@@ -15,6 +15,10 @@ const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRep
 const mockLogger = logger as jest.Mocked<typeof logger>;
 
 describe('LLM Log Cleanup Job Handler', () => {
+  const mockLogEntriesRepo = {
+    cleanupOldEntries: jest.fn().mockResolvedValue(0),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockLogger.child.mockReturnValue(logger);
@@ -39,6 +43,7 @@ describe('LLM Log Cleanup Job Handler', () => {
       mockGetRepositories.mockReturnValue({
         chatSettings: mockChatSettingsRepo as any,
         llmLogs: mockLLMLogsRepo as any,
+        logEntries: mockLogEntriesRepo as any,
       } as any);
 
       const job: BackgroundJob = {
@@ -63,9 +68,10 @@ describe('LLM Log Cleanup Job Handler', () => {
       await handleLLMLogCleanup(job);
 
       expect(mockLLMLogsRepo.cleanupOldLogs).not.toHaveBeenCalled();
+      expect(mockLogEntriesRepo.cleanupOldEntries).not.toHaveBeenCalled();
     });
 
-    it('should skip cleanup if logging is disabled', async () => {
+    it('should skip LLM log cleanup but still prune log entries if logging is disabled', async () => {
       const mockChatSettingsRepo = {
         findByUserId: jest.fn().mockResolvedValue({
           userId: 'user-123',
@@ -83,6 +89,7 @@ describe('LLM Log Cleanup Job Handler', () => {
       mockGetRepositories.mockReturnValue({
         chatSettings: mockChatSettingsRepo as any,
         llmLogs: mockLLMLogsRepo as any,
+        logEntries: mockLogEntriesRepo as any,
       } as any);
 
       const job: BackgroundJob = {
@@ -107,6 +114,7 @@ describe('LLM Log Cleanup Job Handler', () => {
       await handleLLMLogCleanup(job);
 
       expect(mockLLMLogsRepo.cleanupOldLogs).not.toHaveBeenCalled();
+      expect(mockLogEntriesRepo.cleanupOldEntries).toHaveBeenCalledWith(30);
     });
 
     it('should cleanup old logs with specified retention days', async () => {
@@ -127,6 +135,7 @@ describe('LLM Log Cleanup Job Handler', () => {
       mockGetRepositories.mockReturnValue({
         chatSettings: mockChatSettingsRepo as any,
         llmLogs: mockLLMLogsRepo as any,
+        logEntries: mockLogEntriesRepo as any,
       } as any);
 
       const job: BackgroundJob = {
@@ -151,6 +160,7 @@ describe('LLM Log Cleanup Job Handler', () => {
       await handleLLMLogCleanup(job);
 
       expect(mockLLMLogsRepo.cleanupOldLogs).toHaveBeenCalledWith('user-123', 30);
+      expect(mockLogEntriesRepo.cleanupOldEntries).toHaveBeenCalledWith(30);
     });
 
     it('should use override retention days from payload if provided', async () => {
@@ -171,6 +181,7 @@ describe('LLM Log Cleanup Job Handler', () => {
       mockGetRepositories.mockReturnValue({
         chatSettings: mockChatSettingsRepo as any,
         llmLogs: mockLLMLogsRepo as any,
+        logEntries: mockLogEntriesRepo as any,
       } as any);
 
       const job: BackgroundJob = {
@@ -196,6 +207,7 @@ describe('LLM Log Cleanup Job Handler', () => {
       await handleLLMLogCleanup(job);
 
       expect(mockLLMLogsRepo.cleanupOldLogs).toHaveBeenCalledWith('user-123', 7);
+      expect(mockLogEntriesRepo.cleanupOldEntries).toHaveBeenCalledWith(7);
     });
 
     it('should skip cleanup gracefully if chat settings not found', async () => {

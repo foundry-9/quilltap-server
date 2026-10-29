@@ -1,9 +1,11 @@
 'use client'
 
+import { useId, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Icon } from '@/components/ui/icon'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 interface ExternalPromptResultDialogProps {
@@ -20,6 +22,9 @@ export function ExternalPromptResultDialog({
   const { copied, copy } = useCopyToClipboard()
 
   useEscapeKey(onClose)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
 
   const handleCopy = () => copy(prompt)
 
@@ -39,9 +44,17 @@ export function ExternalPromptResultDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md md:max-w-3xl rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="w-full max-w-md md:max-w-3xl rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col"
+      >
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
-          <h3 className="qt-heading-4">
+          <h3 id={titleId} className="qt-heading-4">
             Generated Prompt{characterName ? ` for ${characterName}` : ''}
           </h3>
           <div className="flex items-center gap-2">

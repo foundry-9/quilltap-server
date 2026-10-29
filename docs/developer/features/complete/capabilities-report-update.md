@@ -196,5 +196,4 @@ Phases 0–1 are independent of 2–4 and can land separately. Phase 2 is the bu
 
 ## 10. Related but out of scope
 
-- `docs/developer/features/usage-tracking.md` — provider credit-balance tracking proposal that wants to surface in this report; the seven-phase pipeline gives it a natural future home (Phase 2), but no provider-billing calls are part of this work.
 - Denormalizing `chats.participants` into a join table (the chats repo's own suggestion) — the single-pass GROUP BY sidesteps the need for now.

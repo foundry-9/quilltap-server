@@ -12,6 +12,7 @@
  * hand-write the JSON Schema.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
@@ -36,7 +37,8 @@ export const runSqlToolInputSchema = z.object({
       'Which Quilltap database to query. "main" (quilltap.db): characters, chats, ' +
       'chat_messages, memories, connection_profiles, projects, groups, settings. ' +
       '"llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, ' +
-      'token usage, cost, duration). "mount-index" (quilltap-mount-index.db): document stores ' +
+      'token usage, cost, duration) and the log_entries table (id, message, chatId, characterId, createdAt, updatedAt; ' +
+      'the characters\' log; `X REGEXP \'pattern\'` works here). "mount-index" (quilltap-mount-index.db): document stores ' +
       'and ALL character/project/group vault content. Databases are physically separate — ' +
       'you cannot JOIN across them in one query.'
     )
@@ -96,3 +98,6 @@ export interface RunSqlOutput {
   /** True if the result hit max_rows and was truncated. */
   truncated: boolean;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const runSqlToolEffect: ToolEffectSpec = 'read';

@@ -120,6 +120,8 @@ export interface RecallReplayResult {
   ringSource: 'debug-log' | 'chat'
   /** What each pool of the turn's assemble rendered (ids). */
   pools: { archive: string[]; head: string[]; interCharacter: string[]; recap: string[] }
+  /** What the assemble swallowed: a pool that failed renders nothing and leaves no trace entry. */
+  warnings: string[]
   /** The stage trace: query, the new path's search stages, then assemble. */
   trace: RecallTrace
 }
@@ -400,6 +402,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     ring: [...(newCtx.recentlyWhisperedIds ?? [])],
     ringSource,
     pools: bundle.pools,
+    warnings: bundle.warnings,
     trace,
   }
 }

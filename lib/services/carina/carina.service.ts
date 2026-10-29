@@ -64,6 +64,7 @@ import { BRAHMA_CARINA_ANSWERER_ID, isBrahmaName } from './brahma-answerer';
 import type { CarinaResult } from './carina.types';
 import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section';
+import { buildInventorySection } from '@/lib/inventory/prompt-section';
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
@@ -588,9 +589,13 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       nowMs: Date.now(),
       force: true,
     });
-    const questionWithProgressions = progressionsSection
-      ? `${question}\n\n---\n\n${progressionsSection}`
-      : question;
+    // What the answerer carries in this chat (the Inventory), after the
+    // progressions and on the same uncached user message; absent when nothing
+    // carried has a description.
+    const inventorySection = await buildInventorySection({ chat, characterId: answerer.id, repos });
+    const questionWithProgressions = [question, progressionsSection, inventorySection]
+      .filter((part): part is string => !!part)
+      .join('\n\n---\n\n');
 
     const priorExchanges = await loadPriorCarinaExchanges(repos, chatId, answerer.id);
     let currentMessages: StreamOptions['messages'] = [
@@ -621,22 +626,21 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       }
     }
 
-    const built = await buildTools(
+    const built = await buildTools({
       connectionProfile,
+      userId,
       imageProfileId,
       imageProfile,
-      userId,
-      chat.projectId ?? undefined,
-      false, // requestFullContext
-      chat.disabledTools ?? [],
-      chat.disabledToolGroups ?? [],
-      false, // agentModeEnabled
+      projectId: chat.projectId,
+      disabledTools: chat.disabledTools ?? [],
+      disabledToolGroups: chat.disabledToolGroups ?? [],
       isMultiCharacter,
-      answerer.defaultHelpToolsEnabled === true, // helpToolsEnabled
-      false, // canDressThemselves — Carina does not dress the answerer
-      false, // canCreateOutfits
-      documentEditingEnabled ? 'full' : 'off',
-    );
+      helpToolsEnabled: answerer.defaultHelpToolsEnabled === true,
+      canDressThemselves: false, // Carina does not dress the answerer
+      canCreateOutfits: false,
+      canManageInventory: false, // no inventory_* tools here
+      docToolsMode: documentEditingEnabled ? 'full' : 'off',
+    });
     const tools = built.tools.filter((t) => {
       const name =
         (t as { function?: { name?: string }; name?: string }).function?.name ??

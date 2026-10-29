@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useCallback, ReactNode } from 'react'
+import { useMemo, ReactNode } from 'react'
 import Link from 'next/link'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,8 +11,9 @@ import remarkSmartypants from 'remark-smartypants'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
 import { SMARTYPANTS_OPTIONS, shouldCurlQuotes } from '@/lib/markdown/typography'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import { CodeBlockWithCopy } from '@/components/chat/CodeBlockWithCopy'
+import { DiagramBlock } from '@/components/chat/diagrams/DiagramBlock'
+import { diagramEngineFor, type DiagramStyle } from '@/lib/markdown/diagrams'
 import type { Components } from 'react-markdown'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 import {
@@ -21,6 +22,7 @@ import {
   DEFAULT_RENDERING_PATTERNS,
   DEFAULT_DIALOGUE_DETECTION,
   compileRenderingPatterns,
+  unmarkedClassFor,
   tokenizeInline,
   lineMatchFor,
   wrapBlockMatchFor,
@@ -31,6 +33,8 @@ import { linkifyBareQtapUris } from '@/lib/chat/qtap-linkify'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { QtapLink } from '@/components/qtap/QtapLink'
 import { HiddenInlineImage, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
+import { MentionChipsContext, withMentionChips, type AbsentMentionChip } from '@/components/chat/MentionChip'
+import { rehypeMentionMarkers } from '@/lib/chat/mention-markers'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
 // must navigate via the Next.js router so they work inside the Electron shell
@@ -39,100 +43,6 @@ import { HiddenInlineImage, useImagesHidden } from '@/components/quick-hide/imag
 // are external and excluded.
 function isInternalHref(href: string | undefined): href is string {
   return typeof href === 'string' && href.startsWith('/') && !href.startsWith('//')
-}
-
-/**
- * Code block with copy button component
- */
-function CodeBlockWithCopy({ code, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy code block', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [code])
-
-  return (
-    <div
-      className="qt-code-block-container"
-      style={{
-        position: 'relative',
-        width: '100%',
-        maxWidth: '100%',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        borderRadius: '0.375rem',
-        marginTop: '0.5rem',
-        marginBottom: '0.5rem',
-      }}
-    >
-      <button
-        onClick={handleCopy}
-        className={`qt-copy-button qt-code-block-copy ${copied ? 'qt-copy-button-success' : ''}`}
-        title={copied ? 'Copied!' : 'Copy to clipboard'}
-      >
-        {copied ? '✓' : '📋'}
-        <span className="qt-copy-button-text">{copied ? 'Copied' : 'Copy'}</span>
-      </button>
-      {language === 'text' ? (
-        <pre
-          style={{
-            margin: 0,
-            padding: '1rem',
-            paddingTop: '2.5rem',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowWrap: 'break-word',
-            width: '100%',
-            maxWidth: '100%',
-            boxSizing: 'border-box',
-            overflow: 'hidden',
-            background: 'rgb(40, 44, 52)',
-            color: '#abb2bf',
-            fontFamily: 'var(--qt-code-font, monospace)',
-            fontSize: '0.875rem',
-            lineHeight: '1.5',
-          }}
-        >
-          <code>{code.replace(/\n$/, '')}</code>
-        </pre>
-      ) : (
-        <SyntaxHighlighter
-          style={oneDark}
-          language={language}
-          PreTag="div"
-          wrapLines={true}
-          wrapLongLines={true}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            paddingTop: '2.5rem',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowWrap: 'break-word',
-            width: '100%',
-            maxWidth: '100%',
-            boxSizing: 'border-box',
-            overflow: 'hidden',
-          }}
-          codeTagProps={{
-            style: {
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-            },
-          }}
-        >
-          {code.replace(/\n$/, '')}
-        </SyntaxHighlighter>
-      )}
-    </div>
-  )
 }
 
 interface MessageContentProps {
@@ -149,6 +59,19 @@ interface MessageContentProps {
    * database-backed stores' images render inline.
    */
   blobMountPointId?: string
+  /**
+   * Absent characters first named in this message: each one's first eligible
+   * occurrence becomes a chip with their card on hover (the Salon only).
+   */
+  mentions?: ReadonlyArray<AbsentMentionChip>
+  /**
+   * Draw closed diagram fences (```mermaid / ```dot / ```graphviz / ```svg)
+   * as diagrams rather than code. Only the Salon passes this; every other
+   * surface keeps showing them as code blocks. `style` is the authoring
+   * character's `diagramStyle`; `streaming` keeps fences as code until the
+   * message stops arriving.
+   */
+  diagrams?: { style: DiagramStyle; streaming?: boolean }
 }
 
 /**
@@ -158,8 +81,8 @@ interface MessageContentProps {
 function segmentsToReactNodes(segments: Segment[]): ReactNode[] {
   return segments.map((seg, i) =>
     seg.className
-      ? <span key={i} className={seg.className}>{seg.text}</span>
-      : seg.text
+      ? <span key={i} className={seg.className}>{seg.children ? segmentsToReactNodes(seg.children) : withMentionChips(seg.text)}</span>
+      : withMentionChips(seg.text, i)
   )
 }
 
@@ -168,20 +91,25 @@ function segmentsToReactNodes(segments: Segment[]): ReactNode[] {
  * The match-walk itself lives in the shared core (tokenizeInline); this is the
  * thin React adapter over its Segment[] output.
  */
-function processChildren(children: ReactNode, compiledRules: CompiledRule[]): ReactNode {
+function processChildren(
+  children: ReactNode,
+  compiledRules: CompiledRule[],
+  unmarkedClassName?: string,
+): ReactNode {
+  const options = { unmarkedClassName }
   if (typeof children === 'string') {
-    const segments = tokenizeInline(children, compiledRules)
+    const segments = tokenizeInline(children, compiledRules, options)
     return segments.length === 1 && !segments[0].className
-      ? segments[0].text
+      ? withMentionChips(segments[0].text)
       : <>{segmentsToReactNodes(segments)}</>
   }
 
   if (Array.isArray(children)) {
     return children.map((child, i) => {
       if (typeof child === 'string') {
-        const segments = tokenizeInline(child, compiledRules)
+        const segments = tokenizeInline(child, compiledRules, options)
         return segments.length === 1 && !segments[0].className
-          ? segments[0].text
+          ? withMentionChips(segments[0].text, i)
           : <span key={i}>{segmentsToReactNodes(segments)}</span>
       }
       return child
@@ -323,7 +251,10 @@ function renderLineBlock(
     lineMatch?.hideDelimiters && lineMatch.prefix
       ? stripLeadingPrefix(children, lineMatch.prefix)
       : children
-  return { className: lineMatch?.className, content: processChildren(effective, compiledRules) }
+  // Unmarked styling belongs to blocks no rule owns: a line-claimed block's
+  // text is the rule's, not the template's default.
+  const unmarked = lineMatch ? undefined : unmarkedClassFor(compiledRules)
+  return { className: lineMatch?.className, content: processChildren(effective, compiledRules, unmarked) }
 }
 
 export default function MessageContent({
@@ -332,6 +263,8 @@ export default function MessageContent({
   renderingPatterns,
   dialogueDetection,
   blobMountPointId,
+  mentions,
+  diagrams,
 }: MessageContentProps) {
   // Use provided patterns or fall back to defaults
   const patterns = renderingPatterns && renderingPatterns.length > 0
@@ -372,6 +305,14 @@ export default function MessageContent({
     [curlQuotes],
   ) as React.ComponentProps<typeof ReactMarkdown>['remarkPlugins']
 
+  // Name chips: katex first, so math is already spans the marker pass skips.
+  const rehypePlugins = useMemo(
+    () => (mentions && mentions.length > 0
+      ? [rehypeKatex, [rehypeMentionMarkers, mentions]]
+      : [rehypeKatex]) as React.ComponentProps<typeof ReactMarkdown>['rehypePlugins'],
+    [mentions],
+  )
+
   // Compile patterns once for efficient matching
   const compiledRules = useMemo(
     () => compileRenderingPatterns(patterns),
@@ -389,6 +330,10 @@ export default function MessageContent({
     [content, patterns]
   )
 
+  // Primitives, so the components map below is rebuilt only when they change.
+  const diagramStyle = diagrams?.style
+  const diagramsStreaming = diagrams?.streaming ?? false
+
   const components: Components = useMemo(() => ({
     // Fenced code blocks - handled by pre component since they're <pre><code>
     // This ensures ALL fenced code blocks get block styling, regardless of language
@@ -403,6 +348,19 @@ export default function MessageContent({
       const codeString = typeof codeChildren === 'string' || typeof codeChildren === 'number'
         ? String(codeChildren)
         : ''
+
+      const diagramEngine = diagramStyle ? diagramEngineFor(language) : null
+      if (diagramStyle && diagramEngine) {
+        return (
+          <DiagramBlock
+            engine={diagramEngine}
+            language={language}
+            source={codeString.replace(/\n$/, '')}
+            style={diagramStyle}
+            streaming={diagramsStreaming}
+          />
+        )
+      }
 
       return <CodeBlockWithCopy code={codeString} language={language} />
     },
@@ -522,11 +480,12 @@ export default function MessageContent({
       }
       return <img src={resolvedSrc} alt={alt || ''} title={title} {...props} />
     },
-  }), [compiledRules, dialogueConfig, blobMountPointId, imagesHidden])
+  }), [compiledRules, dialogueConfig, blobMountPointId, imagesHidden, diagramStyle, diagramsStreaming])
 
   return (
     <>
       <div className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto message-content ${className}`}>
+        <MentionChipsContext.Provider value={mentions ?? null}>
         <ReactMarkdown
           // remark-breaks turns a single newline into a hard <br>. In chat, an
           // author who hits Enter means a line break (the way Slack/Discord/GitHub
@@ -541,7 +500,7 @@ export default function MessageContent({
           // lib/services/markdown-renderer.service.ts — if the two lists
           // disagree, a message changes appearance when it stops streaming.
           remarkPlugins={remarkPlugins}
-          rehypePlugins={[rehypeKatex]}
+          rehypePlugins={rehypePlugins}
           // react-markdown's default URL sanitizer only allows http(s)/mailto/
           // etc., so it would strip `qtap://` hrefs before they reach `a()`.
           // Preserve qtap:// URIs (rendered as in-app Document-Mode links by
@@ -551,6 +510,7 @@ export default function MessageContent({
         >
           {processedContent}
         </ReactMarkdown>
+        </MentionChipsContext.Provider>
       </div>
     </>
   )

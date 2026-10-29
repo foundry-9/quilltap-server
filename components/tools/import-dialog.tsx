@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useImportData } from './import-export/hooks/useImportData'
 import {
   LoadingSpinner,
@@ -28,6 +30,20 @@ export function ImportDialog({
   })
   const [dragActive, setDragActive] = useState(false)
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+
+  const handleClose = () => {
+    if (!state.importing) {
+      setDragActive(false)
+      actions.reset()
+      onClose()
+    }
+  }
+
+  useEscapeKey(handleClose, isOpen)
+
   if (!isOpen) return null
 
   const getStepNumber = (): number => {
@@ -44,14 +60,6 @@ export function ImportDialog({
         return 5
       default:
         return 1
-    }
-  }
-
-  const handleClose = () => {
-    if (!state.importing) {
-      setDragActive(false)
-      actions.reset()
-      onClose()
     }
   }
 
@@ -97,12 +105,20 @@ export function ImportDialog({
 
       {/* Dialog */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-[90vw] max-w-2xl">
-        <div className="qt-dialog w-full max-h-[90vh] flex flex-col">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog w-full max-h-[90vh] flex flex-col"
+        >
           {/* Header */}
           <div className="qt-dialog-header flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="qt-dialog-title">Import Data</h2>
+                <h2 id={titleId} className="qt-dialog-title">Import Data</h2>
                 <p className="qt-dialog-description mt-0.5">
                   Step {getStepNumber()} of 5
                 </p>

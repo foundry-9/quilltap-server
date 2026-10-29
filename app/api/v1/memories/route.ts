@@ -41,7 +41,7 @@ import {
 } from '@/lib/api/middleware';
 import { searchMemories } from '@/lib/memory/recall/search';
 import { generateMissingEmbeddings, rebuildVectorIndex, enqueueMissingEmbeddings } from '@/lib/memory/index-store/backfill';
-import { admitCandidate, admissionInserted } from '@/lib/memory/admission';
+import { admitCandidate, admissionInserted, updateMemory } from '@/lib/memory/admission';
 import { retireChatMemories } from '@/lib/memory/retire';
 import { repairMemoryGraph } from '@/lib/memory/repair';
 import {
@@ -80,7 +80,7 @@ import {
   MemoryRecallSettingsSchema,
 } from '@/lib/schemas/settings.types';
 import { patchSchemaOf } from '@/lib/schemas/patch-schema';
-import { MemoryKindEnum } from '@/lib/schemas/memory.types';
+import { KEYSTONES_PER_SUBJECT_MAX, MemoryKindEnum } from '@/lib/schemas/memory.types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError, successResponse, errorResponse } from '@/lib/api/responses';
@@ -109,6 +109,8 @@ const createMemorySchema = z.object({
   occurredAt: z.iso.datetime({ offset: true }).nullable().optional(),
   /** The candidate schema's bound (`MEMORY_ENTITY_CAP`). */
   entities: z.array(z.string().min(1)).max(MEMORY_ENTITY_CAP).optional(),
+  /** Mark the new memory a standing fact (inner-circle-recall.md Part C). */
+  keystone: z.boolean().optional(),
   // Deliberately absent (bug 218, refactor decision 13): `source` is always
   // MANUAL here — a client-claimed AUTO would switch on the extractor-only
   // heuristics — and `skipGate` has left the API, so every manual write goes
@@ -316,6 +318,7 @@ async function listMemoriesByCharacter(
   const source = searchParams.get('source') as 'AUTO' | 'MANUAL' | 'CONSOLIDATED' | null;
   const tierParam = searchParams.get('tier');
   const tier: 'hot' | 'cold' | undefined = tierParam === 'hot' || tierParam === 'cold' ? tierParam : undefined;
+  const keystoneOnly = searchParams.get('keystone') === 'true';
   const sortBy = searchParams.get('sortBy') || 'createdAt';
   const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
 
@@ -339,6 +342,7 @@ async function listMemoriesByCharacter(
       source: source && (source === 'AUTO' || source === 'MANUAL' || source === 'CONSOLIDATED') ? source : undefined,
       minImportance: minImportance !== undefined && !isNaN(minImportance) ? minImportance : undefined,
       tier,
+      keystone: keystoneOnly || undefined,
     });
 
     // Enrich with tag names
@@ -380,6 +384,10 @@ async function listMemoriesByCharacter(
 
   if (tier) {
     memories = memories.filter((m: any) => (m.tier ?? 'hot') === tier);
+  }
+
+  if (keystoneOnly) {
+    memories = memories.filter((m: any) => m.keystone === true);
   }
 
   // Sort
@@ -548,6 +556,18 @@ async function handleCreateMemory(
     }
   }
 
+  // A keystone request is refused before anything is written when the subject
+  // already holds its limit; the mark itself goes on after admission, through
+  // the edit chokepoint, which checks again.
+  if (validatedData.keystone) {
+    const held = await repos.memories.countKeystones(validatedData.characterId, validatedData.aboutCharacterId ?? null);
+    if (held >= KEYSTONES_PER_SUBJECT_MAX) {
+      return badRequest(
+        `A character may keep at most ${KEYSTONES_PER_SUBJECT_MAX} keystones about one subject; unmark one first.`
+      );
+    }
+  }
+
   // Every manual write goes through the gate (decision 13): source forced to
   // MANUAL, provenance stamped 'manual'. A hand-written memory carries no
   // targeting tags (it reads as the defaults) and its event time is given,
@@ -592,7 +612,7 @@ async function handleCreateMemory(
     { userId: user.id }
   );
 
-  const memory = outcome.memory;
+  let memory = outcome.memory;
   if (!memory) {
     // Nothing was written. Say why: only an embedding failure is the
     // provider's fault (bug 236).
@@ -616,6 +636,25 @@ async function handleCreateMemory(
   }
 
   const inserted = admissionInserted(outcome);
+
+  if (validatedData.keystone && !memory.keystone) {
+    const marked = await updateMemory(memory.characterId, memory.id, { keystone: true }, { userId: user.id });
+    if (!marked.ok) {
+      // The memory stands; only the mark was refused (a race on the limit, or
+      // admission folded the text into a row that cannot carry one).
+      logger.debug('[Memories API] Keystone mark refused after manual create', {
+        characterId: validatedData.characterId,
+        memoryId: memory.id,
+        reason: marked.reason,
+      });
+      return badRequest(
+        marked.reason === 'keystone-refused'
+          ? `The memory was saved, but not as a keystone: ${marked.message}`
+          : 'The memory was saved, but could not be marked a keystone.'
+      );
+    }
+    memory = marked.memory;
+  }
   logger.debug('[Memories API] Manual memory create resolved', {
     characterId: validatedData.characterId,
     memoryId: memory.id,

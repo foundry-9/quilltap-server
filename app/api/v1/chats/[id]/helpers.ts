@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { enrichWithDefaultImage, enrichWithApiKey } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { diagramStyleOrDefault } from '@/lib/markdown/diagrams';
 import type { ChatMetadata, ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
@@ -65,6 +66,8 @@ export async function getEnrichedCharacter(characterId: string, repos: Repos) {
     defaultConnectionProfileId: charData.defaultConnectionProfileId,
     // Participant chips badge archived seats (character-archive spec §5.2).
     archivedAt: charData.archivedAt ?? null,
+    // The Salon draws each speaker's diagrams in their own hand.
+    diagramStyle: diagramStyleOrDefault(charData.diagramStyle),
   };
 }
 
@@ -584,6 +587,20 @@ export async function processChatUpdates(
         }
       }
     }
+  }
+
+  // Turn mode (rotation / storyteller). Patch-only: its own setter. Leaving
+  // storyteller mode closes whatever round was still open.
+  if (validatedData.turnMode) {
+    const before = updatedChat.turnMode ?? 'rotation';
+    await repos.chats.setTurnMode(chatId, validatedData.turnMode);
+    if (before === 'storyteller' && validatedData.turnMode !== 'storyteller') {
+      const { abandonStorytellerRound } = await import('@/lib/storyteller/round.service');
+      await abandonStorytellerRound(chatId, 'abandoned');
+    }
+    const refetched = await repos.chats.findById(chatId);
+    if (refetched) updatedChat = refetched;
+    logger.info('[Chats v1] Turn mode set', { chatId, from: before, to: validatedData.turnMode });
   }
 
   // Per-chat Concierge state (Moderated / Unmoderated / Locked). Routed

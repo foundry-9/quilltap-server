@@ -18,12 +18,13 @@
  * `fixed inset-0` child of it is trapped under the toolbar.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { downloadGalleryEntry } from '@/lib/download-utils'
 import { useChatGallery } from '@/app/salon/[id]/hooks/useChatGallery'
 import type { ChatGalleryEntry, ChatGallerySource } from '@/lib/photos/chat-gallery'
@@ -117,6 +118,9 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen && selectedIndex === -1 && !saveTargetId)
 
   const onImageDeleted = mode === 'chat' ? props.onImageDeleted : undefined
 
@@ -479,12 +483,18 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay backdrop-blur-sm p-4" onClick={onClose}>
         <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
           className="qt-dialog flex flex-col max-h-[90vh] max-w-[90vw]"
           style={{ minWidth: '300px' }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="qt-dialog-header border-b qt-border-default">
-            <h2 className="qt-heading-4 text-foreground">{title}</h2>
+            <h2 id={titleId} className="qt-heading-4 text-foreground">{title}</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleZoomOut}

@@ -207,8 +207,37 @@ describe('Roleplay Template Routes', () => {
         ],
         dialogueDetection: null,
         narrationDelimiters: '*',
+        unmarkedStyle: null,
+        markdownAsterisks: true,
       })
       expect(data).toEqual(createdTemplate)
+    })
+
+    it('accepts null narration (unmarked prose) with an unmarked style and Markdown asterisks off', async () => {
+      mockRoleplayRepo.findByName.mockResolvedValueOnce(null)
+      mockRoleplayRepo.create.mockResolvedValueOnce(buildTemplate({ name: 'Prose' }) as any)
+
+      const req = createMockRequest(
+        'http://localhost/api/v1/roleplay-templates',
+        {
+          name: 'Prose',
+          systemPrompt: 'Write prose.',
+          narrationDelimiters: null,
+          unmarkedStyle: { style: 'qt-roleplay-plain', addOns: { italic: true } },
+          markdownAsterisks: false,
+          delimiters: [{ kind: 'wrap', name: 'Emphasis', buttonName: 'Emph', delimiters: '*', style: 'qt-roleplay-plain', hideDelimiter: true }],
+        },
+        'POST',
+      )
+
+      const res = await createRoleplayTemplate(req)
+      expect(res.status).toBe(201)
+      const arg = mockRoleplayRepo.create.mock.calls.at(-1)![0] as any
+      expect(arg.narrationDelimiters).toBeNull()
+      expect(arg.markdownAsterisks).toBe(false)
+      expect(arg.unmarkedStyle.style).toBe('qt-roleplay-plain')
+      const scopes = arg.renderingPatterns.map((p: any) => p.scope ?? 'inline')
+      expect(scopes).toEqual(['strip', 'literal', 'inline', 'unmarked'])
     })
   })
 

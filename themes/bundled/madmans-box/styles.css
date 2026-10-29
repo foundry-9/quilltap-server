@@ -327,7 +327,7 @@
   --qt-queue-badge-memory-fg: var(--box-brass);
   --qt-queue-badge-embedding-bg: hsl(310 36% 32%);
   --qt-queue-badge-embedding-fg: var(--rotor-cyan-bright);
-  --qt-queue-badge-summary-bg: hsl(140 50% 38%);
+  --qt-queue-badge-summary-bg: hsl(140 50% 35%);
   --qt-queue-badge-danger-bg: hsl(4 70% 48%);
   --qt-queue-badge-story-bg: hsl(30 30% 22%);
   --qt-queue-badge-story-fg: hsl(40 58% 76%);
@@ -471,6 +471,15 @@
   --qt-terminal-chrome-muted-fg: hsl(40 25% 60%);
   --qt-terminal-closed-badge-bg: hsl(30 28% 18%);
   --qt-terminal-closed-badge-fg: hsl(40 70% 70%);
+
+  /* ==========================================================================
+     DIAGRAM VARIABLES — a drawing is a screen, so it gets the console's
+     near-black pane and a dim phosphor rim. The nodes still take the cabin's
+     own palette (Mermaid reads the theme colours), so contrast is unchanged.
+     ========================================================================== */
+  --qt-diagram-bg: var(--qt-terminal-bg);
+  --qt-diagram-border: color-mix(in srgb, var(--rotor-cyan-dim) 70%, var(--box-walnut-rim));
+  --qt-diagram-toolbar-hover-bg: var(--box-walnut-mid);
 }
 
 /* ============================================================================
@@ -662,6 +671,13 @@
   outline: 2px solid var(--rotor-cyan);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--rotor-glow-soft);
+}
+
+/* ============================================================================
+   DIAGRAMS — the faint glow of a lit tube face behind the drawing
+   ============================================================================ */
+[data-theme="madmans-box"] .qt-diagram {
+  box-shadow: inset 0 0 28px hsl(184 78% 50% / 0.07);
 }
 
 /* ============================================================================

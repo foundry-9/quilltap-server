@@ -47,6 +47,7 @@ import { showConfirmation } from '@/lib/alert'
 import { formatQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { showSuccessToast } from '@/lib/toast'
 import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
 
 interface DocumentPaneProps {
@@ -588,6 +589,7 @@ export default function DocumentPane({
 
         {isEditingTitle ? (
           <input
+            aria-label="Document title"
             ref={titleInputRef}
             className="qt-doc-title-input"
             value={editTitle}
@@ -599,6 +601,9 @@ export default function DocumentPane({
           <span
             className="qt-doc-title cursor-pointer"
             onClick={handleTitleClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={activateOnKey}
             title="Click to rename"
           >
             {document.displayTitle}
@@ -676,6 +681,7 @@ export default function DocumentPane({
           {showSource ? (
             <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onBlur={onBlur} onScroll={handleScroll}>
               <textarea
+                aria-label="Document source"
                 ref={sourceTextareaRef}
                 className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
                 value={document.content}
@@ -724,6 +730,7 @@ export default function DocumentPane({
           onScroll={handleScroll}
         >
           <textarea
+            aria-label="Document content"
             className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
             value={document.content}
             onChange={(e) => onContentChange(e.target.value)}
@@ -745,6 +752,11 @@ export default function DocumentPane({
         {editingIndicator && (
           <span className="qt-doc-status-item ml-auto">{editingIndicator}</span>
         )}
+        {/* Screen readers hear each completed save and the AI starting to edit,
+            not every Unsaved/Saving flicker while typing. */}
+        <span className="sr-only" role="status" aria-live="polite">
+          {editingIndicator ?? (saveStatus.label === 'Saved' ? 'Saved' : '')}
+        </span>
       </div>
     </div>
   )

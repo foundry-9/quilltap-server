@@ -149,10 +149,13 @@ export async function writeProjectFileToMountStore(
     originalFileName: safeName,
     description: input.description,
     collisionStrategy: 'unique-suffix',
+    // Stays a blob so the `files` row can address it by `mount-blob:` key,
+    // but its text is extracted and indexed so doc_read_file, doc_grep and
+    // search can read an uploaded .md / .txt / .json / PDF / DOCX (bug 260).
     treatNativeTextAsDocument: false,
     transcodeImages: true,
-    extractText: false,
-    enqueueEmbedding: false,
+    extractText: true,
+    enqueueEmbedding: true,
     assetStorage: 'database',
   });
 

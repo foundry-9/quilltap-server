@@ -7,7 +7,7 @@ This document describes the three SQLite databases used by Quilltap, how to acce
 | Database | Filename | Purpose |
 |----------|----------|---------|
 | **Main** | `quilltap.db` | All application data: users, characters, chats, messages, projects, files, memories, settings, etc. |
-| **LLM Logs** | `quilltap-llm-logs.db` | LLM request/response debug data. Isolated so high-churn logging can't corrupt main data. |
+| **LLM Logs** | `quilltap-llm-logs.db` | LLM request/response debug data (`llm_logs`) and the characters' log (`log_entries`). Isolated so high-churn logging can't corrupt main data. |
 | **Mount Index** | `quilltap-mount-index.db` | Document mount point tracking: file inventory, checksums, text chunks, and embeddings for external document directories. |
 
 All three databases live in `<data-dir>/data/`. Alongside them:
@@ -321,6 +321,7 @@ CREATE TABLE "characters" (
   "defaultSystemPromptId" TEXT DEFAULT NULL,
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
+  "canManageInventory" INTEGER DEFAULT NULL,  -- Offered the inventory_* tools; NULL reads as on.
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
   "archivedAt" TEXT DEFAULT NULL,            -- ISO timestamp when the character was archived into a tombstone.
   "archiveFileId" TEXT DEFAULT NULL,         -- File row holding the archived character bundle export.
@@ -348,10 +349,10 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | manifesto | `manifesto.md` |
 | personality | `personality.md` |
 | exampleDialogues | `example-dialogues.md` |
-| pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit | `properties.json` — `canChooseOutfit` is optional-with-default (absent hydrates as `false`), so old vaults need no backfill and no migration exists. |
+| pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit, canDrawDiagrams, diagramStyle | `properties.json` — `canChooseOutfit` and `canDrawDiagrams` are optional-with-default (absent hydrates as `false`); `diagramStyle` is `'handDrawn'` or `'clean'`, and absent or unrecognized hydrates as `'handDrawn'`. Old vaults need no backfill and no migration exists. |
 | metadata | `metadata.json` — optional; a flat object of user-authored keys with any JSON value. Absent file or unparseable content hydrates as `{}` (**not** a keystone — only `properties.json` may declare a vault broken), so old vaults need no backfill and no migration exists. A patch REPLACES the whole object rather than merging keys. One **reserved key**, `progressions`, holds the character's timed spans and IS validated — by `lib/progressions/schema.ts` (the runtime source of truth), mirrored for editors at `public/schemas/qtap-progression.schema.json`. Validation happens at the point of use, not at hydration: the parser stays shape-agnostic, and a malformed entry is dropped alone with a `warn` while its siblings survive. Every other key stays freeform and unchecked. No migration: the key appears on first write. |
 | physicalDescription.fullDescription | `physical-description.md` |
-| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt | `physical-prompts.json` |
+| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt, physicalDescription.humanoid | `physical-prompts.json` — `humanoid` is optional (absent hydrates as `true`), so old vaults need no backfill and no migration exists. A write that omits it keeps the vault's current value. |
 | systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
 | scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record). Frontmatter carries `description` and, since 4.9, `archived: true` — omitted entirely while the scenario is active. The same `archived` key marks a scenario archived in the other three scopes (general, project, group `Scenarios/` folders). |
 
@@ -515,6 +516,55 @@ shared General coat worn by five characters is one file and five rows.
 - DDL single source: `lib/database/backends/sqlite/wardrobe-wear-stats-ddl.ts`.
   Design of record: `docs/developer/features/complete/wardrobe-wear-ledger.md`.
 
+### chat_wardrobe_history
+
+```sql
+CREATE TABLE "chat_wardrobe_history" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL REFERENCES "chats"("id") ON DELETE CASCADE,
+  "characterId" TEXT NOT NULL,             -- no FK: characters may be archived tombstones
+  "entryIndex" INTEGER NOT NULL,           -- 0-based, contiguous per (chatId, characterId); never renumbered
+  "slots" TEXT NOT NULL,                   -- JSON EquippedSlots, dissolved leaves (plain TEXT, not compressed)
+  "slotsHash" TEXT NOT NULL,               -- hashEquippedSlots(slots)
+  "source" TEXT NOT NULL,                  -- chat-start | participant-added | merge | operator | character | pascal | seeded
+  "actorCharacterId" TEXT,                 -- character: the caller; pascal: the roller; operator: the user's Speaking As character
+  "isCurrent" INTEGER NOT NULL DEFAULT 0,  -- the cursor
+  "createdAt" TEXT NOT NULL,
+  "actorToolName" TEXT                     -- pascal only: the custom tool's name (added by add-chat-wardrobe-history-tool-name-v1)
+);
+
+CREATE UNIQUE INDEX "idx_chat_wardrobe_history_entry"
+  ON "chat_wardrobe_history" ("chatId", "characterId", "entryIndex");
+CREATE UNIQUE INDEX "idx_chat_wardrobe_history_current"
+  ON "chat_wardrobe_history" ("chatId", "characterId") WHERE "isCurrent" = 1;
+```
+
+The wardrobe **outfit history** (added 4.11 by `add-chat-wardrobe-history-table-v1`,
+seeded once by `seed-chat-wardrobe-history-v1` with one current entry `0` per
+(chat, character) in every chat's `equippedOutfit`, dated by the chat's
+`updatedAt`). Per character per chat, a numbered timeline of outfits from `0`
+(what they arrived in), one entry per Aurora announcement, and a cursor
+(`isCurrent`) on the entry they are wearing now. A rollback moves the cursor; the
+next real change appends at `max + 1`. Unbounded; nothing prunes or renumbers.
+
+- The only runtime writer is `ChatWardrobeHistoryRepository.settle`
+  (`lib/database/repositories/chat-wardrobe-history.repository.ts`), reached from
+  `notifyWardrobeChanged` / `flushPendingWardrobeAnnouncements` and from
+  `applyOutfitSelections`. It reads the live slots itself; an append whose hash
+  equals the current entry's is a no-op. From the job child it is buffered whole
+  and replayed in the parent after the turn's `commitEquippedOutfit`.
+  `upsertRows` is for restore and import only.
+- Invariants: indices contiguous from `0`; exactly one current row per pair
+  whenever any row exists (the partial unique index); `slotsHash` matches `slots`.
+- The cursor lives on the row, not on `chats`, so no whole-row chat `update` can
+  carry a stale copy of it.
+- Chat deletion cascades. Character deletion calls `deleteByCharacter`. Item
+  deletion and archiving leave history alone: a stale id is skipped at rollback
+  and rendered "(archived)" / "(no longer exists)".
+- Exported in `.qtap` bundles as `wardrobe_history` records and included in backups.
+- DDL single source: `lib/database/backends/sqlite/chat-wardrobe-history-ddl.ts`.
+  Design of record: `docs/developer/features/complete/wardrobe-outfit-history.md`.
+
 ### outfit_presets — REMOVED in 4.5
 
 The `outfit_presets` table was eliminated; named outfit bundles are now expressed as composite `wardrobe_items` rows whose `componentItemIds` references the constituent items. Migrations `migrate-outfit-presets-to-composites-v1` and `drop-outfit-presets-table-v1` perform the fold-and-drop. A snapshot of the table content is written to `<dataDir>/backup/pre-drop-outfit-presets.json` before the drop.
@@ -586,6 +636,8 @@ CREATE TABLE "chats" (
   "lastFullRebuildTurn" INTEGER DEFAULT 0,
   "summaryAnchorMessageIds" TEXT DEFAULT '[]',
   "isPaused" INTEGER DEFAULT 0,
+  "turnMode" TEXT DEFAULT NULL,               -- Storyteller mode: 'rotation' (NULL) or 'storyteller'. Patch-only: written only by ChatsRepository.setTurnMode. Independent of isPaused. Added by add-storyteller-mode-v1.
+  "storytellerInviteFilter" INTEGER DEFAULT 0, -- Storyteller mode: 1 = invite each seat to bid with probability 0.25 + 0.75 × talkativeness; 0 = invite everyone. Added by add-storyteller-mode-v1.
   "isManuallyRenamed" INTEGER DEFAULT 0,
   "impersonatingParticipantIds" TEXT DEFAULT '[]',
   "activeTypingParticipantId" TEXT,
@@ -626,6 +678,7 @@ CREATE TABLE "chats" (
   "cycleOrderParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds still to speak this cycle, in order. Drawn once per cycle (talkativeness-weighted, sampled without replacement) by resolveCycleOrder; struck from as each seat speaks. Empty = cycle spent, next selection draws afresh. Added by add-cycle-order-column-v1.
   "sceneState" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { top: [], bottom: [], footwear: [], accessories: [], hair: [] } }, each slot an array of wardrobe item ids (layering order significant). Unconstrained JSON: rows written before a slot existed simply lack the key and parse with an empty array.
+  "equippedInventory" TEXT DEFAULT NULL,  -- JSON map { [characterId]: string[] } of Inventory object ids each character carries in this chat (sorted, deduplicated). Patch-only: written solely by ChatsRepository.setEquippedInventory, never by a whole-row update. Added by add-chat-equipped-inventory-v1.
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
   "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
@@ -750,6 +803,34 @@ is not extracted again from its first line; a regenerate clears it with the
 rest and does not read it. It travels in bundles as
 `turnExtractionWatermarkMessageId`.
 
+### storyteller_rounds
+
+```sql
+CREATE TABLE "storyteller_rounds" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "triggerMessageId" TEXT,          -- the operator post that opened the round
+  "status" TEXT NOT NULL,           -- 'open' | 'running' | 'closed'
+  "bids" TEXT DEFAULT '[]',         -- JSON: one card per invited seat (participantId, characterId, characterName, status, statedTier, tier, tierRaised, tools, plan, reason, talkativeness, silent, askedAt, answeredAt). Cleared when the round closes.
+  "selection" TEXT DEFAULT NULL,    -- JSON: { participantIds, order: 'sequential'|'simultaneous'|null, chosenAt, names }
+  "closedReason" TEXT DEFAULT NULL, -- 'ran' | 'let-lie' | 'superseded' | 'abandoned'
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  "closedAt" TEXT DEFAULT NULL,
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_storyteller_rounds_chat" ON "storyteller_rounds" ("chatId", "status");
+```
+
+Storyteller mode's rounds. An operator post in a storyteller chat opens one;
+every invited LLM seat's bid lands on `bids` while it is `open`. When the round
+closes its `bids` are cleared — the full bid calls stay in the LLM log
+(`llm_logs.type = 'STORYTELLER_BID'`, grouped by `storytellerRoundId`) — and
+only the ids, timings and selection are kept. **Not exported or backed up**:
+bids are not part of the record; a replace-mode restore truncates the table.
+Repository: `StorytellerRoundsRepository`. Added by `add-storyteller-mode-v1`.
+
 ### chat_informs
 
 ```sql
@@ -813,6 +894,8 @@ CREATE TABLE "terminal_sessions" (
   "exitedAt" TEXT,
   "exitCode" INTEGER,
   "transcriptPath" TEXT,
+  "cols" INTEGER DEFAULT NULL,
+  "rows" INTEGER DEFAULT NULL,
   FOREIGN KEY ("chatId") REFERENCES "chats" ("id") ON DELETE CASCADE
 );
 
@@ -831,6 +914,8 @@ CREATE INDEX "idx_terminal_sessions_startedAt" ON "terminal_sessions" ("startedA
 | exitedAt | TEXT (ISO 8601, nullable) | Session exit timestamp; `null` if session is still active |
 | exitCode | INTEGER (nullable) | Process exit code; `null` if session is still active |
 | transcriptPath | TEXT (nullable) | Relative path to transcript file if recorded; `null` if not recorded |
+| cols | INTEGER (nullable) | Terminal width at spawn, updated to its final value on exit; `terminal_read` replays an exited session's transcript at this size. `null` for sessions before 4.11 (read back at 80) |
+| rows | INTEGER (nullable) | Terminal height, as `cols` (`null` reads back at 24) |
 
 ### conversation_annotations
 
@@ -946,7 +1031,8 @@ CREATE TABLE "chat_messages" (
   "confirmationRevised" INTEGER DEFAULT NULL, -- Answer confirmation: shown content is a re-affirmation rewrite of the original.
   "confirmationNotes" TEXT DEFAULT NULL,      -- Answer confirmation: cheap-LLM discrepancy explanation (badge hover text).
   "confirmationOriginalContent" TEXT DEFAULT NULL, -- Answer confirmation: pre-revision text retained for the logs when confirmationRevised.
-  "pascalMeta" TEXT DEFAULT NULL,             -- Pascal the Croupier (custom pseudo-tools): JSON { tool, toolTitle?, chipLabel?, definitionTier, definitionMountId, params, rollForm, notation?, raw, diceRolls?, value, state, outcomeIndex, metadataTested?, llm?, effects?, invokedBy, callerParticipantId? } on systemSender='pascal' messages. `toolTitle` is the display title at roll time; absent on rows written before it existed, where readers fall back to `tool`. `chipLabel` is the definition's chipLabel template rendered at roll time — the per-run label the Salon chip and the bubble heading share; absent on older rows and unlabelled tools, where readers fall back to `toolTitle`, then `tool`. `metadataTested` records the keys the winning row consulted at their roll-time values. `llm` records an LLM consult when the definition declared one: { ok, output, prompt, reason?, provider?, model? } — output is the model's trimmed answer, or the author's errorMessage when the consult failed (`reason` holds the technical cause). `effects` records the side effects the run applied, in order: [{ target, previous?, next, tier? }] — the raw target as written ('state.encounter.count' / 'metadata.lockpick'), the prior value when there was one, what was written, and (state targets only) which tier the write landed in; absent when the run declared or applied none. The Salon body shows none of it — the bubble stays the author's message; this column carries the audit. The server-side roll record — authoritative, so a model cannot fudge a failure into a success (nor its recorded consequences). NULL on every non-Pascal message. Added by add-pascal-message-meta-v1; chipLabel/effects ride the JSON column with no migration.
+  "storytellerBid" TEXT DEFAULT NULL,         -- Storyteller mode: JSON { roundId, tier: 'simple'|'lookup'|'act'|'destroy', plan, toolsNamed } — the bid this speaking turn carried out. A swipe copies it and re-rolls under the same plan. Part of the record (export, backup); never sent to a model. NULL on every other message. Added by add-storyteller-mode-v1.
+  "pascalMeta" TEXT DEFAULT NULL,             -- Pascal the Croupier (custom pseudo-tools): JSON { tool, toolTitle?, chipLabel?, definitionTier, definitionMountId, params, rollForm, notation?, raw, diceRolls?, value, state, outcomeIndex, metadataTested?, llm?, effects?, invokedBy, triggerPhrase?, callerParticipantId? } on systemSender='pascal' messages. `toolTitle` is the display title at roll time; absent on rows written before it existed, where readers fall back to `tool`. `chipLabel` is the definition's chipLabel template rendered at roll time — the per-run label the Salon chip and the bubble heading share; absent on older rows and unlabelled tools, where readers fall back to `toolTitle`, then `tool`. `metadataTested` records the keys the winning row consulted at their roll-time values. `llm` records an LLM consult when the definition declared one: { ok, output, prompt, reason?, provider?, model? } — output is the model's trimmed answer, or the author's errorMessage when the consult failed (`reason` holds the technical cause). `effects` records the side effects the run applied, in order: [{ target, previous?, next, tier? }] — the raw target as written ('state.encounter.count' / 'metadata.lockpick'), the prior value when there was one, what was written, and (state targets only) which tier the write landed in; absent when the run declared or applied none. A wardrobe effect records one entry per change that landed, with target 'wardrobe.wear' / 'wardrobe.take_off' / 'wardrobe.clear_slot', `previous` the character's EquippedSlots before the change, and `next` = { item?: { id, title }, slot?, slotsAffected, effect: 'layered' | 'replaced' | 'removed' | 'cleared', slots } (the slots after it; `item` absent on clear_slot). An Inventory effect records one entry per object that landed, with target 'inventory.equip' / 'inventory.unequip' / 'inventory.pick_up', `previous` the character's equipped object ids before the gesture, and `next` = { item: { id, title }, created?, equipped } (the ids after it; `created` marks an instance the gesture made). `invokedBy` is 'llm' (a model's `run_custom`), 'user' (the operator's popup) or 'trigger' (a trigger phrase said in the chat, with the phrase as written in `triggerPhrase`). The Salon body shows none of it — the bubble stays the author's message; this column carries the audit. The server-side roll record — authoritative, so a model cannot fudge a failure into a success (nor its recorded consequences). NULL on every non-Pascal message. `intervention` (operator intervention, 4.11) records a run the operator changed while it was held: { resolvedAt, decision: 'deal', changed: [field keys], dealt: { params, raw, diceRolls?, value, outcomeIndex, state, message, chipLabel?, toolTitle?, visibility, announcer, llm?, effects? }, reasks?, staleAnswer? } — the top-level fields stay the run as announced; absent on runs never held or let stand as rolled; operator-facing only, never read by a model-facing path. Added by add-pascal-message-meta-v1; chipLabel/effects/triggerPhrase/intervention ride the JSON column with no migration.
   "routeTrail" TEXT DEFAULT NULL              -- Message route trail: JSON [{ profileId, profileName, provider, modelName, via, outcome, trigger?, evidence?, profileKind?, detail? }] — every profile tried for this turn, in the order tried. `via` says how the profile came to be asked ('primary' | 'retry' | 'concierge' | 'understudy' | 'tier-pick'); `outcome` is 'answered' | 'failed' (fell over on its own) | 'refused' (declined on content grounds); `trigger` is the fallback engine's failure class ('auth' | 'rate-limit' | 'network' | 'model-missing' | 'provider-error' | 'empty-response' | 'moderation-refusal'), absent on the entry that answered; `evidence` says how a refusal was established ('typed-error' — the plugin threw a moderation rejection — 'provider-code', 'finish-reason' and 'message-pattern' — the provider said so, by code, stop reason or wording — or 'inferred' from an empty body on a Concierge-flagged turn); `profileKind` is 'image' when the entry names an image profile (absent = a connection profile); `detail` is a short reason capped at 200 chars, never the full error body. The last entry always agrees with this row's provider/modelName, which stay authoritative for who answered. NULL on every message whose turn had no failure (nearly all of them — a one-entry trail would say nothing provider/modelName do not). Besides assistant turns, image-bearing rows carry an image trail when a picture was refused on the way: the TOOL row of a generate_image call and the Lantern / Aurora announcement (written by generateImageWithConciergeFailover). JSON only — no schema migration. Added by add-route-trail-message-column-v1.
 );
 
@@ -1045,6 +1131,7 @@ CREATE TABLE "chat_settings" (
   "composerSpellcheck" INTEGER DEFAULT 1, -- added in 4.6 (add-composer-spellcheck-field-v1): governs browser spellcheck on Salon composer + Document Mode rich editor
   "composerEmoji" INTEGER DEFAULT 1, -- added in 4.8.2 (add-composer-emoji-field-v1): governs the `:` emoji typeahead on Salon composer + Document Mode rich editor; the toolbar's emoji picker is NOT gated by it
   "composerUnicode" INTEGER DEFAULT 1, -- added in 4.8.2 (add-composer-unicode-field-v1): governs the `\` Unicode typeahead on Salon composer + Document Mode rich editor; the toolbar's symbol picker is NOT gated by it
+  "composerSlashCommands" INTEGER DEFAULT 1, -- added in 4.11 (add-composer-slash-commands-field-v1): governs the `/` slash-command menu in the Salon composer (never Document Mode); the gutter buttons and the sidebar's Run Tool are NOT gated by it
   "impersonationVoiceMode" TEXT DEFAULT 'off', -- added in 4.10 (impersonation-voice-mode-v1, replacing the 4.10-dev INTEGER impersonationVoiceRewrite, which it translated 1 → 'ask' and dropped): what happens to a line typed while impersonating a character (the chats.impersonatingParticipantIds overlay). 'off' posts it as typed; 'ask' opens the review dialog on the draft with no model call, and the operator sends it as written or asks for a restatement; 'always' opens the dialog and starts the restatement by that character's own model at once. Never fires for a controlledBy:'user' seat; the dialog can always send the draft as written. Nothing extra is persisted — a restatement's audit trail is its llm_logs row (taskType `impersonation-voice-rewrite`).
   "textReplacementsEnabled" INTEGER DEFAULT 1, -- added in 4.6 (add-text-replacements-enabled-field-v1): master switch for the Layer 1.5 text-replacement plugin; rule list lives in text_replacement_rules
   "autonomousRoomSettings" TEXT DEFAULT '{}', -- added in 4.6 (add-autonomous-rooms-fields-v1): user-level defaults for autonomous rooms { dailyTokenBudget, defaultFreshnessWindowMs, visibilityDefault, destructiveToolPolicy }
@@ -1053,7 +1140,9 @@ CREATE TABLE "chat_settings" (
   "autoScrollOnResponseComplete" INTEGER DEFAULT 0, -- added in 4.6 (add-auto-scroll-on-response-complete-field-v1): when 1, the Salon scrolls to the newest message as a reply finishes / a new message arrives (only when already near the bottom). Default 0 so long replies don't yank the reader away. DISPLAY ONLY.
   "answerConfirmationSettings" TEXT DEFAULT '{"enabled":false}', -- added in 4.8 (add-answer-confirmation-columns-v2): global default for the Salon answer-confirmation check { enabled }. Per-project override in project properties.json; per-chat override on chats.answerConfirmationOverride.
   "customTools" INTEGER DEFAULT 1, -- added in 4.8 (add-custom-tools-field-v1): when 0, Pascal's run_custom pseudo-tool is never offered to models and the composer gutter button is hidden. Custom tool definitions themselves are retained.
-  "smartTypographySettings" TEXT DEFAULT '{"displayQuotes":false,"dashes":true,"ellipsis":true}', -- added in 4.8.2 (add-smart-typography-settings-field-v1): Layer 1.6 { displayQuotes, dashes, ellipsis }. `displayQuotes` curls quotes at RENDER time only — chat_messages.content is never rewritten, so model input, embeddings and exports are unaffected; suppressed for a template whose patterns claim a quote character. `dashes`/`ellipsis` are type-time and DO write real –/—/… into the composer text.
+  "customToolTriggers" INTEGER DEFAULT 0, -- added in 4.11 (add-custom-tool-triggers-field-v1): when 1, a message from anyone in a chat that contains one of a custom tool's declared `triggers` phrases runs that tool with its defaults (pascalMeta.invokedBy = 'trigger'). Dead while customTools is 0. Off by default.
+  "customToolIntervention" INTEGER DEFAULT 1, -- added in 4.11 (add-custom-tool-intervention-field-v1): when 1 (the default), a custom tool marked intervenable is held for the operator in a dialog before Pascal announces its roll; when 0, every run goes ahead as rolled. A held roll waits indefinitely, so 0 is how a chat runs unattended. Dead while customTools is 0.
+  "smartTypographySettings" TEXT DEFAULT '{"displayQuotes":false,"dashes":true,"ellipsis":true}', -- added in 4.8.2 (add-smart-typography-settings-field-v1): Layer 1.6 { displayQuotes, dashes, ellipsis }. `displayQuotes` curls quotes at RENDER time only — chat_messages.content is never rewritten, so model input, embeddings and exports are unaffected; suppressed for a template whose patterns claim a quote character. `dashes`/`ellipsis` are type-time and DO write real –/—/… into the composer text. `punctuationWarnings` (4.11, absent reads as `true` via the Zod default; the column default was not changed) tints suspect quotes/asterisks/`((`/`))` in the Salon composer and writes nothing.
   "wardrobeImageSettings" TEXT DEFAULT '{"imageProfileId":null}', -- added in 4.10 (add-wardrobe-image-settings-field-v1): { imageProfileId } — the image profile designated for drawing wardrobe items' pictures (Settings → Images → Wardrobe Images). Resolved by `resolveWardrobeImageProfile`: per-generation override → this → the user's default image profile. Never falls back to storyBackgroundsSettings. Also `generateFromTools` (boolean, absent reads as false): whether `wardrobe_create` / `wardrobe_update` may queue a `WARDROBE_ITEM_IMAGE_GENERATION` job — no migration, the Zod default fills older rows.
   UNIQUE("userId")
 );
@@ -1393,7 +1482,8 @@ CREATE TABLE "memories" (
   "supersededById" TEXT DEFAULT NULL,    -- added in 4.10: id of the CONSOLIDATED digest that replaced this cold row
   "supersededAt" TEXT DEFAULT NULL,      -- added in 4.10 (add-memory-superseded-at-v1): when the row went cold under its digest; set/cleared with supersededById. Cold retention ages by it, not updatedAt (bug 225). Backfilled from updatedAt for rows already superseded
   "consolidatedFrom" TEXT DEFAULT '[]',  -- added in 4.10: on a digest, JSON string[] of the member memory ids it folds
-  "consolidatedAt" TEXT DEFAULT NULL     -- added in 4.10: last time the consolidator considered this row
+  "consolidatedAt" TEXT DEFAULT NULL,    -- added in 4.10: last time the consolidator considered this row
+  "keystone" INTEGER NOT NULL DEFAULT 0  -- added in 4.11 (add-memory-keystone-v1): 1 = operator-marked standing fact. Always in the frozen archive (full text) when its subject is present, the holder, or in the inner circle; never folded, consolidated, demoted, footnoted or cascade-retired. At most 5 hot per (characterId, subject), enforced by updateMemory / the manual create route
 );
 
 CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId");
@@ -1404,6 +1494,7 @@ CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
 CREATE INDEX "idx_memories_reinforcedImportance" ON "memories" ("reinforcedImportance" DESC);
 CREATE INDEX "idx_memories_character_tier" ON "memories" ("characterId", "tier");  -- added in 4.10 (add-memory-tiers-v1)
 CREATE INDEX "idx_memories_supersededById" ON "memories" ("supersededById") WHERE "supersededById" IS NOT NULL;  -- added in 4.10 (add-memories-superseded-by-index-v1): the delete chokepoint's "members of a deleted digest" lookup
+CREATE INDEX "idx_memories_keystone" ON "memories" ("characterId", "aboutCharacterId") WHERE "keystone" = 1;  -- added in 4.11 (add-memory-keystone-v1): the frozen archive's keystone reads (findKeystones / countKeystones)
 ```
 
 `aboutCharacterId` semantics: the character the memory is *about*. Three buckets are valid:
@@ -1453,7 +1544,9 @@ CREATE TABLE "roleplay_templates" (
   "dialogueDetection" TEXT,
   "narrationDelimiters" TEXT DEFAULT '"*"',
   "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL
+  "updatedAt" TEXT NOT NULL,
+  "unmarkedStyle" TEXT,
+  "markdownAsterisks" INTEGER DEFAULT 1
 );
 
 CREATE INDEX "idx_roleplay_templates_createdAt" ON "roleplay_templates" ("createdAt" DESC);
@@ -1473,6 +1566,16 @@ CREATE INDEX "idx_roleplay_templates_userId" ON "roleplay_templates" ("userId");
 > boolean (the renderer then emits the pattern's `rpBody` capture group instead of the full
 > match); add-ons are baked into the pattern's `className`. `linePrefix`/`tagPrefix` rules are
 > `line`-scoped (the class lands on the whole block, not an inline span).
+>
+> **`narrationDelimiters`** is JSON text written by the repository itself
+> (`roleplay-template-narration-codec.ts`): `"*"`, `["[","]"]`, or `null` (narration is
+> unmarked prose). Legacy rows holding a raw delimiter (`*`) still decode; a NULL column reads
+> as `'*'`. **`unmarkedStyle`** (since `add-roleplay-template-unmarked-fields-v1`) is JSON
+> `{ style, addOns? }` or NULL — the class for text no delimiter claims. **`markdownAsterisks`**
+> (same migration, default 1) — 0 takes `*` away from Markdown. `wrap` delimiters may also carry
+> `matchCurlyQuotes` and `closeOptional` booleans. `renderingPatterns.scope` may additionally be
+> `unmarked` (class for unclaimed text), `literal` (escape matches before Markdown) or `strip`
+> (remove matches before Markdown); `className` is empty for the last two.
 
 ### tags
 
@@ -1747,6 +1850,31 @@ CREATE TABLE "migrations_metadata" (
 );
 ```
 
+### log_entries
+
+```sql
+CREATE TABLE "log_entries" (
+  "id" TEXT PRIMARY KEY,
+  "message" TEXT NOT NULL,
+  "chatId" TEXT NOT NULL,
+  "characterId" TEXT,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_log_entries_createdAt" ON "log_entries" ("createdAt" DESC);
+CREATE INDEX "idx_log_entries_chatId" ON "log_entries" ("chatId", "createdAt" DESC);
+CREATE INDEX "idx_log_entries_characterId" ON "log_entries" ("characterId", "createdAt" DESC);
+```
+
+The log: short lines written by characters (`log_create_entry`) and by Pascal custom tools (the `log` side effect), readable by characters through `log_grep` and `log_read`. Created by `LogEntriesRepository` from the Zod schema in `lib/schemas/log-entry.types.ts`; there is no migration. The table is instance-wide: every chat and every character reads and writes the same one.
+
+`message` is 1 to 4000 characters, written once and never edited (`updatedAt` equals `createdAt`). It is plain text, not compressed. `chatId` is the chat the line was written from. `characterId` is the calling character, or NULL when the operator ran a tool with no character seat. `createdAt` / `updatedAt` are ISO-8601 text.
+
+The LLM logs connection registers a SQL function `regexp(pattern, value[, flags])` (`lib/database/backends/sqlite/regexp-function.ts`), so `message REGEXP 'pat'` works in this database. It uses JavaScript `RegExp`; flags are `i`, `m`, `s`, `u`. `log_grep` and `searchMessages` use it.
+
+Pruning: the `LLM_LOG_CLEANUP` job deletes rows older than the LLM logging retention days (`chatSettings.llmLoggingSettings.retentionDays`, default 30, 0 keeps forever), even when LLM logging itself is off. The table is not part of `.qtap` exports or logical backups (treated like `llm_logs`); a physical backup of the llm-logs database includes it. In the job child, writes are buffered and land when the job commits.
+
 ### SQLite statistics tables (auto-managed)
 
 ```sql
@@ -1780,6 +1908,7 @@ CREATE TABLE "llm_logs" (
   "requestHashes" TEXT,
   "durationMs" INTEGER,
   "autonomousRunId" TEXT,
+  "storytellerRoundId" TEXT,
   "connectionProfileId" TEXT,
   "imageProfileId" TEXT,
   "createdAt" TEXT NOT NULL,
@@ -1791,6 +1920,7 @@ CREATE INDEX "idx_llm_logs_createdAt" ON "llm_logs" ("createdAt" DESC);
 CREATE INDEX "idx_llm_logs_type" ON "llm_logs" ("type");
 CREATE INDEX "idx_llm_logs_userId" ON "llm_logs" ("userId");
 CREATE INDEX "idx_llm_logs_autonomousRunId" ON "llm_logs" ("autonomousRunId");
+CREATE INDEX "idx_llm_logs_storytellerRoundId" ON "llm_logs" ("storytellerRoundId");
 CREATE INDEX "idx_llm_logs_connectionProfileId" ON "llm_logs" ("connectionProfileId");
 CREATE INDEX "idx_llm_logs_imageProfileId" ON "llm_logs" ("imageProfileId");
 ```
@@ -1802,6 +1932,8 @@ CREATE INDEX "idx_llm_logs_imageProfileId" ON "llm_logs" ("imageProfileId");
 `durationMs` is the wall-clock of the provider call. The shared cheap-LLM path (`lib/memory/cheap-llm-tasks/core-execution.ts`) and several service call sites did not populate it before 4.9; the character optimizer hardcoded `0`, which poisoned any average taken over the column. All of those now measure.
 
 `autonomousRunId` is stamped on every LLM call made within an autonomous-room turn (the turn plus its agent-mode tool sub-calls), via an `AsyncLocalStorage` context the turn handler establishes. It is `NULL` for all non-autonomous calls. The autonomous-room turn handler sums `usage.totalTokens` for a run by this column to enforce the per-run token budget — superseding the older timestamp-window sum, which double-counted overlapping chat activity and background housekeeping. Added by migration `add-llm-logs-autonomous-run-id-column-v1`.
+
+`storytellerRoundId` is stamped on every LLM call made for a storyteller round — each bid (`type = 'STORYTELLER_BID'`, the only record a losing bid leaves) and each speaking turn the round runs — via the round `AsyncLocalStorage` (`lib/storyteller/round-context.ts`). `NULL` outside a round. The Salon's LLM inspector groups a round by it. Added by migration `add-llm-logs-storyteller-round-id-column-v1`.
 
 ### SQLite statistics tables (auto-managed)
 

@@ -87,14 +87,18 @@ const GET_ACTIONS = [
   'get-state',
   'outfit',
   'outfit-summary',
+  'wardrobe-history',
+  'inventory',
   'photo-albums',
   'informs',
+  'storyteller-round',
   'group-stores',
   'mailbox',
   'accessible-stores',
   'get-background',
   'gallery',
   'scenario-source',
+  'absent-mentions',
   'cost',
 ]
 

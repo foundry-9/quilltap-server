@@ -1,5 +1,7 @@
 'use client'
 
+import { useId } from 'react'
+
 /**
  * The legacy hand-written per-provider parameter panel.
  *
@@ -31,16 +33,18 @@ function SizeOnlyParameters({
   value: string
   onSizeChange: (size: string) => void
 }) {
+  const id = useId()
   return (
     <div className="space-y-4 border-t qt-border-default pt-4">
       <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
 
       {/* Size */}
       <div>
-        <label className="qt-label mb-1">
+        <label htmlFor={`${id}-size`} className="qt-label mb-1">
           Default Size
         </label>
         <select
+          id={`${id}-size`}
           value={value}
           onChange={e => onSizeChange(e.target.value)}
           className="qt-select"
@@ -81,6 +85,7 @@ export function ImageProfileParameters({
   parameters,
   onChange,
 }: ImageProfileParametersProps) {
+  const id = useId()
   const handleChange = (key: string, value: any) => {
     onChange({
       ...parameters,
@@ -107,10 +112,11 @@ export function ImageProfileParameters({
 
           {/* Quality */}
           <div>
-            <label className="qt-label mb-1">
+            <label htmlFor={`${id}-quality`} className="qt-label mb-1">
               Quality
             </label>
             <select
+              id={`${id}-quality`}
               value={parameters.quality || ''}
               onChange={e => handleChange('quality', e.target.value)}
               className="qt-select"
@@ -130,10 +136,11 @@ export function ImageProfileParameters({
 
           {/* Style */}
           <div>
-            <label className="qt-label mb-1">
+            <label htmlFor={`${id}-style`} className="qt-label mb-1">
               Style
             </label>
             <select
+              id={`${id}-style`}
               value={parameters.style || ''}
               onChange={e => handleChange('style', e.target.value)}
               className="qt-select"
@@ -147,10 +154,11 @@ export function ImageProfileParameters({
 
           {/* Size */}
           <div>
-            <label className="qt-label mb-1">
+            <label htmlFor={`${id}-size2`} className="qt-label mb-1">
               Default Size
             </label>
             <select
+              id={`${id}-size2`}
               value={parameters.size || ''}
               onChange={e => handleChange('size', e.target.value)}
               className="qt-select"
@@ -182,10 +190,11 @@ export function ImageProfileParameters({
 
           {/* Aspect Ratio */}
           <div>
-            <label className="qt-label mb-1">
+            <label htmlFor={`${id}-aspect`} className="qt-label mb-1">
               Default Aspect Ratio
             </label>
             <select
+              id={`${id}-aspect`}
               value={parameters.aspectRatio || '1:1'}
               onChange={e => handleChange('aspectRatio', e.target.value)}
               className="qt-select"
@@ -201,10 +210,11 @@ export function ImageProfileParameters({
 
           {/* Negative Prompt */}
           <div>
-            <label className="qt-label mb-1">
+            <label htmlFor={`${id}-negative`} className="qt-label mb-1">
               Default Negative Prompt
             </label>
             <textarea
+              id={`${id}-negative`}
               value={parameters.negativePrompt || ''}
               onChange={e => handleChange('negativePrompt', e.target.value)}
               placeholder="e.g., blurry, low quality, distorted"

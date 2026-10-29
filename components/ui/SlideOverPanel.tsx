@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 
 export interface SlideOverPanelProps {
   isOpen: boolean
@@ -33,21 +34,7 @@ export function SlideOverPanel({
   headerActions,
 }: SlideOverPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
-
-  // Save and restore focus
-  useEffect(() => {
-    if (isOpen) {
-      previousFocusRef.current = document.activeElement as HTMLElement
-      // Focus the panel on open for keyboard accessibility
-      requestAnimationFrame(() => {
-        panelRef.current?.focus()
-      })
-    } else if (previousFocusRef.current) {
-      previousFocusRef.current.focus()
-      previousFocusRef.current = null
-    }
-  }, [isOpen])
+  const handleKeyDown = useDialogFocus(panelRef, isOpen)
 
   // Escape key handler
   useEffect(() => {
@@ -70,31 +57,6 @@ export function SlideOverPanel({
       onClose()
     }
   }, [onClose])
-
-  // Focus trap: cycle focus within the panel
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key !== 'Tab') return
-
-    const panel = panelRef.current
-    if (!panel) return
-
-    const focusable = panel.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    )
-
-    if (focusable.length === 0) return
-
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault()
-      last.focus()
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }, [])
 
   if (typeof document === 'undefined') return null
 

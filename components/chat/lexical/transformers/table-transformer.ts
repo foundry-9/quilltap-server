@@ -123,11 +123,14 @@ export const TABLE_TRANSFORMER: MultilineElementTransformer = {
   // Match the first line of a table: must contain at least one pipe
   regExpStart: /^\|(.+)\|?\s*$/,
 
-  // Tables end when we hit a line that doesn't start with a pipe
-  regExpEnd: {
-    optional: true,
-    regExp: /^(?!\s*\|).*/,
-  },
+  // Tables end when we hit a line that doesn't start with a pipe.
+  // A bare (non-optional) regExpEnd keeps this transformer out of the live
+  // markdown-shortcut runner: @lexical/markdown skips multiline transformers
+  // whose end regexp is not optional on both the space and the Enter path.
+  // Import is unaffected — $importMultiline calls handleImportAfterStartMatch
+  // and returns its result before it ever reads regExpEnd. `replace()` stays
+  // a no-op for the same reason: tables are only ever built on import.
+  regExpEnd: /^(?!\s*\|).*/,
 
   /**
    * Handle import after matching the start line.

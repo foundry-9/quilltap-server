@@ -38,6 +38,7 @@ import {
   uriForResolvedPath,
   assertCharacterMayRead,
   assertCharacterMayWrite,
+  publishedMountPoint,
 } from './shared';
 
 // --- doc_read_frontmatter ---
@@ -58,7 +59,7 @@ export async function handleReadFrontmatter(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const uri = await uriForResolvedPath(resolved, context);
+  const uri = await uriForResolvedPath(resolved);
   const { content } = await readFileWithMtime(resolved);
   const parsed = parseFrontmatter(content);
 
@@ -125,14 +126,14 @@ export async function handleUpdateFrontmatter(
 
   await triggerReindexIfNeeded(resolved);
 
-  const editedUri = await uriForResolvedPath(resolved, context);
+  const editedUri = await uriForResolvedPath(resolved);
   const displayTitle = path.basename(input.path);
   await postLibrarianWriteAnnouncement({
     chatId: context.chatId,
     displayTitle,
     uri: editedUri,
     scope: scope as 'project' | 'document_store' | 'general',
-    mountPoint: input.mount_point,
+    mountPoint: publishedMountPoint(resolved, input.mount_point),
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
     hiddenFromCharacters: contentHiddenFromCharacters(newContent),
@@ -179,7 +180,7 @@ export async function handleReadHeading(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const uri = await uriForResolvedPath(resolved, context);
+  const uri = await uriForResolvedPath(resolved);
   const { content } = await readFileWithMtime(resolved);
 
   try {
@@ -246,14 +247,14 @@ export async function handleUpdateHeading(
 
     await triggerReindexIfNeeded(resolved);
 
-    const editedUri = await uriForResolvedPath(resolved, context);
+    const editedUri = await uriForResolvedPath(resolved);
     const displayTitle = path.basename(input.path);
     await postLibrarianWriteAnnouncement({
       chatId: context.chatId,
       displayTitle,
       uri: editedUri,
       scope: scope as 'project' | 'document_store' | 'general',
-      mountPoint: input.mount_point,
+      mountPoint: publishedMountPoint(resolved, input.mount_point),
       origin: await resolveActorOrigin(context),
       change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
       hiddenFromCharacters: contentHiddenFromCharacters(newContent),

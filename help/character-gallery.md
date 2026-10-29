@@ -37,6 +37,19 @@ Each plate carries the same four courtesies the album offers, plus one of its ow
 
 Avatar rolls do not appear in the album above unless you put them there. The album is what someone chose to keep; this drawer is what the house had to draw along the way.
 
+## Wardrobe Pictures — likenesses of every garment within reach
+
+Below the Avatar Rolls sits a third shelf: **Wardrobe Pictures**. Click the heading to open it.
+
+Here hang the pictures the Lantern has drawn of wardrobe items themselves — every generated image of every garment the character can reach. That means the character's own wardrobe, the wardrobes of every group they belong to, and the **Quilltap General** collection that everybody shares. (Project wardrobes keep to their chats, since whether a character may borrow from one depends on which conversation they are in.) Pictures you uploaded to an item yourself are not shown; this shelf is for the sketches the house commissioned.
+
+Each plate wears a small card across its foot, so you need never wonder whose coat you are looking at:
+
+- the **garment's name** on the first line (marked *(archived)* if the item has been put away), and
+- **which wardrobe it hangs in** on the second — *Own wardrobe*, *Group · The Drones Club*, or *Shared · Quilltap General*.
+
+The shelf is for looking rather than rearranging. Hover for the **Download** arrow; click a plate for the enlarged view, with its generation prompt, **Copy**, **Download**, and **Save to my gallery**. To change which picture an item uses, or to discard one, open the item in the wardrobe itself.
+
 ## How a photograph ends up in the album
 
 There are three principal routes:

@@ -1,8 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MemoryCard } from './memory-card'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { MemoryEditor } from './memory-editor'
 import { MaintenanceDialog } from './maintenance-dialog'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -29,6 +31,7 @@ interface Memory {
   tagDetails?: Tag[]
   importance: number
   source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
+  keystone?: boolean
   /** 'cold' rows are archived: out of everyday recall, still on the shelf. */
   tier?: 'hot' | 'cold'
   /** The digest that replaced this row, when it has been folded. */
@@ -64,7 +67,13 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'AUTO' | 'MANUAL' | 'CONSOLIDATED'>('ALL')
   const [tierFilter, setTierFilter] = useState<'ALL' | 'hot' | 'cold'>('ALL')
+  const [keystoneOnly, setKeystoneOnly] = useState(false)
   const [viewedDigest, setViewedDigest] = useState<Memory | null>(null)
+  const digestTitleId = useId()
+  const digestDialogRef = useRef<HTMLDivElement>(null)
+  const handleDigestFocusKeyDown = useDialogFocus(digestDialogRef, viewedDigest !== null)
+  const closeDigest = useCallback(() => setViewedDigest(null), [])
+  useEscapeKey(closeDigest, viewedDigest !== null)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
@@ -90,6 +99,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       if (currentSearch) params.set('search', currentSearch)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
       if (tierFilter !== 'ALL') params.set('tier', tierFilter)
+      if (keystoneOnly) params.set('keystone', 'true')
 
       const result = await fetchJson<{ memories: Memory[]; totalCount: number }>(
         `/api/v1/memories?${params}`
@@ -128,7 +138,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       setIsLoading(false)
       setLoadingMore(false)
     }
-  }, [characterId, sortBy, sortOrder, sourceFilter, tierFilter])
+  }, [characterId, sortBy, sortOrder, sourceFilter, tierFilter, keystoneOnly])
 
   // Reset and refetch when filters change or refreshKey changes
   useEffect(() => {
@@ -268,12 +278,14 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
           <input
             type="text"
             placeholder="Search memories..."
+            aria-label="Search memories"
             value={search}
             onChange={handleSearchChange}
             className="qt-input text-sm"
           />
         </div>
         <select
+          aria-label="Sort memories by"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortBy)}
            className="qt-select w-auto"
@@ -290,6 +302,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
           {sortOrder === 'asc' ? '↑' : '↓'}
         </button>
         <select
+          aria-label="Filter by source"
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value as 'ALL' | 'AUTO' | 'MANUAL' | 'CONSOLIDATED')}
            className="qt-select w-auto"
@@ -309,6 +322,15 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
           <option value="hot">Active</option>
           <option value="cold">Archived</option>
         </select>
+        <label className="flex items-center gap-2 cursor-pointer qt-text-xs" title="Show only the standing facts you have set in stone">
+          <input
+            type="checkbox"
+            checked={keystoneOnly}
+            onChange={(e) => setKeystoneOnly(e.target.checked)}
+            className="qt-checkbox"
+          />
+          Keystones only
+        </label>
       </div>
 
       {/* Error State */}
@@ -371,9 +393,17 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       {/* Digest viewer (portalled so the overlay clears any stacking context) */}
       {viewedDigest && typeof document !== 'undefined' && createPortal(
         <div className="qt-dialog-overlay p-4 z-[100]">
-          <div className="qt-dialog max-w-xl max-h-[90vh] overflow-y-auto">
+          <div
+            className="qt-dialog max-w-xl max-h-[90vh] overflow-y-auto"
+            ref={digestDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={digestTitleId}
+            tabIndex={-1}
+            onKeyDown={handleDigestFocusKeyDown}
+          >
             <div className="qt-dialog-header">
-              <h2 className="qt-dialog-title">The Digest</h2>
+              <h2 id={digestTitleId} className="qt-dialog-title">The Digest</h2>
               <p className="qt-dialog-description">The denser note that took this one&rsquo;s place on the active shelf.</p>
             </div>
             <div className="p-6">

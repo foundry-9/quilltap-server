@@ -3,7 +3,9 @@
  *
  * A chat wipe (`DELETE /memories?chatId=`, `MEMORY_REGENERATE_CHAT`) and the
  * near-duplicate folding tool act on what extraction wrote, and only on that.
- * Three kinds of row are out of their reach:
+ * Four kinds of row are out of their reach:
+ *  - keystones — standing facts the operator marked (inner-circle-recall.md
+ *    Part C); nothing automatic removes, folds or moves one;
  *  - MANUAL rows — written by hand; extraction will never write them back.
  *  - digests (`source: 'CONSOLIDATED'`) — their members point at them through
  *    `supersededById`; removing one leaves every member dangling.
@@ -16,10 +18,13 @@
 
 import type { Memory } from '@/lib/schemas/types'
 
-export type PolicyProtection = 'manual' | 'digest' | 'cold'
+export type PolicyProtection = 'keystone' | 'manual' | 'digest' | 'cold'
 
 /** Why a bulk policy path must leave this row alone, or null when it may act. */
-export function policyProtectionOf(memory: Pick<Memory, 'source' | 'tier'>): PolicyProtection | null {
+export function policyProtectionOf(
+  memory: Pick<Memory, 'source' | 'tier'> & Partial<Pick<Memory, 'keystone'>>,
+): PolicyProtection | null {
+  if (memory.keystone) return 'keystone'
   if (memory.source === 'MANUAL') return 'manual'
   if (memory.source === 'CONSOLIDATED') return 'digest'
   if (memory.tier === 'cold') return 'cold'
@@ -27,12 +32,12 @@ export function policyProtectionOf(memory: Pick<Memory, 'source' | 'tier'>): Pol
 }
 
 /** Split rows into those a bulk policy path may act on and those it must spare. */
-export function partitionByPolicyProtection<T extends Pick<Memory, 'source' | 'tier'>>(
+export function partitionByPolicyProtection<T extends Pick<Memory, 'source' | 'tier'> & Partial<Pick<Memory, 'keystone'>>>(
   memories: readonly T[],
 ): { actionable: T[]; spared: T[]; sparedBy: Record<PolicyProtection, number> } {
   const actionable: T[] = []
   const spared: T[] = []
-  const sparedBy: Record<PolicyProtection, number> = { manual: 0, digest: 0, cold: 0 }
+  const sparedBy: Record<PolicyProtection, number> = { keystone: 0, manual: 0, digest: 0, cold: 0 }
   for (const memory of memories) {
     const protection = policyProtectionOf(memory)
     if (protection) {

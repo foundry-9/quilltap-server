@@ -181,6 +181,8 @@ See [Chat Sidebar](chat-participants.md) for the full tour.
 
 **Tip:** Use **Shift+Enter** for line breaks without sending.
 
+**A word on code blocks.** Three backticks and a space open a code block in the composer. Within it, **Shift+Enter** begins each fresh line as usual. When your code is complete, strike **Shift+Enter** once more to leave a blank line at the foot of the block, then a plain **Enter**: the blank line is quietly tidied away and your pen sets down upon an ordinary paragraph beneath the block, the message as yet unsent. A plain **Enter** on any line that still holds code sends the message, block and all, in the customary fashion. In composition mode the same blank-line **Enter** steps out of the block, and Ctrl/Cmd+Enter remains the only sending key.
+
 **A word on line breaks.** The Salon honours your line breaks exactly as you strike them. A **single** press of Return begins your next words upon a fresh line, snug beneath the last — none of that classical-Markdown habit of sweeping the two together into one flowing line. A **double** press of Return (leaving a blank line betwixt) opens a wholly new paragraph. This courtesy extends to blockquotes, so that a passage entered thus —
 
 ```
@@ -211,7 +213,8 @@ Scroll up to see earlier messages in the conversation. Long chats may have:
 When the AI is generating a response:
 
 - **Typing Indicator** — Shows the character is "thinking"
-- **Stop Button** — Cancel generation if you change your mind
+- **Raise your hand** (amber) — Ask the next character to yield the floor to you; see [Cutting In](interrupting.md)
+- **Stop** (red octagon) — Cut the reply off where it stands and take the floor; see [Cutting In](interrupting.md)
 - **Progress** — Some themes show generation progress
 
 **Should you press Return whilst the room is still speaking**, the Salon will not talk over its own

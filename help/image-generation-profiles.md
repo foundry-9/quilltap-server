@@ -30,6 +30,8 @@ Quilltap now spares you the whole tedious diplomacy. You — and any character w
 
 The establishment then translates that wish into whatever each provider actually honours — a concrete size, an aspect ratio, or a discreet phrase slipped into the prompt — so the same instruction works everywhere. Where a provider is wholly incapable of a given shape (the venerable DALL·E 2, for instance, paints only squares), Quilltap declines to send a measurement it would reject and instead nudges the composition with words.
 
+**On NanoGPT's two hundred ateliers**, each keeps its own list of permissible canvases — some in exact pixels, some merely as "1K" or "2K" with the shape named separately as a ratio. Quilltap consults the model's own list before every order and asks for the nearest thing it actually offers. Should a model nonetheless decline to paint anything but a square (as Qwen Image 3 was observed to do in October of 2026, turning away every tall or wide request as "temporarily unavailable"), the establishment asks once more for a plain square rather than send you away empty-handed — a square portrait being, on the whole, preferable to none at all.
+
 Sensible defaults are already in place: **avatars arrive in portrait**, **story backgrounds in cinematic landscape**. And because providers have a habit of returning a different shape than was requested, Quilltap now measures every finished picture and records its *true* dimensions, rather than trusting the order it placed.
 
 ## The Model's Own Dials — Per-Model Options
@@ -425,7 +427,7 @@ The most expensive failure a LoRA can suffer is the one that wears the costume o
 
 **The magic word was never said.** Most adapters answer to a trigger, and their page names it — sometimes as a single phrase, sometimes as a short list of words, in which case a phrase containing all of them will do. **Query** will often produce it for you, where the author troubled to declare it. Write it into the row's **Trigger Phrase** and Quilltap weaves it into every prompt this profile paints. Leave it blank and the adapter may attend the sitting without ever once picking up the pen.
 
-**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene by default, however uncensored the destination. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [The Concierge](the-concierge.md).
+**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene in a Moderated or Locked chat whose painter is an ordinary one. Tick **Uncensored-compatible** on the profile carrying the adapter, or set the chat **Unmoderated**, and the scene is described plainly. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [The Concierge](the-concierge.md).
 
 ### Generation is very slow
 

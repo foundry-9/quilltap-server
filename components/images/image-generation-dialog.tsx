@@ -8,7 +8,9 @@
  * Supports different generation options based on selected provider
  */
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useId, useRef, FormEvent } from 'react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface GenerationOption {
   n?: number;
@@ -87,6 +89,10 @@ export function ImageGenerationDialog({
   contextId,
   orientation,
 }: ImageGenerationDialogProps) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen);
+  const id = useId();
   const [prompt, setPrompt] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
@@ -229,17 +235,25 @@ export function ImageGenerationDialog({
     onClose();
   }
 
+  useEscapeKey(handleClose, isOpen);
+
   if (!isOpen) return null;
 
   return (
     <div className="qt-dialog-overlay" onClick={handleClose}>
       <div
         className="qt-dialog max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="qt-dialog-header sticky top-0">
-          <h2 className="qt-dialog-title">Generate Image</h2>
+          <h2 id={titleId} className="qt-dialog-title">Generate Image</h2>
         </div>
 
         {/* Body */}
@@ -247,7 +261,7 @@ export function ImageGenerationDialog({
           <div className="px-6 py-4 space-y-6">
             {/* Provider Selection */}
             <div>
-              <label className="block text-sm qt-text-primary mb-2">
+              <label htmlFor={`${id}-profile`} className="block text-sm qt-text-primary mb-2">
                 Provider
               </label>
               {loadingProfiles ? (
@@ -260,6 +274,7 @@ export function ImageGenerationDialog({
                 </div>
               ) : (
                 <select
+                  id={`${id}-profile`}
                   value={selectedProfileId}
                   onChange={(e) => setSelectedProfileId(e.target.value)}
                   className="qt-select"
@@ -275,10 +290,11 @@ export function ImageGenerationDialog({
 
             {/* Prompt Input */}
             <div>
-              <label className="block text-sm qt-text-primary mb-2">
+              <label htmlFor={`${id}-prompt`} className="block text-sm qt-text-primary mb-2">
                 Prompt
               </label>
               <textarea
+                id={`${id}-prompt`}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe the image you want to generate..."
@@ -299,10 +315,11 @@ export function ImageGenerationDialog({
                 {/* Number of Images */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block qt-text-xs qt-text-primary mb-1">
+                    <label htmlFor={`${id}-n`} className="block qt-text-xs qt-text-primary mb-1">
                       Number of Images
                     </label>
                     <select
+                      id={`${id}-n`}
                       value={options.n || 1}
                       onChange={(e) => setOptions({ ...options, n: Number.parseInt(e.target.value) })}
                       className="qt-select"
@@ -331,10 +348,11 @@ export function ImageGenerationDialog({
                     </div>
                   ) : (
                     <div>
-                      <label className="block qt-text-xs qt-text-primary mb-1">
+                      <label htmlFor={`${id}-size`} className="block qt-text-xs qt-text-primary mb-1">
                         Size
                       </label>
                       <select
+                        id={`${id}-size`}
                         value={options.size || '1024x1024'}
                         onChange={(e) => setOptions({ ...options, size: e.target.value })}
                         className="qt-select"
@@ -353,10 +371,11 @@ export function ImageGenerationDialog({
                 {isOpenAI && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block qt-text-xs qt-text-primary mb-1">
+                      <label htmlFor={`${id}-quality`} className="block qt-text-xs qt-text-primary mb-1">
                         Quality
                       </label>
                       <select
+                        id={`${id}-quality`}
                         value={options.quality ?? ''}
                         onChange={(e) => setOptions({ ...options, quality: e.target.value as GenerationOption['quality'] })}
                         className="qt-select"
@@ -370,10 +389,11 @@ export function ImageGenerationDialog({
                     </div>
 
                     <div>
-                      <label className="block qt-text-xs qt-text-primary mb-1">
+                      <label htmlFor={`${id}-style`} className="block qt-text-xs qt-text-primary mb-1">
                         Style
                       </label>
                       <select
+                        id={`${id}-style`}
                         value={options.style || 'vivid'}
                         onChange={(e) => setOptions({ ...options, style: e.target.value as any })}
                         className="qt-select"
@@ -388,10 +408,11 @@ export function ImageGenerationDialog({
                 {/* Gemini Specific Options */}
                 {isGemini && !orientation && (
                   <div>
-                    <label className="block qt-text-xs qt-text-primary mb-1">
+                    <label htmlFor={`${id}-aspect`} className="block qt-text-xs qt-text-primary mb-1">
                       Aspect Ratio
                     </label>
                     <select
+                      id={`${id}-aspect`}
                       value={options.aspectRatio || ''}
                       onChange={(e) => setOptions({ ...options, aspectRatio: e.target.value || undefined })}
                       className="qt-select"

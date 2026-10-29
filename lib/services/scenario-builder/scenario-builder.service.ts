@@ -17,6 +17,7 @@
  * @module services/scenario-builder/scenario-builder.service
  */
 
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { randomUUID } from 'crypto'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -156,32 +157,22 @@ export async function runScenarioBuilder(
 
     // The slate: search (documents/knowledge), the read-only doc_* five,
     // submit_final_response; plus search_web and curl in real mode.
-    const built = await buildTools(
+    const built = await buildTools({
       connectionProfile,
-      null,   // imageProfileId
-      null,   // imageProfile
       userId,
-      null,   // projectId — no project_info tool; the pool carries the project tier
-      false,  // requestFullContext
-      [],     // disabledTools
-      [],     // disabledToolGroups
-      true,   // agentModeEnabled
-      false,  // isMultiCharacter
-      false,  // helpToolsEnabled
-      false,  // canDressThemselves
-      false,  // canCreateOutfits
-      'read', // docToolsMode — reads only
-      false,  // askCarinaEnabled
-      false,  // includeWorkspaceTools
-      true,   // excludeMemorySearch (narrowed further by documentsOnlySearch)
-      false,  // sqlAccess
-      null,   // customToolContext
-      {
-        documentsOnlySearch: true,
-        webSearch: webAvailable,
-        pluginToolAllowlist: input.mode === 'real' ? ['curl'] : [],
-      },
-    )
+      // No projectId — no project_info tool; the pool carries the project tier.
+      agentModeEnabled: true,
+      canDressThemselves: false,
+      canCreateOutfits: false,
+      canManageInventory: false, // no inventory_* tools here
+      docToolsMode: 'read', // reads only
+      askCarinaEnabled: false,
+      includeWorkspaceTools: false,
+      excludeMemorySearch: true, // narrowed further by documentsOnlySearch
+      documentsOnlySearch: true,
+      webSearch: webAvailable,
+      pluginToolAllowlist: input.mode === 'real' ? ['curl'] : [],
+    })
 
     const toolInstructions = buildOneShotToolInstructions({
       connectionProfile,
@@ -203,9 +194,12 @@ export async function runScenarioBuilder(
         wardrobeRead: false,
         wardrobeWear: false,
         wardrobeTakeOff: false,
+        wardrobeRollback: false,
+        wardrobeHistory: false,
         wardrobeCreate: false,
         wardrobeUpdate: false,
         wardrobeArchive: false,
+        ...inventoryToolFlags(false),
       },
     })
 

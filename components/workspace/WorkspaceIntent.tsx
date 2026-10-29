@@ -70,6 +70,7 @@ export function WorkspaceIntent() {
         payload = mountPointId || path || create ? { mountPointId, path, create } : undefined
       }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
+      else if (kind === 'inventory') payload = characterId ? { characterId } : undefined
       else if (kind === 'character-edit' || kind === 'character-view') payload = characterId ? { characterId, tab } : undefined
       else if (kind === 'prospero') {
         const projectId = searchParams.get('projectId') || undefined

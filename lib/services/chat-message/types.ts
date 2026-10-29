@@ -4,63 +4,15 @@
  * Shared interfaces for the chat message service layer.
  */
 
-import type { ChatMetadataBase, ChatParticipantBase, Character, ChatSettings, ConnectionProfile, MessageEvent, TimestampConfig } from '@/lib/schemas/types'
+import type { StorytellerBidCallOutcome, StorytellerBidRequest, StorytellerTurnContext } from '@/lib/storyteller/types'
+import type { Character, ChatSettings, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
-import type { getRepositories } from '@/lib/repositories/factory'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types'
-
-/**
- * Context passed through the message handling pipeline
- */
-export interface MessageServiceContext {
-  /** Chat ID */
-  chatId: string
-  /** User ID */
-  userId: string
-  /** Repository access */
-  repos: ReturnType<typeof getRepositories>
-  /** Chat metadata */
-  chat: ChatMetadataBase
-  /** User participant (user-controlled character) */
-  userParticipant: ChatParticipantBase | null
-  /** Responding character participant */
-  characterParticipant: ChatParticipantBase
-  /** Character data */
-  character: Character
-  /** User character identity data (name and description of the user-controlled character) */
-  userCharacter: { name: string; description: string } | null
-  /** Connection profile for the LLM */
-  connectionProfile: ConnectionProfile
-  /** Decrypted API key (empty for providers that don't require it) */
-  apiKey: string
-  /** Image profile ID (if configured) */
-  imageProfileId: string | null
-  /** Whether this is a continue/nudge mode message */
-  isContinueMode: boolean
-  /** Whether this is a multi-character chat */
-  isMultiCharacter: boolean
-  /** All participants in multi-character chats */
-  allParticipants?: ChatParticipantBase[]
-  /** Map of character IDs to Character data */
-  participantCharacters?: Map<string, Character>
-  /** Timestamp configuration */
-  timestampConfig?: TimestampConfig | null
-  /** Chat settings */
-  chatSettings?: {
-    cheapLLMSettings?: {
-      embeddingProfileId?: string
-    }
-    defaultRoleplayTemplateId?: string
-    defaultTimestampConfig?: TimestampConfig | null
-  } | null
-  /** Roleplay template (if configured) */
-  roleplayTemplate?: { systemPrompt: string } | null
-}
 
 /**
  * Pending tool result from user-initiated tool calls (shown in composer before sending)
@@ -143,7 +95,9 @@ export interface SendMessageOptions {
    *      budget check only fires between jobs, so a 20-deep chain can blow
    *      through caps before anyone notices.
    *
-   * Set by `lib/background-jobs/handlers/autonomous-room-turn.ts`.
+   * Set by `lib/background-jobs/handlers/autonomous-room-turn.ts`. An
+   * operator whisper also runs single-turn, decided inside `handleSendMessage`
+   * (`isOperatorWhisperSend`) rather than through this field (bug 258).
    */
   singleTurn?: boolean
   /**
@@ -158,6 +112,19 @@ export interface SendMessageOptions {
    * Set by the autonomous-room turn handler.
    */
   autonomousContextCap?: number
+  /**
+   * Storyteller: build a BID for `respondingParticipantId` instead of a turn —
+   * the same context a turn would see, the bid section appended, one call with
+   * tools offered but none callable, and nothing saved or streamed. Always run
+   * inside a dry scope (`runStorytellerBid`). Continue mode only.
+   */
+  storytellerBid?: StorytellerBidRequest
+  /**
+   * Storyteller: this continue-mode turn carries out a chosen bid — its tier
+   * is the turn's effect ceiling, its plan rides as a trailing section, and
+   * the bid is stored on the reply.
+   */
+  storyteller?: StorytellerTurnContext
 }
 
 /**
@@ -308,6 +275,19 @@ export interface ProcessMessageResult {
   skipped?: boolean
   /** Participant ID of the character who passed (set when `skipped` is true). */
   skippedParticipantId?: string | null
+  /**
+   * Raised hand: the character yielded the floor to the operator (a Host
+   * turn-yield record was posted, with or without a reply of its own). The
+   * chain stops here so the operator speaks next; the chat is not paused.
+   */
+  yielded?: boolean
+  /**
+   * Storyteller: an operator post was recorded and a round should open (or,
+   * with `carina`, the post was an `@Name:` query and no round opens).
+   */
+  storytellerHold?: { triggerMessageId: string | null; carina: boolean }
+  /** Storyteller: the outcome of a bid build (`options.storytellerBid`). */
+  bid?: StorytellerBidCallOutcome
   /** Scene tracking context for the orchestrator to trigger after chain completion */
   sceneTrackingContext?: {
     connectionProfile: ConnectionProfile
@@ -467,7 +447,6 @@ export interface StreamChunkData {
   error?: string
   errorType?: string
   details?: string
-  debugLLMRequest?: Record<string, unknown>
   fileProcessing?: Array<{
     filename: string
     type: string

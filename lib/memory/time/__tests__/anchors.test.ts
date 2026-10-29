@@ -74,3 +74,26 @@ describe('resolveEpisodicAnchors', () => {
     ).toBe('Midwinter Eve')
   })
 })
+
+describe('resolveEpisodicAnchors — never throws (bug 247)', () => {
+  it('keeps the fallback when the phrase parser throws', () => {
+    jest.isolateModules(() => {
+      jest.doMock('../clock', () => ({
+        resolveWhenPhrase: () => {
+          throw new RangeError('Invalid time value')
+        },
+      }))
+      const { resolveEpisodicAnchors: isolated } = require('../anchors')
+      expect(
+        isolated({ when: 'constructor 5', referenceIso: ANCHOR, fallbackIso: WINDOW_START, timelineMode: 'realtime' }),
+      ).toEqual({ occurredAt: WINDOW_START, narrativeTime: null })
+    })
+    jest.dontMock('../clock')
+  })
+
+  it('resolves "constructor 5" to the fallback through the real parser', () => {
+    expect(
+      resolveEpisodicAnchors({ when: 'constructor 5', referenceIso: ANCHOR, fallbackIso: WINDOW_START, timelineMode: 'realtime' }),
+    ).toEqual({ occurredAt: WINDOW_START, narrativeTime: null })
+  })
+})

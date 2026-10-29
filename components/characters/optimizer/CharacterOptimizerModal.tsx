@@ -9,7 +9,8 @@
  * with all the ceremony the occasion demands.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { Icon } from '@/components/ui/icon';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { createPortal } from 'react-dom';
@@ -81,6 +82,9 @@ export function CharacterOptimizerModal({
   const [saveToVault, setSaveToVault] = useState(false);
 
   useEscapeKey(onClose, !optimizer.loading && !optimizer.applying);
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true);
 
   const handleClose = () => {
     if (!optimizer.loading && !optimizer.applying) {
@@ -123,12 +127,18 @@ export function CharacterOptimizerModal({
     <div className="qt-dialog-overlay" onClick={handleClose}>
       <div
         className="qt-dialog w-full max-w-2xl h-[92vh] m-4 flex flex-col"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="qt-dialog-header flex items-start justify-between flex-shrink-0">
           <div className="flex flex-col gap-0.5">
-            <h2 className="qt-dialog-title flex items-center gap-2">
+            <h2 id={titleId} className="qt-dialog-title flex items-center gap-2">
               <Icon name="book" className="w-5 h-5 text-primary" />
               Refine from Memories
             </h2>

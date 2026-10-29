@@ -222,7 +222,7 @@ beforeEach(() => {
   db.exec(`CREATE TABLE memories (
     id TEXT PRIMARY KEY, characterId TEXT, aboutCharacterId TEXT, tier TEXT, source TEXT, content TEXT,
     importance REAL, reinforcedImportance REAL, supersededById TEXT, supersededAt TEXT,
-    consolidatedFrom TEXT, relatedMemoryIds TEXT, updatedAt TEXT, createdAt TEXT)`)
+    consolidatedFrom TEXT, relatedMemoryIds TEXT, updatedAt TEXT, createdAt TEXT, keystone INTEGER NOT NULL DEFAULT 0)`)
   // The production indexes the chokepoint's queries may lean on.
   db.exec('CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId")')
   db.exec('CREATE INDEX "idx_memories_character_tier" ON "memories" ("characterId", "tier")')

@@ -10,6 +10,7 @@
 import type { WriteStream } from 'fs';
 import type { WebSocket } from 'ws';
 import type { IPty } from 'node-pty';
+import type { TerminalScreen } from './screen';
 import type { TerminalSession, WsClientMessage, WsServerMessage } from '@/lib/schemas/terminal.types';
 
 /**
@@ -25,6 +26,9 @@ export interface PtySessionMeta {
   exitedAt: string | null;
   exitCode: number | null;
   transcriptPath: string | null;
+  /** Current terminal geometry, kept in step with `PtyManager.resize`. */
+  cols: number;
+  rows: number;
 }
 
 /**
@@ -36,8 +40,12 @@ export interface PtySession {
   ringBuffer: string;
   subscribers: Set<WebSocket>;
   transcriptStream: WriteStream | null;
-  /** Raw bytes accumulated since the last Ariel summary flush. */
-  arielFlushBuffer: string;
+  /** Server-side emulator mirroring the screen; what text read-back renders from. */
+  screen: TerminalScreen;
+  /** Output has arrived since the last Ariel summary flush. */
+  arielPending: boolean;
+  /** Tail of this session's chain of Ariel flushes (they post in order). */
+  arielFlush: Promise<void>;
   /** Idle debounce: fires `ARIEL_FLUSH_IDLE_MS` after the last chunk arrived. */
   arielIdleTimer: NodeJS.Timeout | null;
   /** Max-age cap: fires `ARIEL_FLUSH_MAX_AGE_MS` after the buffer started, regardless of activity. */

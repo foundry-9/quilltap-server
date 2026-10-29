@@ -10,6 +10,7 @@
  *  - Successful embedding generation and storage for MOUNT_CHUNK
  *  - Not-found handling for MOUNT_CHUNK
  *  - Error propagation for MOUNT_CHUNK
+ *  - An unopened mount index fails the job instead of marking the chunk FAILED
  */
 
 jest.mock('@/lib/logger', () => ({
@@ -38,13 +39,19 @@ jest.mock('@/lib/memory/index-store', () => ({
   embeddingTextFor: jest.fn(() => 'memory text'),
 }))
 
+jest.mock('@/lib/database/backends/sqlite/mount-index-guard', () => ({
+  requireMountIndexDb: jest.fn(() => ({})),
+}))
+
 import { handleEmbeddingGenerate } from '@/lib/background-jobs/handlers/embedding-generate'
 import { getRepositories } from '@/lib/repositories/factory'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
+import { requireMountIndexDb } from '@/lib/database/backends/sqlite/mount-index-guard'
 import type { BackgroundJob } from '@/lib/schemas/types'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 const mockGenerateEmbeddingForUser = generateEmbeddingForUser as jest.MockedFunction<typeof generateEmbeddingForUser>
+const mockRequireMountIndexDb = requireMountIndexDb as jest.MockedFunction<typeof requireMountIndexDb>
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -310,6 +317,23 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
       expect.stringContaining('not found'),
       'user-1'
     )
+  })
+
+  it('throws without marking FAILED when the mount index is not open yet', async () => {
+    // findById answers null on a read failure; before the guard, a job that ran
+    // ahead of the child's mount-index connection recorded a live chunk as
+    // "not found", and no reconcile retries a FAILED chunk.
+    mockRequireMountIndexDb.mockImplementationOnce(() => {
+      throw new Error('Mount index database not initialized')
+    })
+    const repos = makeRepos({}, { findById: jest.fn().mockResolvedValue(null) })
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+    await expect(handleEmbeddingGenerate(makeJob('MOUNT_CHUNK', 'chunk-1'))).rejects.toThrow(
+      'Mount index database not initialized'
+    )
+    expect(repos.docMountChunks.findById).not.toHaveBeenCalled()
+    expect(repos.embeddingStatus.markAsFailed).not.toHaveBeenCalled()
   })
 
   it('skips an empty/whitespace MOUNT_CHUNK without calling the provider or retrying', async () => {

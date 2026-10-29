@@ -25,13 +25,60 @@ export type PlaceholderRef =
   | { kind: 'roll' }
   | { kind: 'dice' }
   | { kind: 'llm' }
+  | { kind: 'outcome'; field: OutcomePlaceholderField }
   | { kind: 'now' }
+  | { kind: 'character' }
   | { kind: 'params'; name: string }
   | { kind: 'metadata'; key: string }
   | { kind: 'state'; path: string }
   | { kind: 'progress'; id: string; field: string }
+  | { kind: 'inventory'; ref: string; field: InventoryPlaceholderField; key?: string }
   | { kind: 'unknown'; key: string };
 
+/**
+ * The fields an `{{outcome.<field>}}` placeholder may name: the winning row's
+ * semantic state, its 0-based index (as `pascalMeta.outcomeIndex` records it)
+ * and its `brief`. Known only once the table has dealt — before the consult
+ * when no row tests it, after the consult otherwise.
+ */
+export type OutcomePlaceholderField = 'state' | 'index' | 'brief';
+
+export const OUTCOME_PLACEHOLDER_FIELDS: readonly OutcomePlaceholderField[] = ['state', 'index', 'brief'];
+
+/** The fields an `{{inventory.<ref>.<field>}}` placeholder may name. */
+export type InventoryPlaceholderField = 'title' | 'name' | 'description' | 'state' | 'metadata';
+
+const INVENTORY_PREFIX = 'inventory.';
+const INVENTORY_METADATA_INFIX = '.metadata.';
+const INVENTORY_TRAILING_FIELDS = ['title', 'name', 'description', 'state'] as const;
+
+/**
+ * Split an inventory remainder (`<ref>.<field>` or `<ref>.metadata.<key>`)
+ * into its parts — the one rule the placeholder and the `$inventory` operand
+ * share. (1) The FIRST `.metadata.` splits it: everything before is the ref,
+ * everything after the metadata key, so a ref may not contain `.metadata.`.
+ * (2) Otherwise it must end in `.title` / `.name` / `.description` /
+ * `.state`, and the rest (dots and all) is the ref. Anything else is null.
+ */
+export function splitInventoryReference(
+  rest: string
+): { ref: string; field: InventoryPlaceholderField; key?: string } | null {
+  const infix = rest.indexOf(INVENTORY_METADATA_INFIX);
+  if (infix >= 0) {
+    const ref = rest.slice(0, infix);
+    const key = rest.slice(infix + INVENTORY_METADATA_INFIX.length);
+    return ref.length > 0 && key.length > 0 ? { ref, field: 'metadata', key } : null;
+  }
+  for (const field of INVENTORY_TRAILING_FIELDS) {
+    const suffix = `.${field}`;
+    if (rest.endsWith(suffix) && rest.length > suffix.length) {
+      return { ref: rest.slice(0, -suffix.length), field };
+    }
+  }
+  return null;
+}
+
+const OUTCOME_PREFIX = 'outcome.';
 const PARAMS_PREFIX = 'params.';
 const METADATA_PREFIX = 'metadata.';
 const STATE_PREFIX = 'state.';
@@ -51,6 +98,14 @@ export function classifyPlaceholder(key: string): PlaceholderRef {
   // what lets an effect express "ten minutes from now" as {{now}} + 600000
   // without the format growing a date grammar.
   if (key === 'now') return { kind: 'now' };
+  // `character` is the rolling character's name — the one whose metadata,
+  // progressions and wardrobe the run reads and writes. A run nobody made has
+  // none, and the placeholder then renders as written.
+  if (key === 'character') return { kind: 'character' };
+  if (key.startsWith(OUTCOME_PREFIX)) {
+    const field = OUTCOME_PLACEHOLDER_FIELDS.find((f) => f === key.slice(OUTCOME_PREFIX.length));
+    if (field) return { kind: 'outcome', field };
+  }
   if (key.startsWith(PARAMS_PREFIX) && key.length > PARAMS_PREFIX.length) {
     return { kind: 'params', name: key.slice(PARAMS_PREFIX.length) };
   }
@@ -72,6 +127,12 @@ export function classifyPlaceholder(key: string): PlaceholderRef {
     if (dot > 0 && dot < rest.length - 1) {
       return { kind: 'progress', id: rest.slice(0, dot), field: rest.slice(dot + 1) };
     }
+  }
+  // `inventory.<ref>.<field>` — one object the rolling character carries or
+  // can reach, read through the one reference rule (`lib/inventory/refs.ts`).
+  if (key.startsWith(INVENTORY_PREFIX)) {
+    const parts = splitInventoryReference(key.slice(INVENTORY_PREFIX.length));
+    if (parts) return { kind: 'inventory', ...parts };
   }
   return { kind: 'unknown', key };
 }

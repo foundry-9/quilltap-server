@@ -1,6 +1,8 @@
 'use client'
 
+import { useId, useRef } from 'react'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 interface AlertDialogProps {
@@ -12,6 +14,10 @@ interface AlertDialogProps {
 
 export function AlertDialog({ message, onClose, buttons, showCopy = true }: AlertDialogProps) {
   useEscapeKey(() => onClose())
+
+  const messageId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
 
   const { copy } = useCopyToClipboard()
   const handleCopy = () => copy(message)
@@ -34,9 +40,17 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
         type="button"
       />
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[101] pointer-events-auto">
-        <div className="qt-dialog p-6">
+        <div
+          ref={dialogRef}
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={messageId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog p-6"
+        >
         <div className="qt-dialog-body !px-0 !py-0 mb-6">
-          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+          <p id={messageId} className="text-sm text-foreground whitespace-pre-wrap break-words">
             {message}
           </p>
         </div>

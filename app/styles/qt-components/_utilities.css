@@ -579,6 +579,26 @@
   }
 
   /**
+   * Text ON a status fill (qt-bg-success / -warning / -info / -destructive) —
+   * each theme pairs these with its status colour at 4.5:1 or better.
+   */
+  .qt-text-success-foreground {
+    color: var(--color-success-foreground);
+  }
+
+  .qt-text-warning-foreground {
+    color: var(--color-warning-foreground);
+  }
+
+  .qt-text-info-foreground {
+    color: var(--color-info-foreground);
+  }
+
+  .qt-text-destructive-foreground {
+    color: var(--color-destructive-foreground);
+  }
+
+  /**
    * Danger text color — alias of qt-text-destructive kept for the inline
    * error sites (StartupProgress, ChatCreationProgressModal) that reach for
    * the "danger" name. Same destructive token, so themes get one lever.

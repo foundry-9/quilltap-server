@@ -42,7 +42,8 @@ import type { DocGrepInput, DocGrepOutput, DocGrepMatch } from '../../doc-grep-t
 import type { DocListFilesInput, DocListFilesOutput, DocFileInfo } from '../../doc-list-files-tool';
 import { isAutomaticImagePath, isOsCruftName } from '@/lib/files/folder-utils';
 import { getRepositories } from '@/lib/repositories/factory';
-import { listDatabaseFiles } from '@/lib/mount-index/database-store';
+import { listDatabaseFiles, listDatabaseBlobTexts, readDatabaseBlobText } from '@/lib/mount-index/database-store';
+import { compilePathGlob } from '@/lib/doc-edit/path-glob';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   logger,
@@ -60,6 +61,7 @@ import {
   assertCharacterMayRead,
   assertCharacterMayWrite,
   getCharacterBlockedReadPaths,
+  publishedMountPoint,
 } from './shared';
 
 /**
@@ -71,6 +73,32 @@ function getLineNumber(content: string, offset: number): number {
     if (content[i] === '\n') line++;
   }
   return line;
+}
+
+/**
+ * Read a text file for `doc_read_file`. In a database store a path with no
+ * document may still hold an uploaded blob — every chat upload is stored as
+ * one, .md and .txt included — so fall back to the blob's extracted text, which
+ * for native text is the file itself (bug 260). Read-only: the edit tools keep
+ * calling `readFileWithMtime` and still see no document there.
+ */
+async function readTextFileOrUploadedBlob(
+  resolved: Awaited<ReturnType<typeof resolveDocEditPath>>
+): Promise<{ content: string; mtime: number; size: number }> {
+  try {
+    return await readFileWithMtime(resolved);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    if (resolved.mountType !== 'database' || !resolved.mountPointId) throw error;
+    const blob = await readDatabaseBlobText(resolved.mountPointId, resolved.relativePath);
+    if (!blob) throw error;
+    logger.debug('doc_read_file: no document at path; reading the uploaded blob\'s text', {
+      mountPointId: resolved.mountPointId,
+      relativePath: resolved.relativePath,
+      size: blob.size,
+    });
+    return { content: blob.content, mtime: blob.mtime, size: blob.size };
+  }
 }
 
 // --- doc_read_file ---
@@ -88,7 +116,7 @@ export async function handleReadFile(
   const resolved = await resolveDocEditPath(scope, input.path, readContext);
   // character_read:false → not-found for characters (operator unaffected).
   await assertCharacterMayRead(resolved, context);
-  const uri = await uriForResolvedPath(resolved, context);
+  const uri = await uriForResolvedPath(resolved);
 
   // For database-backed stores, a non-text file (pdf/docx/arbitrary binary)
   // may still be readable if the blob has an extractedText representation.
@@ -96,13 +124,9 @@ export async function handleReadFile(
   // original bytes aren't what they're seeing.
   if (!isTextFile(resolved.relativePath)) {
     if (resolved.mountType === 'database' && resolved.mountPointId) {
-      const repos = getRepositories();
-      const blob = await repos.docMountBlobs.findByMountPointAndPath(
-        resolved.mountPointId,
-        resolved.relativePath
-      );
-      if (blob?.extractedText && blob.extractionStatus === 'converted') {
-        const text = blob.extractedText;
+      const blob = await readDatabaseBlobText(resolved.mountPointId, resolved.relativePath);
+      if (blob) {
+        const text = blob.content;
         const lines = text.split('\n');
         const totalLines = lines.length;
 
@@ -119,7 +143,7 @@ export async function handleReadFile(
         const numberedLines = outputLines
           .map((line, i) => `[L${lineStart + i}] ${line}`)
           .join('\n');
-        const header = `File: ${input.path} (extracted text from ${blob.storedMimeType}, ${totalLines} lines, ${blob.sizeBytes} original bytes)`;
+        const header = `File: ${input.path} (extracted text from ${blob.storedMimeType}, ${totalLines} lines, ${blob.size} original bytes)`;
         const truncMsg = truncated
           ? `\n[Truncated — showing lines ${lineStart}-${lineStart + outputLines.length - 1} of ${totalLines}]`
           : '';
@@ -130,7 +154,7 @@ export async function handleReadFile(
           mimeType: blob.storedMimeType,
           path: input.path,
           uri,
-          mtime: new Date(blob.updatedAt).getTime(),
+          mtime: blob.mtime,
           totalLines,
           truncated,
           derivedFromBlob: true,
@@ -141,7 +165,7 @@ export async function handleReadFile(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content: rawContent, mtime, size } = await readFileWithMtime(resolved);
+  const { content: rawContent, mtime, size } = await readTextFileOrUploadedBlob(resolved);
   const mime = detectMimeFromExtension(resolved.relativePath);
 
   let content: string | unknown = rawContent;
@@ -292,7 +316,7 @@ export async function handleWriteFile(
 
   await triggerReindexIfNeeded(resolved);
 
-  const writtenUri = await uriForResolvedPath(resolved, context);
+  const writtenUri = await uriForResolvedPath(resolved);
 
   const announceScope = scope as 'project' | 'document_store' | 'general';
   const displayTitle = path.basename(input.path);
@@ -306,7 +330,7 @@ export async function handleWriteFile(
       displayTitle,
       uri: writtenUri,
       scope: announceScope,
-      mountPoint: input.mount_point,
+      mountPoint: publishedMountPoint(resolved, input.mount_point),
       origin,
       change: { kind: 'created', body: contentToWrite },
       hiddenFromCharacters,
@@ -317,7 +341,7 @@ export async function handleWriteFile(
       displayTitle,
       uri: writtenUri,
       scope: announceScope,
-      mountPoint: input.mount_point,
+      mountPoint: publishedMountPoint(resolved, input.mount_point),
       origin,
       change: { kind: 'edited', diff: generateUnifiedDiff(previousContent, contentToWrite, displayTitle) },
       hiddenFromCharacters,
@@ -430,14 +454,14 @@ export async function handleStrReplace(
 
   const lineNumber = getLineNumber(content, matchResult.index);
 
-  const editedUri = await uriForResolvedPath(resolved, context);
+  const editedUri = await uriForResolvedPath(resolved);
   const displayTitle = path.basename(input.path);
   await postLibrarianWriteAnnouncement({
     chatId: context.chatId,
     displayTitle,
     uri: editedUri,
     scope: scope as 'project' | 'document_store' | 'general',
-    mountPoint: input.mount_point,
+    mountPoint: publishedMountPoint(resolved, input.mount_point),
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
     hiddenFromCharacters: contentHiddenFromCharacters(newContent),
@@ -555,14 +579,14 @@ export async function handleInsertText(
 
   const lineNumber = getLineNumber(newContent, insertOffset);
 
-  const editedUri = await uriForResolvedPath(resolved, context);
+  const editedUri = await uriForResolvedPath(resolved);
   const displayTitle = path.basename(input.path);
   await postLibrarianWriteAnnouncement({
     chatId: context.chatId,
     displayTitle,
     uri: editedUri,
     scope: scope as 'project' | 'document_store' | 'general',
-    mountPoint: input.mount_point,
+    mountPoint: publishedMountPoint(resolved, input.mount_point),
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
     hiddenFromCharacters: contentHiddenFromCharacters(newContent),
@@ -595,7 +619,7 @@ export async function handleGrep(
     return { success: false, error: 'Grep requires a project context' };
   }
   const input = applyQtapUriToInput(rawInput);
-  const uriResolver = await buildDocStoreUriResolver(context.characterId);
+  const uriResolver = await buildDocStoreUriResolver();
 
   const maxResults = Math.min(input.max_results || 100, 500);
   const contextLines = input.context_lines || 0;
@@ -827,6 +851,17 @@ export async function handleGrep(
           if (isBlocked && isBlocked(doc.relativePath)) continue;
           searchContent(doc.content, doc.relativePath, mp.name, makeUri);
         }
+        // Uploads are blobs, not documents; search their extracted text too
+        // (bug 260). A path is searched once even if both somehow exist.
+        const documentPaths = new Set(documents.map(d => d.relativePath.toLowerCase()));
+        const blobTexts = await listDatabaseBlobTexts(mp.id);
+        for (const blob of blobTexts) {
+          if (matches.length >= maxResults) break;
+          if (documentPaths.has(blob.relativePath.toLowerCase())) continue;
+          if (input.path && !blob.relativePath.startsWith(input.path)) continue;
+          if (isBlocked && isBlocked(blob.relativePath)) continue;
+          searchContent(blob.content, blob.relativePath, mp.name, makeUri);
+        }
         continue;
       }
       await walkAndSearch(mp.basePath, '', mp.name, undefined, makeUri, isBlocked);
@@ -916,21 +951,15 @@ export async function handleListFiles(
       folder: parts.path !== '' ? parts.path : rawInput.folder,
     };
   }
-  const uriResolver = await buildDocStoreUriResolver(context.characterId);
+  const uriResolver = await buildDocStoreUriResolver();
 
   const files: DocFileInfo[] = [];
   const recursive = input.recursive !== false;
 
-  // Helper to check glob pattern match (simple implementation)
-  const matchesGlob = (filename: string, pattern: string): boolean => {
-    if (!pattern) return true;
-    // Simple glob: *.ext matching
-    if (pattern.startsWith('*.')) {
-      return filename.endsWith(pattern.substring(1));
-    }
-    // Direct match
-    return filename === pattern;
-  };
+  // `pattern` is a real glob over the store-relative path (bug 261): a bare
+  // `*.md` or `CHANGELOG.md` matches a file name in any folder, and `**/`
+  // spans folders, the root included.
+  const matchesPattern = input.pattern ? compilePathGlob(input.pattern) : null;
 
   // Walk directory and collect file info. `isBlocked` drops files hidden from
   // characters by character_read:false (keyed by mount-relative path).
@@ -965,7 +994,7 @@ export async function handleListFiles(
             });
             if (recursive) await walkRecursive(fullPath);
           } else if (entry.isFile()) {
-            if (input.pattern && !matchesGlob(entry.name, input.pattern)) continue;
+            if (matchesPattern && !matchesPattern(relativePath)) continue;
             if (isBlocked && isBlocked(relativePath)) continue;
 
             try {
@@ -1041,7 +1070,7 @@ export async function handleListFiles(
         // Bytes live in doc_mount_documents; list from the mirror doc_mount_files rows.
         const dbEntries = await listDatabaseFiles(mp.id, input.folder ? { folder: input.folder } : {});
         for (const entry of dbEntries) {
-          if (input.pattern && !matchesGlob(entry.fileName, input.pattern)) continue;
+          if (matchesPattern && !matchesPattern(entry.relativePath)) continue;
           if (entry.kind !== 'folder' && isBlocked && isBlocked(entry.relativePath)) continue;
           files.push({
             path: entry.relativePath,
@@ -1090,7 +1119,7 @@ export async function handleListFiles(
             input.folder ? { folder: input.folder } : {}
           );
           for (const entry of dbEntries) {
-            if (input.pattern && !matchesGlob(entry.fileName, input.pattern)) continue;
+            if (matchesPattern && !matchesPattern(entry.relativePath)) continue;
             if (entry.kind !== 'folder' && isProjectBlocked && isProjectBlocked(entry.relativePath)) continue;
             files.push({
               path: entry.relativePath,

@@ -19,6 +19,9 @@ jest.mock('@/lib/utils/sleep', () => ({
 jest.mock('@/lib/database/backends/sqlite/text-codec-function', () => ({
   registerTextCodecFunction: jest.fn(),
 }))
+jest.mock('@/lib/database/backends/sqlite/regexp-function', () => ({
+  registerRegexpFunction: jest.fn(),
+}))
 
 jest.mock('@/lib/database/backends/sqlite/llm-logs-protection', () => ({
   stopLLMLogsPeriodicCheckpoints: jest.fn(),

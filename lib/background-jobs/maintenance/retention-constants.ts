@@ -64,6 +64,13 @@ export async function resolveStaleChatDays(): Promise<number> {
  */
 export const CLOSED_TERMINAL_RETENTION_DAYS = 30;
 
+/**
+ * A transcript in `logs/terminals/` that no `terminal_sessions` row names is
+ * swept once it has gone this long unwritten. The grace covers the spawn
+ * window: the PTY manager opens the transcript before it inserts the row.
+ */
+export const ORPHAN_TERMINAL_TRANSCRIPT_GRACE_MS = 60 * 60 * 1000;
+
 /** Milliseconds in a day — shared cutoff helper denominator. */
 export const DAY_MS = 24 * 60 * 60 * 1000;
 

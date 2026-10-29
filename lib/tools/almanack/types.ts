@@ -236,6 +236,7 @@ export interface CharacterBreakdownInfo {
   systemTransparent: number;
   canDressThemselves: number;
   canCreateOutfits: number;
+  canManageInventory: number;
   coreWhisperOverrides: number;
 }
 
@@ -274,6 +275,8 @@ export interface FeatureConfigInfo {
   memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };
   autoDetectRng: boolean;
   customTools: boolean;
+  customToolTriggers: boolean;
+  customToolIntervention: boolean;
   avatarDisplay: { mode: string; style: string };
   coreWhisper: {
     enabled: boolean;

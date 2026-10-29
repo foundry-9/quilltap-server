@@ -76,9 +76,11 @@ export interface GalleryImageProps {
   thumbnailSize: number
   onImageClick: (index: number) => void
   onImageError: () => void
-  onSetAvatar: (e: React.MouseEvent) => void
+  /** Omitted by read-only grids (wardrobe pictures): no set-as-avatar button. */
+  onSetAvatar?: (e: React.MouseEvent) => void
   onDownloadImage: (e: React.MouseEvent) => void
-  onDeleteImage: (e: React.MouseEvent) => void
+  /** Omitted by read-only grids (wardrobe pictures): no delete button. */
+  onDeleteImage?: (e: React.MouseEvent) => void
   entityName: string
   /**
    * Optional "keep this in the album" action. Only the avatar-rolls grid
@@ -95,4 +97,31 @@ export interface GalleryImageProps {
    * destructive click is an informed one.
    */
   deleteTitle?: string
+  /**
+   * Optional caption laid over the foot of the tile — where the picture comes
+   * from. The wardrobe grid uses it for the item's title and tier. When set,
+   * the action buttons move to the top corner so they never cover it.
+   */
+  caption?: GalleryImageCaption
+}
+
+export interface GalleryImageCaption {
+  title: string
+  detail: string
+}
+
+/**
+ * One generated picture of a wardrobe item the character can reach (own
+ * vault, a group's store, Quilltap General). `id` is the `files.id`; `url` is
+ * the thumbnail the tile shows and `fullUrl` the full-size image.
+ */
+export interface WardrobeGalleryImage extends GalleryImage {
+  fullUrl: string
+  itemId: string
+  itemTitle: string
+  locationLabel: string
+  itemArchived: boolean
+  isCurrentItemImage: boolean
+  generationPrompt: string | null
+  generationModel: string | null
 }

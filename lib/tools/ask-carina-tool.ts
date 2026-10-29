@@ -8,6 +8,7 @@
  * shared history — and posts the reply as a `systemSender: 'carina'` message.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -72,3 +73,6 @@ export function validateAskCarinaInput(
   const parsed = askCarinaToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const askCarinaToolEffect: ToolEffectSpec = 'read';

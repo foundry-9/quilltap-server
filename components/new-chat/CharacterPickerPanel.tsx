@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useId, useMemo, useRef, useState, useEffect } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
@@ -41,6 +41,7 @@ export function CharacterPickerPanel({
   disabled,
   autoFocusSearch,
 }: CharacterPickerPanelProps) {
+  const id = useId()
   const { style } = useAvatarDisplay()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -156,6 +157,7 @@ export function CharacterPickerPanel({
             ref={searchInputRef}
             type="text"
             placeholder="Search characters..."
+            aria-label="Search characters"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg border qt-border-default bg-background px-4 py-2 text-foreground placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-ring"
@@ -257,8 +259,9 @@ export function CharacterPickerPanel({
                       </div>
                       {sc.character.title && <div className="qt-text-small">{sc.character.title}</div>}
                       <div className="mt-3">
-                        <label className="mb-1 block text-xs font-medium qt-text-xs">Connection Profile</label>
+                        <label htmlFor={`${id}-profile-${sc.character.id}`} className="mb-1 block text-xs font-medium qt-text-xs">Connection Profile</label>
                         <select
+                          id={`${id}-profile-${sc.character.id}`}
                           value={sc.controlledBy === 'user' ? USER_CONTROLLED_PROFILE : sc.connectionProfileId}
                           onChange={(e) => handleProfileChange(sc.character.id, e.target.value)}
                           disabled={disabled}
@@ -284,8 +287,9 @@ export function CharacterPickerPanel({
                       </div>
                       {sc.character.systemPrompts && sc.character.systemPrompts.length > 0 && (
                         <div className="mt-2">
-                          <label className="mb-1 block text-xs font-medium qt-text-xs">System Prompt</label>
+                          <label htmlFor={`${id}-prompt-${sc.character.id}`} className="mb-1 block text-xs font-medium qt-text-xs">System Prompt</label>
                           <select
+                            id={`${id}-prompt-${sc.character.id}`}
                             value={sc.selectedSystemPromptId || ''}
                             onChange={(e) =>
                               handleSystemPromptChange(sc.character.id, e.target.value || null)

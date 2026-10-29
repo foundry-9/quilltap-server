@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useCallback, useId } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { logger } from '@/lib/logger'
@@ -20,6 +20,7 @@ interface AutoLockConfig {
  * Only functional when a user passphrase is set.
  */
 export function AutoLockSettingsCard() {
+  const id = useId()
   const [hasPassphrase, setHasPassphrase] = useState<boolean | null>(null)
   const [config, setConfig] = useState<AutoLockConfig>({ enabled: false, idleMinutes: 15 })
   const [saving, setSaving] = useState(false)
@@ -30,6 +31,7 @@ export function AutoLockSettingsCard() {
     queryKey: queryKeys.system.unlock,
     queryFn: ({ signal }) => apiFetch<{ hasUserPassphrase: boolean }>('/api/v1/system/unlock', { signal }),
   })
+  const queryClient = useQueryClient()
   const { data: settingsData } = useQuery({
     queryKey: queryKeys.settings.chat,
     queryFn: ({ signal }) => apiFetch<{ autoLockSettings?: AutoLockConfig }>('/api/v1/settings/chat', { signal }),
@@ -83,6 +85,9 @@ export function AutoLockSettingsCard() {
         return
       }
 
+      // Keep the shared settings row current, or a remount re-seeds the
+      // card from the pre-save copy.
+      queryClient.setQueryData(queryKeys.settings.chat, await res.json())
       setConfig(newConfig)
       setSaved(true)
       log.info('Auto-lock settings saved successfully', { config: newConfig })
@@ -150,8 +155,9 @@ export function AutoLockSettingsCard() {
 
       {config.enabled && (
         <div className="flex items-center gap-2">
-          <label className="qt-text-small">Lock after</label>
+          <label className="qt-text-small" htmlFor={`${id}-minutes`}>Lock after</label>
           <input
+            id={`${id}-minutes`}
             type="number"
             min={1}
             value={config.idleMinutes}

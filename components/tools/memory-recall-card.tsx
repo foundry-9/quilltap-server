@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -49,6 +49,7 @@ const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
  * recall path; see lib/memory/recall-tags.ts.
  */
 export function MemoryRecallCard() {
+  const id = useId()
   const [config, setConfig] = useState<RecallConfig>(DEFAULT_CONFIG)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -127,8 +128,9 @@ export function MemoryRecallCard() {
       </p>
 
       <div>
-        <label className="qt-text-label block mb-2">Cross-project memories:</label>
+        <label htmlFor={`${id}-scope-policy`} className="qt-text-label block mb-2">Cross-project memories:</label>
         <select
+          id={`${id}-scope-policy`}
           value={config.scopePolicy}
           onChange={e => handleScopePolicyChange(e.target.value as ScopePolicy)}
           disabled={saving}

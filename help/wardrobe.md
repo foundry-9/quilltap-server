@@ -1,7 +1,7 @@
 ---
 title: The Wardrobe
 url: /aurora
-tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import, vision, folders]
+tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import, vision, folders, history, rollback, pronouns, pronoun guidance]
 ---
 
 # The Wardrobe
@@ -32,10 +32,11 @@ Every wardrobe item belongs to one of five slots, which together compose a compl
 
 The Hair slot is the newest arrival and the one most liable to be misconstrued, so let us be perfectly plain about it. It holds a **coiffure**, not a head of hair. Your character's *natural* hair --- its colour, its length, whether it curls or lies flat --- has always lived in their physical description, and there it remains. What goes in the Hair slot is the deliberate *arrangement* of that hair: the plaited crown, the marcel waves, the severe bun that brooks no argument, and --- for the theatrically inclined --- the occasional wig.
 
-Three consequences follow, and they are worth committing to memory:
+Four consequences follow, and they are worth committing to memory:
 
 - **An empty Hair slot is not a bald character.** It simply means the hair is *au naturel*, unbothered by pins or tongs. Quilltap will say nothing whatever about it: not in Aurora's announcements, not in the scene's stage directions, not in a portrait or a Lantern backdrop. The other slots announce their vacancies (*topless*, *barefoot*), because a missing shoe is news; a missing hairdo is not.
 - **Hats remain Accessories.** A hat is worn *over* a coiffure, not instead of one, and the two may perfectly well coexist.
+- **A styled coiffure outranks the natural hair.** Should the physical description insist on hair *perfectly straight* while the Hair slot holds *voluminous curls*, the curls carry the day. Wherever Quilltap sets the outfit down --- a portrait prompt, a Lantern backdrop, the catalogue beneath a kept photograph --- the hairdo is marked as the current styling, taking precedence over the natural texture and style, so that neither portraitist nor character is left to guess which head of hair is actually in the room.
 - **Undressing does not undo the hair.** A character who sheds every stitch keeps their braids. Nudity is a matter for the clothing slots; the coiffure is nobody's business but the character's.
 
 A character may have many items in each slot, and equip multiple of them at once — a t-shirt under a sweater, a dress shirt beneath a waistcoat. The system trusts the LLM (and your own scene-setting) to decide what shows. List them inner-to-outer when it matters; layering is half the fun.
@@ -50,6 +51,7 @@ To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-
 4. Choose the **slot(s)** the garment covers (top, bottom, footwear, accessories, or hair)
 5. Give the item a **title** (e.g., "Burgundy velvet smoking jacket") and a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
 6. Optionally supply a **Portrait Cue** --- a short, literal phrase whispered to the portraitist and the Lantern when a likeness is drawn (see [Portrait Cues](#portrait-cues-dressing-for-the-camera) below)
+7. Optionally set its **Pronoun Guidance** --- the pronouns of the characters the piece is cut for, so it is not pressed upon anyone else (see [Pronoun Guidance](#pronoun-guidance-cut-for-whom) below)
 
 You may edit or remove your personal items at any time via each row's `⋮` menu. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
 
@@ -154,6 +156,28 @@ When you use **Move to another wardrobe…** or **Copy to another wardrobe…** 
 
 When the item in question is an **outfit** — a composite bundling other garments — the picker asks one further question: what of the components? The answer is all or nothing, nested pieces included. Moving an outfit offers to *move* the components along, *copy* them (leaving the originals behind), or leave them where they hang; copying an outfit offers simply to copy the components too, or not. Only components that live in the same wardrobe as the outfit make the journey — pieces borrowed from a shared tier are already reachable and stay put. However the components travel, the outfit arrives properly rewired: its component list points at the very pieces that came with it, so nothing turns up at the destination clutching a list of garments that stayed home.
 
+### Pronoun Guidance: Cut for Whom?
+
+A household wardrobe is a generous thing, and generosity has its hazards: a shared cupboard in Quilltap General may hold both a ball gown and a morning suit, and there is no reason on earth to hand the ball gown to a retired colonel who would sooner be shot than seen in it. **Pronoun Guidance** is how a piece says whom it is meant for.
+
+In the item editor, beneath *Appropriateness*, tick the pronouns of the characters the piece is cut for. The choices are the very ones Aurora offers on a character's page --- **He/Him/His**, **She/Her/Her**, **They/Them/Their**, and **It/It/Its** --- and you may tick as many as suit. A gown might be ticked for *She* and *They*; a waistcoat for *He* and *They*; a pair of plain boots for nobody at all.
+
+The rules of the house are these:
+
+- **A piece with no guidance is offered to everyone.** Every garment you owned before this feature arrived is such a piece, and so is anything you simply never tick. Nothing vanishes on you.
+- **A piece with guidance is offered only to characters whose pronouns it names.** A character who uses *He/Him/His* is not shown a gown ticked only for *She/Her/Her*.
+- **A character with no pronouns set, or with custom pronouns, is offered everything** --- there is nothing to measure against, and the wardrobe declines to guess.
+- **Guidance governs what is offered, never what may be worn.** A character who asks for a piece by name may put it on, and anything already on their back stays in their listings.
+
+The offering is *pronoun-aware* by default, everywhere it matters:
+
+- **The Wardrobe dialog** --- a character's list shows a **Pronoun-aware** tickbox beside *Never worn*, ticked from the start, with a note of how many pieces it is holding back. Untick it to see the whole cupboard. The same switch governs the *Wear an outfit…* pull-down and the slot pickers in the Live and Outfit Builder tabs. (It appears only for a character whose pronouns are one of the four above, and not at all when you are browsing a shared wardrobe rather than a character's.)
+- **The chat-start composer** --- when you compose a character's opening outfit by hand, the same tickbox sits beside **Clear all**.
+- **Let Character Choose** --- the valet consulted before a chat begins is shown only the pieces offered to that character.
+- **The character's own tools** --- `wardrobe_list` holds back pieces meant for other pronouns and tells the character how many it held back; a character who wants the lot passes `pronoun_aware: false`. `wardrobe_create` and `wardrobe_update` accept `pronoun_guidance`, and `wardrobe_read` and `wardrobe_list` report it.
+
+Each row in the Wardrobe dialog notes its guidance beneath the appropriateness line (*For He/Him/His, They/Them/Their*), so you can see at a glance what has been cut for whom. In the item's file in the Scriptorium, the guidance is the `pronounGuidance` list in its frontmatter --- for example `pronounGuidance: [she, they]` --- and a hand-edited value the house does not recognise is quietly ignored.
+
 ### Folders: Filing the Closet
 
 A wardrobe of any ambition soon outgrows a single rail. You may file its garments and outfits into **folders** --- *Formal*, *Formal › Evening*, *Rainy days*, *That Unfortunate Business in Monte Carlo* --- and the browser behaves like a small, well-mannered filing cabinet:
@@ -238,21 +262,48 @@ Every garment in the house keeps a ledger --- a discreet little tally, kept belo
 
 A garment's ledger follows it when moved to another wardrobe; a *copy* is a new garment and starts its ledger afresh. Deleting a garment closes its ledger. Should a character be deleted, the wears they ran up stay on the books, merely unattributed.
 
+## Looking Back --- the Outfit Record
+
+Beside the Ledger, which counts garments, each conversation keeps a second book that remembers *ensembles*: a numbered record, per character, of every outfit they have worn in it. Number **0** is what they arrived in --- the outfit the conversation opened with, or the one they were dressed in when they joined it partway. Each change of clothes after that is written down as the next number.
+
+**One entry per announcement.** The record is kept by the same hand that writes Aurora's announcements, and keeps exactly the same pace. A character who removes the hat, the gloves and the overcoat in a single reply has made *one* change of clothes, not three, and is entered once, in the state they ended in. So too one press of **Done** in the Wardrobe dialog, or one custom tool's wardrobe effects. Putting the hat on and taking it straight off again in the same breath changes nothing, and nothing is written down. Each entry notes when it happened and who was responsible: the character themselves, another character's gift, the operator, a custom tool, or the conversation's opening. When *you* do the dressing, the record names the character you were speaking as at that moment --- "the operator, as Bertie" --- so that a household with several of your characters in it knows which of them held the coat. When a custom tool does it, the record names the tool --- "Pascal's dress_for_dinner" --- and, should someone other than the wearer have run it, who rolled. Entries written before these particulars were kept say simply "the operator" or "Pascal".
+
+**The numbers never change.** Nothing is renumbered, pruned or tidied away; the record lasts as long as the conversation does. Conversations that began before the record was kept start it with what everyone had on when it was first opened.
+
+**Going back.** The record keeps a bookmark on the outfit the character is wearing now. Returning to an earlier outfit moves the bookmark there --- backwards or, indeed, forwards again --- without writing a new entry. The next *real* change of clothes, however, is written at the end of the record, whichever number the bookmark happened to be resting on. From outfit 6, stepping back lands on 5, and again on 4; put on a scarf there, and the scarf outfit becomes number 7.
+
+A return is a change of clothes like any other: Aurora announces the outfit now worn, the conversation's portrait is repainted if you have asked for that, and the Ledger credits a wear to anything that goes back on.
+
+**Garments that are no longer available.** An outfit from the record may name a garment that has since been archived or deleted. Returning to it restores everything else, leaves those pieces off, and says which ones could not be put back on. The one exception: an archived garment the character is *still wearing* in the same slot stays where it is --- leaving it be puts nothing on.
+
+**Characters may consult it.** Two tools serve a character who may dress themselves:
+
+- **wardrobe_history** --- List the outfits worn in this conversation, numbered from 0, with when each began, who made the change, and what it was; the one worn now is marked. A change made earlier in the very same reply may not appear yet.
+- **wardrobe_rollback** --- Return to an earlier outfit by its number, or, with no number, step back one.
+
+A character reaches only their own record. You reach everyone's, in the Wardrobe dialog.
+
+**The History tab.** In a conversation, the Wardrobe dialog shows a third tab beside **Live outfit** and **Outfit Builder** for the character selected: **History**. Each entry, newest first, shows its number, when it happened, who changed it, a summary and its garments by slot; the current one is marked *Wearing now*. **Wear again** returns the character to that outfit at once --- Aurora will say so. A garment that can no longer be put on is shown greyed with an *archived* or *gone* tag, and the button warns you before you press it. Should you have unsaved edits staged on the Live outfit tab for that character, you will be asked whether to discard them first, so that pressing **Done** afterwards can never undo the return.
+
 ## Characters and Their Wardrobe Tools
 
-During a chat, characters with the appropriate permissions may attend to their toilette by means of seven tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
+During a chat, characters with the appropriate permissions may attend to their toilette by means of nine tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
 
 Throughout, a character sees not only the items in their **own** wardrobe but also any shared garments hanging in their **groups'** stores, in the **project** stores, and in the great communal cloakroom that is **Quilltap General** — though shared items, being held in common, may be *worn* but never *altered* by a single character's hand.
 
-- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of one's groups, the project, and Quilltap General. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it, how often you have worn it and when you last did, beside the household's tally (see *The Ledger* above), and, if it has sat for its portrait, the picture's image file id.
+- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of one's groups, the project, and Quilltap General. Pronoun-aware by default: pieces whose [Pronoun Guidance](#pronoun-guidance-cut-for-whom) names other pronouns are held back (with a count of how many), unless the character passes `pronoun_aware: false`. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it, how often you have worn it and when you last did, beside the household's tally (see *The Ledger* above), and, if it has sat for its portrait, the picture's image file id.
 - **wardrobe_read** --- Inspect one item in full: its Portrait Cue, its default-outfit standing, its composite particulars, the slots it presently occupies, its wear history, and its picture's image file id. Where `wardrobe_list` offers a glance, this offers a proper appraisal. A character who wishes to *see* the picture passes that id to `describe_image`.
 - **wardrobe_wear** --- Put garments on. Hand it an ordered list of changes and it applies them in sequence — force-swap the coat, *then* layer a muffler over it, all in a single gesture. Per item: `wear` (don it across every slot it covers, honoring its replace setting — ordinarily a gentle layering), `replace` (clear those slots first, a decisive swap), or `add_to_slot` (tuck it into one named slot).
 - **wardrobe_take_off** --- Remove garments, or empty a slot entirely. Likewise an ordered list. Per item: `remove` (take a worn piece off across every slot it covers, leaving any other layers undisturbed — narrow it to a single slot if you wish) or `clear_slot` (sweep one slot bare).
+- **wardrobe_history** --- Consult the outfit record for this conversation: every outfit worn, numbered from 0, with who changed it and when; the one worn now is marked (see *Looking Back* above).
+- **wardrobe_rollback** --- Return to an earlier outfit from the record by its number, or step back one. It is announced like any other change of clothes.
 - **wardrobe_create** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit from existing items via `component_item_ids` or `component_titles` (a composite). One may furnish a **Portrait Cue** (`image_prompt`) to steer the artist's hand, and one may **gift the item to another character** in the chat. If you have ticked **Portraits from the Wardrobe Tools** (see [Wardrobe Images](wardrobe-images.md)), the new item is drawn in the background.
 - **wardrobe_update** --- Amend an item one already owns — its name, its description, its Portrait Cue, its appropriateness, its coverage, and so forth. Only the particulars you supply are changed; the rest stands. Shared garments, being communal property, are politely declined. With **Portraits from the Wardrobe Tools** ticked, an amendment that changes the item's look has it redrawn, and a character may ask for a fresh sitting outright (`generate_image`).
 - **wardrobe_archive** --- Retire an item one owns to the back of the closet: hidden from listings and no longer wearable, yet not destroyed. Retiring a garment twice changes nothing --- it keeps the date it was first put away. A human may restore it from the Aurora page at leisure. (No character may *permanently* discard a garment; that remains a human prerogative.) Shared garments are, again, declined.
 
-For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[READ_WARDROBE]]`, `[[WEAR]]`, `[[TAKE_OFF]]`, `[[CREATE_WARDROBE_ITEM]]`, `[[UPDATE_WARDROBE_ITEM]]`, and `[[ARCHIVE_WARDROBE_ITEM]]`.
+A [custom tool](custom-tools.md#dressing-and-undressing) may change an outfit too: its `wardrobe` effects put garments on the character who ran it, take them off, or clear a slot, all through the very same valet, as part of the roll. Aurora announces the result like any other change, and a tool with a single certain outcome makes a tidy one-click button for dressing a character for the occasion.
+
+For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[READ_WARDROBE]]`, `[[WEAR]]`, `[[TAKE_OFF]]`, `[[OUTFIT_HISTORY]]`, `[[ROLLBACK_OUTFIT]]`, `[[CREATE_WARDROBE_ITEM]]`, `[[UPDATE_WARDROBE_ITEM]]`, and `[[ARCHIVE_WARDROBE_ITEM]]`.
 
 ### Gifting Wardrobe Items
 
@@ -266,7 +317,7 @@ For models using text-block syntax, gifting uses the `recipient` attribute: `[[C
 
 Three flags on each character govern their clothing:
 
-- **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, and `wardrobe_take_off` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
+- **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, `wardrobe_take_off`, `wardrobe_history`, and `wardrobe_rollback` to browse and change their outfit during conversation, and to return to one they wore earlier. Disable this if you prefer to maintain strict authorial control over what they wear.
 - **canCreateOutfits** --- When enabled (also the default), the character may use `wardrobe_create`, `wardrobe_update`, and `wardrobe_archive` to fabricate, amend, and retire garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
 - **canChooseOutfit** --- Disabled by default. When enabled, a *new* chat with this character opens with its Starting Outfit already set to **Let Character Choose**, so a character with a wardrobe worth showing off arrives dressed for the occasion without your having to flip the switch each time. It changes only the default the new-chat dialog offers; you may still overrule it for any particular chat.
 
@@ -278,7 +329,7 @@ When you begin a new conversation, you will be asked how to handle the character
 
 - **Default** --- The character arrives wearing everything marked as a default garment across every tier --- their own vault, their groups' wardrobes, the project's wardrobe, and Quilltap General --- layered one atop the next rather than squabbling over a single slot. Should the character keep their own copy of a shared garment, that copy prevails: mark it *not* a default and they will decline the house livery altogether, with no offence taken.
 - **Manual** --- You hand-pick what the character is wearing at the start of the scene. A **Wear an outfit…** pull-down at the top of the panel dresses them in a whole composite at one stroke; the five slot rows beneath it handle the individual garments, and **Clear all** empties the lot should the seeded defaults not suit.
-- **Let Character Choose** --- The character examines the scenario and the whole of their wardrobe (every tier), then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph, or a valet who has simply not returned within the minute allotted him), the character falls back to their default outfit with admirable composure.
+- **Let Character Choose** --- The character examines the scenario and the whole of their wardrobe (every tier, less any pieces whose [Pronoun Guidance](#pronoun-guidance-cut-for-whom) is meant for other pronouns), then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph, or a valet who has simply not returned within the minute allotted him), the character falls back to their default outfit with admirable composure.
 
   A character may also elect to wear *nothing* --- a nudist at home, a bathing scene, a setting in which clothing would be plainly absurd --- and when they do so deliberately, the house respects it. The distinction matters: an empty answer offered *without* that deliberate declaration is treated as a valet who has lost his nerve, and the character is put into their defaults rather than sent out undressed by accident. When several characters are dressing at once, they now consult in parallel rather than queueing politely in the hall, so one slow valet no longer keeps the entire party waiting.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative
@@ -324,11 +375,13 @@ A few principles for a cue that actually lands:
 - **Let complexity carry meaning.** Image-makers cannot reliably reproduce a *specific* arbitrary glyph from a description, but they handle relative *busyness* well. "Intricate, many-ringed gold glyph" for a senior rank versus "small, simple gold glyph" for a junior one reads, at a glance, exactly as you intend --- even if the precise number of rings is left to the painter's hand.
 - **Placement is a suggestion, not a command.** Phrases like "on the left shoulder" nudge but do not bind; picture-makers are famously cavalier about where they put things.
 
+When a character tailors a garment for themselves with `wardrobe_create`, they are told in no uncertain terms to furnish a Portrait Cue alongside the description --- two hundred characters or fewer of colour, cloth and cut, with no backstory, no feelings and no names --- and that the description, however eloquent, will never reach the easel. A character who neglects the instruction leaves the painter with nothing but the title, and the resulting likeness is apt to be a matter of guesswork. Should one of your company's creations show a lovely paragraph and an empty Cue, open it and supply the Cue yourself; the next portrait will be the better for it.
+
 A Portrait Cue changes only what the *image* pipeline is told. The title still appears in lists and tools, the description still informs the AI's prose, and a character referring to the garment in conversation is none the wiser. Should you need a glyph rendered with true fidelity --- exact rings, exact spokes --- a Cue will get you the *impression*; for the genuine article, compose the portrait without the insignia and lay the real artwork over the shoulder afterward.
 
 ## Aurora's Wardrobe Announcements
 
-Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, or the character themselves invokes the `update_outfit_item` tool --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with every slot without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
+Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, the character themselves reaches for a `wardrobe_` tool, or a custom tool's wardrobe effect does it for them --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with every slot without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
 
 These announcements appear as ordinary chat messages attributed to Aurora and are visible to every character in the conversation, ensuring nobody is left guessing about who is now wearing what.
 
@@ -402,3 +455,5 @@ Characters with help tools enabled can navigate directly to this page:
 - [Tools](tools.md) - Overview of AI tools available in Quilltap
 - [Using Tools in Chat](tools-usage.md) - How tools work during conversation
 - [Characters](characters.md) - General character management
+- [The Inventory](inventory.md) - What characters carry, as opposed to what they wear
+- [Pascal's Workbench](pascals-workbench.md) - Pick garments and outfits from a wardrobe for a tool's *Change the outfit* side effect

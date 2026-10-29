@@ -42,6 +42,7 @@ import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/war
 import { formatWearLine, wearOf, type WearAnnotated } from '@/lib/wardrobe/wear-display'
 import { WardrobeItemThumbnail } from './wardrobe-item-thumbnail'
 import { SlotBadge } from './slot-ui'
+import { formatPronounGuidance } from '@/lib/wardrobe/pronoun-guidance'
 
 /** A listed item, plus the wear-ledger annotation the collection reads attach. */
 type RowItem = ListedWardrobeItem & WearAnnotated
@@ -283,6 +284,11 @@ export function WardrobeItemRow({
           {item.appropriateness && (
             <div className="qt-text-xs qt-text-secondary truncate mt-0.5">
               {item.appropriateness}
+            </div>
+          )}
+          {(item.pronounGuidance?.length ?? 0) > 0 && (
+            <div className="qt-text-xs qt-text-secondary truncate mt-0.5" data-testid="wardrobe-pronoun-guidance">
+              For {formatPronounGuidance(item.pronounGuidance)}
             </div>
           )}
         </div>

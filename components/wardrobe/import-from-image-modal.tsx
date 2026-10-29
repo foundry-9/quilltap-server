@@ -20,8 +20,10 @@
  * @module components/wardrobe/import-from-image-modal
  */
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useId } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
@@ -86,6 +88,7 @@ export function ImportFromImageModal({
   onClose,
   onImported,
 }: ImportFromImageModalProps) {
+  const id = useId()
   const [state, setState] = useState<ModalState>('upload')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -97,6 +100,11 @@ export function ImportFromImageModal({
   const [keepPhotograph, setKeepPhotograph] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+
+  useEscapeKey(onClose, true)
 
   // ── File Selection ──────────────────────────────────────────────────────
 
@@ -372,12 +380,21 @@ export function ImportFromImageModal({
         className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
         style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
       >
-        <div className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col"
+        >
           {/* Header */}
           <div className="qt-dialog-header sticky top-0 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <h2 className="qt-dialog-title">Import from Image</h2>
+              <h2 id={titleId} className="qt-dialog-title">Import from Image</h2>
               <button
+                aria-label="Close"
                 type="button"
                 onClick={onClose}
                 className="qt-text-secondary hover:text-foreground"
@@ -556,6 +573,7 @@ export function ImportFromImageModal({
                             type="text"
                             value={item.title}
                             onChange={(e) => updateItem(index, { title: e.target.value })}
+                            aria-label="Item title"
                             className="qt-input text-sm font-medium w-full"
                             placeholder="Item title"
                           />
@@ -587,10 +605,11 @@ export function ImportFromImageModal({
 
                           {/* Appropriateness */}
                           <div className="ml-8">
-                            <label className="qt-label text-xs mb-1 block">
+                            <label htmlFor={`${id}-appropriateness-${index}`} className="qt-label text-xs mb-1 block">
                               Appropriateness
                             </label>
                             <input
+                              id={`${id}-appropriateness-${index}`}
                               type="text"
                               value={item.appropriateness}
                               onChange={(e) => updateItem(index, { appropriateness: e.target.value })}
@@ -602,10 +621,11 @@ export function ImportFromImageModal({
 
                           {/* Description */}
                           <div className="ml-8">
-                            <label className="qt-label text-xs mb-1 block">
+                            <label htmlFor={`${id}-description-${index}`} className="qt-label text-xs mb-1 block">
                               Description
                             </label>
                             <textarea
+                              id={`${id}-description-${index}`}
                               value={item.description}
                               onChange={(e) => updateItem(index, { description: e.target.value })}
                               rows={3}

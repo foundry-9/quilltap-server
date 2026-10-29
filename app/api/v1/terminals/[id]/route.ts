@@ -78,7 +78,8 @@ async function handleGetSession(
 /**
  * POST /api/v1/terminals/[id]?action=kill
  *
- * Send SIGTERM to a session.
+ * End a session: SIGHUP, then SIGKILL if it is still running (see
+ * `ptyManager.terminate`).
  */
 async function handleKill(
   request: NextRequest,
@@ -90,7 +91,7 @@ async function handleKill(
 
     terminalLogger.debug('[Terminals API] Killing session', { sessionId: id });
 
-    ptyManager.kill(id, 'SIGTERM');
+    ptyManager.terminate(id);
 
     return successResponse({ ok: true });
   } catch (error) {
@@ -188,7 +189,7 @@ async function handleDelete(
 
     // Kill the session — onExit will fire and post the close announcement with
     // the real exit code, then persist exit state.
-    ptyManager.kill(id, 'SIGTERM');
+    ptyManager.terminate(id);
 
     // Delete from database
     const repos = getRepositories() as any;

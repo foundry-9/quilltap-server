@@ -35,6 +35,8 @@ interface ModelSelectorProps {
   readonly disabled?: boolean
   readonly required?: boolean
   readonly showFetchedCount?: boolean
+  /** id for the select/search input, so a caller's <label htmlFor> names it */
+  readonly id?: string
 }
 
 export function ModelSelector({
@@ -46,11 +48,15 @@ export function ModelSelector({
   disabled = false,
   required = false,
   showFetchedCount = false,
+  id,
 }: ModelSelectorProps) {
   const [searchInput, setSearchInput] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Without a caller's label, the placeholder is the field's accessible name
+  const ariaLabel = id ? undefined : placeholder
 
   const sortedModels = [...models].sort((a, b) => a.localeCompare(b))
 
@@ -180,6 +186,8 @@ export function ModelSelector({
     return (
       <div>
         <select
+          id={id}
+          aria-label={ariaLabel}
           value={value}
           onChange={e => onChange(e.target.value)}
           disabled={disabled}
@@ -208,6 +216,8 @@ export function ModelSelector({
       <div className="relative">
         <input
           ref={searchInputRef}
+          id={id}
+          aria-label={ariaLabel}
           type="text"
           value={isOpen ? searchInput : value}
           onChange={handleSearchChange}
@@ -222,6 +232,8 @@ export function ModelSelector({
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           disabled={disabled}
+          aria-label="Toggle model list"
+          aria-expanded={isOpen}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 qt-hover-accent rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Icon

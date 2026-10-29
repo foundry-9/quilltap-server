@@ -15,6 +15,7 @@
 import {
   isComposite,
   wardrobeItemFieldsSchema,
+  type PronounGuidance,
   type WardrobeItem,
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types'
@@ -31,6 +32,8 @@ export interface WardrobeItemDraft {
   componentItemIds: string[]
   /** Composite-only: clear the designated slots on equip instead of layering. */
   replace: boolean
+  /** Pronoun guidance: who the item is offered to. Empty = everyone. */
+  pronounGuidance: PronounGuidance[]
   /** Folder under `Wardrobe/` (`''` = root). Filing only. */
   folder: string
 }
@@ -45,6 +48,7 @@ export interface WardrobeItemPayload {
   isDefault: boolean
   componentItemIds: string[]
   replace: boolean
+  pronounGuidance: PronounGuidance[]
   /** Omitted on an edit that leaves the folder alone (see `payloadForEdit`). */
   folder?: string
 }
@@ -60,6 +64,7 @@ export function emptyDraft(overrides?: Partial<WardrobeItemDraft>): WardrobeItem
     types: [],
     componentItemIds: [],
     replace: false,
+    pronounGuidance: [],
     folder: '',
     ...overrides,
   }
@@ -76,6 +81,7 @@ export function draftFromItem(item: WardrobeItem): WardrobeItemDraft {
     types: [...item.types],
     componentItemIds: [...(item.componentItemIds ?? [])],
     replace: item.replace ?? false,
+    pronounGuidance: [...(item.pronounGuidance ?? [])],
     folder: item.folder ?? '',
   }
 }
@@ -95,6 +101,7 @@ export function draftToPayload(draft: WardrobeItemDraft): WardrobeItemPayload {
     isDefault: draft.isDefault,
     componentItemIds: [...draft.componentItemIds],
     replace: isComposite(draft) ? draft.replace : false,
+    pronounGuidance: [...draft.pronounGuidance],
     folder: draft.folder,
   }
 }

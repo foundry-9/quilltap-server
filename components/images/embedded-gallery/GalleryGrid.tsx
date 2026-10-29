@@ -1,7 +1,7 @@
 'use client'
 
 import { GalleryImage } from './GalleryImage'
-import type { GalleryImage as GalleryImageType } from './types'
+import type { GalleryImage as GalleryImageType, GalleryImageCaption } from './types'
 
 interface GalleryGridProps {
   images: GalleryImageType[]
@@ -13,9 +13,11 @@ interface GalleryGridProps {
   confirmDelete: string | null
   onImageClick: (index: number) => void
   onImageError: (imageId: string) => void
-  onSetAvatar: (e: React.MouseEvent, image: GalleryImageType) => void
+  /** Omit for a read-only grid: tiles then offer no set-as-avatar button. */
+  onSetAvatar?: (e: React.MouseEvent, image: GalleryImageType) => void
   onDownloadImage: (e: React.MouseEvent, image: GalleryImageType) => void
-  onDeleteImage: (e: React.MouseEvent, image: GalleryImageType) => void
+  /** Omit for a read-only grid: tiles then offer no delete button. */
+  onDeleteImage?: (e: React.MouseEvent, image: GalleryImageType) => void
   entityName: string
   /**
    * Optional "keep in the album" action. Passed only by the avatar-rolls
@@ -28,6 +30,8 @@ interface GalleryGridProps {
   busyImageId?: string | null
   /** Per-image override for the delete button's resting tooltip. */
   deleteTitleFor?: (image: GalleryImageType) => string | undefined
+  /** Per-image source caption laid over the tile (see `GalleryImageCaption`). */
+  captionFor?: (image: GalleryImageType) => GalleryImageCaption | undefined
 }
 
 export function GalleryGrid({
@@ -48,6 +52,7 @@ export function GalleryGrid({
   albumMemberIds,
   busyImageId,
   deleteTitleFor,
+  captionFor,
 }: GalleryGridProps) {
   return (
     <div
@@ -73,14 +78,15 @@ export function GalleryGrid({
             thumbnailSize={thumbnailSize}
             onImageClick={() => onImageClick(index)}
             onImageError={() => onImageError(image.id)}
-            onSetAvatar={(e) => onSetAvatar(e, image)}
+            onSetAvatar={onSetAvatar ? (e) => onSetAvatar(e, image) : undefined}
             onDownloadImage={(e) => onDownloadImage(e, image)}
-            onDeleteImage={(e) => onDeleteImage(e, image)}
+            onDeleteImage={onDeleteImage ? (e) => onDeleteImage(e, image) : undefined}
             entityName={entityName}
             onSaveToAlbum={onSaveToAlbum ? (e) => onSaveToAlbum(e, image) : undefined}
             isInAlbum={albumMemberIds?.has(image.id) ?? false}
             isBusy={busyImageId === image.id}
             deleteTitle={deleteTitleFor?.(image)}
+            caption={captionFor?.(image)}
           />
         )
       })}

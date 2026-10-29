@@ -3,6 +3,14 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
+  // `next build` type-checks with a config that leaves tests out (`npx tsc`
+  // against tsconfig.json is what checks them). Colocated tests import helpers
+  // from the root __tests__/, which .dockerignore keeps out of the image build,
+  // so type-checking them there failed the Docker build.
+  typescript: {
+    tsconfigPath: 'tsconfig.build.json',
+  },
+
   // Dev indicator position (bottom-right instead of default bottom-left)
   devIndicators: {
     position: 'bottom-right',
@@ -19,7 +27,7 @@ const nextConfig = {
     'node-pty',         // Native module for terminal control
     'sharp',            // Native image processing (platform-specific binaries)
     '@napi-rs/canvas',  // Native canvas backend used by pdfjs-dist for PDF rendering
-    'pdf-parse',        // Must load natively: pdfjs-dist finds @napi-rs/canvas (its DOMMatrix polyfill) via createRequire(import.meta.url), which webpack bakes to the build machine's path
+    'pdfjs-dist',       // Must load natively: pdfjs-dist finds @napi-rs/canvas (its DOMMatrix polyfill) via createRequire(import.meta.url), which webpack bakes to the build machine's path
     'ws',               // WebSocket library for terminal streaming
   ],
 
@@ -37,7 +45,6 @@ const nextConfig = {
       './node_modules/ws/**/*',
       './node_modules/@img/**/*',
       './node_modules/@napi-rs/**/*',
-      './node_modules/pdf-parse/**/*',
       './node_modules/pdfjs-dist/**/*',
       './node_modules/@xterm/**/*',
       './first-startup/**/*',

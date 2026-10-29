@@ -16,9 +16,17 @@ If the image has already been saved to your gallery, the system politely decline
 
 There is a second route, for the pictures that never had a message to hang beneath — the backdrops the Lantern painted quietly, the cast's standing portraits. The **Gallery** in a chat's sidebar (Organize drawer) lays out every picture in that conversation and offers the same album picker on each. See [The Chat Gallery](chat-gallery.md).
 
+## Whose cabinet is whose
+
+Your own gallery gathers every picture filed in Quilltap Uploads, Quilltap General, the project albums and the other document stores. It does not include your characters' albums. A character's vault holds their own photographs: the ones they kept with `keep_image`, and any portrait you promoted from their Avatar Rolls. Those stay in the character's cabinet, so choosing Glenn's new likeness won't leave a copy among your own effects.
+
+## Choosing an album
+
+Beneath the page title sits an **Album** selector. It opens on **My Photos**, the gathered collection described above. Choose any character, project, document store or Quilltap General instead, and the page shows that one album alone. Search works the same in every album, and **Remove from this album** removes the picture from whichever album you're looking at. A character's album here is the same one Aurora shows on that character's Photo Gallery, so a photo removed in one place is gone from both.
+
 ## What you'll see when you visit
 
-The gallery presents your photographs as a tidy grid of thumbnails. Each thumbnail bears a small badge: `1 link`, `3 links`, and so on. That number tells you in how many places the image is presently hard-linked — your own gallery, of course, but also any character's photo album that has independently kept the same picture, plus any chat attachments still pointing at the same bytes.
+The gallery presents your photographs as a tidy grid of thumbnails. Some thumbnails carry a small badge with a number. That number tells you in how many places the image is hard-linked: the album you're looking at, of course, but also any other album that has kept the same picture (a character's included), plus any chat attachments still pointing at the same bytes.
 
 A click on a thumbnail unfolds a detail card with the picture, the original generation prompt (when known), the caption you assigned (if any), the tags, the time you saved it, and a list of every other place that's holding a link to those bytes — by mount name and relative path. So if your character Friday saved a portrait of a copper kettle six chats ago and you save the same picture today, both of you will appear in each other's link lists.
 
@@ -28,7 +36,7 @@ There's a search bar at the top. Set it to *"sunroom"* and the gallery rummages,
 
 ## Removing a photograph
 
-The detail card has a discreet **Remove from gallery** button. Click it and the link is severed; if your gallery was the last place holding a link to those bytes, the bytes themselves are quietly garbage-collected. (If another character's album, a chat attachment, or any other link is still pointing at the picture, the bytes stay where they are — your gallery's link is the only thing removed.)
+The detail card has a discreet **Remove from this album** button. Click it and the link is severed; if that album was the last place holding a link to those bytes, the bytes themselves are quietly garbage-collected. (If another character's album, a chat attachment, or any other link is still pointing at the picture, the bytes stay where they are — this album's link is the only thing removed.)
 
 ## In-Chat Navigation
 

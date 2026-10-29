@@ -19,6 +19,8 @@
  * chat with the new engine.
  */
 
+import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
+import { newWardrobeTurnContainers } from '@/lib/wardrobe/turn-containers'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
@@ -199,26 +201,19 @@ async function processBrahmaResponse(
   // (read/write) on, no wardrobe, no Carina, workspace tools stripped, search
   // without memories. Web search & curl flow from the profile / installed
   // plugins exactly as elsewhere.
-  const { tools, modelSupportsNativeTools } = await buildTools(
+  const { tools, modelSupportsNativeTools } = await buildTools({
     connectionProfile,
-    null,   // imageProfileId
-    null,   // imageProfile
     userId,
-    null,   // projectId
-    false,  // requestFullContext
-    [],     // disabledTools
-    [],     // disabledToolGroups
-    true,   // agentModeEnabled
-    false,  // isMultiCharacter
-    false,  // helpToolsEnabled
-    false,  // canDressThemselves
-    false,  // canCreateOutfits
-    'full', // docToolsMode
-    false,  // askCarinaEnabled
-    false,  // includeWorkspaceTools — stripped for the console
-    true,   // excludeMemorySearch — no memory source
-    true,   // sqlAccess — the console gets read-only run_sql
-  )
+    agentModeEnabled: true,
+    canDressThemselves: false,
+    canCreateOutfits: false,
+    canManageInventory: false, // no inventory_* tools here
+    docToolsMode: 'full',
+    askCarinaEnabled: false,
+    includeWorkspaceTools: false, // stripped for the console
+    excludeMemorySearch: true, // no memory source
+    sqlAccess: true, // the console gets read-only run_sql
+  })
 
   // Determine tool mode (native vs pseudo-tool). As with help-chat, anything
   // that would resolve to simple-json is downgraded to text-block.
@@ -248,9 +243,12 @@ async function processBrahmaResponse(
       wardrobeRead: false,
       wardrobeWear: false,
       wardrobeTakeOff: false,
+      wardrobeRollback: false,
+      wardrobeHistory: false,
       wardrobeCreate: false,
       wardrobeUpdate: false,
       wardrobeArchive: false,
+      ...inventoryToolFlags(false),
     }
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (tools.length > 0) {
@@ -486,7 +484,7 @@ async function processBrahmaResponse(
         chatId,
         userId,
         operatorSurface: true,
-        pendingWardrobeAnnouncements: new Set<string>(),
+        ...newWardrobeTurnContainers(),
       }
 
       const toolResult = await processToolCalls(

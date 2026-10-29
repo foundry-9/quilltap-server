@@ -13,16 +13,21 @@
  * Take-off is narrower on purpose. The route's `remove_from_slot` takes one
  * item out of one named slot; the `wardrobe_take_off` tool's `remove` takes
  * an item out of every slot it covers, which is that same gesture looped
- * over the item's slots (`takeOffItem`).
+ * over the item's slots (`takeOffItem`). {@link takeOffWearable} is the
+ * by-reference form the tool and Pascal's wardrobe effects share: a single
+ * garment comes off its slots, and a composite comes off by its LEAVES —
+ * worn composites are stored dissolved, so filtering the composite's own id
+ * out of a slot would remove nothing.
  *
  * Server-only.
  *
  * @module lib/wardrobe/wear-ops
  */
 
+import { WARDROBE_SLOT_TYPES, cloneEquippedSlots, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { applyDisplacement, type DisplacementRepos } from '@/lib/wardrobe/outfit-displacement';
-import type { WearablePool } from '@/lib/wardrobe/pool';
+import { componentGraph, type WearablePool } from '@/lib/wardrobe/pool';
 import type { WardrobeItemWithOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { wearRefusal } from '@/lib/wardrobe/wearable';
 
@@ -129,4 +134,68 @@ export async function takeOffItem(
   for (const slot of slots) {
     await applyDisplacement(repos, chatId, characterId, { mode: 'remove_from_slot', slot, itemId });
   }
+}
+
+export interface TakeOffOutcome {
+  /** The slots after the last commit, or what was loaded when nothing was committed. */
+  slots: EquippedSlots;
+  /** Every slot a removal was committed against, in slot order. */
+  slotsAffected: WardrobeItemType[];
+}
+
+/**
+ * Take a resolved item off, by reference — the `wardrobe_take_off` tool's
+ * `remove` and Pascal's `take_off` effect both come through here.
+ *
+ * - A single garment comes off every slot it covers, or only `slot` when one
+ *   is named (`takeOffItem`) — other layers stay.
+ * - A composite comes off by its leaves: every item in its component graph
+ *   (the composite itself included, in case it was stored whole) is taken out
+ *   of each slot it currently occupies, restricted to `slot` when one is
+ *   named. A composite with nothing of it on commits nothing.
+ *
+ * Archived items may be taken off; archiving never undresses anyone.
+ */
+export async function takeOffWearable(
+  repos: DisplacementRepos,
+  chatId: string,
+  pool: WearablePool,
+  item: WardrobeItemWithOrigin,
+  slot?: WardrobeItemType,
+): Promise<TakeOffOutcome> {
+  const characterId = pool.characterId;
+
+  if ((item.componentItemIds ?? []).length === 0) {
+    const slotsAffected: WardrobeItemType[] = slot ? [slot] : [...(item.types as WardrobeItemType[])];
+    let slots: EquippedSlots | null = null;
+    for (const s of slotsAffected) {
+      slots = await applyDisplacement(repos, chatId, characterId, { mode: 'remove_from_slot', slot: s, itemId: item.id });
+    }
+    return { slots: slots ?? (await loadCurrentSlots(repos, chatId, characterId)), slotsAffected };
+  }
+
+  const current = await loadCurrentSlots(repos, chatId, characterId);
+  const graphIds = new Set(componentGraph(pool, [item.id]).keys());
+  const candidateSlots = slot ? [slot] : [...WARDROBE_SLOT_TYPES];
+
+  let slots = current;
+  const slotsAffected: WardrobeItemType[] = [];
+  for (const s of candidateSlots) {
+    const worn = (current[s] ?? []).filter((id) => graphIds.has(id));
+    for (const id of worn) {
+      slots = await applyDisplacement(repos, chatId, characterId, { mode: 'remove_from_slot', slot: s, itemId: id });
+    }
+    if (worn.length > 0) slotsAffected.push(s);
+  }
+  return { slots, slotsAffected };
+}
+
+/** The character's slots in a chat right now (empty when none are stored). */
+export async function loadCurrentSlots(
+  repos: DisplacementRepos,
+  chatId: string,
+  characterId: string,
+): Promise<EquippedSlots> {
+  const current = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
+  return current ? cloneEquippedSlots(current) : makeEmptyEquippedSlots();
 }

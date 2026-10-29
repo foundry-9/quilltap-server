@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
@@ -9,7 +11,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { isComposite } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import type { PronounGuidance, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
 import { draftFromItem, emptyDraft, payloadForEdit, validateDraft } from '@/lib/wardrobe/item-draft'
@@ -29,6 +31,7 @@ import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeCha
 import { WardrobeWearHistorySection } from './wardrobe-item-editor/WardrobeWearHistorySection'
 import { WardrobeItemImageSection } from './wardrobe-item-editor/WardrobeItemImageSection'
 import { WardrobeFolderField } from './wardrobe-item-editor/WardrobeFolderField'
+import { WardrobePronounGuidanceField } from './wardrobe-item-editor/WardrobePronounGuidanceField'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
 import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
 
@@ -142,6 +145,10 @@ export function WardrobeItemEditor({
   // covering every clothing slot but only containing a ring) — seeded from the
   // stored types, so editing only ever widens (`buildCompositeTypes`).
   const [replace, setReplace] = useState<boolean>(initialDraft.replace)
+  // Pronoun guidance: who the item is offered to. Empty = everyone.
+  const [pronounGuidance, setPronounGuidance] = useState<PronounGuidance[]>(
+    initialDraft.pronounGuidance,
+  )
   const [bundleDesignatedTypes, setBundleDesignatedTypes] = useState<WardrobeItemType[]>(
     initialDraft.types,
   )
@@ -182,6 +189,11 @@ export function WardrobeItemEditor({
   }
 
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+
+  useEscapeKey(onClose, !showKeepResetPrompt)
   useEffect(() => {
     if (autoFocusTitle) titleInputRef.current?.focus()
   }, [autoFocusTitle])
@@ -386,6 +398,7 @@ export function WardrobeItemEditor({
       types: isBundle ? effectiveTypes : selectedTypes,
       componentItemIds: isBundle ? componentItemIds : [],
       replace,
+      pronounGuidance,
       folder,
     })
     if (!validation.ok) {
@@ -468,13 +481,22 @@ export function WardrobeItemEditor({
         className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
         style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
       >
-        <div className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleFocusKeyDown}
+          className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col"
+        >
           <div className="qt-dialog-header sticky top-0 flex-shrink-0 qt-bg-default border-b qt-border-default">
             <div className="flex items-center justify-between">
-              <h2 className="qt-dialog-title">
+              <h2 id={titleId} className="qt-dialog-title">
                 {isEditing ? 'Edit Wardrobe Item' : 'New Wardrobe Item'}
               </h2>
               <button
+                aria-label="Close"
                 type="button"
                 onClick={onClose}
                 className="qt-text-secondary hover:text-foreground"
@@ -710,6 +732,9 @@ export function WardrobeItemEditor({
                 When is this appropriate to wear? e.g., formal, casual, intimate, combat.
               </p>
             </div>
+
+            {/* Pronoun guidance — who the piece is offered to. */}
+            <WardrobePronounGuidanceField value={pronounGuidance} onChange={setPronounGuidance} />
 
             {/* Portrait cue — plain-text phrase handed to the image-makers. */}
             <div>

@@ -164,7 +164,7 @@ async function extractTextContent(
 /**
  * Extract content from a PDF file
  *
- * Reads through `convertPdfBufferToText`, the one pdf-parse caller, which
+ * Reads through `convertPdfBufferToText`, the one PDF text reader, which
  * answers '' on any failure; the regex fallback covers that case.
  */
 async function extractPdfContent(buffer: Buffer): Promise<ExtractedContent> {
@@ -172,7 +172,7 @@ async function extractPdfContent(buffer: Buffer): Promise<ExtractedContent> {
     let content = (await convertPdfBufferToText(buffer)).trim()
 
     if (!content) {
-      logger.warn('pdf-parse found no text, using native fallback extraction', {
+      logger.warn('PDF reader found no text, using native fallback extraction', {
         size: buffer.length,
       })
       content = extractPdfTextFallback(buffer)

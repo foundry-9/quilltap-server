@@ -219,6 +219,47 @@ export function useChatControls({
     await persistChatField(chatId, { isPaused: paused }, 'pause state')
   }, [chatId, setIsPaused, setChat])
 
+  // The three-position turn-mode control: Normal / Paused / Storyteller. Pause
+  // and turn mode are independent (a paused storyteller chat records posts
+  // without opening a round), so Paused keeps the turn mode, and Normal /
+  // Storyteller each un-pause and set the mode.
+  const setTurnPosition = useCallback(async (position: 'normal' | 'paused' | 'storyteller') => {
+    if (position === 'paused') {
+      await setPauseState(true)
+      showInfoToast('Auto-responses paused')
+      return
+    }
+    const turnMode = position === 'storyteller' ? 'storyteller' : 'rotation'
+    setIsPaused(false)
+    setChat((prev) => (prev ? { ...prev, isPaused: false, turnMode } : prev))
+    try {
+      // turnMode rides beside `chat`, not in it: it is patch-only on the row
+      // and has its own setter server-side.
+      await apiFetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { isPaused: false }, turnMode }),
+      })
+      showInfoToast(turnMode === 'storyteller'
+        ? 'Storyteller mode: each of your posts asks the company who wishes to answer'
+        : 'Auto-responses resumed')
+    } catch (error) {
+      showErrorToast('Could not change the turn mode')
+      console.error('[useChatControls] turn mode change failed', error)
+    }
+    await fetchChat()
+  }, [chatId, setIsPaused, setChat, setPauseState, fetchChat])
+
+  // Storyteller: the talkativeness invite filter (off = everyone is asked every round).
+  const toggleStorytellerInviteFilter = useCallback(async () => {
+    const next = !(chat?.storytellerInviteFilter === true)
+    setChat((prev) => (prev ? { ...prev, storytellerInviteFilter: next } : prev))
+    await persistChatField(chatId, { storytellerInviteFilter: next }, 'storyteller invite filter', () => {
+      setChat((prev) => (prev ? { ...prev, storytellerInviteFilter: !next } : prev))
+      showErrorToast('Could not change the invitation setting')
+    })
+  }, [chatId, chat?.storytellerInviteFilter, setChat])
+
   // Toggle pause state
   const togglePause = useCallback(async () => {
     const newPausedState = !isPaused
@@ -586,6 +627,8 @@ export function useChatControls({
     connectionProfiles,
     setPauseState,
     togglePause,
+    setTurnPosition,
+    toggleStorytellerInviteFilter,
     handleToggleDocumentEditingMode,
     handleToggleAgentMode,
     handleRegenerateBackground,

@@ -147,6 +147,7 @@ export function ScopeSelectionStep({
         {scopeType === 'character' && (
           <div className="ml-8 mt-2">
             <select
+              aria-label="Character"
               value={selectedCharacterId}
               onChange={(e) => setSelectedCharacterId(e.target.value)}
               className="qt-input w-full"

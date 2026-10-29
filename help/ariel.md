@@ -12,7 +12,7 @@ When you summon Ariel via the terminal button in the Salon composer, a live shel
 
 **This is read-only for the LLM in this release.** Characters see but cannot dictate. You hold exclusive dominion over the keyboard.
 
-Each chat maintains its own independent terminal session. Close the chat, and the session vanishes. Kill the terminal button, and the session ends. It is a creature of that particular conversation, ephemeral as candlelight.
+Each chat maintains its own independent terminal session. Delete the chat, and the session vanishes. Kill the terminal button, and the session ends. It is a creature of that particular conversation, ephemeral as candlelight. (So ephemeral, indeed, that a [backup](/settings?tab=system&section=backup-restore) does not carry it: the chat and Ariel's dispatches to it travel, but the sessions themselves and their transcripts stay behind, and a closed session's transcript is swept away after thirty days.)
 
 ## Opening a terminal
 
@@ -23,6 +23,10 @@ Look for the terminal icon in the Salon composer — the same toolbar where you 
 Should you enable terminal-reading capabilities (the `terminal_read` and `terminal_list` tools), a character may consult the session's recent scrollback: recent commands, their output, directory listings, file contents — the usual fare of a terminal session. They cannot run commands. They cannot alter files. They witness only what you have already caused to occur.
 
 Think of them as spectators in the control room, able to read the instruments but not touch the switches.
+
+What they read is the screen itself, not a heap of control characters. Ariel keeps a faithful second copy of the terminal behind the scenes, so a character sees the text laid out exactly as your pane shows it. This matters most when a *full-screen* contraption has the terminal — an editor such as vim, a pager such as `less`, or Claude Code itself. Such programs do not scroll; they paint. While one is running, a character reading the terminal sees the picture currently on the screen (and is told as much) rather than the shell's scrollback, which returns the moment the program exits.
+
+Ariel's periodic dispatches to the chat follow the same rule. Every so often, once the terminal has gone quiet or been busy a good while, Ariel posts what has happened: for an ordinary shell, the commands and output since the last dispatch; for a full-screen program, a snapshot of the screen as it then stands — sent only if the picture has actually changed.
 
 ## Caveats
 
@@ -60,9 +64,13 @@ The pane state — whether it is open, which session it shows, where you set the
 
 **Keyboard shortcut:** ⌘⇧T (or Ctrl+Shift+T) toggles Terminal Mode. Escape exits focus mode back to a split.
 
+**Leaving the terminal by keyboard:** the shell keeps the Tab key for itself — it has completions to attend to — so press **F6** to step out of the terminal to the next control on the page, or **Shift+F6** to step back to the one before it. Ariel will not detain you.
+
 ## Closing a session
 
-Either click the termination button within the terminal bubble (or the red ✕ in the Terminal Mode pane), or simply leave the chat — Ariel will tidy up the session when the conversation ends. Both methods are equally graceful; neither will leave orphaned processes.
+Click the termination button within the terminal bubble (or the red ✕ in the Terminal Mode pane), and Ariel hangs up the line — the very courtesy a closing terminal window extends — and, should the shell prove deaf to it, shows it the door outright a few moments later. Merely leaving the chat does *not* close a terminal; it carries on in the background until you return. Deleting the chat, however, ends every terminal it kept, so no orphaned processes linger in the cellar.
+
+Each session's transcript is kept in the instance's `logs/terminals/` folder. A closed session and its transcript are swept away thirty days after the shell exits; and should the chat itself be deleted (or replaced wholesale by a restore), the Estate's daily rounds collect the transcripts it leaves behind as well — sparing, naturally, any shell still drawing breath.
 
 ## In-Chat Navigation
 

@@ -19,6 +19,8 @@ import {
   handleRemoveParticipantAction,
   handleRebuildSystemPromptAction,
   handleTurnAction,
+  handleStopTurn,
+  handleRaiseHand,
   handleSetAvatar,
   handleRemoveAvatar,
   handleBulkReattribute,
@@ -34,6 +36,9 @@ import {
   handleRetryImageUncensored,
   handleReclassifyDanger,
   handleEquipSlot,
+  handleWardrobeRollback,
+  handleInventoryEquip,
+  handleInventoryResetDefaults,
   handleToggleAvatarGeneration,
   handleRegenerateAvatar,
   handleRenderConversation,
@@ -56,6 +61,9 @@ import {
   handleMergeConversation,
   handleSetScenario,
   handleSaveGalleryImage,
+  handleStorytellerRunAction,
+  handleStorytellerAsk,
+  handleStorytellerLie,
 } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -83,6 +91,8 @@ export async function handlePost(
     impersonate: () => handleImpersonate(req, chatId, chat, ctx),
     'set-active-speaker': () => handleSetActiveSpeaker(req, chatId, chat, ctx),
     turn: () => handleTurnAction(req, chatId, chat, ctx),
+    'stop-turn': () => handleStopTurn(chatId, chat, ctx),
+    'raise-hand': () => handleRaiseHand(req, chatId),
     'add-participant': () => handleAddParticipantAction(req, chatId, chat, ctx),
     'update-participant': () => handleUpdateParticipantAction(req, chatId, ctx),
     'remove-participant': () => handleRemoveParticipantAction(req, chatId, chat, ctx),
@@ -102,6 +112,10 @@ export async function handlePost(
     'retry-image-uncensored': () => handleRetryImageUncensored(req, chatId, chat, ctx),
     'reclassify-danger': () => handleReclassifyDanger(chatId, chat, ctx),
     equip: () => handleEquipSlot(req, chatId, ctx),
+    'wardrobe-rollback': () => handleWardrobeRollback(req, chatId, ctx),
+    'inventory-equip': () => handleInventoryEquip(req, chatId, ctx, 'equip'),
+    'inventory-unequip': () => handleInventoryEquip(req, chatId, ctx, 'unequip'),
+    'inventory-reset-defaults': () => handleInventoryResetDefaults(req, chatId, ctx),
     'toggle-avatar-generation': () => handleToggleAvatarGeneration(chatId, ctx),
     'regenerate-avatar': () => handleRegenerateAvatar(req, chatId, ctx),
     'render-conversation': () => handleRenderConversation(chatId, ctx),
@@ -124,5 +138,8 @@ export async function handlePost(
     'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
     scenario: () => handleSetScenario(req, chatId, ctx),
     'save-image': () => handleSaveGalleryImage(req, chatId, ctx),
+    'storyteller-run': () => handleStorytellerRunAction(req, chatId, ctx),
+    'storyteller-ask': () => handleStorytellerAsk(req, chatId, ctx),
+    'storyteller-lie': () => handleStorytellerLie(req, chatId),
   });
 }

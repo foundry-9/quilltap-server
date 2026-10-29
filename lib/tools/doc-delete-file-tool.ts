@@ -5,6 +5,7 @@
  * Scriptorium Phase 3.4
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -62,3 +63,6 @@ export interface DocDeleteFileOutput {
   /** Canonical qtap:// URI for the (now-deleted) file. */
   uri?: string;
 }
+
+/** What this tool does to the world: deletes — cannot be undone from inside Quilltap. */
+export const docDeleteFileToolEffect: ToolEffectSpec = 'destroy';

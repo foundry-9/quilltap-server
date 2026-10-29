@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import type { ChatSettings } from './types'
 
@@ -24,6 +25,7 @@ export function AgentModeSettings({
   onDefaultEnabledChange,
   onMaxTurnsChange,
 }: AgentModeSettingsProps) {
+  const id = useId()
   const agentModeSettings = settings.agentModeSettings ?? {
     maxTurns: 10,
     defaultEnabled: false,
@@ -59,7 +61,7 @@ export function AgentModeSettings({
 
         {/* Max Turns Setting */}
         <div className="space-y-2">
-          <label className="block font-medium text-foreground">
+          <label className="block font-medium text-foreground" htmlFor={`${id}-max-turns`}>
             Maximum Agent Turns
           </label>
           <p className="qt-text-small">
@@ -67,6 +69,7 @@ export function AgentModeSettings({
             Higher values allow more thorough exploration but may increase response time and cost.
           </p>
           <select
+            id={`${id}-max-turns`}
             value={agentModeSettings.maxTurns}
             onChange={(e) => onMaxTurnsChange(parseInt(e.target.value, 10))}
             disabled={saving}

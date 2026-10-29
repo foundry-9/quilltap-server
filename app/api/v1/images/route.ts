@@ -27,6 +27,7 @@ import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resol
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { getErrorMessage } from '@/lib/error-utils';
+import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { generateImageWithConciergeFailover } from '@/lib/services/dangerous-content/image-failover';
@@ -367,7 +368,38 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       orientation: options.orientation,
       logContext: { context: 'api.v1.images.generate', profileId: candidate.id },
     });
-    return provider.generateImage(params, key);
+    // One LLM log row per profile tried, so the call (and any Concierge
+    // reroute) shows in the chat's Inspector when a chat asked for it.
+    const rerouted = candidate.id !== primaryProfileId;
+    const startedAt = Date.now();
+    const record = (response: { content: string; error?: string }) =>
+      logLLMCall({
+        userId: user.id,
+        type: 'IMAGE_GENERATION',
+        chatId: chatId ?? undefined,
+        provider: candidate.provider,
+        modelName: candidate.modelName,
+        connectionProfileId: candidate.id,
+        request: { messages: [{ role: 'user', content: prompt }] },
+        response,
+        durationMs: Date.now() - startedAt,
+      }).catch(error => {
+        logger.warn('[Images v1] Failed to record the image call in llm_logs', {
+          profileId: candidate.id,
+          error: getErrorMessage(error),
+        });
+      });
+    try {
+      const response = await provider.generateImage(params, key);
+      await record({
+        content: response.images?.[0]?.revisedPrompt
+          || `Generated ${response.images?.length ?? 0} image(s)${rerouted ? ' (Concierge reroute)' : ''}`,
+      });
+      return response;
+    } catch (error) {
+      await record({ content: '', error: getErrorMessage(error) });
+      throw error;
+    }
   };
 
   // Generate through the Concierge's failover chokepoint. This route still

@@ -47,6 +47,9 @@
   --deco-gold: hsl(43 85% 55%);
   --deco-gold-light: hsl(43 75% 72%);
   --deco-gold-dark: hsl(43 80% 42%);
+  /* Deep bronze for gold-family TEXT on the light cream ground (4.5:1+);
+     gold itself only reads on navy. */
+  --deco-bronze: hsl(43 80% 20%);
   /* Select dropdown chevron — antique gold to match the deco accent (deep enough
      to read on the cream/ivory inputs). Data URIs can't take a CSS var, so the
      stroke mirrors --deco-gold-dark hsl(43 80% 42%) ≈ #C19015. */
@@ -78,19 +81,19 @@
      ALERT TOKENS
      ========================================================================== */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
-  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-fg: hsl(142 76% 22%);
   --qt-alert-success-border: hsl(142 76% 36% / 0.3);
 
   --qt-alert-warning-bg: hsl(43 85% 55% / 0.12);
-  --qt-alert-warning-fg: hsl(43 80% 32%);
+  --qt-alert-warning-fg: hsl(38 85% 22%);
   --qt-alert-warning-border: hsl(43 85% 55% / 0.35);
 
   --qt-alert-error-bg: hsl(0 84% 60% / 0.1);
-  --qt-alert-error-fg: hsl(0 84% 35%);
+  --qt-alert-error-fg: hsl(0 80% 30%);
   --qt-alert-error-border: hsl(0 84% 60% / 0.3);
 
   --qt-alert-info-bg: hsl(210 80% 50% / 0.1);
-  --qt-alert-info-fg: hsl(210 80% 32%);
+  --qt-alert-info-fg: hsl(210 80% 28%);
   --qt-alert-info-border: hsl(210 80% 50% / 0.3);
 
   /* ==========================================================================
@@ -222,7 +225,7 @@
   --qt-response-status-gathering-fg: hsl(43 85% 55%);
   --qt-response-status-building-fg: hsl(43 80% 42%);
   --qt-response-status-sending-fg: hsl(210 80% 50%);
-  --qt-response-status-streaming-fg: hsl(142 76% 36%);
+  --qt-response-status-streaming-fg: hsl(142 70% 21%);
   --qt-response-status-tool-fg: hsl(43 85% 55%);
 
   --qt-participant-card-active-border: var(--deco-gold);
@@ -311,7 +314,7 @@
   --qt-queue-badge-memory-fg: hsl(43 85% 55%);
   --qt-queue-badge-embedding-bg: hsl(270 40% 30%);
   --qt-queue-badge-embedding-fg: hsl(43 85% 55%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 36%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
   --qt-queue-badge-danger-bg: hsl(0 84% 50%);
   --qt-queue-badge-story-bg: hsl(222 35% 22%);
   --qt-queue-badge-story-fg: hsl(43 60% 75%);
@@ -335,7 +338,7 @@
   /* ==========================================================================
      LINK VARIABLES
      ========================================================================== */
-  --qt-link-color: var(--deco-gold-dark);
+  --qt-link-color: var(--deco-bronze);
   --qt-link-hover-color: var(--deco-gold);
   --qt-link-decoration: underline;
 
@@ -379,7 +382,7 @@
 
   --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 5%);
 
-  --qt-tab-active-fg: var(--deco-gold-dark);
+  --qt-tab-active-fg: var(--deco-bronze);
 
   --qt-tab-group-gap: 0.25rem;
 
@@ -543,8 +546,8 @@
   --qt-queue-badge-memory-fg: hsl(43 90% 65%);
   --qt-queue-badge-embedding-bg: hsl(270 40% 35%);
   --qt-queue-badge-embedding-fg: hsl(43 90% 65%);
-  --qt-queue-badge-summary-bg: hsl(142 76% 40%);
-  --qt-queue-badge-danger-bg: hsl(0 84% 55%);
+  --qt-queue-badge-summary-bg: hsl(142 76% 30%);
+  --qt-queue-badge-danger-bg: hsl(0 84% 49.5%);
   --qt-queue-badge-story-bg: hsl(222 30% 25%);
   --qt-queue-badge-story-fg: hsl(43 70% 70%);
 
@@ -573,6 +576,7 @@
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--deco-gold);
+  --qt-tab-active-fg: var(--deco-gold-dark);
   --qt-link-hover-color: var(--deco-gold-light);
 
   /* Auth page — deeper navy gradient */
@@ -721,6 +725,14 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 0.8125rem;
+}
+
+/* Buttons that carry prose, not a command: a Pascal outcome is a sentence,
+   and set in tracked capitals it reads as shouting. */
+[data-theme="art-deco"] .qt-intervention-row {
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: inherit;
 }
 
 /* --- Geometric borders on inputs: minimal rounding --- */

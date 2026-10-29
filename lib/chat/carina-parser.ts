@@ -85,40 +85,64 @@ function extractQuestion(rest: string): string {
   return rest.trim();
 }
 
+/** Parse one line as a Carina query, or null when it is not one. */
+function parseQueryLine(line: string): CarinaQuery | null {
+  const m = LINE_RE.exec(line);
+  if (!m) {
+    return null;
+  }
+
+  const characterName = m[1].trim();
+  if (!characterName) {
+    return null;
+  }
+
+  const question = extractQuestion(m[3]);
+  if (!question) {
+    // An `@Name:` with no question text isn't a usable query.
+    return null;
+  }
+
+  return {
+    characterName,
+    whisper: m[2] === '?',
+    question,
+  };
+}
+
 /**
  * Parse the first Carina query from a message's raw content.
- * Returns `null` when no line yields a valid (non-empty) query.
+ * Returns `null` when no line yields a valid (non-empty) query — an empty
+ * `@Name:` line is skipped in case a later line carries a real one.
  */
 export function parseCarinaQuery(content: string): CarinaQuery | null {
   if (!content) {
     return null;
   }
 
-  const lines = content.split(/\r?\n/);
-  for (const line of lines) {
-    const m = LINE_RE.exec(line);
-    if (!m) {
-      continue;
+  for (const line of content.split(/\r?\n/)) {
+    const query = parseQueryLine(line);
+    if (query) {
+      return query;
     }
-
-    const characterName = m[1].trim();
-    if (!characterName) {
-      continue;
-    }
-
-    const question = extractQuestion(m[3]);
-    if (!question) {
-      // An `@Name:` with no question text isn't a usable query — keep scanning
-      // in case a later line carries a real one.
-      continue;
-    }
-
-    return {
-      characterName,
-      whisper: m[2] === '?',
-      question,
-    };
   }
 
   return null;
+}
+
+/**
+ * Remove EVERY line that parses as a Carina query — not just the first, which
+ * is all `parseCarinaQuery` fires. A query line is addressed to the reference
+ * desk, not spoken in the scene, so a reader of "what was said" (Pascal's
+ * trigger-phrase scan) subtracts them all. Built on the same line grammar, so
+ * the two never disagree about what a query line is.
+ */
+export function stripCarinaQueryLines(text: string): string {
+  if (!text) {
+    return text;
+  }
+  return text
+    .split(/\r?\n/)
+    .filter((line) => parseQueryLine(line) === null)
+    .join('\n');
 }

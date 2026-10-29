@@ -70,6 +70,16 @@ const BASE = `
   mask-image: var(--_qt-icon-mask, none);
   background-image: var(--_qt-icon-bg, none);
 }
+
+/* Windows High Contrast / forced colors replaces every background-color with
+   the system Canvas colour, which would paint each masked glyph the same colour
+   as the page behind it. Opt the icon out so it keeps the (forced) text colour
+   it inherits. */
+@media (forced-colors: active) {
+  [data-icon] {
+    forced-color-adjust: none;
+  }
+}
 `;
 
 function ruleFor(name: string, def: { defaultFile: string; defaultMode: string }): string {

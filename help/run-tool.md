@@ -15,6 +15,8 @@ Much as a gentleman inventor might wish to test each spring and gear of a newly 
 3. Open the **Chat** drawer
 4. Press **Run Tool…**
 
+Or, without lifting your hands from the keys: type `/tool` at the start of a word in the composer and press Enter to open the full list, or type `/` and a tool's own name — `/wardrobe_wear`, `/self_inventory` — to open Run Tool directly upon that tool's form. A tool that asks for nothing at all runs the moment you choose it, no form required. See [Slash Commands](chat-settings-composer.md) for the full menu.
+
 ## How It Works
 
 The Run Tool modal operates in two phases, rather like a dance card at a particularly well-organized ball:

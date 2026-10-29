@@ -62,6 +62,10 @@ export interface ResolvedRecallTuning {
    * Inert while the gate is off (the gate defines "clears").
    */
   backgroundReserve: number
+  /** Share of the frozen archive the inner circle may take (inner-circle-recall.md B2). */
+  innerCircleShare: number
+  /** Digests per inner-circle member by tier; the last entry covers every looser tier. */
+  innerCircleAllowance: readonly number[]
 }
 
 /** The shipped tuning — defined once, in `recall/tags.ts`. */
@@ -94,6 +98,9 @@ export const RecallTuningInputSchema = z
     anchorMinHits: z.number().int().min(1).max(100).optional().describe('R4: names in fewer memories are not anchors.'),
     anchorOrder: z.enum(['rarest', 'distiller']).optional().describe('R4: order among eligible names.'),
     backgroundReserve: z.number().min(0).max(0.5).optional().describe('R6: fraction of the head reserved for out-of-window background.'),
+    innerCircleShare: z.number().min(0).max(1).optional().describe('Share of the frozen archive the inner circle may take.'),
+    innerCircleAllowance: z.array(z.number().int().min(0).max(20)).min(1).max(10).optional()
+      .describe('Digests per inner-circle member by tier, tightest first; the last entry covers every looser tier.'),
   })
   .strict()
 
@@ -149,6 +156,8 @@ export function resolveRecallTuning(input?: RecallTuningInput | null): ResolvedR
     anchorOrder: input.anchorOrder ?? DEFAULT_RECALL_TUNING.anchorOrder,
     specificAnchors: input.specificAnchors ?? DEFAULT_RECALL_TUNING.specificAnchors,
     backgroundReserve: input.backgroundReserve ?? DEFAULT_RECALL_TUNING.backgroundReserve,
+    innerCircleShare: input.innerCircleShare ?? DEFAULT_RECALL_TUNING.innerCircleShare,
+    innerCircleAllowance: input.innerCircleAllowance ?? DEFAULT_RECALL_TUNING.innerCircleAllowance,
   }
 }
 
@@ -201,5 +210,9 @@ export function describeRecallTuning(tuning: ResolvedRecallTuning): string {
     parts.push(tuning.specificAnchors ? `specificAnchors(minHits=${tuning.anchorMinHits}, ${tuning.anchorOrder})` : 'specificAnchors=false')
   }
   if (tuning.backgroundReserve !== DEFAULT_RECALL_TUNING.backgroundReserve) parts.push(`backgroundReserve=${tuning.backgroundReserve}`)
+  if (tuning.innerCircleShare !== DEFAULT_RECALL_TUNING.innerCircleShare) parts.push(`innerCircleShare=${tuning.innerCircleShare}`)
+  if (tuning.innerCircleAllowance.join(',') !== DEFAULT_RECALL_TUNING.innerCircleAllowance.join(',')) {
+    parts.push(`innerCircleAllowance=[${tuning.innerCircleAllowance.join(',')}]`)
+  }
   return parts.length > 0 ? parts.join(', ') : 'defaults'
 }

@@ -6,6 +6,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { renderHook } from '@testing-library/react'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { FLOATING_LAYER_ATTR } from '@/components/ui/floating-layer'
 import { createRef } from 'react'
 
 describe('useClickOutside', () => {
@@ -291,6 +292,55 @@ describe('useClickOutside', () => {
 
       expect(mockCallback).not.toHaveBeenCalled()
       expect(onEscape).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('topmost floating layer', () => {
+    let layer: HTMLDivElement
+    let inner: HTMLButtonElement
+
+    beforeEach(() => {
+      layer = document.createElement('div')
+      layer.setAttribute(FLOATING_LAYER_ATTR, '')
+      inner = document.createElement('button')
+      layer.appendChild(inner)
+      document.body.appendChild(layer)
+    })
+
+    afterEach(() => {
+      document.body.removeChild(layer)
+    })
+
+    it('does not treat a click inside the floating layer as outside', () => {
+      const ref = createRef<HTMLDivElement>()
+      Object.defineProperty(ref, 'current', { writable: true, value: element })
+
+      renderHook(() => useClickOutside(ref, mockCallback))
+      inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+
+      expect(mockCallback).not.toHaveBeenCalled()
+    })
+
+    it('ignores Escape pressed inside the floating layer, even in capture mode', () => {
+      const ref = createRef<HTMLDivElement>()
+      Object.defineProperty(ref, 'current', { writable: true, value: element })
+      const onEscape = jest.fn()
+
+      renderHook(() => useClickOutside(ref, mockCallback, { onEscape, escapeCapture: true }))
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+      expect(onEscape).not.toHaveBeenCalled()
+    })
+
+    it('still handles Escape pressed elsewhere', () => {
+      const ref = createRef<HTMLDivElement>()
+      Object.defineProperty(ref, 'current', { writable: true, value: element })
+      const onEscape = jest.fn()
+
+      renderHook(() => useClickOutside(ref, mockCallback, { onEscape }))
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+      expect(onEscape).toHaveBeenCalledTimes(1)
     })
   })
 })

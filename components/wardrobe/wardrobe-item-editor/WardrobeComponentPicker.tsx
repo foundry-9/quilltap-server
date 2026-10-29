@@ -111,6 +111,7 @@ export function WardrobeComponentPicker({
 
       <input
         type="search"
+        aria-label="Search items to add as components"
         value={componentSearch}
         onChange={(e) => onComponentSearchChange(e.target.value)}
         onBlur={onComponentsBlur}

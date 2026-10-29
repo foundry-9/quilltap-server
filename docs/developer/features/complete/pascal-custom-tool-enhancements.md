@@ -178,6 +178,8 @@ Failure semantics: **eval failure at run time = that effect is skipped, fail-sof
 
 ### 3.2 Definition schema
 
+> **Correction (4.11).** An effect is no longer always `target` + `value`: it is either that write or a `wardrobe` gesture, never both — see [pascal-wardrobe-effects.md](./pascal-wardrobe-effects.md) §1. The schema below is the original write-only shape.
+
 ```ts
 export const MAX_EFFECTS = 16;
 export const MAX_EFFECT_EXPRESSION_LENGTH = 500;
@@ -248,6 +250,8 @@ chipLabel?: string;   // F1
 The module's "no writes, no message posting" header stays true. `simulateOutcomes` does **not** evaluate effects.
 
 ### 3.4 Applier — new `lib/pascal/side-effects.ts`
+
+> **Correction (4.11).** `applyCustomToolEffects` now also takes `userId` and an optional `pendingWardrobeAnnouncements`, applies the writes below, and then hands any wardrobe gestures to `applyWardrobeEffects` (`lib/pascal/wardrobe-effects.ts`), merging the two applied lists back into effect order — see [pascal-wardrobe-effects.md](./pascal-wardrobe-effects.md) §3.
 
 ```ts
 export interface AppliedEffect {

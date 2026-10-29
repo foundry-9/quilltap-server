@@ -24,12 +24,14 @@ import {
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
-import { folderOfWardrobePath, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
+import { folderOfWardrobePath, WARDROBE_FOLDER_RULES } from '@/lib/wardrobe/folders';
+import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
+import { isItemDocumentPath } from '@/lib/mount-index/item-folders';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
+import { sortScenarios } from '@/lib/scenarios/sort';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
 import {
-  CHARACTER_WARDROBE_FOLDER,
   isWardrobeInstructionsFileName,
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
@@ -255,15 +257,7 @@ export function resolveWardrobeItemId(
  * the restore id remap all agree through it about which files are items.
  */
 export function isWardrobeItemDocumentPath(relativePath: string): boolean {
-  const prefix = `${CHARACTER_WARDROBE_FOLDER}/`.toLowerCase();
-  const pathLower = relativePath.toLowerCase();
-  if (!pathLower.startsWith(prefix)) return false;
-  const rest = pathLower.slice(prefix.length);
-  if (rest.length === 0 || !rest.endsWith('.md')) return false;
-  const segments = rest.split('/');
-  if (segments.some((segment) => segment.length === 0)) return false;
-  if (segments.length > 1 && WARDROBE_RESERVED_FOLDER_SEGMENTS.includes(segments[0])) return false;
-  return !isWardrobeInstructionsFileName(segments[segments.length - 1]);
+  return isItemDocumentPath(WARDROBE_FOLDER_RULES, relativePath, '.md', isWardrobeInstructionsFileName);
 }
 
 /**
@@ -389,6 +383,9 @@ export function parseWardrobeItemFile(
 
   const replace = parsed.data?.replace === true;
 
+  // Unknown values are dropped; an item left with none is offered to everyone.
+  const pronounGuidance = normalizePronounGuidance(parsed.data?.pronounGuidance);
+
   let archivedAt: string | null = null;
   const archivedAtRaw = parsed.data?.archivedAt;
   if (typeof archivedAtRaw === 'string' && archivedAtRaw.length > 0) {
@@ -452,6 +449,7 @@ export function parseWardrobeItemFile(
     appropriateness,
     isDefault,
     replace,
+    ...(pronounGuidance.length > 0 ? { pronounGuidance } : {}),
     componentItemIds: componentItemIdsRaw,
     migratedFromClothingRecordId,
     imageFileId,
@@ -678,4 +676,27 @@ export function parseScenarioFile(
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
+}
+
+/**
+ * Parse every `Scenarios/*.md` document of one vault and return them in
+ * display order — title, then filename, leading "The" ignored
+ * (`lib/scenarios/sort.ts`). The one way a vault's scenario array is built, so
+ * `character.scenarios` and therefore its "first scenario" agree with every
+ * picker.
+ */
+export function parseScenarioFilesSorted(
+  docs: DocMountDocument[],
+  characterId: string,
+): CharacterScenario[] {
+  const parsed: Array<{ doc: DocMountDocument; scenario: CharacterScenario }> = [];
+  for (const doc of docs) {
+    const scenario = parseScenarioFile(doc, characterId);
+    if (scenario) parsed.push({ doc, scenario });
+  }
+  return sortScenarios(parsed, ({ doc, scenario }) => ({
+    title: scenario.title,
+    filename: doc.fileName.replace(/\.md$/i, ''),
+    path: doc.relativePath,
+  })).map(({ scenario }) => scenario);
 }

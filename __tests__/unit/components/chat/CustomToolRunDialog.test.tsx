@@ -144,6 +144,33 @@ describe('CustomToolRunDialog — choosing a tool', () => {
   })
 })
 
+describe('CustomToolRunDialog — initialTool (the composer’s `/` commands)', () => {
+  it('opens straight onto the requested tool’s form', async () => {
+    renderDialog({ initialTool: { name: 'wheel', asCharacterId: 'char-1', nonce: 1 } })
+
+    expect(await screen.findByRole('button', { name: 'Run Spin the Wheel' })).toBeTruthy()
+    expect(screen.queryByText('Force the Lock')).toBeNull()
+  })
+
+  it('picks the per-character variant it was asked for', async () => {
+    rosterTools = [UNLOCK, { ...UNLOCK, characterLabel: 'Vivienne', asCharacterId: 'char-v' }]
+    renderDialog({ initialTool: { name: 'unlock', asCharacterId: 'char-v', nonce: 1 } })
+
+    await screen.findByRole('button', { name: 'Run Force the Lock' })
+    fireEvent.click(screen.getByRole('button', { name: 'Run Force the Lock' }))
+    await waitFor(() => expect(runBodies).toHaveLength(1))
+    expect(runBodies[0]).toMatchObject({ tool: 'unlock', asCharacterId: 'char-v' })
+  })
+
+  it('stays on the picker and says so when nothing by that name is dealt', async () => {
+    const { showErrorToast } = jest.requireMock('@/lib/toast') as { showErrorToast: jest.Mock }
+    renderDialog({ initialTool: { name: 'nonesuch', asCharacterId: null, nonce: 1 } })
+
+    expect(await screen.findByText('Force the Lock')).toBeTruthy()
+    await waitFor(() => expect(showErrorToast).toHaveBeenCalledWith(expect.stringContaining('nonesuch')))
+  })
+})
+
 describe('CustomToolRunDialog — what it remembers', () => {
   it('keeps the tool, its values, and its privacy toggle across a close', async () => {
     const { rerender, onClose } = renderDialog()

@@ -161,6 +161,7 @@ export function emptyCharacterBreakdown(): CharacterBreakdownInfo {
     systemTransparent: 0,
     canDressThemselves: 0,
     canCreateOutfits: 0,
+    canManageInventory: 0,
     coreWhisperOverrides: 0,
   };
 }
@@ -568,6 +569,7 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
     transparent: number;
     dress: number;
     outfits: number;
+    inventory: number;
     coreWhisper: number;
   }>(
     `SELECT COUNT(*)                                                                     AS total,
@@ -581,6 +583,7 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
             -- both mean allowed, only an explicit 0 denies. \`IS NOT 0\` counts both.
             SUM(CASE WHEN "canDressThemselves" IS NOT 0 THEN 1 ELSE 0 END)               AS dress,
             SUM(CASE WHEN "canCreateOutfits" IS NOT 0 THEN 1 ELSE 0 END)                 AS outfits,
+            SUM(CASE WHEN "canManageInventory" IS NOT 0 THEN 1 ELSE 0 END)               AS inventory,
             SUM(CASE WHEN "coreWhisperEnabled" IS NOT NULL THEN 1 ELSE 0 END)            AS coreWhisper
      FROM "characters" WHERE "userId" = ?`,
     [userId],
@@ -600,6 +603,7 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
     systemTransparent: num(row?.transparent),
     canDressThemselves: num(row?.dress),
     canCreateOutfits: num(row?.outfits),
+    canManageInventory: num(row?.inventory),
     coreWhisperOverrides: num(row?.coreWhisper),
   };
 }
@@ -627,6 +631,8 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     },
     autoDetectRng: true,
     customTools: true,
+    customToolTriggers: false,
+    customToolIntervention: true,
     avatarDisplay: { mode: 'ALWAYS', style: 'CIRCULAR' },
     coreWhisper: {
       enabled: true,
@@ -733,6 +739,8 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     },
     autoDetectRng: chatSettings?.autoDetectRng ?? true,
     customTools: chatSettings?.customTools ?? true,
+    customToolTriggers: chatSettings?.customToolTriggers ?? false,
+    customToolIntervention: chatSettings?.customToolIntervention ?? true,
     avatarDisplay: {
       mode: chatSettings?.avatarDisplayMode ?? 'ALWAYS',
       style: chatSettings?.avatarDisplayStyle ?? 'CIRCULAR',

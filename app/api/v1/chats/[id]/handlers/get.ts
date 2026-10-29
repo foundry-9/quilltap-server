@@ -10,6 +10,8 @@
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
  * GET /api/v1/chats/[id]?action=outfit-summary - Equipped outfit with resolved item titles
+ * GET /api/v1/chats/[id]?action=wardrobe-history&characterId=… - One character's outfit timeline
+ * GET /api/v1/chats/[id]?action=inventory - What every cast member carries (the Inventory)
  * GET /api/v1/chats/[id]?action=photo-albums - Candidate save targets for an image
  * GET /api/v1/chats/[id]?action=informs - List the pending Inform batches
  * GET /api/v1/chats/[id]?action=group-stores - Document stores of the persona's groups
@@ -17,6 +19,7 @@
  * GET /api/v1/chats/[id]?action=accessible-stores[&all=true] - Stores for the Open-Document picker
  * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
  * GET /api/v1/chats/[id]?action=scenario-source - Where the scene came from, and whether its file has changed
+ * GET /api/v1/chats/[id]?action=absent-mentions - Absent characters named in the chat: first mention and card
  *
  * An unregistered `?action=` answers 400 with the list above; it never falls
  * through to the chat body.
@@ -39,14 +42,18 @@ import {
   handleGetState,
   handleGetOutfit,
   handleGetOutfitSummary,
+  handleGetWardrobeHistory,
+  handleGetInventory,
   handleGetPhotoAlbums,
   handleGetGroupStores,
   handleAccessibleStores,
   handleGetMailbox,
   handleExportMarkdown,
   handleGetInforms,
+  handleGetStorytellerRound,
   handleGetStoryBackground,
   handleGetScenarioSource,
+  handleGetAbsentMentions,
 } from '../actions';
 import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -69,8 +76,11 @@ export async function handleGet(
       'get-state': () => handleGetState(chatId, ctx),
       'outfit': () => handleGetOutfit(chatId, ctx),
       'outfit-summary': () => handleGetOutfitSummary(chatId, ctx),
+      'wardrobe-history': () => handleGetWardrobeHistory(req, chatId, ctx),
+      'inventory': () => handleGetInventory(chatId, ctx),
       'photo-albums': () => handleGetPhotoAlbums(chatId, ctx),
       'informs': () => handleGetInforms(chatId, ctx),
+      'storyteller-round': () => handleGetStorytellerRound(chatId, ctx),
       'group-stores': () => handleGetGroupStores(chatId, ctx),
       'mailbox': () => handleGetMailbox(req, chatId, ctx),
       // `?all=true` is the Open-Document picker's "look everywhere" mode
@@ -80,6 +90,7 @@ export async function handleGet(
       'get-background': () => handleGetStoryBackground(chatId, ctx),
       'gallery': () => handleGallery(req, ctx, chatId),
       'scenario-source': () => handleGetScenarioSource(chatId, ctx),
+      'absent-mentions': () => handleGetAbsentMentions(chatId, ctx),
       'cost': () => handleCost(req, ctx, chatId),
     },
     () => handleGetChat(req, ctx, chatId)
@@ -366,6 +377,9 @@ async function handleGetChat(
       spokenThisCycleParticipantIds: chatMetadata.spokenThisCycleParticipantIds ?? '[]',
       cycleOrderParticipantIds: chatMetadata.cycleOrderParticipantIds ?? '[]',
       isPaused: chatMetadata.isPaused ?? false,
+      // Storyteller mode: the turn mode ('rotation' when NULL) and its invite filter.
+      turnMode: chatMetadata.turnMode ?? 'rotation',
+      storytellerInviteFilter: chatMetadata.storytellerInviteFilter ?? false,
       // All-LLM-pause bookkeeping — surfaced so the client can explain a silent
       // pause (opens AllLLMPauseModal on load / mid-session).
       allLLMPauseTurnCount: chatMetadata.allLLMPauseTurnCount ?? 0,

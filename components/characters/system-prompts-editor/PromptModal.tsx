@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
@@ -25,6 +26,7 @@ export function PromptModal({
   onSave,
   onFormChange,
 }: PromptModalProps) {
+  const id = useId()
   const isDisabled = !formData.name.trim() || !formData.content.trim()
 
   const footer = (
@@ -60,10 +62,11 @@ export function PromptModal({
     >
       <div className="space-y-4">
         <div>
-          <label className="qt-label">
+          <label htmlFor={`${id}-name`} className="qt-label">
             Name *
           </label>
           <input
+            id={`${id}-name`}
             type="text"
             value={formData.name}
             onChange={(e) => onFormChange('name', e.target.value)}

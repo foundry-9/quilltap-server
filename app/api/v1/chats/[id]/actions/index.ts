@@ -17,6 +17,7 @@ export {
   handleRebuildSystemPromptAction,
 } from './participants';
 export { handleTurnAction } from './turn';
+export { handleStopTurn, handleRaiseHand } from './interrupt';
 export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
@@ -28,7 +29,9 @@ export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleToggleAgentMode } from './agent-mode';
 export { handleGetStoryBackground, handleRegenerateBackground } from './story-background';
 export { handleReclassifyDanger } from './danger-classification';
-export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot } from './outfit';
+export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot, handleGetWardrobeHistory, handleWardrobeRollback } from './outfit';
+export { handleGetAbsentMentions } from './absent-mentions';
+export { handleGetInventory, handleInventoryEquip, handleInventoryResetDefaults } from './inventory';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';
@@ -60,3 +63,9 @@ export { handleGetGroupStores } from './group-stores';
 export { handleExportMarkdown } from './export-markdown';
 export { handleSetScenario, handleGetScenarioSource } from './scenario';
 export { handleRetryImageUncensored } from './retry-image-uncensored';
+export {
+  handleGetStorytellerRound,
+  handleStorytellerRunAction,
+  handleStorytellerAsk,
+  handleStorytellerLie,
+} from './storyteller';

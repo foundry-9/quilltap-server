@@ -62,6 +62,8 @@ export interface AnyExportData {
   conversationAnnotations?: import('@/lib/schemas/types').ConversationAnnotation[];
   chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
   chatInforms?: import('@/lib/schemas/chat-inform.types').ChatInform[];
+  // Outfit-history rows for the bundle's chats
+  wardrobeHistory?: import('@/lib/schemas/chat-wardrobe-history.types').ChatWardrobeHistoryRow[];
   // Wear-ledger rows for the bundle's wardrobe items (characters and
   // document-stores exports)
   wardrobeWear?: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow[];

@@ -148,6 +148,8 @@ const VALID_VAULT_PROPS = {
   firstMessage: 'vault-first',
   talkativeness: 0.8,
   canChooseOutfit: false,
+  canDrawDiagrams: false,
+  diagramStyle: 'handDrawn',
 };
 
 const VALID_VAULT_PHYSICAL_PROMPTS = {
@@ -627,6 +629,29 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const [result] = await applyDocumentStoreOverlay([char]);
     expect(result.physicalDescription!.headAndShouldersPrompt).toBe('vault-headshoulders');
+  });
+
+  it('hydrates humanoid from physical-prompts.json; absent reads as true', async () => {
+    mockRepoPaths({
+      [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
+        { mountPointId: 'mp-1', content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: false }) },
+        { mountPointId: 'mp-2', content: JSON.stringify(VALID_VAULT_PHYSICAL_PROMPTS) },
+      ],
+    });
+    const spheres = makeCharacter({
+      id: 'a',
+      characterDocumentMountPointId: 'mp-1',
+      physicalDescription: makePhysicalDescription({ id: 'pd-1' }),
+    });
+    const legacy = makeCharacter({
+      id: 'b',
+      characterDocumentMountPointId: 'mp-2',
+      physicalDescription: makePhysicalDescription({ id: 'pd-2' }),
+    });
+    const [a, b] = await applyDocumentStoreOverlay([spheres, legacy]);
+    expect(a.physicalDescription!.humanoid).toBe(false);
+    expect(a.physicalDescription!.shortPrompt).toBe('vault-short');
+    expect(b.physicalDescription!.humanoid).toBe(true);
   });
 
   it('back-compat: a legacy physical-prompts.json without headAndShoulders still parses (field null, other tiers survive)', async () => {
@@ -1388,6 +1413,25 @@ describe('readCharacterVaultPhysicalPrompts', () => {
     expect(result).toEqual({ short: null, medium: null, long: null, complete: null });
   });
 
+  it.each([
+    [false, false],
+    ['false', false],
+    [true, true],
+    ['true', true],
+    [null, undefined],
+    ['nope', undefined],
+  ])('reads a hand-edited humanoid of %p as %p without discarding the prompts', async (raw, expected) => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: raw }),
+      mtime: 0,
+      size: 100,
+    });
+    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
+    expect(result).not.toBeNull();
+    expect(result!.short).toBe(VALID_VAULT_PHYSICAL_PROMPTS.short);
+    expect(result!.humanoid).toBe(expected);
+  });
+
   it('returns null on malformed JSON', async () => {
     readDatabaseDocumentMock.mockResolvedValue({ content: 'not json', mtime: 0, size: 10 });
     const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
@@ -1644,6 +1688,140 @@ describe('applyDocumentStoreWriteOverlay — corrupt properties.json (Bug 8)', (
   });
 });
 
+describe('properties.json — diagram settings (canDrawDiagrams, diagramStyle)', () => {
+  const CHAR_ID = 'char-sketch';
+  const MOUNT_ID = 'mount-sketch';
+
+  // A properties.json written before diagrams existed: no diagram keys at all.
+  const { canDrawDiagrams: _c, diagramStyle: _s, ...LEGACY_PROPS } = VALID_VAULT_PROPS;
+
+  function propsWrite() {
+    const call = writeDatabaseDocumentMock.mock.calls.find(
+      ([, relPath]) => relPath === CHARACTER_PROPERTIES_JSON_PATH,
+    );
+    return call ? JSON.parse(call[2] as string) : undefined;
+  }
+
+  function serve(props: Record<string, unknown>) {
+    readDatabaseDocumentMock.mockResolvedValue({ content: JSON.stringify(props), mtime: 0, size: 120 });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getRepositoriesMock.mockReturnValue({
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: CHAR_ID,
+          name: 'Sketcher',
+          characterDocumentMountPointId: MOUNT_ID,
+        }),
+      },
+    });
+  });
+
+  it('parses a file without the keys as false / handDrawn, hollowing nothing', async () => {
+    serve(LEGACY_PROPS);
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result).toEqual({ ...LEGACY_PROPS, canDrawDiagrams: false, diagramStyle: 'handDrawn' });
+  });
+
+  it('reads an unrecognized diagramStyle as handDrawn instead of failing the parse', async () => {
+    serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'crayon' });
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result).not.toBeNull();
+    expect(result!.diagramStyle).toBe('handDrawn');
+    expect(result!.canDrawDiagrams).toBe(true);
+    // The other fields survive the odd value.
+    expect(result!.title).toBe(VALID_VAULT_PROPS.title);
+  });
+
+  it('keeps a valid clean style', async () => {
+    serve({ ...VALID_VAULT_PROPS, diagramStyle: 'clean' });
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result!.diagramStyle).toBe('clean');
+  });
+
+  it('a canDrawDiagrams patch writes only that key and keeps every other', async () => {
+    serve({ ...VALID_VAULT_PROPS, diagramStyle: 'clean' });
+    const dbPatch = await applyDocumentStoreWriteOverlay(CHAR_ID, { canDrawDiagrams: true });
+    expect('canDrawDiagrams' in dbPatch).toBe(false);
+    expect(propsWrite()).toEqual({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'clean' });
+  });
+
+  it('a diagramStyle patch writes only that key and keeps the ability', async () => {
+    serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true });
+    const dbPatch = await applyDocumentStoreWriteOverlay(CHAR_ID, { diagramStyle: 'clean' });
+    expect('diagramStyle' in dbPatch).toBe(false);
+    expect(propsWrite()).toEqual({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'clean' });
+  });
+
+  it('keeps the style while the ability is switched off', async () => {
+    serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'clean' });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { canDrawDiagrams: false });
+    expect(propsWrite()).toMatchObject({ canDrawDiagrams: false, diagramStyle: 'clean' });
+  });
+
+  it('an unrelated patch over a legacy file writes the defaults for the new keys', async () => {
+    serve(LEGACY_PROPS);
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Renamed' });
+    expect(propsWrite()).toEqual({ ...LEGACY_PROPS, title: 'Renamed', canDrawDiagrams: false, diagramStyle: 'handDrawn' });
+  });
+});
+
+describe('applyDocumentStoreWriteOverlay — physical-prompts.json humanoid flag', () => {
+  const CHAR_ID = 'char-spheres';
+  const MOUNT_ID = 'mount-spheres';
+  const incoming = {
+    id: '00000000-0000-4000-8000-000000000001',
+    name: 'default',
+    shortPrompt: 'new short',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  function physPromptsWrite() {
+    const call = writeDatabaseDocumentMock.mock.calls.find(
+      ([, relPath]) => relPath === CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+    );
+    return call ? JSON.parse(call[2] as string) : undefined;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getRepositoriesMock.mockReturnValue({
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: CHAR_ID,
+          name: 'Orrery',
+          characterDocumentMountPointId: MOUNT_ID,
+        }),
+      },
+    });
+  });
+
+  it('keeps the vault\'s humanoid: false when the write does not name it', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: false }),
+      mtime: 0,
+      size: 100,
+    });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { physicalDescription: incoming } as never);
+    const written = physPromptsWrite();
+    expect(written.short).toBe('new short');
+    expect(written.humanoid).toBe(false);
+  });
+
+  it('writes an explicit humanoid value as given', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: false }),
+      mtime: 0,
+      size: 100,
+    });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { physicalDescription: { ...incoming, humanoid: true } } as never);
+    expect(physPromptsWrite().humanoid).toBe(true);
+  });
+});
+
 describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -1702,6 +1880,8 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       firstMessage: 'Hello there.',
       talkativeness: 0.7,
       canChooseOutfit: false,
+      canDrawDiagrams: false,
+      diagramStyle: 'handDrawn',
     });
 
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
@@ -1716,6 +1896,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       medium: 'medium',
       long: 'long',
       complete: 'complete',
+      humanoid: true,
     });
 
     // No items, no presets → no Wardrobe/*.md or Outfits/*.md writes, and the
@@ -1761,6 +1942,14 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(getWrite(CHARACTER_METADATA_JSON_PATH)).toBeUndefined();
   });
 
+  it('projects the diagram settings a character carries (provisioning, import)', async () => {
+    const character = makeCharacter({ id: 'char-drawer', canDrawDiagrams: true, diagramStyle: 'clean' });
+    await writeCharacterVaultManagedFields('mount-3', { character });
+    const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
+    expect(props.canDrawDiagrams).toBe(true);
+    expect(props.diagramStyle).toBe('clean');
+  });
+
   it('writes empty strings / nulls through for characters with sparse fields', async () => {
     const character = makeCharacter({
       id: 'char-sparse',
@@ -1794,6 +1983,8 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       firstMessage: null,
       talkativeness: 0.5,
       canChooseOutfit: false,
+      canDrawDiagrams: false,
+      diagramStyle: 'handDrawn',
     });
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
     expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');

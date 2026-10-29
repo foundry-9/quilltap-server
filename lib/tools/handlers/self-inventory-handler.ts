@@ -1,13 +1,14 @@
 /**
  * Self-Inventory Tool Handler
  *
- * Assembles the eight-section introspection report. Each section is wrapped
+ * Assembles the eleven-section introspection report. Each section is wrapped
  * in a try/catch so a single failing lookup yields an "unavailable" marker
  * rather than throwing the whole report away.
  *
  * The report is split across this directory by responsibility:
  *   - `self-inventory/helpers.ts`    — shared context type + low-level helpers,
  *   - `self-inventory/builders.ts`   — the GATHER half (`build*`/`resolve*`),
+ *   - `self-inventory/holdings.ts`   — the GATHER half of the `holdings` counts,
  *   - `self-inventory/formatters.ts` — the RENDER half (`format*`).
  * This file is the orchestrator: it resolves the requested sections, drives the
  * builders, and re-exports the public surface (`formatSelfInventoryResults`,
@@ -44,6 +45,7 @@ import {
   resolveQuilltapIncludedParts,
   resolveContextIncludedParts,
 } from './self-inventory/builders';
+import { buildHoldingsSection, resolveHoldingsIncludedParts } from './self-inventory/holdings';
 
 export { formatSelfInventoryResults } from './self-inventory/formatters';
 export type { SelfInventoryToolContext } from './self-inventory/helpers';
@@ -209,6 +211,13 @@ export async function executeSelfInventoryTool(
   if (contextParts) {
     result.context = await buildContextSection(character, context, contextParts).catch(() => ({
       includedParts: contextParts,
+    }));
+  }
+
+  const holdingsParts = resolveHoldingsIncludedParts(requested);
+  if (holdingsParts) {
+    result.holdings = await buildHoldingsSection(character, context, holdingsParts).catch(() => ({
+      includedParts: holdingsParts,
     }));
   }
 

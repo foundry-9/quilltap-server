@@ -15,6 +15,7 @@ In the scenario drop-down — on the New Chat form, or in the **Scenario** contr
 ## Finding a Scene
 
 - **Every shelf at once.** On the left, the owners are sorted into four sections — **General**, **Projects**, **Groups** and **Characters** — each with a count of what it holds. A shelf with nothing on it appears greyed ("Nothing filed here yet."), so you know it is bare rather than wondering whether it was overlooked. Shelves this chat already offers carry a small **in this chat** tag.
+- **Shelved by title.** Each shelf lists its scenarios by title, then filename, with a leading "The" ignored — *The Gilded Cage* sits among the Gs.
 - **One shelf.** Click an owner to see only its scenes; **Every shelf** shows them all again.
 - **Search.** The box at the top ("Search every shelf…") searches names, descriptions, the opening lines of each scene and the owner's name, across every shelf at once, whichever shelf is selected. Should nothing answer, the browser says so: *Nothing on that shelf answers to the name.*
 - **Show archived** brings out the scenes under dust sheets, marked *archived*.

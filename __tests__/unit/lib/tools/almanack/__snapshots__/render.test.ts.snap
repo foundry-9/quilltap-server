@@ -264,6 +264,7 @@ Cast sizes:
 - **Permitted to see the Staff**: 4
 - **May dress themselves**: 30
 - **May create outfits**: 12
+- **May manage their inventory**: 28
 - **With a Core-whisper override**: 5
 
 ### Feature Configuration
@@ -318,6 +319,8 @@ Cast sizes:
 #### Pascal's Workbench (Custom Tools)
 
 - **Custom tools offered to models**: Yes
+- **Auto-Run on Trigger Phrases**: No
+- **Hold Intervenable Rolls for the Operator**: No
 - *(the inventory of definitions lives in the Scriptorium section — they are documents, not settings)*
 
 #### Timestamps

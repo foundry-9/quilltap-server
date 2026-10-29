@@ -61,10 +61,13 @@ interface UseChatSettingsReturn {
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
   handleCustomToolsChange: (value: boolean) => Promise<void>
+  handleCustomToolTriggersChange: (value: boolean) => Promise<void>
+  handleCustomToolInterventionChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleComposerEmojiChange: (value: boolean) => Promise<void>
   handleComposerUnicodeChange: (value: boolean) => Promise<void>
+  handleComposerSlashCommandsChange: (value: boolean) => Promise<void>
   handleImpersonationVoiceModeChange: (value: ImpersonationVoiceMode) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
   handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
@@ -365,6 +368,38 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update custom-tool trigger-phrase setting
+   */
+  const handleCustomToolTriggersChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { customToolTriggers: value },
+        'Failed to update trigger phrase setting',
+        'Failed to update trigger phrase setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
+   * Update custom-tool intervention (hold intervenable rolls) setting
+   */
+  const handleCustomToolInterventionChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { customToolIntervention: value },
+        'Failed to update roll intervention setting',
+        'Failed to update roll intervention setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
    * Update default-composition-mode setting
    */
   const handleCompositionModeDefaultChange = useCallback(
@@ -425,6 +460,23 @@ export function useChatSettings(): UseChatSettingsReturn {
         { composerUnicode: value },
         'Failed to update composer unicode setting',
         'Failed to update composer unicode setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
+   * Update composer slash-commands setting (the `/` typeahead only — the
+   * gutter buttons and the sidebar's Run Tool are deliberately not gated)
+   */
+  const handleComposerSlashCommandsChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { composerSlashCommands: value },
+        'Failed to update composer slash-commands setting',
+        'Failed to update composer slash-commands setting'
       )
     },
     [settings, patchChatSettings]
@@ -753,10 +805,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
     handleCustomToolsChange,
+    handleCustomToolTriggersChange,
+    handleCustomToolInterventionChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
+    handleComposerSlashCommandsChange,
     handleImpersonationVoiceModeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,

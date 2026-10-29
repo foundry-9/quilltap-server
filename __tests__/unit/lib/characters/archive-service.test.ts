@@ -99,6 +99,7 @@ function defaultVaultLinks(): FixtureLink[] {
     { id: 'link-props', relativePath: 'properties.json', fileId: 'file-props' },
     { id: 'link-wardrobe-json', relativePath: 'wardrobe.json', fileId: 'file-wardrobe-json' },
     { id: 'link-hat', relativePath: 'Wardrobe/top-hat.md', fileId: 'file-hat' },
+    { id: 'link-sword', relativePath: 'Inventory/Weapons/sword.json', fileId: 'file-sword' },
     { id: AVATAR_LINK_ID, relativePath: 'photos/avatar.webp', fileId: 'file-avatar' },
     { id: OVERRIDE_LINK_ID, relativePath: 'photos/alternate.webp', fileId: 'file-override' },
     { id: 'link-mail', relativePath: 'Mail/letter.md', fileId: 'file-mail' },
@@ -339,6 +340,9 @@ function createDefaultMocks(mockGetUserRepositories: jest.Mock, mockGetRepositor
     { id: 'folder-mail', path: 'Mail' },
     { id: 'folder-summaries', path: 'Conversation Summaries' },
     { id: 'folder-wardrobe', path: 'Wardrobe' },
+    { id: 'folder-inventory', path: 'Inventory' },
+    { id: 'folder-inventory-weapons', path: 'Inventory/Weapons' },
+    { id: 'folder-inventory-empty', path: 'Inventory/Empty' },
     { id: 'folder-photos', path: 'photos' },
   ] as never);
   mockFolderDelete.mockResolvedValue(true as never);
@@ -624,7 +628,7 @@ describe('archiveCharacter — the prune', () => {
     }
   });
 
-  it('removes emptied folders but keeps Wardrobe and any folder sheltering kept content', async () => {
+  it('removes emptied folders but keeps Wardrobe, Inventory and any folder sheltering kept content', async () => {
     const { archiveCharacter } = setup();
 
     await archiveCharacter('user-1', CHARACTER_ID);
@@ -633,6 +637,11 @@ describe('archiveCharacter — the prune', () => {
     expect(mockFolderDelete).toHaveBeenCalledWith('folder-summaries');
     // Wardrobe is in the keep-set explicitly; photos/ still holds the avatar.
     expect(mockFolderDelete).not.toHaveBeenCalledWith('folder-wardrobe');
+    // Inventory/ is kept whole (an archetype's dependents stay countable),
+    // empty subfolders included.
+    expect(mockFolderDelete).not.toHaveBeenCalledWith('folder-inventory');
+    expect(mockFolderDelete).not.toHaveBeenCalledWith('folder-inventory-weapons');
+    expect(mockFolderDelete).not.toHaveBeenCalledWith('folder-inventory-empty');
     expect(mockFolderDelete).not.toHaveBeenCalledWith('folder-photos');
   });
 

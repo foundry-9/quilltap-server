@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -53,6 +55,10 @@ type Result = { kind: 'one'; report: MaintenanceReport } | { kind: 'many'; repor
 
 export function MaintenanceDialog({ characterId, characterName, onClose, onQueued }: MaintenanceDialogProps) {
   const queryClient = useQueryClient()
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(onClose, true)
   const [target, setTarget] = useState<string>(characterId ?? '')
   const [phases, setPhases] = useState<Set<MaintenancePhase>>(() => new Set(PICKABLE_PHASES))
   const [capDraft, setCapDraft] = useState('')
@@ -129,10 +135,18 @@ export function MaintenanceDialog({ characterId, characterName, onClose, onQueue
 
   return createPortal(
     <div className="qt-dialog-overlay p-4 z-[100]">
-      <div className="qt-dialog max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        className="qt-dialog max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+      >
         <div className="qt-dialog-header">
           <div className="flex items-center justify-between">
-            <h2 className="qt-dialog-title">
+            <h2 id={titleId} className="qt-dialog-title">
               Memory Maintenance{characterName ? ` — ${characterName}` : ''}
             </h2>
             <button type="button" onClick={onClose} className="qt-text-secondary hover:text-foreground" aria-label="Close">

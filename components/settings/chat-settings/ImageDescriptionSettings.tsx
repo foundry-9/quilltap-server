@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import Link from 'next/link'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, ConnectionProfile } from './types'
@@ -26,6 +27,7 @@ export function ImageDescriptionSettings({
   connectionProfiles,
   onProfileChange,
 }: ImageDescriptionSettingsProps) {
+  const id = useId()
   const visionProfiles = connectionProfiles.filter(profile => profile.supportsImageUpload === true)
 
   return (
@@ -35,7 +37,7 @@ export function ImageDescriptionSettings({
     >
       <div className="space-y-4">
         <div>
-          <label className="block qt-text-label mb-2">
+          <label className="block qt-text-label mb-2" htmlFor={`${id}-profile`}>
             Primary image description profile
           </label>
           <p className="qt-text-xs mb-2">
@@ -43,6 +45,7 @@ export function ImageDescriptionSettings({
             If not set, the system will automatically use any available vision-capable profile.
           </p>
           <select
+            id={`${id}-profile`}
             value={settings?.imageDescriptionProfileId || ''}
             onChange={(e) => onProfileChange(e.target.value || null)}
             disabled={saving || loadingProfiles}

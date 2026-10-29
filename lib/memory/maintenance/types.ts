@@ -114,7 +114,7 @@ export interface DemotePhaseReport {
   hotTotal: number
   /** Hot AUTO rows before the phase — the only rows the cap measures (bug 210). */
   demotable: number
-  /** Hot MANUAL rows and digests — never demoted, never counted. */
+  /** Hot MANUAL rows, digests and keystones — never demoted, never counted. */
   protected: number
   /** `max(0, demotable − cap)`. */
   excess: number

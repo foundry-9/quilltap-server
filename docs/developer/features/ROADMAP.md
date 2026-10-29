@@ -2,40 +2,19 @@
 
 This document tracks planned features and improvements for Quilltap.
 
-## Release Checklist
-
-### 3.3.0
-
-- [X] Fix direct Node.js/Electron-hosted installation
-- [X] ~~Optional (opt-out)~~ reporting to providers about app/version (tell OpenRouter that it's Quilltap/3.3.0 calling)
-- [ ] Start a "recommendation" JSON file on [Quilltap website](https://quilltap.ai)
-  - [ ] Parser built-in on website
-  - [ ] Downloadable information tracking:
-    - Available providers
-    - Available models
-    - Censorship status
-    - Cost
-    - Capabilities
-    - Tool-use success
-    - Help LLM success
-    - Adaptability (can they be serious? Can they roleplay?)
-    - Thinking ability
-    - Best settings for purpose (temperature, top_p)
-- [X] Context help documentation with LLM (lock down theme)
-- [X] Browseable Help Guide tab (see `help_guide.md`)
-- [X] Turn off story backgrounds for help chats
-- [X] Better "chat" look-and-feel for help
-- [X] Unit test coverage
-- [X] Standard refactor pass
-- [X] Organize documentation (dev docs, help docs, README)
-- [X] Database locking
-- [X] Database version locking
-
 ## Planned Features
+
+### Pascal the Croupier — the Inventory
+
+- [x] The Inventory — objects a character carries, in four tiers, with archetypes, kits and per-chat equipped state (design: [complete/inventory.md](complete/inventory.md))
+- [x] Inventory tools and Pascal support — the `inventory_*` family, the `inventory` / `inventoryCount` subjects, `$inventory` operand, placeholders and the `inventory` effect (design: [complete/inventory-tools-and-pascal.md](complete/inventory-tools-and-pascal.md))
+- [x] Broader custom-tool gates — the `inventoryAggregate` subject (names, titles and `metadata` folded over the equipped, owned or reachable objects; per-entry list tests; `.min` / `.max` / `.sum` / `.count`), and OR as a one-level any-of array in gates and `when` tests (design: [complete/pascal-gate-broadening.md](complete/pascal-gate-broadening.md))
+- [x] Operator intervention — an intervenable custom tool's model- or trigger-reached run is held for the operator, who may change any shown part of it, force an outcome, or veto it; recomputed without rerolling, never told to the model, recorded in `pascalMeta.intervention` with an "adjusted" badge (design: [complete/pascal-operator-intervention.md](complete/pascal-operator-intervention.md))
 
 ### Game and State (Pascal the Croupier)
 
 - [ ] Document the new incarnation of the game and state system
+- [x] Workbench wardrobe picker — choose garments and outfits for a `wardrobe` side effect from a browsable list showing where each lives, its slots and its picture (design: [complete/pascal-wardrobe-effect-picker.md](complete/pascal-wardrobe-effect-picker.md))
 
 ### Plugin architecture (The Foundry)
 
@@ -62,8 +41,12 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
 - [X] Better selectable saved scenarios and prompts per chat
+- [ ] Composer `#` document references — type `#` to point a message at a Scriptorium document; the model is told where it is, or handed its text when it cannot use tools (design: [composer-document-references.md](composer-document-references.md))
+- [x] Diagrams in the Salon, iteration 1 — closed `mermaid` / `dot` / `svg` fences render live as themed SVG; per-character `canDrawDiagrams` and `diagramStyle` (hand-drawn / clean) in the vault's `properties.json`; prompt note only for drawing characters (design: [complete/diagrams.md](complete/diagrams.md))
+- [ ] Diagrams, iteration 2 — server-side render, save a diagram to the gallery or a store, a one-shot repair suggestion for a broken diagram, diagrams beyond the Salon (see the sketch in [complete/diagrams.md](complete/diagrams.md#iteration-2-sketch-not-in-scope))
 - [x] Scenarios from anywhere — browse every character, project, group and General scenario from either picker; a chat keeps a source pointer; one `resolveScenarioLocation` (design: [complete/scenarios-from-anywhere.md](complete/scenarios-from-anywhere.md))
 - [X] Wardrobe folders — user-defined folders under each tier's `Wardrobe/`, breadcrumb browser, move-to-folder and bulk move; the path is the truth (design: [complete/wardrobe-folders.md](complete/wardrobe-folders.md))
+- [x] Wardrobe outfit history — a per-character, per-chat numbered record of every change of clothes (one entry per Aurora announcement), `wardrobe_rollback` / `wardrobe_history` tools, a cursor that moves back and forward without renumbering, and a History tab with **Wear again** in the Wardrobe dialog (design: [complete/wardrobe-outfit-history.md](complete/wardrobe-outfit-history.md))
 - [X] Scenario Builder — The Host researches (web for a real place, the chat's visible stores for an in-world one) and drafts a cast-agnostic starting scene, editable and revisable, usable at once or saved to General, a project, a group, or a character's scenarios (design: [scenario-builder.md](complete/scenario-builder.md))
 
 ### LLM Integration (The Foundry)
@@ -81,6 +64,7 @@ This document tracks planned features and improvements for Quilltap.
 ### Content & Worldbuilding (The Commonplace Book)
 
 - [x] Memory system refactor — one candidate shape, one extraction context, parent-side admission, three named scores, one clock, one recall pipeline with delivery, one maintenance job, one deletion chokepoint; `vector_entries` retired for memories (design: [memory-system-refactor.md](complete/memory-system-refactor.md))
+- [x] Inner-circle recall — importance rubric recalibrated (work ceiling 0.65, "score the fact, not the telling"), group members get reserved full-text lines in the frozen archive, and operator-marked keystone memories are always recalled in full and never folded, consolidated or demoted (design: [inner-circle-recall.md](complete/inner-circle-recall.md))
 - [ ] Worldbook/Lore system
 - [X] Complete embedding of files
   - [X] Text files
@@ -106,7 +90,6 @@ This document tracks planned features and improvements for Quilltap.
 
 #### The Lantern
 
-- [ ] ComfyUI + LORA support for local installations (see [feature request](./comfy_ui_local_image.md))
 - [X] Determination of what people are wearing in an image is iffy at best - needs help
 
 ### Calliope: Themes & UI
@@ -132,4 +115,4 @@ This document tracks planned features and improvements for Quilltap.
 
 ## Completed in v2.10.0 and earlier
 
-See [CHANGELOG.md](../docs/CHANGELOG_V2.md) for details on v2.7.0 and earlier releases.
+See [CHANGELOG_V2.md](../../CHANGELOG_V2.md) for details on v2.10.0 and earlier releases.

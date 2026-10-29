@@ -16,6 +16,7 @@ import {
 } from './common.types';
 import { TimestampConfigSchema } from './settings.types';
 import { ControlledByEnum } from './character.types';
+import { ChatTurnModeSchema, StorytellerBidRecordSchema } from './storyteller.types';
 
 // ============================================================================
 // DANGER FLAGS
@@ -72,6 +73,25 @@ export const SceneStateSchema = z.object({
 });
 
 export type SceneState = z.infer<typeof SceneStateSchema>;
+
+/**
+ * A chat's stored `sceneState` column as a `SceneState`, or null when it is
+ * absent, not JSON, or not the schema's shape. The column holds either the
+ * object or its JSON text depending on the path that wrote it.
+ */
+export function parseStoredSceneState(raw: unknown): SceneState | null {
+  if (!raw) return null;
+  let candidate: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      candidate = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  const result = SceneStateSchema.safeParse(candidate);
+  return result.success ? result.data : null;
+}
 
 // ============================================================================
 // CHAT TYPE
@@ -424,14 +444,16 @@ export const MessageEventSchema = z.object({
   }).nullable().optional(),
   /**
    * Ad-hoc announcer metadata for user-authored announcement bubbles
-   * (Insert Announcement composer button). Mutually exclusive with
-   * `systemSender`: when this is set, the message renders with the named
-   * character or custom display name in lieu of any Staff member.
+   * (Insert Announcement composer button), and for a Pascal outcome whose
+   * tool sets `announceAsCharacter` (then `systemSender` stays `'pascal'`).
+   * When this is set, the message renders with the named character or custom
+   * display name in lieu of any Staff member, and the LLM context tags the
+   * body with that speaker.
    *
-   * - `kind: 'character'` → `characterId` references a workspace character
-   *   who is not a participant in this chat. The renderer resolves the
-   *   character's avatar/name via the off-scene character lookup attached
-   *   to the chat payload.
+   * - `kind: 'character'` → `characterId` references a workspace character —
+   *   a participant, or one who is not in this chat. The renderer looks among
+   *   the participants first, then the off-scene character lookup attached to
+   *   the chat payload.
    * - `kind: 'custom'` → `displayName` is the free-text label shown next
    *   to a placeholder avatar.
    *
@@ -458,6 +480,14 @@ export const MessageEventSchema = z.object({
     question: z.string(),
   }).nullable().optional(),
   /**
+   * Storyteller mode: the bid this speaking turn carried out — round, tier,
+   * plan, tools named. A swipe or regenerate re-applies it, so a re-roll runs
+   * under the same plan and ceiling. Part of the record (export, backup), but
+   * never model-facing: stripped from every transcript a model reads.
+   * NULL on every message that was not a storyteller speaking turn.
+   */
+  storytellerBid: StorytellerBidRecordSchema.nullable().optional(),
+  /**
    * Pascal the Croupier (custom pseudo-tools) roll record, set on
    * `systemSender = 'pascal'` messages. The whole point of the column is that
    * the *server* rolled and the *server* chose the outcome: the model asked for
@@ -472,8 +502,10 @@ export const MessageEventSchema = z.object({
    * the outcome table was tested against; `outcomeIndex` names the winning
    * entry and `state` its semantic verdict. `metadataTested` records the
    * invoking character's metadata as the winning row read it. `invokedBy`
-   * distinguishes a model's reach for the tool from a user's own Run-Tool, and
-   * `callerParticipantId` names the participant who rolled, when there was one.
+   * distinguishes a model's reach for the tool from a user's own Run-Tool and
+   * from a trigger phrase overheard in the chat ('trigger', with the phrase in
+   * `triggerPhrase`), and `callerParticipantId` names the participant who
+   * rolled (or spoke the phrase), when there was one.
    *
    * NULL on every non-Pascal message.
    */
@@ -534,9 +566,17 @@ export const MessageEventSchema = z.object({
      * definition's `effects` array. Each entry names the raw target
      * ("state.encounter.count" / "metadata.lockpick"), what the store held
      * before (absent when it held nothing), what was written, and — for state
-     * targets only — which tier the write landed in. The Salon body shows none
-     * of this; the bubble stays the author's message. Absent when the run
-     * declared or applied no effects.
+     * targets only — which tier the write landed in. A wardrobe effect records
+     * one entry per change that landed, targeted "wardrobe.wear" /
+     * "wardrobe.take_off" / "wardrobe.clear_slot": `previous` is the slots
+     * before, `next` is `{ item?, slot?, slotsAffected, effect, slots }`
+     * (`WardrobeEffectRecord`, lib/pascal/wardrobe-effects.ts). An Inventory
+     * effect records one entry per object that landed, targeted
+     * "inventory.equip" / "inventory.unequip" / "inventory.pick_up": `previous`
+     * is the equipped ids before, `next` is `{ item, created?, equipped }`
+     * (`InventoryEffectRecord`, lib/pascal/inventory-effects.ts). The Salon body
+     * shows none of this; the bubble stays the author's message. Absent when
+     * the run declared or applied no effects.
      */
     effects: z.array(z.object({
       target: z.string(),
@@ -544,8 +584,49 @@ export const MessageEventSchema = z.object({
       next: z.unknown(),
       tier: z.enum(['chat', 'project', 'group', 'general']).optional(),
     })).optional(),
-    invokedBy: z.enum(['llm', 'user']),
+    invokedBy: z.enum(['llm', 'user', 'trigger']),
+    /** The phrase that fired a triggered run, as written in the definition. Present only when invokedBy is 'trigger'. */
+    triggerPhrase: z.string().optional(),
     callerParticipantId: UUIDSchema.optional(),
+    /**
+     * Operator intervention: the run was held for the operator and changed
+     * before it was announced. The top-level fields above describe the run AS
+     * ANNOUNCED; this records what was first dealt and which fields changed
+     * (`params.<name>`, `roll`, `value`, `llmAnswer`, `outcome`, `message`,
+     * `state`, `chipLabel`, `title`, `visibility`, `announcer`,
+     * `effects.<index>`). Absent when the run was never held, or was let
+     * stand as rolled; a veto posts nothing at all. Operator-facing only:
+     * no model-facing path reads `pascalMeta`.
+     */
+    intervention: z.object({
+      resolvedAt: z.string(),
+      decision: z.enum(['deal', 'as-rolled']),
+      changed: z.array(z.string()),
+      dealt: z.object({
+        params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
+        raw: z.number(),
+        diceRolls: z.array(z.number()).optional(),
+        value: z.number(),
+        outcomeIndex: z.number(),
+        state: z.enum(['success', 'partial', 'failure', 'info']),
+        message: z.string(),
+        chipLabel: z.string().optional(),
+        toolTitle: z.string().optional(),
+        visibility: z.enum(['public', 'whisper']),
+        announcer: z.enum(['pascal', 'character']),
+        llm: z.object({ ok: z.boolean(), output: z.string(), prompt: z.string() }).optional(),
+        effects: z.array(z.object({
+          index: z.number(),
+          fired: z.boolean(),
+          target: z.string(),
+          next: z.unknown().optional(),
+        })).optional(),
+      }),
+      /** Consult calls made from the dialog. */
+      reasks: z.number().int().optional(),
+      /** Dealt with a consult answer given to a different prompt than the one in force. */
+      staleAnswer: z.boolean().optional(),
+    }).optional(),
   }).nullable().optional(),
   /**
    * The Courier: when non-null, this message is a placeholder for a manual /
@@ -687,6 +768,24 @@ export function canReceiveWhisper(status: ParticipantStatus): boolean {
  */
 export function hasWhisperTargets(message: Pick<MessageEvent, 'targetParticipantIds'>): boolean {
   return Array.isArray(message.targetParticipantIds) && message.targetParticipantIds.length > 0;
+}
+
+/**
+ * Whether a message is addressed to one whisper scope: `null` is the whole
+ * room (an untargeted message), a participant id is a whisper naming that
+ * participant. The scope a Staff writer posts a per-recipient whisper to, and
+ * the one its sweep of the recipient's prior whispers must match.
+ *
+ * An empty `targetParticipantIds` array is the whole room, as it is to
+ * `hasWhisperTargets` and to the visibility filter (`filterWhisperMessages`):
+ * a row everyone is shown belongs to the public scope.
+ */
+export function isInWhisperScope(
+  message: Pick<MessageEvent, 'targetParticipantIds'>,
+  targetParticipantId: string | null,
+): boolean {
+  if (targetParticipantId === null) return !hasWhisperTargets(message);
+  return Array.isArray(message.targetParticipantIds) && message.targetParticipantIds.includes(targetParticipantId);
 }
 
 /**
@@ -866,6 +965,18 @@ export const ChatMetadataSchema = z.object({
   summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
+  /**
+   * Turn mode: 'rotation' (NULL) or 'storyteller' — each operator post opens a
+   * round of bids. Independent of `isPaused`. **Patch-only**: written only by
+   * `ChatsRepository.setTurnMode`, so a whole-row update cannot carry a stale
+   * copy back.
+   */
+  turnMode: ChatTurnModeSchema.nullable().optional(),
+  /**
+   * Storyteller mode: invite each seat to bid with probability
+   * `0.25 + 0.75 × talkativeness` instead of inviting everyone. Off by default.
+   */
+  storytellerInviteFilter: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed: z.boolean().default(false),
 
@@ -1025,6 +1136,13 @@ export const ChatMetadataSchema = z.object({
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
 
+  /**
+   * Inventory objects carried per character in this chat: `{ [characterId]: string[] }`
+   * of object ids (`EquippedInventorySchema`). Patch-only — written solely by
+   * `ChatsRepository.setEquippedInventory`.
+   */
+  equippedInventory: JsonSchema.nullable().optional(),
+
   /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
   characterAvatars: JsonSchema.nullable().optional(),
 
@@ -1169,7 +1287,7 @@ export const ChatMetadataSchema = z.object({
    */
   runMilestonesAnnounced: z.number().int().nonnegative().default(0),
 
-  /** 1 = owner pre-authorized destructive tools (DESTRUCTIVE_TOOL_NAMES); 0 = disabled. */
+  /** 1 = owner pre-authorized `destroy`-effect tools (lib/tools/effects.ts); 0 = disabled. */
   runDestructiveToolsAllowed: z.number().int().min(0).max(1).default(0),
   /**
    * Per-run token-budget counting mode. 1 (default) = exclude prompt-cache
@@ -1264,6 +1382,10 @@ export const ChatMetadataBaseSchema = z.object({
   summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
+  /** Turn mode ('rotation' | 'storyteller'). See ChatMetadataSchema. */
+  turnMode: ChatTurnModeSchema.nullable().optional(),
+  /** Storyteller invite filter. See ChatMetadataSchema. */
+  storytellerInviteFilter: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
   isManuallyRenamed: z.boolean().default(false),
   // Impersonation state
@@ -1413,6 +1535,13 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
+
+  /**
+   * Inventory objects carried per character in this chat: `{ [characterId]: string[] }`
+   * of object ids (`EquippedInventorySchema`). Patch-only — written solely by
+   * `ChatsRepository.setEquippedInventory`.
+   */
+  equippedInventory: JsonSchema.nullable().optional(),
 
   /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
   characterAvatars: JsonSchema.nullable().optional(),

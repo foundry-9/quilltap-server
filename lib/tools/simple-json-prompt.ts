@@ -33,12 +33,15 @@ import { wardrobeUpdateToolDefinition } from './wardrobe-update-tool'
 import { wardrobeArchiveToolDefinition } from './wardrobe-archive-tool'
 import { wardrobeWearToolDefinition } from './wardrobe-wear-tool'
 import { wardrobeTakeOffToolDefinition } from './wardrobe-take-off-tool'
+import { wardrobeRollbackToolDefinition } from './wardrobe-rollback-tool'
+import { wardrobeHistoryToolDefinition } from './wardrobe-history-tool'
+import { enabledInventoryToolDefinitions, type InventoryToolFlags } from './inventory-tool-flags'
 
 /**
  * Which tools to document in the prompt. Mirrors the shape of
  * `TextBlockPromptOptions` so the orchestrator can wire them in symmetrically.
  */
-export interface SimpleJsonPromptOptions {
+export interface SimpleJsonPromptOptions extends InventoryToolFlags {
   whisper?: boolean
   search?: boolean
   imageGeneration?: boolean
@@ -54,6 +57,8 @@ export interface SimpleJsonPromptOptions {
   wardrobeRead?: boolean
   wardrobeWear?: boolean
   wardrobeTakeOff?: boolean
+  wardrobeRollback?: boolean
+  wardrobeHistory?: boolean
   wardrobeCreate?: boolean
   wardrobeUpdate?: boolean
   wardrobeArchive?: boolean
@@ -214,6 +219,12 @@ export function buildSimpleJsonToolInstructions(options: SimpleJsonPromptOptions
   if (options.wardrobeTakeOff) {
     entries.push(renderToolEntry(wardrobeTakeOffToolDefinition as unknown as OpenAIToolDefinition))
   }
+  if (options.wardrobeRollback) {
+    entries.push(renderToolEntry(wardrobeRollbackToolDefinition as unknown as OpenAIToolDefinition))
+  }
+  if (options.wardrobeHistory) {
+    entries.push(renderToolEntry(wardrobeHistoryToolDefinition as unknown as OpenAIToolDefinition))
+  }
   if (options.wardrobeCreate) {
     entries.push(renderToolEntry(wardrobeCreateToolDefinition as unknown as OpenAIToolDefinition))
   }
@@ -222,6 +233,9 @@ export function buildSimpleJsonToolInstructions(options: SimpleJsonPromptOptions
   }
   if (options.wardrobeArchive) {
     entries.push(renderToolEntry(wardrobeArchiveToolDefinition as unknown as OpenAIToolDefinition))
+  }
+  for (const definition of enabledInventoryToolDefinitions(options)) {
+    entries.push(renderToolEntry(definition as unknown as OpenAIToolDefinition))
   }
 
   if (entries.length === 0) {

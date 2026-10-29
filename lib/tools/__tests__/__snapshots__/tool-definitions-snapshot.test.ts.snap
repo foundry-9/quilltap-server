@@ -1,5 +1,84 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
+exports[`tool definitions: declared effects effects snapshot (static effect, or "computed (max <effect>)") 1`] = `
+{
+  "ask_carina": "read",
+  "attach_image": "write",
+  "delete_annotation": "destroy",
+  "describe_image": "read",
+  "discard_mail": "destroy",
+  "doc_close_document": "read",
+  "doc_copy_file": "write",
+  "doc_create_folder": "write",
+  "doc_delete_blob": "destroy",
+  "doc_delete_file": "destroy",
+  "doc_delete_folder": "destroy",
+  "doc_focus": "read",
+  "doc_grep": "read",
+  "doc_insert_text": "write",
+  "doc_list_blobs": "read",
+  "doc_list_files": "read",
+  "doc_move_file": "write",
+  "doc_move_folder": "write",
+  "doc_open_document": "computed (max write)",
+  "doc_read_blob": "read",
+  "doc_read_file": "read",
+  "doc_read_frontmatter": "read",
+  "doc_read_heading": "read",
+  "doc_str_replace": "write",
+  "doc_update_frontmatter": "write",
+  "doc_update_heading": "write",
+  "doc_write_blob": "write",
+  "doc_write_file": "write",
+  "edit_custom_tool": "computed (max write)",
+  "generate_image": "write",
+  "help_navigate": "read",
+  "help_search": "read",
+  "help_settings": "read",
+  "inventory_archive": "write",
+  "inventory_create": "write",
+  "inventory_equip": "write",
+  "inventory_give": "write",
+  "inventory_list": "read",
+  "inventory_pick_up": "write",
+  "inventory_read": "read",
+  "inventory_unequip": "write",
+  "inventory_update": "write",
+  "keep_image": "write",
+  "list_images": "read",
+  "list_mail": "read",
+  "log_create_entry": "write",
+  "log_grep": "read",
+  "log_read": "read",
+  "project_info": "read",
+  "read_conversation": "read",
+  "read_mail": "read",
+  "request_full_context": "read",
+  "rng": "none",
+  "run_custom": "computed (max write)",
+  "run_sql": "read",
+  "search": "read",
+  "search_web": "read",
+  "self_inventory": "read",
+  "send_mail": "write",
+  "state": "computed (max write)",
+  "submit_final_response": "none",
+  "terminal_list": "read",
+  "terminal_read": "read",
+  "upsert_annotation": "write",
+  "wardrobe_archive": "write",
+  "wardrobe_create": "write",
+  "wardrobe_history": "read",
+  "wardrobe_list": "read",
+  "wardrobe_read": "read",
+  "wardrobe_rollback": "write",
+  "wardrobe_take_off": "write",
+  "wardrobe_update": "write",
+  "wardrobe_wear": "write",
+  "whisper": "none",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters askCarina: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -483,7 +562,7 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       "type": "string",
     },
     "pattern": {
-      "description": "Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js").",
+      "description": "Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js"). A pattern with no "/" matches file names in any folder; "**/" spans any number of folders, including none. Case-insensitive.",
       "type": "string",
     },
     "recursive": {
@@ -1016,6 +1095,35 @@ exports[`tool definitions: derived OpenAI parameters docWriteFile: parameters sn
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters editCustomTool: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "description": "Set to "schema" to fetch the custom-tool definition format — the full JSON Schema plus worked example definitions — instead of saving or validating anything. No other field is needed or read. Omit it to save (with \`content\`) or validate (without).",
+      "enum": [
+        "schema",
+      ],
+      "type": "string",
+    },
+    "content": {
+      "description": "The complete new definition, as a JSON string or a native object. It is schema-validated before anything is written, and an invalid definition is not saved. Omit it to save nothing and only validate the file as it stands — for instance after editing it with another tool.",
+    },
+    "file": {
+      "description": "The definition's file name, with or without its ".tool.json" suffix (e.g. "unlock" or "unlock.tool.json"). It always lives directly inside the store's top-level Tools/ folder; no other folder is accepted. Required unless \`action\` is "schema".",
+      "minLength": 1,
+      "type": "string",
+    },
+    "mount_point": {
+      "description": "Name of the document store holding the definition. The reserved value "self" addresses your own character vault. Required unless \`action\` is "schema".",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters helpNavigate: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1179,6 +1287,316 @@ Bad: "A woman with brown hair sitting with a man" (missing placeholders!)",
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters inventoryArchive: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "archived": {
+      "description": "true to archive it, false to restore it.",
+      "type": "boolean",
+    },
+    "ref": {
+      "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+    "archived",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryCreate: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "description": "What the object is, as you and others know it while it is carried.",
+      "maxLength": 4000,
+      "type": "string",
+    },
+    "emoji": {
+      "description": "A single emoji glyph for it.",
+      "maxLength": 16,
+      "type": "string",
+    },
+    "equip": {
+      "description": "Equip the new object at once. Defaults to false.",
+      "type": "boolean",
+    },
+    "image_description": {
+      "description": "How the object looks, for pictures — the ONLY text about it the image generator sees (never the description). Supply it whenever the object would be visible in a portrait or scene. 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. E.g. "dented brass pocket compass on a short chain".",
+      "maxLength": 2000,
+      "type": "string",
+    },
+    "max_equipped": {
+      "description": "At most this many of its kind (same name) may be carried at once. Defaults to 1.",
+      "maximum": 999,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "metadata": {
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null",
+        ],
+      },
+      "description": "Free-form facts about it, e.g. {"damage": "2d6", "charges": 3}.",
+      "propertyNames": {
+        "type": "string",
+      },
+      "type": "object",
+    },
+    "name": {
+      "description": "The plain name of the object ("sword"). Objects of a kind share it.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "title": {
+      "description": "A proper title ("Excalibur"), shown first when set.",
+      "maxLength": 200,
+      "type": "string",
+    },
+  },
+  "required": [
+    "name",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryEquip: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "refs": {
+      "description": "One to eight objects (or kits), each by id, title or name.",
+      "items": {
+        "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string",
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "refs",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryGive: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "ref": {
+      "description": "The object to give: one of your own, by id, title or name.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "to": {
+      "description": "Who receives it: another character in this chat, by name or id.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+    "to",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryList: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "equipped": {
+      "description": "true lists only what you have equipped in this chat; false only what you do not. Omit for both.",
+      "type": "boolean",
+    },
+    "folder": {
+      "description": "Only objects filed in this folder (or beneath it), e.g. "Weapons".",
+      "type": "string",
+    },
+    "include_archived": {
+      "description": "Also list your own archived objects. Defaults to false.",
+      "type": "boolean",
+    },
+    "kind": {
+      "description": ""item" for single objects, "kit" for bundles equipped as one, "archetype" for classes of object you can pick up an instance of.",
+      "enum": [
+        "item",
+        "kit",
+        "archetype",
+      ],
+      "type": "string",
+    },
+    "tier": {
+      "description": ""own" for your own vault, or one of the shared stores: "group", "project", "general".",
+      "enum": [
+        "own",
+        "group",
+        "project",
+        "general",
+      ],
+      "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryPickUp: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "equip": {
+      "description": "Equip the new instance at once. Defaults to true.",
+      "type": "boolean",
+    },
+    "ref": {
+      "description": "The archetype to pick up an instance of: its id, title or name.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "title": {
+      "description": "A proper title for your instance ("Old Faithful"). Omit to keep the archetype's.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryRead: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "ref": {
+      "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryUnequip: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "refs": {
+      "description": "One to eight objects (or kits), each by id, title or name.",
+      "items": {
+        "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string",
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "refs",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters inventoryUpdate: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "description": "What the object is, as you and others know it while it is carried.",
+      "maxLength": 4000,
+      "type": "string",
+    },
+    "emoji": {
+      "description": "A single emoji glyph for it.",
+      "maxLength": 16,
+      "type": "string",
+    },
+    "image_description": {
+      "description": "How the object looks, for pictures — the ONLY text about it the image generator sees (never the description). Supply it whenever the object would be visible in a portrait or scene. 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. E.g. "dented brass pocket compass on a short chain".",
+      "maxLength": 2000,
+      "type": "string",
+    },
+    "max_equipped": {
+      "description": "At most this many of its kind (same name) may be carried at once. Defaults to 1.",
+      "maximum": 999,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "metadata": {
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null",
+        ],
+      },
+      "description": "Free-form facts about it, e.g. {"damage": "2d6", "charges": 3}.",
+      "propertyNames": {
+        "type": "string",
+      },
+      "type": "object",
+    },
+    "name": {
+      "description": "A new plain name.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "ref": {
+      "description": "The object: its id, its title ("Excalibur") or its name ("sword"), case-insensitive.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+    },
+    "title": {
+      "description": "A proper title ("Excalibur"), shown first when set.",
+      "maxLength": 200,
+      "type": "string",
+    },
+  },
+  "required": [
+    "ref",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters keepImage: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1243,6 +1661,87 @@ exports[`tool definitions: derived OpenAI parameters listMail: parameters snapsh
 {
   "additionalProperties": false,
   "properties": {},
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters logCreateEntry: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "description": "The line to record, verbatim.",
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "message",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters logGrep: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "ignore_case": {
+      "description": "Match without regard to case. Default false.",
+      "type": "boolean",
+    },
+    "limit": {
+      "description": "Most entries to return, newest first. Default 50.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "pattern": {
+      "description": "A JavaScript regular expression matched against each entry's message, e.g. "lock(pick|smith)" or "^Day \\\\d+". A plain word matches anywhere in the message.",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "pattern",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters logRead: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "character": {
+      "description": "Only entries written by this character, by name (case-insensitive) or id.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "conversationId": {
+      "description": "Only entries written from this conversation. Use "current" for this one.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "from": {
+      "description": "Only entries written at or after this moment (ISO-8601, e.g. "2026-10-01" or "2026-10-01T18:00:00Z").",
+      "minLength": 1,
+      "type": "string",
+    },
+    "limit": {
+      "description": "Most entries to return, newest first. Default 50.",
+      "maximum": 200,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "to": {
+      "description": "Only entries written at or before this moment (ISO-8601). A bare date means the end of that day (UTC), so from and to may name the same date.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
   "type": "object",
 }
 `;
@@ -1408,7 +1907,7 @@ exports[`tool definitions: derived OpenAI parameters runSql: parameters snapshot
   "properties": {
     "database": {
       "default": "main",
-      "description": "Which Quilltap database to query. "main" (quilltap.db): characters, chats, chat_messages, memories, connection_profiles, projects, groups, settings. "llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, token usage, cost, duration). "mount-index" (quilltap-mount-index.db): document stores and ALL character/project/group vault content. Databases are physically separate — you cannot JOIN across them in one query.",
+      "description": "Which Quilltap database to query. "main" (quilltap.db): characters, chats, chat_messages, memories, connection_profiles, projects, groups, settings. "llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, token usage, cost, duration) and the log_entries table (id, message, chatId, characterId, createdAt, updatedAt; the characters' log; \`X REGEXP 'pattern'\` works here). "mount-index" (quilltap-mount-index.db): document stores and ALL character/project/group vault content. Databases are physically separate — you cannot JOIN across them in one query.",
       "enum": [
         "main",
         "llm-logs",
@@ -1612,13 +2111,14 @@ exports[`tool definitions: derived OpenAI parameters selfInventory: parameters s
       "type": "boolean",
     },
     "sections": {
-      "description": "Optional list of section names to return. If omitted or empty, all top-level sections are returned (equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "carina", "quilltap", "context"). Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information. The "quilltap.*", "vault.*", "vaultAccess.*", and "context.*" sub-sections let you fetch one piece of a section without pulling the rest (e.g. the changelog, which can be large).",
+      "description": "Optional list of section names to return. If omitted or empty, all top-level sections are returned (equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "carina", "quilltap", "context", "holdings"). Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information. The "quilltap.*", "vault.*", "vaultAccess.*", "context.*", and "holdings.*" sub-sections let you fetch one piece of a section without pulling the rest (e.g. the changelog, which can be large).",
       "items": {
-        "description": "Which section(s) to include. Options: "vault" (files in your own character vault AND your group vaults), with finer-grained dotted variants "vault.character" (just your own vault) and "vault.groups" (just the vaults of the groups you belong to); "vaultAccess" (who can read/write your character vault in this chat AND who can read/write your group vaults), with dotted variants "vaultAccess.character" (this chat only) and "vaultAccess.groups" (group members, in any chat); "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call), "carina" (whether you yourself are a Carina answerer, plus everyone you can reach via Carina — every other character if you are an answerer, with the ones who are also answerers noted; only the Carina answerers if you are not), "quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" (release notes for the current or most recent release only), "quilltap.changelog" (the changelog only); "context" (where you are right now: this chat, the current project, your groups, the characters present with you, and the files attached to this chat with instructions for reaching each via the doc_* tools), with dotted variants "context.chat", "context.project", "context.groups", "context.characters", and "context.files".",
+        "description": "Which section(s) to include. Options: "vault" (files in your own character vault AND your group vaults, plus the core-file checklist), with finer-grained dotted variants "vault.character" (just your own vault), "vault.groups" (just the vaults of the groups you belong to), and "vault.coreFiles" (the nine core files of your vault — path, whether each exists, and what belongs in it); "vaultAccess" (who can read/write your character vault in this chat AND who can read/write your group vaults), with dotted variants "vaultAccess.character" (this chat only) and "vaultAccess.groups" (group members, in any chat); "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call), "carina" (whether you yourself are a Carina answerer, plus everyone you can reach via Carina — every other character if you are an answerer, with the ones who are also answerers noted; only the Carina answerers if you are not), "quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" (release notes for the current or most recent release only), "quilltap.changelog" (the changelog only); "context" (where you are right now: this chat, the current project, your groups, the characters present with you, and the files attached to this chat with instructions for reaching each via the doc_* tools), with dotted variants "context.chat", "context.project", "context.groups", "context.characters", and "context.files"; "holdings" (counts of what is within your reach: wardrobe garments and outfits, Inventory objects, and custom tools), with dotted variants "holdings.wardrobe", "holdings.inventory", and "holdings.customTools".",
         "enum": [
           "vault",
           "vault.character",
           "vault.groups",
+          "vault.coreFiles",
           "vaultAccess",
           "vaultAccess.character",
           "vaultAccess.groups",
@@ -1638,6 +2138,10 @@ exports[`tool definitions: derived OpenAI parameters selfInventory: parameters s
           "context.groups",
           "context.characters",
           "context.files",
+          "holdings",
+          "holdings.wardrobe",
+          "holdings.inventory",
+          "holdings.customTools",
         ],
         "type": "string",
       },
@@ -1771,7 +2275,7 @@ exports[`tool definitions: derived OpenAI parameters terminalRead: parameters sn
     },
     "raw": {
       "default": false,
-      "description": "When true, the response also includes a rawScrollback field with ANSI escape codes preserved. The default scrollback field is always cleaned.",
+      "description": "When true, the response also includes a rawScrollback field: the last 64 KB of the raw byte stream, ANSI escape codes preserved. The default scrollback field is always rendered text.",
       "type": "boolean",
     },
     "sessionId": {
@@ -1857,7 +2361,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
       "type": "array",
     },
     "description": {
-      "description": "A detailed description of the wardrobe item.",
+      "description": "Prose for you and the other characters to read. It is NEVER used for pictures — put what the item looks like in image_prompt as well.",
       "type": "string",
     },
     "equip_now": {
@@ -1870,8 +2374,21 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
       "type": "boolean",
     },
     "image_prompt": {
-      "description": "Optional Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator IN PLACE OF the title (e.g. "intricate dense burnished-gold circular rank glyph on the shoulder"). Terse, never Markdown; it is joined into a comma-separated outfit list. Omit to fall back to the title.",
+      "description": "Portrait Cue — ALWAYS supply this for a new garment. It is the ONLY text about the item that avatars, story backgrounds and item pictures ever see (the description is never shown to them; without a cue they get only the title). 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. E.g. "ankle-length emerald silk gown, square neckline, gold beaded sash". It is joined into a comma-separated outfit list. May be omitted for a composite, whose components speak for it.",
       "type": "string",
+    },
+    "pronoun_guidance": {
+      "description": "Optional pronoun guidance: the pronouns (by subject: "he", "she", "they", "it") of the characters this item is meant for. Pronoun-aware wardrobe listings offer it only to characters with one of these pronouns; anyone can still wear it when they ask for it by name. Omit (or pass an empty array) to offer it to everyone.",
+      "items": {
+        "enum": [
+          "he",
+          "she",
+          "they",
+          "it",
+        ],
+        "type": "string",
+      },
+      "type": "array",
     },
     "recipient": {
       "description": "Name of a character in this chat to give the item to. If omitted, the item is added to your own wardrobe.",
@@ -1909,6 +2426,21 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters wardrobeHistory: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "description": "How many of the most recent outfits to list. Default 20.",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer",
+    },
+  },
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1919,6 +2451,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters sn
     },
     "include_equipped": {
       "description": "Whether to include currently equipped items in the results. Defaults to true.",
+      "type": "boolean",
+    },
+    "pronoun_aware": {
+      "description": "Whether to honour each item's pronoun guidance, listing only items meant for characters with your pronouns (plus items with no guidance, and anything you are wearing now). Defaults to true. Pass false to see the whole wardrobe — for instance when the scene calls for something you would not ordinarily be offered.",
       "type": "boolean",
     },
     "type_filter": {
@@ -1944,6 +2480,21 @@ exports[`tool definitions: derived OpenAI parameters wardrobeRead: parameters sn
     "item_title": {
       "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
       "type": "string",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeRollback: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "index": {
+      "description": "The outfit to return to, by its number in wardrobe_history. Omit to step back one outfit from the current one. Any recorded number is allowed, earlier or later than the current one.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer",
     },
   },
   "type": "object",
@@ -2016,7 +2567,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
       "type": "array",
     },
     "description": {
-      "description": "New description. Omit to leave unchanged.",
+      "description": "New description. Omit to leave unchanged. Prose for you and the other characters to read. It is NEVER used for pictures — put what the item looks like in image_prompt as well.",
       "type": "string",
     },
     "generate_image": {
@@ -2024,7 +2575,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
       "type": "boolean",
     },
     "image_prompt": {
-      "description": "New Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator in place of the title. Terse, never Markdown. Omit to leave unchanged.",
+      "description": "New Portrait Cue — the only text about the item the image generator sees (never the description). 200 characters or fewer of literal, comma-separated visual detail — colour, material, cut, notable features — as a painter would need it. No story, mood, history, feelings, names or Markdown. Supply one whenever the item has none or its look changes. Omit to leave unchanged.",
       "type": "string",
     },
     "is_default": {
@@ -2038,6 +2589,19 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
     "item_title": {
       "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
       "type": "string",
+    },
+    "pronoun_guidance": {
+      "description": "Replace the pronoun guidance: the pronouns (by subject: "he", "she", "they", "it") of the characters this item is meant for. Pronoun-aware wardrobe listings offer it only to characters with one of these pronouns; anyone can still wear it when they ask for it by name. An empty array offers it to everyone. Omit to leave unchanged.",
+      "items": {
+        "enum": [
+          "he",
+          "she",
+          "they",
+          "it",
+        ],
+        "type": "string",
+      },
+      "type": "array",
     },
     "replace": {
       "description": "Composite behaviour on equip: false = additive (layer), true = clear-then-set. Omit to leave unchanged.",

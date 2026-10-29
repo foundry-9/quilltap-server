@@ -244,6 +244,7 @@ export {
   MemorySchema,
   MemoriesFileSchema,
   WitnessedContextEnum,
+  KEYSTONES_PER_SUBJECT_MAX,
 } from './memory.types';
 
 export type {

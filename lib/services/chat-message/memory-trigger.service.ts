@@ -262,3 +262,35 @@ export async function triggerConversationRender(
     logger.error('Failed to trigger conversation render', {}, error as Error)
   }
 }
+
+/**
+ * What runs once after a Salon stream has finished every turn it carries (the
+ * first turn and its chain, or a storyteller round): scene-state tracking,
+ * when a turn left a tracking context, and the Scriptorium render. Both
+ * triggers enqueue and never throw.
+ */
+export async function triggerAfterTurnsHousekeeping(
+  repos: ReturnType<typeof getRepositories>,
+  options: {
+    chatId: string
+    userId: string
+    sceneTracking?: {
+      connectionProfile: ConnectionProfile
+      memoryChatSettings: MemoryChatSettings
+      characterIds: string[]
+    }
+  }
+): Promise<void> {
+  const { chatId, userId, sceneTracking } = options
+  logger.debug('After-turns housekeeping', { chatId, sceneTracking: !!sceneTracking })
+  if (sceneTracking) {
+    await triggerSceneStateTracking(repos, {
+      chatId,
+      userId,
+      connectionProfile: sceneTracking.connectionProfile,
+      chatSettings: sceneTracking.memoryChatSettings,
+      characterIds: sceneTracking.characterIds,
+    })
+  }
+  await triggerConversationRender(repos, { chatId, userId })
+}

@@ -4,6 +4,7 @@
  * Supports disambiguation by heading level when heading text appears multiple times.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
@@ -76,3 +77,6 @@ export interface DocReadHeadingOutput {
   /** Canonical qtap:// URI for the file (fragment carries the heading). */
   uri?: string;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const docReadHeadingToolEffect: ToolEffectSpec = 'read';

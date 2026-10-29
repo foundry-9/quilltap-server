@@ -579,6 +579,40 @@ export const Chat: React.FC = () => {
         <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
           Continue and stop buttons for controlling AI response generation.
         </p>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+          The composer&apos;s action trio while a character is speaking: Send (disabled),
+          the soft interrupt <code>.qt-chat-interrupt-button</code> (shown idle, then raised with
+          <code>.qt-chat-interrupt-button-raised</code>), and the hard <code>.qt-chat-stop-button</code>.
+        </p>
+        <div className="qt-chat-composer-actions" style={{ marginBottom: '1.5rem' }}>
+          <button className="qt-chat-composer-send" aria-label="Send message" disabled>
+            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+          <button className="qt-chat-composer-send qt-chat-interrupt-button" aria-label="Raise your hand to interrupt">
+            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+              </svg>
+          </button>
+          <button className="qt-chat-composer-send qt-chat-interrupt-button qt-chat-interrupt-button-raised" aria-label="Lower your hand" aria-pressed>
+            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+              </svg>
+          </button>
+          <button className="qt-chat-composer-send qt-chat-stop-button" aria-label="Stop">
+            <svg width="20" height="20" fill="currentColor" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" viewBox="0 0 24 24">
+              <polygon points="8.36 3.22 15.64 3.22 20.78 8.36 20.78 15.64 15.64 20.78 8.36 20.78 3.22 15.64 3.22 8.36" />
+            </svg>
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: '1rem', maxWidth: '32rem' }}>
           <button className="qt-chat-continue-button">
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

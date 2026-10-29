@@ -78,6 +78,7 @@ export {
   summarizeChat,
   stripToolArtifacts,
   extractVisibleConversation,
+  toVisibleConversationMessage,
   titleChat,
   titleHelpChat,
   considerHelpChatTitleUpdate,

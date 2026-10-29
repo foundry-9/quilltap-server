@@ -32,7 +32,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import type { DocMountFile, DocMountPoint } from '@/lib/schemas/mount-index.types';
 import { FileOpError } from './file-op-error';
-import { normaliseRelativePath, detectNativeText, mimeForExtension } from './path-utils';
+import { normaliseRelativePath, detectNativeText, mimeForExtension, detectBlobFileType, isExtractableBlobPath } from './path-utils';
 import { destExists, deleteAtDest, writeFsFileBytes, resolveFsAbsolute } from './file-ops';
 import { transcodeToWebP, normaliseBlobRelativePath } from './blob-transcode';
 import { convertBufferToPlainText } from './converters';
@@ -111,7 +111,7 @@ export interface StoreFileInput {
   expectedMtime?: number;
   /** Transcode bitmap images to WebP (default true). */
   transcodeImages?: boolean;
-  /** Extract text from PDF/DOCX and enqueue chunks (default true). */
+  /** Extract text from PDF/DOCX and native-text blobs and enqueue chunks (default true). */
   extractText?: boolean;
   /** Enqueue embedding jobs after a text write (default true). */
   enqueueEmbedding?: boolean;
@@ -145,11 +145,97 @@ function isFilesystemMount(mp: DocMountPoint): boolean {
   return mp.mountType === 'filesystem' || mp.mountType === 'obsidian';
 }
 
-function detectBlobFileType(relativePath: string): 'pdf' | 'docx' | 'blob' {
-  const ext = path.extname(relativePath).toLowerCase();
-  if (ext === '.pdf') return 'pdf';
-  if (ext === '.docx') return 'docx';
-  return 'blob';
+/**
+ * Derive a blob's plain text and record it on its link (`extractedText`,
+ * `extractionStatus`, `conversionStatus`). The one place blob text extraction
+ * lives: `storeMountFile` calls it on ingest and the startup backfill
+ * (`lib/startup/backfill-upload-blob-text.ts`) on uploads that predate it.
+ * Does not chunk or embed — callers run `reindexSingleFile` after. Never
+ * throws; a failed conversion is recorded as `failed` and returns false.
+ *
+ * Returns true when usable text was stored.
+ */
+export async function extractBlobText(args: {
+  blobId: string;
+  linkId: string;
+  relativePath: string;
+  data: Buffer;
+  mountPointId: string;
+}): Promise<boolean> {
+  const { blobId, linkId, relativePath, data, mountPointId } = args;
+  if (!isExtractableBlobPath(relativePath)) return false;
+
+  const repos = getRepositories();
+  const blobType = detectBlobFileType(relativePath);
+  try {
+    const text = blobType === 'pdf' || blobType === 'docx'
+      ? await convertBufferToPlainText(data, blobType)
+      : data.toString('utf-8');
+    if (text && text.trim().length > 0) {
+      const sha = createHash('sha256').update(text, 'utf-8').digest('hex');
+      await repos.docMountBlobs.updateExtractedText(blobId, {
+        extractedText: text,
+        extractedTextSha256: sha,
+        extractionStatus: 'converted',
+        extractionError: null,
+      }, linkId);
+      await repos.docMountFileLinks.update(linkId, {
+        conversionStatus: 'converted',
+        conversionError: null,
+        plainTextLength: text.length,
+        chunkCount: 0,
+      });
+      logger.debug('extractBlobText: stored extracted text', {
+        mountPointId,
+        relativePath,
+        blobType,
+        textLength: text.length,
+      });
+      return true;
+    }
+    await repos.docMountBlobs.updateExtractedText(blobId, {
+      extractedText: null,
+      extractedTextSha256: null,
+      extractionStatus: 'failed',
+      extractionError: 'Converter produced no text',
+    }, linkId);
+    await repos.docMountFileLinks.update(linkId, {
+      conversionStatus: 'skipped',
+      conversionError: 'Converter produced no text',
+      plainTextLength: null,
+      chunkCount: 0,
+    });
+    return false;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn('extractBlobText: text extraction failed', {
+      mountPointId,
+      relativePath,
+      blobType,
+      error: msg,
+    });
+    try {
+      await repos.docMountBlobs.updateExtractedText(blobId, {
+        extractedText: null,
+        extractedTextSha256: null,
+        extractionStatus: 'failed',
+        extractionError: msg,
+      }, linkId);
+      await repos.docMountFileLinks.update(linkId, {
+        conversionStatus: 'skipped',
+        conversionError: msg,
+        plainTextLength: null,
+        chunkCount: 0,
+      });
+    } catch (recordErr) {
+      logger.warn('extractBlobText: could not record the failure', {
+        mountPointId,
+        relativePath,
+        error: recordErr instanceof Error ? recordErr.message : String(recordErr),
+      });
+    }
+    return false;
+  }
 }
 
 /**
@@ -334,63 +420,12 @@ export async function storeMountFile(input: StoreFileInput): Promise<StoreFileRe
   }
   const { link, file, blobId } = linked;
 
-  // PDF/DOCX: extract plain text from the ORIGINAL bytes (transcode only
-  // touches bitmaps, so for these types transcoded.data === input.data).
-  let hasExtractedText = false;
-  if (extractText && (mirrorFileType === 'pdf' || mirrorFileType === 'docx')) {
-    try {
-      const text = await convertBufferToPlainText(input.data, mirrorFileType);
-      if (text && text.trim().length > 0) {
-        const sha = createHash('sha256').update(text, 'utf-8').digest('hex');
-        await repos.docMountBlobs.updateExtractedText(blobId, {
-          extractedText: text,
-          extractedTextSha256: sha,
-          extractionStatus: 'converted',
-          extractionError: null,
-        }, link.id);
-        hasExtractedText = true;
-        await repos.docMountFileLinks.update(link.id, {
-          conversionStatus: 'converted',
-          conversionError: null,
-          plainTextLength: text.length,
-          chunkCount: 0,
-        });
-      } else {
-        await repos.docMountBlobs.updateExtractedText(blobId, {
-          extractedText: null,
-          extractedTextSha256: null,
-          extractionStatus: 'failed',
-          extractionError: 'Converter produced no text',
-        }, link.id);
-        await repos.docMountFileLinks.update(link.id, {
-          conversionStatus: 'skipped',
-          conversionError: 'Converter produced no text',
-          plainTextLength: null,
-          chunkCount: 0,
-        });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn('storeMountFile: text extraction failed', {
-        mountPointId: mp.id,
-        relativePath: finalPath,
-        fileType: mirrorFileType,
-        error: msg,
-      });
-      await repos.docMountBlobs.updateExtractedText(blobId, {
-        extractedText: null,
-        extractedTextSha256: null,
-        extractionStatus: 'failed',
-        extractionError: msg,
-      }, link.id);
-      await repos.docMountFileLinks.update(link.id, {
-        conversionStatus: 'skipped',
-        conversionError: msg,
-        plainTextLength: null,
-        chunkCount: 0,
-      });
-    }
-  }
+  // Text the doc tools can read, grep and search: PDF/DOCX are converted from
+  // the ORIGINAL bytes (transcode only touches bitmaps, so for these types
+  // transcoded.data === input.data); native text is the bytes themselves.
+  const hasExtractedText = extractText
+    ? await extractBlobText({ blobId, linkId: link.id, relativePath: finalPath, data: input.data, mountPointId: mp.id })
+    : false;
 
   emitDocumentWritten({ mountPointId: mp.id, relativePath: finalPath });
 

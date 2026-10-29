@@ -28,6 +28,7 @@ import {
   matchLoraFamily,
   NANOGPT_LORA_FAMILIES,
 } from './image-loras';
+import { fitImageShape } from './image-sizes';
 
 const logger = createPluginLogger('qtap-plugin-nanogpt');
 
@@ -39,6 +40,7 @@ interface NanoGPTImageModelEntry {
   max_images?: number;
   supported_parameters?: {
     resolutions?: string[];
+    aspect_ratio?: string[];
   };
   capabilities?: {
     image_generation?: boolean;
@@ -99,6 +101,29 @@ function labelForSize(size: string): string {
   return ratio <= 0.625 ? `Tall (${size})` : `Portrait (${size})`;
 }
 
+/** True when a posted size or aspect ratio asks for something other than a square. */
+function isNonSquare(size: string | null | undefined, aspectRatio: unknown): boolean {
+  if (typeof aspectRatio === 'string') {
+    const [width, height] = aspectRatio.split(':').map(Number);
+    if (width > 0 && height > 0) return width !== height;
+  }
+  const dims = size ? /^\s*(\d+)\s*[x×*]\s*(\d+)\s*$/i.exec(size) : null;
+  return dims !== null && dims[1] !== dims[2];
+}
+
+/**
+ * Whether a failed generate call is one a square might get past: a 400 about
+ * the output's size, resolution or aspect ratio, or an upstream 503. NanoGPT's
+ * error body is a bare string, so the SDK keeps only the status and message.
+ */
+function isShapeFailure(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (status === 503) return true;
+  if (status !== 400) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b(size|resolution|aspect|dimension|output)\b/i.test(message);
+}
+
 export class NanoGPTImageProvider implements ImageProviderBase {
   readonly provider = 'NANOGPT';
   readonly supportedModels = STATIC_IMAGE_MODEL_IDS;
@@ -128,8 +153,23 @@ export class NanoGPTImageProvider implements ImageProviderBase {
       response_format: 'b64_json',
     };
 
-    if (params.size) {
-      requestParams.size = params.size as Images.ImageGenerateParams['size'];
+    // Fit the requested shape onto what this model lists — the host's portrait
+    // and landscape sizes are provider-wide, and a size the model does not
+    // list is a hard 400 (bug 269).
+    const sizeCatalog = (await this.catalogEntryFor(model, apiKey))?.supported_parameters;
+    const shape = fitImageShape(sizeCatalog, params.size, params.aspectRatio);
+    if (shape.adjusted) {
+      logger.debug('Fitted the requested image shape to the model', {
+        context: 'NanoGPTImageProvider.generateImage',
+        model,
+        requestedSize: params.size,
+        requestedAspectRatio: params.aspectRatio,
+        size: shape.size,
+        aspectRatio: shape.aspectRatio,
+      });
+    }
+    if (shape.size) {
+      requestParams.size = shape.size as Images.ImageGenerateParams['size'];
     }
 
     // NanoGPT's model-specific generation controls ride the request body as
@@ -140,6 +180,9 @@ export class NanoGPTImageProvider implements ImageProviderBase {
     // existing `seed` cast pattern, widened.
     const extraBody = requestParams as unknown as Record<string, unknown>;
 
+    if (shape.aspectRatio) {
+      extraBody.aspect_ratio = shape.aspectRatio;
+    }
     if (params.seed !== undefined) {
       extraBody.seed = params.seed;
     }
@@ -163,7 +206,8 @@ export class NanoGPTImageProvider implements ImageProviderBase {
     logger.debug('Posting NanoGPT image request', {
       context: 'NanoGPTImageProvider.generateImage',
       model,
-      size: params.size,
+      size: requestParams.size,
+      aspectRatio: shape.aspectRatio,
       n: requestParams.n,
       loraDialect: applied.dialect,
       loraKeys: applied.keys,
@@ -173,7 +217,35 @@ export class NanoGPTImageProvider implements ImageProviderBase {
 
     let response: Awaited<ReturnType<typeof client.images.generate>>;
     try {
-      response = await client.images.generate(requestParams);
+      try {
+        response = await client.images.generate(requestParams);
+      } catch (error) {
+        // A non-square request the model turns down on its shape — a size it
+        // does not list, or a ratio upstream cannot serve right now (Qwen
+        // Image 3 answered every non-square ratio with an uncharged 503 while
+        // 1:1 worked) — gets one more try as a plain square. A square picture
+        // beats no picture; the caller measures what comes back. Bug 269.
+        const square = isNonSquare(requestParams.size, extraBody.aspect_ratio) && isShapeFailure(error)
+          ? fitImageShape(sizeCatalog, '1024x1024', undefined)
+          : null;
+        if (!square) throw error;
+        logger.warn('NanoGPT turned down a non-square image; retrying once as a square', {
+          context: 'NanoGPTImageProvider.generateImage',
+          model,
+          size: requestParams.size,
+          aspectRatio: extraBody.aspect_ratio,
+          squareSize: square.size,
+          squareAspectRatio: square.aspectRatio,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        requestParams.size = square.size as Images.ImageGenerateParams['size'];
+        if (square.aspectRatio) {
+          extraBody.aspect_ratio = square.aspectRatio;
+        } else {
+          delete extraBody.aspect_ratio;
+        }
+        response = await client.images.generate(requestParams);
+      }
     } catch (error) {
       // The failure path needs this more than the success path does. NanoGPT
       // answers a rejected adapter, an unreachable weights repo and a filtered
@@ -185,7 +257,8 @@ export class NanoGPTImageProvider implements ImageProviderBase {
       logger.error('NanoGPT image request failed', {
         context: 'NanoGPTImageProvider.generateImage',
         model,
-        size: params.size,
+        size: requestParams.size,
+        aspectRatio: extraBody.aspect_ratio,
         n: requestParams.n,
         loraDialect: applied.dialect,
         loraKeys: applied.keys,
@@ -278,6 +351,27 @@ export class NanoGPTImageProvider implements ImageProviderBase {
       count: imageModels.length,
     });
     return imageModels;
+  }
+
+  /**
+   * The catalog entry for a model, refreshing a cold cache with this call's
+   * key. The job child never lists models, so its cache starts cold; a failed
+   * fetch is not fatal — the request then goes out as asked.
+   */
+  private async catalogEntryFor(model: string, apiKey: string): Promise<NanoGPTImageModelEntry | undefined> {
+    if (!catalogIsFresh()) {
+      try {
+        await this.fetchDetailedCatalog(apiKey);
+      } catch (error) {
+        logger.warn('Could not refresh the NanoGPT image catalog; posting the size as asked', {
+          context: 'NanoGPTImageProvider.catalogEntryFor',
+          model,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return undefined;
+      }
+    }
+    return catalogEntry(model);
   }
 
   /**

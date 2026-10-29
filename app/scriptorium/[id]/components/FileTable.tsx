@@ -20,6 +20,7 @@ import { showErrorToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import { activateOnKey } from '@/components/ui/activate-on-key'
 import type { DocumentStoreFile, DocumentStoreBlob } from '../../types'
 
 /** Root-level custom-tool definitions get an "open in Pascal's Workbench" action. */
@@ -312,6 +313,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input
+            aria-label="Filter files"
             type="text"
             placeholder="Filter files..."
             value={filter}
@@ -389,7 +391,14 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
                       onClick={() => toggleExpand(file)}
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-foreground truncate max-w-xs" title={file.relativePath}>
+                        <div
+                          className="font-medium text-foreground truncate max-w-xs"
+                          title={file.relativePath}
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={expanded}
+                          onKeyDown={activateOnKey}
+                        >
                           {file.fileName}
                         </div>
                         <div className="text-xs qt-text-secondary truncate max-w-xs" title={file.relativePath}>
@@ -529,6 +538,7 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
       {isBlobBackedFile && blob && (
         <div className="flex flex-col gap-2 flex-1 min-w-[18rem]">
           <textarea
+            aria-label="File description or transcript"
             className="qt-input text-xs"
             value={description}
             placeholder="Description / transcript (searchable)"

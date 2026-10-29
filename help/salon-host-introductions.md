@@ -2,60 +2,56 @@
 url: /salon/:id
 ---
 
-# The Host's Introductions
+# Absent Acquaintances
 
 > **[Open this page in Quilltap](/salon)**
 
-In any properly run Salon, conversation has a way of straying — names crop up that nobody present has actually met, and the company can feel suddenly outnumbered by absent acquaintances. The Host, ever observant, takes it upon herself to keep the proceedings honest.
+In any properly run Salon, conversation has a way of straying — names crop up that nobody present has actually met, and the company can feel suddenly outnumbered by absent acquaintances. The Host, ever observant, keeps the proceedings honest, and he does it now without so much as clearing his throat in the middle of the conversation.
 
-When a character belonging to your workspace is mentioned in a chat — but is not, at the moment, a participant — the Host steps forward and introduces them, once. Their card joins the conversation as a public message, visible to you and to every character in the room.
+## The Name Chip
 
-## What Triggers an Introduction
+When a character belonging to your workspace is named in a chat — but is not, at the moment, in it — their name is quietly marked where it *first* appears in the conversation: a soft tint with a dotted rule beneath, like a calling card left on the hall table.
 
-The Host watches the conversation for the names (and aliases) of any character that already exists in your workspace but has not been added to this particular Salon. The first time a name surfaces — whether from your own remarks, another character's reply, or even the conversation summary the Librarian keeps — the Host posts an introduction.
+Rest the pointer on it (or tab to it) and their card appears:
 
-The introduction is published as a regular Salon message authored by the Host. It carries the absent character's:
-
-- **Name and aliases**
+- **Name**
+- **Also known as** — their aliases
 - **Pronouns**
-- **Description** — exactly as it appears on their character sheet
+- **Identity** — what the world knows of them, or their description where there is no identity
 
-The phrasing makes the Host's intent plain: *for accurate reference only; not a summons to the scene.* The character has not joined the chat. They are simply being identified, so that anyone speaking of them does so with their proper particulars in hand.
+Click the chip to pin the card open, so a long identity can be scrolled and read at leisure; click elsewhere, or press Escape, to put it away.
 
-## Why Once, and Only Once
+Only the first mention in the whole chat is marked. The name may turn up fifty times thereafter; the chip stays where the acquaintance began. A name inside code, a link or emphasis is passed over in favour of the next plain mention in that message.
 
-In earlier days, Quilltap re-injected absent-character cards into every single response, every turn — silently, behind the scenes. That meant the same character description was sent to the model dozens or hundreds of times in a long conversation, eating tokens for breakfast and confusing the model's prompt cache.
+## What the Characters Are Told
 
-Now, the introduction lives in the chat history once. From that moment on, every character — and you — can refer back to it just as you would any other message. The Host does not repeat herself.
+The chip is for *you*. The characters never see it — nor did they ever read a card in the conversation, for a card wedged between a remark and the reply that leaned on it had a habit of making a "she" lose track of whom it meant.
 
-If the same workspace character is named twice, three times, fifty times across a long conversation, the Host introduces them precisely once. Subsequent mentions cost nothing.
+Instead, on every turn, the Host slips a short, private note to the character about to answer, tucked in after the rest of the turn's notes, which is late enough not to disturb the house's cached preliminaries and early enough to be read:
 
-## What This Looks Like in the Salon
+- **Who is being spoken of.** Everyone named in the last few lines, the most recently named first, each with their pronouns, whether they are in the room, who last named them and the very sentence in which they did. The character answering is left off (it is "you"), and so is whoever wrote the latest line (that is "I"). Anyone on the list who is *not* in the room brings their card along — the very card the chip shows you. Nobody named, no note.
+- **The line being answered.** Your latest message, repeated at the very end, after the scene and the memories have had their say, so that the last thing the character reads is what you actually said. A very long message is repeated by its closing paragraphs only.
 
-The introduction appears in the conversation feed with the Host's avatar (the same one used for participant arrivals, departures, and scene-setting). It uses the Host's voice:
+Neither costs a thing in extra calls to a model, and neither is kept in the chat history. Someone last named longer ago than the last few lines drops off the note until they are named again.
 
-> *The Host begs leave to introduce a person spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.*
->
-> ### Mochi
-> Pronouns: he/him/his
-> A medium-sized domestic cat with a sturdy, stocky build…
+## Those Left Behind
 
-When several absent characters are mentioned together for the first time in the same turn, the Host introduces them all in a single combined announcement, sorted alphabetically.
-
-### Those Left Behind
-
-When a conversation is carried off by **Continue Elsewhere** and someone from the old cast does not make the journey, the Host says so at once. At the end of the carried-over history — just before the new scene begins — she posts a notice in the same form:
+When a conversation is carried off by **Continue Elsewhere** and someone from the old cast does not make the journey, the Host says so at once. At the end of the carried-over history — just before the new scene begins — he posts a notice:
 
 > *The Host observes that one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer.*
 
-It matters more than it might seem. The carried-over history keeps every remark the travelling party made *to* the absentee, but none of the absentee's own replies, so without the notice the company would take them for a guest in the room who has gone oddly quiet. The notice counts as their introduction, so the Host does not introduce them a second time when their name comes up later.
+This one *does* stay in the conversation, where the characters read it. The carried-over history keeps every remark the travelling party made *to* the absentee, but none of the absentee's own replies, so without the notice the company would take them for a guest in the room who has gone oddly quiet.
+
+## Older Conversations
+
+Chats from before the chips arrived may hold the Host's old introduction cards. They are kept in the record but no longer shown in the feed, and the characters do not read them; the chip and the private note do that work now.
 
 ## What This Doesn't Do
 
-- **It doesn't add the character to the chat.** The character remains absent from the participant list. To bring them into the scene, open the **Chat Sidebar** on the right, expand the **Participants** drawer, and use **Add Character** at the bottom.
-- **It doesn't fire for your own character — wherever you speak.** In an ordinary Salon, your persona is the voice of your messages even when it holds no seat, so it is never "absent". An **autonomous room** is another matter: you are not speaking there at all, so if the cast starts addressing your character, the Host introduces them like any other absent acquaintance, and the company stops waiting on a reply that cannot come.
-- **It doesn't re-introduce known characters.** A character introduced earlier in the chat — even thousands of messages ago — is not reintroduced when their name comes up again.
-- **It doesn't broadcast across chats.** The introduction is per-Salon. The same character may be introduced in another conversation if their name surfaces there too.
+- **It doesn't add the character to the chat.** The character remains absent from the participant list. To bring them into the scene, open the **Chat Sidebar** on the right, expand the **Participants** drawer, and use **Add Character** at the bottom. Once they are seated, the chip goes away.
+- **It doesn't mark your own character — wherever you speak.** In an ordinary Salon, your persona is the voice of your messages even when it holds no seat, so it is never "absent". An **autonomous room** is another matter: you are not speaking there at all, so if the cast starts addressing your character, they are treated like any other absent acquaintance.
+- **It doesn't read lowercase.** Names are matched as written, capitals and all, so a character called *Ember* is not marked every time someone mentions the embers of a fire.
+- **It doesn't reach across chats.** Each Salon marks its own first mentions.
 
 ## In-Chat Navigation
 

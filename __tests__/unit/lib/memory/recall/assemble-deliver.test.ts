@@ -120,12 +120,15 @@ beforeEach(() => {
       searchByContent: jest.fn(async () => []),
       findHotDigests: jest.fn(async (_holder: string, about: string) => (about === IRIS ? [digestB] : [])),
       findMostImportant: jest.fn(async () => [archived]),
+      findKeystones: jest.fn(async () => []),
       findByCharacterAboutCharacters: jest.fn(async () => [digestB, partitionB]),
       findRecentByImportanceTier: jest.fn(async () => ({ high: [recapOnly, archived], medium: [], low: [] })),
       updateAccessTimeBulk: jest.fn(async () => 0),
     },
     characters: { findNamesByIds: jest.fn(async () => new Map([[IRIS, 'Iris']])) },
     chats: { update: jest.fn(async () => null), findRecentSummarizedByCharacter: jest.fn(async () => []) },
+    groupCharacterMembers: { findByCharacterId: jest.fn(async () => []), findByGroupId: jest.fn(async () => []) },
+    groups: { findByIdRaw: jest.fn(async () => null) },
   }
   ;(getRepositories as jest.Mock).mockReturnValue(repos)
 })
@@ -336,6 +339,46 @@ describe('deliverRecall', () => {
     expect(repos.memories.updateAccessTimeBulk).not.toHaveBeenCalled()
     expect(repos.chats.update).not.toHaveBeenCalled()
     expect(delivery.debugLog).toContain(`${RECALL_RING_PREFIX}`)
+  })
+})
+
+describe('assembleRecall — the inner circle (inner-circle-recall.md Part B)', () => {
+  const JUNO = 'char-c'
+  const aboutJuno = mem('about-juno', 0.95, {
+    source: 'CONSOLIDATED',
+    aboutCharacterId: JUNO,
+    summary: 'juno note',
+    content: 'Juniper is Lyra\'s sister and is expecting in the spring',
+  })
+
+  beforeEach(() => {
+    corpus.push(aboutJuno)
+    repos.groupCharacterMembers.findByCharacterId.mockImplementation(async (id: string) =>
+      id === LYRA ? [{ groupId: 'family', characterId: LYRA }] : [])
+    repos.groupCharacterMembers.findByGroupId.mockImplementation(async () =>
+      [LYRA, IRIS, JUNO].map(characterId => ({ groupId: 'family', characterId })))
+    repos.groups.findByIdRaw.mockImplementation(async () => ({ id: 'family', name: 'Family' }))
+    repos.characters.findNamesByIds.mockImplementation(async (ids: string[]) =>
+      new Map(ids.flatMap(id => (id === IRIS ? [[id, 'Iris']] : id === JUNO ? [[id, 'Juniper']] : [])) as Array<[string, string]>))
+    repos.memories.findHotDigests.mockImplementation(async (_h: string, about: string) =>
+      about === IRIS ? [digestB] : about === JUNO ? [aboutJuno] : [])
+  })
+  afterEach(() => {
+    corpus.pop()
+  })
+
+  it('puts an absent group-mate ahead of the anchors, in full text, and keeps the row out of the head', async () => {
+    const bundle = await assembleRecall(plan())
+    const relevant = bundle.sections.relevant!
+
+    expect(relevant.indexOf('## Those Closest to You')).toBe(0)
+    expect(relevant.indexOf('## Memory Anchors')).toBeGreaterThan(0)
+    expect(relevant).toContain('- About Juniper: Juniper is Lyra\'s sister and is expecting in the spring')
+    expect(relevant).not.toContain('juno note')
+    expect(bundle.pools.archive).toContain('about-juno')
+    expect(bundle.pools.head).not.toContain('about-juno')
+    // Iris is present: her digest is the present step's anchor, not a circle line.
+    expect(relevant.indexOf('Shivering Bridge')).toBeGreaterThan(relevant.indexOf('## Memory Anchors'))
   })
 })
 

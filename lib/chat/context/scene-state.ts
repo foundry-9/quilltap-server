@@ -1,14 +1,13 @@
 /**
- * The `## Current State` block of the Commonplace Book whisper, and the
- * conversation-summary formatter. Moved out of the retired
- * `memory-injector.ts` (memory refactor Phase E), whose memory formatting now
- * lives in `lib/memory/recall/render.ts`.
+ * The `## Current State` block of the Commonplace Book whisper. Pure
+ * formatting; the turn's reads around it (the stored scene, the live
+ * wardrobe, the per-recipient emission cache) are `turn-scene-state.ts`.
  */
 
 import { createHash } from 'node:crypto'
 import type { Provider } from '@/lib/schemas/types'
 import type { SceneState } from '@/lib/schemas/chat.types'
-import { estimateTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
+import { estimateTokens } from '@/lib/tokens/token-counter'
 
 /**
  * Per-target emission record for a single character's slice of the
@@ -133,35 +132,4 @@ export function formatCurrentSceneState(
   const content = lines.join('\n')
   const tokenCount = estimateTokens(content + '\n', provider)
   return { content, tokenCount, emittedByCharacter }
-}
-
-/**
- * Format conversation summary for context
- */
-export function formatSummaryForContext(
-  summary: string,
-  maxTokens: number,
-  provider: Provider
-): { content: string; tokenCount: number } {
-  if (!summary || summary.trim().length === 0) {
-    return { content: '', tokenCount: 0 }
-  }
-
-  const header = '## Previous Conversation Summary'
-  const fullContent = `${header}\n${summary}`
-  const fullTokens = estimateTokens(fullContent, provider)
-
-  if (fullTokens <= maxTokens) {
-    return { content: fullContent, tokenCount: fullTokens }
-  }
-
-  // Truncate summary to fit
-  const headerTokens = estimateTokens(header + '\n', provider)
-  const availableForSummary = maxTokens - headerTokens
-  const truncatedSummary = truncateToTokenLimit(summary, availableForSummary, provider)
-
-  return {
-    content: `${header}\n${truncatedSummary}`,
-    tokenCount: estimateTokens(`${header}\n${truncatedSummary}`, provider),
-  }
 }

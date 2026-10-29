@@ -9,7 +9,10 @@
  * touched.
  */
 
+import { useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import type { DocumentStore } from '../types'
 
 interface ConvertToDatabaseDialogProps {
@@ -19,12 +22,25 @@ interface ConvertToDatabaseDialogProps {
 }
 
 export function ConvertToDatabaseDialog({ store, onClose, onConfirm }: ConvertToDatabaseDialogProps) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, !!store)
+  useEscapeKey(onClose, !!store)
+
   if (!store) return null
 
   return createPortal(
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-lg p-6">
-        <h3 className="qt-dialog-title mb-4">Convert &ldquo;{store.name}&rdquo; to Database-Backed Storage</h3>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-lg p-6"
+      >
+        <h3 id={titleId} className="qt-dialog-title mb-4">Convert &ldquo;{store.name}&rdquo; to Database-Backed Storage</h3>
 
         <div className="space-y-3 mb-5">
           <p className="qt-text-small">

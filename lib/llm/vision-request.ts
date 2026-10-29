@@ -225,6 +225,11 @@ export interface VisionRequestInput {
   timeoutMs: number
   /** The `llm_logs` type the call is recorded under. */
   logType: LLMLogType
+  /**
+   * The chat the picture is being read for, when there is one. Without it the
+   * log row is an orphan the Salon's LLM Inspector can never find.
+   */
+  chatId?: string | null
   /** Refuse (rather than send keyless) when the profile has no API key. Ollama is exempt. */
   requireApiKey?: boolean
 }
@@ -306,13 +311,15 @@ export async function sendVisionRequest(input: VisionRequestInput): Promise<Visi
     temperature: input.sampling.temperature,
     maxTokens: input.sampling.maxTokens,
   }
-  const record = async (call: Pick<Parameters<typeof logLLMCall>[0], 'response' | 'usage'>) => {
+  const record = async (call: Pick<Parameters<typeof logLLMCall>[0], 'response' | 'usage' | 'cacheUsage'>) => {
     try {
       await logLLMCall({
         userId,
         type: input.logType,
+        chatId: input.chatId ?? undefined,
         provider: profile.provider,
         modelName: profile.modelName,
+        connectionProfileId: profile.id,
         request: loggedRequest,
         ...call,
         durationMs: Date.now() - startedAt,
@@ -351,6 +358,7 @@ export async function sendVisionRequest(input: VisionRequestInput): Promise<Visi
   await record({
     response: { content: response.content ?? '', finishReason: response.finishReason ?? null },
     usage: response.usage,
+    cacheUsage: response.cacheUsage,
   })
 
   // Before believing a word of it: did the image arrive? (bug 116)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useId } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showAlert } from '@/lib/alert'
@@ -44,6 +44,7 @@ interface RenameReplaceTabProps {
 }
 
 export function RenameReplaceTab({ characterId, characterName, onRenameComplete }: RenameReplaceTabProps) {
+  const id = useId()
   // Primary name replacement
   const [newName, setNewName] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
@@ -205,10 +206,11 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block qt-text-label mb-2 text-foreground">
+            <label htmlFor={`${id}-current-name`} className="block qt-text-label mb-2 text-foreground">
               Current Name
             </label>
             <input
+              id={`${id}-current-name`}
               type="text"
               value={characterName}
               disabled
@@ -216,10 +218,11 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
             />
           </div>
           <div>
-            <label className="block qt-text-label mb-2 text-foreground">
+            <label htmlFor={`${id}-new-name`} className="block qt-text-label mb-2 text-foreground">
               New Name
             </label>
             <input
+              id={`${id}-new-name`}
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -274,10 +277,11 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
               >
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block qt-text-label-xs mb-1 qt-text-muted">
+                    <label htmlFor={`${id}-find-${replacement.id}`} className="block qt-text-label-xs mb-1 qt-text-muted">
                       Find
                     </label>
                     <input
+                      id={`${id}-find-${replacement.id}`}
                       type="text"
                       value={replacement.oldValue}
                       onChange={(e) => updateAdditionalReplacement(replacement.id, 'oldValue', e.target.value)}
@@ -286,10 +290,11 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                     />
                   </div>
                   <div>
-                    <label className="block qt-text-label-xs mb-1 qt-text-muted">
+                    <label htmlFor={`${id}-replace-${replacement.id}`} className="block qt-text-label-xs mb-1 qt-text-muted">
                       Replace with
                     </label>
                     <input
+                      id={`${id}-replace-${replacement.id}`}
                       type="text"
                       value={replacement.newValue}
                       onChange={(e) => updateAdditionalReplacement(replacement.id, 'newValue', e.target.value)}

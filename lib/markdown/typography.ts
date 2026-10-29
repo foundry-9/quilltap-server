@@ -89,6 +89,12 @@ function hasRpBodyGroup(pattern: RenderingPattern): boolean {
   return pattern.pattern.includes('(?<rpBody>');
 }
 
+/** Whether a regex source names `glyph`, literally or as a `\\uXXXX` escape. */
+function mentionsGlyph(source: string, glyph: string): boolean {
+  const escape = `\\u${glyph.charCodeAt(0).toString(16).padStart(4, '0')}`;
+  return source.includes(glyph) || source.toLowerCase().includes(escape);
+}
+
 /**
  * Whether the typographer must stand down for this render.
  *
@@ -112,6 +118,9 @@ function hasRpBodyGroup(pattern: RenderingPattern): boolean {
  *    instant paragraphs start arriving curled — the bug-62 shape, arriving via a
  *    custom template instead of via the fallback.
  *
+ * A wrap delimiter compiled with `matchCurlyQuotes` names each straight quote's
+ * curly forms alongside it, matches either, and so does not count.
+ *
  * The shipped defaults trip neither: the built-in dialogue pattern carries no
  * `rpBody` group, and `DEFAULT_DIALOGUE_DETECTION` lists both the straight and
  * the curly double quote.
@@ -123,7 +132,11 @@ export function isQuoteSensitiveRoleplayConfig(
   for (const pattern of renderingPatterns) {
     if (!hasRpBodyGroup(pattern)) continue;
     for (const quote of STRAIGHT_QUOTES) {
-      if (pattern.pattern.includes(quote)) return true;
+      if (!pattern.pattern.includes(quote)) continue;
+      // A delimiter compiled with `matchCurlyQuotes` names the curly forms too,
+      // so it matches both before and after curling — safe.
+      if (CURLY_FORMS[quote].every((c) => mentionsGlyph(pattern.pattern, c))) continue;
+      return true;
     }
   }
 

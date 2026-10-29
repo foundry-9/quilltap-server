@@ -10,6 +10,14 @@
 import { useState, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { Icon } from '@/components/ui/icon'
+import {
+  requestRngDirect,
+  requestRngPendingResult,
+  type RngPendingResult,
+  type RngRollType,
+} from './rng-request'
+
+export type { RngPendingResult } from './rng-request'
 
 interface RngOption {
   label: string
@@ -26,18 +34,6 @@ const DICE_TYPES = [
   { sides: 6, label: 'd6' },
   { sides: 20, label: 'd20' },
 ] as const
-
-/** Pending tool result data returned from preview mode */
-export interface RngPendingResult {
-  tool: 'rng'
-  displayName: string
-  icon: string
-  summary: string
-  formattedResult: string
-  requestPrompt: string
-  arguments: Record<string, unknown>
-  success: boolean
-}
 
 interface RngDropdownProps {
   /** Chat ID for API call */
@@ -83,41 +79,17 @@ export function RngDropdown({
     enabled: isOpen,
   })
 
-  const executeRng = async (type: number | 'flip_coin' | 'spin_the_bottle', rolls: number) => {
+  const executeRng = async (type: RngRollType, rolls: number) => {
     setIsLoading(true)
     setError(null)
 
-    // Use preview mode if onPendingResult callback is provided
-    const usePreview = !!onPendingResult
-
     try {
-      const response = await fetch(`/api/v1/chats/${chatId}?action=rng`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, rolls, preview: usePreview }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'RNG failed')
-      }
-
-      if (usePreview && data.preview) {
-        // Return pending result for display in composer
-        onPendingResult({
-          tool: 'rng',
-          displayName: 'Random Number Generator',
-          icon: '🎲',
-          summary: data.result.summary,
-          formattedResult: data.result.formattedText,
-          requestPrompt: data.result.requestPrompt,
-          arguments: data.result.arguments,
-          success: true,
-        })
+      // Preview mode when the composer takes pending results (the chip);
+      // legacy mode otherwise, where the server posts the message itself.
+      if (onPendingResult) {
+        onPendingResult(await requestRngPendingResult(chatId, { type, rolls }))
       } else {
-        // Legacy mode: message was created directly
-        onSuccess?.(data.result)
+        onSuccess?.(await requestRngDirect(chatId, { type, rolls }))
       }
 
       setIsOpen(false)
@@ -283,6 +255,7 @@ export function RngDropdown({
               <div className="px-3 py-2 space-y-2 border-t">
                 <div className="flex items-center gap-2">
                   <input
+                    aria-label="Number of rolls"
                     type="number"
                     value={customRolls}
                     onChange={e => setCustomRolls(e.target.value)}
@@ -293,6 +266,7 @@ export function RngDropdown({
                   />
                   <span className="text-sm">d</span>
                   <input
+                    aria-label="Sides per die"
                     type="number"
                     value={customSides}
                     onChange={e => setCustomSides(e.target.value)}

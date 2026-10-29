@@ -24,8 +24,8 @@ import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
  * here — a new row is hot with no consolidation history unless the caller
  * (the consolidation job, an import) says otherwise.
  */
-export type MemoryCreateInput = Omit<Memory, 'id' | 'createdAt' | 'updatedAt' | 'tier' | 'consolidatedFrom'> &
-  Partial<Pick<Memory, 'tier' | 'consolidatedFrom'>>;
+export type MemoryCreateInput = Omit<Memory, 'id' | 'createdAt' | 'updatedAt' | 'tier' | 'consolidatedFrom' | 'keystone'> &
+  Partial<Pick<Memory, 'tier' | 'consolidatedFrom' | 'keystone'>>;
 
 /** One dangling link: row `id` (held by `characterId`) names `target`, which no longer exists. */
 export interface DanglingMemoryLink {
@@ -244,11 +244,13 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       minImportance?: number
       /** Restrict to one tier; omitted lists both. */
       tier?: MemoryTier
+      /** Keystones only. */
+      keystone?: boolean
     }
   ): Promise<{ memories: Memory[]; totalCount: number }> {
     return this.safeQuery(
       async () => {
-        const { limit, offset, sortBy = 'createdAt', sortOrder = 'desc', search, source, minImportance, tier } = options;
+        const { limit, offset, sortBy = 'createdAt', sortOrder = 'desc', search, source, minImportance, tier, keystone } = options;
 
         // Build filter
         const filter: TypedQueryFilter<Memory> = { characterId };
@@ -260,6 +262,9 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         }
         if (tier) {
           (filter as any).tier = tier;
+        }
+        if (keystone) {
+          (filter as any).keystone = true;
         }
 
         // Get total count before pagination (but after filtering except search,
@@ -454,6 +459,11 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         }
       }
 
+      // SQLite stores the boolean as 0 / 1; SQLiteCollection converts it, a raw query must.
+      if (typeof row.keystone === 'number' || typeof row.keystone === 'bigint' || row.keystone === null) {
+        row.keystone = Number(row.keystone ?? 0) === 1;
+      }
+
       const validation = MemorySchema.safeParse(row);
       if (validation.success) {
         memories.push(validation.data);
@@ -539,7 +549,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     return this.safeQuery(
       async () => {
         const memory = await this._create(
-          { ...data, tier: data.tier ?? 'hot', consolidatedFrom: data.consolidatedFrom ?? [] },
+          { ...data, tier: data.tier ?? 'hot', consolidatedFrom: data.consolidatedFrom ?? [], keystone: data.keystone ?? false },
           options,
         );
         return memory;
@@ -1131,6 +1141,73 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error finding hot digests',
       { characterId, subject, limit },
       [],
+    );
+  }
+
+  /**
+   * A holder's hot keystones about one or more subjects, or about themself
+   * (`'self'`: rows about the holder, or about no one). Ordered by creation,
+   * then id — never by score — so the frozen archive's keystone lines keep
+   * their order however the rows are reinforced (inner-circle-recall.md C3).
+   */
+  async findKeystones(characterId: string, subjects: readonly string[] | 'self'): Promise<Memory[]> {
+    return this.safeQuery(
+      async () => {
+        const params: unknown[] = [characterId];
+        let subjectSql: string;
+        if (subjects === 'self') {
+          subjectSql = '(aboutCharacterId = ? OR aboutCharacterId IS NULL)';
+          params.push(characterId);
+        } else {
+          const ids = [...new Set(subjects.filter((id) => id && id !== characterId))];
+          if (ids.length === 0) return [];
+          subjectSql = `aboutCharacterId IN (${ids.map(() => '?').join(', ')})`;
+          params.push(...ids);
+        }
+        const rows = await rawQuery<Record<string, unknown>[]>(
+          `SELECT * FROM memories
+            WHERE characterId = ?
+              AND keystone = 1
+              AND ${HOT_TIER_SQL}
+              AND ${subjectSql}
+            ORDER BY createdAt ASC, id ASC`,
+          params,
+        );
+        return this.hydrateRawRows(rows, 'keystone fetch');
+      },
+      'Error finding keystones',
+      { characterId, subjects: subjects === 'self' ? 'self' : subjects.length },
+      [],
+    );
+  }
+
+  /**
+   * How many hot keystones a holder keeps about one subject (`null` or the
+   * holder's own id: about themself), leaving `excludeId` out — the row being
+   * edited. The write paths hold this under `KEYSTONES_PER_SUBJECT_MAX`.
+   */
+  async countKeystones(characterId: string, aboutCharacterId: string | null, excludeId?: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const self = !aboutCharacterId || aboutCharacterId === characterId;
+        const params: unknown[] = [characterId];
+        const subjectSql = self ? '(aboutCharacterId = ? OR aboutCharacterId IS NULL)' : 'aboutCharacterId = ?';
+        params.push(self ? characterId : aboutCharacterId);
+        let excludeSql = '';
+        if (excludeId) {
+          excludeSql = 'AND id <> ?';
+          params.push(excludeId);
+        }
+        const rows = await rawQuery<Array<{ n: number | bigint }>>(
+          `SELECT COUNT(*) AS n FROM memories
+            WHERE characterId = ? AND keystone = 1 AND ${HOT_TIER_SQL} AND ${subjectSql} ${excludeSql}`,
+          params,
+        );
+        return Number(rows[0]?.n ?? 0);
+      },
+      'Error counting keystones',
+      { characterId, aboutCharacterId },
+      0,
     );
   }
 

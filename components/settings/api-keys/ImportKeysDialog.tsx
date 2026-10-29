@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useId } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
@@ -39,6 +40,8 @@ export function ImportKeysDialog({
   onSuccess,
 }: ImportKeysDialogProps) {
   const modalRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
 
   const { state, fileInputRef, actions } = useImportKeys({
     isOpen,
@@ -103,9 +106,17 @@ export function ImportKeysDialog({
 
   return (
     <div className="qt-dialog-overlay">
-      <div ref={modalRef} className="qt-dialog max-w-lg max-h-[80vh] flex flex-col">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-lg max-h-[80vh] flex flex-col"
+      >
         <div className="qt-dialog-header">
-          <h2 className="qt-dialog-title">{getStepTitle()}</h2>
+          <h2 id={titleId} className="qt-dialog-title">{getStepTitle()}</h2>
         </div>
 
         <div className="qt-dialog-body flex-1 overflow-y-auto">

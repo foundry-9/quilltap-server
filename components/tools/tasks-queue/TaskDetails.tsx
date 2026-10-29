@@ -1,6 +1,9 @@
 'use client'
 
+import { useId, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import type { FullJobDetail } from './types'
 
 interface TaskDetailsProps {
@@ -20,6 +23,12 @@ export function TaskDetails({
   onDelete,
   formatDate,
 }: TaskDetailsProps) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+
+  useEscapeKey(onClose, isOpen)
+
   if (!isOpen) return null
 
   const getStatusColor = (status: string): string => {
@@ -43,16 +52,23 @@ export function TaskDetails({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         className="bg-background rounded-lg qt-shadow-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Dialog Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div>
-            <h3 className="qt-heading-4 text-foreground">Job Details</h3>
+            <h3 id={titleId} className="qt-heading-4 text-foreground">Job Details</h3>
             <p className="qt-text-small">{job.type}</p>
           </div>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="p-1 rounded hover:qt-bg-muted"
           >

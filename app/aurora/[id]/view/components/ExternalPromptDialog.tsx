@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 
 interface SystemPrompt {
   id: string
@@ -90,6 +91,9 @@ export function ExternalPromptDialog({
   }, [systemPrompts, systemPromptId])
 
   useEscapeKey(onCancel, !generating)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
 
   const handleGenerate = async () => {
     if (!connectionProfileId || !systemPromptId) return
@@ -132,8 +136,16 @@ export function ExternalPromptDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md md:max-w-lg rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
-        <h3 className="mb-4 qt-heading-4 flex-shrink-0">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="w-full max-w-md md:max-w-lg rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col"
+      >
+        <h3 id={titleId} className="mb-4 qt-heading-4 flex-shrink-0">
           Generate External Prompt{characterName ? ` for ${characterName}` : ''}
         </h3>
 

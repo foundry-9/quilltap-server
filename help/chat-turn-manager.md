@@ -188,9 +188,9 @@ The participant sidebar shows the **turn order** for all participants. Each part
 
 Participants are automatically sorted in the sidebar by their turn position, so you can see at a glance who's speaking, who follows, and who has already had their say. Since [the running order](#the-running-order) is drawn for the whole cycle before it begins, those positions are a schedule rather than a forecast — the sidebar and the turn banner both read that one stored running order, so what they tell you is what the house will actually do, and not a second opinion arrived at independently.
 
-### Interrupt/Stop Button
+### Raising a Hand and Stopping
 
-When a character is generating a response, their card shows a **Stop** button instead of the usual Nudge/Queue button. Click it to interrupt the current generation. In multi-character chats, the stop button appears on the generating character's card in the sidebar rather than in the chat composer.
+While a character is generating, the composer's two interruption buttons wake beside **Send**: the amber **raised hand**, which asks the *next* speaker whether they will yield the floor to you (a yield is announced by the Host and does not pause the room), and the red **Stop** octagon, which cuts the current reply off where it stands, keeps what had appeared, and pauses the room. The full account is in [Cutting In — Raising a Hand and Stopping](interrupting.md).
 
 ### Visual Feedback
 
@@ -199,7 +199,6 @@ The UI shows turn status in several ways:
 **Current Speaker:**
 - Glowing/animated avatar border
 - Green pulsing position badge (#1)
-- Stop button on their card
 - Active highlight on their card
 
 **Your Turn:**
@@ -260,7 +259,7 @@ Characters you're impersonating sit in the same weighted rotation as the LLM cha
 
 - Type your character's response in the composer and send normally
 - Or hit **Skip** to record their turn as taken (no message) and let the next character respond — on their turn or off it. In a paused room a Skip buys exactly one turn and leaves the pause standing
-- With two of your own characters in the room, a message from one of them hands the floor straight to the other rather than summoning an LLM to answer — so two turns in a row are yours, and the banner will name each in its proper order
+- With two of your own characters in the room, a message from one of them hands the floor straight to the other rather than summoning an LLM to answer — so two turns in a row are yours, and the banner will name each in its proper order. The message so handed on is filed in full all the same: any tool results you staged in the composer, any dice you wrote out ("I roll 1d20"), any custom tool whose trigger phrase you spoke, and the Librarian's note of an uploaded picture all land in the transcript exactly as they would had a character been about to answer
 - Talkativeness applies to user characters too — a chatty user character will come up more often than a quiet one
 - Other LLM characters continue their turns normally; you can still queue an impersonated character with the sidebar's Queue button if you want them up sooner
 - When the rotation reaches a seat you're driving, the composer defaults the voice above the input to *that* seat, so you're already speaking as whoever's turn it is. Taking up a character's pen also hands them the floor at once, rather than making you wait for the rotation to come round. A voice you pick by hand for the turn still stands; the composer only re-defaults as the turn moves on.
@@ -463,5 +462,6 @@ Characters with help tools enabled can navigate directly to this page:
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Multi-Character Chats](chat-multi-character.md) — Setting up group conversations
 - [Nothing to Add — Turn Skipping](turn-skipping.md) — Letting a character pass a turn
+- [Cutting In — Raising a Hand and Stopping](interrupting.md) — The composer's interruption buttons
 - [Chat Sidebar](chat-participants.md) — Managing participants and per-chat settings
 - [Message Actions](chat-message-actions.md) — Editing and managing messages

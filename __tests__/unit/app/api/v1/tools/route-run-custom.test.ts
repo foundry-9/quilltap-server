@@ -50,21 +50,21 @@ beforeEach(() => {
   }
 })
 
-it('lists run_custom as a user-toggleable built-in utility tool', async () => {
+it.each(['run_custom', 'edit_custom_tool'])('lists %s as a user-toggleable built-in in the Pascal group', async (id) => {
   const res: any = await GET(req(), undefined as any)
 
   expect(res.__kind).toBe('success')
-  const runCustom = res.data.tools.find((t: any) => t.id === 'run_custom')
-  expect(runCustom).toBeDefined()
-  expect(runCustom).toMatchObject({
+  const tool = res.data.tools.find((t: any) => t.id === id)
+  expect(tool).toBeDefined()
+  expect(tool).toMatchObject({
     source: 'built-in',
-    category: 'utility',
+    category: 'pascal',
     userInvocable: true,
   })
 })
 
-it('includes run_custom\'s parameters schema when includeSchemas=true', async () => {
+it.each(['run_custom', 'edit_custom_tool'])('includes %s\'s parameters schema when includeSchemas=true', async (id) => {
   const res: any = await GET(req('includeSchemas=true'), undefined as any)
-  const runCustom = res.data.tools.find((t: any) => t.id === 'run_custom')
-  expect(runCustom?.parameters).toBeDefined()
+  const tool = res.data.tools.find((t: any) => t.id === id)
+  expect(tool?.parameters).toBeDefined()
 })

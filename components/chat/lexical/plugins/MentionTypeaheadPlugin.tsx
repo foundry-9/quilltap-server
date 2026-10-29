@@ -27,7 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { LexicalTypeaheadMenuPlugin } from '@lexical/react/LexicalTypeaheadMenuPlugin'
+import { GuardedTypeaheadMenuPlugin } from '../typeahead/GuardedTypeaheadMenuPlugin'
 import type { MenuRenderFn, MenuTextMatch } from '@lexical/react/LexicalTypeaheadMenuPlugin'
 import {
   $getNodeByKey,
@@ -100,7 +100,7 @@ function $lineStartOf(node: LexicalNode): { paragraph: ParagraphNode; lineIndex:
   if (previous !== null && !$isLineBreakNode(previous)) return null
 
   let lineIndex = 0
-  for (let sibling = previous; sibling !== null; sibling = sibling.getPreviousSibling()) {
+  for (let sibling: LexicalNode | null = previous; sibling !== null; sibling = sibling.getPreviousSibling()) {
     if ($isLineBreakNode(sibling)) lineIndex += 1
   }
   return { paragraph: parent, lineIndex }
@@ -174,8 +174,8 @@ function MenuKeyBindings({ editor, onSpace, holdCommitKeys }: MenuKeyBindingsPro
     () =>
       editor.registerCommand(
         KEY_DOWN_COMMAND,
-        (event: KeyboardEvent | null) => {
-          if (event === null || event.key !== ' ') return false
+        (event: KeyboardEvent) => {
+          if (event.key !== ' ') return false
           if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false
           if (editor.isComposing()) return false
           if (!onSpace()) return false
@@ -392,7 +392,7 @@ export function MentionTypeaheadPlugin({
   )
 
   return (
-    <LexicalTypeaheadMenuPlugin<TypeaheadOption<MentionCandidate>>
+    <GuardedTypeaheadMenuPlugin<TypeaheadOption<MentionCandidate>>
       options={options}
       onQueryChange={setQuery}
       onSelectOption={onSelectOption}

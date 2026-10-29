@@ -27,6 +27,8 @@ interface Memory {
   supersededById?: string | null
   /** The notes a digest was folded from (digest rows only). */
   consolidatedFrom?: string[]
+  /** An operator-marked standing fact. */
+  keystone?: boolean
   /** Source message ID for auto-created memories (memory provenance) */
   sourceMessageId?: string | null
   /** Chat ID where the source message resides */
@@ -74,6 +76,14 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onVie
           <span className={`qt-text-label-xs ${importanceColor}`} title={`Importance: ${(memory.importance * 100).toFixed(0)}%`}>
             {importanceLabel}
           </span>
+          {memory.keystone && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full qt-bg-primary/10 qt-text-favorite"
+              title="Keystone: a standing fact, always remembered in full and never tidied away"
+            >
+              Keystone
+            </span>
+          )}
           {archived && (
             <span
               className="text-xs px-2 py-0.5 rounded-full qt-bg-muted qt-text-secondary"

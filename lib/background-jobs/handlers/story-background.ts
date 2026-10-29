@@ -14,7 +14,7 @@ import {
 } from '@/lib/file-storage/lantern-store-bridge';
 
 import { CONCEALMENT_MARKER, craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { SceneStateSchema, isParticipantPresent } from '@/lib/schemas/chat.types';
+import { parseStoredSceneState, isParticipantPresent, type SceneState } from '@/lib/schemas/chat.types';
 import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logger } from '@/lib/logger';
@@ -23,6 +23,7 @@ import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import {
   equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
+  sceneDescriptionParts,
   sanitizeAppearancesIfNeeded,
   type AppearanceResolutionInput,
   type AppearanceResolutionResult,
@@ -51,11 +52,11 @@ import {
   composeRetryRouteTrail,
   resolveImageRetryUnderstudy,
 } from '@/lib/services/dangerous-content/retry-uncensored';
-import type { ImageUnderstudy } from '@/lib/services/dangerous-content/understudy';
+import { isUncensoredImageProfile, type ImageUnderstudy } from '@/lib/services/dangerous-content/understudy';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
-import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
+import { figureGenderPrefix } from '@/lib/characters/pronoun-gender';
 import type { Character, ImageProfile } from '@/lib/schemas/types';
-import { pickPhysicalDescription } from '@/lib/characters/physical-description';
+import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -63,8 +64,14 @@ function escapeRegex(s: string): string {
 
 function buildBasicEnumeration(char: Character): string {
   const primary = char.physicalDescription;
-  const desc = pickPhysicalDescription(primary, 'scene') || char.name;
-  return `${genderPrefixFromPronouns(char.pronouns)}${desc}`.trim();
+  return sceneDescriptionParts(
+    {
+      physicalDescription: pickPhysicalDescription(primary, 'scene') || char.name,
+      clothingDescription: '',
+      humanoid: isHumanoid(primary),
+    },
+    figureGenderPrefix(char),
+  ).join('. ').trim();
 }
 
 /**
@@ -159,26 +166,19 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const validCharacters = characters.filter(c => c !== null);
 
   // Check if we have a fresh scene state to use
-  let sceneStateData: import('@/lib/schemas/chat.types').SceneState | null = null;
-  if (chat.sceneState) {
-    try {
-      const parsed = typeof chat.sceneState === 'string' ? JSON.parse(chat.sceneState as string) : chat.sceneState;
-      const validated = SceneStateSchema.safeParse(parsed);
-      if (validated.success) {
-        // Consider scene state "fresh" if within 5 messages of current count
-        const messageGap = (chat.messageCount ?? 0) - validated.data.updatedAtMessageCount;
-        if (messageGap <= 5) {
-          sceneStateData = validated.data;
-          logger.info('[StoryBackground] Using fresh scene state for context', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            chatId: payload.chatId,
-            sceneStateAge: messageGap,
-          });
-        }
-      }
-    } catch {
-      // Failed to parse scene state, fall back to normal derivation
+  let sceneStateData: SceneState | null = null;
+  const storedScene = parseStoredSceneState(chat.sceneState);
+  if (storedScene) {
+    // Consider scene state "fresh" if within 5 messages of current count
+    const messageGap = (chat.messageCount ?? 0) - storedScene.updatedAtMessageCount;
+    if (messageGap <= 5) {
+      sceneStateData = storedScene;
+      logger.info('[StoryBackground] Using fresh scene state for context', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        chatId: payload.chatId,
+        sceneStateAge: messageGap,
+      });
     }
   }
 
@@ -205,16 +205,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
   const isDangerousChat = shouldUseUncensoredRoute(chat);
   const hasUncensoredImageProvider = Boolean(conciergePolicy.desk.imageProfileId);
-  // A dangerous-marked chat with an uncensored image profile configured is
-  // already headed for a provider that accepts adult content — appearance
-  // sanitization steps aside for exactly this case (see
-  // `sanitizeAppearancesIfNeeded`), so the prompt crafter should too rather
-  // than draping a sheet over a scene nobody asked to have covered.
+  // The scene is cleaned — concealment in the crafter, sanitization of the
+  // appearances — only for a Moderated chat bound for a moderated painter.
+  // Everything else is crafted candidly:
   //
-  // Only when the policy routes direct (on duty and Unmoderated): a candid
-  // prompt is never crafted for a chat the Concierge will not send to the
-  // uncensored desk, or its franker prompt would go straight to the moderated
-  // provider.
+  // - the chat's own image profile is uncensored (`isUncensoredImageProfile`)
+  //   → it accepts the scene, whatever the chat's state;
+  // - the chat is Unmoderated → the operator asked for the scene as written.
+  //   With an uncensored desk (and the Concierge on duty) it is routed there
+  //   below; without one the ordinary painter gets it as written and a
+  //   refusal is answered by the post-hoc failover, not by a draped sheet.
   //
   // "Try uncensored" (`payload.forceUncensored`) puts the Concierge's
   // uncensored understudy in the painter's chair for this one job, whatever
@@ -240,15 +240,22 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     }
     forcedUnderstudy = gate.understudy;
   }
+  const paintsOnUncensoredProfile = isUncensoredImageProfile(imageProfile, conciergePolicy);
+  // Unmoderated and on duty with a desk configured → reroute up front.
+  const routesDirectToDesk =
+    forcedUnderstudy === null
+    && !paintsOnUncensoredProfile
+    && isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect;
   const uncensoredImageTarget =
-    forcedUnderstudy !== null
-    || (isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect);
+    forcedUnderstudy !== null || paintsOnUncensoredProfile || isDangerousChat;
   logger.debug('[StoryBackground] Concierge policy resolved', {
     context: 'background-jobs.story-background',
     jobId: job.id,
     conciergeSource: conciergePolicy.source,
     conciergeState: conciergePolicy.state,
     uncensoredImageTarget,
+    paintsOnUncensoredProfile,
+    routesDirectToDesk,
   });
 
   // For dangerous chats, use uncensored provider for all cheap LLM tasks
@@ -442,10 +449,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       resolvedAppearances = await sanitizeAppearancesIfNeeded(
         resolvedAppearances,
         conciergePolicy,
-        isDangerousChat,
-        // Story backgrounds never route up front — only `uncensoredImageTarget`
-        // scenes actually reach the uncensored provider (bug 133).
-        uncensoredImageTarget,
+        // Whether this scene's painter is uncensored — the chat's own profile,
+        // the desk it is routed to, or the forced understudy — never whether
+        // one exists somewhere (bug 133). An Unmoderated chat bound for a
+        // moderated painter is not cleaned either: the sanitizer only acts
+        // under a Moderated chat's pre-screen.
+        forcedUnderstudy !== null || paintsOnUncensoredProfile || routesDirectToDesk,
         cheapLLMSelection,
         job.userId,
         payload.chatId,
@@ -467,14 +476,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const characterDescriptions = validCharacters.map(char => {
     const resolved = resolvedAppearances?.find(a => a.characterId === char!.id);
 
-    // Derive a gender prefix from standard pronouns so image generators know the character's sex
-    const genderPrefix = genderPrefixFromPronouns(char!.pronouns);
+    // Derive a gender prefix from standard pronouns so image generators know
+    // the character's sex ('' for a non-humanoid character).
+    const genderPrefix = figureGenderPrefix(char!);
 
     if (resolved) {
-      const descParts = [genderPrefix + resolved.physicalDescription];
-      if (resolved.clothingDescription) {
-        descParts.push(`Wearing: ${resolved.clothingDescription}`);
-      }
+      const descParts = sceneDescriptionParts(resolved, genderPrefix);
       if (resolved.needsConcealment) {
         descParts.push(CONCEALMENT_MARKER);
         logger.debug('[StoryBackground] Character flagged for cinematic concealment', {
@@ -489,9 +496,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       };
     }
 
-    // Fallback: simple first-description logic
+    // Fallback: simple first-description logic.
     const primary = char!.physicalDescription;
-    const descParts = [genderPrefix + (pickPhysicalDescription(primary, 'scene') || char!.name)];
+    const descParts = sceneDescriptionParts(
+      {
+        physicalDescription: pickPhysicalDescription(primary, 'scene') || char!.name,
+        clothingDescription: '',
+        humanoid: isHumanoid(primary),
+      },
+      genderPrefix,
+    );
     return {
       name: char!.name,
       description: descParts.join('. '),
@@ -509,9 +523,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   ]);
   const depictionGuidelines = await resolveDepictionGuidelines(validCharacters);
 
-  // An Unmoderated chat with an uncensored image profile goes straight to the
-  // uncensored desk (`routeDirect`): the candid prompt crafted below must
-  // never be sent to the ordinary painter first.
+  // An Unmoderated chat with an uncensored desk goes straight to it
+  // (`routeDirect`): its candid prompt is never offered to the ordinary
+  // painter first when an uncensored one is to hand. A chat whose own image
+  // profile is already uncensored stays on it.
   let primaryImageProfile: ImageProfile = imageProfile;
   let primaryImageKey: string = apiKey.key_value;
   if (forcedUnderstudy) {
@@ -523,7 +538,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       profileId: primaryImageProfile.id,
       profileName: primaryImageProfile.name,
     });
-  } else if (uncensoredImageTarget) {
+  } else if (routesDirectToDesk) {
     const route = await resolveImageProviderForDangerousContent(
       imageProfile,
       apiKey.key_value,

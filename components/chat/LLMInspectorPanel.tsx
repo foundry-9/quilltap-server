@@ -5,22 +5,42 @@ import { SlideOverPanel } from '@/components/ui/SlideOverPanel'
 import { Icon } from '@/components/ui/icon'
 import LLMInspectorEntry from './LLMInspectorEntry'
 import type { LLMLog, LLMLogType } from '@/lib/schemas/types'
+import { LLMLogTypeEnum } from '@/lib/schemas/llm-log.types'
 
-type FilterCategory = 'all' | 'chat' | 'memory' | 'system' | 'image' | 'safety' | 'other'
+type FilterCategory = 'all' | 'chat' | 'storyteller' | 'memory' | 'system' | 'image' | 'safety' | 'other'
+
+const NAMED_FILTER_GROUPS = {
+  chat: ['CHAT_MESSAGE', 'TOOL_CONTINUATION'],
+  // Bids, plus every call a round ran (matched on storytellerRoundId below)
+  storyteller: ['STORYTELLER_BID'],
+  memory: ['MEMORY_EXTRACTION'],
+  system: ['TITLE_GENERATION', 'SUMMARIZATION', 'CONTEXT_COMPRESSION', 'SCENE_STATE_TRACKING'],
+  image: [
+    'IMAGE_PROMPT_CRAFTING',
+    'IMAGE_DESCRIPTION',
+    'APPEARANCE_RESOLUTION',
+    'IMAGE_GENERATION',
+    'WARDROBE_IMAGE_ANALYSIS',
+    'WARDROBE_ITEM_IMAGE',
+    'INVENTORY_ITEM_IMAGE',
+  ],
+  safety: ['DANGER_CLASSIFICATION'],
+} satisfies Record<Exclude<FilterCategory, 'all' | 'other'>, LLMLogType[]>
+
+// "Other" is everything no named group claims — derived, so a new log type is
+// never reachable only through "All".
+const CLAIMED_TYPES = new Set<LLMLogType>(Object.values(NAMED_FILTER_GROUPS).flat())
 
 const FILTER_GROUPS: Record<FilterCategory, LLMLogType[] | null> = {
   all: null,
-  chat: ['CHAT_MESSAGE', 'TOOL_CONTINUATION'],
-  memory: ['MEMORY_EXTRACTION'],
-  system: ['TITLE_GENERATION', 'SUMMARIZATION', 'CONTEXT_COMPRESSION'],
-  image: ['IMAGE_PROMPT_CRAFTING', 'IMAGE_DESCRIPTION', 'APPEARANCE_RESOLUTION'],
-  safety: ['DANGER_CLASSIFICATION'],
-  other: ['CHARACTER_WIZARD', 'AI_IMPORT', 'CUSTOM_TOOL_CONSULT', 'VOICE_REWRITE', 'SCENARIO_BUILDER'],
+  ...NAMED_FILTER_GROUPS,
+  other: LLMLogTypeEnum.options.filter(type => !CLAIMED_TYPES.has(type)),
 }
 
 const FILTER_LABELS: Record<FilterCategory, string> = {
   all: 'All',
   chat: 'Chat Messages',
+  storyteller: 'Storyteller Rounds',
   memory: 'Memory',
   system: 'System Ops',
   image: 'Image',
@@ -58,6 +78,10 @@ export default function LLMInspectorPanel({
   const filteredLogs = useMemo(() => {
     const types = FILTER_GROUPS[filter]
     if (!types) return chronologicalLogs
+    if (filter === 'storyteller') {
+      // A round as one group: its bids and its speaking turns, in round order
+      return chronologicalLogs.filter(log => types.includes(log.type) || !!log.storytellerRoundId)
+    }
     return chronologicalLogs.filter(log => types.includes(log.type))
   }, [chronologicalLogs, filter])
 

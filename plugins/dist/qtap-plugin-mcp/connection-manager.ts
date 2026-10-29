@@ -6,7 +6,7 @@
  */
 
 import { createPluginLogger, getBuiltinToolNames } from '@quilltap/plugin-utils';
-import type { UniversalTool } from '@quilltap/plugin-types';
+import type { ToolEffect, UniversalTool } from '@quilltap/plugin-types';
 import { MCPClient } from './mcp-client';
 import { parseServerConfigs } from './security';
 import { convertToolsWithCollisionHandling } from './tool-generator';
@@ -445,6 +445,19 @@ export class MCPConnectionManager {
     }
 
     return hierarchy;
+  }
+
+  /**
+   * Each discovered tool's effect, inherited from its server's configured
+   * `effect` (default `write`).
+   */
+  getToolEffects(): Record<string, ToolEffect> {
+    const effects: Record<string, ToolEffect> = {};
+    for (const [quilltapName, mapping] of this.toolIndex) {
+      const config = this.clients.get(mapping.serverId)?.getConfig();
+      effects[quilltapName] = config?.effect ?? 'write';
+    }
+    return effects;
   }
 
   /**

@@ -611,6 +611,49 @@ describe('resolveImageProviderForDangerousContent', () => {
     })
   })
 
+  describe('an image profile that is already uncensored', () => {
+    // Trading one uncensored painter for another buys nothing and would
+    // override the operator's pick: the profile stays put, and no understudy
+    // is looked up.
+    it.each([
+      ['an Unmoderated chat', () => policyFor('unmoderated', { uncensoredImageProfileId: 'img-uncensored-2' })],
+      ['a Moderated chat', () => policyFor('moderated', { uncensoredImageProfileId: 'img-uncensored-2' })],
+    ])('keeps an uncensored-compatible profile for %s', async (_label, makePolicy) => {
+      const mockRepos = { imageProfiles: { findById: jest.fn(), findAll: jest.fn() } }
+      ;(getRepositories as jest.Mock).mockReturnValue(mockRepos)
+
+      const result = await resolveImageProviderForDangerousContent(
+        uncensoredImageProfile,
+        originalApiKey,
+        makePolicy(),
+        userId
+      )
+
+      expect(result.rerouted).toBe(false)
+      expect(result.imageProfile).toBe(uncensoredImageProfile)
+      expect(result.apiKey).toBe(originalApiKey)
+      expect(result.reason).toContain('already uncensored')
+      expect(mockRepos.imageProfiles.findById).not.toHaveBeenCalled()
+      expect(mockRepos.imageProfiles.findAll).not.toHaveBeenCalled()
+    })
+
+    it('keeps the configured desk profile even when it is not marked uncensored-compatible', async () => {
+      const mockRepos = { imageProfiles: { findById: jest.fn(), findAll: jest.fn() } }
+      ;(getRepositories as jest.Mock).mockReturnValue(mockRepos)
+
+      const result = await resolveImageProviderForDangerousContent(
+        originalImageProfile,
+        originalApiKey,
+        withImageDesk(originalImageProfile.id),
+        userId
+      )
+
+      expect(result.rerouted).toBe(false)
+      expect(result.imageProfile).toBe(originalImageProfile)
+      expect(mockRepos.imageProfiles.findAll).not.toHaveBeenCalled()
+    })
+  })
+
   describe('explicit uncensored image profile', () => {
     it('reroutes to explicitly configured uncensored image profile', async () => {
       const explicitImageSettings = withImageDesk('img-uncensored-1')

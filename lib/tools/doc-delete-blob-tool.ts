@@ -2,6 +2,7 @@
  * @fileoverview Tool definition for deleting a binary blob asset from a document store.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -47,3 +48,6 @@ export interface DocDeleteBlobOutput {
   /** Canonical qtap:// URI for the (now-deleted) blob. */
   uri?: string;
 }
+
+/** What this tool does to the world: deletes — cannot be undone from inside Quilltap. */
+export const docDeleteBlobToolEffect: ToolEffectSpec = 'destroy';

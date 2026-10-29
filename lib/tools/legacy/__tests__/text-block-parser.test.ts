@@ -289,6 +289,22 @@ describe('convertTextBlockToToolCallRequest', () => {
   })
 })
 
+describe('convertTextBlockToToolCallRequest — inventory tools', () => {
+  const block = (toolName: string, params: Record<string, string>) =>
+    convertTextBlockToToolCallRequest({ toolName, params, content: '', fullMatch: '', startIndex: 0, endIndex: 0 })
+
+  it('keeps numeric- and boolean-looking text as text', () => {
+    const result = block('inventory_create', { name: '42', title: 'true', description: '7' })
+    expect(result.arguments).toMatchObject({ name: '42', title: 'true', description: '7' })
+  })
+
+  it('still converts the parameters that are numbers or booleans', () => {
+    const result = block('inventory_create', { name: 'arrow', max_equipped: '20', equip: 'true' })
+    expect(result.arguments).toMatchObject({ name: 'arrow', max_equipped: 20, equip: true })
+    expect(block('inventory_archive', { ref: '12', archived: 'false' }).arguments).toMatchObject({ archived: false })
+  })
+})
+
 describe('stripTextBlockMarkers', () => {
   it('strips content-form blocks', () => {
     const response = 'Hello [[WHISPER to="Elena"]]secret[[/WHISPER]] world'

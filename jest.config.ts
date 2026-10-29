@@ -66,8 +66,10 @@ const config: Config = {
     '^arctic$': '<rootDir>/__mocks__/arctic.ts',
     '^jose$': '<rootDir>/__mocks__/jose.ts',
   },
+  // Lexical went ESM-only in 0.51 and must be transformed; see the export
+  // below for the matching change to next/jest's own pattern.
   transformIgnorePatterns: [
-    'node_modules/(?!(@openrouter/sdk|jose)/)',
+    'node_modules/(?!(@openrouter/sdk|jose|lexical|@lexical/[^/]+|@preact/signals-core)/)',
   ],
   collectCoverageFrom: [
     'app/**/*.{js,jsx,ts,tsx}',
@@ -126,5 +128,22 @@ const config: Config = {
   coverageDirectory: 'coverage',
 }
 
-// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-export default createJestConfig(config)
+// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async.
+// next/jest prepends its own node_modules ignore pattern, which exempts only
+// `transpilePackages` and so swallows the exemptions above. Patterns are OR'd,
+// so the ESM-only packages are added to that pattern's exemption list too.
+const ESM_ONLY_PACKAGES = 'lexical|@lexical/[^/]+|@preact/signals-core'
+
+const jestConfig = async () => {
+  const resolved = await createJestConfig(config)()
+  return {
+    ...resolved,
+    transformIgnorePatterns: (resolved.transformIgnorePatterns ?? []).map((pattern) =>
+      pattern === '/node_modules/'
+        ? `/node_modules/(?!(${ESM_ONLY_PACKAGES})/)`
+        : pattern.replace('/node_modules/(?!.pnpm)(?!(', `/node_modules/(?!.pnpm)(?!(${ESM_ONLY_PACKAGES}|`),
+    ),
+  }
+}
+
+export default jestConfig

@@ -88,7 +88,7 @@ beforeEach(() => {
   db.exec(`CREATE TABLE memories (
     id TEXT PRIMARY KEY, characterId TEXT NOT NULL, relatedMemoryIds TEXT DEFAULT '[]',
     consolidatedFrom TEXT DEFAULT '[]', supersededById TEXT, tier TEXT, embedding TEXT, updatedAt TEXT,
-    source TEXT DEFAULT 'AUTO', aboutCharacterId TEXT)`)
+    source TEXT DEFAULT 'AUTO', aboutCharacterId TEXT, keystone INTEGER NOT NULL DEFAULT 0)`)
   ;(getRawDatabase as jest.Mock).mockReturnValue(db)
   ;(rawQuery as jest.Mock).mockImplementation(async (sql: string, params: unknown[] = []) => db.prepare(sql).all(...params))
 

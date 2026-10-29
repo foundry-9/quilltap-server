@@ -30,6 +30,7 @@ import {
 } from './wardrobe-handler-shared';
 import { buildWardrobeReadFailure, buildWardrobeReadOutput } from './wardrobe-read-handler';
 import { formatWardrobeToolImageLine, maybeQueueWardrobeToolImage } from '@/lib/wardrobe/tool-image-generation';
+import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 
 /** Whether a patch changes what a picture of the item would show. */
 function patchChangesLook(item: WardrobeItem, patch: Partial<WardrobeItem>): boolean {
@@ -75,6 +76,7 @@ export async function executeWardrobeUpdateTool(
       description,
       image_prompt,
       appropriateness,
+      pronoun_guidance,
       types,
       is_default,
       replace,
@@ -101,6 +103,7 @@ export async function executeWardrobeUpdateTool(
     if (description !== undefined) patch.description = description;
     if (image_prompt !== undefined) patch.imagePrompt = image_prompt;
     if (appropriateness !== undefined) patch.appropriateness = appropriateness;
+    if (pronoun_guidance !== undefined) patch.pronounGuidance = normalizePronounGuidance(pronoun_guidance);
     if (types !== undefined) patch.types = types as WardrobeItemType[];
     if (is_default !== undefined) patch.isDefault = is_default;
     if (replace !== undefined) patch.replace = replace;

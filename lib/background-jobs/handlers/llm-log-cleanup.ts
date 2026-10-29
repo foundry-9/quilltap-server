@@ -2,7 +2,10 @@
  * LLM Log Cleanup Job Handler
  *
  * Handles LLM_LOG_CLEANUP background jobs by deleting old LLM logs
- * based on the user's retention settings.
+ * based on the user's retention settings. The log's entries (`log_entries`,
+ * same database) are pruned on the same retention days — whether or not LLM
+ * logging itself is switched on, since characters and custom tools write
+ * entries either way.
  */
 
 import { BackgroundJob } from '@/lib/schemas/types';
@@ -46,6 +49,13 @@ export async function handleLLMLogCleanup(job: BackgroundJob): Promise<void> {
     if (retentionDays <= 0) {
       return;
     }
+
+    const deletedEntryCount = await repos.logEntries.cleanupOldEntries(retentionDays);
+    logger.debug('[LLMLogCleanup] Log entries pruned', {
+      jobId: job.id,
+      deletedEntryCount,
+      retentionDays,
+    });
 
     // Get chat settings to check if logging is enabled
     const chatSettings = await repos.chatSettings.findByUserId(job.userId);

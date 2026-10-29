@@ -49,6 +49,16 @@
   background-image: var(--_qt-icon-bg, none);
 }
 
+/* Windows High Contrast / forced colors replaces every background-color with
+   the system Canvas colour, which would paint each masked glyph the same colour
+   as the page behind it. Opt the icon out so it keeps the (forced) text colour
+   it inherits. */
+@media (forced-colors: active) {
+  [data-icon] {
+    forced-color-adjust: none;
+  }
+}
+
 /* ---- per-icon defaults (generated from icon-registry.ts) ---- */
 [data-icon="close"] { --_qt-icon-mask: url("/images/icons/close.svg"); --_qt-icon-bg: none; }
 [data-icon="pencil"] { --_qt-icon-mask: url("/images/icons/pencil.svg"); --_qt-icon-bg: none; }
@@ -95,6 +105,8 @@
 [data-icon="play"] { --_qt-icon-mask: url("/images/icons/play.svg"); --_qt-icon-bg: none; }
 [data-icon="pause"] { --_qt-icon-mask: url("/images/icons/pause.svg"); --_qt-icon-bg: none; }
 [data-icon="stop"] { --_qt-icon-mask: url("/images/icons/stop.svg"); --_qt-icon-bg: none; }
+[data-icon="stop-sign"] { --_qt-icon-mask: url("/images/icons/stop-sign.svg"); --_qt-icon-bg: none; }
+[data-icon="hand-raised"] { --_qt-icon-mask: url("/images/icons/hand-raised.svg"); --_qt-icon-bg: none; }
 [data-icon="zoom-in"] { --_qt-icon-mask: url("/images/icons/zoom-in.svg"); --_qt-icon-bg: none; }
 [data-icon="zoom-out"] { --_qt-icon-mask: url("/images/icons/zoom-out.svg"); --_qt-icon-bg: none; }
 [data-icon="projects"] { --_qt-icon-mask: url("/images/icons/projects.svg"); --_qt-icon-bg: none; }
@@ -115,6 +127,7 @@
 [data-icon="megaphone"] { --_qt-icon-mask: url("/images/icons/megaphone.svg"); --_qt-icon-bg: none; }
 [data-icon="mail"] { --_qt-icon-mask: url("/images/icons/mail.svg"); --_qt-icon-bg: none; }
 [data-icon="dice"] { --_qt-icon-mask: url("/images/icons/dice.svg"); --_qt-icon-bg: none; }
+[data-icon="inventory"] { --_qt-icon-mask: url("/images/icons/inventory.svg"); --_qt-icon-bg: none; }
 [data-icon="sparkles"] { --_qt-icon-mask: url("/images/icons/sparkles.svg"); --_qt-icon-bg: none; }
 [data-icon="wand"] { --_qt-icon-mask: url("/images/icons/wand.svg"); --_qt-icon-bg: none; }
 [data-icon="thinking"] { --_qt-icon-mask: url("/images/icons/thinking.svg"); --_qt-icon-bg: none; }

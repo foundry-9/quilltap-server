@@ -20,6 +20,7 @@ import path from 'path';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getArchivedCharacterVaultMountPointIds } from '@/lib/mount-index/character-vault';
+import { checkPersistentTarget } from '@/lib/mount-index/persistent-target';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
 import {
   applyDiskAction,
@@ -130,6 +131,15 @@ async function runSync(
 ): Promise<SyncReport> {
   const targetPath = path.resolve(options.targetPath);
   const warnings: string[] = [];
+
+  // A mirror written into the container's own layer looks fine until the
+  // container is recreated, and a to-store pass from it would then read an
+  // empty directory as "everything was deleted". Refused in dry runs too, so
+  // the plan says so before anything is attempted.
+  const persistence = await checkPersistentTarget(targetPath);
+  if (!persistence.persistent) {
+    throw new SyncRefusedError(persistence.message, 'TARGET_NOT_PERSISTENT');
+  }
 
   // `--dry-run` changes nothing on either side, and that includes not
   // conjuring the directory: an operator planning a sync against a path they

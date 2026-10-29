@@ -421,8 +421,11 @@ async function resolveDocumentStorePath(
 ): Promise<ResolvedPath> {
   if (!context.mountPoint) {
     logger.warn('document_store scope requires mountPoint in context');
+    // A path alone names no one: every character vault has a `metadata.json`,
+    // so a bare filename matches every vault and must never pick one (bug 256).
     throw new PathResolutionError(
-      'Mount point is required for document_store scope',
+      'Mount point is required for document_store scope: a path names no store on its own ' +
+        '(every character vault has a metadata.json), so say which store — by name, ID or qtap:// address',
       'MISSING_CONTEXT'
     );
   }
@@ -520,7 +523,7 @@ async function resolveDocumentStorePath(
       `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)}, vaultsHidden: ${context.hideCharacterVaults === true})`
     );
     throw new PathResolutionError(
-      `Mount point not found or not accessible in this context`,
+      `No document store "${context.mountPoint}" is reachable in this context — nothing was read`,
       'NOT_FOUND'
     );
   }

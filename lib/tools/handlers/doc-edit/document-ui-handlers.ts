@@ -36,6 +36,7 @@ import {
   uriForResolvedPath,
   assertCharacterMayRead,
   resolveActorOrigin,
+  publishedMountPoint,
 } from './shared';
 
 /**
@@ -87,6 +88,9 @@ export async function handleOpenDocument(
   // read gate already blocks characters from opening one; this covers the
   // operator-override path that bypasses the gate.
   let hiddenFromCharacters = false;
+  // What the chat_documents row, the result and the announcement name — the
+  // resolved store, never a reader-relative `self` (bug 256).
+  let storeName = input.mount_point;
 
   if (filePath) {
     // Opening an existing file — resolve the path to verify it exists.
@@ -97,7 +101,8 @@ export async function handleOpenDocument(
       // character_read:false → not-found for characters (operator unaffected).
       await assertCharacterMayRead(resolved, context);
       hiddenFromCharacters = await documentHiddenFromCharacters(resolved.mountPointId, resolved.relativePath);
-      docUri = await uriForResolvedPath(resolved, context);
+      storeName = publishedMountPoint(resolved, input.mount_point);
+      docUri = await uriForResolvedPath(resolved);
       if (resolved.mountType === 'database' && resolved.mountPointId) {
         const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
         if (!exists) throw new Error(`File not found: ${filePath}`);
@@ -139,7 +144,7 @@ export async function handleOpenDocument(
       await fs.writeFile(resolved.absolutePath, '', 'utf-8');
       const stat = await fs.stat(resolved.absolutePath);
       mtime = stat.mtimeMs;
-      docUri = await uriForResolvedPath(resolved, context);
+      docUri = await uriForResolvedPath(resolved);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { success: false, error: `Failed to create blank document: ${errorMsg}` };
@@ -151,7 +156,7 @@ export async function handleOpenDocument(
     await repos.chatDocuments.openDocument(context.chatId, {
       filePath,
       scope,
-      mountPoint: input.mount_point,
+      mountPoint: storeName,
       displayTitle,
     });
 
@@ -174,7 +179,7 @@ export async function handleOpenDocument(
     filePath,
     uri: docUri,
     scope,
-    mountPoint: input.mount_point,
+    mountPoint: storeName,
     displayTitle,
     mode,
     isNew,
@@ -198,7 +203,7 @@ export async function handleOpenDocument(
     displayTitle,
     filePath,
     scope,
-    mountPoint: input.mount_point,
+    mountPoint: storeName,
     isNew,
     origin: toLibrarianOpenKind(await resolveActorOrigin(context)),
     hiddenFromCharacters,

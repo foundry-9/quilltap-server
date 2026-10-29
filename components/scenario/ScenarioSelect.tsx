@@ -20,6 +20,7 @@
  */
 
 import { useMemo } from 'react'
+import { sortScenarios, type SortableScenario } from '@/lib/scenarios/sort'
 import {
   BROWSE_SCENARIO_VALUE,
   CUSTOM_SCENARIO_VALUE,
@@ -35,6 +36,10 @@ import {
   type ProjectScenarioOption,
   type ScenarioSelection,
 } from './types'
+
+/** Store-tier sort fields; character scenarios carry no filename, so the title stands in. */
+const storeSortFields = (s: ProjectScenarioOption): SortableScenario => ({ title: s.name, filename: s.filename, path: s.path })
+const characterSortFields = (s: CharacterScenario): SortableScenario => ({ title: s.title, filename: s.title, path: s.id })
 
 export interface ScenarioSelectProps {
   id?: string
@@ -71,6 +76,16 @@ export function ScenarioSelect({
   className = 'qt-select mb-2',
   'aria-label': ariaLabel,
 }: ScenarioSelectProps) {
+  // Every optgroup lists its entries in title order (`lib/scenarios/sort.ts`).
+  // The server already sends them sorted; sorting here too keeps an entry a
+  // surface appended locally (a fresh save) in its proper place.
+  const sortedProjectScenarios = useMemo(() => sortScenarios(projectScenarios, storeSortFields), [projectScenarios])
+  const sortedGeneralScenarios = useMemo(() => sortScenarios(generalScenarios, storeSortFields), [generalScenarios])
+  const sortedCharacterScenarios = useMemo(
+    () => (characterScenarios ? sortScenarios(characterScenarios, characterSortFields) : null),
+    [characterScenarios],
+  )
+
   // Group scenarios by groupId for rendering as optgroups
   const groupScenariosByGroup = useMemo(() => {
     const groups = new Map<string, { groupName: string; scenarios: GroupScenarioOption[] }>()
@@ -79,6 +94,9 @@ export function ScenarioSelect({
         groups.set(scenario.groupId, { groupName: scenario.groupName, scenarios: [] })
       }
       groups.get(scenario.groupId)!.scenarios.push(scenario)
+    }
+    for (const group of groups.values()) {
+      group.scenarios = sortScenarios(group.scenarios, storeSortFields)
     }
     return groups
   }, [groupScenarios])
@@ -107,18 +125,18 @@ export function ScenarioSelect({
           <option value={scenarioSelectionToValue(selection)}>{selection.label}</option>
         </optgroup>
       )}
-      {projectScenarios.length > 0 && (
+      {sortedProjectScenarios.length > 0 && (
         <optgroup label="Project Scenarios">
-          {projectScenarios.map((s) => (
+          {sortedProjectScenarios.map((s) => (
             <option key={`project:${s.path}`} value={`${PROJECT_SCENARIO_PREFIX}${s.path}`}>
               {scenarioOptionLabel(s, ' (project default)')}
             </option>
           ))}
         </optgroup>
       )}
-      {generalScenarios.length > 0 && (
+      {sortedGeneralScenarios.length > 0 && (
         <optgroup label="General Scenarios">
-          {generalScenarios.map((s) => (
+          {sortedGeneralScenarios.map((s) => (
             <option key={`general:${s.path}`} value={`${GENERAL_SCENARIO_PREFIX}${s.path}`}>
               {scenarioOptionLabel(s, ' (general default)')}
             </option>
@@ -134,9 +152,9 @@ export function ScenarioSelect({
           ))}
         </optgroup>
       ))}
-      {characterScenarios && characterScenarios.length > 0 && (
+      {sortedCharacterScenarios && sortedCharacterScenarios.length > 0 && (
         <optgroup label="Character Scenarios">
-          {characterScenarios.map((s) => (
+          {sortedCharacterScenarios.map((s) => (
             <option key={s.id} value={s.id}>
               {scenarioOptionLabel(
                 { name: s.title, isDefault: characterDefaultScenarioId === s.id, archived: s.archived, description: s.description },

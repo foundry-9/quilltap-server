@@ -28,6 +28,7 @@ import {
   rngToolDefinition,
   runCustomToolDefinition,
   buildRunCustomDescription,
+  editCustomToolToolDefinition,
   stateToolDefinition,
   selfInventoryToolDefinition,
   whisperToolDefinition,
@@ -36,6 +37,9 @@ import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import {
   readConversationToolDefinition,
 } from '@/lib/tools/read-conversation-tool';
+import { logCreateEntryToolDefinition } from '@/lib/tools/log-create-entry-tool';
+import { logGrepToolDefinition } from '@/lib/tools/log-grep-tool';
+import { logReadToolDefinition } from '@/lib/tools/log-read-tool';
 import {
   upsertAnnotationToolDefinition,
 } from '@/lib/tools/upsert-annotation-tool';
@@ -69,6 +73,8 @@ import {
 import {
   wardrobeTakeOffToolDefinition,
 } from '@/lib/tools/wardrobe-take-off-tool';
+import { wardrobeRollbackToolDefinition } from '@/lib/tools/wardrobe-rollback-tool';
+import { wardrobeHistoryToolDefinition } from '@/lib/tools/wardrobe-history-tool';
 import { docReadFileToolDefinition as docReadFileTool } from '@/lib/tools/doc-read-file-tool';
 import { docWriteFileToolDefinition as docWriteFileTool } from '@/lib/tools/doc-write-file-tool';
 import { docStrReplaceToolDefinition as docStrReplaceTool } from '@/lib/tools/doc-str-replace-tool';
@@ -105,6 +111,7 @@ import { listMailToolDefinition } from '@/lib/tools/list-mail-tool';
 import { readMailToolDefinition } from '@/lib/tools/read-mail-tool';
 import { discardMailToolDefinition } from '@/lib/tools/discard-mail-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
+import { enabledInventoryToolDefinitions, pickInventoryToolFlags, type InventoryToolFlags } from '@/lib/tools/inventory-tool-flags';
 
 /**
  * Apply image provider constraints to the image generation tool
@@ -185,9 +192,11 @@ function applyImageConstraintsToTool(
 export type DocToolsMode = 'off' | 'read' | 'full';
 
 /**
- * Options for building tools for a provider
+ * Options for building tools for a provider ({@link buildToolsForProvider}). The nine `inventory_*` flags
+ * (`inventoryList` … `inventoryGive`, gated by `canManageInventory`) come from
+ * {@link InventoryToolFlags}.
  */
-export interface BuildToolsOptions {
+export interface BuildToolsOptions extends InventoryToolFlags {
   /** Whether to enable image generation tool */
   imageGeneration?: boolean;
 
@@ -230,6 +239,13 @@ export interface BuildToolsOptions {
    */
   customTools?: DiscoveredCustomTool[];
 
+  /**
+   * Whether to offer `edit_custom_tool` (save or validate a `Tools/*.tool.json`
+   * definition). Offered whenever the surface has custom tools switched on,
+   * empty roster or not — it is how a scene's first tool gets written.
+   */
+  editCustomTool?: boolean;
+
   /** Whether to enable state (persistent state management) tool (enabled by default) */
   state?: boolean;
 
@@ -247,6 +263,12 @@ export interface BuildToolsOptions {
 
   /** Whether to enable wardrobe_take_off tool (gated by canDressThemselves) */
   wardrobeTakeOff?: boolean;
+
+  /** Whether to enable wardrobe_rollback tool (gated by canDressThemselves) */
+  wardrobeRollback?: boolean;
+
+  /** Whether to enable wardrobe_history tool (gated by canDressThemselves) */
+  wardrobeHistory?: boolean;
 
   /** Whether to enable wardrobe_create tool (gated by canCreateOutfits) */
   wardrobeCreate?: boolean;
@@ -364,15 +386,19 @@ export async function buildToolsForProvider(
       helpNavigate: options.helpNavigate,
       rng: options.rng,
       customTools: options.customTools?.length ?? 0,
+      editCustomTool: options.editCustomTool,
       state: options.state,
       whisper: options.whisper,
       wardrobeList: options.wardrobeList,
       wardrobeRead: options.wardrobeRead,
       wardrobeWear: options.wardrobeWear,
       wardrobeTakeOff: options.wardrobeTakeOff,
+      wardrobeRollback: options.wardrobeRollback,
+      wardrobeHistory: options.wardrobeHistory,
       wardrobeCreate: options.wardrobeCreate,
       wardrobeUpdate: options.wardrobeUpdate,
       wardrobeArchive: options.wardrobeArchive,
+      ...pickInventoryToolFlags(options),
       docToolsMode: options.docToolsMode ?? 'off',
       pluginToolAllowlist: options.pluginToolAllowlist,
       documentsOnlySearch: options.documentsOnlySearch,
@@ -451,6 +477,10 @@ export async function buildToolsForProvider(
     } as UniversalTool);
   }
 
+  if (options.editCustomTool) {
+    universalTools.push(editCustomToolToolDefinition as UniversalTool);
+  }
+
   // Add state tool if enabled (defaults to true when not specified)
   if (includeWorkspaceTools && options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
@@ -473,6 +503,12 @@ export async function buildToolsForProvider(
     universalTools.push(readConversationToolDefinition as UniversalTool);
     universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
     universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
+
+    // The log — always offered to characters; the per-chat tool settings can
+    // switch each one off.
+    universalTools.push(logCreateEntryToolDefinition as UniversalTool);
+    universalTools.push(logGrepToolDefinition as UniversalTool);
+    universalTools.push(logReadToolDefinition as UniversalTool);
   }
 
   // Unified search — available on every surface. The Brahma variant drops the
@@ -522,6 +558,12 @@ export async function buildToolsForProvider(
   if (options.wardrobeTakeOff) {
     universalTools.push(wardrobeTakeOffToolDefinition as UniversalTool);
   }
+  if (options.wardrobeRollback) {
+    universalTools.push(wardrobeRollbackToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeHistory) {
+    universalTools.push(wardrobeHistoryToolDefinition as UniversalTool);
+  }
   if (options.wardrobeCreate) {
     universalTools.push(wardrobeCreateToolDefinition as UniversalTool);
   }
@@ -530,6 +572,11 @@ export async function buildToolsForProvider(
   }
   if (options.wardrobeArchive) {
     universalTools.push(wardrobeArchiveToolDefinition as UniversalTool);
+  }
+
+  // Inventory tools (gated by canManageInventory)
+  for (const definition of enabledInventoryToolDefinitions(options)) {
+    universalTools.push(definition as UniversalTool);
   }
 
   // Add submit_final_response tool if agent mode is enabled

@@ -36,6 +36,7 @@ import {
 } from '@/lib/services/host-notifications/writer';
 import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections';
+import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults';
 import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 
@@ -260,6 +261,10 @@ export async function applyChatMerge(
           error: getErrorMessage(error),
         });
       }
+
+      // A merge brings what the character carried in the merged chat along
+      // (or their defaults, when they carried nothing there). Never throws.
+      await applyInventoryDefaults(repos, targetChatId, [characterId], { source: 'merge', userId, sourceChatId });
 
       logger.info('[ChatMerge] Merged character into chat', {
         targetChatId,

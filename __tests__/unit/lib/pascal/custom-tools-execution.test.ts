@@ -195,6 +195,7 @@ describe('matchesWhen — the metadata subject', () => {
     clearanceLevel: 3,
     faction: 'Ordo Aurum',
     knownLanguages: ['Trade Cant'],
+    sealedOrders: [{ seal: 'red' }],
     dossier: { rank: 'adept' },
     lastSeen: null,
   }
@@ -257,7 +258,8 @@ describe('matchesWhen — the metadata subject', () => {
     it.each([
       ['a key this character has never heard of', { ansibleAccess: { eq: true } }],
       ['an absent key tested with neq — absence is not inequality', { ansibleAccess: { neq: true } }],
-      ['a key holding an array', { knownLanguages: { eq: 'Trade Cant' } }],
+      ['a list holding an object', { sealedOrders: { eq: 'red' } }],
+      ['a list ordered without a fold', { knownLanguages: { gt: 1 } }],
       ['a key holding an object', { dossier: { eq: 'adept' } }],
       ['a key holding null', { lastSeen: { neq: 'never' } }],
       ['a string ordered against a number', { faction: { gt: 1 } }],
@@ -265,10 +267,18 @@ describe('matchesWhen — the metadata subject', () => {
       ['an ordering test whose operand is a string', { clearanceLevel: { gte: 'three' } }],
       ['an absent key tested with ncontains — absence is not a miss', { ansibleAccess: { ncontains: 'x' } }],
       ['a number searched for a substring', { clearanceLevel: { contains: '3' } }],
-      ['an array searched for a substring', { knownLanguages: { contains: 'Trade' } }],
+      ['a list holding an object, searched for a substring', { sealedOrders: { contains: 'red' } }],
     ])('%s', (_label, metadata) => {
       expect(() => against({ metadata } as When)).not.toThrow()
       expect(against({ metadata } as When)).toBe(false)
+    })
+
+    it('compares a list of primitives entry by entry', () => {
+      expect(against({ metadata: { knownLanguages: { eq: 'Trade Cant' } } } as When)).toBe(true)
+      expect(against({ metadata: { knownLanguages: { contains: 'Cant' } } } as When)).toBe(true)
+      expect(against({ metadata: { knownLanguages: { neq: 'Latin' } } } as When)).toBe(true)
+      expect(against({ metadata: { knownLanguages: { ncontains: 'Trade' } } } as When)).toBe(false)
+      expect(against({ metadata: { knownLanguages: { eq: 'Trade' } } } as When)).toBe(false)
     })
 
     it('treats a missing metadata sheet as a sheet with nothing on it', async () => {
@@ -321,6 +331,32 @@ describe('renderTemplate', () => {
 
   it('tolerates whitespace inside the braces', async () => {
     expect(renderTemplate('{{ value }}', vars)).toBe('14')
+  })
+
+  describe('{{character}}', () => {
+    it("substitutes the rolling character's name", () => {
+      expect(renderTemplate('{{character}} suits up.', { ...vars, character: 'Charlie' })).toBe('Charlie suits up.')
+    })
+
+    it('stays as written when nobody in particular rolled', () => {
+      expect(renderTemplate('{{character}} suits up.', vars)).toBe('{{character}} suits up.')
+    })
+
+    it('reaches the message, the chip label and a wardrobe reference through executeCustomTool', async () => {
+      const tool = define({
+        name: 'suit_up',
+        description: 'Suit up.',
+        chipLabel: 'Armour for {{character}}',
+        effects: [{ wardrobe: { action: 'wear', items: ["{{character}}'s armour"] } }],
+        outcomes: [{ when: true, message: '{{character}} is suited.', state: 'success' }],
+      })
+      const result = await executeCustomTool(tool, null, { character: 'Charlie' })
+      expect(result.message).toBe('Charlie is suited.')
+      expect(result.chipLabel).toBe('Armour for Charlie')
+      expect(result.effects).toEqual([
+        { index: 0, wardrobe: { action: 'wear', items: ["Charlie's armour"] } },
+      ])
+    })
   })
 
   describe('the {{metadata.key}} family', () => {

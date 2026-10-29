@@ -30,6 +30,8 @@ By default, Quilltap automatically detects RNG patterns in both your messages an
 
 For your messages, results appear as tool messages before your message. For character responses, results appear as tool messages after the response. Either way, everyone in the chat sees the outcome.
 
+Pascal's own [custom tools](custom-tools.md#words-that-pull-the-lever--triggers) can listen for phrases in just the same way — say the word and the tool is dealt — once you turn on **Auto-Run Custom Tools on Trigger Phrases** in the same Automation settings.
+
 **Note:** This feature can be disabled in [Chat Settings](/settings?tab=chat&section=automation) under "Automation" if you prefer to roll only when you press the button yourself, or to discuss dice without executing rolls.
 
 ### From the Composer's Dice Button
@@ -43,6 +45,10 @@ For your messages, results appear as tool messages before your message. For char
    - **Flip Coin** - Get heads or tails
    - **Spin the Bottle** - Randomly select a chat participant
    - **Custom Roll** - Choose any number of sides (2-1000) and rolls (1-100)
+
+### From the Composer's Slash Commands
+
+Type `/d6`, `/d20`, `/coin` or `/bottle` at the start of a word in the composer and press Enter: the roll is made and lands as the same pending result the dice button produces, ready to ride along with your next message. `/roll` opens [Run Tool](run-tool.md) on the random-number tool, where you may set the sides and the number of dice. See [Slash Commands](chat-settings-composer.md).
 
 ### Via AI Tool Use
 

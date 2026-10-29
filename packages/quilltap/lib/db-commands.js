@@ -31,6 +31,7 @@ const DB_DOMAINS = {
   },
   logs: {
     'LLM logs': ['llm_logs'],
+    'Log entries': ['log_entries'],
   },
   mount: {
     'Document mount index': [

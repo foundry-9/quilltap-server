@@ -6,7 +6,6 @@
 
 // Types
 export type {
-  MessageServiceContext,
   SendMessageOptions,
   AttachedFile,
   ToolMessage,
@@ -24,6 +23,7 @@ export type {
 // Orchestrator (main entry point)
 export {
   handleSendMessage,
+  handleStorytellerRun,
   sendMessageSchema,
   continueMessageSchema,
 } from './orchestrator.service'
@@ -77,7 +77,6 @@ export {
 export {
   buildTools,
   streamMessage,
-  encodeDebugInfo,
   encodeFallbackInfo,
   encodeContentChunk,
   encodeReasoningChunk,
@@ -89,7 +88,6 @@ export {
   safeClose,
   createStreamingResult,
   type StreamOptions,
-  type StreamDebugInfo,
   type StreamChunkCallback,
 } from './streaming.service'
 

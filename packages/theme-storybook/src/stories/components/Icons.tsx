@@ -40,7 +40,7 @@ const ICON_GROUPS: IconGroup[] = [
   },
   {
     category: 'Media',
-    names: ['image', 'camera', 'play', 'pause', 'stop', 'zoom-in', 'zoom-out'],
+    names: ['image', 'camera', 'play', 'pause', 'stop', 'stop-sign', 'hand-raised', 'zoom-in', 'zoom-out'],
   },
   {
     category: 'Content & sidebar navigation',
@@ -51,7 +51,7 @@ const ICON_GROUPS: IconGroup[] = [
   },
   {
     category: 'People',
-    names: ['profile', 'user', 'user-plus', 'users', 'megaphone', 'dice'],
+    names: ['profile', 'user', 'user-plus', 'users', 'megaphone', 'dice', 'inventory'],
   },
   {
     category: 'System & tooling',

@@ -70,6 +70,8 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 | `play` | NEW | ▷ | run queue, continue, autonomous run |
 | `pause` | NEW | ❚❚ | pause queue/task |
 | `stop` | NEW | ◻ | stop queue |
+| `stop-sign` | NEW | octagon | the composer's hard Stop (cut the reply off, keep what streamed) |
+| `hand-raised` | NEW | raised hand | the composer's soft interrupt (ask the next speaker to yield) |
 | `zoom-in` | NEW | magnifier + | gallery zoom in |
 | `zoom-out` | NEW | magnifier − | gallery zoom out |
 
@@ -87,6 +89,7 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 | `megaphone` | NEW | megaphone | insert announcement (composer) |
 | `mail` | NEW | envelope | compose mail (composer; the Post Office) |
 | `dice` | NEW | die w/ pips | RNG dropdown (Pascal) |
+| `inventory` | NEW | open box with flaps | the Inventory (sidebar, participant card, Prospero Inventory card) |
 | `sparkles` | NEW | sparkles | inline "generate" / AI-flavored actions |
 | `wand` | NEW | magic wand | the AI Wizard (distinct from inline `sparkles`) |
 | `thinking` | NEW | quill on the diagonal | the rocking "awaiting / streaming / tool running" indicator — see §6 (deliberately **not** `brand`) |

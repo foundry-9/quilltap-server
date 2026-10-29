@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import DeletedImagePlaceholder from '../DeletedImagePlaceholder'
 import { ImageActions } from './ImageActions'
 import { ImageMetadata } from './ImageMetadata'
@@ -20,6 +21,8 @@ export default function ImageDetailModal({
   const [characters, setCharacters] = useState<Character[]>([])
   const [loadingEntities, setLoadingEntities] = useState(true)
   const [imageMissing, setImageMissing] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
 
   const {
     characterGalleryLinks,
@@ -90,6 +93,12 @@ export default function ImageDetailModal({
   // gallery with no reachable way to save a picture (bug 99).
   return createPortal(
     <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Image viewer: ${image.filename}`}
+      tabIndex={-1}
+      onKeyDown={handleFocusKeyDown}
       className="fixed inset-0 z-[60] flex items-center justify-center qt-bg-overlay backdrop-blur-sm p-4"
       onClick={onClose}
     >

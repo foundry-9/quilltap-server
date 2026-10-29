@@ -15,14 +15,11 @@ function resolveDataDir(overrideDir) {
       : overrideDir;
     return path.join(resolved, 'data');
   }
-  const os = require('os');
   if (process.env.QUILLTAP_DATA_DIR) {
     return path.join(process.env.QUILLTAP_DATA_DIR, 'data');
   }
-  const home = os.homedir();
-  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Quilltap', 'data');
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Quilltap', 'data');
-  return path.join(home, '.quilltap', 'data');
+  const { getDefaultBaseDir } = require('./platform-paths');
+  return path.join(getDefaultBaseDir(), 'data');
 }
 
 // Resolve the data dir + database passphrase a subcommand should use, given

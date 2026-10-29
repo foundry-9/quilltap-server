@@ -212,6 +212,7 @@ export default function FolderPicker({
     <div className={`space-y-2 ${className}`}>
       <div className="flex gap-2">
         <select
+          aria-label="Folder"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled || loading}
@@ -247,6 +248,7 @@ export default function FolderPicker({
         <div className="flex gap-2">
           <input
             type="text"
+            aria-label="New folder path"
             value={newFolderInput}
             onChange={(e) => setNewFolderInput(e.target.value)}
             placeholder="/path/to/folder/"

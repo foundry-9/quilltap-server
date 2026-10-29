@@ -9,11 +9,12 @@
  */
 
 import { logger } from '@/lib/logger'
+import type { InventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 
 /**
  * Options for which tools to document in the text-block instructions
  */
-export interface TextBlockPromptOptions {
+export interface TextBlockPromptOptions extends InventoryToolFlags {
   /** Enable whisper (private messaging) tool */
   whisper?: boolean
   /** Enable search tool */
@@ -44,6 +45,10 @@ export interface TextBlockPromptOptions {
   wardrobeWear?: boolean
   /** Enable wardrobe_take_off tool */
   wardrobeTakeOff?: boolean
+  /** Enable wardrobe_rollback tool */
+  wardrobeRollback?: boolean
+  /** Enable wardrobe_history tool */
+  wardrobeHistory?: boolean
   /** Enable wardrobe_create tool */
   wardrobeCreate?: boolean
   /** Enable wardrobe_update tool */
@@ -184,13 +189,29 @@ By name: [[TAKE_OFF mode="remove" title="Charcoal Sweater" /]]
 To clear a slot entirely: [[TAKE_OFF mode="clear_slot" slot="top" /]]`)
   }
 
+  if (options.wardrobeHistory) {
+    toolDocs.push(`
+### Outfit History
+List the outfits you have worn in this chat, numbered from 0 (what you arrived in). The one you wear now is marked.
+[[OUTFIT_HISTORY /]]
+Only the most recent few: [[OUTFIT_HISTORY limit="5" /]]`)
+  }
+
+  if (options.wardrobeRollback) {
+    toolDocs.push(`
+### Return to an Earlier Outfit
+Step back one outfit: [[ROLLBACK_OUTFIT /]]
+Return to a numbered outfit from the history: [[ROLLBACK_OUTFIT index="2" /]]`)
+  }
+
   if (options.wardrobeCreate) {
     toolDocs.push(`
 ### Create Wardrobe Item
-Design and add a new clothing item to your wardrobe, or gift one to another character. You can also build composite outfits that bundle existing items, and set a Portrait Cue (image_prompt) to steer image generation.
-Single garment: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
+Design and add a new clothing item to your wardrobe, or gift one to another character. You can also build composite outfits that bundle existing items.
+For every single garment ALWAYS give a cue: 200 characters or fewer of literal visual detail (colour, material, cut). Pictures are drawn from the cue, never from the description text between the tags.
+Single garment: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual" cue="long crimson wool scarf, golden tassels"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
 Composite outfit (bundles existing items by id or title): [[CREATE_WARDROBE_ITEM title="Rain Outfit" component_titles="Yellow Slicker,Dark Jeans,Wellington Boots"]]Practical attire for a downpour[[/CREATE_WARDROBE_ITEM]]
-Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
+Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" cue="long crimson wool scarf, golden tassels" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
   }
 
   if (options.wardrobeUpdate) {
@@ -207,6 +228,71 @@ By name: [[UPDATE_WARDROBE_ITEM name="Rain Outfit" context="formal" /]]`)
 Retire an item you own — hidden from listings and no longer wearable, but a human can restore it. Only your own items can be archived.
 By id: [[ARCHIVE_WARDROBE_ITEM id="item-uuid" /]]
 By name: [[ARCHIVE_WARDROBE_ITEM title="Red Scarf" /]]`)
+  }
+
+  if (options.inventoryList) {
+    toolDocs.push(`
+### List Inventory
+See the objects you carry and can reach (not clothing). Each shows whether it is equipped, carried in your vault, or reachable in a shared store; archetypes can be picked up.
+[[LIST_INVENTORY /]]
+Only what you have equipped: [[LIST_INVENTORY equipped="true" /]]`)
+  }
+
+  if (options.inventoryRead) {
+    toolDocs.push(`
+### Read an Object
+[[READ_INVENTORY ref="Excalibur" /]]`)
+  }
+
+  if (options.inventoryEquip) {
+    toolDocs.push(`
+### Equip an Object
+Take up an object (or kit) by id, title or name; several separated by commas.
+[[EQUIP_ITEM ref="Excalibur" /]]
+[[EQUIP_ITEM refs="lantern,signet ring" /]]`)
+  }
+
+  if (options.inventoryUnequip) {
+    toolDocs.push(`
+### Unequip an Object
+Set down an object you carry.
+[[UNEQUIP_ITEM ref="lantern" /]]`)
+  }
+
+  if (options.inventoryPickUp) {
+    toolDocs.push(`
+### Pick Up an Object
+Make an instance of an archetype in your own vault, equipped unless equip="false".
+[[PICK_UP ref="magic bow" /]]
+With a title of its own: [[PICK_UP ref="magic bow" title="Whisperwind" /]]`)
+  }
+
+  if (options.inventoryCreate) {
+    toolDocs.push(`
+### Create an Object
+Give anything that could appear in a picture a looks: 200 characters or fewer of literal visual detail. Pictures are drawn from it, never from the description text between the tags.
+[[CREATE_INVENTORY_ITEM name="compass" title="The Navigator" looks="dented brass pocket compass on a short chain" equip="true"]]A brass compass that points toward home[[/CREATE_INVENTORY_ITEM]]`)
+  }
+
+  if (options.inventoryUpdate) {
+    toolDocs.push(`
+### Update an Object
+Change one of your own objects. Only your own can be changed.
+[[UPDATE_INVENTORY_ITEM ref="compass" description="A dented brass compass" /]]`)
+  }
+
+  if (options.inventoryArchive) {
+    toolDocs.push(`
+### Archive an Object
+Put away one of your own objects (archived="false" restores it).
+[[ARCHIVE_INVENTORY_ITEM ref="compass" archived="true" /]]`)
+  }
+
+  if (options.inventoryGive) {
+    toolDocs.push(`
+### Give an Object
+Hand one of your own objects to another character in this chat.
+[[GIVE_ITEM ref="lantern" to="Marcus" /]]`)
   }
 
   if (toolDocs.length === 0) {

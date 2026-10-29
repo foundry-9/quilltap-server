@@ -21,6 +21,7 @@ import { validateWardrobeArchiveInput } from '../wardrobe-archive-tool';
 import { setItemArchived } from '@/lib/wardrobe/item-mutations';
 import { resolveWardrobeLocation } from '@/lib/wardrobe/location';
 import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { turnContainersOf } from '@/lib/wardrobe/turn-containers';
 import { findInPool } from '@/lib/wardrobe/wear-ops';
 import {
   findEquippedSlots,
@@ -105,7 +106,8 @@ export async function executeWardrobeArchiveTool(
           userId: context.userId,
           chatId: context.chatId,
           characterId: context.characterId,
-          pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+          provenance: context.provenance,
+          ...turnContainersOf(context),
         },
         'wardrobe-archive-handler',
       );

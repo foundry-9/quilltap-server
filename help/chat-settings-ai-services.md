@@ -158,6 +158,8 @@ Context compression applies only to **conversation history** — the message log
 
 In multi-character chats, each character maintains their own compression cache. This is necessary because different characters may have different views of the conversation — a character who joined late only sees messages after their arrival, whispers are filtered per-recipient, and absent characters don't see messages that occurred while they were away.
 
+Once a summary is in force, it *replaces* the earlier messages rather than joining them. Each character receives the summary followed by only the most recent messages — the window you have set — and not the older turns the summary already speaks for. (Before 4.11, a group chat was served the summary *and* the full transcript it summarised, which is rather like handing a guest both the précis and the novel and charging them for the paper.) Should one of those recent replies have been nothing but a tool being worked, it rides along without taking the place of a real message in the window.
+
 **Two clocks, and why:**
 
 Compression is ordinarily done in the quiet after a turn has already been delivered, so that a tidy history is waiting when you next press send. Nobody is standing about while that happens, and it is allowed a generous interval to finish in — long conversations make for long prompts, and a compression that runs slowly is not a compression that has gone wrong.

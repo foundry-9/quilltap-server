@@ -8,12 +8,14 @@ import { ScenarioRefSchema } from '@/lib/schemas/chat.types';
 import { z } from 'zod';
 import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
 import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
+import { ChatTurnModeSchema } from '@/lib/schemas/storyteller.types';
 
 export const updateChatSchema = z.object({
   title: z.string().optional(),
   contextSummary: z.string().optional(),
   roleplayTemplateId: z.string().nullish(),
   isPaused: z.boolean().optional(),
+  storytellerInviteFilter: z.boolean().optional(), // Storyteller: weight bid invitations by talkativeness
   isManuallyRenamed: z.boolean().optional(),
   documentEditingMode: z.boolean().optional(),
   projectId: z.uuid().nullish(),
@@ -136,6 +138,12 @@ export const chatUpdateRequestSchema = z.object({
    * ('monitored', 'flagged', 'vouched', 'uncensored') are rejected with 400.
    */
   conciergeState: ConciergeModeSchema.optional(),
+  /**
+   * Turn mode: 'rotation' or 'storyteller'. Patch-only on the chat row, so it
+   * is written through `ChatsRepository.setTurnMode`, never the whole-row
+   * update; leaving storyteller mode closes any open round.
+   */
+  turnMode: ChatTurnModeSchema.optional(),
 });
 
 export const addTagSchema = z.object({
@@ -166,6 +174,11 @@ export const turnActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('query') }),
   z.object({ action: z.literal('skipUserTurn'), participantId: z.uuid() }),
 ]);
+
+/** Soft interrupt: raise (default) or lower the operator's hand. */
+export const raiseHandSchema = z.object({
+  raised: z.boolean().prefault(true),
+});
 
 export const persistTurnSchema = z.object({
   lastTurnParticipantId: z.uuid().nullable(),

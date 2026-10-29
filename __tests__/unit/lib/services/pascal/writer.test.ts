@@ -6,7 +6,19 @@
  * roll, and any trace of who reached for the tool or what they set.
  */
 
-import { buildPascalResultContent } from '@/lib/services/pascal/writer'
+jest.mock('@/lib/logger', () => {
+  const makeLogger = (): any => ({
+    debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(),
+    child: jest.fn(() => makeLogger()),
+  })
+  return { logger: makeLogger() }
+})
+
+jest.mock('@/lib/repositories/factory')
+
+import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer'
+
+const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock
 
 const BASE = {
   toolTitle: 'Force the Lock',
@@ -84,5 +96,39 @@ describe('buildPascalResultContent', () => {
     it('is still populated, per the opaqueContent contract', () => {
       expect(buildPascalResultContent(BASE).opaqueContent).toBeTruthy()
     })
+  })
+})
+
+describe('postPascalResult', () => {
+  const addMessage = jest.fn()
+  const META = { tool: 'suit_up', toolTitle: 'Suit Up', state: 'success' } as never
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    getRepositoriesMock.mockReturnValue({
+      chats: { findById: jest.fn().mockResolvedValue({ id: 'chat-1' }), addMessage },
+    })
+  })
+
+  it('posts as Pascal, with no announcer, by default', async () => {
+    const posted = await postPascalResult({ chatId: 'chat-1', content: 'x', opaqueContent: 'x', pascalMeta: META })
+    expect(posted).toMatchObject({ systemSender: 'pascal', systemKind: 'custom-tool-result' })
+    expect(posted?.customAnnouncer).toBeUndefined()
+  })
+
+  it("wears the announcing character's name and face, and stays Pascal's record", async () => {
+    const posted = await postPascalResult({
+      chatId: 'chat-1',
+      content: 'x',
+      opaqueContent: 'x',
+      pascalMeta: META,
+      announcerCharacterId: 'char-1',
+    })
+    expect(posted).toMatchObject({
+      systemSender: 'pascal',
+      pascalMeta: META,
+      customAnnouncer: { kind: 'character', characterId: 'char-1' },
+    })
+    expect(addMessage.mock.calls[0][1].customAnnouncer).toEqual({ kind: 'character', characterId: 'char-1' })
   })
 })

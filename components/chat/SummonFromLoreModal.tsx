@@ -15,7 +15,9 @@
  */
 
 import dynamic from 'next/dynamic'
-import { useCallback } from 'react'
+import { useCallback, useId, useRef } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast } from '@/lib/toast'
@@ -39,6 +41,10 @@ export default function SummonFromLoreModal({
   onSummoned,
 }: SummonFromLoreModalProps) {
   const queryClient = useQueryClient()
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+  useEscapeKey(onClose, isOpen)
 
   const handleImportSuccess = useCallback(
     (characterIds?: string[]) => {
@@ -67,9 +73,17 @@ export default function SummonFromLoreModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="qt-dialog-title text-foreground">Summon From Lore</h3>
+          <h3 id={titleId} className="qt-dialog-title text-foreground">Summon From Lore</h3>
           <button
             onClick={onClose}
             className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"

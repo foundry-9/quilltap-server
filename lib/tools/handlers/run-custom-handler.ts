@@ -15,23 +15,14 @@
  * here reads back what it just wrote.
  */
 
+import { turnContainersOf, type WardrobeTurnContainers } from '@/lib/wardrobe/turn-containers';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRepositories } from '@/lib/repositories/factory';
-import {
-  resolveCustomToolRoster,
-  executeCustomTool,
-  CustomToolRunError,
-  type CustomToolRunResult,
-  type DiscoveredCustomTool,
-} from '@/lib/pascal/custom-tools';
-import { displayTitle } from '@/lib/pascal/custom-tool.types';
-import { applyCustomToolEffects } from '@/lib/pascal/side-effects';
-import { flattenProgressions } from '@/lib/progressions/engine';
-import { resolveStateCascade, type StateCascadeResult } from '@/lib/state/state-cascade';
-import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
-import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
+import { resolveCustomToolRoster, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
+import { runCustomTool, type RunCustomToolOutcome } from '@/lib/pascal/run-service';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
+import { vetoResultFor } from '@/lib/pascal/intervention/veto-result';
 import type { MessageEvent } from '@/lib/schemas/chat.types';
 import { validateRunCustomInput, type RunCustomToolInput, type RunCustomToolOutput } from '../run-custom-tool';
 
@@ -49,8 +40,6 @@ export interface RunCustomToolContext {
   characterId?: string | null;
   /** Fast path for the character's vault; the group tier still needs characterId. */
   characterMountPointId?: string | null;
-  /** Every character in the chat — their vaults form the 'participant' tier. */
-  characterIds?: string[];
   /** Active project, for the 'project' tier. */
   projectId?: string | null;
   /** The caller's participant id — the whisper target for a private roll. */
@@ -60,6 +49,14 @@ export interface RunCustomToolContext {
    * over SSE the instant it lands rather than waiting for the post-turn refetch.
    */
   onPosted?: (message: MessageEvent) => void;
+  /**
+   * The turn's wardrobe containers, so a tool's `wardrobe` effect joins the
+   * turn's single Aurora announcement and history entry alongside any
+   * `wardrobe_wear` call. The effects applier supplies the `'pascal'` provenance.
+   */
+  pendingWardrobeAnnouncements?: Set<string>;
+  pendingWardrobeHistory?: WardrobeTurnContainers['pendingWardrobeHistory'];
+  pendingInventoryAnnouncements?: WardrobeTurnContainers['pendingInventoryAnnouncements'];
 }
 
 /** Shape the failure the same way whether it was a bad input or a bad roll. */
@@ -96,6 +93,33 @@ async function reportFailure(
   });
 
   return failure(reason, toolName);
+}
+
+/**
+ * Whether the caller may be told the chat is a game: a user-controlled seat, or
+ * a character granted `systemTransparency` (resolved as Carina resolves an
+ * asker's). Any failed read counts as plain, so a failure can never tell a
+ * character it is in a game.
+ */
+async function callerKnowsItIsAGame(context: RunCustomToolContext): Promise<boolean> {
+  try {
+    const repos = getRepositories();
+    if (context.callerParticipantId) {
+      const chat = await repos.chats.findById(context.chatId);
+      const seat = chat?.participants.find((p) => p.id === context.callerParticipantId);
+      if (seat?.controlledBy === 'user') return true;
+    }
+    if (!context.characterId) return false;
+    const character = await repos.characters.findByIdRaw(context.characterId);
+    return character?.systemTransparency === true;
+  } catch (error) {
+    logger.debug('run_custom veto: caller transparency unreadable, treating as plain', {
+      context: CONTEXT,
+      chatId: context.chatId,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
 }
 
 /**
@@ -142,18 +166,12 @@ export async function executeRunCustomTool(
     }
   }
 
-  // The derived progress sheet, from the SAME snapshot the gates and the
-  // table read, against that one `nowMs`. Deriving costs no reads: the
-  // progressions live inside the metadata already in hand.
-  const progress = flattenProgressions(metadata, nowMs);
-
   // Resolved fresh: a definition added or edited mid-chat is live on this call.
   const roster = await resolveCustomToolRoster({
     userId: context.userId,
     chatId: context.chatId,
     characterId: context.characterId ?? null,
     characterMountPointId: context.characterMountPointId ?? null,
-    characterIds: context.characterIds,
     projectId: context.projectId ?? null,
     metadata,
   });
@@ -177,113 +195,54 @@ export async function executeRunCustomTool(
     );
   }
 
-  // The state cascade (chat → project → group → general) the run's `$state`
-  // references resolve against — retained WHOLE, not just `.merged`, because
-  // the effect applier needs the per-tier objects to decide where a write
-  // lives. Read once here; never re-read (the job-child contract). Scoped to
-  // the rolling character's own groups (Knowledge's rule). Fail-soft: every
-  // `$state` ref carries a required fallback, so a run is always dealable even
-  // if state can't be read — state effects then skip.
-  let cascade: StateCascadeResult | null = null;
+  // The deal itself — cascade, roll, effects, Pascal's post — is the shared
+  // run service's (lib/pascal/run-service.ts); this entrance only resolves the
+  // roster from the caller's perspective and reports back to the model.
+  let outcome: RunCustomToolOutcome;
   try {
-    const chat = await getRepositories().chats.findById(context.chatId);
-    if (chat) {
-      cascade = await resolveStateCascade({
-        chat,
-        groupScope: context.characterId
-          ? { kind: 'character', characterId: context.characterId }
-          : { kind: 'none' },
-      });
-    }
+    outcome = await runCustomTool({
+      userId: context.userId,
+      chatId: context.chatId,
+      entry,
+      parameters: parameters ?? null,
+      private: isPrivate,
+      characterId: context.characterId ?? null,
+      metadata,
+      // A private roll is whispered to the rolling character alone: every
+      // other participant's context excludes it. The human operator sees it
+      // regardless — Pascal is one of the operator-facing senders the Salon's
+      // whisper filter exempts (see app/salon/[id]/whisper-visibility.ts).
+      whisperTargetIds: context.callerParticipantId ? [context.callerParticipantId] : null,
+      invokedBy: 'llm',
+      mayHold: true,
+      callerParticipantId: context.callerParticipantId ?? null,
+      nowMs,
+      ...turnContainersOf(context),
+    });
   } catch (error) {
-    logger.debug('run_custom: state cascade unavailable, defaulting to {}', {
+    const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
+    return reportFailure(context, toolName, getErrorMessage(error), whisper);
+  }
+
+  if (outcome.ok === 'vetoed') {
+    // The operator set the table aside. No Prospero bubble — nothing failed —
+    // and nothing in the result says a run was held or by whom (spec I13).
+    const transparent = await callerKnowsItIsAGame(context);
+    logger.info('run_custom set aside by the operator', {
       context: CONTEXT,
       chatId: context.chatId,
-      error: getErrorMessage(error),
+      tool: toolName,
+      transparent,
     });
-    cascade = null;
-  }
-  const toolState = cascade?.merged ?? {};
-
-  let result: CustomToolRunResult;
-  try {
-    result = await executeCustomTool(entry.definition, parameters ?? null, {
-      private: isPrivate,
-      metadata,
-      progress,
-      now: nowMs,
-      state: toolState,
-      // Only built when the definition wants one; the invoker resolves the
-      // cheap-LLM selection fresh on each consult.
-      ...(entry.definition.llm
-        ? { llmInvoke: buildCustomToolLlmInvoker({ userId: context.userId, chatId: context.chatId }) }
-        : {}),
-    });
-  } catch (error) {
-    const reason = error instanceof CustomToolRunError ? error.message : getErrorMessage(error);
-    const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
-    return reportFailure(context, toolName, reason, whisper);
+    return failure(vetoResultFor(transparent), toolName);
   }
 
-  // Effects apply BEFORE the Pascal post: if the post then fails, the effects
-  // stand — they happened, and the existing "outcome could not be posted"
-  // failure path still tells the model. (A throw inside executeCustomTool
-  // means no effects were ever applied.) The applier never throws.
-  const appliedEffects = result.effects?.length
-    ? await applyCustomToolEffects({
-        chatId: context.chatId,
-        toolName: result.tool,
-        effects: result.effects,
-        cascade,
-        characterId: context.characterId ?? null,
-        metadataSnapshot: metadata,
-        nowMs,
-      })
-    : [];
+  if (!outcome.ok) {
+    return reportFailure(context, toolName, outcome.reason, outcome.whisper);
+  }
 
+  const { result, posted } = outcome;
   const whispered = result.visibility === 'whisper';
-
-  // A private roll is whispered to the rolling character alone: every other
-  // participant's context excludes it. The human operator sees it regardless —
-  // Pascal is one of the operator-facing senders the Salon's whisper filter
-  // exempts (see app/salon/[id]/whisper-visibility.ts).
-  const targetParticipantIds =
-    whispered && context.callerParticipantId ? [context.callerParticipantId] : null;
-
-  const toolTitle = displayTitle(entry.definition);
-
-  const { content, opaqueContent } = buildPascalResultContent({
-    toolTitle,
-    ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
-    message: result.message,
-  });
-
-  const posted = await postPascalResult({
-    chatId: context.chatId,
-    content,
-    opaqueContent,
-    targetParticipantIds,
-    pascalMeta: {
-      tool: result.tool,
-      toolTitle,
-      ...(result.chipLabel ? { chipLabel: result.chipLabel } : {}),
-      definitionTier: entry.tier,
-      definitionMountId: entry.mountPointId,
-      params: result.params,
-      rollForm: result.rollForm,
-      ...(result.notation ? { notation: result.notation } : {}),
-      raw: result.raw,
-      ...(result.diceRolls ? { diceRolls: result.diceRolls } : {}),
-      value: result.value,
-      state: result.state,
-      outcomeIndex: result.outcomeIndex,
-      ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
-      ...(result.llm ? { llm: result.llm } : {}),
-      ...(appliedEffects.length ? { effects: appliedEffects } : {}),
-      invokedBy: 'llm',
-      ...(context.callerParticipantId ? { callerParticipantId: context.callerParticipantId } : {}),
-    },
-  });
 
   if (posted) {
     context.onPosted?.(posted);

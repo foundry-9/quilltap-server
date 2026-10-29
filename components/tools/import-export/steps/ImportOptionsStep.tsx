@@ -1,5 +1,7 @@
 'use client'
 
+import { useId } from 'react'
+
 type ConflictStrategy = 'skip' | 'overwrite' | 'duplicate'
 
 interface ImportOptionsStepProps {
@@ -20,13 +22,15 @@ export function ImportOptionsStep({
   onImportMemoriesChange,
   hasMemories,
 }: ImportOptionsStepProps) {
+  const id = useId()
   return (
     <div className="space-y-4">
       <div>
-        <label className="block qt-label text-foreground mb-2">
+        <label htmlFor={`${id}-conflict-strategy`} className="block qt-label text-foreground mb-2">
           Conflict Strategy
         </label>
         <select
+          id={`${id}-conflict-strategy`}
           value={conflictStrategy}
           onChange={(e) => onConflictStrategyChange(e.target.value as ConflictStrategy)}
           className="w-full px-3 py-2 border qt-border-default rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"

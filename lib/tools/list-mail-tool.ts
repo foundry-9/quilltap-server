@@ -7,6 +7,7 @@
  * source of truth for the derived OpenAI-format `parameters`.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -36,3 +37,6 @@ export function validateListMailInput(input: unknown): ListMailToolInput | null 
   const parsed = listMailToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const listMailToolEffect: ToolEffectSpec = 'read';

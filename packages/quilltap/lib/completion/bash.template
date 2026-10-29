@@ -321,12 +321,12 @@ _quilltap_complete() {
       fi
       ;;
     memories)
-      local mem_verbs="ls find grep show tree status validate maintain"
+      local mem_verbs="ls find grep show tree status validate keystone maintain"
       local mem_flags="--character --about --source --tier --chat --project --since --until \
         --min-importance --min-reinforced --has-embedding --no-embedding \
         --sort -r --reverse --limit --full-titles --in --no-related --list \
         --ignore-case -i --paths-only -l --max --context --depth --max-nodes \
-        --semantic --top --threshold --dry-run --phases --cap --repair --write \
+        --semantic --top --threshold --dry-run --phases --cap --repair --write --keystone --off \
         --instance --data-dir --passphrase -p --port --json --help"
       if [[ -z "$subverb" ]]; then
         if [[ "$cur" == -* ]]; then

@@ -43,6 +43,7 @@ import {
   updateFrontmatterInContent,
 } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
+import { sortScenarios } from '@/lib/scenarios/sort';
 
 /** The folder every scope keeps its scenarios in. */
 export const SCENARIOS_FOLDER = 'Scenarios';
@@ -177,8 +178,9 @@ export function parseScenarioDoc(doc: DocMountDocument): ParsedScenario | null {
 }
 
 /**
- * Turn one folder's already-fetched documents into a sorted scenario list with
- * default-conflict resolution applied — what every scenario
+ * Turn one folder's already-fetched documents into a scenario list sorted by
+ * title (then filename, leading "The" ignored) with default-conflict
+ * resolution applied — what every scenario
  * location's `list` runs, shared with the instance-wide lister (which fetches
  * every owner's documents in a single query and buckets them by mount).
  *
@@ -234,7 +236,12 @@ export function buildScenarioList(
     });
   }
 
-  return { scenarios: parsed, warnings };
+  // Default resolution above walks path order; the list itself is shown in
+  // title order (`lib/scenarios/sort.ts`).
+  const scenarios = sortScenarios(parsed, (s) => ({ title: s.name, filename: s.filename, path: s.path }));
+  logger.debug('Scenarios: built list', { ...logContext, count: scenarios.length });
+
+  return { scenarios, warnings };
 }
 
 /**

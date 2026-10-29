@@ -234,19 +234,13 @@ async function processHelpResponse(
   }
 
   // Build tools — agent mode always enabled for help chats, help tools always enabled
-  const { tools, modelSupportsNativeTools } = await buildTools(
+  const { tools, modelSupportsNativeTools } = await buildTools({
     connectionProfile,
-    null, // imageProfileId
-    null, // imageProfile
     userId,
-    null, // projectId
-    false, // requestFullContext
-    [], // disabledTools
-    [], // disabledToolGroups
-    true, // agentModeEnabled
-    allParticipants.length > 1, // isMultiCharacter
-    true, // helpToolsEnabled
-  )
+    agentModeEnabled: true,
+    isMultiCharacter: allParticipants.length > 1,
+    helpToolsEnabled: true,
+  })
 
 
   // Determine tool mode (native vs pseudo-tool). Help-chat does not yet
@@ -268,6 +262,7 @@ async function processHelpResponse(
       true, // helpToolsEnabled
       false, // canDressThemselves - not applicable for help chats
       false, // canCreateOutfits - not applicable for help chats
+      false,  // canManageInventory — no inventory_* tools here
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (tools.length > 0) {

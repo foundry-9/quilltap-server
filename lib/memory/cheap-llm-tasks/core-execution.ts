@@ -325,7 +325,16 @@ async function sendToProvider(
   // CONTEXT_COMPRESSION, SCENE_STATE_TRACKING and IMAGE_PROMPT_CRAFTING — a
   // large share of all llm_logs rows — so leaving it null used to hollow out
   // every latency average the Almanack draws.
-  const logCall = (response: LLMResponse, temperature: number | undefined, durationMs: number) => {
+  //
+  // A call that throws is recorded too (with its error), so a refusal, a
+  // timeout or an unsupported-temperature rejection shows in the Inspector
+  // beside the retry that followed it.
+  const logCall = (
+    outcome: { response: LLMResponse } | { error: unknown },
+    temperature: number | undefined,
+    durationMs: number
+  ) => {
+    const response = 'response' in outcome ? outcome.response : null
     logLLMCall({
       userId,
       type: mapTaskTypeToLogType(taskType),
@@ -340,10 +349,11 @@ async function sendToProvider(
         ...(temperature !== undefined ? { temperature } : {}),
         maxTokens: effectiveMaxTokens,
       },
-      response: {
-        content: response.content,
-      },
-      usage: response.usage,
+      response: response
+        ? { content: response.content, finishReason: response.finishReason ?? null }
+        : { content: '', error: getErrorMessage('error' in outcome ? outcome.error : undefined, 'Unknown error') },
+      usage: response?.usage,
+      cacheUsage: response?.cacheUsage,
       durationMs,
     }).catch(err => {
       logger.warn('Failed to log cheap LLM call', {
@@ -372,30 +382,35 @@ async function sendToProvider(
     requestTimeoutMs: providerBudgetFor(selection, taskType, latency),
   }
 
+  const send = async (temperature: number | undefined): Promise<ProviderResponse> => {
+    const startedAt = Date.now()
+    try {
+      const response: LLMResponse = await provider.sendMessage(
+        temperature !== undefined ? { ...baseParams, temperature } : baseParams,
+        apiKey
+      )
+      logCall({ response }, temperature, Date.now() - startedAt)
+      return { content: response.content, usage: response.usage, finishReason: response.finishReason }
+    } catch (error) {
+      logCall({ error }, temperature, Date.now() - startedAt)
+      throw error
+    }
+  }
+
   // Check if we already know this profile doesn't support custom temperature
   if (profilesWithoutCustomTemp.has(profileKey)) {
-    const startedAt = Date.now()
-    const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
-    logCall(response, undefined, Date.now() - startedAt)
-    return { content: response.content, usage: response.usage, finishReason: response.finishReason }
+    return send(undefined)
   }
 
   // Try with lower temperature for more consistent outputs
-  const firstAttemptStartedAt = Date.now()
   try {
-    const response: LLMResponse = await provider.sendMessage({ ...baseParams, temperature: 0.3 }, apiKey)
-    logCall(response, 0.3, Date.now() - firstAttemptStartedAt)
-    return { content: response.content, usage: response.usage, finishReason: response.finishReason }
+    return await send(0.3)
   } catch (error) {
     // If temperature is not supported, cache it and retry with default temperature
     const errorMessage = getErrorMessage(error, '')
     if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
       profilesWithoutCustomTemp.add(profileKey)
-
-      const retryStartedAt = Date.now()
-      const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
-      logCall(response, undefined, Date.now() - retryStartedAt)
-      return { content: response.content, usage: response.usage, finishReason: response.finishReason }
+      return send(undefined)
     }
     throw error
   }

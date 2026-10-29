@@ -28,7 +28,7 @@ Always prefer running a query and reading real rows over guessing. When a query 
 Pick the \`database\` argument per call. They are physically separate files — you cannot JOIN across them in one query. When a question spans databases, query one, carry the IDs in your reasoning, and query the next with \`WHERE … IN (…)\`.
 
 - **main** — characters, chats, chat_messages, memories, connection_profiles, projects, groups, files, folders, settings, jobs.
-- **llm-logs** — the \`llm_logs\` table: full request/response JSON, token usage, cost, duration, per model call.
+- **llm-logs** — the \`llm_logs\` table: full request/response JSON, token usage, cost, duration, per model call; and the \`log_entries\` table (\`id\`, \`message\`, \`chatId\`, \`characterId\`, \`createdAt\`, \`updatedAt\`): the lines characters and custom tools write to the log. \`REGEXP\` works in this database (\`message REGEXP 'pattern'\`, JavaScript regex).
 - **mount-index** — the document stores, and the **actual text of every document, including all character/project/group vault content**.
 
 ### Confirm the schema before you guess

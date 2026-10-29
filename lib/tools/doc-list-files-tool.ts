@@ -4,6 +4,7 @@
  * Supports filtering by mount point, scope, folder, and glob patterns.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
@@ -31,7 +32,7 @@ export const docListFilesToolInputSchema = z.object({
     .optional(),
   pattern: z
     .string()
-    .describe('Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js").')
+    .describe('Optional: glob pattern to filter results (e.g., "*.md", "*.{ts,tsx}", "src/**/*.js"). A pattern with no "/" matches file names in any folder; "**/" spans any number of folders, including none. Case-insensitive.')
     .optional(),
   recursive: z
     .boolean()
@@ -85,3 +86,6 @@ export interface DocListFilesOutput {
   files: DocFileInfo[];
   total: number;
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const docListFilesToolEffect: ToolEffectSpec = 'read';

@@ -151,10 +151,13 @@ describe('policyProtectionOf', () => {
       row('m', { source: 'MANUAL' }),
       row('d', { source: 'CONSOLIDATED' }),
       row('c', { tier: 'cold' }),
+      row('k', { keystone: true }),
+      row('mk', { source: 'MANUAL', keystone: true }),
     ])
     expect(actionable.map(m => m.id)).toEqual(['a'])
-    expect(spared.map(m => m.id)).toEqual(['m', 'd', 'c'])
-    expect(sparedBy).toEqual({ manual: 1, digest: 1, cold: 1 })
+    expect(spared.map(m => m.id)).toEqual(['m', 'd', 'c', 'k', 'mk'])
+    // A keystone is counted as a keystone, whatever its source.
+    expect(sparedBy).toEqual({ keystone: 2, manual: 1, digest: 1, cold: 1 })
   })
 })
 

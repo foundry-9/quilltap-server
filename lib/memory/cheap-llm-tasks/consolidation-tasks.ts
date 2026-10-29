@@ -31,6 +31,7 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { parseLLMJsonObject } from '@/lib/llm/llm-json'
 import { logger } from '@/lib/logger'
+import { IMPORTANCE_FACT_NOT_TELLING_NOTE, IMPORTANCE_WORK_CEILING_NOTE } from '@/lib/memory/extraction/prompts/shared'
 import { executeCheapLLMTask } from './core-execution'
 import type { CheapLLMTaskResult, UncensoredFallbackOptions } from './types'
 
@@ -243,10 +244,16 @@ TAGS — each digest's "keywords" must end with exactly one value from each axis
   context   philosophy | relationships | history | banter | mannerisms |
             trivia | information
 
-IMPORTANCE — weigh the bound entry as a whole: 0.90 for a commitment or a
-revelation that changes how the holder relates to the subject; 0.60 for a
-substantive standing fact; 0.40 for a preference or pattern; 0.20 for a
-minor note worth keeping.`
+IMPORTANCE — weigh the bound entry as a whole: 0.95 for a fact that
+redefines the subject's life or bond to the holder (marriage, vows,
+pregnancy, birth, death, a change of body, joining or leaving the family);
+0.85 for a revelation or personal commitment that changes how the holder
+relates to the subject; 0.60 for a substantive standing fact; 0.45 for
+work decisions, rulings, or task agreements; 0.40 for a preference or
+pattern; 0.20 for a minor note worth keeping.
+${IMPORTANCE_WORK_CEILING_NOTE}
+
+${IMPORTANCE_FACT_NOT_TELLING_NOTE}`
 
 /** One member note as the model sees it. */
 export interface ConsolidationMemberInput {

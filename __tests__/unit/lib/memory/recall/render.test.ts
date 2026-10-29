@@ -14,13 +14,14 @@ import {
   renderHead,
   renderRelevant,
   renderInterCharacter,
+  renderInnerCircle,
   formatMemorySubjectPrefix,
   formatKeywordsTag,
   humanKeywords,
   isTargetingKeyword,
 } from '@/lib/memory/recall/render'
 import { DYNAMIC_HEAD_TOKEN_BUDGET, DYNAMIC_HEAD_DEFAULT_SIZE } from '@/lib/memory/recall/assemble'
-import type { RecallCandidate } from '@/lib/memory/recall/types'
+import type { InnerCircleEntry, RecallCandidate } from '@/lib/memory/recall/types'
 import type { Memory, Provider } from '@/lib/schemas/types'
 
 const provider: Provider = {
@@ -91,6 +92,16 @@ function head(
 const EMPTY = { content: '', tokenCount: 0, memoriesUsed: 0, lines: [], debugMemories: [] }
 
 describe('renderArchive', () => {
+  it('renders summaries, but a keystone in full', () => {
+    const result = renderArchive([
+      memory('a-id', 'plain summary', 'plain content'),
+      memory('k-id', 'keystone summary', 'Abigail has emerald-green hair and teal eyes', { keystone: true }),
+    ], 1000, provider, SELF_SUBJECT)
+    expect(result.content).toContain('- plain summary')
+    expect(result.content).toContain('- Abigail has emerald-green hair and teal eyes')
+    expect(result.content).not.toContain('keystone summary')
+  })
+
   it('emits memories in input order (caller sorts by id)', () => {
     const archive = [
       memory('a-id', 'first archive entry'),
@@ -139,6 +150,73 @@ describe('renderArchive', () => {
     const result = renderArchive(archive, 1000, provider, SELF_SUBJECT)
     expect(result.content).toContain('short summary')
     expect(result.content).not.toContain('a much longer body')
+  })
+})
+
+describe('renderInnerCircle', () => {
+  const ABIGAIL = '00000000-0000-0000-0000-0000000000a1'
+  const GREG = '00000000-0000-0000-0000-0000000000a2'
+  const subject = { selfCharacterId: SELF_ID, characterNames: new Map([[ABIGAIL, 'Abigail'], [GREG, 'Greg']]) }
+  function entry(id: string, about: string, tier: number, rank: number, order: number, content: string, keystone = false): InnerCircleEntry {
+    return {
+      memory: memory(id, `${id} summary`, content, { aboutCharacterId: about, keywords: ['family', 'past'], keystone }),
+      characterId: about,
+      tier,
+      rank,
+      order,
+      keystone,
+    }
+  }
+  const entries = [
+    entry('a-0', ABIGAIL, 0, 0, 0, 'Abigail has green hair and is carrying Charlie\'s daughter'),
+    entry('a-1', ABIGAIL, 0, 1, 0, 'Abigail captains the Revenant'),
+    entry('g-0', GREG, 2, 0, 1, 'Greg keeps the club accounts'),
+  ]
+
+  it('renders full text under its own heading, in circle order, with subjects and no age tag', () => {
+    const result = renderInnerCircle(entries, 1000, provider, subject)
+    expect(result.content).toBe([
+      '## Those Closest to You',
+      '- About Abigail: Abigail has green hair and is carrying Charlie\'s daughter _(keywords: family)_',
+      '- About Abigail: Abigail captains the Revenant _(keywords: family)_',
+      '- About Greg: Greg keeps the club accounts _(keywords: family)_',
+    ].join('\n'))
+    expect(result.content).not.toContain('summary')
+    expect(result.lines.map(l => l.memoryId)).toEqual(['a-0', 'a-1', 'g-0'])
+  })
+
+  it('cuts the loosest tier first when the budget binds, keeping circle order for the rest', () => {
+    const full = renderInnerCircle(entries, 1000, provider, subject)
+    const greg = full.lines.find(l => l.memoryId === 'g-0')!
+    const tight = renderInnerCircle(entries, full.tokenCount - 1, provider, subject)
+    expect(tight.lines.map(l => l.memoryId)).toEqual(['a-0', 'a-1'])
+    expect(tight.content).not.toContain(greg.line)
+  })
+
+  it('cuts a member\'s later digests before a looser tier\'s first only within the same tier', () => {
+    const sameTier = [
+      entry('a-0', ABIGAIL, 0, 0, 0, 'first about Abigail'),
+      entry('a-1', ABIGAIL, 0, 1, 0, 'second about Abigail'),
+      entry('g-0', GREG, 0, 0, 1, 'first about Greg'),
+    ]
+    const full = renderInnerCircle(sameTier, 1000, provider, subject)
+    const tight = renderInnerCircle(sameTier, full.tokenCount - 1, provider, subject)
+    expect(tight.lines.map(l => l.memoryId)).toEqual(['a-0', 'g-0'])
+  })
+
+  it('cuts every digest before any keystone, whatever the tier', () => {
+    const mixed = [
+      entry('a-0', ABIGAIL, 0, 0, 0, 'first about Abigail'),
+      entry('g-k', GREG, 2, 0, 1, 'Greg is the ship\'s doctor', true),
+    ]
+    const full = renderInnerCircle(mixed, 1000, provider, subject)
+    const tight = renderInnerCircle(mixed, full.tokenCount - 1, provider, subject)
+    expect(tight.lines.map(l => l.memoryId)).toEqual(['g-k'])
+  })
+
+  it('is empty with no entries or no room', () => {
+    expect(renderInnerCircle([], 1000, provider, subject)).toEqual(EMPTY)
+    expect(renderInnerCircle(entries, 1, provider, subject)).toEqual(EMPTY)
   })
 })
 

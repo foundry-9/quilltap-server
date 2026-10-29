@@ -12,8 +12,8 @@ import { z } from 'zod';
 import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { generateRenderingPatterns } from '@/lib/chat/annotations';
-import { TemplateDelimiterSchema } from '@/lib/schemas/template.types';
+import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
+import { TemplateDelimiterSchema, UnmarkedStyleSchema } from '@/lib/schemas/template.types';
 
 /**
  * GET /api/v1/roleplay-templates
@@ -77,11 +77,14 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       return errorResponse('Description must be 500 characters or less', 400);
     }
 
-    // Validate narrationDelimiters (required)
-    if (!narrationDelimiters) {
-      return errorResponse('Narration delimiters are required', 400);
+    // Validate narrationDelimiters (required; an explicit null means narration
+    // is unmarked plain prose)
+    if (narrationDelimiters === undefined || narrationDelimiters === '') {
+      return errorResponse('Narration delimiters are required (null for unmarked prose)', 400);
     }
-    if (typeof narrationDelimiters === 'string') {
+    if (narrationDelimiters === null) {
+      // Unmarked narration — nothing further to check.
+    } else if (typeof narrationDelimiters === 'string') {
       if (narrationDelimiters.length === 0) {
         return errorResponse('Narration delimiters string must not be empty', 400);
       }
@@ -106,12 +109,33 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       return errorResponse(`Invalid delimiters: ${delimitersResult.error.issues[0]?.message ?? 'malformed'}`, 400);
     }
 
+    const unmarkedResult = UnmarkedStyleSchema.nullable().optional().safeParse(body.unmarkedStyle);
+    if (!unmarkedResult.success) {
+      return errorResponse(`Invalid unmarked style: ${unmarkedResult.error.issues[0]?.message ?? 'malformed'}`, 400);
+    }
+    if (body.markdownAsterisks !== undefined && typeof body.markdownAsterisks !== 'boolean') {
+      return errorResponse('markdownAsterisks must be a boolean', 400);
+    }
+    const unmarkedStyle = unmarkedResult.data ?? null;
+    const markdownAsterisks: boolean = body.markdownAsterisks ?? true;
+
     // Auto-generate rendering patterns from delimiters if not explicitly provided
     const templateDelimiters = delimitersResult.data || [];
     let renderingPatterns = body.renderingPatterns || [];
-    if ((!renderingPatterns || renderingPatterns.length === 0) && (templateDelimiters.length > 0 || narrationDelimiters)) {
-      renderingPatterns = generateRenderingPatterns(templateDelimiters, narrationDelimiters as string | [string, string]);
+    if (!renderingPatterns || renderingPatterns.length === 0) {
+      renderingPatterns = generateTemplateRenderingPatterns({
+        delimiters: templateDelimiters,
+        narrationDelimiters,
+        unmarkedStyle,
+        markdownAsterisks,
+      });
     }
+    logger.debug('Roleplay template patterns resolved for create', {
+      delimiterCount: templateDelimiters.length,
+      patternCount: renderingPatterns.length,
+      unmarkedNarration: narrationDelimiters === null,
+      markdownAsterisks,
+    });
 
     // Create template
     const template = await repos.roleplayTemplates.create({
@@ -124,7 +148,9 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       delimiters: templateDelimiters,
       renderingPatterns,
       dialogueDetection: body.dialogueDetection || null,
-      narrationDelimiters: narrationDelimiters as string | [string, string],
+      narrationDelimiters: narrationDelimiters as string | [string, string] | null,
+      unmarkedStyle,
+      markdownAsterisks,
     });
 
     logger.info('Roleplay template created', {

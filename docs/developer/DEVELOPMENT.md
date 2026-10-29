@@ -276,7 +276,12 @@ Plugins must be built before running the application:
 npm run build:plugins
 ```
 
-When making changes to a plugin, bump the patch version in its `package.json` and rebuild.
+When making changes to a plugin, bump the patch version in its `package.json` (and `manifest.json`, which must match) and rebuild.
+
+`npm run build:plugins` typechecks each plugin before bundling it (`tsc -p tsconfig.json`, extending
+[`plugins/tsconfig.base.json`](../../plugins/tsconfig.base.json)) and fails on any error. The root
+`npx tsc` excludes `plugins/`, so this build is the only thing that checks plugin types. A new plugin
+needs its own `tsconfig.json` extending that base, plus a `typecheck` script.
 
 ## Data Storage
 
@@ -413,7 +418,8 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
 11. Make sure that lint/test/build in Github Actions are working
 12. Verify that documentation, completions, and tooling for the [Quilltap CLI](../../packages/quilltap/) are up-to-date
-13. Check the following Markdown files to be sure they are up-to-date:
+13. Take a fresh look at the whole UI and its look-and-feel under every bundled theme, in light and dark mode, and verify it meets WCAG 2.2 Level AA (contrast, keyboard and focus, accessible names, reflow, colour-only cues)
+14. Check the following Markdown files to be sure they are up-to-date:
     - [README](../../README.md)
     - [Changelog](../CHANGELOG.md)
     - [API Documentation](API.md)
@@ -540,12 +546,20 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 
 ## Contributing
 
-1. Open an issue first to discuss major changes
+1. Open an [issue](https://github.com/foundry-9/quilltap-server/issues) first to discuss major changes
 2. Fork the repository
 3. Create a feature branch
-4. Make your changes
-5. Run tests and type checking
-6. Submit a pull request
+4. Make your changes, recording them in [docs/CHANGELOG.md](../CHANGELOG.md) (plain English) and documenting anything user-visible in `help/*.md`
+5. Run `npx tsc`, `npm run lint` and `npm run test:unit`
+6. Submit a [pull request](https://github.com/foundry-9/quilltap-server/pulls) against `main`
+
+### Reporting bugs
+
+Bugs are [GitHub issues](https://github.com/foundry-9/quilltap-server/issues/new?template=bug.yml) filed
+with the Bug form (`.github/ISSUE_TEMPLATE/bug.yml`) and cited as `#N` in commits, code comments and
+the changelog. A fix says `Fixes #N` in its commit message. The in-repo catalogue
+([bugs.md](bugs.md), `bugs/`) is frozen at Bug 269 and takes no new entries; "bug N" always means
+one of those.
 
 ## Additional Documentation
 

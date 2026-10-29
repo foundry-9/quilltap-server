@@ -73,6 +73,7 @@ export function LLMLoggingSettingsComponent({
             <div className="flex items-center gap-2 ml-4">
               <input
                 type="number"
+                aria-label="Log retention in days"
                 min={0}
                 max={365}
                 value={loggingSettings.retentionDays}

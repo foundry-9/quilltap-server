@@ -218,4 +218,54 @@ describe('buildCharacterAvatarPrompt', () => {
     })
     expect(leafCounts.hair).toBe(1)
   })
+
+  describe('a non-humanoid character', () => {
+    const spheres: Character = {
+      id: 'char-2',
+      name: 'Orrery',
+      pronouns: { subject: 'he', object: 'him', possessive: 'his' },
+      physicalDescription: {
+        id: 'pd-2',
+        humanoid: false,
+        headAndShouldersPrompt: 'stale crop text with a face',
+        mediumPrompt: 'Seven interlocking brass spheres turning about one another',
+      },
+    } as unknown as Character
+
+    it('drops the crop and the pronoun anchor, and says it is not humanoid', async () => {
+      const { prompt, hasAppearance } = await buildCharacterAvatarPrompt(repos, spheres)
+      expect(hasAppearance).toBe(true)
+      expect(prompt).toContain('single non-humanoid entity: Orrery')
+      expect(prompt).toContain('its whole form in frame')
+      expect(prompt).toContain('Seven interlocking brass spheres')
+      expect(prompt).toMatch(/Not humanoid: no head, face, neck, shoulders/)
+      expect(prompt).toContain('Only one subject in the image.')
+      expect(prompt).not.toMatch(/head-and-shoulders crop|collarbone|\bman\b|person/)
+      expect(prompt).not.toContain('stale crop text')
+    })
+
+    it('lists whatever it has on without cropping slots or nudity wording', async () => {
+      mockResolve.mockReturnValue({
+        leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [{ title: 'silver chain' }], hair: [] },
+      })
+      const { prompt } = await buildCharacterAvatarPrompt(repos, spheres, { equippedSlots: equipped })
+      expect(prompt).toContain('silver chain')
+      expect(prompt).not.toMatch(/naked|unadorned|collarbone/)
+    })
+
+    it('still builds a prompt with no prompt text and nothing equipped', async () => {
+      const bare = { ...spheres, physicalDescription: { id: 'pd-3', humanoid: false } } as unknown as Character
+      const { prompt, hasAppearance } = await buildCharacterAvatarPrompt(repos, bare)
+      expect(hasAppearance).toBe(true)
+      expect(prompt).toMatch(/Not humanoid: no head/)
+    })
+
+    it('adds no outfit text when nothing is equipped', async () => {
+      mockResolve.mockReturnValue({
+        leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
+      })
+      const { prompt } = await buildCharacterAvatarPrompt(repos, spheres, { equippedSlots: equipped })
+      expect(prompt).not.toMatch(/naked|unadorned|- \*\*/)
+    })
+  })
 })

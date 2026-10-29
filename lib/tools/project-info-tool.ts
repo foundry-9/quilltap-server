@@ -11,6 +11,7 @@
  * @module tools/project-info-tool
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 
@@ -43,19 +44,6 @@ export type ProjectInfoToolInput = z.infer<typeof projectInfoToolInputSchema>
 export interface ProjectCharacterInfo {
   id: string
   name: string
-}
-
-/**
- * Project file info
- */
-export interface ProjectFileInfo {
-  id: string
-  filename: string
-  mimeType: string
-  size: number
-  category: string
-  description?: string | null
-  createdAt: string
 }
 
 /**
@@ -126,3 +114,6 @@ export function validateProjectInfoInput(
   const parsed = projectInfoToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: reads, changes nothing. */
+export const projectInfoToolEffect: ToolEffectSpec = 'read';

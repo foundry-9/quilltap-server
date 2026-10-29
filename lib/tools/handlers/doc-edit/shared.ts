@@ -36,6 +36,22 @@ import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 export const logger = createServiceLogger('DocEdit:Handler');
 
 /**
+ * The store a published record or announcement names: the resolved store's
+ * own name, never the `mount_point` the caller typed. A caller's `self` means
+ * the caller's vault; written into a Librarian announcement or a
+ * `chat_documents` row, every other reader would follow it into their own
+ * vault instead (bug 256). Falls back to the request only outside
+ * document-store scope, where the scope itself is the address.
+ */
+export function publishedMountPoint(
+  resolved: Pick<ResolvedPath, 'scope' | 'mountPointName'> | null | undefined,
+  requested: string | undefined,
+): string | undefined {
+  if (resolved?.scope === 'document_store' && resolved.mountPointName) return resolved.mountPointName;
+  return requested;
+}
+
+/**
  * Resolve the LibrarianActorOrigin for a doc-tool call so a change
  * announcement can name who effected it. Characters are preferred; if the
  * context carries no characterId (operator / Document-Mode surfaces) or the

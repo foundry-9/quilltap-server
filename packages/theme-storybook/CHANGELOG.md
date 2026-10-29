@@ -2,6 +2,32 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.85] - 2026-10-26
+
+### Added
+- The diagram lightbox in `qt-components.css`, mirroring the app's `_content.css`: a zoom-in cursor and focus ring on a clickable `.qt-diagram-canvas[role="button"]`, the full-window `.qt-diagram-lightbox` with its toolbar (`-bar`, `-group`, `-button` with hover / pressed / disabled / focus states, `-zoom` readout, `-check` for the Transparent toggle), the pan-and-zoom `-viewport`, the drawing's `-sheet` (with a checkerboard under `[data-transparent="true"]`) and the `-hint` line. Colours read new `--qt-diagram-lightbox-*` variables, defaulting to the `--qt-overlay-*` tokens.
+
+## [1.0.84] - 2026-10-25
+
+### Added
+- The `qt-diagram*` family in `qt-components.css`, mirroring the app's `_content.css`: the frame around a diagram drawn in the Salon (`.qt-diagram`), its toolbar (`.qt-diagram-toolbar`, `-toolbar-button`, with hover / pressed / focus states), the drawing (`.qt-diagram-canvas`), the loading placeholder (`.qt-diagram-placeholder`), the offscreen scratch space (`.qt-diagram-stage`) and the could-not-draw fallback (`.qt-diagram-error`, `-error-note`, `-error-details`). Colours, radius and fonts read new `--qt-diagram-*` variables, including `--qt-diagram-hand-font` for hand-drawn diagrams.
+
+## [1.0.78] - 2026-10-22
+
+### Added
+- The `qt-storyteller-*` family in `qt-components.css`, mirroring the app's `_storyteller.css`: the Salon's Normal / Paused / Storyteller turn-mode control (`.qt-storyteller-mode`, `-option`, `-option-active`, `-option-paused`) and the storyteller's bidding board (`.qt-storyteller-board`, `-board-header`, `.qt-storyteller-cards`, `.qt-storyteller-card` with `-selected` / `-act` / `-destroy` / `-quiet` / `-head` / `-name`, `.qt-storyteller-plan`, `-meta`, `-warning`, `-actions`, `.qt-storyteller-summary`). Every colour reads a `--qt-storyteller-*` hook with a token fallback.
+
+## [1.0.76] - 2026-10-20
+
+### Added
+- `stop-sign` (an octagon) and `hand-raised` in the Icons story's media group, mirroring the app's new registry entries for the Salon composer's Stop and raised-hand buttons.
+- The composer action-button family in `qt-components.css`: `.qt-chat-composer-actions`, `.qt-chat-composer-send`, `.qt-chat-continue-button`, `.qt-chat-stop-button`, and the new `.qt-chat-interrupt-button` / `.qt-chat-interrupt-button-raised` (warning amber, with a pulsing ring while a hand is up). The Chat story's control-buttons section shows the trio.
+
+## [1.0.75] - 2026-10-19
+
+### Added
+- `inventory` (an open box with flaps) in the Icons story's People group, mirroring the app's new registry entry for the Inventory.
+
 ## [1.0.71] - 2026-09-19
 
 ### Added

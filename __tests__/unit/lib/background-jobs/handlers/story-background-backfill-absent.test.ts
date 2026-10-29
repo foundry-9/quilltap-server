@@ -49,6 +49,7 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  isUncensoredImageProfile: jest.requireActual('@/lib/services/dangerous-content/understudy').isUncensoredImageProfile,
   resolveUncensoredImageUnderstudy: jest.fn(),
   resolveUncensoredTextUnderstudy: jest.fn(),
 }))
@@ -71,6 +72,8 @@ jest.mock('@/lib/image-gen/appearance-resolution', () => ({
   resolveCharacterAppearances: jest.fn(),
   sanitizeAppearancesIfNeeded: jest.fn(),
   equippedWardrobeItemsForAppearance: jest.fn().mockResolvedValue(undefined),
+  // Pure; the enumeration fallbacks render through it.
+  sceneDescriptionParts: jest.requireActual('@/lib/image-gen/appearance-resolution').sceneDescriptionParts,
 }))
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),

@@ -27,7 +27,17 @@
  * `hasAnsibleAccess` is true".
  */
 
-import { isStateRef, parseEffectTarget, scanPlaceholders, type QtapCustomTool } from './custom-tool.types';
+import {
+  effectWhenGroups,
+  gateGroups,
+  isInventoryRef,
+  isStateRef,
+  whenGroups,
+  parseEffectTarget,
+  scanPlaceholders,
+  type QtapCustomTool,
+} from './custom-tool.types';
+import { parseInventoryOperand } from './inventory-subjects';
 
 const STATE_PREFIX = 'state.';
 
@@ -83,6 +93,39 @@ export interface ToolVocabulary {
   progressWrites: string[];
   /** True when some rendered string quotes `{{now}}`. */
   now: boolean;
+  /** True when some rendered string quotes `{{character}}`. */
+  character: boolean;
+  /**
+   * Item references this tool's wardrobe effects may PUT ON the rolling
+   * character, verbatim (a `{{params.garment}}` stays as written — it is
+   * vocabulary, not a resolved garment). Sorted.
+   */
+  wears: string[];
+  /** Item references this tool's wardrobe effects may TAKE OFF, verbatim. Sorted. */
+  takesOff: string[];
+  /** Slots this tool's wardrobe effects may CLEAR. Sorted. */
+  clearsSlots: string[];
+  /**
+   * Inventory object references this tool READS — tested by an `inventory` /
+   * `inventoryCount` subject (outcomes, effect conditions, the gate), quoted
+   * by `{{inventory.<ref>.*}}`, or drawn from by a `$inventory` operand.
+   * Verbatim, sorted.
+   */
+  inventoryReads: string[];
+  /**
+   * `inventoryAggregate` keys this tool tests (`equipped.names`,
+   * `owned.metadata.toolVersion.max`) — outcomes, effect conditions, the
+   * gate. A metadata key read through an aggregate is the OBJECTS'
+   * vocabulary, not the character's, so it is not added to `metadata`.
+   * Sorted.
+   */
+  inventoryAggregates: string[];
+  /** References this tool's inventory effects may EQUIP, verbatim. Sorted. */
+  equips: string[];
+  /** References this tool's inventory effects may UNEQUIP, verbatim. Sorted. */
+  unequips: string[];
+  /** Archetype references this tool's inventory effects may PICK UP, verbatim. Sorted. */
+  picksUp: string[];
 }
 
 /** True when a tool quotes nothing at all, and so has no vocabulary to show. */
@@ -99,7 +142,16 @@ export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
     vocabulary.metadataWrites.length === 0 &&
     vocabulary.progress.length === 0 &&
     vocabulary.progressWrites.length === 0 &&
-    !vocabulary.now
+    !vocabulary.now &&
+    !vocabulary.character &&
+    vocabulary.wears.length === 0 &&
+    vocabulary.takesOff.length === 0 &&
+    vocabulary.clearsSlots.length === 0 &&
+    vocabulary.inventoryReads.length === 0 &&
+    vocabulary.inventoryAggregates.length === 0 &&
+    vocabulary.equips.length === 0 &&
+    vocabulary.unequips.length === 0 &&
+    vocabulary.picksUp.length === 0
   );
 }
 
@@ -125,16 +177,38 @@ export function collectToolVocabulary(
     progress: new Set<string>(),
     progressWrites: new Set<string>(),
     now: false,
+    character: false,
+    wears: new Set<string>(),
+    takesOff: new Set<string>(),
+    clearsSlots: new Set<string>(),
+    inventory: new Set<string>(),
+    inventoryAggregates: new Set<string>(),
+    equips: new Set<string>(),
+    unequips: new Set<string>(),
+    picksUp: new Set<string>(),
+  };
+  // One group's reads — the same for an outcome row, an effect condition and
+  // a gate group. Walked over every group of an any-of.
+  const collectGroup = (group: {
+    metadata?: object;
+    progress?: object;
+    inventory?: object;
+    inventoryCount?: object;
+    inventoryAggregate?: object;
+  }): void => {
+    for (const key of Object.keys(group.metadata ?? {})) found.metadata.add(key);
+    for (const key of Object.keys(group.progress ?? {})) found.progress.add(progressionId(key));
+    for (const key of Object.keys(group.inventory ?? {})) found.inventory.add(key);
+    for (const key of Object.keys(group.inventoryCount ?? {})) found.inventory.add(key);
+    for (const key of Object.keys(group.inventoryAggregate ?? {})) found.inventoryAggregates.add(key);
   };
 
   for (const outcome of definition.outcomes ?? []) {
     // A catch-all tests nothing, so it names nothing — but it still carries a
     // message, and that message may well quote a fact sheet.
-    if (outcome.when !== true) {
-      for (const key of Object.keys(outcome.when.metadata ?? {})) found.metadata.add(key);
-      for (const key of Object.keys(outcome.when.progress ?? {})) found.progress.add(progressionId(key));
-    }
+    for (const group of whenGroups(outcome.when)) collectGroup(group);
     collectPlaceholders(outcome.message, declared, found);
+    if (outcome.brief !== undefined) collectPlaceholders(outcome.brief, declared, found);
   }
 
   // The availability gate reads the same fact sheet, and naming its keys stays
@@ -143,8 +217,7 @@ export function collectToolVocabulary(
   // "programmable" is not, and is not said here. A gated-out tool never reaches
   // a roster listing at all, so this only ever describes one the reader has.
   for (const gate of [definition.availableWhen, definition.withheldWhen]) {
-    for (const key of Object.keys(gate?.metadata ?? {})) found.metadata.add(key);
-    for (const key of Object.keys(gate?.progress ?? {})) found.progress.add(progressionId(key));
+    if (gate) for (const group of gateGroups(gate)) collectGroup(group);
   }
 
   if (definition.llm) collectPlaceholders(definition.llm.prompt, declared, found);
@@ -156,10 +229,31 @@ export function collectToolVocabulary(
   // verbatim, so the one placeholder scanner reads them too; a condition's
   // metadata keys are reads like an outcome row's; and each target is a WRITE,
   // reported on its own lists because it is a different claim than a read.
+  // A wardrobe gesture's item references are templates too, scanned the same
+  // way, and the gesture itself is reported on the dress/undress lists. A log
+  // line is a template whose placeholders are reads and nothing more.
   for (const effect of definition.effects ?? []) {
     if (typeof effect.value === 'string') collectPlaceholders(effect.value, declared, found);
-    for (const key of Object.keys(effect.when?.metadata ?? {})) found.metadata.add(key);
-    for (const key of Object.keys(effect.when?.progress ?? {})) found.progress.add(progressionId(key));
+    if (effect.log !== undefined) collectPlaceholders(effect.log, declared, found);
+    if (effect.when !== undefined) for (const group of effectWhenGroups(effect.when)) collectGroup(group);
+
+    if (effect.inventory) {
+      const { action, items } = effect.inventory;
+      for (const item of items) collectPlaceholders(item, declared, found);
+      const list = action === 'equip' ? found.equips : action === 'unequip' ? found.unequips : found.picksUp;
+      for (const item of items) list.add(item);
+      continue;
+    }
+
+    if (effect.wardrobe) {
+      const { action, items = [], slot } = effect.wardrobe;
+      for (const item of items) collectPlaceholders(item, declared, found);
+      if (action === 'wear') for (const item of items) found.wears.add(item);
+      else if (action === 'take_off') for (const item of items) found.takesOff.add(item);
+      else if (slot) found.clearsSlots.add(slot);
+      continue;
+    }
+    if (effect.target === undefined) continue; // a log line, or load-rejected; no write to report
 
     const target = parseEffectTarget(effect.target);
     if (!target.ok) continue; // load-rejected; nothing honest to report
@@ -175,7 +269,7 @@ export function collectToolVocabulary(
   // Every `$state` reference, wherever it sits — a parameter default, a roll
   // field, a comparator operand. Walked rather than enumerated: the schema is
   // free to grow new sites, and a list of them here would silently fall behind.
-  collectStateRefs(definition, found.state);
+  collectStateRefs(definition, found.state, found.inventory);
 
   return {
     value: found.value,
@@ -190,6 +284,15 @@ export function collectToolVocabulary(
     progress: sorted(found.progress),
     progressWrites: sorted(found.progressWrites),
     now: found.now,
+    character: found.character,
+    wears: sorted(found.wears),
+    takesOff: sorted(found.takesOff),
+    clearsSlots: sorted(found.clearsSlots),
+    inventoryReads: sorted(found.inventory),
+    inventoryAggregates: sorted(found.inventoryAggregates),
+    equips: sorted(found.equips),
+    unequips: sorted(found.unequips),
+    picksUp: sorted(found.picksUp),
   };
 }
 
@@ -221,6 +324,8 @@ function collectPlaceholders(
     state: Set<string>;
     progress: Set<string>;
     now: boolean;
+    character: boolean;
+    inventory: Set<string>;
   }
 ): void {
   for (const { ref } of scanPlaceholders(text)) {
@@ -252,16 +357,28 @@ function collectPlaceholders(
       case 'now':
         found.now = true;
         break;
+      case 'character':
+        found.character = true;
+        break;
+      case 'outcome':
+        break;
+      case 'inventory':
+        found.inventory.add(ref.ref);
+        break;
       case 'unknown':
         break;
     }
   }
 }
 
-/** Depth-first walk for `{ "$state": "..." }` objects anywhere in the tree. */
-function collectStateRefs(node: unknown, into: Set<string>): void {
+/**
+ * Depth-first walk for `{ "$state": "..." }` objects anywhere in the tree,
+ * and beside them `{ "$inventory": "<ref>.metadata.<key>" }` (whose ref is
+ * an Inventory read).
+ */
+function collectStateRefs(node: unknown, into: Set<string>, inventory: Set<string>): void {
   if (Array.isArray(node)) {
-    for (const item of node) collectStateRefs(item, into);
+    for (const item of node) collectStateRefs(item, into, inventory);
     return;
   }
   if (typeof node !== 'object' || node === null) return;
@@ -269,5 +386,10 @@ function collectStateRefs(node: unknown, into: Set<string>): void {
     into.add(node.$state);
     return;
   }
-  for (const value of Object.values(node)) collectStateRefs(value, into);
+  if (isInventoryRef(node)) {
+    const parsed = parseInventoryOperand(node.$inventory);
+    if (parsed) inventory.add(parsed.ref);
+    return;
+  }
+  for (const value of Object.values(node)) collectStateRefs(value, into, inventory);
 }

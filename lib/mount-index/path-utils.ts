@@ -63,6 +63,34 @@ export function detectNativeText(relativePath: string): NativeTextType | null {
 }
 
 /**
+ * The mirror file type of a path stored as a blob: `pdf` / `docx` when text
+ * can be converted out of it, otherwise `blob`.
+ */
+export function detectBlobFileType(relativePath: string): 'pdf' | 'docx' | 'blob' {
+  const ext = path.extname(relativePath).toLowerCase();
+  if (ext === '.pdf') return 'pdf';
+  if (ext === '.docx') return 'docx';
+  return 'blob';
+}
+
+/**
+ * Whether a blob at this path has text worth extracting: a PDF, a DOCX, or a
+ * native-text file (.md, .txt, .json …) that was stored as a blob — every chat
+ * upload is, so its `files` row can address it by `mount-blob:` key (bug 260).
+ */
+export function isExtractableBlobPath(relativePath: string): boolean {
+  return EXTRACTABLE_BLOB_EXTENSIONS.includes(path.extname(relativePath).toLowerCase());
+}
+
+/**
+ * The extensions `isExtractableBlobPath` accepts: every `detectNativeText`
+ * extension plus PDF and DOCX. A test holds it to `detectNativeText`.
+ */
+export const EXTRACTABLE_BLOB_EXTENSIONS: readonly string[] = [
+  '.md', '.markdown', '.txt', '.json', '.jsonl', '.ndjson', '.pdf', '.docx',
+];
+
+/**
  * Best-effort MIME type from a path extension. Used when a write has no
  * caller-supplied MIME (e.g. cross-storage byte copies and CLI writes).
  */

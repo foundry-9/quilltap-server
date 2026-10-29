@@ -271,6 +271,20 @@ For example:
 - **Both ways work** — Changes in one are reflected in the other
 - **Choose your method** — Use whichever fits your workflow
 
+### Legibility and Motion
+
+Every theme the house supplies — in light dress and dark — is held to the customary standard of legibility: ordinary text stands at least four and a half times brighter (or darker) than the ground beneath it, and focus rings and other signposts at least three. You will notice the consequences chiefly in the status colours. In light mode, success, warning and information messages wear a deeper shade so they may be read rather than merely glimpsed; in dark mode the red "delete" buttons and their green and blue cousins are lighter, with dark lettering upon them. Art Deco and Great Estate, finding gold lettering illegible on cream, now set their links and the active tab in bronze in light mode, and the gold focus ring in Art Deco is likewise burnished.
+
+Should you have asked your operating system to reduce motion, every theme now obliges — not only the default — and the various pulses, slides and spinners settle down to a single, nearly instantaneous gesture.
+
+Notices that appear in the corner (the little toasts announcing a save or a mishap) now wear the theme's own status colours and are read aloud by screen readers, and dialog boxes take the keyboard's attention when they open, keep it while they are open, and hand it back politely when they close.
+
+That courtesy now extends to every dialog in the house, not merely the principal few: each one announces itself to a screen reader by its title, keeps the Tab key circulating within its walls, closes at a touch of Escape, and returns you to the very button that summoned it. The floating Help and Console windows take your attention on opening but do not hold it hostage — the page behind them stays within reach of Tab, and Escape dismisses them wherever you happen to be, unless a proper dialog is open and has the prior claim.
+
+Nor need you reach for the mouse to open things. The name on a character card, a document store's title, a folder or a file in the Scriptorium's lists, an entry in the LLM log, a picture in a gallery and a document's title (to rename it) may all be reached with Tab and set going with Enter or the space bar.
+
+The very first press of Tab on any page now offers a **Skip to content** link, so the keyboard may bypass the sidebar entirely and land in the page proper. In the Salon, a screen reader is told each time a character replies, and Document Mode murmurs "Saved" when your work is safely put away. A whisper you are merely overhearing says so in words, not just in a paler ink, and the close buttons on workspace tabs have grown large enough to hit without squinting. Should your system be set to Windows High Contrast, the icons now keep their ink rather than vanishing into the page.
+
 ## Troubleshooting Appearance Settings
 
 ### Themes Won't Load

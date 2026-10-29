@@ -47,7 +47,8 @@
               "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } },
               "conversationAnnotations": { "type": "array", "items": { "$ref": "#/$defs/ConversationAnnotation" } },
               "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } },
-              "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } }
+              "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } },
+              "wardrobeHistory": { "type": "array", "items": { "$ref": "#/$defs/WardrobeHistory" } }
             },
             "additionalProperties": false
           }
@@ -378,6 +379,7 @@
         "conversationAnnotations": { "type": "integer", "minimum": 0 },
         "chatDocuments": { "type": "integer", "minimum": 0 },
         "chatInforms": { "type": "integer", "minimum": 0 },
+        "wardrobeHistory": { "type": "integer", "minimum": 0 },
         "wardrobeWear": { "type": "integer", "minimum": 0 },
         "files": { "type": "integer", "minimum": 0 },
         "folders": { "type": "integer", "minimum": 0 },
@@ -436,7 +438,7 @@
         },
         "physicalDescription": {
           "oneOf": [{ "type": "object" }, { "type": "null" }],
-          "description": "Singular physical description with full text plus token-sized prompt variants (headAndShoulders/short/medium/long/complete; headAndShoulders is the head-and-shoulders crop preferred for avatar generation). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
+          "description": "Singular physical description with full text plus token-sized prompt variants (headAndShoulders/short/medium/long/complete; headAndShoulders is the head-and-shoulders crop preferred for avatar generation), plus an optional `humanoid` boolean (absent = true; false = no humanoid body, so image prompts drop the portrait crop and gender anchor). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
         },
         "avatarUrl": {
           "type": ["string", "null"],
@@ -474,9 +476,22 @@
           "type": ["boolean", "null"],
           "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
         },
+        "canManageInventory": {
+          "type": ["boolean", "null"],
+          "description": "Whether this character may see and change what they carry with the inventory_* tools (null = enabled by default)"
+        },
         "canChooseOutfit": {
           "type": "boolean",
           "description": "When true, a new chat with this character defaults its Starting Outfit to 'Let character choose'. Absent/false falls back to defaults (or Compose when there is no usable default outfit). Stored in the vault's properties.json."
+        },
+        "canDrawDiagrams": {
+          "type": "boolean",
+          "description": "When true, the character's system prompt tells it that fenced ```mermaid, ```dot/```graphviz and ```svg blocks render as diagrams in the Salon. Absent/false means the character hears nothing about diagrams (any diagram fence still renders). Stored in the vault's properties.json."
+        },
+        "diagramStyle": {
+          "type": "string",
+          "enum": ["handDrawn", "clean"],
+          "description": "How the character's Mermaid and Graphviz diagrams look: 'handDrawn' (sketched) or 'clean' (as the engine drew them). Absent or unrecognized reads as 'handDrawn'. Rendering only; never sent to a model. Stored in the vault's properties.json."
         },
         "systemTransparency": {
           "type": ["boolean", "null"],
@@ -594,6 +609,14 @@
           "items": { "type": "string" },
           "description": "Informational: names of assigned tags at export time"
         },
+        "equippedInventory": {
+          "type": ["object", "null"],
+          "description": "Inventory objects each character carries in this chat, keyed by characterId: an array of Inventory object UUIDs (the `id` inside each `Inventory/**/*.json` file). Ids that no longer resolve are dropped on read.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/UUID" }
+          }
+        },
         "equippedOutfit": {
           "type": ["object", "null"],
           "description": "Per-character equipped outfit state, keyed by characterId. Each character entry is { top, bottom, footwear, accessories, hair } where each slot is an array of wardrobe-item UUIDs (post-rework). Legacy pre-rework exports may store each slot as a single UUID or null; importers upgrade those to single-element/empty arrays.",
@@ -701,6 +724,14 @@
         "conciergeModeReason": {
           "enum": ["manual", "refusals", "classifier", "migration", null],
           "description": "Why the chat is in its conciergeMode. NULL when Moderated."
+        },
+        "turnMode": {
+          "enum": ["rotation", "storyteller", null],
+          "description": "The chat's turn mode. NULL reads as 'rotation' (the weighted rotation). 'storyteller' = each operator post opens a round: every LLM character is asked for a bid, and the operator chooses who speaks."
+        },
+        "storytellerInviteFilter": {
+          "type": ["boolean", "null"],
+          "description": "Storyteller mode: invite each character to bid with probability 0.25 + 0.75 × talkativeness instead of inviting everyone. Default false."
         },
         "answerConfirmationOverride": {
           "enum": ["ON", "OFF", null],
@@ -923,6 +954,17 @@
             "question": { "type": "string", "description": "Verbatim question that was asked." }
           }
         },
+        "storytellerBid": {
+          "type": ["object", "null"],
+          "description": "Storyteller mode: the bid this speaking turn carried out. A swipe re-rolls under the same plan. Never sent to a model. NULL on every message that was not a storyteller speaking turn.",
+          "required": ["roundId", "tier", "plan"],
+          "properties": {
+            "roundId": { "type": "string", "description": "The round the bid was made in." },
+            "tier": { "enum": ["simple", "lookup", "act", "destroy"], "description": "The tier the turn ran under: simple (no tools), lookup (read-only tools), act (changes allowed), destroy (deletion allowed)." },
+            "plan": { "type": "string", "description": "What the character planned, in its own words." },
+            "toolsNamed": { "type": "array", "items": { "type": "string" }, "description": "Tools the character named when it bid." }
+          }
+        },
         "pascalMeta": {
           "type": ["object", "null"],
           "description": "Pascal the Croupier (custom pseudo-tools) roll record, set on systemSender='pascal' messages. The server rolled and the server chose the outcome, so this is the authoritative account of the deal rather than the model's own. NULL on every non-Pascal message.",
@@ -957,7 +999,7 @@
             },
             "effects": {
               "type": "array",
-              "description": "The side effects this run applied — the audit of the definition's `effects` array. Each entry names the raw target ('state.encounter.count' / 'metadata.lockpick'), what the store held before (absent when nothing), what was written, and — state targets only — which tier the write landed in. Absent when the run declared or applied none.",
+              "description": "The side effects this run applied — the audit of the definition's `effects` array. Each entry names the raw target ('state.encounter.count' / 'metadata.lockpick'), what the store held before (absent when nothing), what was written, and — state targets only — which tier the write landed in. A wardrobe change is targeted 'wardrobe.wear' / 'wardrobe.take_off' / 'wardrobe.clear_slot', with `previous` the character's equipped slots before it and `next` = { item?: { id, title }, slot?, slotsAffected, effect, slots }. An Inventory change is targeted 'inventory.equip' / 'inventory.unequip' / 'inventory.pick_up', with `previous` the character's equipped object ids before it and `next` = { item: { id, title }, created?, equipped }. Absent when the run declared or applied none.",
               "items": {
                 "type": "object",
                 "required": ["target", "next"],
@@ -969,8 +1011,22 @@
                 }
               }
             },
-            "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },
-            "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
+            "invokedBy": { "type": "string", "enum": ["llm", "user", "trigger"], "description": "Whether the model reached for the tool, the user ran it themselves, or a trigger phrase said in the chat set it off." },
+            "triggerPhrase": { "type": "string", "description": "The phrase that fired a triggered run, as written in the definition. Present only when invokedBy is 'trigger'." },
+            "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." },
+            "intervention": {
+              "type": "object",
+              "description": "Operator intervention: the run was held for the operator and changed before it was announced. The other pascalMeta fields describe the run as announced; this records what was first dealt and which fields changed. Absent when the run was never held or was let stand as rolled. Operator-facing only; no model reads it.",
+              "required": ["resolvedAt", "decision", "changed", "dealt"],
+              "properties": {
+                "resolvedAt": { "type": "string", "description": "ISO timestamp of the operator's decision." },
+                "decision": { "type": "string", "enum": ["deal", "as-rolled"] },
+                "changed": { "type": "array", "items": { "type": "string" }, "description": "Changed field keys: 'params.<name>', 'roll', 'value', 'llmAnswer', 'outcome', 'message', 'state', 'chipLabel', 'title', 'visibility', 'announcer', 'effects.<index>'." },
+                "dealt": { "type": "object", "description": "The run as first dealt: params, raw, diceRolls?, value, outcomeIndex, state, message, chipLabel?, toolTitle?, visibility, announcer, llm?, effects?." },
+                "reasks": { "type": "integer", "description": "Consult calls made from the hold dialog." },
+                "staleAnswer": { "type": "boolean", "description": "Dealt with a consult answer given to a different prompt than the one in force." }
+              }
+            }
           }
         },
         "routeTrail": {
@@ -1032,6 +1088,10 @@
         "consolidatedAt": {
           "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
           "description": "Last time the consolidator considered this row. Null/absent when never considered."
+        },
+        "keystone": {
+          "type": "boolean",
+          "description": "Operator-marked standing fact: always in the holder's frozen archive (in full) when its subject is present, the holder, or in the holder's group inner circle, and never folded, consolidated, demoted or footnoted. At most 5 hot keystones per (holder, subject). Absent reads as false."
         },
         "occurredAt": {
           "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
@@ -1146,7 +1206,9 @@
         "marker": { "type": "string", "description": "linePrefix only — the line-start marker." },
         "open": { "type": "string", "description": "tagPrefix only — opening bracket." },
         "close": { "type": "string", "description": "tagPrefix only — closing bracket." },
-        "tokenPattern": { "type": "string", "description": "tagPrefix only — inner-token Unicode regex." }
+        "tokenPattern": { "type": "string", "description": "tagPrefix only — inner-token Unicode regex." },
+        "matchCurlyQuotes": { "type": "boolean", "description": "wrap only — straight quotes in the delimiters also match their curly forms." },
+        "closeOptional": { "type": "boolean", "description": "wrap only — an unclosed span runs to the end of its paragraph." }
       }
     },
 
@@ -1169,11 +1231,30 @@
           "items": { "$ref": "#/$defs/TemplateDelimiter" }
         },
         "narrationDelimiters": {
-          "description": "Narration delimiter(s) — single string or [open, close] pair",
+          "description": "Narration delimiter(s) — single string, [open, close] pair, or null for unmarked plain-prose narration",
           "anyOf": [
             { "type": "string", "minLength": 1 },
-            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 2, "maxItems": 2 }
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 2, "maxItems": 2 },
+            { "type": "null" }
           ]
+        },
+        "unmarkedStyle": {
+          "description": "How text no delimiter claims is displayed; null leaves it unstyled.",
+          "anyOf": [
+            {
+              "type": "object",
+              "required": ["style"],
+              "properties": {
+                "style": { "type": "string", "minLength": 1, "maxLength": 50 },
+                "addOns": { "$ref": "#/$defs/DelimiterAddOns" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "markdownAsterisks": {
+          "type": "boolean",
+          "description": "Whether Markdown reads asterisks as bold/italic (default true). False hands single * to the template's delimiters and drops doubled **."
         },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
@@ -1372,6 +1453,36 @@
       }
     },
 
+    "WardrobeHistory": {
+      "type": "object",
+      "description": "One outfit-history row (chat_wardrobe_history): one entry in one character's numbered outfit timeline in one chat. Entry 0 is what they arrived in; one entry is recorded per Aurora announcement; exactly one row per (chatId, characterId) is current. In an NDJSON stream each row is a `wardrobe_history` record emitted with its chat. Ids are source-instance ids: the importer mints a fresh id, remaps chatId, characterId and actorCharacterId, and copies entryIndex, isCurrent, slots and createdAt as they are. A slot id that no longer resolves is left off at rollback and shown as gone.",
+      "required": ["id", "chatId", "characterId", "entryIndex", "slots", "slotsHash", "source", "actorCharacterId", "isCurrent", "createdAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "characterId": { "type": "string", "minLength": 1 },
+        "entryIndex": { "type": "integer", "minimum": 0, "description": "0-based and contiguous per (chatId, characterId); never renumbered." },
+        "slots": {
+          "type": "object",
+          "description": "Equipped slots at this entry: wardrobe item ids per slot, dissolved to leaves.",
+          "properties": {
+            "top": { "type": "array", "items": { "type": "string" } },
+            "bottom": { "type": "array", "items": { "type": "string" } },
+            "footwear": { "type": "array", "items": { "type": "string" } },
+            "accessories": { "type": "array", "items": { "type": "string" } },
+            "hair": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "slotsHash": { "type": "string", "minLength": 16, "maxLength": 16, "description": "hashEquippedSlots(slots); recomputed on import." },
+        "source": { "enum": ["chat-start", "participant-added", "merge", "operator", "character", "pascal", "seeded"] },
+        "actorCharacterId": { "type": ["string", "null"], "description": "Who made the change: for `character`, the character whose tool call it was; for `pascal`, the rolling character; for `operator`, the character the user was speaking as at the time (null when the user drove no character). Null for arrivals and seeds." },
+        "actorToolName": { "type": ["string", "null"], "description": "For `pascal` entries: the name of the custom tool whose wardrobe effects made the change. Null otherwise. Absent in bundles from before the field; read as null." },
+        "isCurrent": { "type": "boolean", "description": "The cursor: the entry the character is wearing now." },
+        "createdAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
     "WardrobeItem": {
       "type": "object",
       "description": "A wardrobe item (clothing, accessory, etc.) belonging to a character.",
@@ -1414,6 +1525,11 @@
         "isDefault": {
           "type": "boolean",
           "description": "Whether this item is part of the character's default outfit"
+        },
+        "pronounGuidance": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["he", "she", "they", "it"] },
+          "description": "Pronoun guidance: the standard pronoun sets (by subject) this item is meant for. Pronoun-aware listings offer it only to characters with one of these pronouns. Empty or absent means it is offered to everyone. Unknown values are dropped on import."
         },
         "replace": {
           "type": "boolean",

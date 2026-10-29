@@ -22,6 +22,7 @@ export function GalleryImage({
   isInAlbum = false,
   isBusy = false,
   deleteTitle,
+  caption,
 }: GalleryImageProps) {
   const getImageUrl = () => {
     if (image.url) return image.url
@@ -55,6 +56,17 @@ export function GalleryImage({
           />
         )}
 
+        {/* Source caption — where the picture comes from */}
+        {caption && (
+          <div
+            className="qt-gallery-caption absolute inset-x-0 bottom-0 px-1.5 pt-4 pb-1 text-left pointer-events-none"
+            title={`${caption.title} — ${caption.detail}`}
+          >
+            <div className="qt-gallery-caption-title truncate">{caption.title}</div>
+            <div className="qt-gallery-caption-detail truncate">{caption.detail}</div>
+          </div>
+        )}
+
         {/* Avatar Badge */}
         {isAvatar && (
           <div className="absolute top-1 left-1 qt-bg-success qt-text-on-success text-xs px-1.5 py-0.5 rounded font-medium">
@@ -64,9 +76,9 @@ export function GalleryImage({
       </button>
 
       {/* Action buttons overlay */}
-      <div className="absolute bottom-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={`absolute ${caption ? 'top-1' : 'bottom-1'} right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity`}>
         {/* Set as Avatar button */}
-        {!isAvatar && (
+        {!isAvatar && onSetAvatar && (
           <button
             onClick={(e) => {
               onSetAvatar(e)
@@ -120,7 +132,7 @@ export function GalleryImage({
         )}
 
         {/* Delete button — show for non-avatars, or for missing avatar images */}
-        {(!isAvatar || isMissingImage) && (
+        {onDeleteImage && (!isAvatar || isMissingImage) && (
           <button
             onClick={(e) => {
               onDeleteImage(e)

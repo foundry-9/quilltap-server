@@ -15,6 +15,11 @@
  * announcement couldn't be written.
  */
 
+import {
+  HOST_KIND_OFF_SCENE_CHARACTERS,
+  HOST_KIND_OFF_SCENE_LEFT_BEHIND,
+  LEFT_BEHIND_INTRO_PREFIX,
+} from './off-scene-kinds';
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
@@ -360,6 +365,50 @@ export async function postHostTurnPassAnnouncement(
     : buildTurnPassContent(params.characterName);
   const opaqueContent = buildTurnPassOpaqueContent(params.characterName);
   return postHostMessage(params.chatId, content, opaqueContent, HOST_KIND_TURN_PASS, {
+    participantId: params.participantId,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Turn-yield announcements (the operator's raised hand).
+//
+// When the operator raises a hand and the next character yields the floor
+// rather than carrying on, the Host says so, and the operator speaks next. As
+// with the turn-pass, the persona content never contains the `[YIELD]`
+// sentinel, so the record cannot teach it. `systemKind` is `turn-yield`;
+// `hostEvent.participantId` records who yielded.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_TURN_YIELD = 'turn-yield';
+
+export function buildTurnYieldContent(characterName: string, operatorName: string): string {
+  return `The Host, spying a hand raised at the back of the room, catches ${characterName}'s eye — and ${characterName} yields the floor to ${operatorName} with a gracious little bow. Pray, go on.`;
+}
+
+export function buildTurnYieldOpaqueContent(characterName: string, operatorName: string): string {
+  return `${operatorName} raised a hand to interject, and ${characterName} yielded the floor to them. ${operatorName} speaks next.`;
+}
+
+export interface HostTurnYieldAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the character who yielded. */
+  participantId: string;
+  /** The name the room knows the operator by. */
+  operatorName: string;
+}
+
+/**
+ * Post the Host's turn-yield announcement. Errors are swallowed (the existing
+ * Host-notification contract): a yield must never fail the turn. Returns the
+ * persisted MessageEvent so the caller can surface it live over SSE.
+ */
+export async function postHostTurnYieldAnnouncement(
+  params: HostTurnYieldAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildTurnYieldContent(params.characterName, params.operatorName);
+  const opaqueContent = buildTurnYieldOpaqueContent(params.characterName, params.operatorName);
+  return postHostMessage(params.chatId, content, opaqueContent, HOST_KIND_TURN_YIELD, {
     participantId: params.participantId,
   });
 }
@@ -774,7 +823,6 @@ export async function postHostTimestampAnnouncement(
 // never been introduced — and pass only that delta in.
 // ---------------------------------------------------------------------------
 
-const HOST_KIND_OFF_SCENE_CHARACTERS = 'off-scene-characters';
 
 export interface OffSceneCharacterCard {
   id: string;
@@ -789,29 +837,51 @@ export interface OffSceneCharacterCard {
  * Compose a Host announcement introducing one or more off-scene characters.
  * Sorted alphabetically for deterministic, cache-friendly output.
  */
-function renderOffSceneCard(
+/**
+ * An absent character's particulars, as the model is told them: name, aliases,
+ * pronouns and the body (identity, else description) with `{{char}}` /
+ * `{{user}}` bound. The one source for the card in the referent ledger
+ * ({@link renderOffSceneCard}), the left-behind notice and the Salon's
+ * name-chip popup (`lib/chat/absent-mentions.ts`).
+ */
+export interface OffSceneCardFields {
+  name: string;
+  aliases: string[];
+  /** `subject/object/possessive`, or null when none are recorded. */
+  pronouns: string | null;
+  body: string;
+}
+
+export function offSceneCardFields(
+  c: OffSceneCharacterCard,
+  userCharacterName?: string | null,
+): OffSceneCardFields {
+  const body = ((c.identity ?? '').trim() || (c.description ?? '').trim());
+  return {
+    name: c.name,
+    aliases: c.aliases ?? [],
+    pronouns: c.pronouns ? `${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}` : null,
+    body: body.length > 0 ? applyHostTemplates(body, c.name, userCharacterName) : '',
+  };
+}
+
+export function renderOffSceneCard(
   c: OffSceneCharacterCard,
   userCharacterName?: string | null,
 ): string {
-  const lines: string[] = [`### ${c.name}`];
-  if (c.aliases && c.aliases.length > 0) {
-    lines.push(`Aliases: ${c.aliases.join(', ')}`);
-  }
-  if (c.pronouns) {
-    lines.push(`Pronouns: ${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`);
-  }
-  const body = ((c.identity ?? '').trim() || (c.description ?? '').trim());
-  if (body.length > 0) {
-    lines.push(applyHostTemplates(body, c.name, userCharacterName));
-  }
+  const fields = offSceneCardFields(c, userCharacterName);
+  const lines: string[] = [`### ${fields.name}`];
+  if (fields.aliases.length > 0) lines.push(`Aliases: ${fields.aliases.join(', ')}`);
+  if (fields.pronouns) lines.push(`Pronouns: ${fields.pronouns}`);
+  if (fields.body) lines.push(fields.body);
   return lines.join('\n');
 }
 
 /**
  * Why the Host is introducing these characters:
  *
- * - `'mentioned'` — named in the conversation but never seated here (the
- *   per-turn scan in the context builder).
+ * - `'mentioned'` — named in the conversation but never seated here. No longer
+ *   posted (the Salon's name chips and the model's referent ledger replaced it).
  * - `'left-behind'` — seated in the chat this one continues from, but not
  *   brought along. The carried-over transcript still has the cast talking to
  *   them, and their own lines were dropped in the replay, so without this they
@@ -830,8 +900,8 @@ export function buildOffSceneCharactersContent(
   if (reason === 'left-behind') {
     intro =
       sorted.length === 1
-        ? `The Host observes that one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`
-        : `The Host observes that certain members of the previous company did not make the journey. These persons remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`;
+        ? `${LEFT_BEHIND_INTRO_PREFIX} one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`
+        : `${LEFT_BEHIND_INTRO_PREFIX} certain members of the previous company did not make the journey. These persons remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer. Mentioned for accurate reference only; not a summons to the scene.`;
   } else {
     intro =
       sorted.length === 1
@@ -865,66 +935,25 @@ export function buildOffSceneCharactersOpaqueContent(
   return [intro, '', ...sorted.map((c) => renderOffSceneCard(c, userCharacterName))].join('\n\n');
 }
 
-/**
- * Scan a chat's existing messages for prior Host off-scene-character
- * introductions and return the set of character IDs that have already been
- * introduced. Callers diff this against the freshly-detected mention set to
- * compute the announcement delta.
- *
- * The scan looks at message metadata — specifically `systemSender === 'host'`
- * with `systemKind === 'off-scene-characters'` — and reads the character IDs
- * from the message's `hostEvent.introducedCharacterIds` field, which the
- * announcement writer stamps at post time.
- */
-export function findIntroducedOffSceneCharacterIds(
-  messages: ReadonlyArray<unknown>,
-): Set<string> {
-  const introduced = new Set<string>();
-  for (const m of messages) {
-    if (!m || typeof m !== 'object') continue;
-    const msg = m as {
-      type?: unknown;
-      systemSender?: unknown;
-      systemKind?: unknown;
-      hostEvent?: unknown;
-    };
-    if (
-      msg.type === 'message' &&
-      msg.systemSender === 'host' &&
-      msg.systemKind === HOST_KIND_OFF_SCENE_CHARACTERS &&
-      msg.hostEvent &&
-      typeof msg.hostEvent === 'object'
-    ) {
-      const ids = (msg.hostEvent as { introducedCharacterIds?: unknown }).introducedCharacterIds;
-      if (Array.isArray(ids)) {
-        for (const id of ids) {
-          if (typeof id === 'string') introduced.add(id);
-        }
-      }
-    }
-  }
-  return introduced;
-}
-
 export interface HostOffSceneCharactersAnnouncement {
   chatId: string;
   characters: OffSceneCharacterCard[];
   /**
-   * Defaults to `'mentioned'`. Either way the IDs are stamped onto
-   * `hostEvent.introducedCharacterIds`, so a left-behind notice also stops
-   * the per-turn scan from introducing the same people a second time.
+   * Defaults to `'mentioned'`, which nothing posts any more: an absent
+   * character named in a chat gets a name chip in the Salon
+   * (`lib/chat/absent-mentions.ts`) and a card in the model's referent ledger.
+   * Continue Elsewhere's `'left-behind'` notice is the live caller. The IDs are
+   * still stamped onto `hostEvent.introducedCharacterIds`.
    */
   reason?: OffSceneIntroductionReason;
 }
 
 /**
- * Post a public Host announcement introducing the given off-scene characters.
- * The character IDs are stamped into `hostEvent.introducedCharacterIds` so
- * subsequent calls can detect already-introduced characters and skip them.
+ * Post a public Host announcement naming the given off-scene characters.
+ * The character IDs are stamped into `hostEvent.introducedCharacterIds`.
  *
- * Returns the persisted MessageEvent (so the caller can also surface it to
- * this turn's LLM context without a one-turn lag), or null on failure / when
- * the input is empty.
+ * Returns the persisted MessageEvent, or null on failure / when the input is
+ * empty.
  */
 export async function postHostOffSceneCharactersAnnouncement(
   params: HostOffSceneCharactersAnnouncement,
@@ -957,7 +986,7 @@ export async function postHostOffSceneCharactersAnnouncement(
       createdAt: now,
       participantId: null,
       systemSender: 'host',
-      systemKind: HOST_KIND_OFF_SCENE_CHARACTERS,
+      systemKind: reason === 'left-behind' ? HOST_KIND_OFF_SCENE_LEFT_BEHIND : HOST_KIND_OFF_SCENE_CHARACTERS,
       hostEvent: { introducedCharacterIds },
     };
 

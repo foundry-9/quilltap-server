@@ -89,6 +89,8 @@ In the new-chat drop-down you'll see, in order:
 
 A project default still pre-selects when present; otherwise the general default takes the field. You may, of course, choose any item from any group.
 
+Within each group the scenarios are shelved by title, as a well-run library would have it: by the frontmatter `name`, then by filename where two titles coincide. A leading "The" is politely ignored, so *The Gilded Cage* files under G and not among the Ts. Every list of scenarios in the house — the drop-downs, the scenario pages, the browser — keeps the same order.
+
 Beneath the drop-down sits a writing-desk that never leaves the room. Choose **Custom...** and whatever you compose there *is* the scenario, plain and simple. But pick a ready-made scenario from any group and the desk politely remains — anything you jot beneath it is **added below** the chosen scenario rather than replacing it. So you may begin from a trusted envelope and then pencil in tonight's particulars ("...and a storm has knocked out the lights") without rewriting the whole thing. Your pencilled notes survive a change of selection, too, should you reconsider which envelope to start from.
 
 Would you rather not write the scene yourself? The **Ask the Host to set the scene** button beside the **Starting Scenario** label sends the Host to research the place and time you name and bring back a scene — which you may then **Save as scenario…** straight into this collection. See [The Scenario Builder](scenario-builder.md).

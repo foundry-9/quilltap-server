@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 import { isValidWardrobeFolderPath, WARDROBE_FOLDER_MAX_DEPTH } from '@/lib/wardrobe/folders';
+import { STANDARD_PRONOUN_SUBJECTS } from '@/lib/characters/pronoun-presets';
 import {
   UUIDSchema,
   TimestampSchema,
@@ -118,6 +119,23 @@ export const UNREPORTED_IF_BLANK_SLOT_TYPES: readonly WardrobeItemType[] =
   WARDROBE_SLOT_TYPES.filter((s) => !WARDROBE_SLOT_META[s].reportWhenEmpty);
 
 // ============================================================================
+// PRONOUN GUIDANCE
+// ============================================================================
+
+/**
+ * One value of an item's pronoun guidance: a standard pronoun set from
+ * Aurora's picker, named by its subject (`he`, `she`, `they`, `it`).
+ */
+export const PronounGuidanceEnum = z.enum(STANDARD_PRONOUN_SUBJECTS);
+export type PronounGuidance = z.infer<typeof PronounGuidanceEnum>;
+
+/**
+ * Which characters an item is offered to, by pronouns. Empty or absent means
+ * everyone. Matching and normalising live in `lib/wardrobe/pronoun-guidance.ts`.
+ */
+export const PronounGuidanceListSchema = z.array(PronounGuidanceEnum);
+
+// ============================================================================
 // WARDROBE FOLDERS
 // ============================================================================
 
@@ -164,6 +182,8 @@ export const wardrobeItemFieldsSchema = z.object({
   componentItemIds: z.array(z.string()).optional(),
   /** Clear the designated slots on wear instead of layering (composites and leaves alike). */
   replace: z.boolean().optional(),
+  /** Pronoun guidance: who the item is offered to. Empty = everyone. */
+  pronounGuidance: PronounGuidanceListSchema.optional(),
   /**
    * Folder under `Wardrobe/` to file the item in. Create defaults to the root;
    * update leaves the folder unchanged when omitted.
@@ -273,6 +293,16 @@ export const WardrobeItemSchema = z.object({
    * composite like Naked, or a leaf that always replaces what's there.
    */
   replace: z.boolean().default(false),
+  /**
+   * Pronoun guidance — the standard pronoun sets this item is meant for. A
+   * pronoun-aware listing (the default for the `wardrobe_*` tools, the
+   * "Let character choose" pass and the Wardrobe UI) offers the item only to
+   * characters whose pronouns are one of these. Empty or absent = offered to
+   * everyone; a character with custom or unset pronouns is offered
+   * everything. Guidance never stops an item being worn when asked for by
+   * name. Frontmatter key `pronounGuidance`.
+   */
+  pronounGuidance: PronounGuidanceListSchema.optional(),
   /** Provenance tracking for items migrated from legacy clothingRecords */
   migratedFromClothingRecordId: UUIDSchema.nullable().optional(),
   /**

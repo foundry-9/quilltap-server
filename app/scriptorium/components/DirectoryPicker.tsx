@@ -85,6 +85,7 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
     <div>
       <div className="flex gap-2">
         <input
+          aria-label="Directory path"
           type="text"
           name={name}
           value={value}

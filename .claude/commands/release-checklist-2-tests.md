@@ -2,7 +2,7 @@
 
 If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to work in this repository.
 
-**Goal (checklist item 2 of 13):** Expand unit-test coverage for any new functionality, and add regression tests that specifically reproduce every bug fixed since the last release (so it can never silently come back).
+**Goal (checklist item 2 of 14):** Expand unit-test coverage for any new functionality, and add regression tests that specifically reproduce every bug fixed since the last release (so it can never silently come back).
 
 ## Scope
 

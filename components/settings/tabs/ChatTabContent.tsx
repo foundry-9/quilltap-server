@@ -7,6 +7,7 @@ import { CompositionModeDefaultSettings } from '@/components/settings/chat-setti
 import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
 import { ComposerEmojiSettings } from '@/components/settings/chat-settings/ComposerEmojiSettings'
 import { ComposerUnicodeSettings } from '@/components/settings/chat-settings/ComposerUnicodeSettings'
+import { ComposerSlashCommandsSettings } from '@/components/settings/chat-settings/ComposerSlashCommandsSettings'
 import { ImpersonationVoiceSettings } from '@/components/settings/chat-settings/ImpersonationVoiceSettings'
 import { AutoScrollSettings } from '@/components/settings/chat-settings/AutoScrollSettings'
 import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
@@ -42,6 +43,7 @@ export function ChatTabContent() {
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
+    handleComposerSlashCommandsChange,
     handleImpersonationVoiceModeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
@@ -50,6 +52,8 @@ export function ChatTabContent() {
     handleImageDescriptionProfileChange,
     handleAutoDetectRngChange,
     handleCustomToolsChange,
+    handleCustomToolTriggersChange,
+    handleCustomToolInterventionChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleAutonomousRoomSettingsUpdate,
@@ -103,6 +107,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleImpersonationVoiceModeChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Slash Commands" description="Run tools and composer actions by typing / in the Salon composer" sectionId="composer-slash-commands" forceOpen={activeSection === 'composer-slash-commands'}>
+          <ComposerSlashCommandsSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleComposerSlashCommandsChange}
           />
         </CollapsibleCard>
 
@@ -169,6 +181,8 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onAutoDetectRngChange={handleAutoDetectRngChange}
+            onCustomToolTriggersChange={handleCustomToolTriggersChange}
+            onCustomToolInterventionChange={handleCustomToolInterventionChange}
           />
         </CollapsibleCard>
 

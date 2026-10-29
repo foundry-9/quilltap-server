@@ -17,6 +17,9 @@
  *     reinforcement count;
  *   - `relatedMemoryIds` must name existing memories of the same character, and
  *     the link is written on both sides;
+ *   - a keystone (inner-circle-recall.md C5) must be hot and stay within
+ *     `KEYSTONES_PER_SUBJECT_MAX` per subject — checked when the mark is set
+ *     and when a keystone's subject moves;
  *   - the frozen archive is invalidated and `memories` is published;
  *   - a digest's Commonplace mirror bucket(s) are rewritten through
  *     `mirrorCommonplaceForSubjects`, the same writer consolidation uses.
@@ -28,7 +31,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import type { Memory } from '@/lib/schemas/types'
+import { KEYSTONES_PER_SUBJECT_MAX, type Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
@@ -50,12 +53,16 @@ export interface MemoryEditPatch {
   aboutCharacterId?: string | null
   chatId?: string | null
   relatedMemoryIds?: string[]
+  /** Mark or unmark the row as a standing fact. */
+  keystone?: boolean
 }
 
 export type UpdateMemoryResult =
   | { ok: true; memory: Memory }
   | { ok: false; reason: 'not-found' }
   | { ok: false; reason: 'invalid-related'; invalidIds: string[] }
+  /** A keystone must be hot, and a subject holds at most `KEYSTONES_PER_SUBJECT_MAX`; nothing was written. */
+  | { ok: false; reason: 'keystone-refused'; message: string }
   /** The edited text could not be embedded; nothing was written. */
   | { ok: false; reason: 'embedding-failed'; message: string }
 
@@ -69,6 +76,28 @@ function changesEmbeddedText(existing: Memory, patch: MemoryEditPatch): boolean 
     (patch.content !== undefined && patch.content !== existing.content) ||
     (patch.summary !== undefined && patch.summary !== existing.summary)
   )
+}
+
+/**
+ * Why a patch may not leave the row a keystone, or null when it may. Checked
+ * only when the edit makes the row a keystone or moves a keystone's subject,
+ * so an ordinary edit of an existing keystone never trips the limit.
+ */
+async function checkKeystone(characterId: string, existing: Memory, patch: MemoryEditPatch): Promise<string | null> {
+  const willBe = patch.keystone ?? !!existing.keystone
+  if (!willBe) return null
+  const becoming = !existing.keystone
+  const subject = patch.aboutCharacterId !== undefined ? patch.aboutCharacterId : existing.aboutCharacterId ?? null
+  const moving = patch.aboutCharacterId !== undefined && (patch.aboutCharacterId ?? null) !== (existing.aboutCharacterId ?? null)
+  if (!becoming && !moving) return null
+  if ((existing.tier ?? 'hot') !== 'hot') {
+    return 'An archived memory cannot be a keystone; it belongs to the digest that replaced it.'
+  }
+  const held = await getRepositories().memories.countKeystones(characterId, subject, existing.id)
+  if (held >= KEYSTONES_PER_SUBJECT_MAX) {
+    return `A character may keep at most ${KEYSTONES_PER_SUBJECT_MAX} keystones about one subject; unmark one first.`
+  }
+  return null
 }
 
 /**
@@ -86,6 +115,13 @@ export async function updateMemory(
 
   const update: Partial<Memory> = { ...patch }
   delete update.relatedMemoryIds
+
+  // --- keystone: hot only, and within the per-subject limit -----------------
+  const refusal = await checkKeystone(characterId, existing, patch)
+  if (refusal) {
+    log.debug('Refusing memory edit: keystone rule', { characterId, memoryId, reason: refusal })
+    return { ok: false, reason: 'keystone-refused', message: refusal }
+  }
 
   // --- importance → reinforcedImportance -------------------------------------
   if (patch.importance !== undefined && patch.importance !== existing.importance) {

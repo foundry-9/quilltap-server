@@ -39,6 +39,8 @@ interface RoleplayTemplateWithDelimiters {
   description: string | null
   isBuiltIn: boolean
   delimiters?: TemplateDelimiter[]
+  /** `false` ⇒ `**` means nothing in this template, so Bold is withheld. */
+  markdownAsterisks?: boolean
 }
 
 interface FormattingToolbarProps {
@@ -55,7 +57,7 @@ interface FormattingToolbarProps {
   /** Callback to toggle source editing mode */
   onToggleSource?: () => void
   /** Narration delimiters from the active roleplay template */
-  narrationDelimiters?: NarrationDelimiters
+  narrationDelimiters?: NarrationDelimiters | null
 }
 
 interface CharPickerToolbarButtonProps {
@@ -482,7 +484,9 @@ export default function FormattingToolbar({
     <div className="qt-formatting-toolbar">
       {/* Markdown buttons - always shown */}
       <div className="qt-formatting-toolbar-section">
-        {MARKDOWN_FORMATS.map((format) => (
+        {MARKDOWN_FORMATS.filter(
+          (format) => !(format.type === 'bold' && template?.markdownAsterisks === false),
+        ).map((format) => (
           <button
             key={format.type}
             type="button"

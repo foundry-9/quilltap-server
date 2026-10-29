@@ -74,6 +74,10 @@ When a character is over the cap, the staff archive exactly as many notes as the
 
 Reinforcement and links both count for less with each addition: the first few matter more than the next ten. Age and neglect are already in the score, so there is no separate "old and unimportant" rule.
 
+### Keystones are beyond the staff's reach
+
+A memory you have marked a **keystone** (see [Recall Relevance](memory-recall-relevance.md#keystones-facts-set-in-stone)) is your own statement of how things stand, and the staff do not tamper with it. A keystone is never folded into a near-copy nor has a near-copy folded into it, never becomes part of a digest, is never archived for want of room, and never counts against the cap. A fresh retelling may still *reinforce* it (the count rises) but adds no *[+]* afterthought to its words; those change only when you edit them. Even a chat wipe or the departure of a digest's last original note leaves a keystone where it stands. Deleting one remains entirely your affair.
+
 ## Consolidation
 
 The clerk's errand, for one character at a time:
@@ -144,6 +148,7 @@ In a character's memory list:
 - The **tier** filter shows *Active* memories, *Archived* ones, or both. Archived memories are dimmed and labelled.
 - An archived memory that a digest replaced has a **Superseded by a digest** link that shows you the digest.
 - Digests carry a **Digest** badge and say how many notes they were made from; the source filter can show digests alone.
+- Keystones carry a **Keystone** badge, and **Keystones only** narrows the list to them.
 - **Maintenance** opens the run dialog for this character.
 
 ## In-Chat Navigation

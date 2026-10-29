@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -30,6 +30,7 @@ export function ProfileModal({
   embeddingModels,
   embeddingProviders,
 }: ProfileModalProps) {
+  const id = useId()
   const {
     loading: formLoading,
     error: formError,
@@ -218,10 +219,11 @@ export function ProfileModal({
       <div className="space-y-4">
             {/* Name */}
             <div>
-              <label className="qt-label mb-1">
+              <label className="qt-label mb-1" htmlFor={`${id}-name`}>
                 Profile Name *
               </label>
               <input
+                id={`${id}-name`}
                 type="text"
                 name="name"
                 value={form.formData.name}
@@ -234,10 +236,11 @@ export function ProfileModal({
 
             {/* Provider */}
             <div>
-              <label className="qt-label mb-1">
+              <label className="qt-label mb-1" htmlFor={`${id}-provider`}>
                 Provider *
               </label>
               <select
+                id={`${id}-provider`}
                 name="provider"
                 value={form.formData.provider}
                 onChange={handleProviderChange}
@@ -259,10 +262,11 @@ export function ProfileModal({
             {/* API Key (for providers that need it) */}
             {needsApiKey && (
               <div>
-                <label className="qt-label mb-1">
+                <label className="qt-label mb-1" htmlFor={`${id}-api-key`}>
                   API Key
                 </label>
                 <select
+                  id={`${id}-api-key`}
                   name="apiKeyId"
                   value={form.formData.apiKeyId}
                   onChange={form.handleChange}
@@ -286,10 +290,11 @@ export function ProfileModal({
             {/* Base URL (for providers that need it) */}
             {needsBaseUrl && (
               <div>
-                <label className="qt-label mb-1">
+                <label className="qt-label mb-1" htmlFor={`${id}-base-url`}>
                   Base URL
                 </label>
                 <input
+                  id={`${id}-base-url`}
                   type="text"
                   name="baseUrl"
                   value={form.formData.baseUrl}
@@ -307,7 +312,7 @@ export function ProfileModal({
             {!isBuiltin && (
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="qt-label">
+                  <label className="qt-label" htmlFor={`${id}-model`}>
                     Model *
                   </label>
                   {canFetchModels && (
@@ -331,6 +336,7 @@ export function ProfileModal({
                 {currentModels.length > 0 ? (
                   <div className="space-y-2">
                     <select
+                      id={`${id}-model`}
                       value={form.formData.modelName}
                       onChange={e => handleModelSelect(e.target.value)}
                       className="qt-select"
@@ -350,6 +356,7 @@ export function ProfileModal({
                   </div>
                 ) : (
                   <input
+                    id={`${id}-model`}
                     type="text"
                     name="modelName"
                     value={form.formData.modelName}
@@ -364,10 +371,11 @@ export function ProfileModal({
             {/* Dimensions (optional override) - not needed for BUILTIN */}
             {!isBuiltin && (
               <div>
-                <label className="qt-label mb-1">
+                <label className="qt-label mb-1" htmlFor={`${id}-dimensions`}>
                   Dimensions (optional)
                 </label>
                 <input
+                  id={`${id}-dimensions`}
                   type="text"
                   name="dimensions"
                   value={form.formData.dimensions}

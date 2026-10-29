@@ -98,6 +98,36 @@ describe('child proxy — commitEquippedOutfit', () => {
   });
 });
 
+describe('child proxy — wardrobeHistory.settle', () => {
+  it('buffers settle whole, after the commit it follows, and never runs it in the child', async () => {
+    const real = {
+      chats: {
+        getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(makeEmptyEquippedSlots()),
+        setEquippedOutfit: jest.fn(),
+      },
+      wardrobeWear: { commitEquippedOutfit: jest.fn(), incrementWears: jest.fn() },
+      wardrobeHistory: { settle: jest.fn(), findEntries: jest.fn().mockResolvedValue([]) },
+    };
+    mockedRepoSource.mockReturnValue(real as never);
+
+    const writes = await runWithJobScope('job-history', async () => {
+      const repos = getChildRepositoriesProxy() as any;
+      await wear(repos, 'chat-1', 'char-1', { id: 'coat', types: ['top'] });
+      await repos.wardrobeHistory.settle('chat-1', 'char-1', {
+        kind: 'append',
+        provenance: { source: 'character', actorCharacterId: 'char-1' },
+      });
+      await repos.wardrobeHistory.findEntries('chat-1', 'char-1');
+      return flushPendingWrites();
+    });
+
+    expect(real.wardrobeHistory.settle).not.toHaveBeenCalled();
+    expect(real.wardrobeHistory.findEntries).toHaveBeenCalled();
+    expect(writes.map((w) => w.method)).toEqual(['wardrobeWear.commitEquippedOutfit', 'wardrobeHistory.settle']);
+    expect(classifyWriteTarget('wardrobeHistory.settle')).toBe('main');
+  });
+});
+
 describe('child proxy — equipped outfits are read-your-writes within a job (bug 179)', () => {
   function realRepos(baseline: EquippedSlots = makeEmptyEquippedSlots()) {
     return {

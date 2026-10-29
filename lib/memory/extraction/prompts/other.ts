@@ -15,6 +15,8 @@ import {
   AGREEMENTS_INSTRUCTION_BLOCK,
   AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE,
   EVENT_INSTRUCTION_BLOCK,
+  IMPORTANCE_FACT_NOT_TELLING_NOTE,
+  IMPORTANCE_WORK_CEILING_NOTE,
   ORIENTING_CONTEXT_SKIP_BULLET,
   TAGS_INSTRUCTION_BLOCK,
   renderClockBlock,
@@ -115,18 +117,26 @@ distinct memories about the same event from their own angle — that
 is allowed and expected.
 
 IMPORTANCE — calibrate to these anchors
-  0.90  An explicit new commitment the subject themselves spoke, or a
-        revelation, that changes how the observer relates to the
-        subject. A proposal made TO the subject is not the subject's
+  0.95  A fact that redefines the subject's life or bond to the
+        observer: marriage, vows, pregnancy, birth, death, a change of
+        body, joining or leaving the family.
+  0.85  A revelation, or a personal commitment the subject themselves
+        spoke, that changes how the observer relates to the subject.
+        A proposal made TO the subject is not the subject's
         commitment.
   0.60  A new substantive fact about the subject's background, plans,
-        or skills.
+        or skills — including a commitment to build, file, fix, or
+        rule on something.
   0.55  A proposal, condition, or demand the subject stated, not yet
         answered.
+  0.45  A work decision, ruling, or task agreement made in passing.
   0.40  A new preference, trait, or novel gesture expressed in passing.
   0.20  A specific event occurred with the subject present, no new
         information.
   < 0.20  Do not extract.
+${IMPORTANCE_WORK_CEILING_NOTE}
+
+${IMPORTANCE_FACT_NOT_TELLING_NOTE}
 
 OUTPUT — third person, past tense, names not pronouns (use the actual
 names from the CONTEXT footer below), one fact per object. Every item
@@ -150,7 +160,7 @@ EXAMPLE — good extraction (observer is Friday, subjects 1=Amy 2=Charlie):
     "content": "Amy proposed reframing the cost problem as a four-tier prompt cache layout when Charlie was stuck between two designs.",
     "summary": "proposed four-tier cache layout",
     "keywords": ["cache", "architecture", "proposal"],
-    "importance": 0.85,
+    "importance": 0.55,
     "temporal": "moment",
     "scope": "narrow",
     "context": "philosophy"
@@ -160,7 +170,7 @@ EXAMPLE — good extraction (observer is Friday, subjects 1=Amy 2=Charlie):
     "content": "Charlie agreed to defer the renaming pass until after Amy's cache patch lands.",
     "summary": "deferred rename until after cache patch",
     "keywords": ["rename", "deferred", "agreement"],
-    "importance": 0.65,
+    "importance": 0.45,
     "temporal": "future",
     "scope": "narrow",
     "context": "information"
@@ -173,6 +183,16 @@ EXAMPLE — good extraction (observer is Friday, subjects 1=Amy 2=Charlie):
     "importance": 0.55,
     "temporal": "moment",
     "scope": "narrow",
+    "context": "relationships"
+  },
+  {
+    "subjectIndex": 1,
+    "content": "Amy told Friday at the piano bench that she is nine weeks pregnant with Charlie's child, laying his hand against her stomach.",
+    "summary": "amy nine weeks pregnant with charlies child",
+    "keywords": ["pregnancy", "charlie", "family"],
+    "importance": 0.95,
+    "temporal": "present",
+    "scope": "wide",
     "context": "relationships"
   }
 ]

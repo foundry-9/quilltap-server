@@ -4,6 +4,7 @@
  * Supports OpenAI and Anthropic format conversions
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
@@ -135,3 +136,6 @@ export function validateImageGenerationInput(
   const parsed = imageGenerationToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }
+
+/** What this tool does to the world: changes stored state. */
+export const imageGenerationToolEffect: ToolEffectSpec = 'write';

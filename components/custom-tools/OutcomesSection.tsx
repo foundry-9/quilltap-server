@@ -7,8 +7,10 @@
  * holds wins. The final row is the pinned catch-all: not movable, not
  * deletable, its condition reading "otherwise" — which makes the loader's
  * ordering rule unviolatable by construction. Conditions are chips (subject +
- * comparator + operand) joined by AND; a duplicate subject+comparator pair is
- * blocked at the door because one comparator object can carry each key once.
+ * comparator + operand) joined by AND on a line, and lines joined by OR — a
+ * row wins when any of its lines holds. A duplicate subject+comparator pair on
+ * one line is blocked at the door because one comparator object can carry
+ * each key once.
  */
 
 import { useRef, useState } from 'react'
@@ -26,6 +28,7 @@ import {
 } from '@/lib/pascal/custom-tool.types'
 import {
   conditionSlotKey,
+  groupsOf,
   nextDraftId,
   reseatOperandForComparator,
   subjectValueType,
@@ -39,6 +42,10 @@ import {
 } from '@/lib/pascal/tool-draft'
 import { COMPARATOR_LABELS } from './comparator-labels'
 import { LiteralOperandField } from './LiteralOperandField'
+import { INVENTORY_STATE_VALUES } from '@/lib/pascal/inventory-subjects'
+import { ConditionGroups } from './ConditionGroups'
+import { AggregateKeyField } from './AggregateKeyField'
+import { ToolFieldInterventionToggle } from './InterventionToggle'
 
 interface OutcomesSectionProps {
   draft: ToolDraft
@@ -73,6 +80,12 @@ function subjectSelectValue(subject: ConditionSubject): string {
       return 'llm'
     case 'llm-ok':
       return 'llm-ok'
+    case 'inventory':
+      return 'inventory'
+    case 'inventoryCount':
+      return 'inventoryCount'
+    case 'inventoryAggregate':
+      return 'inventoryAggregate'
   }
 }
 
@@ -92,7 +105,7 @@ export function OutcomesSection({
       .filter(
         (issue) =>
           issue.severity === 'error' &&
-          (issue.where.section === 'outcome' || issue.where.section === 'message') &&
+          (issue.where.section === 'outcome' || issue.where.section === 'message' || issue.where.section === 'brief') &&
           issue.where.id === id &&
           (conditionId === undefined || (issue.where.section === 'outcome' && issue.where.conditionId === conditionId))
       )
@@ -100,7 +113,12 @@ export function OutcomesSection({
 
   const messageWarnings = (id: string): string[] =>
     issues
-      .filter((issue) => issue.severity === 'warning' && issue.where.section === 'message' && issue.where.id === id)
+      .filter(
+        (issue) =>
+          issue.severity === 'warning' &&
+          (issue.where.section === 'message' || issue.where.section === 'brief') &&
+          issue.where.id === id
+      )
       .map((issue) => issue.message)
 
   const setOutcomes = (next: DraftOutcome[]) => onChange({ ...draft, outcomes: next })
@@ -115,6 +133,7 @@ export function OutcomesSection({
       conditions: [],
       state: 'success',
       message: '',
+      brief: '',
     }
     // Insert above the pinned catch-all.
     setOutcomes([...outcomes.slice(0, -1), fresh, outcomes[outcomes.length - 1]])
@@ -134,8 +153,44 @@ export function OutcomesSection({
     <section className="qt-card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="qt-card-title text-sm">The outcome table</h2>
-          <p className="qt-hint">Checked top to bottom — the first row whose every condition holds wins.</p>
+          <h2 className="qt-card-title text-sm flex items-center gap-2">
+            The outcome table
+            <ToolFieldInterventionToggle
+              draft={draft}
+              onChange={onChange}
+              fieldKey="outcome"
+              label="Show the winning outcome in the hold dialog"
+              disabled={disabled}
+            />
+          </h2>
+          {draft.intervention.enabled && (
+            <div className="flex items-center gap-4 text-xs qt-text-secondary">
+              <span className="flex items-center gap-1">
+                Message
+                <ToolFieldInterventionToggle
+                  draft={draft}
+                  onChange={onChange}
+                  fieldKey="message"
+                  label="Show the rendered message in the hold dialog"
+                  disabled={disabled}
+                />
+              </span>
+              <span className="flex items-center gap-1">
+                State
+                <ToolFieldInterventionToggle
+                  draft={draft}
+                  onChange={onChange}
+                  fieldKey="state"
+                  label="Show the outcome state in the hold dialog"
+                  disabled={disabled}
+                />
+              </span>
+            </div>
+          )}
+          <p className="qt-hint">
+            Checked top to bottom — the first row that holds wins. Tests on one line must all hold; any line of a row
+            will do.
+          </p>
         </div>
         <button
           type="button"
@@ -308,6 +363,25 @@ function OutcomeRow({
 
       <MessageEditor outcome={outcome} draft={draft} disabled={disabled} onUpdate={onUpdate} />
 
+      {(draft.llmEnabled || outcome.brief !== '') && (
+        <div className="space-y-1">
+          <textarea
+            value={outcome.brief}
+            maxLength={MAX_MESSAGE_LENGTH}
+            onChange={(e) => onUpdate({ brief: e.target.value })}
+            disabled={disabled}
+            rows={2}
+            className="qt-textarea w-full text-sm"
+            placeholder="Brief for the consult's narrator — the verdict this row means, e.g. “Report that the signal is definitively confirmed.” Quote it in the prompt as {{outcome.brief}}."
+            aria-label="Outcome brief for the LLM consult"
+          />
+          <p className="qt-hint">
+            Optional. When no row tests the consult&rsquo;s answer, the table is dealt first and the model is simply
+            told this, rather than asked to work the verdict out for itself.
+          </p>
+        </div>
+      )}
+
       {errors.map((message) => (
         <p key={message} className="text-xs qt-text-destructive">
           {message}
@@ -343,7 +417,8 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
     // Block a change that would collide with an existing subject+comparator
     // slot — one comparator object carries each key once (§4.4.1).
     const slot = conditionSlotKey(next)
-    const collision = outcome.conditions.some((c) => c.id !== id && conditionSlotKey(c) === slot)
+    const line = groupsOf(outcome.conditions).find((group) => group.some((c) => c.id === id)) ?? []
+    const collision = line.some((c) => c.id !== id && conditionSlotKey(c) === slot)
     if (collision) {
       setDuplicateNotice(describeSlot(next))
       return
@@ -359,8 +434,9 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
       comparator: 'gte',
       operand: { kind: 'number', text: '' },
     }
-    // Find a free slot so the fresh chip never lands on a duplicate.
-    const taken = new Set(outcome.conditions.map(conditionSlotKey))
+    // Find a free slot on the last line so the fresh chip never lands on a duplicate.
+    const lines = groupsOf(outcome.conditions)
+    const taken = new Set((lines[lines.length - 1] ?? []).map(conditionSlotKey))
     const comparators: ComparatorKey[] = ['gte', 'gt', 'lte', 'lt', 'eq', 'neq']
     for (const subject of [{ kind: 'value' } as const, { kind: 'roll' } as const]) {
       for (const comparator of comparators) {
@@ -384,9 +460,14 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
 
   return (
     <div className="space-y-1 pl-6">
-      {outcome.conditions.map((condition, i) => (
-        <div key={condition.id} className="flex items-center gap-2 flex-wrap">
-          {i > 0 && <span className="text-xs qt-text-secondary font-mono">AND</span>}
+      <ConditionGroups
+        conditions={outcome.conditions}
+        disabled={disabled}
+        onJoinerChange={(id, joiner) => {
+          setDuplicateNotice(null)
+          setConditions(outcome.conditions.map((c) => (c.id === id ? { ...c, joiner } : c)))
+        }}
+        renderChip={(condition) => (
           <ConditionChip
             condition={condition}
             draft={draft}
@@ -395,8 +476,8 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
             onChange={(next) => updateCondition(condition.id, next)}
             onDelete={() => deleteCondition(condition.id)}
           />
-        </div>
-      ))}
+        )}
+      />
       {duplicateNotice && <p className="text-xs qt-text-destructive">{duplicateNotice}</p>}
       <button
         type="button"
@@ -415,19 +496,25 @@ function describeSlot(condition: Pick<DraftCondition, 'subject' | 'comparator'>)
   const label = COMPARATOR_LABELS[condition.comparator]
   switch (condition.subject.kind) {
     case 'value':
-      return `A row can test ${label} on the value only once.`
+      return `A line can test ${label} on the value only once.`
     case 'roll':
-      return `A row can test ${label} on the raw roll only once.`
+      return `A line can test ${label} on the raw roll only once.`
     case 'param':
-      return `A row can test ${label} on "${condition.subject.name}" only once.`
+      return `A line can test ${label} on "${condition.subject.name}" only once.`
     case 'metadata':
-      return `A row can test ${label} on metadata "${condition.subject.key}" only once.`
+      return `A line can test ${label} on metadata "${condition.subject.key}" only once.`
     case 'progress':
-      return `A row can test ${label} on progress "${condition.subject.key}" only once.`
+      return `A line can test ${label} on progress "${condition.subject.key}" only once.`
     case 'llm':
-      return `A row can test ${label} on the consult's answer only once.`
+      return `A line can test ${label} on the consult's answer only once.`
     case 'llm-ok':
-      return 'A row can test whether the consult succeeded only once.'
+      return 'A line can test whether the consult succeeded only once.'
+    case 'inventory':
+      return `A line can test ${label} on the state of "${condition.subject.key}" only once.`
+    case 'inventoryCount':
+      return `A line can test ${label} on the equipped count of "${condition.subject.key}" only once.`
+    case 'inventoryAggregate':
+      return `A line can test ${label} on the aggregate "${condition.subject.key}" only once.`
   }
 }
 
@@ -453,8 +540,15 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
   // Metadata and the consult's answer offer every comparator — the stored type
   // is unknowable at authoring time (§4.4.1). String subjects offer equality
   // and containment; boolean subjects only = and ≠; numbers cannot contain.
+  // An aggregate offers everything: whether its key reads as a list or a
+  // number is the validator's to flag beside the chip, so typing the key never
+  // yanks the comparator out from under the author.
   const comparators: ComparatorKey[] =
-    subjectType === 'string'
+    subject.kind === 'inventory'
+      ? ['eq', 'neq']
+      : subject.kind === 'inventoryAggregate'
+      ? ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
+      : subjectType === 'string'
       ? ['eq', 'neq', 'contains', 'ncontains']
       : subjectType === 'boolean'
         ? ['eq', 'neq']
@@ -471,7 +565,12 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
       if (!p.name) return false
       // A substring must be text whatever the subject turns out to hold.
       if (containment) return p.type === 'string'
-      if (subject.kind === 'metadata' || subject.kind === 'progress' || subject.kind === 'llm') {
+      if (
+        subject.kind === 'metadata' ||
+        subject.kind === 'progress' ||
+        subject.kind === 'llm' ||
+        (subject.kind === 'inventoryAggregate' && subjectType === null)
+      ) {
         // With the subject's type unknown, no reference can be ruled
         // incompatible — ordering still demands a number, though.
         return !ordering || p.type === 'number' || p.type === 'integer'
@@ -490,6 +589,13 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     else if (value === 'progress') nextSubject = { kind: 'progress', key: subject.kind === 'progress' ? subject.key : '' }
     else if (value === 'llm') nextSubject = { kind: 'llm' }
     else if (value === 'llm-ok') nextSubject = { kind: 'llm-ok' }
+    else if (value === 'inventoryAggregate') {
+      nextSubject = { kind: 'inventoryAggregate', key: subject.kind === 'inventoryAggregate' ? subject.key : '' }
+    }
+    else if (value === 'inventory' || value === 'inventoryCount') {
+      const key = subject.kind === 'inventory' || subject.kind === 'inventoryCount' ? subject.key : ''
+      nextSubject = { kind: value, key }
+    }
     else nextSubject = { kind: 'param', name: value.slice('param:'.length) }
 
     // Re-legalize the comparator and operand for the new subject's type.
@@ -502,6 +608,12 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
       nextComparator = 'eq'
     }
     let nextOperand: ConditionOperand = condition.operand
+    if (nextSubject.kind === 'inventory') {
+      // A state is tested with = or ≠ against one of the four states.
+      if (nextComparator !== 'eq' && nextComparator !== 'neq') nextComparator = 'eq'
+      const valid = nextOperand.kind === 'string' && (INVENTORY_STATE_VALUES as readonly string[]).includes(nextOperand.text)
+      if (!valid && nextOperand.kind !== 'param') nextOperand = { kind: 'string', text: 'equipped' }
+    }
     if (nextType === 'boolean' && nextOperand.kind !== 'param') nextOperand = { kind: 'boolean', value: true }
     else if (nextType === 'string' && nextOperand.kind === 'number') nextOperand = { kind: 'string', text: nextOperand.text }
     else if (nextType === 'number' && (nextOperand.kind === 'string' || nextOperand.kind === 'boolean')) {
@@ -538,6 +650,15 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         <option value="progress" title="A derived field of one of the character's timed progressions">
           Progress…
         </option>
+        <option value="inventory" title="An object's state for the rolling character: equipped, carried, reachable or absent">
+          Inventory state…
+        </option>
+        <option value="inventoryCount" title="How many of an object's kind the rolling character has equipped">
+          Inventory count…
+        </option>
+        <option value="inventoryAggregate" title="One attribute across everything equipped, owned or reachable">
+          Inventory aggregate…
+        </option>
         {draft.llmEnabled && (
           <>
             <option value="llm" title="What the consulted model answered">
@@ -573,6 +694,27 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
           className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
           aria-label="Progress key"
           title={'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity. A progression they do not carry simply doesn\u2019t match.'}
+        />
+      )}
+
+      {(subject.kind === 'inventory' || subject.kind === 'inventoryCount') && (
+        <input
+          type="text"
+          value={subject.key}
+          onChange={(e) => onChange({ ...condition, subject: { kind: subject.kind, key: e.target.value } })}
+          placeholder="Excalibur, or {{params.weapon}}"
+          disabled={disabled}
+          className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
+          aria-label="Inventory object reference"
+          title="The object, by id, title or name — a template, so {{params.weapon}} lets a parameter choose. A run nobody made declines the test."
+        />
+      )}
+
+      {subject.kind === 'inventoryAggregate' && (
+        <AggregateKeyField
+          value={subject.key}
+          onChange={(key) => onChange({ ...condition, subject: { kind: 'inventoryAggregate', key } })}
+          disabled={disabled}
         />
       )}
 
@@ -658,7 +800,8 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   const typeUnknowable =
     condition.subject.kind === 'metadata' ||
     condition.subject.kind === 'progress' ||
-    condition.subject.kind === 'llm'
+    condition.subject.kind === 'llm' ||
+    (condition.subject.kind === 'inventoryAggregate' && subjectType === null)
 
   const setOperand = (next: ConditionOperand) => onChange({ ...condition, operand: next })
 
@@ -666,7 +809,12 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   // segmented literal-type picker chooses between number, text, and true/false
   // (§4.4.1). Containment needs no picker — the substring is always text.
   const showTypePicker =
-    typeUnknowable && !ordering && !containment && operand.kind !== 'param' && operand.kind !== 'state'
+    typeUnknowable &&
+    !ordering &&
+    !containment &&
+    operand.kind !== 'param' &&
+    operand.kind !== 'state' &&
+    operand.kind !== 'inventory'
 
   /**
    * The literal the shared widget renders. A string operand against a numeric
@@ -685,6 +833,13 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
           title="This operand draws from persistent state. Edit $state references in the raw JSON."
         >
           $state: {operand.path} → {String(operand.fallback)}
+        </span>
+      ) : operand.kind === 'inventory' ? (
+        <span
+          className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
+          title="This operand draws from an object the rolling character carries. Edit $inventory references in the raw JSON."
+        >
+          $inventory: {operand.path} → {String(operand.fallback)}
         </span>
       ) : operand.kind === 'param' ? (
         <select
@@ -707,6 +862,7 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
           onChange={setOperand}
           disabled={disabled}
           showTypePicker={showTypePicker}
+          {...(condition.subject.kind === 'inventory' ? { stateOptions: INVENTORY_STATE_VALUES } : {})}
         />
       )}
 
@@ -849,6 +1005,7 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
                 .map((p) => (
                   <MenuItem key={p.id} label={`Parameter: ${p.name}`} onClick={() => insertAtCursor(`{{params.${p.name}}}`)} />
                 ))}
+              <MenuItem label="Character name" onClick={() => insertAtCursor('{{character}}')} />
               <MenuItem label="Metadata key…" onClick={insertMetadataKey} />
               <MenuItem label="Progress field…" onClick={insertProgressField} />
               <MenuItem

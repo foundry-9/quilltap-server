@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
+import { StorytellerBoard, withBid, type StorytellerRoundResponse } from '@/components/chat/StorytellerBoard'
+import type { StorytellerStreamEvent } from './hooks/useSSEStreaming'
+import type { AvatarImageSource } from '@/components/ui/Avatar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
@@ -50,6 +53,7 @@ import {
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
+import { isProseTemplate } from '@/lib/punctuation-lint/prose-mode'
 
 // Import extracted hooks
 import {
@@ -80,6 +84,7 @@ import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
 import { buildRenderItems } from './announcement-render-items'
+import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
@@ -105,6 +110,7 @@ import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
 import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
+import { ReplyAnnouncer } from '@/components/chat/ReplyAnnouncer'
 
 /** Fallback re-read cadence for the avatar watch, while the socket is down. */
 const AVATAR_POLL_INTERVAL_MS = 5000
@@ -198,7 +204,8 @@ export function SalonView({ chatId }: SalonViewProps) {
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
-  const [narrationDelimiters, setNarrationDelimiters] = useState<NarrationDelimiters | undefined>(undefined)
+  const [narrationDelimiters, setNarrationDelimiters] = useState<NarrationDelimiters | null | undefined>(undefined)
+  const [composerProseMode, setComposerProseMode] = useState(false)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
@@ -249,6 +256,27 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
     return names
   }, [chat?.participants])
+
+  // Character id → name, for the Staff bar of a message a character announces
+  // (`customAnnouncer`) — participants first, then the off-scene cards.
+  const announcerNames = useMemo(() => {
+    const names: Record<string, string> = {}
+    for (const c of chat?.offSceneCharacters ?? []) {
+      if (c.name) names[c.id] = c.name
+    }
+    for (const p of chat?.participants ?? []) {
+      if (p.character?.id && p.character.name) names[p.character.id] = p.character.name
+    }
+    return names
+  }, [chat?.participants, chat?.offSceneCharacters])
+
+  // A `/` command's immediate built-in run acts as Run Tool's default would:
+  // the first active character seat.
+  const slashDefaultCharacterId = useMemo(
+    () =>
+      (chat?.participants ?? []).find(p => p.type === 'CHARACTER' && p.isActive && !p.removedAt)?.character?.id ?? null,
+    [chat?.participants]
+  )
 
   // The `@` typeahead lists this chat's cast ahead of everyone else.
   const castCharacterIds = useMemo(
@@ -379,8 +407,12 @@ export function SalonView({ chatId }: SalonViewProps) {
     (customToolsQuery.data?.tools?.length ?? 0) > 0 ||
     (customToolsQuery.data?.errors?.length ?? 0) > 0
 
+  // The Host's old "spoken of" cards stay in the transcript but not the feed:
+  // an absent character's name now carries a chip with the same card on hover
+  // (`useAbsentMentions`, `MentionChip`).
   const visibleMessages = useMemo(() => {
     return messages.filter(msg =>
+      !isOffSceneMentionIntroduction(msg) &&
       isMessageVisibleToOperator(msg, {
         showAllWhispers,
         userParticipantIds: userParticipantIdSet,
@@ -523,6 +555,20 @@ export function SalonView({ chatId }: SalonViewProps) {
     startBackgroundPolling,
   })
 
+  // --- Storyteller board: the send's stream fills the board's cached round ---
+  const storytellerQueryClient = useQueryClient()
+  const handleStorytellerEvent = useCallback((event: StorytellerStreamEvent) => {
+    const key = queryKeys.chats.storytellerRound(id)
+    if (event.kind === 'round') {
+      storytellerQueryClient.setQueryData<StorytellerRoundResponse>(key, { round: event.round })
+    } else if (event.kind === 'bid') {
+      storytellerQueryClient.setQueryData<StorytellerRoundResponse>(key, (prev) =>
+        prev?.round && prev.round.id === event.roundId ? { round: withBid(prev.round, event.bid) } : prev)
+    } else {
+      void storytellerQueryClient.invalidateQueries({ queryKey: key })
+    }
+  }, [id, storytellerQueryClient])
+
   // --- SSE Streaming hook ---
   const sseStreaming = useSSEStreaming({
     chatId: id,
@@ -545,6 +591,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     inputRef: inputRef as React.RefObject<ComposerEditorHandle>,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
+    onStorytellerEvent: handleStorytellerEvent,
     onToolResult: (name, success, result) => {
       // React to LLM opening/closing documents
       if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
@@ -968,6 +1015,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         setRoleplayRenderingPatterns(undefined)
         setRoleplayDialogueDetection(undefined)
         setNarrationDelimiters(undefined)
+        setComposerProseMode(false)
         return
       }
       try {
@@ -978,17 +1026,20 @@ export function SalonView({ chatId }: SalonViewProps) {
           setRoleplayRenderingPatterns(template.renderingPatterns)
           setRoleplayDialogueDetection(template.dialogueDetection)
           setNarrationDelimiters(template.narrationDelimiters)
+          setComposerProseMode(isProseTemplate(template))
         } else {
           setRoleplayTemplateName(null)
           setRoleplayRenderingPatterns(undefined)
           setRoleplayDialogueDetection(undefined)
           setNarrationDelimiters(undefined)
+          setComposerProseMode(false)
         }
       } catch {
         setRoleplayTemplateName(null)
         setRoleplayRenderingPatterns(undefined)
         setRoleplayDialogueDetection(undefined)
         setNarrationDelimiters(undefined)
+        setComposerProseMode(false)
       }
     }
     fetchTemplateData()
@@ -1287,6 +1338,11 @@ export function SalonView({ chatId }: SalonViewProps) {
     return chatSettings.avatarDisplayMode === 'ALWAYS'
   }, [chatSettings])
 
+  const announcerNameFor = useCallback((participantId: string | null | undefined) => {
+    if (!participantId) return undefined
+    return chat?.participants.find(p => p.id === participantId)?.character?.name
+  }, [chat?.participants])
+
   const getRespondingCharacter = useCallback(() => {
     if (respondingParticipantId) {
       const participant = chat?.participants.find(p => p.id === respondingParticipantId)
@@ -1298,9 +1354,10 @@ export function SalonView({ chatId }: SalonViewProps) {
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
   const getMessageAvatar = useCallback((message: Message) => {
-    // Ad-hoc announcement bubble (Insert Announcement composer button).
-    // customAnnouncer takes precedence over systemSender by construction:
-    // the writer only sets one or the other per message.
+    // Ad-hoc announcement bubble (Insert Announcement composer button), or a
+    // Pascal outcome its tool has the rolling character announce
+    // (`announceAsCharacter`). customAnnouncer takes precedence over
+    // systemSender: when both are set, the named speaker wears the bubble.
     if (message.customAnnouncer) {
       if (message.customAnnouncer.kind === 'character' && message.customAnnouncer.characterId) {
         const charId = message.customAnnouncer.characterId
@@ -1522,6 +1579,8 @@ export function SalonView({ chatId }: SalonViewProps) {
       style={visibleStoryBackgroundUrl ? { '--story-background-url': `url('${visibleStoryBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
+        <h1 className="sr-only">{chat?.title || 'The Salon'}</h1>
+        <ReplyAnnouncer messages={renderMessages} nameFor={announcerNameFor} />
         <SalonModePanes
           parentChatId={id}
           chatTitle={chat?.title}
@@ -1558,6 +1617,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           streaming={sseStreaming.streaming}
           streamingContent={sseStreaming.streamingContent}
           waitingForResponse={sseStreaming.waitingForResponse}
+          concurrentStreams={sseStreaming.concurrentStreams.map((stream) => ({
+            ...stream,
+            character: chat?.participants.find(p => p.id === stream.participantId)?.character ?? undefined,
+          }))}
           userParticipantId={participantsWithImpersonation.userParticipantId}
           respondingParticipantId={respondingParticipantId}
           chatId={id}
@@ -1585,6 +1648,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
           getMessageAvatar={getMessageAvatar}
           participantNames={participantNames}
+          announcerNames={announcerNames}
           currentUserId={chat?.user?.id ?? null}
           userParticipantIdSet={userParticipantIdSet}
           isDangerousChat={shouldShowDangerStyling(chat)}
@@ -1694,6 +1758,19 @@ export function SalonView({ chatId }: SalonViewProps) {
           )
         })()}
 
+        {/* Storyteller: the round's board, above the composer */}
+        {chat?.turnMode === 'storyteller' && (
+          <StorytellerBoard
+            chatId={id}
+            busy={sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending}
+            avatarFor={(participantId) => {
+              const character = chat?.participants.find(p => p.id === participantId)?.character
+              return character as unknown as AvatarImageSource | undefined
+            }}
+            onRun={sseStreaming.runStorytellerSelection}
+          />
+        )}
+
         {/* Chat Composer */}
         <ChatComposer
           id={id}
@@ -1727,10 +1804,15 @@ export function SalonView({ chatId }: SalonViewProps) {
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
           onDismissToolExecutionStatus={sseStreaming.dismissToolExecutionStatus}
           customToolsAvailable={customToolsAvailable}
-          onCustomToolRan={fetchChat}
+          onCustomToolsClick={() => modals.openCustomTool()}
+          onOpenRunTool={modals.openRunTool}
+          onOpenCustomTool={modals.openCustomTool}
+          onSlashToolRan={fetchChat}
+          slashDefaultCharacterId={slashDefaultCharacterId}
           renderingPatterns={roleplayRenderingPatterns}
           dialogueDetection={roleplayDialogueDetection}
           roleplayTemplateId={chat?.roleplayTemplateId}
+          proseMode={composerProseMode}
           documentEditingMode={chatControls.documentEditingMode}
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
@@ -1798,7 +1880,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           onInformClick={modals.openInform}
           informParticipantNames={participantNames}
           onStopStreaming={sseStreaming.stopStreaming}
-          hideStopButton={modals.showParticipantSidebar}
+          onToggleRaisedHand={sseStreaming.toggleRaisedHand}
+          handRaised={sseStreaming.handRaised}
+          canRaiseHand={!participantsWithImpersonation.isSingleCharacterChat && chat?.chatType !== 'autonomous'}
+          stopping={sseStreaming.stopping}
           onPendingToolResult={handleAddPendingToolResult}
           narrationDelimiters={narrationDelimiters}
           onOpenTerminalClick={handleOpenTerminal}
@@ -1932,7 +2017,11 @@ export function SalonView({ chatId }: SalonViewProps) {
           toolSettingsModalOpen={modals.toolSettingsModalOpen}
           closeToolSettings={modals.closeToolSettings}
           runToolModalOpen={modals.runToolModalOpen}
+          runToolRequest={modals.runToolRequest}
           closeRunTool={modals.closeRunTool}
+          customToolDialogOpen={modals.customToolDialogOpen}
+          customToolRequest={modals.customToolRequest}
+          closeCustomTool={modals.closeCustomTool}
           stateEditorModalOpen={modals.stateEditorModalOpen}
           closeStateEditor={modals.closeStateEditor}
           libraryFilePickerOpen={modals.libraryFilePickerOpen}
@@ -2017,11 +2106,14 @@ export function SalonView({ chatId }: SalonViewProps) {
           waitingForResponse={sseStreaming.waitingForResponse}
           isPaused={isPaused}
           onTogglePause={chatControls.togglePause}
+          turnMode={chat?.turnMode ?? 'rotation'}
+          onSetTurnPosition={chatControls.setTurnPosition}
+          storytellerInviteFilter={chat?.storytellerInviteFilter === true}
+          onToggleStorytellerInviteFilter={chatControls.toggleStorytellerInviteFilter}
           onNudge={turnManagement.handleNudge}
           onQueue={turnManagement.handleQueue}
           onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
-          onStopStreaming={sseStreaming.stopStreaming}
           onTalkativenessChange={chatControls.handleTalkativenessChange}
           onAddCharacter={modals.openAddCharacter}
           onRemoveCharacter={chatControls.handleRemoveCharacter}
@@ -2058,7 +2150,7 @@ export function SalonView({ chatId }: SalonViewProps) {
             refusalCount: chat?.conciergeRefusalCount,
           }}
           onToolSettingsClick={modals.openToolSettings}
-          onRunToolClick={modals.openRunTool}
+          onRunToolClick={() => modals.openRunTool()}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
           onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
           // Visibility section

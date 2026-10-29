@@ -15,12 +15,14 @@
 import type { DialogueDetection } from '@/lib/schemas/template.types';
 import {
   type CompiledRule,
+  unmarkedClassFor,
   tokenizeInline,
   lineMatchFor,
   wrapBlockMatchFor,
   isDialogueParagraph,
   segmentsToHtml,
 } from '@/lib/chat/roleplay-rendering';
+import { escapeRegex } from '@/lib/utils/regex';
 
 /**
  * Process roleplay syntax in HTML content and wrap inline matches with styled
@@ -32,6 +34,12 @@ import {
  * shared `tokenizeInline` core, so client and server can't diverge.
  */
 export function applyRoleplayPatterns(html: string, compiledRules: CompiledRule[]): string {
+  // The template's unmarked-text class, applied (as on the client) only to text
+  // sitting directly in a block element — never inside a span or other inline
+  // element. Blocks a line rule claims shed it in applyLineScopedClasses.
+  const unmarkedClassName = unmarkedClassFor(compiledRules);
+  const openTags: string[] = [];
+
   // Split by HTML tags to avoid matching inside them
   // This regex captures HTML tags as separate array elements
   const tagRegex = /(<[^>]*>)/g;
@@ -68,6 +76,7 @@ export function applyRoleplayPatterns(html: string, compiledRules: CompiledRule[
       } else if (lowerPart === '</code>' || lowerPart === '</pre>') {
         inCodeBlock = Math.max(0, inCodeBlock - 1);
       }
+      if (unmarkedClassName) trackOpenTags(openTags, lowerPart);
       return part; // Return HTML tags unchanged
     }
 
@@ -77,10 +86,44 @@ export function applyRoleplayPatterns(html: string, compiledRules: CompiledRule[
     }
 
     // Tokenize the text run with the shared core and emit HTML spans.
-    return segmentsToHtml(tokenizeInline(part, compiledRules));
+    const directlyInBlock =
+      openTags.length > 0 && UNMARKED_BLOCK_TAGS.has(openTags[openTags.length - 1]);
+    return segmentsToHtml(
+      tokenizeInline(part, compiledRules, {
+        unmarkedClassName: directlyInBlock ? unmarkedClassName : undefined,
+      }),
+    );
   });
 
   return processedParts.join('');
+}
+
+/** Blocks whose direct text the client styles as unmarked (see MessageContent). */
+const UNMARKED_BLOCK_TAGS = new Set(['p', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+
+/** HTML void elements — they never close, so they never enter the stack. */
+const VOID_TAGS = new Set(['br', 'hr', 'img', 'input', 'wbr', 'col', 'area', 'base', 'embed', 'link', 'meta', 'source', 'track']);
+
+/** Maintain the stack of open element names across a lower-cased tag token. */
+function trackOpenTags(stack: string[], lowerTag: string): void {
+  const m = lowerTag.match(/^<(\/?)([a-z][a-z0-9-]*)/);
+  if (!m) return; // comment, doctype, …
+  const [, closing, name] = m;
+  if (closing) {
+    const at = stack.lastIndexOf(name);
+    if (at >= 0) stack.length = at;
+    return;
+  }
+  if (VOID_TAGS.has(name) || lowerTag.endsWith('/>')) return;
+  stack.push(name);
+}
+
+/** Remove the unmarked-text spans tokenizeInline emitted inside a claimed block. */
+function stripUnmarkedSpans(html: string, unmarkedClassName: string): string {
+  const open = `<span class="${unmarkedClassName}">`;
+  if (!html.includes(open)) return html;
+  // Unmarked spans hold plain text only (no nested tags), so a lazy match is exact.
+  return html.replace(new RegExp(`${escapeRegex(open)}([^<]*)</span>`, 'g'), '$1');
 }
 
 /**
@@ -118,6 +161,7 @@ export function applyDialogueDetection(html: string, detection: DialogueDetectio
 export function applyLineScopedClasses(html: string, compiledRules: CompiledRule[]): string {
   const lineRules = compiledRules.filter((r) => r.scope === 'line');
   if (lineRules.length === 0) return html;
+  const unmarkedClassName = unmarkedClassFor(compiledRules);
 
   return html.replace(
     /<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g,
@@ -127,10 +171,12 @@ export function applyLineScopedClasses(html: string, compiledRules: CompiledRule
       const lm = lineMatchFor(plainText, lineRules);
       if (!lm) return match;
 
+      // A claimed block's text belongs to its rule, not the unmarked default.
+      let body = unmarkedClassName ? stripUnmarkedSpans(content as string, unmarkedClassName) : (content as string);
+
       // When the rule hides its delimiter, drop the leading marker/tag from the
       // block's content. The prefix is literal text before any inline tag, so a
       // leading slice is safe and preserves inline formatting in the body.
-      let body = content as string;
       if (lm.hideDelimiters && lm.prefix && body.startsWith(lm.prefix)) {
         body = body.slice(lm.prefix.length);
       }

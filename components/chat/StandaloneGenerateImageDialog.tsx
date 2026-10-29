@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useId } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { useEntitySearch } from './useEntitySearch'
 import { EntitySearchDropdown } from './EntitySearchDropdown'
@@ -124,6 +126,12 @@ export default function StandaloneGenerateImageDialog({
     }
   }
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
+
+  useEscapeKey(onClose, isOpen && !isGenerating)
+
   if (!isOpen) return null
 
   // Get current chat participants for quick buttons
@@ -132,13 +140,22 @@ export default function StandaloneGenerateImageDialog({
 
   return (
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+        className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col"
+      >
         {/* Header */}
         <div className="qt-dialog-header flex items-center justify-between">
-          <h2 className="qt-dialog-title">
+          <h2 id={titleId} className="qt-dialog-title">
             Generate Image
           </h2>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="qt-button qt-button-ghost p-2"
             disabled={isGenerating}

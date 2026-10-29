@@ -119,7 +119,7 @@ describe('pseudo-tool.service', () => {
         arguments: {
           title: 'Red Scarf',
           types: 'accessories',
-          content: 'A soft crimson scarf with golden tassels',
+          description: 'A soft crimson scarf with golden tassels',
         },
       },
     ])

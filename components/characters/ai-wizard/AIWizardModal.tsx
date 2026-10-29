@@ -7,7 +7,8 @@
  * Orchestrates the multi-step wizard flow.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useId, useRef } from 'react'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { Icon } from '@/components/ui/icon'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useAIWizard } from './hooks/useAIWizard'
@@ -42,6 +43,9 @@ export function AIWizardModal({
 
 
   useEscapeKey(onClose, isOpen && !wizard.generating)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
 
   // Reset wizard when closed
   useEffect(() => {
@@ -65,12 +69,18 @@ export function AIWizardModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center qt-dialog-overlay" onClick={handleClose}>
       <div
         className="qt-dialog w-full max-w-2xl max-h-[90vh] m-4 flex flex-col"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="qt-dialog-header flex justify-between items-center flex-shrink-0">
           <div>
-            <h2 className="qt-dialog-title flex items-center gap-2">
+            <h2 id={titleId} className="qt-dialog-title flex items-center gap-2">
               <Icon name="wand" className="w-5 h-5 text-primary" />
               AI Wizard
             </h2>
@@ -79,6 +89,7 @@ export function AIWizardModal({
             </p>
           </div>
           <button
+            aria-label="Close"
             type="button"
             onClick={handleClose}
             disabled={wizard.generating}

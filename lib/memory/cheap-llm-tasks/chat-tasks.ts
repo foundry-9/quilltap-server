@@ -2,6 +2,7 @@
  * Chat summarization, title generation, and conversation utility tasks.
  */
 
+import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from './core-execution'
@@ -242,36 +243,51 @@ export function stripToolArtifacts(content: string): string | null {
  * @returns Clean ChatMessage[] with only user/assistant conversational text
  */
 export function extractVisibleConversation(
-  messages: Array<{ type?: string; role?: string; content?: string; systemKind?: string | null }>
+  messages: Array<VisibleConversationCandidate>
 ): ChatMessage[] {
   const result: ChatMessage[] = []
-
   for (const m of messages) {
-    // Skip non-message entries (system events, context-summary events, etc.)
-    if (m.type !== undefined && m.type !== 'message') continue
-
-    // Record-only: documents a delivery, is not part of the conversation.
-    if (m.systemKind === 'inform') continue
-
-    // Skip entries without content (e.g., context-summary events)
-    if (!m.content) continue
-
-    // Only include USER and ASSISTANT roles
-    const role = (m.role || '').toUpperCase()
-    if (role !== 'USER' && role !== 'ASSISTANT') continue
-
-    const lowerRole = role.toLowerCase() as 'user' | 'assistant'
-
-    if (lowerRole === 'assistant') {
-      const cleaned = stripToolArtifacts(m.content)
-      if (!cleaned) continue
-      result.push({ role: lowerRole, content: cleaned })
-    } else {
-      result.push({ role: lowerRole, content: m.content })
-    }
+    const visible = toVisibleConversationMessage(m)
+    if (visible) result.push(visible)
   }
-
   return result
+}
+
+/** The fields `toVisibleConversationMessage` reads from any message-like row. */
+export type VisibleConversationCandidate = {
+  type?: string
+  role?: string
+  content?: string
+  systemKind?: string | null
+  systemSender?: string | null
+}
+
+/**
+ * One row of `extractVisibleConversation`: the clean user/assistant line, or
+ * null when the row is not part of the visible conversation. The one rule for
+ * what counts — anything that must agree with that function's output row for
+ * row (the compression window does) asks this rather than re-deriving it.
+ */
+export function toVisibleConversationMessage(m: VisibleConversationCandidate): ChatMessage | null {
+  // Skip non-message entries (system events, context-summary events, etc.)
+  if (m.type !== undefined && m.type !== 'message') return null
+
+  // Record-only: documents a delivery, is not part of the conversation.
+  if (m.systemKind === 'inform') return null
+  // Record-only too: the Host's "spoken of" card. Folded into a compression
+  // summary it would come back into every prompt as system block 3.
+  if (isOffSceneMentionIntroduction(m)) return null
+
+  // Skip entries without content (e.g., context-summary events)
+  if (!m.content) return null
+
+  // Only include USER and ASSISTANT roles
+  const role = (m.role || '').toUpperCase()
+  if (role === 'USER') return { role: 'user', content: m.content }
+  if (role !== 'ASSISTANT') return null
+
+  const cleaned = stripToolArtifacts(m.content)
+  return cleaned ? { role: 'assistant', content: cleaned } : null
 }
 
 /**

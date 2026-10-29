@@ -18,7 +18,7 @@ const {
   memoryColumns,
 } = require('./graph-integrity');
 const { cmdMaintain } = require('./memories-maintain-command');
-const { postMemoriesAction, resolveMemoriesServerPort } = require('./memories-server');
+const { postMemoriesAction, putMemory, resolveMemoriesServerPort } = require('./memories-server');
 
 // ---------- colour & marker helpers ----------
 
@@ -152,6 +152,8 @@ function parseFlags(args) {
       case '--list': flags.list = true; break;
       case '--repair': flags.repair = true; break;
       case '--write': flags.write = true; break;
+      case '--keystone': flags.keystone = true; break;
+      case '--off': flags.off = true; break;
 
       case '--phases': flags.phases = args[++i] || ''; break;
       case '--cap': {
@@ -255,6 +257,11 @@ function buildWhereClause(db, flags, openMounts = null) {
     }
     clauses.push('m.source = ?');
     params.push(s);
+  }
+
+  if (flags.keystone) {
+    // Instances that haven't run add-memory-keystone-v1 have no keystones.
+    clauses.push(hasMemoryColumn(db, 'keystone') ? 'm.keystone = 1' : '0');
   }
 
   if (flags.tier) {
@@ -386,17 +393,23 @@ const SELECT_BASE_TEMPLATE = `
   LEFT JOIN projects ON projects.id = m.projectId
 `;
 
-// Instances that haven't yet run add-memory-tiers-v1 lack the tier columns;
-// substitute constants so the CLI still reads them (rows read as hot).
-function selectBase(db) {
-  let hasTier = false;
+function hasMemoryColumn(db, name) {
   try {
-    hasTier = db.prepare("PRAGMA table_info('memories')").all().some((c) => c.name === 'tier');
-  } catch { /* fall through: treat as legacy */ }
-  const cols = hasTier
+    return db.prepare("PRAGMA table_info('memories')").all().some((c) => c.name === name);
+  } catch {
+    return false; // treat as legacy
+  }
+}
+
+// Instances that haven't yet run add-memory-tiers-v1 lack the tier columns (and
+// those before add-memory-keystone-v1 the keystone column); substitute
+// constants so the CLI still reads them (rows read as hot, not keystones).
+function selectBase(db) {
+  const tierCols = hasMemoryColumn(db, 'tier')
     ? 'm.tier, m.supersededById, m.consolidatedFrom, m.consolidatedAt,'
     : "'hot' AS tier, NULL AS supersededById, '[]' AS consolidatedFrom, NULL AS consolidatedAt,";
-  return SELECT_BASE_TEMPLATE.replace('__TIER_COLUMNS__', cols);
+  const keystoneCol = hasMemoryColumn(db, 'keystone') ? 'm.keystone,' : '0 AS keystone,';
+  return SELECT_BASE_TEMPLATE.replace('__TIER_COLUMNS__', `${tierCols} ${keystoneCol}`);
 }
 
 
@@ -499,6 +512,7 @@ function rowToJson(row) {
     supersededById: row.supersededById || null,
     consolidatedFrom: (() => { try { return JSON.parse(row.consolidatedFrom || '[]'); } catch { return []; } })(),
     consolidatedAt: row.consolidatedAt || null,
+    keystone: Number(row.keystone) === 1,
     importance: row.importance,
     reinforcedImportance: row.reinforcedImportance,
     reinforcementCount: row.reinforcementCount,
@@ -546,7 +560,8 @@ function renderTable(rows, { showHolder, impField, fullTitles }) {
     const chat = truncate(chatLabel(row, fullTitles), fullTitles ? 24 : 32).padEnd(fullTitles ? 24 : 32);
     const links = String(linkCount(row)).padStart(5);
     const emb = row.hasEmbedding ? 'Y' : '-';
-    const summary = truncate(row.summary || '', sumW);
+    // A keystone's line is marked ◆ (a standing fact; never folded or demoted).
+    const summary = (Number(row.keystone) === 1 ? '◆ ' : '') + truncate(row.summary || '', sumW);
 
     const cells = [
       showHolder ? truncate(row.holderName || '(?)', 14).padEnd(14) : null,
@@ -937,6 +952,7 @@ function renderShowText(row, graph, depth) {
   console.log(`  About:         ${aboutName}${row.aboutCharacterId && row.aboutCharacterId !== row.characterId ? `    (${shortId(row.aboutCharacterId)})` : ''}`);
   console.log(`  Source:        ${row.source || '(?)'}`);
   console.log(`  Tier:          ${row.tier || 'hot'}${row.supersededById ? `    (superseded by ${shortId(row.supersededById)})` : ''}`);
+  console.log(`  Keystone:      ${Number(row.keystone) === 1 ? 'yes (standing fact)' : 'no'}`);
   const reinf = row.reinforcedImportance != null ? Number(row.reinforcedImportance).toFixed(2) : '?';
   const baseImp = row.importance != null ? Number(row.importance).toFixed(2) : '?';
   console.log(`  Importance:    ${reinf} (reinforced from ${baseImp}, count: ${row.reinforcementCount ?? 0})`);
@@ -1507,6 +1523,51 @@ function renderRepairText(report) {
   }
 }
 
+// ---------- keystone ----------
+
+/**
+ * Mark or unmark a keystone. The id resolves locally (read-only); the change
+ * itself goes to the running server's memory PUT, through the edit chokepoint
+ * that enforces the per-subject limit and invalidates the frozen archive.
+ */
+async function cmdKeystone(flags, positional) {
+  const idArg = positional[0];
+  if (!idArg) {
+    throw new Error('memories keystone: missing <id>. Usage: quilltap memories keystone <id|prefix> [--off] [--write]');
+  }
+  const want = !flags.off;
+  const { db } = await openDb(flags);
+  let row;
+  try {
+    const id = resolveMemoryId(db, idArg);
+    row = db.prepare(`${selectBase(db)} WHERE m.id = ?`).get(id);
+    if (!row) throw new Error(`Memory ${id} not found`);
+  } finally {
+    db.close();
+  }
+  const is = Number(row.keystone) === 1;
+  const label = `${shortId(row.id)} (${truncate(row.summary || '', 60)})`;
+  if (is === want) {
+    const msg = `${label} is ${want ? 'already' : 'not'} a keystone; nothing to do.`;
+    if (flags.json) renderJson({ id: row.id, keystone: is, changed: false }); else console.log(msg);
+    return;
+  }
+  if (!flags.write) {
+    const msg = `Would ${want ? 'mark' : 'unmark'} ${label} as a keystone. Re-run with --write to apply.`;
+    if (flags.json) renderJson({ id: row.id, keystone: is, wouldBe: want, changed: false, dryRun: true }); else console.log(msg);
+    return;
+  }
+  const payload = await putMemory(flags, row.id, { keystone: want }, {
+    why: 'Changing a keystone needs the running server (the only database writer).',
+  });
+  const now = Boolean(payload && payload.memory && payload.memory.keystone);
+  if (flags.json) {
+    renderJson({ id: row.id, keystone: now, changed: now === want });
+  } else {
+    console.log(`${want ? 'Marked' : 'Unmarked'} ${label} as a keystone.`);
+  }
+}
+
 // ---------- help ----------
 
 function printMemoriesHelp() {
@@ -1559,6 +1620,16 @@ Subcommands:
                                              server (the only database
                                              writer, holder of the instance
                                              lock), so the server must be up.
+  keystone <id|prefix> [--off] [--write] [--port N]
+                                             Mark a memory a keystone (a
+                                             standing fact, always recalled in
+                                             full, never folded, consolidated
+                                             or demoted), or unmark it with
+                                             --off. Without --write it only
+                                             says what would change; with
+                                             --write the running server makes
+                                             the change (at most 5 keystones
+                                             per holder and subject).
   maintain --character <name|id|all> [--phases a,b,…] [--dry-run]
            [--max N] [--threshold 0..1] [--cap N] [--port N] [--json]
                                              Run memory maintenance by hand on
@@ -1586,6 +1657,7 @@ Shared filter flags:
   --about <name|id|self|none> Subject (aboutCharacterId).
   --source AUTO|MANUAL|CONSOLIDATED  Restrict by source.
   --tier hot|cold             Restrict by recall tier (default: both).
+  --keystone                  Only keystones (marked ◆ in tables).
   --chat <id|title|none>      Source chat ('none' for manual memories).
   --project <id|name>         Project context.
   --since <date>              ISO date floor on createdAt.
@@ -1617,9 +1689,9 @@ Note: -i is reserved here for 'grep --ignore-case'. Use the long --instance
 form to target a registered instance.
 
 All memories verbs are read-only. They open the main encrypted database
-(quilltap.db) and never write to it. 'maintain' and 'validate --repair' leave
-the writing to the running server; 'validate --repair' changes data only with
---write.
+(quilltap.db) and never write to it. 'maintain', 'keystone' and 'validate
+--repair' leave the writing to the running server; 'keystone' and 'validate
+--repair' change data only with --write.
 
 Examples:
   quilltap memories ls
@@ -1634,6 +1706,9 @@ Examples:
   quilltap memories validate --list
   quilltap memories validate --repair                 # rehearse the repair
   quilltap memories validate --repair --write         # apply it
+  quilltap memories ls --character Friday --keystone
+  quilltap memories keystone abc12345 --write         # mark a standing fact
+  quilltap memories keystone abc12345 --off --write   # unmark it
   quilltap memories maintain --instance Friday --character Friday --dry-run
   quilltap memories maintain --instance Friday --character Friday --phases consolidate --max 100
   quilltap memories maintain --character all --phases demote,retire --dry-run
@@ -1671,8 +1746,11 @@ async function memoriesCommand(args) {
   if (flags.repair && verb !== 'validate') {
     throw new Error('--repair applies only to memories validate.');
   }
-  if (flags.write && !(verb === 'validate' && flags.repair)) {
-    throw new Error('--write applies only to memories validate --repair.');
+  if (flags.write && !(verb === 'validate' && flags.repair) && verb !== 'keystone') {
+    throw new Error('--write applies only to memories validate --repair and memories keystone.');
+  }
+  if (flags.off && verb !== 'keystone') {
+    throw new Error('--off applies only to memories keystone.');
   }
   switch (verb) {
     case 'ls': await cmdLs(flags); break;
@@ -1682,6 +1760,7 @@ async function memoriesCommand(args) {
     case 'tree': await cmdTree(flags, positional); break;
     case 'status': await cmdStatus(flags); break;
     case 'validate': await cmdValidate(flags); break;
+    case 'keystone': await cmdKeystone(flags, positional); break;
     case 'maintain': await cmdMaintain(flags, resolveCharacterIdForServer); break;
     default:
       console.error(`Unknown memories subcommand: ${verb}`);

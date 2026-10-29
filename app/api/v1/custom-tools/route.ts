@@ -8,7 +8,9 @@
  *                                 store is attached to.
  * - `POST ?action=preview`      — dry-run a definition through the one true
  *                                 execution core. Posts nothing, writes
- *                                 nothing.
+ *                                 nothing. With a character in the chair,
+ *                                 also says which garment each wardrobe
+ *                                 gesture would have found (a read).
  * - `POST ?action=audit`        — deal ten thousand hands and report where
  *                                 they landed.
  *
@@ -17,6 +19,7 @@
  * second write path into stores.
  */
 
+import { MockInventorySchema, mockInventoryContext } from '@/lib/pascal/bench-inventory';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -41,6 +44,7 @@ import { evaluateToolGate, hasToolGate } from '@/lib/pascal/tool-gate';
 import { flattenProgressions } from '@/lib/progressions/engine';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildCustomToolLibrary, listCustomToolDestinations } from '@/lib/pascal/workbench';
+import { resolveBenchWardrobe } from '@/lib/pascal/bench-wardrobe';
 import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
 
 const HANDLER = 'api.v1.custom-tools';
@@ -98,6 +102,8 @@ const PreviewBodySchema = z.object({
   metadata: MetadataInputSchema.nullish(),
   /** Mock merged state for `$state` refs and `{{state.path}}`. Default {}. */
   state: z.record(z.string(), z.unknown()).nullish(),
+  /** Mock inventory rows `{ ref, state, count? }`; absent → no inventory (inventory tests decline). */
+  inventory: MockInventorySchema.nullish(),
   llm: z.union([z.strictObject({ live: z.literal(true) }), LlmSimulationSchema]).nullish(),
 });
 
@@ -107,6 +113,8 @@ const AuditBodySchema = z.object({
   metadata: MetadataInputSchema.nullish(),
   /** Mock merged state for `$state` refs, held fixed across every draw. Default {}. */
   state: z.record(z.string(), z.unknown()).nullish(),
+  /** Mock inventory rows `{ ref, state, count? }`; absent → no inventory (inventory tests decline). */
+  inventory: MockInventorySchema.nullish(),
   // No `live` here: an audit is ten thousand hands, and the point of the bench
   // is that it never spends ten thousand LLM calls. The simulated answer is
   // held fixed across every draw.
@@ -147,21 +155,21 @@ function parseDefinition(raw: unknown): Parsed<QtapCustomTool> {
 async function resolveMetadata(
   ctx: RequestContext,
   metadata: z.infer<typeof MetadataInputSchema> | null | undefined
-): Promise<Parsed<Record<string, unknown>>> {
-  if (metadata === null || metadata === undefined) return { ok: true, value: {} };
+): Promise<Parsed<{ metadata: Record<string, unknown>; characterName?: string }>> {
+  if (metadata === null || metadata === undefined) return { ok: true, value: { metadata: {} } };
 
-  const isCharacterRef =
-    typeof metadata === 'object' &&
-    Object.keys(metadata).length === 1 &&
-    typeof (metadata as { characterId?: unknown }).characterId === 'string';
+  const characterId = benchCharacterId(metadata);
+  if (!characterId) return { ok: true, value: { metadata: metadata as Record<string, unknown> } };
 
-  if (!isCharacterRef) return { ok: true, value: metadata as Record<string, unknown> };
-
-  const characterId = (metadata as { characterId: string }).characterId;
   try {
     const character = await ctx.repos.characters.findById(characterId);
     if (!character) return { ok: false, response: notFound('Character') };
-    return { ok: true, value: (character.metadata ?? {}) as Record<string, unknown> };
+    // The seated character's name answers `{{character}}`; a hand-typed sheet
+    // names nobody, so the placeholder renders as written, as for a run nobody made.
+    return {
+      ok: true,
+      value: { metadata: (character.metadata ?? {}) as Record<string, unknown>, characterName: character.name },
+    };
   } catch (error) {
     // A broken vault is surfaced honestly, never papered over with `{}` — the
     // bench would otherwise report metadata rows declining for the wrong reason.
@@ -170,6 +178,13 @@ async function resolveMetadata(
     }
     throw error;
   }
+}
+
+/** The character a bench request seats in the chair, if its fact sheet is the `{ characterId }` form. */
+function benchCharacterId(metadata: z.infer<typeof MetadataInputSchema> | null | undefined): string | null {
+  if (!metadata || typeof metadata !== 'object' || Object.keys(metadata).length !== 1) return null;
+  const characterId = (metadata as { characterId?: unknown }).characterId;
+  return typeof characterId === 'string' && characterId.length > 0 ? characterId : null;
 }
 
 /**
@@ -182,7 +197,9 @@ async function parseBenchRequest<T extends { definition: unknown; metadata?: unk
   req: NextRequest,
   ctx: RequestContext,
   schema: z.ZodType<T>
-): Promise<Parsed<{ body: T; definition: QtapCustomTool; metadata: Record<string, unknown> }>> {
+): Promise<
+  Parsed<{ body: T; definition: QtapCustomTool; metadata: Record<string, unknown>; characterName?: string }>
+> {
   const body = await parseBody(req, schema);
   if (!body.ok) return body;
 
@@ -195,7 +212,15 @@ async function parseBenchRequest<T extends { definition: unknown; metadata?: unk
   );
   if (!metadata.ok) return metadata;
 
-  return { ok: true, value: { body: body.value, definition: definition.value, metadata: metadata.value } };
+  return {
+    ok: true,
+    value: {
+      body: body.value,
+      definition: definition.value,
+      metadata: metadata.value.metadata,
+      ...(metadata.value.characterName ? { characterName: metadata.value.characterName } : {}),
+    },
+  };
 }
 
 /**
@@ -213,7 +238,7 @@ function benchRefusal(error: unknown, action: string, toolName: string): NextRes
 async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<NextResponse> {
   const parsed = await parseBenchRequest(req, ctx, PreviewBodySchema);
   if (!parsed.ok) return parsed.response;
-  const { body, definition, metadata } = parsed.value;
+  const { body, definition, metadata, characterName } = parsed.value;
 
   // Which oracle answers the bench: the real one (live), a scripted one, or a
   // scripted failure. Absent input leaves the seam unwired, so the consult
@@ -237,25 +262,36 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
   const progress = flattenProgressions(metadata, benchNowMs);
 
   try {
+    const inventory = body.inventory ? mockInventoryContext(body.inventory) : null;
     const result = await executeCustomTool(definition, body.params ?? undefined, {
       private: body.private,
+      inventory,
       metadata,
       progress,
       now: benchNowMs,
+      ...(characterName ? { character: characterName } : {}),
       state: body.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
+    // With a character in the chair, say which garment each wardrobe gesture
+    // would have found — the applier's own lookup, and a read only. A
+    // hand-typed sheet names nobody, so it gets no resolution.
+    const chairCharacterId = benchCharacterId(body.metadata);
+    const wardrobeResolution = chairCharacterId
+      ? await resolveBenchWardrobe(ctx.repos, chairCharacterId, result.effects, definition.name)
+      : undefined;
     // The bench always deals — a gate decides whether a character is OFFERED a
     // tool, not whether the author may test one they are holding. The verdict
     // rides along so the bench can say "and this character would never have
     // been dealt it", which a roll alone could never reveal.
     return successResponse({
       ...result,
-      ...(hasToolGate(definition) ? { gate: evaluateToolGate(definition, metadata, progress) } : {}),
+      ...(hasToolGate(definition) ? { gate: evaluateToolGate(definition, metadata, progress, inventory) } : {}),
       // The derived sheet the roll actually saw, so the bench can show the
       // author `cannon.percent` beside the outcome rather than leaving them to
       // work it out from two ISO timestamps.
       ...(Object.keys(progress).length > 0 ? { progress } : {}),
+      ...(wardrobeResolution ? { wardrobeResolution } : {}),
     });
   } catch (error) {
     return benchRefusal(error, 'preview', definition.name);
@@ -292,7 +328,9 @@ async function handleAudit(req: NextRequest, ctx: RequestContext): Promise<NextR
       body.state ?? {},
       // Held fixed across every draw, like the pretend consult: an audit that
       // advanced the clock ten thousand times would not be an audit.
-      flattenProgressions(metadata, Date.now())
+      flattenProgressions(metadata, Date.now()),
+      // The mock bag, held fixed across every draw.
+      body.inventory ? mockInventoryContext(body.inventory) : null
     );
     return successResponse(result);
   } catch (error) {

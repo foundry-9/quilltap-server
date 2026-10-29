@@ -16,6 +16,7 @@ import type {
   PhysicalDescription,
 } from '@/lib/schemas/types';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
+import { diagramStyleOrDefault } from '@/lib/markdown/diagrams';
 import {
   buildSystemPromptFile,
   buildScenarioFile,
@@ -92,6 +93,8 @@ export async function readCharacterVaultManagedFields(
           snapshot.firstMessage = props.firstMessage;
           snapshot.talkativeness = props.talkativeness;
           snapshot.canChooseOutfit = props.canChooseOutfit;
+          snapshot.canDrawDiagrams = props.canDrawDiagrams;
+          snapshot.diagramStyle = props.diagramStyle;
         }
         break;
       }
@@ -151,6 +154,7 @@ export async function readCharacterVaultManagedFields(
             patched.mediumPrompt = physPromptsJson.medium;
             patched.longPrompt = physPromptsJson.long;
             patched.completePrompt = physPromptsJson.complete;
+            patched.humanoid = physPromptsJson.humanoid ?? true;
           }
           patched.updatedAt = nowIso;
           snapshot.physicalDescription = patched;
@@ -227,6 +231,8 @@ export async function writeCharacterVaultManagedFields(
         firstMessage: character.firstMessage ?? null,
         talkativeness: character.talkativeness ?? 0.5,
         canChooseOutfit: character.canChooseOutfit ?? false,
+        canDrawDiagrams: character.canDrawDiagrams ?? false,
+        diagramStyle: diagramStyleOrDefault(character.diagramStyle),
       },
       null,
       2,
@@ -414,7 +420,10 @@ export async function applyDocumentStoreWriteOverlay(
         break;
       }
       case 'properties-json': {
-        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness', 'canChooseOutfit'] as const;
+        const propsKeys = [
+          'pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness',
+          'canChooseOutfit', 'canDrawDiagrams', 'diagramStyle',
+        ] as const;
         const touched = propsKeys.filter((k) => k in patch);
         if (touched.length === 0) break;
         // Read-modify-write so a partial patch doesn't blow away unspecified
@@ -424,8 +433,9 @@ export async function applyDocumentStoreWriteOverlay(
         // properties.json is genuinely absent (a fresh vault — seeding the
         // defaults below is correct); it THROWS when the file exists but is
         // unreadable/unparseable. That refusal is the whole fix for Bug 8: the
-        // six fields this file owns (pronouns, aliases, title, firstMessage,
-        // talkativeness, canChooseOutfit) live NOWHERE else post-4.6, so
+        // fields this file owns (pronouns, aliases, title, firstMessage,
+        // talkativeness, canChooseOutfit, canDrawDiagrams, diagramStyle) live
+        // NOWHERE else post-4.6, so
         // seeding empty defaults over a corrupt-but-present file would clobber
         // them permanently and silently. Fail the save loudly instead — the
         // user repairs or deletes the file. (Established vault failure
@@ -438,6 +448,8 @@ export async function applyDocumentStoreWriteOverlay(
           firstMessage: character.firstMessage ?? null,
           talkativeness: character.talkativeness ?? 0.5,
           canChooseOutfit: character.canChooseOutfit ?? false,
+          canDrawDiagrams: character.canDrawDiagrams ?? false,
+          diagramStyle: diagramStyleOrDefault(character.diagramStyle),
         };
         const next: CharacterVaultProperties = {
           pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
@@ -449,7 +461,18 @@ export async function applyDocumentStoreWriteOverlay(
             'talkativeness' in patch ? (patch.talkativeness ?? 0.5) : current.talkativeness,
           canChooseOutfit:
             'canChooseOutfit' in patch ? (patch.canChooseOutfit ?? false) : current.canChooseOutfit,
+          canDrawDiagrams:
+            'canDrawDiagrams' in patch ? (patch.canDrawDiagrams ?? false) : current.canDrawDiagrams,
+          diagramStyle:
+            'diagramStyle' in patch ? diagramStyleOrDefault(patch.diagramStyle) : current.diagramStyle,
         };
+        if (touched.includes('canDrawDiagrams') || touched.includes('diagramStyle')) {
+          logger.debug('[VaultOverlay] Writing diagram settings to properties.json', {
+            characterId,
+            canDrawDiagrams: next.canDrawDiagrams,
+            diagramStyle: next.diagramStyle,
+          });
+        }
         await writeDatabaseDocument(
           mountPointId,
           descriptor.vaultPath,
@@ -485,6 +508,20 @@ export async function applyDocumentStoreWriteOverlay(
           // Clearing physicalDescription is a DB-side concern; leave vault file alone.
           break;
         }
+        // `humanoid` is a setting, not generated text: a writer that doesn't
+        // name it (the AI Wizard, the optimizer, the head-and-shoulders
+        // backfill) keeps whatever the vault already says rather than
+        // resetting a non-humanoid character to humanoid.
+        let humanoid = incoming.humanoid;
+        if (humanoid === undefined) {
+          const current = await readCharacterVaultPhysicalPrompts(mountPointId, characterId);
+          humanoid = current?.humanoid;
+          logger.debug('[VaultOverlay] Physical write carries no humanoid flag; keeping the vault\'s', {
+            characterId,
+            mountPointId,
+            humanoid: humanoid ?? true,
+          });
+        }
         await writeDatabaseDocument(
           mountPointId,
           CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
@@ -493,7 +530,7 @@ export async function applyDocumentStoreWriteOverlay(
         await writeDatabaseDocument(
           mountPointId,
           CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
-          renderPhysicalPromptsJson(incoming),
+          renderPhysicalPromptsJson({ ...incoming, humanoid }),
         );
         // Vault owns the physicalDescription post-cutover; nothing flows back to
         // the (now nonexistent) DB column.

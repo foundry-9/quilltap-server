@@ -56,6 +56,13 @@ async function clearFormat3Entities(): Promise<void> {
     // and its unique (itemId, wearer) index would otherwise make a
     // replace-mode restore merge into stale tallies rather than replace them.
     'wardrobe_wear_stats',
+    // The outfit history. The chat delete's cascade would remove it, but
+    // clearing it here keeps a restore from colliding on the timelines of
+    // chat ids it is about to recreate (the per-timeline unique indexes).
+    'chat_wardrobe_history',
+    // Storyteller rounds. Never backed up (bids are not part of the record),
+    // so a replace-mode restore simply drops whatever rounds were open.
+    'storyteller_rounds',
   ];
   for (const table of mainTables) {
     try {
@@ -67,6 +74,11 @@ async function clearFormat3Entities(): Promise<void> {
       });
     }
   }
+
+  // The Log lives in the LLM logs database (no userId). Without this a
+  // replace-mode restore would collide on its preserved primary keys, and
+  // "delete all my data" would leave every line behind.
+  await getRepositories().logEntries.deleteAll();
 
   // instance_settings is special: we don't want to drop EVERYTHING since some
   // keys are written by startup migrations and aren't part of the backup. The

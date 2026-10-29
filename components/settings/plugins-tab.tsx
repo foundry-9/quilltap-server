@@ -79,10 +79,12 @@ const getSourceBadge = (source: PluginSource): SettingsCardBadge => {
  * Toggle switch component for plugin enable/disable
  */
 function PluginToggle({
+  label,
   enabled,
   isToggling,
   onToggle,
 }: {
+  label: string
   enabled: boolean
   isToggling: boolean
   onToggle: () => void
@@ -99,6 +101,7 @@ function PluginToggle({
       `}
       role="switch"
       aria-checked={enabled}
+      aria-label={label}
     >
       <span
         className={`
@@ -600,6 +603,7 @@ export default function PluginsTab() {
                     badges={badges}
                     headerExtra={
                       <PluginToggle
+                        label={`Enable ${plugin.name}`}
                         enabled={plugin.enabled}
                         isToggling={isToggling}
                         onToggle={() => handleTogglePlugin(plugin.name, plugin.enabled)}
@@ -812,6 +816,7 @@ export default function PluginsTab() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && searchNpmPlugins()}
                 placeholder="Search plugins (e.g., 'llm', 'theme', 'openai')..."
+                aria-label="Search npm plugins"
                 className="qt-input"
               />
             </div>

@@ -128,6 +128,8 @@ If a tool you need is unavailable, the dialog shows the reason. Take the suggest
 
 ## Tool Groups and Subgroups
 
+**The Log** is a built-in group of three tools (`log_create_entry`, `log_grep`, `log_read`) that let characters write to, and search, a shared book of short notes. On by default; untick the group to withdraw all three. See [The Log](the-log.md).
+
 **Plugin Tools** are often organized in groups:
 
 **Plugin Groups**
@@ -135,6 +137,16 @@ If a tool you need is unavailable, the dialog shows the reason. Take the suggest
 - Example: "Plugin: MyExtension"
 - Contains all tools from that plugin
 - Enable/disable the entire group at once
+
+**What a Tool Does to the World**
+
+Every tool declares an *effect*: **none** (a calculation), **read** (looks things up, changes nothing), **write** (changes stored state) or **destroy** (deletes, past undoing). [Storyteller Mode](storyteller-mode.md) uses it to decide which tools a chosen character may use, and autonomous rooms use it to keep deletion behind the owner's permission. A plugin tool that declares nothing counts as a *write*.
+
+An MCP server's tools inherit one effect, which you set in the MCP plugin's configuration with an `"effect"` field on each server — `"read"` for a server that only looks things up, `"write"` (the default) for one that may change things, `"destroy"` for one that deletes. The server's own claims about its tools (MCP's read-only and destructive hints) are not trusted; only your setting counts. For example:
+
+```json
+[{ "name": "wiki", "displayName": "Team Wiki", "url": "https://wiki.example/sse", "authType": "none", "enabled": true, "effect": "read" }]
+```
 
 **Subgroups (MCP Servers)**
 

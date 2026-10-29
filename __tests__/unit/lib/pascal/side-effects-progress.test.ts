@@ -81,6 +81,7 @@ function apply(
   overrides: Partial<Parameters<typeof applyCustomToolEffects>[0]> = {},
 ) {
   return applyCustomToolEffects({
+    userId: 'user-1',
     chatId: 'chat-1',
     toolName: 'fire_cannon',
     effects,
@@ -414,6 +415,7 @@ describe('the metadata snapshot as the RMW base', () => {
   it('defaults nowMs to the wall clock when a caller omits it', async () => {
     const before = Date.now()
     const params = {
+      userId: 'user-1',
       chatId: 'chat-1',
       toolName: 'fire_cannon',
       effects: [progressEffect(0, 'fuse', 'name', 'Fuse')],

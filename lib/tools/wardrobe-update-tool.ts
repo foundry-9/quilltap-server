@@ -2,8 +2,8 @@
  * Update Wardrobe Item Tool Definition
  *
  * `wardrobe_update` edits the stored fields of an existing wardrobe item — its
- * title, description, Portrait Cue (`image_prompt`), appropriateness, coverage
- * slots, default-outfit membership, composite behaviour (`replace`), and
+ * title, description, Portrait Cue (`image_prompt`), appropriateness, pronoun
+ * guidance, coverage slots, default-outfit membership, composite behaviour (`replace`), and
  * component list. Only the fields you supply are changed; everything else is
  * left as-is.
  *
@@ -12,10 +12,16 @@
  * General) are read-only and the call is refused.
  */
 
+import type { ToolEffectSpec } from './effect-types';
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
 import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance'
+import { pronounGuidanceToolParam } from './wardrobe-pronoun-params'
+import {
+  WARDROBE_DESCRIPTION_GUIDANCE,
+  WARDROBE_UPDATE_IMAGE_PROMPT_GUIDANCE,
+} from './image-cue-guidance'
 import type { WardrobeReadToolOutput } from './wardrobe-read-tool'
 import type { WardrobeToolImageResult } from '@/lib/wardrobe/tool-image-generation'
 
@@ -39,20 +45,17 @@ export const wardrobeUpdateToolInputSchema = z
       .optional(),
     description: z
       .string()
-      .describe('New description. Omit to leave unchanged.')
+      .describe(`New description. Omit to leave unchanged. ${WARDROBE_DESCRIPTION_GUIDANCE}`)
       .optional(),
     image_prompt: z
       .string()
-      .describe(
-        'New Portrait Cue — a short, literal, plain-text visual phrase fed to ' +
-        'the image generator in place of the title. Terse, never Markdown. Omit ' +
-        'to leave unchanged.'
-      )
+      .describe(WARDROBE_UPDATE_IMAGE_PROMPT_GUIDANCE)
       .optional(),
     appropriateness: z
       .string()
       .describe('New context tags (e.g. "casual", "formal"). Omit to leave unchanged.')
       .optional(),
+    pronoun_guidance: pronounGuidanceToolParam('replace'),
     types: z
       .array(WardrobeItemTypeEnum)
       .nonempty()
@@ -113,7 +116,7 @@ export const wardrobeUpdateToolDefinition = {
     name: 'wardrobe_update',
     description:
       'Edit the stored fields of an existing wardrobe item: title, description, ' +
-      'image_prompt (Portrait Cue), appropriateness, coverage types, default-' +
+      'image_prompt (Portrait Cue), appropriateness, pronoun_guidance, coverage types, default-' +
       'outfit membership, composite replace behaviour, and component list. Only ' +
       'the fields you supply change. If the operator allows it, a new picture ' +
       'of the item is drawn in the background (generate_image). This does NOT put the item on — use ' +
@@ -132,3 +135,6 @@ export function validateWardrobeUpdateInput(
   const parsed = wardrobeUpdateToolInputSchema.safeParse(input)
   return parsed.success ? parsed.data : null
 }
+
+/** What this tool does to the world: changes stored state. */
+export const wardrobeUpdateToolEffect: ToolEffectSpec = 'write';

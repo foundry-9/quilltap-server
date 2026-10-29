@@ -153,6 +153,14 @@ companions reach by membership, without your having to "Look everywhere" to find
 that character belongs to, for when they wish to consult the club's shelves and
 nowhere else.
 
+**Membership shapes what a character remembers.** A character holds the members of
+their Groups in a kind of inner circle: when they speak, the Commonplace Book sets
+aside room for what they know of their fellow members, even those not present, with
+the members of their smallest Group first. A Group of four is thus treated as closer
+kin than a Group of forty — so a household, a crew or a marriage is best given a
+Group of its own. The particulars are in
+[Recall Relevance](memory-recall-relevance.md#those-closest-to-you).
+
 ## Tips & Notes
 
 - A character may belong to **as many Groups as you like**; in any turn, all of

@@ -1,6 +1,9 @@
 'use client'
 
+import { useId, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -24,6 +27,7 @@ interface Memory {
   tagDetails?: Tag[]
   importance: number
   source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
+  keystone?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -37,12 +41,17 @@ interface MemoryEditorProps {
 
 export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEditorProps) {
   const isEditing = !!memory
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
+  useEscapeKey(onClose, true)
 
   const form = useFormState({
     content: memory?.content || '',
     summary: memory?.summary || '',
     keywords: memory?.keywords?.join(', ') || '',
     importance: memory?.importance || 0.5,
+    keystone: memory?.keystone ?? false,
   })
 
   const { loading: saving, error, execute, clearError } = useAsyncOperation<void>()
@@ -63,6 +72,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         summary: form.formData.summary,
         keywords,
         importance: form.formData.importance,
+        keystone: form.formData.keystone,
       }
 
       const url = isEditing
@@ -102,13 +112,22 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
 
   return (
     <div className="qt-dialog-overlay p-4">
-      <div className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div
+        className="qt-dialog max-w-2xl max-h-[90vh] overflow-y-auto"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleFocusKeyDown}
+      >
         <div className="qt-dialog-header">
           <div className="flex items-center justify-between">
-            <h2 className="qt-dialog-title">
+            <h2 id={titleId} className="qt-dialog-title">
               {isEditing ? 'Edit Memory' : 'Add Memory'}
             </h2>
             <button
+              aria-label="Close"
               onClick={onClose}
               className="qt-text-secondary hover:text-foreground"
             >
@@ -198,6 +217,27 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
               <p className="mt-1 qt-text-xs">
                 Higher importance memories are prioritized when building context.
               </p>
+            </div>
+
+            <div>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="keystone"
+                  name="keystone"
+                  checked={form.formData.keystone}
+                  onChange={form.handleChange}
+                  className="qt-checkbox mt-0.5"
+                />
+                <span>
+                  <span className="block qt-text-label">Keystone — always remembered</span>
+                  <span className="block qt-text-xs">
+                    A standing fact, set in stone until you yourself chip it out. Whenever its subject is in the
+                    room, in the character&apos;s own circle, or is the character themself, it is recalled in full,
+                    and no tidying of the Book will ever fold, digest or shelve it. Five to a subject, at most.
+                  </span>
+                </span>
+              </label>
             </div>
 
             {error && (

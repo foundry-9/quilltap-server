@@ -3,18 +3,27 @@
  *
  * A `metadata` comparator names a key on a character the definition has never
  * met, so nothing about the subject is knowable at load time: the key may be
- * absent, may hold a list, may hold a string where the table wanted a number.
+ * absent, may hold an object, may hold a string where the table wanted a number.
  * Each of those simply fails to match. That rule is load-bearing in two places —
  * the outcome table (`matchesWhen`, at roll time) and the availability gate
  * (`evaluateToolGate`, before a tool is ever offered) — and a second
  * implementation of it would drift the moment one side gained a comparator.
+ *
+ * ## Lists compare entry by entry
+ *
+ * A key holding an array of primitives (`knownLanguages: ["Trade Cant",
+ * "Latin"]`, or an `inventoryAggregate` list such as `equipped.names`) is
+ * compared per entry: `eq` holds when ANY entry equals the operand, `neq` when
+ * NO entry does, `contains` when any string entry contains the substring,
+ * `ncontains` when none does. The four ordering keys decline on a list (fold
+ * it first). An array holding anything but primitives still declines whole.
  *
  * CLIENT-SAFE: no logger, no repositories, no node built-ins. The Workbench runs
  * this in the browser to tell an author whether a fact sheet would be dealt to,
  * against the same code the roster loader runs on the server.
  */
 
-import { COMPARATOR_KEYS, type MetadataComparator } from './custom-tool.types';
+import type { COMPARATOR_KEYS, MetadataComparator } from './custom-tool.types';
 
 /** The four keys that order two numbers. */
 export type OrderingKey = 'gt' | 'gte' | 'lt' | 'lte';
@@ -83,9 +92,12 @@ export function metadataComparatorHolds(
   if (!(key in metadata)) return decline('the character has no such metadata key');
 
   const subject = metadata[key];
+  if (Array.isArray(subject) && subject.every(isPrimitive)) {
+    return listComparatorHolds(comparator, key, subject, hooks, decline);
+  }
   if (!isPrimitive(subject)) {
     return decline(
-      `the key holds ${subject === null ? 'null' : Array.isArray(subject) ? 'an array' : 'an object'}, which cannot be compared`
+      `the key holds ${subject === null ? 'null' : Array.isArray(subject) ? 'an array that is not all numbers, strings and booleans' : 'an object'}, which cannot be compared`
     );
   }
 
@@ -111,6 +123,48 @@ export function metadataComparatorHolds(
       return decline(`${comparatorKey} searches ${JSON.stringify(subject)}, and only a string can contain a substring`);
     }
     const held = subject.includes(operand);
+    if (comparatorKey === 'contains' ? !held : held) return false;
+  }
+
+  return true;
+}
+
+/**
+ * The per-entry rule for a list of primitives (see the module header). Each
+ * comparator key is its own test and the keys AND together, as they do on a
+ * single value.
+ */
+function listComparatorHolds(
+  comparator: MetadataComparator,
+  key: string,
+  entries: readonly Primitive[],
+  hooks: MetadataMatchHooks,
+  decline: (reason: string) => false
+): boolean {
+  for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
+    if (comparator[comparatorKey] !== undefined) {
+      return decline(`${comparatorKey} orders ${key}, which is a list; fold it with .min/.max/.sum/.count first`);
+    }
+  }
+
+  if (comparator.eq !== undefined) {
+    const operand = hooks.resolveOperand('eq');
+    if (!entries.some((entry) => entry === operand)) return false;
+  }
+  if (comparator.neq !== undefined) {
+    const operand = hooks.resolveOperand('neq');
+    if (entries.some((entry) => entry === operand)) return false;
+  }
+
+  for (const comparatorKey of ['contains', 'ncontains'] as const) {
+    if (comparator[comparatorKey] === undefined) continue;
+    const operand = hooks.resolveOperand(comparatorKey);
+    if (typeof operand !== 'string') {
+      return decline(`${comparatorKey} looks for ${JSON.stringify(operand)}, and only a string can be a substring`);
+    }
+    // Non-string entries cannot contain anything, so they are skipped — as a
+    // single non-string value declines on its own.
+    const held = entries.some((entry) => typeof entry === 'string' && entry.includes(operand));
     if (comparatorKey === 'contains' ? !held : held) return false;
   }
 

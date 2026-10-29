@@ -40,3 +40,14 @@ export const HAIR_PHYSICAL_DESCRIPTION_NOTE =
   'Natural hair — colour, length, texture — belongs here; a deliberate ' +
   'hairSTYLE (braids, an updo, a wig) belongs in the WARDROBE\'s "hair" slot ' +
   'instead. Describe the hair itself, not its styling.';
+
+/**
+ * Trailing note on a rendered outfit's hair line ({@link describeOutfit}).
+ * A styled hairdo and the natural hair in the physical description sit side
+ * by side in image prompts, scene text and the photo catalogue; without this
+ * a reader (or an image model) sees "perfectly straight hair" and "voluminous
+ * curls" with nothing to say which one is showing.
+ */
+export const HAIR_STYLING_PRECEDENCE_NOTE =
+  "current styling — overrides the natural hair's texture and style in the " +
+  'physical description';
