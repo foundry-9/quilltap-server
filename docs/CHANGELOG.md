@@ -4,6 +4,18 @@
 
 ### 4.12-dev
 
+#### Deps: Packages and plugins brought up to the root's dependency levels
+
+- `npm update -S` in the root, every `packages/*` and every `plugins/dist/*`. Main movements: `@quilltap/plugin-types` ^2.9.1 and `@quilltap/plugin-utils` ^2.7.2 everywhere (root included), `openai` ^7.45.1, `@openrouter/sdk` ^1.5.21, `@modelcontextprotocol/sdk` ^1.32.2, `sharp` ^0.35.5 in `packages/quilltap`, Storybook ^10.6.5 and `react` ^19.3.1 in `theme-storybook`, `@types/node` ^24.19.2 in `create-quilltap-theme` and `plugin-types`.
+- Major bumps:
+  - `@google/genai` 1.52 → 2.32 (google plugin). 2.0's breaking changes are confined to the Interactions API, which the plugin doesn't use. Two default changes do reach it. The SDK no longer applies Undici's 300 s timeouts when `httpOptions.timeout` is unset, so a call with no `requestTimeoutMs` now runs until the server's limit (10 min unary, 20 min streaming). Automatic continuation is on, so a long decode that checkpoints is resumed by the SDK within one call, and summed `usageMetadata` can then count the prompt more than once.
+  - `zod` ^3.25.76 → ^4.6.7 (mcp plugin). The plugin doesn't import zod. It's external in the bundle, so the plugin already ran against the app's zod 4 at runtime, and `@modelcontextprotocol/sdk` accepts `^3.25 || ^4.0`.
+  - `html-to-text` 9 → 10 (curl plugin). A maintenance release (htmlparser2 10, selderee 0.12, Node ≥ 20.19); the plugin's options are unchanged and produce the same output. `@types/html-to-text` stays at 9.0.4, the latest.
+  - `@anthropic-ai/sdk` 0.115 → 1.3 (anthropic plugin). SDK 1.0 defaults to `anthropic-version: 2026-10-21`, which returns 400 for any request carrying `temperature`, `top_p` or `top_k`, or a `document` block in an assistant message. The plugin sends sampling parameters on every non-thinking request to models that still accept them. It now pins `anthropic-version: 2023-06-01` through `defaultHeaders` on all four clients (`clientHeaders()` in `provider.ts`), which overrides the SDK's value, so requests go out as before. One visible difference: the SDK now sends the API key as `Authorization: Bearer` instead of `X-Api-Key`. The API accepts either, but a proxy that reads `X-Api-Key` would need changing.
+- TypeScript 7, `@types/node` 26 and `emojibase-data` 18 remain held back, as in the root.
+- Removed `fsevents@2.3.2` from the root `allowScripts`. That version is no longer installed; `fsevents@2.3.3` stays.
+- Patch bumps: `@quilltap/plugin-types` 2.9.2, `@quilltap/plugin-utils` 2.7.3, `@quilltap/theme-storybook` 1.0.92, `create-quilltap-theme` 2.0.23, and every plugin in `plugins/dist/`.
+
 #### Deps: TypeScript 6
 
 - `typescript` 5.9.3 → 6.0.3 in the root project, `packages/plugin-utils`, `packages/plugin-types`, `packages/theme-storybook`, `packages/create-quilltap-theme` and `qtap-plugin-default-system-prompts`. The root project and all plugins type-check under 6 with no source or tsconfig changes, and `npm run lint` and the unit suite are unchanged.

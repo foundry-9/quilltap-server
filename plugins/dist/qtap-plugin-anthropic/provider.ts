@@ -11,6 +11,22 @@ import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from 
 
 const logger = createPluginLogger('qtap-plugin-anthropic')
 
+/**
+ * SDK 1.x defaults to API version 2026-10-21, which rejects `temperature`,
+ * `top_p` and `top_k` on every model (and `document` blocks in assistant
+ * turns). Pin the previous version so sampling settings keep working on the
+ * models that still honour them; `defaultHeaders` overrides the SDK's own.
+ */
+const ANTHROPIC_API_VERSION = '2023-06-01'
+
+/** Headers every Anthropic client in this plugin sends. */
+function clientHeaders(): Record<string, string> {
+  return {
+    'User-Agent': getQuilltapUserAgent(),
+    'anthropic-version': ANTHROPIC_API_VERSION,
+  }
+}
+
 // Anthropic supports images, PDFs, and plain text documents
 const ANTHROPIC_SUPPORTED_MIME_TYPES = [
   'image/jpeg',
@@ -353,7 +369,7 @@ export class AnthropicProvider implements TextProvider {
 
     const client = new Anthropic({
       apiKey,
-      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      defaultHeaders: clientHeaders(),
       // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
       // default would let a silent endpoint hold a turn open indefinitely.
       ...buildSdkClientOptions(params),
@@ -550,7 +566,7 @@ export class AnthropicProvider implements TextProvider {
 
     const client = new Anthropic({
       apiKey,
-      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      defaultHeaders: clientHeaders(),
       // A caller-supplied budget is a ceiling; without one the SDK's 10-minute
       // default would let a silent endpoint hold a turn open indefinitely.
       ...buildSdkClientOptions(params),
@@ -886,7 +902,7 @@ export class AnthropicProvider implements TextProvider {
 
       const client = new Anthropic({
         apiKey,
-        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+        defaultHeaders: clientHeaders(),
       })
       // Anthropic doesn't have a direct validation endpoint, so we make a minimal request
       await client.messages.create({
@@ -907,7 +923,7 @@ export class AnthropicProvider implements TextProvider {
     try {
       const client = new Anthropic({
         apiKey,
-        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+        defaultHeaders: clientHeaders(),
       })
       const response = await client.models.list()
 
