@@ -4,6 +4,11 @@
 
 ### 4.12-dev
 
+#### Deps: ESLint 10
+
+- `eslint` 9.39.5 → 10.13.0. `eslint.config.mjs` was already flat config and needs no changes. `npm run lint` reports the same results as on 9 (zero findings across 4,290 files), and a probe file with deliberate violations tripped the same rules under both versions.
+- `eslint-plugin-react` 7.37.5, `eslint-plugin-jsx-a11y` 6.10.2 and `eslint-plugin-import` 2.32.0 (all pulled in by `eslint-config-next`) still cap their `eslint` peer range at `^9`, and none has released since ESLint 10 shipped. `package.json` `overrides` now point their `eslint` peer at the root version (`$eslint`). Remove those overrides once the plugins publish `^10` ranges. Until then `npm install` will not flag an incompatibility; a breakage would show up as a crash in `npm run lint`.
+
 #### Deps: Lexical 0.53
 
 - `lexical` and all `@lexical/*` packages 0.52.0 → 0.53.0. No code changes. 0.53's breaking changes (removed `*ImportExtension`s, removed unchecked type arguments on `getParent<T>()` / `$getNodeByKey<T>()` and similar, `@lexical/mdast` table alignment) touch no Quilltap code; `npx tsc` is clean and the composer and Lexical test suites pass.
