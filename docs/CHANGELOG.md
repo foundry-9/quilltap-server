@@ -18,6 +18,11 @@
 - Export schema, DDL.md, API.md, PROMPT_ARCHITECTURE.md and SYSTEM_FLOWCHARTS.md §9 updated. `.qtap` import and backup restore carry the flag and the Host row unchanged (round-trip tests added).
 - Docs: new `help/deus-ex-machina.md`; cross-links in `help/insert-announcement.md` and `help/inform.md`. `help/character-system-transparency.md` corrected: Staff messages are not stripped for opaque characters (they get the persona-free body, chat-wide), and there is no chat/project setting that disables Staff messages. Stale comments about a per-character presence-window summary removed from `lib/schemas/chat.types.ts` and `lib/services/librarian-notifications/writer.ts`.
 
+#### Fix: mail deliveries and Pascal roll outcomes drew as collapsed chips in the Salon
+
+- `buildRenderItems` kept Suparṇā mail deliveries and Pascal `custom-tool-result` rows out of chip groups, but `VirtualizedMessageList` computed `isSystemMessageCollapsed` with its own check that exempted only Carina and established facts. `MessageRow` then drew its collapsed-chip fallback for those rows anyway.
+- The rule now lives in one exported predicate, `isAlwaysExpandedAnnouncement` (`app/salon/[id]/announcement-render-items.ts`), used by `isCollapsedAnnouncement` (now exported). The message list passes `isCollapsedAnnouncement(...)` to `MessageRow`, so the grouping and the row flag cannot disagree. Tests cover all four always-expanded kinds.
+
 #### Fix: global search returned Staff messages (#121)
 
 - The message search index decided eligibility by role only. Staff messages (Commonplace Book recall whispers, Host/Prospero/Librarian announcements, other `systemSender` rows) are written with role `ASSISTANT`, so they were indexed and returned as character lines, including whispers addressed to other participants. Announcement bubbles (`customAnnouncer`) had the same problem.

@@ -22,10 +22,11 @@ export type RenderItem =
     }
 
 /**
- * Whether a message is a *collapsed* Staff-authored announcement — i.e. one
- * that should render as a packed chip rather than a full message row. A
- * systemSender message the user has explicitly expanded is NOT collapsed and
- * therefore breaks out of any surrounding chip group.
+ * Whether a Staff-authored announcement always renders as a full, expanded row
+ * and never as a collapsed chip, whatever the expand/collapse state. This is
+ * the one rule for "never collapsed": `buildRenderItems` uses it (through
+ * `isCollapsedAnnouncement`) to keep these out of chip groups, and the message
+ * list uses it for the `isSystemMessageCollapsed` it hands `MessageRow`.
  *
  * Carina (inline LLM queries) reference answers are exempt: although they carry
  * `systemSender: 'carina'`, they are real reference answers that must always
@@ -46,11 +47,23 @@ export type RenderItem =
  * what is now true in the story, so it renders as a full band, expanded, and
  * never collapses into a run of Host chips.
  */
-function isCollapsedAnnouncement(message: Message, expandedSystemMessageIds: Set<string>): boolean {
-  if (message.systemSender === 'carina') return false
-  if (isEstablishedFactAnnouncement(message)) return false
-  if (message.systemSender === 'suparna' && message.systemKind === 'mail-delivery') return false
-  if (message.systemSender === 'pascal' && message.systemKind === 'custom-tool-result') return false
+export function isAlwaysExpandedAnnouncement(message: Message): boolean {
+  if (message.systemSender === 'carina') return true
+  if (isEstablishedFactAnnouncement(message)) return true
+  if (message.systemSender === 'suparna' && message.systemKind === 'mail-delivery') return true
+  if (message.systemSender === 'pascal' && message.systemKind === 'custom-tool-result') return true
+  return false
+}
+
+/**
+ * Whether a message is a *collapsed* Staff-authored announcement — i.e. one
+ * that should render as a packed chip rather than a full message row. A
+ * systemSender message the user has explicitly expanded is NOT collapsed and
+ * therefore breaks out of any surrounding chip group, and neither is one that
+ * `isAlwaysExpandedAnnouncement` exempts.
+ */
+export function isCollapsedAnnouncement(message: Message, expandedSystemMessageIds: Set<string>): boolean {
+  if (isAlwaysExpandedAnnouncement(message)) return false
   return !!message.systemSender && !expandedSystemMessageIds.has(message.id)
 }
 

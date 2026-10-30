@@ -1,4 +1,9 @@
-import { buildRenderItems, type RenderItem } from './announcement-render-items'
+import {
+  buildRenderItems,
+  isAlwaysExpandedAnnouncement,
+  isCollapsedAnnouncement,
+  type RenderItem,
+} from './announcement-render-items'
 import type { Message } from './types'
 
 let seq = 0
@@ -107,6 +112,17 @@ describe('buildRenderItems', () => {
     expect(ids(items[2])).toEqual([c.id])
   })
 
+  it('renders a Pascal roll outcome expanded (standalone), splitting a surrounding group', () => {
+    const a = ann('host', 'add')
+    const roll = ann('pascal', 'custom-tool-result')
+    const c = ann('lantern', 'background')
+
+    const items = buildRenderItems([a, roll, c], none)
+
+    expect(items.map(i => i.kind)).toEqual(['announcement-group', 'message', 'announcement-group'])
+    expect(ids(items[1])).toEqual([roll.id])
+  })
+
   it('renders an established fact expanded, never packed into a run of Host chips', () => {
     const a = ann('host', 'add')
     const fact = ann('host', 'established-fact')
@@ -142,5 +158,35 @@ describe('buildRenderItems', () => {
 
   it('returns an empty array for no messages', () => {
     expect(buildRenderItems([], none)).toEqual([])
+  })
+})
+
+describe('isCollapsedAnnouncement', () => {
+  const none = new Set<string>()
+
+  // The message list hands this to MessageRow as isSystemMessageCollapsed, and
+  // MessageRow draws a chip when it is true, so an always-expanded kind must
+  // answer false here or it still renders as a chip outside any group.
+  it.each([
+    ['carina', 'answer'],
+    ['suparna', 'mail-delivery'],
+    ['pascal', 'custom-tool-result'],
+    ['host', 'established-fact'],
+  ] as const)('never collapses %s/%s', (sender, kind) => {
+    const m = ann(sender, kind)
+    expect(isAlwaysExpandedAnnouncement(m)).toBe(true)
+    expect(isCollapsedAnnouncement(m, none)).toBe(false)
+  })
+
+  it('collapses other kinds from the same senders', () => {
+    expect(isCollapsedAnnouncement(ann('suparna', 'other'), none)).toBe(true)
+    expect(isCollapsedAnnouncement(ann('pascal', 'inventory-change'), none)).toBe(true)
+    expect(isCollapsedAnnouncement(ann('host', 'add'), none)).toBe(true)
+  })
+
+  it('does not collapse an announcement the user expanded, or a non-system message', () => {
+    const a = ann('host', 'add')
+    expect(isCollapsedAnnouncement(a, new Set([a.id]))).toBe(false)
+    expect(isCollapsedAnnouncement(msg({ role: 'ASSISTANT', content: 'hi' }), none)).toBe(false)
   })
 })
