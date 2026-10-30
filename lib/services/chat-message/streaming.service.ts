@@ -1009,6 +1009,18 @@ export function encodeRoundOpenEvent(encoder: TextEncoder, data: { roundId: stri
 }
 
 /**
+ * Encode the moment the operator's raised hand is taken: this character is
+ * the one being asked whether to yield. The Salon names them beside the
+ * composer until the answer (`encodeHandAnsweredEvent`) arrives.
+ */
+export function encodeHandAskedEvent(
+  encoder: TextEncoder,
+  data: { participantId: string; characterName: string }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ handAsked: true, ...data })}\n\n`)
+}
+
+/**
  * Encode the answer to the operator's raised hand: the asked character either
  * yielded the floor or carried on. Either way the hand is down; the Salon
  * lowers its button and, on a decline, says who carried on.

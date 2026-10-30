@@ -164,6 +164,8 @@ interface SSEEvent {
   /** Storyteller: every bid is in (or the board timed out); the choice is the operator's. */
   roundOpen?: boolean
   roundId?: string
+  /** The operator's raised hand was taken: this character is being asked. */
+  handAsked?: boolean
   /** The character asked about the operator's raised hand has answered it. */
   handAnswered?: boolean
   // Answer confirmation: the resolved state for a just-streamed message. On a
@@ -326,6 +328,35 @@ interface UseSSEStreamingParams {
 }
 
 /**
+ * Where the operator's raised hand stands, shown beside the composer
+ * (`RaisedHandChip`). `raised` is up and nobody asked yet; `asked` names the
+ * speaker weighing it; the last three are the outcome, kept until the
+ * operator dismisses it or speaks again.
+ */
+export type RaisedHandStatus =
+  | { kind: 'raised' }
+  | { kind: 'asked'; characterName: string }
+  | { kind: 'yielded'; characterName: string }
+  | { kind: 'declined'; characterName: string }
+  | { kind: 'unasked' }
+
+/** Is the hand still up — raised, or being weighed by a speaker? */
+export function isHandUp(status: RaisedHandStatus | null): boolean {
+  return status?.kind === 'raised' || status?.kind === 'asked'
+}
+
+/**
+ * The stream has ended. A hand nobody was asked about is said so; one whose
+ * speaker never answered (a stop, an error) simply goes down; an outcome
+ * stays where it is.
+ */
+function settleHandAtStreamEnd(prev: RaisedHandStatus | null): RaisedHandStatus | null {
+  if (prev?.kind === 'raised') return { kind: 'unasked' }
+  if (prev?.kind === 'asked') return null
+  return prev
+}
+
+/**
  * The Salon's live message transport, built on Fetch Streams (SSE-style events).
  *
  * TanStack Query boundary: this is deliberately NOT a TanStack Query concern.
@@ -373,7 +404,8 @@ export function useSSEStreaming({
   // The operator's interrupts (lib/chat/turn-control.ts on the server): a
   // raised hand waiting for the next speaker's answer, and a hard stop the
   // server is still putting away.
-  const [handRaised, setHandRaised] = useState(false)
+  const [handStatus, setHandStatus] = useState<RaisedHandStatus | null>(null)
+  const handRaised = isHandUp(handStatus)
   const [stopping, setStopping] = useState(false)
   const stoppingRef = useRef(false)
   const [streamingContent, setStreamingContent] = useState('')
@@ -702,6 +734,20 @@ export function useSSEStreaming({
       const data = parseSSEData(rawData)
       if (!data) return
 
+      // The operator's raised hand: taken by a speaker, then answered. Handled
+      // ahead of the concurrent branch, which would otherwise swallow it. The
+      // chip beside the composer says each step, so neither the asking nor a
+      // decline passes without a word.
+      if (data.handAsked) {
+        setHandStatus({ kind: 'asked', characterName: data.characterName || 'The next speaker' })
+        return
+      }
+      if (data.handAnswered) {
+        const characterName = data.characterName || 'The speaker'
+        setHandStatus({ kind: data.yielded ? 'yielded' : 'declined', characterName })
+        return
+      }
+
       // Storyteller board frames: handed to the board, nothing else to do.
       if (data.storytellerRound) {
         onStorytellerEventRef.current?.({ kind: 'round', round: data.storytellerRound })
@@ -821,16 +867,6 @@ export function useSSEStreaming({
       if (opts.onSurfacedMessage) {
         for (const surfaced of [data.carinaAnswer, data.hostAnnouncement, data.pascalResult]) {
           if (surfaced) opts.onSurfacedMessage(surfaced)
-        }
-      }
-
-      // The raised hand has been answered. A yield speaks for itself (the
-      // Host's note, then the floor); a decline is said here, or the hand
-      // would simply go down with no word of why.
-      if (data.handAnswered) {
-        setHandRaised(false)
-        if (!data.yielded) {
-          showInfoToast(`${data.characterName || 'The speaker'} carried on regardless. Your hand is lowered.`)
         }
       }
 
@@ -1061,6 +1097,8 @@ export function useSSEStreaming({
       return
     }
 
+    // The operator has the floor now; the last hand's outcome is spent.
+    setHandStatus(null)
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
     const messageAttachments: MessageAttachment[] = attachedFiles.map((f) => ({
@@ -1353,7 +1391,7 @@ export function useSSEStreaming({
       setResponseStatus(null)
       // The stream is over: any hand still up has nobody left to ask, and a
       // stop has finished putting the reply away.
-      setHandRaised(false)
+      setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
       // The turn is over, so every optimistic bubble has had its chance: the
@@ -1390,6 +1428,8 @@ export function useSSEStreaming({
       showErrorToast('No characters available. Add a character to continue the conversation.')
       return
     }
+
+    setHandStatus(null)
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -1529,7 +1569,7 @@ export function useSSEStreaming({
       setRespondingParticipantId(null)
       setResponseStatus(null)
       abortControllerRef.current = null
-      setHandRaised(false)
+      setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
       scrollOnStreamComplete()
@@ -1657,7 +1697,7 @@ export function useSSEStreaming({
       setRespondingParticipantId(null)
       setResponseStatus(null)
       abortControllerRef.current = null
-      setHandRaised(false)
+      setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
       scrollOnStreamComplete()
@@ -1698,7 +1738,7 @@ export function useSSEStreaming({
     if (stoppingRef.current) return
     stoppingRef.current = true
     setStopping(true)
-    setHandRaised(false)
+    setHandStatus(null)
     // Reflect the pause at once; the server writes it before it aborts, so
     // the chain's next decision already reads it.
     if (isMultiChar) {
@@ -1734,12 +1774,13 @@ export function useSSEStreaming({
 
   /**
    * Soft interrupt: raise (or lower) the operator's hand. The next character
-   * built to speak is asked whether to yield; the answer arrives as a
-   * `handAnswered` event, and the stream's end lowers any hand left up.
+   * built to speak is asked whether to yield (`handAsked`), the answer arrives
+   * as `handAnswered`, and the stream's end settles any hand left up. The
+   * server's reply never overwrites a `handAsked` that beat it here.
    */
   const toggleRaisedHand = useCallback(async () => {
     const raise = !handRaised
-    setHandRaised(raise)
+    setHandStatus(raise ? { kind: 'raised' } : null)
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=raise-hand`, {
         method: 'POST',
@@ -1748,15 +1789,22 @@ export function useSSEStreaming({
       })
       if (!res.ok) throw new Error(res.statusText || 'Request failed')
       const data = await res.json() as { raised?: boolean; active?: boolean }
-      setHandRaised(data.raised === true)
+      if (raise && data.raised !== true) {
+        setHandStatus((prev) => (prev?.kind === 'raised' ? null : prev))
+      }
       if (raise && data.active === false) {
         showInfoToast('Nobody is speaking just now. The floor is already yours.')
       }
     } catch (err) {
-      setHandRaised(false)
+      setHandStatus((prev) => (prev?.kind === 'raised' ? null : prev))
       showErrorToast(`Could not raise your hand: ${getErrorMessage(err)}`)
     }
   }, [chatId, handRaised])
+
+  /** Put away the raised hand's outcome note. */
+  const dismissHandStatus = useCallback(() => {
+    setHandStatus((prev) => (isHandUp(prev) ? prev : null))
+  }, [])
 
   return {
     sending,
@@ -1775,7 +1823,9 @@ export function useSSEStreaming({
     concurrentStreams,
     stopStreaming,
     handRaised,
+    handStatus,
     toggleRaisedHand,
+    dismissHandStatus,
     stopping,
   }
 }

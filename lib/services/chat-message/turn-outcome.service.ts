@@ -59,7 +59,8 @@ export interface TurnOutcome {
   /** The character gave the floor to the raised hand; the chain stops after this turn. */
   yielded: boolean
   /** Set when the character was asked to yield: its answer, for the Salon's hand. */
-  handAnswered?: { yielded: boolean }
+  /** `inferred`: a gesture-only reply read as a yield, with no sentinel. */
+  handAnswered?: { yielded: boolean; inferred?: boolean }
   /** A pass sentinel was emitted after tools had run; the tools win, the pass is ignored. */
   passOverriddenByTools?: boolean
 }
@@ -89,7 +90,9 @@ export function resolveTurnOutcome(input: {
 
   if (offerYield && !stopped) {
     const detection = detectYieldSentinel(response, character.name, aliases)
-    handAnswered = { yielded: detection.yielded }
+    handAnswered = detection.yielded && detection.inferred
+      ? { yielded: true, inferred: true }
+      : { yielded: detection.yielded }
     if (detection.yielded) {
       yielded = true
       response = detection.cleaned
@@ -236,6 +239,7 @@ function logOutcome(params: SettleTurnParams, outcome: TurnOutcome): void {
       logger.info('[TurnYield] Character yielded the floor to the raised hand', {
         ...ids,
         withReply: outcome.response.length > 0,
+        inferredFromGesture: outcome.handAnswered.inferred === true,
         toolCount: params.toolMessages.length,
       })
     } else {

@@ -67,6 +67,7 @@ export {
   YIELD_SENTINEL,
   TURN_YIELD_SYSTEM_KIND,
   detectYieldSentinel,
+  isGestureOnlyReply,
   buildTurnYieldInstruction,
 } from './yield-signal';
 export type { DetectYieldResult } from './yield-signal';

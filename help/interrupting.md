@@ -20,10 +20,23 @@ You may type freely while a character is speaking, so your remark can be ready a
 
 Press the amber hand while a character is mid-reply, and the hand stays up — the button glows with a slow, expectant pulse — until somebody answers it. The character currently speaking is left to finish in peace; it is **the next character to take the floor** who is asked, quite plainly, whether they will yield to you or carry on regardless.
 
-- **If they yield**, the Host announces it — a raised hand spied at the back of the room, a gracious little bow — and it is immediately your turn. A yielding character may add a word of their own first ("After you, my dear"), which is kept as their reply. The room is *not* paused: send your message and the conversation resumes its ordinary rotation.
-- **If they carry on**, their turn proceeds as though nothing had happened, your hand comes down, and a small notice tells you who chose to keep talking. Nobody after them is asked; raise your hand again if you are still determined.
+A small note appears in the row just above the composer, beside any pending [Informs](inform.md), and keeps you abreast of the whole affair:
 
-Changed your mind? Press the hand again to lower it before anyone is asked.
+| The note reads | Meaning |
+|---|---|
+| *Hand raised — the next speaker will be asked to yield* | Your hand is up and nobody has been asked yet. Its × lowers the hand. |
+| *Clementine is weighing your raised hand…* | The next speaker has noticed and is making up their mind. |
+| *Clementine yields the floor — it is yours* | They have stepped aside. Speak whenever you are ready. |
+| *Clementine carried on regardless; your hand is lowered* | They kept the floor. Nobody after them is asked. |
+| *The room fell quiet before anyone was asked — the floor is yours* | The speaker you interrupted was the last in the round, so nobody was left to ask; the floor came back to you in the ordinary way. |
+
+The outcome stays put until you dismiss it with its × or send your next remark.
+
+- **If they yield**, the Host announces it — a raised hand spied at the back of the room, a gracious little bow — and it is immediately your turn. A yielding character may add a word of their own first ("After you, my dear"), which is kept as their reply. The room is *not* paused: send your message and the conversation resumes its ordinary rotation.
+  A character who answers with nothing but a gesture — a bow, a sweep of the hand, *"(a tilt of the head — go on, then)"* — and not a word spoken aloud is taken to have yielded too, and the gesture is kept as their reply. Should they say anything at all, or set a longer scene, they are carrying on.
+- **If they carry on**, their turn proceeds as though nothing had happened and your hand comes down. Nobody after them is asked; raise your hand again if you are still determined.
+
+Changed your mind? Press the hand again (or the note's ×) to lower it before anyone is asked.
 
 The hand is a courtesy for a crowd. It is offered only in a chat with more than one character present — in a one-on-one, the floor returns to you the moment your companion finishes anyway — and it is not offered in [Autonomous Rooms](autonomous-rooms.md), which run on their own and keep their own controls.
 

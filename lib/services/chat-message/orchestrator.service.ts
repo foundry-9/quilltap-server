@@ -54,6 +54,7 @@ import {
   encodeStorytellerRoundEvent,
   encodeStorytellerBidEvent,
   encodeRoundOpenEvent,
+  encodeHandAskedEvent,
   safeEnqueue,
   type TurnStatusEmitter,
 } from './streaming.service'
@@ -599,6 +600,10 @@ async function processMessage(
       characterId: character.id,
       participantId: characterParticipant.id,
     })
+    safeEnqueue(controller, encodeHandAskedEvent(encoder, {
+      participantId: characterParticipant.id,
+      characterName: character.name,
+    }))
   }
 
   if (!hold && !isBid) {

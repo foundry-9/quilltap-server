@@ -1994,6 +1994,8 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onStopStreaming={sseStreaming.stopStreaming}
           onToggleRaisedHand={sseStreaming.toggleRaisedHand}
           handRaised={sseStreaming.handRaised}
+          handStatus={sseStreaming.handStatus}
+          onDismissHandStatus={sseStreaming.dismissHandStatus}
           canRaiseHand={!participantsWithImpersonation.isSingleCharacterChat && chat?.chatType !== 'autonomous'}
           stopping={sseStreaming.stopping}
           onPendingToolResult={handleAddPendingToolResult}

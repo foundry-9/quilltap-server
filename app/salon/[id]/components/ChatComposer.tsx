@@ -6,6 +6,8 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import PendingInformChips from '@/components/chat/PendingInformChips'
+import RaisedHandChip from './RaisedHandChip'
+import type { RaisedHandStatus } from '../hooks/useSSEStreaming'
 import { SpeakingAsAvatar, voiceRehearsalTitle, type VoiceRehearsalCue } from './SpeakingAsAvatar'
 import type { AvatarImageSource } from '@/components/ui/Avatar'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
@@ -117,6 +119,10 @@ interface ChatComposerProps {
   onToggleRaisedHand: () => void
   /** The operator's hand is up, waiting on the next speaker's answer. */
   handRaised?: boolean
+  /** Where the raised hand stands, for the chip above the form. */
+  handStatus?: RaisedHandStatus | null
+  /** Put away the raised hand's outcome note. */
+  onDismissHandStatus?: () => void
   /**
    * Whether anyone could be asked to yield — a room with a rotation (more than
    * one character). A lone character's reply hands the floor back anyway.
@@ -209,6 +215,8 @@ export function ChatComposer({
   onStopStreaming,
   onToggleRaisedHand,
   handRaised = false,
+  handStatus = null,
+  onDismissHandStatus,
   canRaiseHand = false,
   stopping = false,
   onPendingToolResult,
@@ -453,6 +461,13 @@ export function ChatComposer({
         {informParticipantNames && (
           <PendingInformChips chatId={id} participantNames={informParticipantNames} />
         )}
+
+        {/* The raised hand (soft interrupt): up, being weighed, then answered. */}
+        <RaisedHandChip
+          status={handStatus}
+          onLower={onToggleRaisedHand}
+          onDismiss={() => onDismissHandStatus?.()}
+        />
 
         {/* Deus Ex Machina, armed: the next line is posted as established
             fact. Announced politely to assistive tech as it comes and goes. */}

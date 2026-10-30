@@ -4,6 +4,20 @@
 
 ### 4.12-dev
 
+#### Raised-hand status chip above the Salon composer
+
+- Raising a hand (soft interrupt) gave no feedback beyond the button's pulse, and a decline was reported only by a short toast. A new `RaisedHandChip` (`app/salon/[id]/components/RaisedHandChip.tsx`) sits in the composer's chip row beside the pending Informs and shows each step: raised, being weighed by a named speaker, then yielded / carried on / nobody asked (the stream ended with the hand still up). The outcome stays until dismissed or the operator sends or nudges. Announced via `aria-live="polite"`.
+- New SSE event `handAsked` (`encodeHandAskedEvent`, `streaming.service.ts`), sent by `processMessage` when `takeRaisedHand()` hands the question to a speaker.
+- `useSSEStreaming` replaces the `handRaised` boolean with `handStatus: RaisedHandStatus | null` (`handRaised` is now derived) and adds `dismissHandStatus`. Hand events are handled before the Storyteller concurrent branch, which used to swallow `handAnswered` for concurrent turns. The raise-hand POST reply no longer overwrites a `handAsked` that arrived first. The decline toast is gone; the chip says it.
+- `help/interrupting.md` updated.
+
+#### Fix: a gesture-only answer to a raised hand counted as carrying on
+
+- Models asked to yield often hand over the floor with a stage direction (`*(a tilt of the head — go on, then)*`) and leave out `[YIELD]`. `detectYieldSentinel` read that as a decline: no Host announcement, and the Salon reported "carried on".
+- New `isGestureOnlyReply` (`lib/chat/turn-manager/yield-signal.ts`): a reply of at most 280 characters that is one stage direction wrapped whole in `*…*`, `_…_` or `(…)` (layering allowed), on a single paragraph, with no quotation marks. When a yield was offered and no sentinel is found, such a reply is a yield (`inferred: true`), and the gesture is kept as the reply. Only applies when the hand was offered; nothing changes for ordinary turns.
+- The Turn note now tells the model that a gesture-only reply counts as yielding. `[TurnYield]` logs carry `inferredFromGesture`.
+- Tests in `yield-signal.test.ts` and `turn-outcome.test.ts`; `help/interrupting.md` updated.
+
 #### Custom-tool presets follow the tool walk
 
 - Run presets (`Tools/{tool}.{preset}.settings.json`) were read from and saved to the running character's vault only. They are now found where definitions are: character vault, group stores, project stores, Quilltap General, nearest first. A nearer preset of a name shadows a farther one.
