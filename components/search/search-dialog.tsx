@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { SearchResults } from './search-results'
+import { ConversationMatches } from './conversation-matches'
+import { CONVERSATION_SEARCH_MIN_QUERY, type ConversationSearchSource } from '@/lib/chat/conversation-search'
 import { ALL_SEARCH_TYPES } from './types'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 
@@ -18,12 +20,17 @@ interface SearchDialogProps {
   initialQuery?: string
   /** Pre-select specific types when opening the dialog */
   initialTypes?: SearchType[]
+  /** The open Salon chat, searched first behind a "This conversation" chip. */
+  conversation?: ConversationSearchSource | null
+  /** Called with the query when an in-chat match is picked, just before closing. */
+  onConversationReveal?: (query: string) => void
 }
 
 const ALL_TYPES = ALL_SEARCH_TYPES
 const PAGE_SIZE = 20
+const CONVERSATION_LIMIT = 50
 
-export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes }: SearchDialogProps) {
+export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes, conversation, onConversationReveal }: SearchDialogProps) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -39,6 +46,16 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hasInitializedRef = useRef(false)
   const currentQueryRef = useRef('')
+  // "This conversation" is a filter of its own beside the global types; it is
+  // on by default, and off when the dialog was opened to look at one type.
+  const [includeConversation, setIncludeConversation] = useState(true)
+  const trimmedQuery = query.trim()
+  const conversationResults = useMemo(
+    () => (conversation && includeConversation && trimmedQuery.length >= CONVERSATION_SEARCH_MIN_QUERY
+      ? conversation.search(trimmedQuery, CONVERSATION_LIMIT)
+      : null),
+    [conversation, includeConversation, trimmedQuery],
+  )
 
   // Search function with pagination support
   const performSearch = useCallback(async (
@@ -121,8 +138,10 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
         // Set initial types if provided, otherwise reset to all types
         if (initialTypes && initialTypes.length > 0) {
           setSelectedTypes(initialTypes)
+          setIncludeConversation(false)
         } else {
           setSelectedTypes(ALL_TYPES)
+          setIncludeConversation(true)
         }
         hasInitializedRef.current = true
       }
@@ -219,6 +238,12 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
     onClose()
   }
 
+  const handleConversationSelect = (messageId: string) => {
+    onConversationReveal?.(trimmedQuery)
+    conversation?.reveal(messageId)
+    onClose()
+  }
+
   // Handle keyboard navigation for search input
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && query.length >= 2) {
@@ -292,6 +317,16 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
 
             {/* Type filters */}
             <div className="flex flex-wrap gap-2 mt-3">
+              {conversation && (
+                <button
+                  type="button"
+                  onClick={() => setIncludeConversation(v => !v)}
+                  aria-pressed={includeConversation}
+                  className={includeConversation ? 'qt-filter-chip-active' : 'qt-filter-chip'}
+                >
+                  This conversation
+                </button>
+              )}
               {ALL_TYPES.map((type) => (
                 <button
                   key={type}
@@ -309,6 +344,19 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
 
           {/* Results */}
           <div ref={scrollContainerRef} className="max-h-[60vh] overflow-y-auto">
+            {conversationResults && (
+              <>
+                <ConversationMatches
+                  matches={conversationResults.matches}
+                  total={conversationResults.total}
+                  query={query}
+                  onSelect={handleConversationSelect}
+                />
+                <div className="px-3 pt-2 pb-1 border-t qt-border-default qt-text-xs font-semibold uppercase tracking-wider">
+                  Everywhere
+                </div>
+              </>
+            )}
             {hasSearched ? (
               <>
                 <SearchResults

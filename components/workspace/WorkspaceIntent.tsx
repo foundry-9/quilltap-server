@@ -11,6 +11,7 @@
  * Examples:
  *   /workspace?open=aurora
  *   /workspace?open=salon&chatId=abc
+ *   /workspace?open=salon&chatId=abc&msg=def   (scrolls to message def)
  *   /workspace?open=settings&tab=system&section=memory
  *
  * @module components/workspace/WorkspaceIntent
@@ -20,6 +21,7 @@ import { useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
+import { requestMessageReveal } from '@/lib/chat/message-navigation'
 import { TAB_KINDS, standaloneDocKey, type DocumentStandaloneTabPayload, type TabKind } from '@/lib/workspace/types'
 
 const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>(TAB_KINDS)
@@ -117,6 +119,12 @@ export function WorkspaceIntent() {
           // new-chat modal with the character preselected (legacy-page parity).
           if (kind === 'character-view' && characterId && searchParams.get('action') === 'chat') {
             openNewChat?.({ characterId })
+          }
+          // `/salon/<id>?msg=<messageId>` (a Message search result) arrives
+          // here through the old-route redirect: scroll that chat to it.
+          const messageId = searchParams.get('msg')
+          if (kind === 'salon' && chatId && messageId) {
+            requestMessageReveal(chatId, messageId)
           }
         }
       }

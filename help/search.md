@@ -29,6 +29,30 @@ The search bar searches across six categories:
 
 Each category has a chip in the full search dialog; switch one off and the search obligingly stops looking there.
 
+### Searching the Conversation in Front of You
+
+When a Salon conversation is open — and, in a split workspace, it is the pane you last touched — the search bar looks there **first**. The placeholder says as much ("Search this chat & all…"), and the results arrive in two parcels:
+
+- **This conversation** — every message and announcement you can see in the open chat that contains your words, newest first, each with its speaker, its moment, and a little excerpt. A message that says it more than once is marked with a count.
+- **Everywhere** — the ordinary search across all six categories, beneath.
+
+Choose a line from *This conversation* and the Salon scrolls to it — to the **top** of that message, so a long speech may need a little further scrolling to reach the passage itself — and the message flashes briefly to show you where you have landed. An announcement folded down to a chip is unfolded first, so its text is actually on the page.
+
+Meanwhile, **every visible occurrence of your words is highlighted** throughout the transcript, and it stays so for as long as the words remain in the search bar — including in messages that scroll into view later and in replies still being written. Your query stays put after you choose a match, so the next one is a single click away.
+
+To put the highlighter down:
+
+- Press **Escape** once to close the results, and **again** to clear the search (and the highlighting with it), or
+- Click the little **×** at the end of the search bar.
+
+A few particulars:
+
+- It searches only what you can **see**: whispers hidden from you stay hidden, and a regenerated reply is searched in whichever version is showing.
+- It reads what was *written*, not how it was dressed: `fine morning` finds *a **fine** morning*. It matches any run of letters, so `walk` does find *sidewalk* here, unlike the Messages category below.
+- Tool payloads are not searched; they are paperwork, not conversation.
+- A phrase split across formatting (half of it in bold, say) is still listed among the results, but the highlighter may not paint it on screen.
+- In the full search dialog, **This conversation** has a chip of its own beside the six categories; switch it off and the dialog searches only everywhere else.
+
 ### Opening a Document from Search
 
 Click a document result and it opens in Document Mode — but *where* it opens depends on what you were doing at the time, which is rather the point:
@@ -47,7 +71,7 @@ As you type, you'll see:
 - **Result categories** — Items grouped by type (chats, characters, messages, documents, tags, memories)
 - **View all option** — Click "View all" under any category to see the complete list
 
-Click any result to navigate directly to it.
+Click any result to navigate directly to it. A **Message** result opens its conversation scrolled to that very message (to the top of it), which flashes briefly so you know where you have fetched up. Should the line be one you cannot see from your seat — a whisper meant for other ears, say — a note will tell you so, and the sidebar's **Show all whispers** will bring it into view.
 
 ## Mobile vs. Desktop
 
@@ -79,10 +103,12 @@ On mobile, the search experience automatically adapts for better usability.
 
 4. **Minimum 2 characters** — The search requires at least 2 characters to begin searching
 
-5. **Navigate with keyboard** — On desktop:
+5. **Find it in this chat** — With a conversation open, the *This conversation* results come first; choose one to scroll straight to it
+
+6. **Navigate with keyboard** — On desktop:
    - Use **arrow keys** to navigate through results
    - Press **Enter** to select a result
-   - Press **Escape** to close the search dropdown
+   - Press **Escape** to close the search dropdown, and again to clear the search
 
 ## What Gets Indexed
 

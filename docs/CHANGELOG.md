@@ -4,6 +4,19 @@
 
 ### 4.12-dev
 
+#### Search bar searches the open Salon chat first
+
+- With a Salon chat focused, the header search bar shows a "This conversation" group above the global results (now headed "Everywhere"). It lists messages and announcements in the visible transcript that contain the query, newest first, with speaker, time, excerpt and occurrence count. The full search dialog has a "This conversation" chip for the same group (up to 50 matches; the inline dropdown shows 5).
+- Matching is done client-side on the messages the Salon already has (whisper filtering and the current swipe applied, TOOL rows skipped), case-insensitive substring on markdown-stripped text. Matcher: `findConversationMatches` (`lib/chat/conversation-search.ts`).
+- Choosing a match scrolls the virtualized list so the top of the message is at the top of the transcript and flashes it. A match in a collapsed announcement chip expands it first. This uses the virtualizer, so off-screen messages work.
+- While the query is in the search bar, every occurrence in the rendered transcript is highlighted with the CSS Custom Highlight API (`useSearchHighlight`, `::highlight(quilltap-conversation-search)` in `app/globals.css`). No markup is added to message DOM; a MutationObserver repaints as rows mount or stream.
+- The query stays after choosing a match. Escape closes the dropdown, a second Escape clears the query and highlight; the input also has a clear button.
+- The Salon publishes a `ConversationSearchSource` through the page toolbar context (`conversationSearch` / `setConversationSearch`). In the workspace it is a per-tab slot that `WorkspaceToolbarBridge` forwards for the focused tab, like the left/right toolbar content. Not published while quick-hide covers the chat.
+- Fix: a Message result in global search (`/salon/<id>?msg=<messageId>`) now opens the chat scrolled to that message and flashes it. Nothing used to read `msg`. Every way into such a link goes through `requestMessageReveal(chatId, messageId)` (`lib/chat/message-navigation.ts`): the workspace link interceptor and `useWorkspaceNavigate` (via `revealRequestFromSalonHref`), `WorkspaceIntent` for the old-route redirect (which now forwards `msg`), and the legacy route's new `revealMessageId` prop on `SalonView`. The request is stored in sessionStorage under the chat id and announced with a `quilltap:reveal-message` window event, so a Salon that is still mounting takes it once loaded and a kept-alive tab takes it at once; only the named chat takes it.
+- The Salon reveals only after the initial scroll to the newest message has finished (new `isInitialScrollDone` from `useAutoScroll`; that scroll keeps nudging for 300 ms after `isSettled`). A tab still hidden when the request arrives waits until it is shown.
+- If the target isn't shown in this view (a whisper to another participant, another variant of a reply), the Salon shows a toast saying so instead of doing nothing. In V4test most global Message hits are Commonplace Book whispers addressed to characters, which the Salon hides by default (#121).
+- Removed the unscoped `navigateToMessage` / `getPendingMessageNavigation` handoff (no remaining callers; any Salon would take its request).
+
 #### Salon header compacts a crowded cast
 
 - The Salon's toolbar breadcrumb (project, characters, story background, Concierge badge, title) is now `ChatHeaderBreadcrumb` (`components/chat/ChatHeaderBreadcrumb.tsx`). When the row doesn't fit, the project and character links step down from full name to an abbreviation (`abbreviateName`: first three letters of one word, initials of several) to avatar only. Compact links get a Quilltap tooltip with the full name and "Click to open character" / "Click to open project". The density is chosen by measuring invisible copies of each density, so it doesn't depend on the row's own width.

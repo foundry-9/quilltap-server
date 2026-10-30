@@ -1,51 +1,70 @@
 /**
  * Message Navigation Utilities
  *
- * Handles navigation to specific messages in chat, including
- * scrolling and highlighting for memory provenance tracking.
+ * Handles navigation to specific messages in chat: the chat-scoped reveal
+ * request every `?msg=` link resolves to, and a DOM-only scroll helper.
  */
 
-const SCROLL_TO_MESSAGE_KEY = 'scrollToMessageId'
-const HIGHLIGHT_MESSAGE_KEY = 'highlightMessageId'
+const PENDING_REVEAL_KEY = 'pendingMessageReveal'
 
-/**
- * Navigate to a specific message in a chat.
- * Stores the target message ID in sessionStorage for the chat page to pick up.
- *
- * @param chatId The chat ID to navigate to
- * @param messageId The message ID to scroll to and highlight
- */
-export function navigateToMessage(chatId: string, messageId: string): void {
-  // Store in sessionStorage for the chat page to pick up
-  sessionStorage.setItem(SCROLL_TO_MESSAGE_KEY, messageId)
-  sessionStorage.setItem(HIGHLIGHT_MESSAGE_KEY, messageId)
+/** Window event announcing a new reveal request; `detail` is a {@link MessageRevealRequest}. */
+export const MESSAGE_REVEAL_EVENT = 'quilltap:reveal-message'
 
-  // Navigate to chat. Full page load, not router.push: this is a plain module
-  // with no router in scope, and the sessionStorage handoff above is read by
-  // the chat page on mount — a client transition would change that timing
-  // relative to the message DOM the scroll/highlight depends on.
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-  window.location.href = `/salon/${chatId}`
+/** "Scroll this chat to this message", waiting for whichever Salon shows the chat. */
+export interface MessageRevealRequest {
+  chatId: string
+  messageId: string
 }
 
 /**
- * Check for pending message navigation and return the message ID.
- * Clears the stored values after reading.
+ * Ask the Salon showing `chatId` to scroll to `messageId` and flash it.
  *
- * @returns Object with scrollTo and highlight message IDs, or null if none
+ * The request is parked in sessionStorage, so a Salon that is still to mount
+ * (a new tab, a full page load) takes it once its transcript has loaded, and is
+ * announced with {@link MESSAGE_REVEAL_EVENT}, so a Salon already open — a
+ * kept-alive workspace tab — takes it at once. Either way it is taken once,
+ * and only by that chat. Every way into a `/salon/<id>?msg=<messageId>` link
+ * (workspace links, the workspace redirect, the legacy route) ends here.
  */
-export function getPendingMessageNavigation(): {
-  scrollTo: string | null
-  highlight: string | null
-} {
-  const scrollTo = sessionStorage.getItem(SCROLL_TO_MESSAGE_KEY)
-  const highlight = sessionStorage.getItem(HIGHLIGHT_MESSAGE_KEY)
+export function requestMessageReveal(chatId: string, messageId: string): void {
+  const request: MessageRevealRequest = { chatId, messageId }
+  try {
+    sessionStorage.setItem(PENDING_REVEAL_KEY, JSON.stringify(request))
+  } catch {
+    // Storage unavailable: the event still reaches an open Salon.
+  }
+  window.dispatchEvent(new CustomEvent<MessageRevealRequest>(MESSAGE_REVEAL_EVENT, { detail: request }))
+}
 
-  // Clear after reading
-  sessionStorage.removeItem(SCROLL_TO_MESSAGE_KEY)
-  sessionStorage.removeItem(HIGHLIGHT_MESSAGE_KEY)
+/**
+ * Take the pending reveal for `chatId`, if there is one, clearing it. A request
+ * for a different chat is left for that chat.
+ */
+export function takePendingMessageReveal(chatId: string): string | null {
+  let raw: string | null = null
+  try {
+    raw = sessionStorage.getItem(PENDING_REVEAL_KEY)
+  } catch {
+    return null
+  }
+  if (!raw) return null
+  try {
+    const request = JSON.parse(raw) as Partial<MessageRevealRequest>
+    if (request.chatId !== chatId || typeof request.messageId !== 'string') return null
+    sessionStorage.removeItem(PENDING_REVEAL_KEY)
+    return request.messageId
+  } catch {
+    sessionStorage.removeItem(PENDING_REVEAL_KEY)
+    return null
+  }
+}
 
-  return { scrollTo, highlight }
+/** The message a Salon href (`/salon/<id>?msg=<messageId>`) points at, if any. */
+export function revealRequestFromSalonHref(href: string): MessageRevealRequest | null {
+  const match = href.match(/^\/salon\/([^/?#]+)\/?\?([^#]*)/)
+  if (!match || match[1] === 'new') return null
+  const messageId = new URLSearchParams(match[2]).get('msg')
+  return messageId ? { chatId: decodeURIComponent(match[1]), messageId } : null
 }
 
 /**

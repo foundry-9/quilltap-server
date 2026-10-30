@@ -1,11 +1,14 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { SearchResults } from './search-results'
 import { SearchDialog } from './search-dialog'
+import { ConversationMatches } from './conversation-matches'
+import { usePageToolbarOptional } from '@/components/providers/page-toolbar-provider'
+import { CONVERSATION_SEARCH_MIN_QUERY } from '@/lib/chat/conversation-search'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 
 export function SearchBar() {
@@ -26,6 +29,22 @@ export function SearchBar() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dialogInitialQuery, setDialogInitialQuery] = useState('')
   const [dialogInitialTypes, setDialogInitialTypes] = useState<SearchType[] | undefined>(undefined)
+
+  // The open Salon chat, when there is one: searched first, and painted with
+  // the query for as long as it stays in the box.
+  const conversation = usePageToolbarOptional()?.conversationSearch ?? null
+  const trimmedQuery = query.trim()
+  const conversationResults = useMemo(
+    () => (conversation && trimmedQuery.length >= CONVERSATION_SEARCH_MIN_QUERY
+      ? conversation.search(trimmedQuery, 5)
+      : null),
+    [conversation, trimmedQuery],
+  )
+  useEffect(() => {
+    if (!conversation) return
+    conversation.setHighlight(trimmedQuery.length >= CONVERSATION_SEARCH_MIN_QUERY ? trimmedQuery : null)
+    return () => conversation.setHighlight(null)
+  }, [conversation, trimmedQuery])
 
   // Global keyboard shortcut (Cmd+K on macOS, Ctrl+K on Windows/Linux)
   // On macOS, Ctrl+K is "delete to end of line" and should not be intercepted
@@ -105,13 +124,27 @@ export function SearchBar() {
     }, 300)
   }
 
-  // Handle result click
-  const handleResultClick = () => {
-    setShowDropdown(false)
+  const clearQuery = () => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
     setQuery('')
     setResults([])
     setCountsByType({})
     setHasSearched(false)
+  }
+
+  // Handle result click
+  const handleResultClick = () => {
+    setShowDropdown(false)
+    clearQuery()
+  }
+
+  // A match in the open chat: scroll to it, and keep the query (and so the
+  // highlight) in place so the next match is one click away.
+  const handleConversationSelect = (messageId: string) => {
+    conversation?.reveal(messageId)
+    setShowDropdown(false)
   }
 
   // Handle clicking on a type count to open dialog filtered to that type
@@ -131,8 +164,15 @@ export function SearchBar() {
       }
       performSearch(query)
     } else if (e.key === 'Escape') {
-      setShowDropdown(false)
-      inputRef.current?.blur()
+      // First Escape closes the results; a second clears the query and with
+      // it the highlight in the conversation.
+      if (showDropdown) {
+        setShowDropdown(false)
+      } else if (query) {
+        clearQuery()
+      } else {
+        inputRef.current?.blur()
+      }
     }
   }
 
@@ -157,16 +197,42 @@ export function SearchBar() {
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onFocus={handleFocus}
-            placeholder="Search... (⌘K)"
+            placeholder={conversation ? 'Search this chat & all… (⌘K)' : 'Search... (⌘K)'}
             aria-label="Search"
-            className="qt-input w-48 lg:w-64 pl-9 pr-3 py-1.5 focus:border-transparent transition-all"
+            className="qt-input w-48 lg:w-64 pl-9 pr-8 py-1.5 focus:border-transparent transition-all"
           />
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                clearQuery()
+                inputRef.current?.focus()
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 qt-text-secondary hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <Icon name="close" className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Dropdown results */}
         {showDropdown && (query.length >= 2 || hasSearched) && (
           <div className="absolute top-full left-0 mt-2 w-96 qt-bg-popover rounded-lg qt-shadow-lg border qt-border-default overflow-hidden z-50">
             <div className="max-h-96 overflow-y-auto">
+              {conversationResults && (
+                <>
+                  <ConversationMatches
+                    matches={conversationResults.matches}
+                    total={conversationResults.total}
+                    query={query}
+                    onSelect={handleConversationSelect}
+                  />
+                  <div className="px-3 pt-2 pb-1 border-t qt-border-default qt-text-xs font-semibold uppercase tracking-wider">
+                    Everywhere
+                  </div>
+                </>
+              )}
               {hasSearched ? (
                 <SearchResults
                   results={results}
@@ -204,6 +270,9 @@ export function SearchBar() {
       {/* Mobile search button - hidden on desktop */}
       <button
         onClick={() => {
+          // A fresh search: drop any query a previous in-chat pick left
+          // painted on the conversation.
+          clearQuery()
           setDialogInitialQuery('')
           setIsDialogOpen(true)
         }}
@@ -223,6 +292,13 @@ export function SearchBar() {
         }}
         initialQuery={dialogInitialQuery}
         initialTypes={dialogInitialTypes}
+        conversation={conversation}
+        onConversationReveal={(revealedQuery) => {
+          // Carry the dialog's query back to the bar so the highlight it
+          // paints outlives the dialog.
+          setQuery(revealedQuery)
+          setShowDropdown(false)
+        }}
       />
     </>
   )

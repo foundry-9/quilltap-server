@@ -336,7 +336,7 @@ function DocumentResultCard({ result, query, onResultClick }: { result: Document
 }
 
 // Highlight matching text
-function HighlightedText({ text, query }: { text: string; query: string }) {
+export function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query || !text) return <>{text}</>
 
   const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))

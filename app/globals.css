@@ -315,6 +315,20 @@
 }
 
 /*
+ * In-conversation search highlight
+ *
+ * The header search bar paints its query across the open Salon transcript
+ * through the CSS Custom Highlight API (app/salon/[id]/hooks/useSearchHighlight.ts),
+ * so no markup is injected into React-owned message DOM. Same tokens as the
+ * search results' <mark class="qt-highlight">; a named highlight, not a qt-*
+ * class, so no theme-storybook mirror is owed.
+ */
+::highlight(quilltap-conversation-search) {
+  background-color: var(--qt-highlight-bg);
+  color: var(--qt-highlight-fg);
+}
+
+/*
  * Mobile viewport overflow prevention
  * Uses overflow-x: clip to prevent horizontal scroll without breaking sticky positioning
  */
