@@ -3386,6 +3386,36 @@ List the roster for the run dialog. Because a character-tier store shadows farth
 
 `characterLabel` is present on variant rows, and on a single-variant row that fell back off the operator's own character (above). `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`. `references` is always present, all-false with empty lists for a tool that quotes nothing.
 
+#### `GET /api/v1/chats/[id]/custom-tools?action=presets`
+
+One tool's run presets (`Tools/{tool}.{preset}.settings.json`) as one character sees them, walked like the roster: the character's vault, then group stores, then project stores, then Quilltap General. The nearest preset of a name wins; farther ones are listed in its `shadows`. Resolved fresh per request (`resolveToolPresetPool`, `lib/pascal/tool-preset-pool.ts`).
+
+**Query Parameters**: `tool` (required, a tool name), `asCharacterId` (optional; defaults to the operator's own character, as `?action=run` does). `400` for a malformed tool name, a character not in the chat, or a chat with no character participants.
+
+**Response**:
+```json
+{
+  "presets": [
+    {
+      "name": "aggressive",
+      "path": "Tools/unlock.aggressive.settings.json",
+      "tier": "character",
+      "mountPointId": "mp-vault",
+      "mountName": "Charlie Character Vault",
+      "shadows": [{ "tier": "group", "mountPointId": "mp-group", "mountName": "Heist Crew Store" }]
+    }
+  ],
+  "stores": [
+    { "tier": "character", "mountPointId": "mp-vault", "mountName": "Charlie Character Vault" },
+    { "tier": "group", "mountPointId": "mp-group", "mountName": "Heist Crew Store" },
+    { "tier": "global", "mountPointId": "mp-general", "mountName": "Quilltap General" }
+  ],
+  "unread": []
+}
+```
+
+`stores` is every enabled store on the walk, nearest first: where the run dialog may save a preset. `unread` lists stores whose `Tools/` folder could not be listed (`reason` included); they stay in `stores`. The files themselves are read and written through the mount-points file routes.
+
 #### `POST /api/v1/chats/[id]/custom-tools?action=run`
 
 Run one tool at the operator's behest. This is one of three entrances to a custom tool — beside a model's `run_custom` and a trigger phrase said in the chat — and all three deal through the same run service (`lib/pascal/run-service.ts`), so the outcome, effects and `pascalMeta` are identical but for `invokedBy` (`'user'` here). Posts **one** message: Pascal's outcome (`systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`), identical to the one a character's own roll produces. The transcript does not record that the operator reached for the tool, nor what figures they set — a companion USER-role invocation line used to publish exactly that, and was removed.

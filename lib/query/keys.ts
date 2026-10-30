@@ -212,13 +212,14 @@ export const queryKeys = {
      */
     library: () => ['custom-tools', 'library'] as const,
     /**
-     * Run presets for one tool in one character's vault —
-     * `Tools/{toolName}.{preset}.settings.json`, listed by the run dialog.
-     * Invalidated after a save; refetched per dialog open, same doctrine as
-     * `byChat` (the files live in a store the user edits).
+     * Run presets for one tool as one character sees them —
+     * `Tools/{toolName}.{preset}.settings.json` across the character → group →
+     * project → General walk, listed by the run dialog. Invalidated after a
+     * save; refetched per dialog open, same doctrine as `byChat` (the files
+     * live in stores the user edits).
      */
-    presets: (vaultMountPointId: string, toolName: string) =>
-      ['custom-tools', 'presets', vaultMountPointId, toolName] as const,
+    presets: (chatId: string, asCharacterId: string | null, toolName: string) =>
+      ['custom-tools', chatId, 'presets', asCharacterId ?? '', toolName] as const,
     /** The Workbench save-target list, grouped by attachment. */
     destinations: () => ['custom-tools', 'destinations'] as const,
     /**

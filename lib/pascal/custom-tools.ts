@@ -217,40 +217,45 @@ export interface RosterContext {
 // ---------------------------------------------------------------------------
 
 /**
- * True for a root-level `*.tool.json`.
+ * True for a file directly inside `Tools/`.
  *
  * `listDatabaseFiles({ folder })` filters by PREFIX, so it happily returns
- * `Tools/nested/deep/x.tool.json`. Definitions are a flat root-level
- * convention; a nested file is somebody's archive, not a live tool.
+ * `Tools/nested/deep/x.tool.json`. Definitions and presets are a flat
+ * root-level convention; a nested file is somebody's archive, not a live one.
  */
-function isRootToolFile(relativePath: string): boolean {
-  const lower = relativePath.toLowerCase();
-  if (!lower.endsWith(TOOL_FILE_SUFFIX)) return false;
+function isRootOfToolsFolder(relativePath: string): boolean {
   const rest = relativePath.slice(TOOLS_FOLDER.length + 1);
   return rest.length > 0 && !rest.includes('/');
 }
 
-/** List `Tools/*.tool.json` in a database-backed store. */
-async function listToolFilesFromDatabase(mountPointId: string): Promise<string[]> {
-  const entries = await listDatabaseFiles(mountPointId, { folder: TOOLS_FOLDER });
-  return entries
-    .filter((e) => e.kind !== 'folder' && isRootToolFile(e.relativePath))
-    .map((e) => e.relativePath);
-}
-
 /**
- * List `Tools/*.tool.json` in an on-disk store (filesystem or obsidian).
+ * Every file directly inside a store's `Tools/` folder, as vault-relative
+ * paths. The one listing shared by definition discovery (`*.tool.json`) and
+ * the preset walk (`*.settings.json`, `lib/pascal/tool-preset-pool.ts`), so
+ * both read a store's folder the same way.
  *
  * A missing `Tools/` folder is the normal case — it is a lazy convention like
- * Suparṇā's `Mail/`, never scaffolded — so ENOENT yields [] rather than an error.
+ * Suparṇā's `Mail/`, never scaffolded — so an on-disk ENOENT yields [] rather
+ * than an error. Anything else throws, and the caller records the store as
+ * unread.
  */
-async function listToolFilesFromDisk(basePath: string): Promise<string[]> {
-  const folder = path.join(basePath, TOOLS_FOLDER);
+export async function listToolsFolderFiles(mount: {
+  id: string;
+  mountType: string;
+  basePath: string;
+}): Promise<string[]> {
+  if (mount.mountType === 'database') {
+    const entries = await listDatabaseFiles(mount.id, { folder: TOOLS_FOLDER });
+    return entries
+      .filter((e) => e.kind !== 'folder' && isRootOfToolsFolder(e.relativePath))
+      .map((e) => e.relativePath);
+  }
+
+  // On-disk store (filesystem or obsidian).
+  const folder = path.join(mount.basePath, TOOLS_FOLDER);
   try {
     const entries = await fs.readdir(folder, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(TOOL_FILE_SUFFIX))
-      .map((e) => `${TOOLS_FOLDER}/${e.name}`);
+    return entries.filter((e) => e.isFile()).map((e) => `${TOOLS_FOLDER}/${e.name}`);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT' || code === 'ENOTDIR') return [];
@@ -327,7 +332,7 @@ export function validateToolDefinitionText(
  * (`unlock.tool.json`, suffix case-insensitive) or that file name under a
  * leading `Tools/`. Anything that would land outside the top level of `Tools/`
  * — another folder, a nested path, an empty stem — returns null: definitions
- * are a flat root-level convention (see {@link isRootToolFile}).
+ * are a flat root-level convention (see {@link isRootOfToolsFolder}).
  */
 export function toolDefinitionPathFor(file: string): string | null {
   let name = file.trim().replace(/\\/g, '/');
@@ -363,10 +368,9 @@ export async function loadToolsFromMount(
 
   let paths: string[];
   try {
-    paths =
-      mount.mountType === 'database'
-        ? await listToolFilesFromDatabase(mountPointId)
-        : await listToolFilesFromDisk(mount.basePath);
+    paths = (await listToolsFolderFiles(mount)).filter((p) =>
+      p.toLowerCase().endsWith(TOOL_FILE_SUFFIX),
+    );
   } catch (error) {
     logger.warn('Custom-tool listing failed for mount', {
       context: CONTEXT,
@@ -430,8 +434,13 @@ export async function loadToolsFromMount(
   return { found, errors, unread };
 }
 
-/** Bucket the pool into (tier, mountPointId) pairs in precedence order. */
-function orderedMounts(pool: TieredMountPool): Array<{ tier: MountTier; mountPointId: string }> {
+/**
+ * Bucket the pool into (tier, mountPointId) pairs in precedence order.
+ *
+ * Exported so run presets walk the stores in exactly the order definitions do
+ * (`lib/pascal/tool-preset-pool.ts`) — one precedence, not two copies of it.
+ */
+export function orderedMounts(pool: TieredMountPool): Array<{ tier: MountTier; mountPointId: string }> {
   const byTier: Record<MountTier, string[]> = {
     character: pool.characterMountPointId ? [pool.characterMountPointId] : [],
     // Never resolved for custom tools (see TIER_ORDER); present only because

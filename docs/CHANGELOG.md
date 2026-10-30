@@ -4,6 +4,15 @@
 
 ### 4.12-dev
 
+#### Custom-tool presets follow the tool walk
+
+- Run presets (`Tools/{tool}.{preset}.settings.json`) were read from and saved to the running character's vault only. They are now found where definitions are: character vault, group stores, project stores, Quilltap General, nearest first. A nearer preset of a name shadows a farther one.
+- New `resolveToolPresetPool` (`lib/pascal/tool-preset-pool.ts`) and `GET /api/v1/chats/[id]/custom-tools?action=presets&tool=…&asCharacterId=…`. It returns the winning presets (with the stores each one shadows), every enabled store on the walk as a save destination, and any store whose `Tools/` folder would not list.
+- `lib/pascal/custom-tools.ts`: the `Tools/` folder listing is now one exported helper, `listToolsFolderFiles`, shared by definition discovery and the preset walk. `orderedMounts` is exported so both walks use the same precedence.
+- Run dialog: the preset dropdown labels each preset with its store and names shadowed copies on hover. A new **Save into** selector picks the destination store, defaulting to the character's vault (or the nearest store when there is no vault). Loading a preset reads it from its own store and does not change the destination. The section now shows for any row that names a character, vault or not.
+- `queryKeys.customTools.presets` is now keyed by `(chatId, asCharacterId, toolName)`.
+- Docs: `help/custom-tools.md`, API.md, and `features/complete/custom-tool-presets.md` updated. New unit tests in `__tests__/unit/lib/pascal/tool-preset-pool.test.ts`.
+
 #### Deus Ex Machina toggle on the composer portrait; composer tooltips
 
 - New `deus-ex-machina` icon in the icon registry: a game-master's screen by default, an eye in a triangle in the Madman's Box override (bundle 1.1.10). It replaces `zap` on the `/deus` menu entry and on the armed chip.
