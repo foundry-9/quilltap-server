@@ -157,8 +157,12 @@ Shows chat information and controls:
 
 - **Chat Title** — Auto-generated or custom name; it doubles as a direct link back to this conversation's own Salon address, handy for pinning open in a fresh tab
 - **Copy ID** — a small button just past the title that whisks the conversation's unique identifier onto the clipboard, flashing a check-mark once the deed is done
-- **Character Info** — Who you're chatting with
+- **Project** — When the chat belongs to a project, its name leads the row; click it to visit the project
+- **Character Info** — Who you're chatting with, each with a portrait; click one to open that character
+- **Story Background** — A little thumbnail of the Lantern's current backdrop, always kept on display; hover for "Click to display background," and click to see it at full size
 - **Action Menu** — Additional chat operations
+
+When a gathering grows too large for the header's mantelpiece, the project and the cast tighten their collars rather than shove the search bar aside: first each name gives way to a short abbreviation ("Abigail" becomes "Abi," "Baraka Ilunga" becomes "BI"), and if that still won't do, to the portrait alone. The search bar and everything to its right keep their full width, the story background and the chat title stay put, and hovering over any abbreviated name or bare portrait produces a tooltip with the full name and a reminder that a click opens the project or character.
 
 ### Chat Sidebar
 

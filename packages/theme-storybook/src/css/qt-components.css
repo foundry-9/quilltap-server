@@ -3996,15 +3996,24 @@
   -webkit-backdrop-filter: var(--qt-app-header-blur);
 }
 
+/* With page content, the left section takes whatever the search bar and the
+   right section leave over — never the other way round — so a crowded
+   breadcrumb compacts itself instead of squeezing the search bar. */
 .qt-page-toolbar-left {
   display: flex;
   align-items: center;
+  flex: 1 1 0%;
   /* Reserve space for hamburger on mobile, empty on desktop */
   min-width: 2.5rem;
 }
 
+/* Empty, it claims no spare room, so the search bar sits where it always has. */
+.qt-page-toolbar-left:empty {
+  flex: 0 1 auto;
+}
+
 .qt-page-toolbar-center {
-  flex: 1 1 0%;
+  flex: 0 1 32rem;
   display: flex;
   justify-content: center;
   padding-left: 1rem;
@@ -4016,6 +4025,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
   /* Balance with left section */
   min-width: 2.5rem;
   justify-content: flex-end;

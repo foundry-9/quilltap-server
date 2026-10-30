@@ -109,7 +109,7 @@ import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
-import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
+import { ChatHeaderBreadcrumb } from '@/components/chat/ChatHeaderBreadcrumb'
 import { ReplyAnnouncer } from '@/components/chat/ReplyAnnouncer'
 
 /** Fallback re-read cadence for the avatar watch, while the socket is down. */
@@ -1183,108 +1183,59 @@ export function SalonView({ chatId }: SalonViewProps) {
         return null
       }
 
-      setLeftContent(
-        <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
-          {chat.projectId && chat.projectName && (
-            <>
-              <a
-                href={`/projects/${chat.projectId}`}
-                className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
-              >
-                <Icon name="folder" className="w-4 h-4" />
-                <span>{chat.projectName}</span>
-              </a>
-              <span className="qt-text-muted">/</span>
-            </>
-          )}
-          {llmCharacters.map((character) => {
-            const avatarUrl = getCharacterAvatarUrl(character)
-            return (
-              <span key={character.id} className="contents">
-                <a
-                  href={`/aurora/${character.id}/view?tab=conversations`}
-                  className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
-                >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={character.name}
-                      className="w-5 h-5 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full qt-bg-muted flex items-center justify-center">
-                      <span className="text-xs font-medium qt-text-secondary">
-                        {character.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <span>{character.name}</span>
-                </a>
-                <span className="qt-text-muted">/</span>
-              </span>
-            )
-          })}
-          {visibleStoryBackgroundUrl && (
-            <button
-              type="button"
-              onClick={() => setModalImage({
-                src: visibleStoryBackgroundUrl,
-                filename: storyBackgroundFilename || 'story_background.png',
-                fileId: storyBackgroundFileId || undefined,
-              })}
-              className="flex-shrink-0 rounded overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-              title="View story background"
+      // Moderated is the default and renders no badge — the pill means
+      // "something other than the default is set." Everything the pill
+      // says comes from the presentation table, so it speaks the same
+      // words as the list marks and the sidebar's helper text; who set
+      // Unmoderated goes in the tooltip, never the colour.
+      const conciergeBadge = (() => {
+        const conciergeState = getConciergeState(chat)
+        if (conciergeState === 'moderated') return null
+
+        const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
+        const description = describeConciergeState(
+          conciergeState,
+          {
+            setBy: getConciergeProvenance(chat),
+            reason: getConciergeReason(chat),
+            refusalCount: chat.conciergeRefusalCount,
+          },
+          chat.dangerCategories ?? undefined,
+        )
+        const toneSuffix = conciergeToneSuffix(tone)
+
+        return (
+          <Tooltip content={<ConciergeTooltipBody {...description} />} placement="bottom">
+            <span
+              className={`qt-danger-badge${toneSuffix ? ` qt-danger-badge${toneSuffix}` : ''} flex-shrink-0`}
+              role="img"
+              aria-label={`Concierge: ${label}`}
             >
-              <img
-                src={visibleStoryBackgroundUrl}
-                alt="Story background"
-                className="w-8 h-5 object-cover"
-              />
-            </button>
-          )}
-          {(() => {
-            // Moderated is the default and renders no badge — the pill means
-            // "something other than the default is set." Everything the pill
-            // says comes from the presentation table, so it speaks the same
-            // words as the list marks and the sidebar's helper text; who set
-            // Unmoderated goes in the tooltip, never the colour.
-            const conciergeState = getConciergeState(chat)
-            if (conciergeState === 'moderated') return null
+              <Icon name={icon} className="w-3 h-3" />
+              {label}
+            </span>
+          </Tooltip>
+        )
+      })()
 
-            const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
-            const description = describeConciergeState(
-              conciergeState,
-              {
-                setBy: getConciergeProvenance(chat),
-                reason: getConciergeReason(chat),
-                refusalCount: chat.conciergeRefusalCount,
-              },
-              chat.dangerCategories ?? undefined,
-            )
-            const toneSuffix = conciergeToneSuffix(tone)
-
-            return (
-              <Tooltip content={<ConciergeTooltipBody {...description} />} placement="bottom">
-                <span
-                  className={`qt-danger-badge${toneSuffix ? ` qt-danger-badge${toneSuffix}` : ''} flex-shrink-0`}
-                  role="img"
-                  aria-label={`Concierge: ${label}`}
-                >
-                  <Icon name={icon} className="w-3 h-3" />
-                  {label}
-                </span>
-              </Tooltip>
-            )
-          })()}
-          <a
-            href={`/salon/${id}`}
-            className="qt-text-primary truncate hover:text-foreground transition-colors"
-            title={chat.title}
-          >
-            {chat.title}
-          </a>
-          <CopyChatIdButton chatId={id} variant="inline" />
-        </div>
+      setLeftContent(
+        <ChatHeaderBreadcrumb
+          chatId={id}
+          title={chat.title}
+          project={chat.projectId && chat.projectName ? { id: chat.projectId, name: chat.projectName } : null}
+          characters={llmCharacters.map(character => ({
+            id: character.id,
+            name: character.name,
+            avatarUrl: getCharacterAvatarUrl(character),
+          }))}
+          storyBackgroundUrl={visibleStoryBackgroundUrl}
+          onOpenStoryBackground={() => setModalImage({
+            src: visibleStoryBackgroundUrl!,
+            filename: storyBackgroundFilename || 'story_background.png',
+            fileId: storyBackgroundFileId || undefined,
+          })}
+          conciergeBadge={conciergeBadge}
+        />
       )
     } else {
       setLeftContent(null)

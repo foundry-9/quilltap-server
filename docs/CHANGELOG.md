@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### Salon header compacts a crowded cast
+
+- The Salon's toolbar breadcrumb (project, characters, story background, Concierge badge, title) is now `ChatHeaderBreadcrumb` (`components/chat/ChatHeaderBreadcrumb.tsx`). When the row doesn't fit, the project and character links step down from full name to an abbreviation (`abbreviateName`: first three letters of one word, initials of several) to avatar only. Compact links get a Quilltap tooltip with the full name and "Click to open character" / "Click to open project". The density is chosen by measuring invisible copies of each density, so it doesn't depend on the row's own width.
+- The story-background thumbnail and the title always show. The thumbnail's tooltip reads "Click to display background"; the title has a minimum width and truncates, and the cast clips before it does.
+- `.qt-page-toolbar-left` now takes the space the search bar and right section leave (`flex: 1 1 0%`; `flex: 0 1 auto` when empty, so pages without left content lay out as before). `.qt-page-toolbar-center` has a fixed `32rem` basis and `.qt-page-toolbar-right` no longer shrinks, so a long breadcrumb can't squeeze either. `@quilltap/theme-storybook` 1.0.94 mirrors the change.
+
 #### Fix: see-through dropdowns and menus that let clicks fall through
 
 - The header search dropdown, the search dialog, the Generate Image and entity-search pickers, the Brahma model picker and the wardrobe, inventory and folder menus used page-background colors (`bg-background`, `qt-bg-default`, `qt-bg-surface`). Art Deco, Great Estate and Madman's Box set `.bg-background` to transparent so their backdrop shows, which made those panels see-through. They now use a new `qt-bg-popover` utility (`--qt-popover-bg`). The two roleplay-template editor dialogs and the task-details dialog use `qt-dialog` for the same reason.
