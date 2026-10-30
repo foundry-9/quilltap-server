@@ -53,6 +53,12 @@ describe('buildSendMessageOptions', () => {
 
     expect(options.targetParticipantIds).toEqual([])
   })
+
+  it('carries the established-fact flag only when it is set', () => {
+    expect(buildSendMessageOptions({ content: 'hi', isEstablishedFact: true } as never).isEstablishedFact).toBe(true)
+    expect(buildSendMessageOptions({ content: 'hi', isEstablishedFact: false } as never).isEstablishedFact).toBeUndefined()
+    expect(buildSendMessageOptions({ content: 'hi' } as never).isEstablishedFact).toBeUndefined()
+  })
 })
 
 describe('buildContinueMessageOptions', () => {

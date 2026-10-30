@@ -16,6 +16,8 @@ import {
   type SlashCustomToolRef,
 } from '@/components/chat/lexical/slash-commands/context'
 import { useSlashCommandRunner } from '@/components/chat/useSlashCommandRunner'
+import type { ComposerSubmitOptions } from '@/components/chat/lexical/plugins/KeyboardPlugin'
+import { showInfoToast } from '@/lib/toast'
 import type { AttachedFile, PendingToolResult } from '../types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
 
@@ -87,7 +89,13 @@ interface ChatComposerProps {
   isDocumentModeActive?: boolean
 
   // Callbacks
-  onSubmit: (e: React.FormEvent) => void
+  /**
+   * Submit the composer. `opts.establishedFact` posts the line as established
+   * fact (Deus Ex Machina) — armed with `/deus`, or sent once with
+   * Cmd/Ctrl+Shift+Enter. Return `false` when nothing was sent, so an armed
+   * composer stays armed.
+   */
+  onSubmit: (e: React.FormEvent, opts?: ComposerSubmitOptions) => boolean | void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   onAttachFileClick?: () => void
   onImagePaste: (file: File) => Promise<void>
@@ -224,6 +232,37 @@ export function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<ComposerEditorHandle>(null)
+
+  // Deus Ex Machina: the next line is posted as established fact. Armed per
+  // chat (the state holds the chat id it was armed in), so switching chats
+  // disarms it; never persisted with the draft, so a reload disarms it too.
+  const [factArmedForChat, setFactArmedForChat] = useState<string | null>(null)
+  const factArmed = factArmedForChat === id
+  // The Cmd/Ctrl+Shift+Enter shortcut sends one line as fact without arming;
+  // the flag rides from the key handler to the form submit through this ref.
+  const shortcutFactRef = useRef(false)
+  const currentText = useCallback(
+    () => (showSource ? input : editorRef.current?.getMarkdown() ?? ''),
+    [showSource, input],
+  )
+  const toggleEstablishedFact = useCallback(() => {
+    if (factArmed) {
+      setFactArmedForChat(null)
+      return
+    }
+    // A fact needs words: an attachments-only composer cannot be armed.
+    if (!currentText().trim() && attachedFiles.length > 0) {
+      showInfoToast('A fact must be written down — attachments alone cannot be established.')
+      return
+    }
+    setFactArmedForChat(id)
+  }, [factArmed, currentText, attachedFiles.length, id])
+  const handleFormSubmit = useCallback((e: React.FormEvent) => {
+    const establishedFact = factArmed || shortcutFactRef.current
+    shortcutFactRef.current = false
+    const sent = onSubmit(e, establishedFact ? { establishedFact: true } : undefined)
+    if (establishedFact && sent !== false) setFactArmedForChat(null)
+  }, [factArmed, onSubmit])
   // Track the Lexical editor instance in state so it's available during render
   // (refs can't be read during render in React 19)
   const [lexicalEditor, setLexicalEditor] = useState<import('lexical').LexicalEditor | null>(null)
@@ -266,6 +305,7 @@ export function ChatComposer({
         announce: onInsertAnnouncementClick,
         mail: onComposeMailClick,
         inform: onInformClick,
+        deus: toggleEstablishedFact,
         ...(onPendingToolResult ? buildQuickRollActions(id, onPendingToolResult) : {}),
       },
       openRunTool: onOpenRunTool,
@@ -282,6 +322,7 @@ export function ChatComposer({
     onInsertAnnouncementClick,
     onComposeMailClick,
     onInformClick,
+    toggleEstablishedFact,
     onPendingToolResult,
     onOpenRunTool,
     onOpenCustomTool,
@@ -294,11 +335,18 @@ export function ChatComposer({
   // form submit — the page's onSubmit reads markdown straight from the editor
   // handle (`getMarkdown()`), which is why we no longer round-trip through
   // setInput here (that was the per-keystroke re-render source).
-  const handleEditorSubmit = useCallback(() => {
+  const handleEditorSubmit = useCallback((opts?: ComposerSubmitOptions) => {
     // Belt and braces: the editor is already disabled, but a keystroke racing
     // the lock must not put a message on top of a turn in flight.
     if (composerLocked) return
     const markdown = editorRef.current?.getMarkdown() ?? ''
+    if (opts?.establishedFact) {
+      if (!markdown.trim()) {
+        showInfoToast('A fact must be written down — there is nothing here to establish.')
+        return
+      }
+      shortcutFactRef.current = true
+    }
     if (markdown.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
       const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
       if (form) {
@@ -404,6 +452,28 @@ export function ChatComposer({
           <PendingInformChips chatId={id} participantNames={informParticipantNames} />
         )}
 
+        {/* Deus Ex Machina, armed: the next line is posted as established
+            fact. Announced politely to assistive tech as it comes and goes. */}
+        <div aria-live="polite">
+          {factArmed && (
+            <div className="qt-chat-attachment-list mb-2">
+              <div className="qt-chat-tool-result-chip">
+                <Icon name="zap" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
+                <span className="text-foreground">Deus Ex Machina: this line will be established as fact</span>
+                <button
+                  type="button"
+                  onClick={() => setFactArmedForChat(null)}
+                  className="qt-chat-attachment-chip-remove"
+                  title="Disarm Deus Ex Machina"
+                  aria-label="Disarm Deus Ex Machina"
+                >
+                  <Icon name="close" className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Attached files and pending tool results preview */}
         {(attachedFiles.length > 0 || pendingToolResults.length > 0) && (
           <div className="qt-chat-attachment-list mb-2">
@@ -480,7 +550,7 @@ export function ChatComposer({
           />
         )}
 
-        <form id={`composer-form-${id}`} onSubmit={onSubmit} className="qt-chat-composer-inner">
+        <form id={`composer-form-${id}`} onSubmit={handleFormSubmit} className="qt-chat-composer-inner">
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
@@ -536,9 +606,10 @@ export function ChatComposer({
                   onToggleDocumentEditingMode()
                 }}
                 className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
-                title={documentEditingMode
+                title={(documentEditingMode
                   ? `Switch to chat mode (Enter to send)`
-                  : `Switch to composition mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`}
+                  : `Switch to composition mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`)
+                  + ` · ${isMac ? 'Cmd' : 'Ctrl'}+Shift+Enter sends as established fact`}
               >
                 <Icon name="file" className="w-5 h-5" />
               </button>
@@ -590,7 +661,10 @@ export function ChatComposer({
             />
           )}
           {/* Keep Lexical mounted but hidden during source mode to preserve undo history */}
-          <div className="flex-1 min-w-0 self-stretch" style={showSource ? { display: 'none' } : undefined}>
+          <div
+            className={`flex-1 min-w-0 self-stretch${factArmed ? ' qt-chat-composer-established-fact' : ''}`}
+            style={showSource ? { display: 'none' } : undefined}
+          >
             <LexicalComposerWrapper
               ref={composerRefCallback}
               input={input}
@@ -618,10 +692,12 @@ export function ChatComposer({
                 ? "Add a character to start chatting"
                 : isGenerating
                   ? "Generating..."
-                  : voiceRehearsal && speakingAs
-                    ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
-                    : "Send message"}
-              aria-label="Send message"
+                  : factArmed
+                    ? 'Send as established fact'
+                    : voiceRehearsal && speakingAs
+                      ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
+                      : "Send message"}
+              aria-label={factArmed ? 'Send as established fact' : 'Send message'}
             >
               <Icon name="send" className="w-5 h-5" />
             </button>

@@ -1045,8 +1045,11 @@ export function useSSEStreaming({
      * the restored words survive a reload exactly as they did before Send.
      */
     persistDraft?: (text: string) => void,
+    /** `establishedFact`: post this line as established fact (Deus Ex Machina). */
+    opts?: { establishedFact?: boolean },
   ) => {
     e?.preventDefault()
+    const establishedFact = !!opts?.establishedFact
     // Two refusals, deliberately told apart (bug 136). An empty composer is
     // the operator's own doing and wants no answer; a send declined because a
     // turn is still in flight is a real request refused, and silence there is
@@ -1122,6 +1125,8 @@ export function useSSEStreaming({
       // Renders with the chosen character's name/avatar immediately (not the
       // default user), matching what the server persists.
       participantId: optimisticAuthor?.id ?? activeTypingParticipantIdRef.current ?? undefined,
+      // The ribbon shows at once, before the server's row replaces this one.
+      ...(establishedFact ? { isEstablishedFact: true } : {}),
     }
     setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
     scrollOnUserMessage()
@@ -1130,6 +1135,7 @@ export function useSSEStreaming({
       content: userMessage || (attachedFiles.length > 0 ? 'Please look at the attached file(s).' : ''),
       fileIds,
       speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+      ...(establishedFact ? { isEstablishedFact: true } : {}),
       pendingToolResults: toolResultsToSend.length > 0 ? toolResultsToSend.map(r => ({
         tool: r.tool,
         success: r.success,

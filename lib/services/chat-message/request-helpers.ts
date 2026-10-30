@@ -39,6 +39,7 @@ export function buildSendMessageOptions(
     pendingToolResults: parsed.pendingToolResults,
     targetParticipantIds: parsed.targetParticipantIds,
     speakingAsParticipantId: parsed.speakingAsParticipantId,
+    isEstablishedFact: parsed.isEstablishedFact || undefined,
     continueMode: false,
     browserUserAgent: extras.browserUserAgent,
   }

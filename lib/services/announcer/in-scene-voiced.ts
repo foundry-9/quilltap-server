@@ -23,6 +23,7 @@
  */
 
 import { logger } from '@/lib/logger'
+import { framedEstablishedFactBody, isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
 import { getErrorMessage } from '@/lib/error-utils'
 import { getRepositories } from '@/lib/repositories/factory'
 import type {
@@ -144,23 +145,31 @@ function buildTranscriptForSeat(
     hostEvent: m.hostEvent ?? null,
   }))
 
-  // Played messages only: the character's and the operator's own speech.
+  // Played messages only: the character's and the operator's own speech —
+  // plus established facts of either kind, which everybody knows. A machine
+  // fact is a Host row and would otherwise fall to the Staff drop. Facts are
+  // framed in the plain voice: a rehearsal names no Staff.
   const played = messageEvents
     .filter(
       m =>
-        !m.systemSender &&
+        (!m.systemSender || isEstablishedFactAnnouncement(m)) &&
         (m.role === 'USER' || m.role === 'ASSISTANT') &&
         typeof m.content === 'string' &&
         m.content.trim().length > 0,
     )
-    .map(m => ({
-      role: m.role,
-      content: m.content,
-      id: m.id,
-      participantId: m.participantId ?? null,
-      createdAt: m.createdAt,
-      targetParticipantIds: m.targetParticipantIds ?? null,
-    }))
+    .map(m => {
+      const framed = framedEstablishedFactBody(m, 'plain')
+      return {
+        // A machine fact is an input to the seat, not its speech.
+        role: isEstablishedFactAnnouncement(m) ? 'USER' : m.role,
+        content: framed ?? m.content,
+        id: m.id,
+        participantId: m.participantId ?? null,
+        createdAt: m.createdAt,
+        targetParticipantIds: m.targetParticipantIds ?? null,
+        ...(framed !== null ? { isEstablishedFact: true } : {}),
+      }
+    })
 
   // Whispers this seat is not party to, then the history the seat has access
   // to, then the stretches it was actually present for.

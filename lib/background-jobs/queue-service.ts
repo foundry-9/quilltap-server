@@ -145,6 +145,18 @@ export interface CarinaMemoryExtractionPayload {
 }
 
 /**
+ * Payload for an established-fact memory job. A machine-delivered established
+ * fact (a Host row, `systemKind: 'established-fact'`) has no speaker for LLM
+ * extraction to interpret, so the handler admits it verbatim as one MANUAL
+ * memory per non-removed LLM seat — absent and silent seats included.
+ */
+export interface EstablishedFactMemoriesPayload {
+  chatId: string;
+  /** The posted Host fact row. Its `content` is the fact. */
+  messageId: string;
+}
+
+/**
  * Payload for context summary job
  */
 export interface ContextSummaryPayload {
@@ -630,6 +642,37 @@ export async function enqueueCarinaMemoryExtraction(
   }
 
   return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue the memory job for a machine-delivered established fact. Runs once
+ * per post: dedupe is keyed on the posted message id.
+ */
+export async function enqueueEstablishedFactMemories(
+  userId: string,
+  payload: EstablishedFactMemoriesPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'ESTABLISHED_FACT_MEMORIES') return false;
+      return (j.payload as unknown as EstablishedFactMemoriesPayload).messageId === payload.messageId;
+    });
+    if (existing) {
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[EstablishedFactMemories] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
+  return enqueueJob(userId, 'ESTABLISHED_FACT_MEMORIES', payload as unknown as Record<string, unknown>, options);
 }
 
 /** Union two phase lists; `undefined` (every phase) absorbs anything. */

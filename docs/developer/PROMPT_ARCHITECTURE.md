@@ -163,6 +163,7 @@ Sections are appended to the new user message in this order, separated by `---`:
 4. Character progressions
 5. Inventory
 6. Inform block (`INFORM_BLOCK_HEADER` + the operator's passages, standing first) — after recall on purpose, so an inform outranks a recalled memory that contradicts it
+6a. Established-fact reminder (`buildEstablishedFactReminder`, `lib/chat/context/established-fact-reminder.ts`) — every established fact (both kinds) posted since this seat last spoke (`findLastOwnTurnMs`), in posting order under `ESTABLISHED_FACT_REMINDER_HEADER`, seat lines name-prefixed, capped at 8,000 characters (oldest dropped). Right after the inform block, so the operator's vouched words travel together. Reads only; a swipe measures "last spoke" on the history the original saw. Empty-is-absent.
 7. Referent ledger, "Who is being spoken of" (`buildReferentLedger`, `lib/chat/context/referent-ledger.ts`) — everyone named in the last 6 spoken lines, most recent first, with pronouns, in the room or not, who last named them and the sentence; then the card of each listed person not in the room. Leaves out the responder and the latest line's author. Empty-is-absent.
 8. Closing echo, "The line you are answering" (`buildClosingEcho`) — the new user message repeated (its closing paragraphs past 1,500 characters), so the last thing the model reads about the conversation is what it is answering. New-user-message turns only.
 9. "Nothing to add" turn-skip note, then the raised-hand yield note
@@ -171,6 +172,8 @@ Sections are appended to the new user message in this order, separated by `---`:
 On continue / nudge / chained autonomous turns (and swipes) there is no new user message, so these sections (all but the echo), in the same order, are pushed as their own trailing `user` message, led by the chained-turn scene note when it applies. The order and both deliveries live in one function, `composeTrailingMessage` (`lib/chat/context/turn-trailing.ts`).
 
 **The sections are measured before history is packed.** `buildContext` builds every Staff whisper and trailing section first, then gives history what `safeInputLimit` leaves after system blocks 1–3, the timestamp line, the whole trailing message and the caller's `reservedOutgoingTokens`. A section added here is counted automatically; one built after history is chosen would not be ([bug 263](bugs/fixed/bug-263-budget-blind-to-trailing-sections.md)).
+
+**Established facts** ("Deus Ex Machina" in the UI — a name no model ever reads) are framed in history, not stored framed. `buildMessageContext` runs `frameEstablishedFacts` between the whisper filter and `normalizeWhisperRoles`, while `systemSender` / `systemKind` / `isEstablishedFact` are still on the rows: a seat line (USER row, `isEstablishedFact`) gets the seat frame; a machine fact (Host row, `systemKind: 'established-fact'`) gets the Host frame on a transparent roster and the plain frame when `isOpaqueAnywhere`, written into both `content` and `opaqueContent` so the Staff swap reads the right one. Fact rows are exempt from the history-access cut and the presence-window filter. Cheap-LLM transcripts (`extractVisibleConversation`), the summary fold, the extraction transcripts and the Courier delta frame them in the plain voice. Every frame, predicate and header lives in `lib/chat/established-fact.ts`.
 
 **Character progressions** (§9a) are the newest of these and the only one derived from the wall clock.
 
@@ -282,6 +285,8 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 | `lib/chat/context/message-attribution.ts` | `name` attribution, history-access and presence-window filtering, whisper visibility |
 | `lib/chat/context/compression.ts`, `lib/chat/context-summary.ts` | Budget compression and the Librarian rolling summary |
 | `lib/chat/context/inform-block.ts` | `buildInformBlock` — the one reader of `chat_informs` on the prompt path; selects, never consumes |
+| `lib/chat/established-fact.ts` | Established facts: the predicate (`isEstablishedFact`), the frames, the reminder header and the transcript rule — the only place that knows the wording |
+| `lib/chat/context/established-fact-reminder.ts` | `buildEstablishedFactReminder` — the trailing "since you last spoke" section; reads only |
 | `lib/chat/context/core-whisper-trigger.ts` | Aurora Core cadence; `findLastOwnTurnMs`, shared with progressions |
 | `lib/progressions/schema.ts`, `engine.ts` | Progression shape (Zod source of truth) and the pure, client-safe derivation |
 | `lib/progressions/prompt-section.ts` | `buildProgressionsSection` — the one prompt-side reader of progression state |

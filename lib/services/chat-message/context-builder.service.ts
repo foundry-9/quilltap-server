@@ -42,6 +42,7 @@ import type {
 } from '@/lib/schemas/types'
 import type { AttachedFile } from './types'
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
+import { countEstablishedFacts, frameEstablishedFacts, isEstablishedFact } from '@/lib/chat/established-fact';
 
 const logger = createServiceLogger('ContextBuilderService')
 
@@ -868,7 +869,7 @@ export function isRecordOnlyMessage(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null; customAnnouncer?: CustomAnnouncer | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null; customAnnouncer?: CustomAnnouncer | null; isEstablishedFact?: boolean | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -985,10 +986,29 @@ export async function buildMessageContext(
     isOpaqueAnywhere = character.systemTransparency !== true
   }
 
+  // Established facts: frame each fact row's body for the model while
+  // `systemSender` / `systemKind` / `isEstablishedFact` are still on the rows.
+  // The voice follows the same chat-wide opacity rule as the Staff swap: if
+  // any LLM seat is opaque, everyone reads the plain frame with no Host. See
+  // lib/chat/established-fact.ts — the frame is never stored.
+  const factVoice = isOpaqueAnywhere ? 'plain' : 'host'
+  const factCounts = countEstablishedFacts(messagesAfterWhisperFilter)
+  const messagesFramed = factCounts.seat + factCounts.announcement > 0
+    ? frameEstablishedFacts(messagesAfterWhisperFilter, { voice: factVoice })
+    : messagesAfterWhisperFilter
+  if (factCounts.seat + factCounts.announcement > 0) {
+    logger.debug('[Context] Framed established facts', {
+      chatId: chat.id,
+      seatLines: factCounts.seat,
+      machineFacts: factCounts.announcement,
+      voice: factVoice,
+    })
+  }
+
   // Whisper-role normalization (re-role Staff whispers to USER, preserve
   // attachment-bearing whispers as ASSISTANT, apply opaque body swap). See
   // `normalizeWhisperRoles` for the full rationale.
-  const filteredExistingMessages = normalizeWhisperRoles(messagesAfterWhisperFilter, isOpaqueAnywhere)
+  const filteredExistingMessages = normalizeWhisperRoles(messagesFramed, isOpaqueAnywhere)
 
   // Row ids of the *human's* own turns, captured before normalization erases
   // the distinction. Staff whispers are re-roled to USER above, so after this
@@ -1047,10 +1067,20 @@ export async function buildMessageContext(
     : filteredExistingMessages
 
   // Build conversation messages
-  const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
+  const { conversationMessages, messagesWithParticipants: builtWithParticipants } = buildConversationMessages(
     messagesForConversation,
     isMultiCharacter
   )
+  // Mark fact rows on the multi-character sequence: everybody knows an
+  // established fact, so the history-access cut must not hide one from a seat
+  // that joined after it was posted. Ids are taken before normalization erases
+  // the Host row's `systemSender`.
+  const factRowIds = factCounts.seat + factCounts.announcement > 0
+    ? new Set(messagesAfterWhisperFilter.filter(m => m.id && isEstablishedFact(m)).map(m => m.id as string))
+    : null
+  const messagesWithParticipants = factRowIds && builtWithParticipants
+    ? builtWithParticipants.map(m => (m.id && factRowIds.has(m.id) ? { ...m, isEstablishedFact: true } : m))
+    : builtWithParticipants
 
   // Determine if this is the first user message (for timestamp START_ONLY mode)
   const isInitialMessage = conversationMessages.filter(m => m.role === 'user' || m.role === 'USER').length === 0

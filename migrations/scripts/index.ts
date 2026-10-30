@@ -461,6 +461,8 @@ import { addRoleplayTemplateUnmarkedFieldsMigration } from './add-roleplay-templ
 import { stripAnthropicSamplingParametersMigration } from './strip-anthropic-sampling-parameters-v1';
 // Global search: drop Staff messages and announcement bubbles from the message index (#121)
 import { reindexChatMessageFtsCharacterOnlyMigration } from './reindex-chat-message-fts-character-only';
+// Deus Ex Machina: chat_messages.isEstablishedFact (operator lines posted as established fact)
+import { addEstablishedFactFieldMigration } from './add-established-fact-field-v1';
 
 /**
  * All available migrations.
@@ -950,6 +952,8 @@ export const migrations: Migration[] = [
   stripAnthropicSamplingParametersMigration,
   // Global search: drop Staff messages and announcement bubbles from the message index (#121)
   reindexChatMessageFtsCharacterOnlyMigration,
+  // Deus Ex Machina: chat_messages.isEstablishedFact (operator lines posted as established fact)
+  addEstablishedFactFieldMigration,
 ];
 
 export {
@@ -1413,5 +1417,6 @@ export {
   addRoleplayTemplateUnmarkedFieldsMigration,
   stripAnthropicSamplingParametersMigration,
   reindexChatMessageFtsCharacterOnlyMigration,
+  addEstablishedFactFieldMigration,
 };
 

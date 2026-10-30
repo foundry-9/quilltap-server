@@ -1,4 +1,5 @@
 import type { Message } from './types'
+import { isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
 
 /**
  * A single entry in the virtualized Salon message list. Either an ordinary
@@ -40,9 +41,14 @@ export type RenderItem =
  * is the table's binding verdict on the scene — the roll, the value, and the
  * outcome it landed on — and it must be legible in full rather than reduced to
  * a chip the reader has to unpack.
+ *
+ * A machine-delivered established fact (Deus Ex Machina) is exempt too: it is
+ * what is now true in the story, so it renders as a full band, expanded, and
+ * never collapses into a run of Host chips.
  */
 function isCollapsedAnnouncement(message: Message, expandedSystemMessageIds: Set<string>): boolean {
   if (message.systemSender === 'carina') return false
+  if (isEstablishedFactAnnouncement(message)) return false
   if (message.systemSender === 'suparna' && message.systemKind === 'mail-delivery') return false
   if (message.systemSender === 'pascal' && message.systemKind === 'custom-tool-result') return false
   return !!message.systemSender && !expandedSystemMessageIds.has(message.id)

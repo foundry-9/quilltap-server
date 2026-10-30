@@ -29,6 +29,7 @@
 import type { MessageEvent } from '@/lib/schemas/types'
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
 import { speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
+import { framedEstablishedFactBody } from '@/lib/chat/established-fact'
 import { formatNameWithPronouns } from '../format-utils'
 
 // ============================================================================
@@ -88,7 +89,8 @@ export function stretchWindow(
     messages,
     rendered: messages.map(m => ({
       speaker: speakerLabel(m, speakerNames),
-      content: m.content ?? '',
+      // A seat line posted as established fact is framed, here as in history.
+      content: framedEstablishedFactBody(m, 'plain') ?? m.content ?? '',
       createdAt: m.createdAt ?? null,
     })),
     nowIso,

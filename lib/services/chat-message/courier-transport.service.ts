@@ -15,6 +15,7 @@
  * bubble can switch to.
  */
 
+import { ESTABLISHED_FACT_SPEAKER_LABEL, framedEstablishedFactBody, isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   renderCourierRequestAsMarkdown,
@@ -247,7 +248,9 @@ async function buildCourierDeltaEvents(
     }
   }
 
-  const resolveSpeaker = (event: { role?: string | null; participantId?: string | null; systemSender?: string | null; customAnnouncer?: { kind: 'character' | 'custom'; characterId?: string | null; displayName?: string | null } | null }): string => {
+  const resolveSpeaker = (event: { role?: string | null; participantId?: string | null; systemSender?: string | null; systemKind?: string | null; customAnnouncer?: { kind: 'character' | 'custom'; characterId?: string | null; displayName?: string | null } | null }): string => {
+    // A machine-delivered established fact belongs to no speaker.
+    if (isEstablishedFactAnnouncement(event)) return `[${ESTABLISHED_FACT_SPEAKER_LABEL}]`
     if (event.systemSender) {
       return `[Staff: ${COURIER_SYSTEM_SENDER_LABELS[event.systemSender] ?? event.systemSender}]`
     }
@@ -282,6 +285,7 @@ async function buildCourierDeltaEvents(
   }
 
   const deltaEvents: CourierDeltaEvent[] = []
+  let framedFacts = 0
   for (const event of freshMessages) {
     if (event.type !== 'message') continue
     // Skip anything at-or-before the checkpoint.
@@ -337,12 +341,22 @@ async function buildCourierDeltaEvents(
       }
     }
 
+    // Established facts are framed here as everywhere a model reads them —
+    // plain voice, matching `extractVisibleConversation`; this transport
+    // reads raw rows, so the context builder's frame pass never reaches it.
+    const framedFact = framedEstablishedFactBody(event, 'plain')
+    if (framedFact !== null) framedFacts++
+
     deltaEvents.push({
       speaker: resolveSpeaker(event),
       createdAt: event.createdAt as string,
-      content: event.content ?? '',
+      content: framedFact ?? event.content ?? '',
       attachments: attachments.length > 0 ? attachments : undefined,
     })
+  }
+
+  if (framedFacts > 0) {
+    logger.debug('Courier delta: framed established facts', { chatId, framedFacts })
   }
 
   return deltaEvents

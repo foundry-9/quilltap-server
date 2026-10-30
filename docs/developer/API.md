@@ -3718,7 +3718,9 @@ Post an ad-hoc announcement bubble, publicly or whispered to named participants.
 }
 ```
 
-`sender.kind` is one of `"system"`, `"character"`, or a `systemSender` value (e.g. `"lantern"`, `"host"`). For `character` senders the referenced character must exist.
+`sender.kind` is one of `"staff"` (with `staffId`, a `systemSender` value such as `"lantern"` or `"host"`), `"character"` (with `characterId`), `"custom"` (with `displayName`), or `"fact"`. For `character` senders the referenced character must exist.
+
+A `fact` sender (`{ "kind": "fact" }`, the dialog's Deus Ex Machina tab) posts an **established fact** with no speaker: a public Host row with `systemKind: 'established-fact'`, no participant, and `content` = `opaqueContent` = the trimmed text, written by `postEstablishedFact` (`lib/services/announcer/writer.ts`). It then enqueues `ESTABLISHED_FACT_MEMORIES`, which admits the fact verbatim as one MANUAL memory (`pass: 'established-fact'`) for every non-removed LLM seat; an enqueue failure does not undo the post. A `fact` sender with any non-null `targetParticipantIds` is a `400`.
 
 `targetParticipantIds` is optional. Omitted, `null`, or empty posts a public announcement (the default). Otherwise the announcement is persisted as a whisper: only those participants' LLM contexts include it. The ids are **chat participant ids, not character ids**, and each is re-verified against the chat's current participants — a removed participant or an id from another chat is rejected.
 
@@ -4340,6 +4342,8 @@ Send a message and get streaming response.
   "attachments": []
 }
 ```
+
+`isEstablishedFact` (optional boolean) posts the operator's line as an **established fact** (the Salon's "Deus Ex Machina"): persisted on the USER row as `chat_messages.isEstablishedFact`, framed for every model at read time by `lib/chat/established-fact.ts`. It is refused (`400`) with a non-empty `targetParticipantIds` (a fact is public) and with empty `content` (a fact needs words).
 
 **Response**: Server-Sent Events (text/event-stream)
 

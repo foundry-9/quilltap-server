@@ -63,6 +63,8 @@ export interface SendMessageOptions {
   pendingToolResults?: PendingToolResultInput[]
   /** Target participant IDs for whisper messages (null = visible to all) */
   targetParticipantIds?: string[] | null
+  /** Post the operator's line as established fact (Deus Ex Machina); public only. */
+  isEstablishedFact?: boolean
   /** Browser User-Agent string from the originating request (scrubbed of Electron/Quilltap tokens) */
   browserUserAgent?: string
   /**

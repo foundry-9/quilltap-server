@@ -1918,7 +1918,8 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
           isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
-          onSubmit={(e) => {
+          onSubmit={(e, submitOpts) => {
+            const establishedFact = !!submitOpts?.establishedFact
             // Read the live text straight from the editor handle — page `input`
             // intentionally lags while typing (that's the decoupling). Except in
             // raw-source view (bug 67), where the textarea is the edited surface
@@ -1935,8 +1936,16 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
               clearDraft,
               persistDraft,
             }
+            // Deus Ex Machina: a fact needs words, and the server refuses one
+            // without them. Nothing is cleared, and the composer stays armed.
+            if (establishedFact && !text.trim()) {
+              e.preventDefault()
+              showInfoToast('A fact must be written down — attachments alone cannot be established.')
+              return false
+            }
             // In Their Own Words takes the submit over when it is armed; it has
-            // already called preventDefault and nothing has been cleared.
+            // already called preventDefault and nothing has been cleared. It
+            // never takes an established fact: the exact words are what is true.
             if (
               impersonationVoice.intercept(e, {
                 text,
@@ -1947,6 +1956,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
                 attachedFiles,
                 pendingToolResults,
                 sendArgs,
+                establishedFact,
               })
             ) {
               return
@@ -1960,6 +1970,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
               sendArgs.setPendingToolResults,
               sendArgs.clearDraft,
               sendArgs.persistDraft,
+              establishedFact ? { establishedFact: true } : undefined,
             )
           }}
           onFileSelect={handleFileSelect}

@@ -66,6 +66,8 @@ import {
   retrieveTurnKnowledge,
 } from './context/turn-recall'
 import { createTurnTranscript, minutesSinceLastHostTimestamp, type TurnTranscript } from './context/turn-transcript'
+import { buildEstablishedFactReminder } from './context/established-fact-reminder'
+import { resolveSpeakerNames } from './speaker-names'
 import { announceTurnMail, offerCoreWhisper, postCommonplaceWhispers, postTurnTimestamp } from './context/turn-whispers'
 import { buildReferentSections, buildTurnNotes, composeTrailingMessage } from './context/turn-trailing'
 import {
@@ -703,7 +705,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // autonomous room), and the design of record wants both on all of them.
   // The inform block is the operator's passages for this seat, verbatim under
   // their one vouching header; empty-is-absent.
-  const [progressions, inventory, referents, inform] = await Promise.all([
+  const [progressions, inventory, referents, inform, establishedFacts] = await Promise.all([
     buildProgressionsSection({
       character,
       // A thunk: a character carrying no progressions — nearly all of them —
@@ -733,6 +735,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           regenerationOfMessageIds: options.regenerationOfMessageIds,
         })
       : Promise.resolve({ content: null, rowIds: [] as string[] }),
+    // Established facts posted since this seat last spoke, under their one
+    // vouching header; empty-is-absent. Reads only — the cadence is derived
+    // from history, and a swipe measures it on what the original saw.
+    respondingParticipant
+      ? transcript.events().then(events => buildEstablishedFactReminder({
+          events,
+          respondingParticipantId: respondingParticipant.id,
+          joinedAt: respondingParticipant.createdAt,
+          hasHistoryAccess: respondingParticipant.hasHistoryAccess,
+          regenerationOfMessageIds: options.regenerationOfMessageIds,
+          loadSpeakerNames: () => resolveSpeakerNames(chat),
+          chatId: chat.id,
+        })).catch(error => {
+          // Never fails the turn: the facts are still in history.
+          logger.warn('[EstablishedFact] Could not build the reminder; the facts still ride in history', {
+            chatId: chat.id,
+            error: getErrorMessage(error),
+          })
+          return ''
+        })
+      : Promise.resolve(''),
   ])
   const notes = buildTurnNotes({
     turnSkip: options.turnSkip,
@@ -756,6 +779,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     progressions,
     inventory,
     inform: inform.content,
+    establishedFacts,
     referentLedger: referents.referentLedger,
     closingEcho: referents.closingEcho,
     turnSkip: notes.turnSkip,

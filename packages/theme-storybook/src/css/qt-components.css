@@ -1937,6 +1937,60 @@
 }
 
 /**
+ * Deus Ex Machina — established facts in the Salon.
+ *
+ * Mirrors app/styles/qt-components/_chat.css. Built on existing tokens only (the --qt-alert-info-* family and --color-ring,
+ * the focus-ring colour), so every bundled theme renders it without per-theme
+ * work and the armed frame holds the focus ring's own contrast.
+ *
+ * - .qt-chat-composer-established-fact: the composer's editor wrapper while
+ *   `/deus` is armed — a frame and a faint tint, so the operator can see the
+ *   next line will be posted as fact.
+ * - .qt-chat-message-established-fact: the small ribbon on an operator line
+ *   posted as fact.
+ * - .qt-chat-established-fact: the accent on a machine fact's bar/chip.
+ * - .qt-chat-established-fact-row / -band: a machine fact renders as a
+ *   full-width band (no avatar) rather than a speech bubble.
+ */
+.qt-chat-composer-established-fact .qt-chat-composer-input {
+  border-color: var(--color-ring);
+  box-shadow: inset 0 0 0 1px var(--color-ring);
+  background-image: linear-gradient(var(--qt-alert-info-bg), var(--qt-alert-info-bg));
+}
+
+/* The ribbon sits on whatever the theme paints the speaker's bubble, so it
+   takes the bubble's own text colour (every theme pairs those) and stands
+   apart by weight and small caps rather than by a hue of its own. */
+.qt-chat-message-established-fact {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+  color: inherit;
+  margin-bottom: 0.25rem;
+}
+
+.qt-chat-system-bar.qt-chat-established-fact,
+.qt-chat-announcement-chip.qt-chat-established-fact {
+  border-left-width: 3px;
+  border-left-color: var(--color-ring);
+  padding-left: 0.75rem;
+}
+
+.qt-chat-established-fact-row {
+  width: 100%;
+  max-width: none;
+}
+
+.qt-chat-established-fact-band {
+  width: 100%;
+  background: var(--qt-alert-info-bg);
+  border: 1px solid var(--qt-alert-info-border);
+  border-left: 3px solid var(--color-ring);
+  box-shadow: none;
+}
+
+/**
  * Silent message — inner thoughts and actions from character in silent mode.
  * Distinguished from whispers by a dotted border (vs dashed) and sage/teal tones.
  */

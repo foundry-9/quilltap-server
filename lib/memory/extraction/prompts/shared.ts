@@ -8,6 +8,7 @@
  */
 
 import { getMemoryTimeZone, zonedDateStamp, zonedParts } from '@/lib/memory/time/calendar'
+import { ESTABLISHED_FACT_TRANSCRIPT_RULE } from '@/lib/chat/established-fact'
 
 /**
  * Non-canonical orienting context fed into the extraction footer. Project
@@ -154,6 +155,16 @@ export const AGREEMENTS_INSTRUCTION_BLOCK = `AGREEMENTS, PROPOSALS, AND CONDITIO
 - Keep stated limits in the text: "until breakfast," "for tonight,"
   "custody, not confiscation — back at breakfast." A memory that
   drops the limit records a different, larger thing than was said.`
+
+/**
+ * Shared by every extraction body that reads seat lines (SELF, OTHER, the
+ * episode pass). A line the operator posted as established fact arrives
+ * framed (`lib/chat/established-fact.ts`); this is how the extractor is told
+ * to keep it as a fact of the world rather than one speaker's claim. The
+ * wording is the fold's, from the same module.
+ */
+export const ESTABLISHED_FACT_INSTRUCTION_BLOCK = `ESTABLISHED FACTS
+${ESTABLISHED_FACT_TRANSCRIPT_RULE}`
 
 /**
  * Highest importance a work, project or tooling agreement may carry. Above it

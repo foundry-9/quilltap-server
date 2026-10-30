@@ -20,6 +20,10 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types'
+import { ESTABLISHED_FACT_SPEAKER_LABEL, isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
+
+/** The fixed label of a machine-delivered established fact: it has no speaker to name. */
+export { ESTABLISHED_FACT_SPEAKER_LABEL }
 
 /** participantId → display name. Seats with no resolvable name are absent. */
 export type SpeakerNames = ReadonlyMap<string, string>
@@ -59,12 +63,14 @@ export async function resolveSpeakerNames(chat: SpeakerNamesChat): Promise<Speak
 /**
  * The label a transcript line gets. Never a bare LLM role: an unresolvable
  * seat becomes `User` or `Character`, which the fold prompt is told to keep
- * verbatim rather than to name.
+ * verbatim rather than to name. A machine-delivered established fact has no
+ * speaker and is labelled `Established fact`.
  */
 export function speakerLabel(
-  m: Pick<MessageEvent, 'participantId' | 'role'>,
+  m: Pick<MessageEvent, 'participantId' | 'role'> & Partial<Pick<MessageEvent, 'systemSender' | 'systemKind'>>,
   names: SpeakerNames,
 ): string {
+  if (isEstablishedFactAnnouncement(m)) return ESTABLISHED_FACT_SPEAKER_LABEL
   const resolved = m.participantId ? names.get(m.participantId) : undefined
   if (resolved) return resolved
   return m.role === 'USER' ? 'User' : 'Character'

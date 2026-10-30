@@ -129,6 +129,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-turn-queue-field-v1': 'Adding the turn queue to chats',
   'add-scene-state-field-v1': 'Adding scene state tracking to chats',
   'add-silent-message-field-v1': 'Adding silent-message marker to messages',
+  'add-established-fact-field-v1': 'Fitting the Salon with a seal for things that are simply so',
   'add-rendered-markdown-field-v1': 'Adding rendered markdown to chats',
   'add-system-sender-field-v1': 'Adding the system-sender field to messages',
   'add-system-kind-field-v1': 'Adding the system-kind label to messages',

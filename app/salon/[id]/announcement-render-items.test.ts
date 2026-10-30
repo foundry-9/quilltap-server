@@ -107,6 +107,17 @@ describe('buildRenderItems', () => {
     expect(ids(items[2])).toEqual([c.id])
   })
 
+  it('renders an established fact expanded, never packed into a run of Host chips', () => {
+    const a = ann('host', 'add')
+    const fact = ann('host', 'established-fact')
+    const c = ann('host', 'timestamp')
+
+    const items = buildRenderItems([a, fact, c], none)
+
+    expect(items.map(i => i.kind)).toEqual(['announcement-group', 'message', 'announcement-group'])
+    expect(ids(items[1])).toEqual([fact.id])
+  })
+
   it('emits a one-member group for a lone collapsed announcement', () => {
     const user = msg({ role: 'USER', content: 'hi' })
     const a = ann('commonplaceBook', 'memory-recap')

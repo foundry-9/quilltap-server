@@ -132,4 +132,11 @@ describe('shouldRehearseImpersonatedLine', () => {
       expect(shouldRehearseImpersonatedLine(args({ bypassOnce: true }))).toBe(false)
     })
   })
+
+  describe('an established fact (Deus Ex Machina)', () => {
+    it('is never rewritten in character: the exact words are what is true', () => {
+      expect(shouldRehearseImpersonatedLine(args({ establishedFact: true }))).toBe(false)
+      expect(shouldRehearseImpersonatedLine(args({ mode: 'always', establishedFact: true }))).toBe(false)
+    })
+  })
 })

@@ -142,6 +142,7 @@ export const CandidatePassEnum = z.enum([
   'episode-fold',
   'carina',
   'manual',
+  'established-fact',
   'consolidation',
   'import',
 ])

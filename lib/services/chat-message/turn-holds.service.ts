@@ -181,6 +181,7 @@ export async function maybePauseForUserSeatTurn(params: {
     attachedFiles: await findAttachedFiles(repos, chatId, options.fileIds),
     pendingToolResults: options.pendingToolResults,
     targetParticipantIds: null,
+    isEstablishedFact: options.isEstablishedFact,
     poster: { participant: posterSeat, participantId: posterSeat.id },
     context: [],
     ledger: params.ledger,

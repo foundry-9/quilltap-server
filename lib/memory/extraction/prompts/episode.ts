@@ -8,7 +8,7 @@
 
 import type { LLMMessage } from '@/lib/llm/base'
 import { renderStretch, type StretchMessage } from '../window'
-import { IMPORTANCE_FACT_NOT_TELLING_NOTE, IMPORTANCE_WORK_CEILING_NOTE, renderClockStamp, type ExtractionClock } from './shared'
+import { ESTABLISHED_FACT_INSTRUCTION_BLOCK, IMPORTANCE_FACT_NOT_TELLING_NOTE, IMPORTANCE_WORK_CEILING_NOTE, renderClockStamp, type ExtractionClock } from './shared'
 
 /** Hard cap on consolidated episodes per fold. */
 export const FOLD_EPISODE_CAP = 2
@@ -42,6 +42,8 @@ ${IMPORTANCE_WORK_CEILING_NOTE}
 ${IMPORTANCE_FACT_NOT_TELLING_NOTE}
 
 An episode records what was said and done, not what was agreed: attribute proposals and conditions to their speaker, and record an agreement only where the agreeing party's own assent appears in the window.
+
+${ESTABLISHED_FACT_INSTRUCTION_BLOCK}
 
 Return a JSON array only. No prose, no code fences. If nothing qualifies, return [].`
 

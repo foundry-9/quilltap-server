@@ -79,7 +79,8 @@ interface InsertAnnouncementDialogProps {
   onPosted?: () => void
 }
 
-type Mode = 'staff' | 'character' | 'custom'
+/** `fact`: the Deus Ex Machina tab — an established fact with no speaker. */
+type Mode = 'staff' | 'character' | 'custom' | 'fact'
 type Stage = 'compose' | 'generating' | 'review'
 
 const AS_IS = 'as-is'
@@ -214,6 +215,11 @@ export default function InsertAnnouncementDialog({
     setProposedMarkdown('')
     setProfileOverride(null)
     setSystemPromptOverride(null)
+    // An established fact is known to everyone: selecting the tab clears any
+    // audience, and the audience picker is hidden while it is selected.
+    if (next === 'fact') {
+      setAudience([])
+    }
     if (next === 'character') {
       loadCharactersIfNeeded()
     }
@@ -245,6 +251,7 @@ export default function InsertAnnouncementDialog({
     if (isPosting || stage === 'generating') return false
     if (mode === 'staff') return Boolean(staffId) && content.trim().length > 0
     if (mode === 'custom') return customName.trim().length > 0 && content.trim().length > 0
+    if (mode === 'fact') return content.trim().length > 0
     if (mode === 'character') {
       if (!characterId) return false
       if (stage === 'compose') return content.trim().length > 0
@@ -254,12 +261,15 @@ export default function InsertAnnouncementDialog({
   })()
 
   const postAnnouncement = async (textToPost: string) => {
+    const isFact = mode === 'fact'
     const sender =
       mode === 'staff'
         ? { kind: 'staff' as const, staffId }
         : mode === 'character'
           ? { kind: 'character' as const, characterId }
-          : { kind: 'custom' as const, displayName: customName.trim() }
+          : isFact
+            ? { kind: 'fact' as const }
+            : { kind: 'custom' as const, displayName: customName.trim() }
 
     setIsPosting(true)
     try {
@@ -269,7 +279,7 @@ export default function InsertAnnouncementDialog({
         body: JSON.stringify({
           contentMarkdown: textToPost.trim(),
           sender,
-          targetParticipantIds: audience.length > 0 ? audience : null,
+          targetParticipantIds: !isFact && audience.length > 0 ? audience : null,
         }),
       })
 
@@ -280,7 +290,11 @@ export default function InsertAnnouncementDialog({
         return
       }
 
-      showSuccessToast(audience.length > 0 ? 'Whispered announcement posted' : 'Announcement posted')
+      showSuccessToast(
+        isFact
+          ? 'Established as fact'
+          : audience.length > 0 ? 'Whispered announcement posted' : 'Announcement posted',
+      )
       onPosted?.()
       onClose()
     } catch (error) {
@@ -350,8 +364,8 @@ export default function InsertAnnouncementDialog({
     setProposedMarkdown('')
   }
 
-  const isWhisper = audience.length > 0
-  const postLabel = isWhisper ? 'Post Whisper' : 'Post Announcement'
+  const isWhisper = mode !== 'fact' && audience.length > 0
+  const postLabel = mode === 'fact' ? 'Establish' : isWhisper ? 'Post Whisper' : 'Post Announcement'
 
   const primaryLabel = (() => {
     if (stage === 'generating') return 'Generating…'
@@ -415,6 +429,16 @@ export default function InsertAnnouncementDialog({
                 disabled={isPosting || stage !== 'compose'}
               >
                 Custom
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'fact'}
+                onClick={() => handleModeChange('fact')}
+                className={`qt-button ${mode === 'fact' ? 'qt-button-primary' : 'qt-button-secondary'}`}
+                disabled={isPosting || stage !== 'compose'}
+              >
+                Deus Ex Machina
               </button>
             </div>
           </div>
@@ -548,6 +572,12 @@ export default function InsertAnnouncementDialog({
               </div>
             )}
 
+            {mode === 'fact' && (
+              <div className="qt-text-xs">
+                Posted as established fact: true, known to everyone, needing no verification.
+              </div>
+            )}
+
             {mode === 'custom' && (
               <div>
                 <label htmlFor="announce-custom-name" className="block text-sm qt-text-primary mb-2">
@@ -571,7 +601,7 @@ export default function InsertAnnouncementDialog({
           </div>
 
           {/* Audience — public by default; naming anyone makes it a whisper. */}
-          {audienceCandidates.length > 0 && (
+          {audienceCandidates.length > 0 && mode !== 'fact' && (
             <div className="mb-4">
               <label className="block text-sm qt-text-primary mb-2" id="announce-audience-label">
                 Who hears it
@@ -649,9 +679,11 @@ export default function InsertAnnouncementDialog({
               <label className="block text-sm qt-text-primary">
                 {willRewrite
                   ? `What you want the character to ${isWhisper ? 'say privately' : 'announce'}`
-                  : isWhisper
-                    ? 'Whisper'
-                    : 'Announcement'}
+                  : mode === 'fact'
+                    ? 'Fact'
+                    : isWhisper
+                      ? 'Whisper'
+                      : 'Announcement'}
               </label>
               {willRewrite && stage === 'review' && (
                 <button
@@ -669,7 +701,7 @@ export default function InsertAnnouncementDialog({
               onChange={setContent}
               disabled={isPosting || stage !== 'compose'}
               namespace="InsertAnnouncementDialog"
-              ariaLabel="Announcement body"
+              ariaLabel={mode === 'fact' ? 'Fact' : 'Announcement body'}
             />
           </div>
 

@@ -42,6 +42,7 @@ export const JOB_TYPE_ACTIVITY: Record<BackgroundJobType, ActivityKind | null> =
   MEMORY_REGENERATE_ALL: 'memory',
   MEMORY_MAINTENANCE: 'memory',
   CARINA_MEMORY_EXTRACTION: 'memory',
+  ESTABLISHED_FACT_MEMORIES: 'memory',
 
   // ── Emb ──────────────────────────────────────────────────────────────────
   EMBEDDING_GENERATE: 'embedding',

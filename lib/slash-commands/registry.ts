@@ -62,6 +62,12 @@ export const COMPOSER_ACTION_SPECS: Readonly<Record<ComposerAction, ActionSpec>>
     keywords: ['ooc', 'tell'],
     needsDialog: false,
   },
+  deus: {
+    label: 'Deus Ex Machina',
+    description: 'Post this line as established fact',
+    keywords: ['fact', 'true', 'canon', 'dem'],
+    needsDialog: false,
+  },
   tool: {
     label: 'Run Tool',
     description: "Open Prospero's Run Tool dialog",

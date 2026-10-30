@@ -1177,3 +1177,44 @@ describe('restore field fidelity — 4.11 data-model additions', () => {
     expect(summary.warnings).toContain('Log entries were not restored because the logs database is in degraded mode')
   })
 })
+
+describe('restore field fidelity — 4.12 data-model additions', () => {
+  const mockedIsLLMLogsDegraded = jest.requireMock('@/lib/database/backends/sqlite/llm-logs-client')
+    .isLLMLogsDegraded as jest.Mock
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockedIsLLMLogsDegraded.mockReturnValue(true)
+  })
+
+  it('carries both kinds of established fact (Deus Ex Machina) through restore', async () => {
+    const { addMessage } = buildRepoMocks()
+    const seatLine = {
+      id: 'msg-seat', type: 'message', role: 'USER', content: 'The bridge is gone.', isEstablishedFact: true,
+    }
+    const machineFact = {
+      id: 'msg-fact', type: 'message', role: 'ASSISTANT', content: 'The river has risen.',
+      opaqueContent: 'The river has risen.', participantId: null, systemSender: 'host',
+      systemKind: 'established-fact', targetParticipantIds: null,
+    }
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-1',
+            userId: 'old-user',
+            title: 'A Conversation',
+            participants: [],
+            tags: [],
+            messages: [seatLine, machineFact],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(addMessage.mock.calls[0][1]).toMatchObject({ isEstablishedFact: true })
+    expect(addMessage.mock.calls[1][1]).toMatchObject({ systemSender: 'host', systemKind: 'established-fact' })
+  })
+})

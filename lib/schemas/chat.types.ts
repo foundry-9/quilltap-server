@@ -376,6 +376,15 @@ export const MessageEventSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
+  /**
+   * The operator posted this USER line as established fact (the Salon's "Deus
+   * Ex Machina"): true in the story, known to everyone, needing no
+   * verification. Set only by `recordOperatorPost`; NULL everywhere else. The
+   * stored body is exactly what the operator typed — the frame a model reads
+   * is applied at read time by `lib/chat/established-fact.ts`. The machine
+   * kind (a Host row, `systemKind: 'established-fact'`) does not use this.
+   */
+  isEstablishedFact: z.boolean().nullable().optional(),
   /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina); 'suparna' = Suparṇā's Post Office mail-delivery announcements (new letters arrived in the character's vault Mail/ folder); 'pascal' = Pascal the Croupier's custom-tool (pseudo-tool) roll outcomes, posted server-side so a model cannot fudge a failure into a success. Note: a 'carina' message renders with the ANSWERER character's own avatar (resolved via `carinaMeta.answererId`), not a dedicated Staff avatar — the tag exists for memory suppression and the compact reference-card UI hook. */
   systemSender: SystemSenderEnum.nullable().optional(),
   /**
@@ -410,8 +419,11 @@ export const MessageEventSchema = z.object({
    *
    * - **Presence transitions** (`systemKind` = add / remove / status-change):
    *   `participantId` + `toStatus` carry the affected participant and the
-   *   status they were transitioning to. Consumed by the per-character
-   *   Librarian summary pipeline to compute presence windows.
+   *   status they were transitioning to. Consumed by
+   *   `computePresenceWindowsForParticipant`, whose one caller is the
+   *   in-scene rehearsal (`lib/services/announcer/in-scene-voiced.ts`). There
+   *   is no per-character catch-up summary; the main context path does not
+   *   filter by presence window.
    * - **Off-scene character introductions** (`systemKind` =
    *   `off-scene-characters`): `introducedCharacterIds` carries the workspace
    *   character IDs the Host introduced in this announcement. Consumed by the

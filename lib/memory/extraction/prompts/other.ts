@@ -14,6 +14,7 @@ import { renderStretch, renderTurnContext, type StretchMessage } from '../window
 import {
   AGREEMENTS_INSTRUCTION_BLOCK,
   AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE,
+  ESTABLISHED_FACT_INSTRUCTION_BLOCK,
   EVENT_INSTRUCTION_BLOCK,
   IMPORTANCE_FACT_NOT_TELLING_NOTE,
   IMPORTANCE_WORK_CEILING_NOTE,
@@ -108,6 +109,8 @@ WHAT TO SKIP (do not produce a memory for any of these)
 ${ORIENTING_CONTEXT_SKIP_BULLET}
 
 ${AGREEMENTS_INSTRUCTION_BLOCK}
+
+${ESTABLISHED_FACT_INSTRUCTION_BLOCK}
 
 DEDUPLICATION
 Before finalizing, scan your own list. Within a single subject, if two

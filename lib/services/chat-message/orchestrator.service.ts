@@ -22,6 +22,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { takeRaisedHand, waitForEarlierTurns } from '@/lib/chat/turn-control'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
+import { frameEstablishedFact } from '@/lib/chat/established-fact'
 import { postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
@@ -122,7 +123,28 @@ export const sendMessageSchema = z.object({
   targetParticipantIds: z.array(z.string()).nullable().optional(),
   /** The user-controlled participant the human is "Speaking As" for this message */
   speakingAsParticipantId: z.uuid().nullable().optional(),
+  /**
+   * Post this line as established fact (the Salon's "Deus Ex Machina"): true
+   * in the story, known to everyone. Public only, and it needs words.
+   */
+  isEstablishedFact: z.boolean().optional(),
 }).superRefine((data, ctx) => {
+  if (data.isEstablishedFact) {
+    if (data.targetParticipantIds && data.targetParticipantIds.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'An established fact is public; it cannot be whispered',
+        path: ['isEstablishedFact'],
+      })
+    }
+    if (data.content.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'An established fact needs words',
+        path: ['isEstablishedFact'],
+      })
+    }
+  }
   if (data.content.trim().length === 0 &&
       (!data.fileIds || data.fileIds.length === 0) &&
       (!data.pendingToolResults || data.pendingToolResults.length === 0)) {
@@ -615,6 +637,7 @@ async function processMessage(
         attachedFiles: fileProcessing.attachedFiles,
         pendingToolResults: options.pendingToolResults,
         targetParticipantIds: options.targetParticipantIds,
+        isEstablishedFact: options.isEstablishedFact,
         poster: { participant: userParticipant, participantId: userParticipantId },
         dangerFlags,
         context: existingMessages,
@@ -739,7 +762,12 @@ async function processMessage(
         defaultTimestampConfig: chatSettings.defaultTimestampConfig,
       } : null,
       toolInstructions: slate.toolInstructions,
-      newUserMessage: isContinueMode ? undefined : fileProcessing.messageContentPrefix + content,
+      // An established fact reaches the model framed, exactly as the stored
+      // row will read from history on every later turn.
+      newUserMessage: isContinueMode
+        ? undefined
+        : fileProcessing.messageContentPrefix
+          + (options.isEstablishedFact && content ? frameEstablishedFact(content, { kind: 'seat', voice: 'plain' }) : content),
       activeUserParticipantId: speakingAsParticipantId,
       isContinueMode,
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,

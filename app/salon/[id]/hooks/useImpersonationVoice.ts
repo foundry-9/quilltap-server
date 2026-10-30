@@ -44,6 +44,8 @@ export interface ShouldRehearseArgs {
   hasAttachmentsOnly: boolean
   /** Set for the one resubmit that "Send as written" triggers. */
   bypassOnce: boolean
+  /** The line is posted as established fact: its exact words are what is true. */
+  establishedFact?: boolean
 }
 
 /**
@@ -61,7 +63,11 @@ export function shouldRehearseImpersonatedLine({
   text,
   hasAttachmentsOnly,
   bypassOnce,
+  establishedFact,
 }: ShouldRehearseArgs): boolean {
+  // An established fact is never rewritten in character: the exact words are
+  // what is true.
+  if (establishedFact) return false
   if (mode === 'off') return false
   if (bypassOnce) return false
   if (!seat) return false
@@ -228,6 +234,7 @@ export function useImpersonationVoice({
         attachedFiles: AttachedFile[]
         pendingToolResults: PendingToolResult[]
         sendArgs: SendMessageArgs
+        establishedFact?: boolean
       },
     ): boolean => {
       const hasAttachmentsOnly =
@@ -241,6 +248,7 @@ export function useImpersonationVoice({
         text: args.text,
         hasAttachmentsOnly,
         bypassOnce: bypassOnceRef.current,
+        establishedFact: args.establishedFact,
       })
 
       // The bypass is consumed by the submit it was set for, whether or not

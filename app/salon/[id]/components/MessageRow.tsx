@@ -1,5 +1,6 @@
 'use client'
 
+import { isEstablishedFactAnnouncement, isEstablishedFactSeatLine } from '@/lib/chat/established-fact'
 import { memo, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
@@ -217,6 +218,10 @@ function MessageRowInner({
   // was generated — NOT the participant's current status. Changing a character to silent
   // should not retroactively restyle their old messages.
   const isSilentMessage = !!message.isSilentMessage
+  // Deus Ex Machina: an operator line posted as established fact wears a
+  // ribbon; a machine-delivered fact renders as a full-width band, no avatar.
+  const isFactSeatLine = isEstablishedFactSeatLine(message)
+  const isFactBand = isEstablishedFactAnnouncement(message)
 
   const messageRowClasses = ['qt-chat-message-row']
   if (message.role === 'USER') {
@@ -224,6 +229,7 @@ function MessageRowInner({
   } else {
     messageRowClasses.push('qt-chat-message-row-assistant')
   }
+  if (isFactBand) messageRowClasses.push('qt-chat-established-fact-row')
 
   // "Not Dangerous" overrides a flag; only flags still standing blur or
   // collapse the message. The chips themselves stay (struck through) as the
@@ -314,8 +320,9 @@ function MessageRowInner({
       key={message.id}
       className={messageRowClasses.join(' ')}
     >
-      {/* Desktop avatar - assistant (left side) */}
-      {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
+      {/* Desktop avatar - assistant (left side). An established-fact band has
+          no speaker, so no avatar. */}
+      {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && !isFactBand && (
         <MessageDesktopAvatar
           messageAvatar={messageAvatar}
           dangerous={isDangerousChat}
@@ -350,7 +357,7 @@ function MessageRowInner({
             message.role === 'USER'
               ? 'qt-chat-message-user'
               : 'qt-chat-message-assistant'
-          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}${regeneration ? ' qt-chat-message-regenerating' : ''}`}
+          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}${isFactBand ? ' qt-chat-established-fact-band' : ''}${regeneration ? ' qt-chat-message-regenerating' : ''}`}
           aria-busy={regeneration ? true : undefined}
         >
           {isEditing ? (
@@ -392,6 +399,12 @@ function MessageRowInner({
               {isSilentMessage && !isWhisper && (
                 <div className="qt-chat-silent-label">
                   silent — inner thoughts and actions only
+                </div>
+              )}
+              {/* Deus Ex Machina ribbon: this line was posted as established fact */}
+              {isFactSeatLine && (
+                <div className="qt-chat-message-established-fact">
+                  Deus Ex Machina — established as fact
                 </div>
               )}
               {/* A line being re-rolled shows the regeneration in place of its

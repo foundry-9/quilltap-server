@@ -77,6 +77,7 @@ export function topicsForCompletedJob(
 
     case 'MEMORY_EXTRACTION':
     case 'CARINA_MEMORY_EXTRACTION':
+    case 'ESTABLISHED_FACT_MEMORIES':
     case 'MEMORY_REGENERATE_CHAT':
       // Every one of these carries `chatId` on its payload, which is what the
       // Salon sidebar's count is scoped by.

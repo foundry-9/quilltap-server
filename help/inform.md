@@ -102,6 +102,7 @@ Post two informs to the same character before she speaks and she gets both, in t
 ## See also
 
 - [Inserting your own announcements](/salon) — for when the room genuinely should hear it. An announcement is said; an inform is known.
+- [Deus Ex Machina](deus-ex-machina.md) — for when it is simply *so*. An announcement is said, an inform is known, and a Deus Ex Machina is true — for everyone, at once, and for good.
 
 ## In-Chat Navigation
 

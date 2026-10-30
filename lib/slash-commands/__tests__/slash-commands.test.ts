@@ -15,7 +15,7 @@ import {
 } from '..';
 
 const ALL_ACTIONS = new Set<ComposerAction>([
-  'attach', 'library', 'image', 'announce', 'mail', 'inform',
+  'attach', 'library', 'image', 'announce', 'mail', 'inform', 'deus',
   'tool', 'pascal', 'roll', 'd6', 'd20', 'coin', 'bottle',
 ]);
 

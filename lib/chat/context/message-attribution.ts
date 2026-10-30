@@ -27,6 +27,11 @@ export interface MessageWithParticipant {
   /** Target participant IDs for whisper messages */
   targetParticipantIds?: string[] | null
   /**
+   * An established fact (either kind, see lib/chat/established-fact.ts).
+   * Everybody knows one, so the history-access cut keeps it.
+   */
+  isEstablishedFact?: boolean
+  /**
    * Structured payload on Host announcements. For presence transitions both
    * `participantId` and `toStatus` are set; for off-scene-character
    * introductions only `introducedCharacterIds` is set. Presence tracking
@@ -67,7 +72,14 @@ export function filterMessagesByHistoryAccess(
   // Otherwise, filter to only messages after the participant joined
   const participantJoinTime = new Date(participant.createdAt).getTime()
 
+  let factsKept = 0
   const filteredMessages = messages.filter(msg => {
+    if (msg.isEstablishedFact) {
+      // "Everybody knows" beats the join-time cut: a seat that joined after
+      // an established fact was posted knows it too.
+      if (msg.createdAt && new Date(msg.createdAt).getTime() < participantJoinTime) factsKept++
+      return true
+    }
     if (!msg.createdAt) {
       // If no createdAt, include the message (shouldn't happen)
       return true
@@ -75,6 +87,13 @@ export function filterMessagesByHistoryAccess(
     const msgTime = new Date(msg.createdAt).getTime()
     return msgTime >= participantJoinTime
   })
+
+  if (factsKept > 0) {
+    logger.debug('[MessageAttribution] Kept pre-join established facts past the history-access cut', {
+      participantId: participant.id,
+      factsKept,
+    })
+  }
 
   return filteredMessages
 }
@@ -155,6 +174,8 @@ export function filterMessagesByPresenceWindows(
     return []
   }
   return messages.filter(msg => {
+    // Everybody knows an established fact, absent or not.
+    if (msg.isEstablishedFact) return true
     if (!msg.createdAt) return false
     const t = msg.createdAt
     return windows.some(w => t >= w.from && (w.to === null || t < w.to))

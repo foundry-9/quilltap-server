@@ -1,6 +1,6 @@
 # Feature: Deus Ex Machina — established facts in the Salon
 
-**Status:** Proposal / Not Implemented. Design agreed with the operator on 2026-10-30.
+**Status:** Implemented in 4.12-dev (2026-10-29). Live verification on V4test (§Verification) outstanding. Design agreed with the operator on 2026-10-30. See [As built](#as-built) for the few places the code differs from the text below.
 
 The operator gains two ways to declare something **true** in a Salon chat:
 
@@ -342,3 +342,19 @@ Everything under [Documentation](#documentation).
 - **Seat-line memories for absent seats.** They know it from history and the reminder, but form no memory of a seat line because episode holders are present seats only. A deterministic admission like the machine fact's would close it, but a seat line is dialogue and action in a speaker's voice, which makes a poor verbatim memory. Revisit if it bites.
 - **A visible composer button.** Deferred for space. If wanted later, the least disruptive slot is a fourth button under Terminal in the middle toolbar column.
 - **Carina** does not receive the reminder. It builds its own minimal call, as it does for informs.
+
+## As built
+
+Implemented as specced, with these choices made during the build:
+
+- **Idempotent frames.** `frameEstablishedFact` strips any frame it put on a body before framing (`stripEstablishedFactFrame`), so re-running the pass, or re-voicing a framed body, never stacks openers.
+- **Multi-character fact marking.** `buildConversationMessages` drops `systemKind`, so `buildMessageContext` collects the fact row ids before normalisation and marks the matching `messagesWithParticipants` rows `isEstablishedFact: true`; `filterMessagesByHistoryAccess` and `filterMessagesByPresenceWindows` keep marked rows.
+- **The current turn's own line.** The new user message is not in `existingMessages` (it is persisted after they are read), so the orchestrator frames `newUserMessage` itself when the send is a fact.
+- **The fold.** A machine fact rides under the `Established fact` label with its body unframed (the label is the frame); a seat line keeps its speaker and gets the seat frame. `turnsToChatMessages` is exported for tests.
+- **The reminder never fails a turn.** A failed chat read drops the section with a `warn`; the facts still ride in history.
+- **The writer imports the queue lazily** (`await import('@/lib/background-jobs/queue-service')`), so the announcer module does not drag the job processor into everything that imports it.
+- **Rendering class names.** Ribbon `qt-chat-message-established-fact` (text: "Deus Ex Machina — established as fact"); band `qt-chat-established-fact-row` (row) and `qt-chat-established-fact-band` (bubble), no avatar; bar accent `qt-chat-established-fact`. The tint is on the rich editor's wrapper only, not the raw-source textarea.
+- **Icon.** `/deus` uses the existing `zap` glyph.
+- **Ribbon colour.** The ribbon takes the bubble's own text colour (`color: inherit`, set apart by weight and small caps). A fixed info hue failed on Art Deco's dark user bubble during live verification.
+- **Row-level collapse.** `VirtualizedMessageList` decides `isSystemMessageCollapsed` with its own check, separate from `buildRenderItems`; a machine fact is exempted in both, or it renders as a chip.
+- **Live verification (2026-10-29, V4test, DeepSeek v4 flash).** Steps 1–8 checked: the armed composer, ribbon and disarm; the seat frame, `[Tester]` prefix and reminder in both seats' requests with zero mentions of the UI name; the band; the plain voice on an opaque roster and the Host voice after both seats went transparent (applied to an older fact too, confirming read-time framing); the absent seat's MANUAL memory and her two-fact reminder on return, none on the next turn; an identical reminder on swipe with no new job; the three 400 refusals; the fold stating the fact as settled. The ⌘⇧Enter shortcut stores the flag. Not checked live: the Courier delta (no Courier profile on V4test) and the export/import round trip (unit-tested).

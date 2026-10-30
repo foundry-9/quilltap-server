@@ -1,5 +1,6 @@
 'use client'
 
+import { isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import ToolMessage from '@/components/chat/ToolMessage'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -325,8 +326,10 @@ export function VirtualizedMessageList({
                   viewSourceMessageIds={viewSourceMessageIds}
                   isSystemMessageCollapsed={
                     // Carina reference answers always render as a full row (with
-                    // the answerer's avatar + the answer), never a collapsed chip.
+                    // the answerer's avatar + the answer), never a collapsed chip;
+                    // so does an established fact (Deus Ex Machina), as a band.
                     message.systemSender !== 'carina' &&
+                    !isEstablishedFactAnnouncement(message) &&
                     !!message.systemSender && !expandedSystemMessageIds.has(message.id)
                   }
                   onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}

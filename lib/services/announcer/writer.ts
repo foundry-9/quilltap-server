@@ -29,6 +29,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { MessageEvent } from '@/lib/schemas/types';
+import { ESTABLISHED_FACT_KIND } from '@/lib/chat/established-fact';
 
 export type StaffSender =
   | 'lantern'
@@ -46,6 +47,9 @@ export type AnnouncerSender =
   | { kind: 'staff'; staffId: StaffSender }
   | { kind: 'character'; characterId: string }
   | { kind: 'custom'; displayName: string };
+
+/** A sender for the announcement route: an announcer, or an established fact (no speaker). */
+export type AnnouncementRouteSender = AnnouncerSender | { kind: 'fact' };
 
 export interface AdhocAnnouncementParams {
   chatId: string;
@@ -229,4 +233,108 @@ export async function postInformRecord(
     }, error as Error);
     return null;
   }
+}
+
+export interface EstablishedFactParams {
+  chatId: string;
+  /** The operator's user id — the memory job runs under it. */
+  userId: string;
+  /** Exactly what the operator typed. Persisted verbatim (trimmed only). */
+  contentMarkdown: string;
+}
+
+/**
+ * Post a machine-delivered **established fact** (the Salon's "Deus Ex Machina"
+ * tab): a fact that belongs to no speaker — true in the story, known to
+ * everyone, needing no verification.
+ *
+ * The row is a public, persona-free Host row (`systemKind: 'established-fact'`,
+ * no participant, no announcer) whose `content` and `opaqueContent` are both
+ * exactly what was typed. Nothing on the row speaks: the Host's voice, for
+ * transparent rosters, is added only by the frame at read time
+ * (`lib/chat/established-fact.ts`), so it is never stored.
+ *
+ * After the post it enqueues `ESTABLISHED_FACT_MEMORIES`, which admits the
+ * fact to every non-removed LLM seat. An enqueue failure is a `warn`: the post
+ * stands either way.
+ *
+ * Returns the persisted message, or null on empty content / unknown chat /
+ * failure. Errors never propagate (the Staff-announcer convention).
+ */
+export async function postEstablishedFact(
+  params: EstablishedFactParams,
+): Promise<MessageEvent | null> {
+  const trimmed = params.contentMarkdown?.trim() ?? '';
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  let message: MessageEvent;
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(params.chatId);
+    if (!chat) {
+      logger.warn('[Announcer] Established fact skipped — unknown chat', {
+        context: 'announcer',
+        chatId: params.chatId,
+      });
+      return null;
+    }
+
+    message = {
+      type: 'message',
+      id: randomUUID(),
+      role: 'ASSISTANT',
+      content: trimmed,
+      opaqueContent: trimmed,
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      participantId: null,
+      systemSender: 'host',
+      systemKind: ESTABLISHED_FACT_KIND,
+      targetParticipantIds: null,
+      customAnnouncer: null,
+    };
+
+    await repos.chats.addMessage(params.chatId, message);
+
+    logger.info('[Announcer] Established fact posted', {
+      context: 'announcer',
+      chatId: params.chatId,
+      messageId: message.id,
+    });
+  } catch (error) {
+    logger.error('[Announcer] Failed to post established fact', {
+      context: 'announcer',
+      chatId: params.chatId,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
+  }
+
+  try {
+    // Imported lazily: the queue drags in the job processor, which nothing
+    // else this writer serves needs.
+    const { enqueueEstablishedFactMemories } = await import('@/lib/background-jobs/queue-service');
+    const jobId = await enqueueEstablishedFactMemories(params.userId, {
+      chatId: params.chatId,
+      messageId: message.id,
+    });
+    logger.debug('[Announcer] Established-fact memory job enqueued', {
+      context: 'announcer',
+      chatId: params.chatId,
+      messageId: message.id,
+      jobId,
+    });
+  } catch (error) {
+    logger.warn('[Announcer] Could not enqueue the established-fact memory job; the fact stands', {
+      context: 'announcer',
+      chatId: params.chatId,
+      messageId: message.id,
+      error: getErrorMessage(error),
+    });
+  }
+
+  return message;
 }

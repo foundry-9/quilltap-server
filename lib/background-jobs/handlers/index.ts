@@ -26,6 +26,7 @@ import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
 import { handleAutonomousRoomTurn } from './autonomous-room-turn';
 import { handleAutonomousRoomScheduleTick } from './autonomous-room-schedule-tick';
 import { handleCarinaMemoryExtraction } from './carina-memory-extraction';
+import { handleEstablishedFactMemories } from './established-fact-memories';
 import { handleCharacterHeadShouldersBackfill } from './character-headshoulders-backfill';
 import { handleRegenerateConversationSummaries } from './regenerate-conversation-summaries';
 
@@ -59,6 +60,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   AUTONOMOUS_ROOM_TURN: handleAutonomousRoomTurn,
   AUTONOMOUS_ROOM_SCHEDULE_TICK: handleAutonomousRoomScheduleTick,
   CARINA_MEMORY_EXTRACTION: handleCarinaMemoryExtraction,
+  ESTABLISHED_FACT_MEMORIES: handleEstablishedFactMemories,
   CHARACTER_HEADSHOULDERS_BACKFILL: handleCharacterHeadShouldersBackfill,
   REGENERATE_CONVERSATION_SUMMARIES: handleRegenerateConversationSummaries,
 };
@@ -95,5 +97,6 @@ export { handleWardrobeOutfitAnnouncement };
 export { handleAutonomousRoomTurn };
 export { handleAutonomousRoomScheduleTick };
 export { handleCarinaMemoryExtraction };
+export { handleEstablishedFactMemories };
 export { handleCharacterHeadShouldersBackfill };
 export { handleRegenerateConversationSummaries };

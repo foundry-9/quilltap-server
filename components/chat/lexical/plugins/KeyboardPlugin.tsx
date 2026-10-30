@@ -56,11 +56,16 @@ function $codeBlockToEscape(selection: BaseSelection | null): CodeNode | null {
   return codeBlock;
 }
 
+/** Options a submit carries. `establishedFact`: send this one line as established fact. */
+export interface ComposerSubmitOptions {
+  establishedFact?: boolean;
+}
+
 interface KeyboardPluginProps {
   /** Whether document editing mode is enabled */
   documentEditingMode: boolean;
   /** Callback to submit the message */
-  onSubmit: () => void;
+  onSubmit: (opts?: ComposerSubmitOptions) => void;
 }
 
 export default function KeyboardPlugin({
@@ -106,6 +111,17 @@ export default function KeyboardPlugin({
           codeBlock.insertAfter(paragraph);
           paragraph.selectStart();
         });
+        return true;
+      }
+
+      // Cmd+Shift+Enter (Mac) / Ctrl+Shift+Enter (elsewhere), in either mode:
+      // send this one line as established fact, without arming the composer.
+      const primaryModifier = isMac
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+      if (primaryModifier && event.shiftKey) {
+        event.preventDefault();
+        onSubmit({ establishedFact: true });
         return true;
       }
 

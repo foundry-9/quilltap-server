@@ -32,13 +32,14 @@ const every: TrailingSections = {
   progressions: 'PROGRESSIONS',
   inventory: 'INVENTORY',
   inform: 'INFORM',
+  establishedFacts: 'FACTS',
   referentLedger: 'LEDGER',
   closingEcho: 'ECHO',
   turnSkip: 'SKIP',
   turnYield: 'YIELD',
   storyteller: 'STORYTELLER',
 }
-const ORDER = ['CORE', 'RECALL', 'MAIL', 'PROGRESSIONS', 'INVENTORY', 'INFORM', 'LEDGER', 'ECHO', 'SKIP', 'YIELD', 'STORYTELLER']
+const ORDER = ['CORE', 'RECALL', 'MAIL', 'PROGRESSIONS', 'INVENTORY', 'INFORM', 'FACTS', 'LEDGER', 'ECHO', 'SKIP', 'YIELD', 'STORYTELLER']
 
 describe('composeTrailingMessage', () => {
   it('is the bare user message when there are no sections', () => {

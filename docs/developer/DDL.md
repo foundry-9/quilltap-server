@@ -1014,6 +1014,7 @@ CREATE TABLE "chat_messages" (
   "dangerFlags" TEXT DEFAULT NULL,
   "targetParticipantIds" TEXT DEFAULT NULL,
   "isSilentMessage" INTEGER DEFAULT NULL,
+  "isEstablishedFact" INTEGER DEFAULT NULL,   -- Deus Ex Machina: 1 on an operator USER row posted as established fact (true, known to everyone, needing no verification). Set only by recordOperatorPost; NULL everywhere else. The stored body is what was typed — the frame a model reads is applied at read time by lib/chat/established-fact.ts. The machine-delivered kind is a Host row (systemSender='host', systemKind='established-fact', participantId NULL, content = opaqueContent) and does not use this column. Added by add-established-fact-field-v1.
   "systemSender" TEXT DEFAULT NULL,
   "hostEvent" TEXT DEFAULT NULL,
   "systemKind" TEXT DEFAULT NULL,
