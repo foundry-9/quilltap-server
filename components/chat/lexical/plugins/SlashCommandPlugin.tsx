@@ -79,7 +79,7 @@ const ACTION_ICONS: Partial<Record<ComposerAction, IconName>> = {
   announce: 'megaphone',
   mail: 'mail',
   inform: 'info',
-  deus: 'zap',
+  deus: 'deus-ex-machina',
   tool: 'wrench',
   pascal: 'wand',
 }

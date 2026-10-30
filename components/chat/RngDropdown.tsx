@@ -10,6 +10,7 @@
 import { useState, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { Icon } from '@/components/ui/icon'
+import { Tooltip } from '@/components/ui/Tooltip'
 import {
   requestRngDirect,
   requestRngPendingResult,
@@ -149,30 +150,31 @@ export function RngDropdown({
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Main button - different styling for gutter vs palette */}
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={disabled || isLoading}
-        className={variant === 'gutter' ? 'qt-composer-gutter-button' : 'qt-tool-palette-button'}
-        title="Random number generator"
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
-        aria-label="Random number generator"
-      >
-        {isLoading ? (
-          <svg className={variant === 'gutter' ? 'w-5 h-5 animate-spin' : 'w-4 h-4 animate-spin'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        ) : (
-          <Icon name="dice" className={variant === 'gutter' ? 'w-5 h-5' : 'w-4 h-4'} />
-        )}
-        {variant === 'palette' && (
-          <>
-            <span>RNG</span>
-            <Icon name="chevron-down" className={`w-3 h-3 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-          </>
-        )}
-      </button>
+      <Tooltip content="Random number generator">
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled || isLoading}
+          className={variant === 'gutter' ? 'qt-composer-gutter-button' : 'qt-tool-palette-button'}
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+          aria-label="Random number generator"
+        >
+          {isLoading ? (
+            <svg className={variant === 'gutter' ? 'w-5 h-5 animate-spin' : 'w-4 h-4 animate-spin'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          ) : (
+            <Icon name="dice" className={variant === 'gutter' ? 'w-5 h-5' : 'w-4 h-4'} />
+          )}
+          {variant === 'palette' && (
+            <>
+              <span>RNG</span>
+              <Icon name="chevron-down" className={`w-3 h-3 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </>
+          )}
+        </button>
+      </Tooltip>
 
       {/* Dropdown menu */}
       {isOpen && (
@@ -197,26 +199,28 @@ export function RngDropdown({
                   Roll {diceRolls[dice.sides] || 1}{dice.label}
                 </button>
                 <div className="flex flex-col">
-                  <button
-                    type="button"
-                    onClick={() => adjustDiceCount(dice.sides, 1)}
-                    disabled={isLoading || (diceRolls[dice.sides] || 1) >= 100}
-                    className="px-1.5 py-0.5 text-xs hover:qt-bg-muted transition-colors disabled:opacity-30 rounded-t border border-b-0"
-                    title="Increase dice count"
-                    aria-label={`Increase ${dice.label} count`}
-                  >
-                    <Icon name="chevron-down" className="w-3 h-3 rotate-180" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => adjustDiceCount(dice.sides, -1)}
-                    disabled={isLoading || (diceRolls[dice.sides] || 1) <= 1}
-                    className="px-1.5 py-0.5 text-xs hover:qt-bg-muted transition-colors disabled:opacity-30 rounded-b border"
-                    title="Decrease dice count"
-                    aria-label={`Decrease ${dice.label} count`}
-                  >
-                    <Icon name="chevron-down" className="w-3 h-3" />
-                  </button>
+                  <Tooltip content="Increase dice count">
+                    <button
+                      type="button"
+                      onClick={() => adjustDiceCount(dice.sides, 1)}
+                      disabled={isLoading || (diceRolls[dice.sides] || 1) >= 100}
+                      className="px-1.5 py-0.5 text-xs hover:qt-bg-muted transition-colors disabled:opacity-30 rounded-t border border-b-0"
+                      aria-label={`Increase ${dice.label} count`}
+                    >
+                      <Icon name="chevron-down" className="w-3 h-3 rotate-180" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Decrease dice count">
+                    <button
+                      type="button"
+                      onClick={() => adjustDiceCount(dice.sides, -1)}
+                      disabled={isLoading || (diceRolls[dice.sides] || 1) <= 1}
+                      className="px-1.5 py-0.5 text-xs hover:qt-bg-muted transition-colors disabled:opacity-30 rounded-b border"
+                      aria-label={`Decrease ${dice.label} count`}
+                    >
+                      <Icon name="chevron-down" className="w-3 h-3" />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             ))}

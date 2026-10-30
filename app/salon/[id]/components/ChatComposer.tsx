@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { Tooltip } from '@/components/ui/Tooltip'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import PendingInformChips from '@/components/chat/PendingInformChips'
@@ -406,15 +407,16 @@ export function ChatComposer({
               <Icon name="alert-circle" className="w-5 h-5 flex-shrink-0" />
             )}
             <span className="qt-label flex-1">{toolExecutionStatus.message}</span>
-            <button
-              type="button"
-              onClick={onDismissToolExecutionStatus}
-              className="qt-button-ghost flex-shrink-0 p-1"
-              title="Dismiss"
-              aria-label="Dismiss notice"
-            >
-              <Icon name="close" className="w-4 h-4" />
-            </button>
+            <Tooltip content="Dismiss">
+              <button
+                type="button"
+                onClick={onDismissToolExecutionStatus}
+                className="qt-button-ghost flex-shrink-0 p-1"
+                aria-label="Dismiss notice"
+              >
+                <Icon name="close" className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
         )}
 
@@ -458,17 +460,18 @@ export function ChatComposer({
           {factArmed && (
             <div className="qt-chat-attachment-list mb-2">
               <div className="qt-chat-tool-result-chip">
-                <Icon name="zap" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
+                <Icon name="deus-ex-machina" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
                 <span className="text-foreground">Deus Ex Machina: this line will be established as fact</span>
-                <button
-                  type="button"
-                  onClick={() => setFactArmedForChat(null)}
-                  className="qt-chat-attachment-chip-remove"
-                  title="Disarm Deus Ex Machina"
-                  aria-label="Disarm Deus Ex Machina"
-                >
-                  <Icon name="close" className="w-4 h-4" />
-                </button>
+                <Tooltip content="Disarm Deus Ex Machina">
+                  <button
+                    type="button"
+                    onClick={() => setFactArmedForChat(null)}
+                    className="qt-chat-attachment-chip-remove"
+                    aria-label="Disarm Deus Ex Machina"
+                  >
+                    <Icon name="close" className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             </div>
           )}
@@ -491,14 +494,16 @@ export function ChatComposer({
                 <span className="text-foreground max-w-[150px] truncate">
                   {file.filename}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveAttachedFile(file.id)}
-                  className="qt-chat-attachment-chip-remove"
-                  title="Remove attachment"
-                >
-                  <Icon name="close" className="w-4 h-4" />
-                </button>
+                <Tooltip content="Remove attachment">
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachedFile(file.id)}
+                    className="qt-chat-attachment-chip-remove"
+                    aria-label={`Remove attachment ${file.filename}`}
+                  >
+                    <Icon name="close" className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             ))}
 
@@ -507,20 +512,31 @@ export function ChatComposer({
               <div
                 key={result.id}
                 className="qt-chat-tool-result-chip group relative"
-                title={`${result.requestPrompt}\n\n${result.formattedResult}`}
               >
-                <span className="text-base leading-none">{result.icon}</span>
-                <span className="text-foreground max-w-[200px] truncate">
-                  {result.summary}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onRemovePendingToolResult(result.id)}
-                  className="qt-chat-attachment-chip-remove"
-                  title="Remove tool result"
+                <Tooltip
+                  content={
+                    <div className="qt-tooltip-body whitespace-pre-wrap">
+                      {`${result.requestPrompt}\n\n${result.formattedResult}`}
+                    </div>
+                  }
+                  interactive
+                  anchorClassName="gap-2 min-w-0"
                 >
-                  <Icon name="close" className="w-4 h-4" />
-                </button>
+                  <span className="text-base leading-none">{result.icon}</span>
+                  <span className="text-foreground max-w-[200px] truncate">
+                    {result.summary}
+                  </span>
+                </Tooltip>
+                <Tooltip content="Remove tool result">
+                  <button
+                    type="button"
+                    onClick={() => onRemovePendingToolResult(result.id)}
+                    className="qt-chat-attachment-chip-remove"
+                    aria-label={`Remove tool result ${result.summary}`}
+                  >
+                    <Icon name="close" className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             ))}
           </div>
@@ -572,6 +588,11 @@ export function ChatComposer({
                 src={speakingAs.character}
                 canType={hasActiveCharacters && !composerLocked && !streaming && !waitingForResponse}
                 voiceRehearsal={voiceRehearsal}
+                establishedFact={{
+                  armed: factArmed,
+                  onToggle: toggleEstablishedFact,
+                  disabled: composerLocked || !hasActiveCharacters,
+                }}
               />
             </div>
           )}
@@ -599,52 +620,63 @@ export function ChatComposer({
             {/* Main toolbar buttons - composition mode, document, terminal */}
             <div className="qt-chat-toolbar">
               {/* Composition mode toggle button */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleDocumentEditingMode()
-                }}
-                className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
-                title={(documentEditingMode
+              <Tooltip
+                content={(documentEditingMode
                   ? `Switch to chat mode (Enter to send)`
                   : `Switch to composition mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`)
                   + ` · ${isMac ? 'Cmd' : 'Ctrl'}+Shift+Enter sends as established fact`}
               >
-                <Icon name="file" className="w-5 h-5" />
-              </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleDocumentEditingMode()
+                  }}
+                  className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
+                  aria-label={documentEditingMode ? 'Switch to chat mode' : 'Switch to composition mode'}
+                  aria-pressed={documentEditingMode}
+                >
+                  <Icon name="file" className="w-5 h-5" />
+                </button>
+              </Tooltip>
 
               {/* Open Document button — stays available even with documents
                   already open, so the user can keep adding more. */}
               {onOpenDocumentClick && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onOpenDocumentClick()
-                  }}
-                  className="qt-chat-toolbar-button qt-doc-open-button"
-                  title={isDocumentModeActive
+                <Tooltip
+                  content={isDocumentModeActive
                     ? 'Open another document'
                     : `Open document (${isMac ? 'Cmd' : 'Ctrl'}+Shift+D)`}
                 >
-                  <Icon name="pencil" className="w-5 h-5" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenDocumentClick()
+                    }}
+                    className="qt-chat-toolbar-button qt-doc-open-button"
+                    aria-label={isDocumentModeActive ? 'Open another document' : 'Open document'}
+                  >
+                    <Icon name="pencil" className="w-5 h-5" />
+                  </button>
+                </Tooltip>
               )}
 
               {/* Open Terminal button */}
               {onOpenTerminalClick && !isTerminalModeActive && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onOpenTerminalClick()
-                  }}
-                  className="qt-chat-toolbar-button"
-                  title="Open terminal"
-                >
-                  <Icon name="code" className="w-5 h-5" />
-                </button>
+                <Tooltip content="Open terminal">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenTerminalClick()
+                    }}
+                    className="qt-chat-toolbar-button"
+                    aria-label="Open terminal"
+                  >
+                    <Icon name="code" className="w-5 h-5" />
+                  </button>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -684,11 +716,8 @@ export function ChatComposer({
 
           {/* Right side buttons: Send, raise a hand (soft interrupt), Stop (hard). */}
           <div className="qt-chat-composer-actions">
-            <button
-              type="submit"
-              disabled={composerLocked || isGenerating || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
-              className="qt-chat-composer-send"
-              title={!hasActiveCharacters
+            <Tooltip
+              content={!hasActiveCharacters
                 ? "Add a character to start chatting"
                 : isGenerating
                   ? "Generating..."
@@ -697,21 +726,18 @@ export function ChatComposer({
                     : voiceRehearsal && speakingAs
                       ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
                       : "Send message"}
-              aria-label={factArmed ? 'Send as established fact' : 'Send message'}
             >
-              <Icon name="send" className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleRaisedHand()
-              }}
-              disabled={!isGenerating || !canRaiseHand || stopping}
-              className={`qt-chat-composer-send qt-chat-interrupt-button${handRaised ? ' qt-chat-interrupt-button-raised' : ''}`}
-              aria-pressed={handRaised}
-              aria-label={handRaised ? 'Lower your hand' : 'Raise your hand to interrupt'}
-              title={!isGenerating
+              <button
+                type="submit"
+                disabled={composerLocked || isGenerating || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+                className="qt-chat-composer-send"
+                aria-label={factArmed ? 'Send as established fact' : 'Send message'}
+              >
+                <Icon name="send" className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={!isGenerating
                 ? 'Raise your hand (while someone is speaking)'
                 : !canRaiseHand
                   ? 'Only one character is present — the floor returns to you after this reply'
@@ -719,25 +745,40 @@ export function ChatComposer({
                     ? 'Hand raised — the next speaker will be asked to yield. Click to lower it.'
                     : 'Raise your hand — the next speaker may yield the floor to you'}
             >
-              <Icon name="hand-raised" className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onStopStreaming()
-              }}
-              disabled={!isGenerating || stopping}
-              className="qt-chat-composer-send qt-chat-stop-button"
-              aria-label="Stop"
-              title={stopping
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleRaisedHand()
+                }}
+                disabled={!isGenerating || !canRaiseHand || stopping}
+                className={`qt-chat-composer-send qt-chat-interrupt-button${handRaised ? ' qt-chat-interrupt-button-raised' : ''}`}
+                aria-pressed={handRaised}
+                aria-label={handRaised ? 'Lower your hand' : 'Raise your hand to interrupt'}
+              >
+                <Icon name="hand-raised" className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={stopping
                 ? 'Stopping…'
                 : isGenerating
                   ? 'Stop — cut the reply off here and take the floor'
                   : 'Stop (while someone is speaking)'}
             >
-              <Icon name="stop-sign" className="w-5 h-5" />
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onStopStreaming()
+                }}
+                disabled={!isGenerating || stopping}
+                className="qt-chat-composer-send qt-chat-stop-button"
+                aria-label="Stop"
+              >
+                <Icon name="stop-sign" className="w-5 h-5" />
+              </button>
+            </Tooltip>
           </div>
         </form>
       </div>

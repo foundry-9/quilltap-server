@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### Deus Ex Machina toggle on the composer portrait; composer tooltips
+
+- New `deus-ex-machina` icon in the icon registry: a game-master's screen by default, an eye in a triangle in the Madman's Box override (bundle 1.1.10). It replaces `zap` on the `/deus` menu entry and on the armed chip.
+- `SpeakingAsAvatar` takes an optional `establishedFact` prop (`{ armed, onToggle, disabled }`) and renders a small toggle in the portrait's bottom-left corner that arms and disarms Deus Ex Machina through the same `toggleEstablishedFact` handler `/deus` uses. The toggle sits outside the dimmed portrait layer, so it stays usable while a reply streams, reports its state with `aria-pressed`, and keeps editor focus on click. The armed chip and the tinted editor frame are unchanged. New class `qt-chat-established-fact-toggle` (armed state reuses the composer frame's ring and info tint); mirrored in `@quilltap/theme-storybook` 1.0.96.
+- Every native `title` tooltip in the composer is now a Quilltap `Tooltip`: the composer's toolbar, Send / raise-hand / Stop, attachment and tool-result chips and their remove buttons, the speaking-as portrait, the gutter tools (`ComposerGutterTools`, `CustomToolsButton`, `RngDropdown`), `PendingInformChips` and `FormattingToolbar`. Native tooltips did not fire reliably under the Electron shell. Icon-only buttons that relied on `title` for a name now carry `aria-label`.
+
 #### Deus Ex Machina: established facts in the Salon
 
 - The operator can post something as **established fact**: true in the story, known to everyone, needing no verification. Two kinds. A **seat line**: the operator's own USER row with the new `chat_messages.isEstablishedFact` flag (migration `add-established-fact-field-v1`). A **machine fact**: a public, persona-free Host row with `systemKind: 'established-fact'` and no participant. "Deus Ex Machina" is the UI name only; no model-facing text contains it, and a test enforces that.

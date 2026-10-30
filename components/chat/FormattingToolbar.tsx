@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { LexicalEditor } from 'lexical'
 import { FORMAT_TEXT_COMMAND, $getSelection, $isRangeSelection, $createTextNode, $createParagraphNode, $getRoot } from 'lexical'
 import { $isCodeNode, $createCodeNode } from '@lexical/code'
@@ -97,20 +98,21 @@ function CharPickerToolbarButton({
 
   return (
     <div className="qt-formatting-toolbar-section relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        onMouseDown={onMouseDown}
-        onClick={() => setOpen((o) => !o)}
-        disabled={disabled}
-        className={`qt-formatting-button qt-formatting-button-emoji${open ? ' qt-formatting-button-active' : ''}`}
-        title={title}
-        aria-label={ariaLabel}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        {glyph}
-      </button>
+      <Tooltip content={title}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onMouseDown={onMouseDown}
+          onClick={() => setOpen((o) => !o)}
+          disabled={disabled}
+          className={`qt-formatting-button qt-formatting-button-emoji${open ? ' qt-formatting-button-active' : ''}`}
+          aria-label={ariaLabel}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          {glyph}
+        </button>
+      </Tooltip>
       {open && (
         <CharPickerPanel
           profile={profile}
@@ -487,50 +489,53 @@ export default function FormattingToolbar({
         {MARKDOWN_FORMATS.filter(
           (format) => !(format.type === 'bold' && template?.markdownAsterisks === false),
         ).map((format) => (
+          <Tooltip key={format.type} content={format.tooltip}>
+            <button
+              type="button"
+              onMouseDown={preventFocusLoss}
+              onClick={() => handleMarkdownClick(format)}
+              disabled={disabled}
+              className={`qt-formatting-button qt-formatting-button-${format.type}`}
+            >
+              {format.label}
+            </button>
+          </Tooltip>
+        ))}
+        <Tooltip content="Outdent list item (Shift+Tab)">
           <button
-            key={format.type}
             type="button"
             onMouseDown={preventFocusLoss}
-            onClick={() => handleMarkdownClick(format)}
+            onClick={() => handleIndentClick('outdent')}
             disabled={disabled}
-            className={`qt-formatting-button qt-formatting-button-${format.type}`}
-            title={format.tooltip}
+            className="qt-formatting-button qt-formatting-button-outdent"
+            aria-label="Outdent list item"
           >
-            {format.label}
+            {'⇤'}
           </button>
-        ))}
-        <button
-          type="button"
-          onMouseDown={preventFocusLoss}
-          onClick={() => handleIndentClick('outdent')}
-          disabled={disabled}
-          className="qt-formatting-button qt-formatting-button-outdent"
-          title="Outdent list item (Shift+Tab)"
-          aria-label="Outdent list item"
-        >
-          {'⇤'}
-        </button>
-        <button
-          type="button"
-          onMouseDown={preventFocusLoss}
-          onClick={() => handleIndentClick('indent')}
-          disabled={disabled}
-          className="qt-formatting-button qt-formatting-button-indent"
-          title="Indent list item (Tab)"
-          aria-label="Indent list item"
-        >
-          {'⇥'}
-        </button>
-        <button
-          type="button"
-          onMouseDown={preventFocusLoss}
-          onClick={handleCodeBlockClick}
-          disabled={disabled}
-          className={`qt-formatting-button qt-formatting-button-code-block${inCodeBlock ? ' qt-formatting-button-active' : ''}`}
-          title={inCodeBlock ? 'End code block' : 'Insert code block'}
-        >
-          {inCodeBlock ? '/CODE' : 'CODE'}
-        </button>
+        </Tooltip>
+        <Tooltip content="Indent list item (Tab)">
+          <button
+            type="button"
+            onMouseDown={preventFocusLoss}
+            onClick={() => handleIndentClick('indent')}
+            disabled={disabled}
+            className="qt-formatting-button qt-formatting-button-indent"
+            aria-label="Indent list item"
+          >
+            {'⇥'}
+          </button>
+        </Tooltip>
+        <Tooltip content={inCodeBlock ? 'End code block' : 'Insert code block'}>
+          <button
+            type="button"
+            onMouseDown={preventFocusLoss}
+            onClick={handleCodeBlockClick}
+            disabled={disabled}
+            className={`qt-formatting-button qt-formatting-button-code-block${inCodeBlock ? ' qt-formatting-button-active' : ''}`}
+          >
+            {inCodeBlock ? '/CODE' : 'CODE'}
+          </button>
+        </Tooltip>
       </div>
 
       {/* RP template buttons - only shown when template has delimiters */}
@@ -539,17 +544,17 @@ export default function FormattingToolbar({
           <div className="qt-formatting-toolbar-divider" />
           <div className="qt-formatting-toolbar-section">
             {allDelimiters.map((delimiter, index) => (
-              <button
-                key={`${delimiter.buttonName}-${index}`}
-                type="button"
-                onMouseDown={preventFocusLoss}
-                onClick={() => handleDelimiterClick(delimiter)}
-                disabled={disabled}
-                className="qt-rp-annotation-button"
-                title={getDelimiterTooltip(delimiter)}
-              >
-                {delimiter.buttonName}
-              </button>
+              <Tooltip key={`${delimiter.buttonName}-${index}`} content={getDelimiterTooltip(delimiter)}>
+                <button
+                  type="button"
+                  onMouseDown={preventFocusLoss}
+                  onClick={() => handleDelimiterClick(delimiter)}
+                  disabled={disabled}
+                  className="qt-rp-annotation-button"
+                >
+                  {delimiter.buttonName}
+                </button>
+              </Tooltip>
             ))}
           </div>
         </>
@@ -584,24 +589,25 @@ export default function FormattingToolbar({
         <>
           <div className="qt-formatting-toolbar-divider" />
           <div className="qt-formatting-toolbar-section">
-            <button
-              type="button"
-              onMouseDown={preventFocusLoss}
-              onClick={onToggleSource}
-              disabled={disabled}
-              className={`qt-formatting-button qt-formatting-button-source ${showSource ? 'qt-formatting-button-active' : ''}`}
-              title={showSource ? 'Switch to rich text editor' : 'Edit markdown source'}
-              aria-label={showSource ? 'Switch to rich text editor' : 'Edit markdown source'}
-              aria-pressed={showSource}
-            >
-              {showSource ? (
-                // Rich text icon when source mode is active
-                <Icon name="pencil" className="w-4 h-4" />
-              ) : (
-                // Code/source icon when in rich text mode
-                <Icon name="code" className="w-4 h-4" />
-              )}
-            </button>
+            <Tooltip content={showSource ? 'Switch to rich text editor' : 'Edit markdown source'}>
+              <button
+                type="button"
+                onMouseDown={preventFocusLoss}
+                onClick={onToggleSource}
+                disabled={disabled}
+                className={`qt-formatting-button qt-formatting-button-source ${showSource ? 'qt-formatting-button-active' : ''}`}
+                aria-label={showSource ? 'Switch to rich text editor' : 'Edit markdown source'}
+                aria-pressed={showSource}
+              >
+                {showSource ? (
+                  // Rich text icon when source mode is active
+                  <Icon name="pencil" className="w-4 h-4" />
+                ) : (
+                  // Code/source icon when in rich text mode
+                  <Icon name="code" className="w-4 h-4" />
+                )}
+              </button>
+            </Tooltip>
           </div>
         </>
       )}

@@ -89,6 +89,7 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 | `megaphone` | NEW | megaphone | insert announcement (composer) |
 | `mail` | NEW | envelope | compose mail (composer; the Post Office) |
 | `dice` | NEW | die w/ pips | RNG dropdown (Pascal) |
+| `deus-ex-machina` | NEW | game-master's screen (Madman's Box: eye in a triangle) | Deus Ex Machina toggle on the composer portrait and its armed chip |
 | `inventory` | NEW | open box with flaps | the Inventory (sidebar, participant card, Prospero Inventory card) |
 | `sparkles` | NEW | sparkles | inline "generate" / AI-flavored actions |
 | `wand` | NEW | magic wand | the AI Wizard (distinct from inline `sparkles`) |

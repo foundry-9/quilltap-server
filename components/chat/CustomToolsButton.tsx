@@ -10,6 +10,7 @@
  */
 
 import { Icon } from '@/components/ui/icon'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface CustomToolsButtonProps {
   /** Opens Pascal's table */
@@ -26,18 +27,19 @@ export function CustomToolsButton({
   variant = 'palette',
 }: Readonly<CustomToolsButtonProps>) {
   return (
-    <button
-      type="button"
-      onClick={() => !disabled && onClick()}
-      disabled={disabled}
-      className={variant === 'gutter' ? 'qt-composer-gutter-button' : 'qt-tool-palette-button'}
-      title="Custom tools"
-      aria-haspopup="dialog"
-      aria-label="Custom tools"
-    >
-      <Icon name="wand" className={variant === 'gutter' ? 'w-5 h-5' : 'w-4 h-4'} />
-      {variant === 'palette' && <span>Tools</span>}
-    </button>
+    <Tooltip content="Custom tools">
+      <button
+        type="button"
+        onClick={() => !disabled && onClick()}
+        disabled={disabled}
+        className={variant === 'gutter' ? 'qt-composer-gutter-button' : 'qt-tool-palette-button'}
+        aria-haspopup="dialog"
+        aria-label="Custom tools"
+      >
+        <Icon name="wand" className={variant === 'gutter' ? 'w-5 h-5' : 'w-4 h-4'} />
+        {variant === 'palette' && <span>Tools</span>}
+      </button>
+    </Tooltip>
   )
 }
 

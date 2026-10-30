@@ -12,9 +12,10 @@ Every author, sooner or later, wants to reach into the scene and simply settle a
 
 The line you are about to send can be posted *as established fact.* It goes out under your own seat, with your own name and avatar, exactly as you typed it — but it arrives marked as something true in the story, known to everyone present, and in need of no verification.
 
-There are two ways to do it:
+There are three ways to do it:
 
-- **Type `/deus`** in the composer and pick **Deus Ex Machina** from the menu. The composer is now *armed*: a chip appears above it reading *Deus Ex Machina: this line will be established as fact*, the editor takes on a faint tint, and the Send button's label changes to *Send as established fact.* Send your line and the composer disarms itself. Pick `/deus` a second time, or press the chip's **×**, to disarm without sending. Switching chats or reloading the page disarms it too.
+- **Press the little screen on your portrait.** In the bottom-left corner of the *speaking as* portrait beside the composer sits a small button bearing a game-master's screen — the folding panel behind which the one who runs the table decides what is so. (Under the Madman's Box theme it is an eye in a triangle instead, the all-seeing narrator.) Hover over it and it introduces itself. Press it and the composer is armed, exactly as `/deus` arms it; press it again to stand it down. While armed, the button wears the same ring and tint as the editor, so the two always agree. It stays bright and pressable even while a reply is still arriving and the portrait has dimmed. (On the narrowest screens the portrait folds away to make room, and the button with it; `/deus` and the shortcut still serve.)
+- **Type `/deus`** in the composer and pick **Deus Ex Machina** from the menu. The composer is now *armed*: a chip appears above it reading *Deus Ex Machina: this line will be established as fact*, the editor takes on a faint tint, and the Send button's label changes to *Send as established fact.* Send your line and the composer disarms itself. Pick `/deus` a second time, press the portrait button again, or press the chip's **×**, to disarm without sending. Switching chats or reloading the page disarms it too.
 - **Press ⌘ + Shift + Enter** (Ctrl + Shift + Enter away from a Mac) to send just this one line as fact without arming anything. It works in chat mode and in composition mode alike.
 
 A fact needs words. A composer holding only an attachment cannot be armed, and an armed send with nothing written is politely refused.
