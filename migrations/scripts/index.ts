@@ -459,6 +459,8 @@ import { addLLMLogsStorytellerRoundIdColumnMigration } from './add-llm-logs-stor
 // Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
 import { addRoleplayTemplateUnmarkedFieldsMigration } from './add-roleplay-template-unmarked-fields-v1';
 import { stripAnthropicSamplingParametersMigration } from './strip-anthropic-sampling-parameters-v1';
+// Global search: drop Staff messages and announcement bubbles from the message index (#121)
+import { reindexChatMessageFtsCharacterOnlyMigration } from './reindex-chat-message-fts-character-only';
 
 /**
  * All available migrations.
@@ -946,6 +948,8 @@ export const migrations: Migration[] = [
   addRoleplayTemplateUnmarkedFieldsMigration,
   // Anthropic API 2026-10-21: drop temperature/top_p/top_k from Anthropic profiles
   stripAnthropicSamplingParametersMigration,
+  // Global search: drop Staff messages and announcement bubbles from the message index (#121)
+  reindexChatMessageFtsCharacterOnlyMigration,
 ];
 
 export {
@@ -1408,5 +1412,6 @@ export {
   addLLMLogsStorytellerRoundIdColumnMigration,
   addRoleplayTemplateUnmarkedFieldsMigration,
   stripAnthropicSamplingParametersMigration,
+  reindexChatMessageFtsCharacterOnlyMigration,
 };
 

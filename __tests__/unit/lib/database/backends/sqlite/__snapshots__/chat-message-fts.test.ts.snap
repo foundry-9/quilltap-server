@@ -13,7 +13,7 @@ exports[`DDL is single-sourced matches its snapshot 1`] = `
   tokenize='unicode61 remove_diacritics 2'
 )",
   "CREATE TRIGGER IF NOT EXISTS "chat_messages_fts_ai" AFTER INSERT ON "chat_messages"
-  WHEN new."type" = 'message' AND new."role" IN ('USER','ASSISTANT') AND new."content" IS NOT NULL
+  WHEN new."type" = 'message' AND new."role" IN ('USER','ASSISTANT') AND new."content" IS NOT NULL AND new."systemSender" IS NULL AND new."customAnnouncer" IS NULL
 BEGIN
   INSERT INTO "chat_messages_fts_map"("messageId") VALUES (new."id");
   INSERT INTO "chat_messages_fts"(rowid, content)

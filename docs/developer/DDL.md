@@ -1081,8 +1081,16 @@ CREATE TRIGGER "chat_messages_fts_au" AFTER UPDATE OF "content" ON "chat_message
 Facts that constrain anything touching this:
 
 - **Only eligible rows are indexed** — `type='message'`,
-  `role IN ('USER','ASSISTANT')`, non-null `content`. That is the filter global
-  search has always applied. Eligibility is decided at INSERT time only.
+  `role IN ('USER','ASSISTANT')`, non-null `content`, `systemSender IS NULL`,
+  `customAnnouncer IS NULL` (the same judgement as `isCharacterAuthoredMessage`).
+  Staff rows carry role `ASSISTANT`, so before #121 they were indexed too;
+  `reindex-chat-message-fts-character-only-v1` dropped them. The search query
+  re-applies the filter to the joined row. Eligibility is decided at INSERT
+  time only.
+- **A changed trigger definition is replaced, not skipped.**
+  `ensureChatMessageFtsSchema` compares each trigger's `sqlite_master.sql` with
+  the module's DDL (`staleChatMessageFtsTriggers`) and drops any that differ
+  before replaying `IF NOT EXISTS`.
 - **The triggers call `qt_text()`.** A connection that opens without the
   function fails any write to `chat_messages` with "no such function" — a loud
   failure instead of silent index drift.

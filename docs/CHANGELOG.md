@@ -4,6 +4,13 @@
 
 ### 4.12-dev
 
+#### Fix: global search returned Staff messages (#121)
+
+- The message search index decided eligibility by role only. Staff messages (Commonplace Book recall whispers, Host/Prospero/Librarian announcements, other `systemSender` rows) are written with role `ASSISTANT`, so they were indexed and returned as character lines, including whispers addressed to other participants. Announcement bubbles (`customAnnouncer`) had the same problem.
+- `chatMessageFtsEligibilitySql` (`lib/database/backends/sqlite/chat-message-fts.ts`) now also requires `systemSender IS NULL AND customAnnouncer IS NULL`, matching `isCharacterAuthoredMessage`. The insert trigger is built from the same fragment. The FTS query path re-applies the filter to the joined row, and the non-SQLite path uses `isCharacterAuthoredMessage`.
+- `ensureChatMessageFtsSchema` now replaces any trigger whose stored SQL differs from the module's DDL (`staleChatMessageFtsTriggers`); `IF NOT EXISTS` alone never updated one.
+- New migration `reindex-chat-message-fts-character-only-v1` replaces the old insert trigger and rebuilds the index. `create-chat-message-fts-v1` now depends on `add-system-sender-field-v1` and `add-custom-announcer-field-v1`, since its trigger reads those columns.
+
 #### Search bar searches the open Salon chat first
 
 - With a Salon chat focused, the header search bar shows a "This conversation" group above the global results (now headed "Everywhere"). It lists messages and announcements in the visible transcript that contain the query, newest first, with speaker, time, excerpt and occurrence count. The full search dialog has a "This conversation" chip for the same group (up to 50 matches; the inline dropdown shows 5).
@@ -14,7 +21,7 @@
 - The Salon publishes a `ConversationSearchSource` through the page toolbar context (`conversationSearch` / `setConversationSearch`). In the workspace it is a per-tab slot that `WorkspaceToolbarBridge` forwards for the focused tab, like the left/right toolbar content. Not published while quick-hide covers the chat.
 - Fix: a Message result in global search (`/salon/<id>?msg=<messageId>`) now opens the chat scrolled to that message and flashes it. Nothing used to read `msg`. Every way into such a link goes through `requestMessageReveal(chatId, messageId)` (`lib/chat/message-navigation.ts`): the workspace link interceptor and `useWorkspaceNavigate` (via `revealRequestFromSalonHref`), `WorkspaceIntent` for the old-route redirect (which now forwards `msg`), and the legacy route's new `revealMessageId` prop on `SalonView`. The request is stored in sessionStorage under the chat id and announced with a `quilltap:reveal-message` window event, so a Salon that is still mounting takes it once loaded and a kept-alive tab takes it at once; only the named chat takes it.
 - The Salon reveals only after the initial scroll to the newest message has finished (new `isInitialScrollDone` from `useAutoScroll`; that scroll keeps nudging for 300 ms after `isSettled`). A tab still hidden when the request arrives waits until it is shown.
-- If the target isn't shown in this view (a whisper to another participant, another variant of a reply), the Salon shows a toast saying so instead of doing nothing. In V4test most global Message hits are Commonplace Book whispers addressed to characters, which the Salon hides by default (#121).
+- If the target isn't shown in this view (a whisper to another participant, another variant of a reply), the Salon shows a toast saying so instead of doing nothing. Before #121 was fixed, most global Message hits in V4test were Commonplace Book whispers addressed to characters, which the Salon hides by default.
 - Removed the unscoped `navigateToMessage` / `getPendingMessageNavigation` handoff (no remaining callers; any Salon would take its request).
 
 #### Salon header compacts a crowded cast

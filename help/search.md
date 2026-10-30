@@ -155,8 +155,10 @@ manners, which it is only civil to explain:
   ordered by how well they match.
 
 Only what was actually *said* is catalogued: your messages and your
-characters'. House announcements, system events and the Staff's own asides
-remain unsearchable, precisely as they always have been.
+characters'. House announcements, announcement bubbles, system events and the
+Staff's own asides — the Commonplace Book's whispered reminiscences among them —
+remain unsearchable. (For a spell they slipped into the catalogue disguised as
+your characters; they have been politely shown out.)
 
 ## Search Limitations
 

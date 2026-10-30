@@ -48,6 +48,8 @@ const CREATE_CHAT_MESSAGES = `
     "type" TEXT DEFAULT 'message',
     "role" TEXT,
     "content" TEXT,
+    "systemSender" TEXT DEFAULT NULL,
+    "customAnnouncer" TEXT DEFAULT NULL,
     "createdAt" TEXT NOT NULL
   )
 `

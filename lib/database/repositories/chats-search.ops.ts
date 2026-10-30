@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { rawQuery } from '../manager';
 import { chatMessageFtsEligibilitySql } from '../backends/sqlite/chat-message-fts';
 import { buildFtsMatchExpression } from './fts-query';
+import { isCharacterAuthoredMessage } from '@/lib/chat/chat-activity';
 import { escapeLikeLiteral } from './like-escape';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatMessagesOps } from './chats-messages.ops';
@@ -55,6 +56,10 @@ function deferTextDecode(matchingIdsSql: string): string {
  * The indexed path: probe the FTS5 index, then join back for the columns the
  * caller wants.
  *
+ * The eligibility filter is repeated against the joined row so that an index
+ * built under an older, looser rule (#121: Staff whispers were indexed) can
+ * never surface a row the current rule excludes, even before it is rebuilt.
+ *
  * The `chatId IN (…)` list is kept for PARITY with the pre-index query rather
  * than being replaced with a join on `chats.userId`. It binds the same
  * parameters the `$in` filter always did, so nothing about the caller's
@@ -68,6 +73,7 @@ function buildFtsSearchSql(chatIdCount: number): string {
         JOIN "chat_messages_fts_map" x ON x."ftsId" = f.rowid
         JOIN "chat_messages" mm        ON mm."id" = x."messageId"
        WHERE "chat_messages_fts" MATCH ?
+         AND ${chatMessageFtsEligibilitySql('mm')}
          AND mm."chatId" IN (${placeholders})
        ORDER BY mm."createdAt" DESC
        LIMIT ?
@@ -251,8 +257,7 @@ export class ChatSearchReplaceOps {
           for (const msg of messages) {
             if (results.length >= limit) break;
             if (
-              msg.type === 'message' &&
-              (msg.role === 'USER' || msg.role === 'ASSISTANT') &&
+              isCharacterAuthoredMessage(msg) &&
               msg.content.toLowerCase().includes(lowerSearch)
             ) {
               results.push({

@@ -21,6 +21,7 @@ import {
   ensureChatMessageFtsSchema,
   missingChatMessageFtsObjects,
   rebuildChatMessageFtsIndex,
+  staleChatMessageFtsTriggers,
 } from '@/lib/database/backends/sqlite/chat-message-fts'
 import { registerTextCodecFunction } from '@/lib/database/backends/sqlite/text-codec-function'
 import { textToBlob } from '@/lib/database/text-compression'
@@ -39,6 +40,8 @@ const CREATE_CHAT_MESSAGES = `
     "type" TEXT DEFAULT 'message',
     "role" TEXT,
     "content" TEXT,
+    "systemSender" TEXT DEFAULT NULL,
+    "customAnnouncer" TEXT DEFAULT NULL,
     "createdAt" TEXT NOT NULL
   )
 `
@@ -191,6 +194,65 @@ describe('chat message FTS', () => {
     expect(search('"estate"*')).toHaveLength(20)
   })
 
+  it('skips Staff messages and announcement bubbles, which carry role ASSISTANT (#121)', () => {
+    insert('msg-01', 'the three-legged tabby', { role: 'ASSISTANT' })
+    db.prepare(
+      `INSERT INTO "chat_messages" ("id","chatId","type","role","content","systemSender","createdAt")
+       VALUES ('msg-02','chat-1','message','ASSISTANT','recall: the three-legged tabby','commonplaceBook','2026-01-01T00:00:02.000Z')`,
+    ).run()
+    db.prepare(
+      `INSERT INTO "chat_messages" ("id","chatId","type","role","content","customAnnouncer","createdAt")
+       VALUES ('msg-03','chat-1','message','ASSISTANT','the tabby arrives','{"kind":"custom","displayName":"Town Crier"}','2026-01-01T00:00:03.000Z')`,
+    ).run()
+
+    expect(countEligibleChatMessages(db)).toBe(1)
+    expect(countIndexedChatMessages(db)).toBe(1)
+    expect(search('"tabby"*')).toEqual(['msg-01'])
+  })
+
+  describe('outdated triggers', () => {
+    /** The insert trigger as `create-chat-message-fts-v1` first shipped it. */
+    const LEGACY_INSERT_TRIGGER = `CREATE TRIGGER "chat_messages_fts_ai" AFTER INSERT ON "chat_messages"
+  WHEN new."type" = 'message' AND new."role" IN ('USER','ASSISTANT') AND new."content" IS NOT NULL
+BEGIN
+  INSERT INTO "chat_messages_fts_map"("messageId") VALUES (new."id");
+  INSERT INTO "chat_messages_fts"(rowid, content)
+    VALUES ((SELECT "ftsId" FROM "chat_messages_fts_map" WHERE "messageId" = new."id"),
+            qt_text(new."content"));
+END`
+
+    beforeEach(() => {
+      db.exec('DROP TRIGGER "chat_messages_fts_ai"')
+      db.exec(LEGACY_INSERT_TRIGGER)
+    })
+
+    it('reports a trigger whose definition no longer matches', () => {
+      expect(staleChatMessageFtsTriggers(db)).toEqual(['chat_messages_fts_ai'])
+    })
+
+    it('replaces it, and a rebuild then drops the Staff rows it let in', () => {
+      db.prepare(
+        `INSERT INTO "chat_messages" ("id","chatId","type","role","content","systemSender","createdAt")
+         VALUES ('msg-01','chat-1','message','ASSISTANT','a dirigible overhead','host','2026-01-01T00:00:01.000Z')`,
+      ).run()
+      insert('msg-02', 'a dirigible, said plainly')
+      expect(countIndexedChatMessages(db)).toBe(2)
+
+      ensureChatMessageFtsSchema(db)
+      expect(staleChatMessageFtsTriggers(db)).toEqual([])
+      expect(countEligibleChatMessages(db)).not.toBe(countIndexedChatMessages(db))
+
+      rebuildChatMessageFtsIndex(db)
+      expect(search('"dirigible"*')).toEqual(['msg-02'])
+
+      db.prepare(
+        `INSERT INTO "chat_messages" ("id","chatId","type","role","content","systemSender","createdAt")
+         VALUES ('msg-03','chat-1','message','ASSISTANT','another dirigible','lantern','2026-01-01T00:00:03.000Z')`,
+      ).run()
+      expect(search('"dirigible"*')).toEqual(['msg-02'])
+    })
+  })
+
   describe('rebuildChatMessageFtsIndex', () => {
     it('repopulates the index from the base table', () => {
       insert('msg-01', 'the first interchange')
@@ -259,10 +321,12 @@ describe('DDL is single-sourced', () => {
 
   it('applies the same eligibility filter everywhere', () => {
     expect(chatMessageFtsEligibilitySql()).toBe(
-      `"type" = 'message' AND "role" IN ('USER','ASSISTANT') AND "content" IS NOT NULL`,
+      `"type" = 'message' AND "role" IN ('USER','ASSISTANT') AND "content" IS NOT NULL` +
+        ` AND "systemSender" IS NULL AND "customAnnouncer" IS NULL`,
     )
     expect(chatMessageFtsEligibilitySql('m')).toBe(
-      `m."type" = 'message' AND m."role" IN ('USER','ASSISTANT') AND m."content" IS NOT NULL`,
+      `m."type" = 'message' AND m."role" IN ('USER','ASSISTANT') AND m."content" IS NOT NULL` +
+        ` AND m."systemSender" IS NULL AND m."customAnnouncer" IS NULL`,
     )
   })
 
