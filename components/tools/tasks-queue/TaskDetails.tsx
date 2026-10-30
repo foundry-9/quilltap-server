@@ -58,7 +58,7 @@ export function TaskDetails({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={handleFocusKeyDown}
-        className="bg-background rounded-lg qt-shadow-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
+        className="qt-dialog max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Dialog Header */}

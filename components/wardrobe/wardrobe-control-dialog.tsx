@@ -601,7 +601,7 @@ function WardrobeControlDialogInner({
                       {resetMenuOpen && (
                         <div
                           role="menu"
-                          className="absolute left-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
+                          className="absolute left-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-popover shadow-md"
                         >
                           <ul className="divide-y qt-border-default">
                             {isInChat && (

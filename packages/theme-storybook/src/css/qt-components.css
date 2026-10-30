@@ -762,6 +762,13 @@
   transform: translateY(-2px);
 }
 
+.qt-card:has([aria-haspopup][aria-expanded="true"]),
+.qt-card-interactive:has([aria-haspopup][aria-expanded="true"]) {
+  position: relative;
+  z-index: 20;
+  transform: none;
+}
+
 .qt-card-header {
   padding: var(--qt-card-padding);
   padding-bottom: 0;
@@ -3053,6 +3060,10 @@
 
 .qt-bg-card {
   background-color: var(--color-card);
+}
+
+.qt-bg-popover {
+  background-color: var(--qt-popover-bg);
 }
 
 .qt-border {

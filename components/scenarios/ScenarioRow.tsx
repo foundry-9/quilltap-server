@@ -22,7 +22,8 @@
  * @module components/scenarios/ScenarioRow
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
+import { useFixedMenu } from '@/hooks/useFixedMenu'
 import type { Scenario } from './types'
 
 interface ScenarioRowProps {
@@ -46,8 +47,10 @@ export function ScenarioRow({
   onDelete,
   onToggleArchived,
 }: ScenarioRowProps) {
-  const [kebabOpen, setKebabOpen] = useState(false)
   const kebabRef = useRef<HTMLDivElement>(null)
+  // Fixed to the viewport so a scrolling scenario list cannot clip the menu.
+  const { anchorRef: kebabAnchorRef, menuStyle: kebabStyle, open: kebabOpen, setOpen: setKebabOpen, close: closeKebab } =
+    useFixedMenu(kebabRef, 200)
 
   const archiveLabel = scenario.archived ? 'Restore' : 'Archive'
 
@@ -56,12 +59,12 @@ export function ScenarioRow({
     if (!kebabOpen) return
     const onDoc = (e: MouseEvent): void => {
       if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
-        setKebabOpen(false)
+        closeKebab()
       }
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
-  }, [kebabOpen])
+  }, [kebabOpen, closeKebab])
 
   // Close on Escape while open (capture phase, mirroring the wardrobe row).
   useEffect(() => {
@@ -70,11 +73,11 @@ export function ScenarioRow({
       if (e.key !== 'Escape') return
       e.stopPropagation()
       e.preventDefault()
-      setKebabOpen(false)
+      closeKebab()
     }
     document.addEventListener('keydown', onKey, true)
     return () => document.removeEventListener('keydown', onKey, true)
-  }, [kebabOpen])
+  }, [kebabOpen, closeKebab])
 
   return (
     <li className="py-3 flex items-start gap-3">
@@ -158,8 +161,9 @@ export function ScenarioRow({
       {/* Narrow container: kebab menu holding the same four actions. */}
       <div className="relative @lg:hidden shrink-0" ref={kebabRef}>
         <button
+          ref={kebabAnchorRef}
           type="button"
-          onClick={() => setKebabOpen((v) => !v)}
+          onClick={() => setKebabOpen(!kebabOpen)}
           className="qt-button-ghost qt-button-sm"
           aria-label={`More actions for ${scenario.name}`}
           title="More actions"
@@ -169,12 +173,12 @@ export function ScenarioRow({
           ⋮
         </button>
         {kebabOpen && (
-          <div role="menu" className="qt-dropdown absolute right-0 top-full mt-1">
+          <div role="menu" style={kebabStyle ?? undefined} className="qt-dropdown">
             <button
               type="button"
               role="menuitem"
               onClick={() => {
-                setKebabOpen(false)
+                closeKebab()
                 onEdit(scenario)
               }}
               className="qt-dropdown-item w-full text-left"
@@ -185,7 +189,7 @@ export function ScenarioRow({
               type="button"
               role="menuitem"
               onClick={() => {
-                setKebabOpen(false)
+                closeKebab()
                 onRename(scenario)
               }}
               className="qt-dropdown-item w-full text-left"
@@ -196,7 +200,7 @@ export function ScenarioRow({
               type="button"
               role="menuitem"
               onClick={() => {
-                setKebabOpen(false)
+                closeKebab()
                 onToggleArchived(scenario)
               }}
               className="qt-dropdown-item w-full text-left"
@@ -207,7 +211,7 @@ export function ScenarioRow({
               type="button"
               role="menuitem"
               onClick={() => {
-                setKebabOpen(false)
+                closeKebab()
                 onDelete(scenario)
               }}
               className="qt-dropdown-item w-full text-left qt-text-destructive"

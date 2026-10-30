@@ -16,8 +16,9 @@
  * @module components/inventory/inventory-item-row
  */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useFixedMenu } from '@/hooks/useFixedMenu'
 import type { KitState, ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
 import { inventoryOriginLabel } from '@/lib/inventory/container'
 import { InventoryGlyph } from './inventory-glyph'
@@ -54,51 +55,10 @@ interface InventoryItemRowProps {
 }
 
 const MENU_ITEM = 'block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50'
-/** Room the ⋮ menu wants below its button before it opens upward instead. */
-const MENU_ROOM = 340
-const MENU_GAP = 4
-
-/**
- * Where the ⋮ menu sits: fixed to the viewport beside its button, so the
- * browser's scrolling list cannot clip it, opening upward when the room below
- * is short and the room above is longer.
- */
-function menuPlacement(button: HTMLElement): CSSProperties {
-  const rect = button.getBoundingClientRect()
-  const below = window.innerHeight - rect.bottom - MENU_GAP
-  const above = rect.top - MENU_GAP
-  const up = below < MENU_ROOM && above > below
-  return {
-    position: 'fixed',
-    right: Math.max(MENU_GAP, window.innerWidth - rect.right),
-    ...(up ? { bottom: window.innerHeight - rect.top + MENU_GAP } : { top: rect.bottom + MENU_GAP }),
-    maxHeight: Math.max(120, up ? above : below),
-    overflowY: 'auto',
-  }
-}
-
 export function InventoryItemRow({ item, manageable, actions, equip, selection, folderCrumb }: InventoryItemRowProps) {
   const menuRef = useRef<HTMLDivElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
-  const menuOpen = menuStyle !== null
-  const setMenuOpen = useCallback((open: boolean) => setMenuStyle(open && buttonRef.current ? menuPlacement(buttonRef.current) : null), [])
-  const closeMenu = useCallback(() => setMenuStyle(null), [])
+  const { anchorRef: buttonRef, menuStyle, open: menuOpen, setOpen: setMenuOpen, close: closeMenu } = useFixedMenu(menuRef)
   useClickOutside(menuRef, closeMenu, { enabled: menuOpen, onEscape: closeMenu, escapeCapture: true })
-  // A fixed menu would drift from its button, so any scroll or resize outside it closes it.
-  useEffect(() => {
-    if (!menuOpen) return
-    const onScroll = (event: Event) => {
-      if (menuRef.current && event.target instanceof Node && menuRef.current.contains(event.target)) return
-      closeMenu()
-    }
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', closeMenu)
-    return () => {
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', closeMenu)
-    }
-  }, [menuOpen, closeMenu])
 
   const label = item.title || item.name
   const showName = !!item.title && item.title.trim().toLowerCase() !== item.name.trim().toLowerCase()
@@ -180,7 +140,7 @@ export function InventoryItemRow({ item, manageable, actions, equip, selection, 
           ⋮
         </button>
         {menuOpen && (
-          <div role="menu" style={menuStyle ?? undefined} className="z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md">
+          <div role="menu" style={menuStyle ?? undefined} className="z-30 min-w-[14rem] rounded border qt-border-default qt-bg-popover shadow-md">
             <ul className="divide-y qt-border-default">
               {manageable && (
                 <li>

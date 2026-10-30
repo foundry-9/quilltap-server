@@ -81,7 +81,7 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 top-full z-30 mt-1 rounded border qt-border-default qt-bg-default shadow-md max-h-64 overflow-y-auto"
+          className="absolute left-0 right-0 top-full z-30 mt-1 rounded border qt-border-default qt-bg-popover shadow-md max-h-64 overflow-y-auto"
         >
           <div className="p-2">
             <input

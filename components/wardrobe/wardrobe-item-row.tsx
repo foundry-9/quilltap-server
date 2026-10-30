@@ -34,7 +34,8 @@
  * …` / `Never worn`); an item read without a `wear` annotation is never worn.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { useFixedMenu } from '@/hooks/useFixedMenu'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { WARDROBE_SLOT_META, isComposite as isCompositeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
@@ -150,15 +151,27 @@ export function WardrobeItemRow({
   const originLabel = wardrobeOriginLabel(item.origin)
   const selectMode = selection !== undefined
 
-  const [slotPickerOpen, setSlotPickerOpen] = useState(false)
-  const [kebabOpen, setKebabOpen] = useState(false)
   const slotPickerRef = useRef<HTMLDivElement>(null)
   const kebabRef = useRef<HTMLDivElement>(null)
+  // Both popovers are fixed to the viewport so the dialog's scrolling list
+  // cannot clip them under its footer.
+  const {
+    anchorRef: slotPickerAnchorRef,
+    menuStyle: slotPickerStyle,
+    open: slotPickerOpen,
+    setOpen: setSlotPickerOpen,
+    close: closeSlotPicker,
+  } = useFixedMenu(slotPickerRef, 240)
+  const {
+    anchorRef: kebabAnchorRef,
+    menuStyle: kebabStyle,
+    open: kebabOpen,
+    setOpen: setKebabOpen,
+    close: closeKebab,
+  } = useFixedMenu(kebabRef)
 
   // Popovers close on an outside click or Escape — the Escape swallowed in the
   // capture phase so the enclosing dialog stays open.
-  const closeSlotPicker = useCallback(() => setSlotPickerOpen(false), [])
-  const closeKebab = useCallback(() => setKebabOpen(false), [])
   useClickOutside(slotPickerRef, closeSlotPicker, {
     enabled: slotPickerOpen,
     onEscape: closeSlotPicker,
@@ -184,7 +197,7 @@ export function WardrobeItemRow({
       onAddToSlot(item, item.types[0])
       return
     }
-    setSlotPickerOpen((v) => !v)
+    setSlotPickerOpen(!slotPickerOpen)
   }
 
   const addTooltip =
@@ -313,28 +326,34 @@ export function WardrobeItemRow({
           {inChat && onAddToSlot && (
             <div className="relative">
               <button
+                ref={slotPickerAnchorRef}
                 type="button"
                 onClick={handleAddClick}
                 disabled={selectMode}
                 className="qt-button-ghost qt-button-sm"
                 title={addTooltip}
                 aria-label={addTooltip}
+                aria-haspopup={item.types.length > 1 ? 'menu' : undefined}
+                aria-expanded={item.types.length > 1 ? slotPickerOpen : undefined}
               >
                 +
               </button>
               {slotPickerOpen && item.types.length > 1 && (
                 <div
                   ref={slotPickerRef}
-                  className="absolute right-0 top-full mt-1 z-30 min-w-[10rem] rounded border qt-border-default qt-bg-default shadow-md"
+                  role="menu"
+                  style={slotPickerStyle ?? undefined}
+                  className="z-30 min-w-[10rem] rounded border qt-border-default qt-bg-popover shadow-md"
                 >
                   <ul className="divide-y qt-border-default">
                     {item.types.map((slot) => (
                       <li key={slot}>
                         <button
                           type="button"
+                          role="menuitem"
                           onClick={() => {
                             onAddToSlot(item, slot)
-                            setSlotPickerOpen(false)
+                            closeSlotPicker()
                           }}
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
                         >
@@ -352,8 +371,9 @@ export function WardrobeItemRow({
           {/* Kebab menu — item actions */}
           <div className="relative" ref={kebabRef}>
               <button
+                ref={kebabAnchorRef}
                 type="button"
-                onClick={() => setKebabOpen((v) => !v)}
+                onClick={() => setKebabOpen(!kebabOpen)}
                 disabled={selectMode}
                 className="qt-button-ghost qt-button-sm"
                 aria-label="More actions"
@@ -366,7 +386,8 @@ export function WardrobeItemRow({
               {kebabOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
+                  style={kebabStyle ?? undefined}
+                  className="z-30 min-w-[14rem] rounded border qt-border-default qt-bg-popover shadow-md"
                 >
                   <ul className="divide-y qt-border-default">
                     {manageable && (
@@ -376,7 +397,7 @@ export function WardrobeItemRow({
                             type="button"
                             role="menuitem"
                             onClick={() => {
-                              setKebabOpen(false)
+                              closeKebab()
                               onEdit(item)
                             }}
                             className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
@@ -391,7 +412,7 @@ export function WardrobeItemRow({
                               role="menuitem"
                               disabled={isGeneratingImage}
                               onClick={() => {
-                                setKebabOpen(false)
+                                closeKebab()
                                 onGenerateImage(item)
                               }}
                               className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
@@ -406,7 +427,7 @@ export function WardrobeItemRow({
                             role="menuitem"
                             disabled={isUpdatingDefault}
                             onClick={() => {
-                              setKebabOpen(false)
+                              closeKebab()
                               onToggleDefault(item)
                             }}
                             className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
@@ -421,7 +442,7 @@ export function WardrobeItemRow({
                             type="button"
                             role="menuitem"
                             onClick={() => {
-                              setKebabOpen(false)
+                              closeKebab()
                               onDuplicate(item)
                             }}
                             className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
@@ -435,7 +456,7 @@ export function WardrobeItemRow({
                               type="button"
                               role="menuitem"
                               onClick={() => {
-                                setKebabOpen(false)
+                                closeKebab()
                                 onToggleArchived(item)
                               }}
                               className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
@@ -452,7 +473,7 @@ export function WardrobeItemRow({
                           type="button"
                           role="menuitem"
                           onClick={() => {
-                            setKebabOpen(false)
+                            closeKebab()
                             onMoveToFolder(item)
                           }}
                           className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
@@ -467,7 +488,7 @@ export function WardrobeItemRow({
                           type="button"
                           role="menuitem"
                           onClick={() => {
-                            setKebabOpen(false)
+                            closeKebab()
                             onCopyToFolder(item)
                           }}
                           className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
@@ -481,7 +502,7 @@ export function WardrobeItemRow({
                         type="button"
                         role="menuitem"
                         onClick={() => {
-                          setKebabOpen(false)
+                          closeKebab()
                           onMove(item)
                         }}
                         className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
@@ -494,7 +515,7 @@ export function WardrobeItemRow({
                         type="button"
                         role="menuitem"
                         onClick={() => {
-                          setKebabOpen(false)
+                          closeKebab()
                           onCopy(item)
                         }}
                         className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
@@ -508,7 +529,7 @@ export function WardrobeItemRow({
                           type="button"
                           role="menuitem"
                           onClick={() => {
-                            setKebabOpen(false)
+                            closeKebab()
                             onDelete(item)
                           }}
                           className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"

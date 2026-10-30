@@ -8,7 +8,8 @@
  * @module components/item-browser/ItemFolderRow
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useFixedMenu } from '@/hooks/useFixedMenu'
 import { Icon } from '@/components/ui/icon'
 
 export interface ItemFolderRowView {
@@ -33,7 +34,8 @@ export interface ItemFolderRowProps {
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export function ItemFolderRow({ row, manageable, onOpen, onRename, onDelete, testId, countNoun = 'item' }: ItemFolderRowProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const { anchorRef, menuStyle, open: menuOpen, setOpen: setMenuOpen, close: closeMenu } = useFixedMenu(menuRef, 120)
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(row.name)
 
@@ -76,22 +78,24 @@ export function ItemFolderRow({ row, manageable, onOpen, onRename, onDelete, tes
       )}
       <span className="qt-text-xs qt-text-secondary flex-shrink-0">{plural(row.itemCount, countNoun)}</span>
       {manageable && !renaming && (
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
+            ref={anchorRef}
             type="button"
             className="qt-button-ghost qt-button-sm"
             aria-label={`Folder actions for ${row.name}`}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => setMenuOpen(!menuOpen)}
           >
             ⋮
           </button>
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full mt-1 z-30 min-w-[10rem] rounded border qt-border-default qt-bg-default shadow-md"
-              onMouseLeave={() => setMenuOpen(false)}
+              style={menuStyle ?? undefined}
+              className="z-30 min-w-[10rem] rounded border qt-border-default qt-bg-popover shadow-md"
+              onMouseLeave={() => closeMenu()}
             >
               <ul className="divide-y qt-border-default">
                 <li>
@@ -100,7 +104,7 @@ export function ItemFolderRow({ row, manageable, onOpen, onRename, onDelete, tes
                     role="menuitem"
                     className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
                     onClick={() => {
-                      setMenuOpen(false)
+                      closeMenu()
                       setName(row.name)
                       setRenaming(true)
                     }}
@@ -114,7 +118,7 @@ export function ItemFolderRow({ row, manageable, onOpen, onRename, onDelete, tes
                     role="menuitem"
                     className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
                     onClick={() => {
-                      setMenuOpen(false)
+                      closeMenu()
                       onDelete()
                     }}
                   >

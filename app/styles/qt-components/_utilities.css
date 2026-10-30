@@ -58,6 +58,15 @@
   }
 
   /**
+   * Popover background - the opaque surface for dropdowns and menus.
+   * Never use a page-background utility (bg-background, qt-bg-default) for a
+   * floating panel: themes with textured backdrops clear those to transparent.
+   */
+  .qt-bg-popover {
+    background-color: var(--qt-popover-bg);
+  }
+
+  /**
    * Muted background - subtle, de-emphasized background
    * Use for badges, tags, secondary UI elements
    */

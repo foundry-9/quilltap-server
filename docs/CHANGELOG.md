@@ -4,6 +4,14 @@
 
 ### 4.12-dev
 
+#### Fix: see-through dropdowns and menus that let clicks fall through
+
+- The header search dropdown, the search dialog, the Generate Image and entity-search pickers, the Brahma model picker and the wardrobe, inventory and folder menus used page-background colors (`bg-background`, `qt-bg-default`, `qt-bg-surface`). Art Deco, Great Estate and Madman's Box set `.bg-background` to transparent so their backdrop shows, which made those panels see-through. They now use a new `qt-bg-popover` utility (`--qt-popover-bg`). The two roleplay-template editor dialogs and the task-details dialog use `qt-dialog` for the same reason.
+- `qt-card-interactive:hover` lifts the card with `translate`, which makes the card a stacking context. An open ⋮ menu was trapped inside its row, so later rows' buttons drew on top of it and took its clicks. A `qt-card` or `qt-card-interactive` that contains an open popup (`[aria-haspopup][aria-expanded="true"]`) now gets `position: relative; z-index: 20; translate: none`. Only `translate` is cleared: the CSS build merges `transform: none` with it into `translate3d(0,0,0)`, which would trap fixed menus.
+- Menus inside scrolling lists were clipped by the list and drawn under the wardrobe dialog's footer. The inventory row's viewport-fixed placement (opens upward when there's no room below, closes on outside scroll or resize) is now the shared `useFixedMenu` hook (`hooks/useFixedMenu.ts`), used by the inventory and wardrobe item rows (⋮ menu and slot picker), the item-browser folder row and the scenario row.
+- The wardrobe slot picker's button now has `aria-haspopup` / `aria-expanded`, and the picker has `role="menu"` / `menuitem`.
+- `@quilltap/theme-storybook` 1.0.93 mirrors `qt-bg-popover` and the open-popup card rule.
+
 #### Anthropic: move to API version 2026-10-21; drop temperature and top_p
 
 - The Anthropic plugin (1.0.64) no longer pins `anthropic-version: 2023-06-01`. It now uses the SDK's default, `2026-10-21`.

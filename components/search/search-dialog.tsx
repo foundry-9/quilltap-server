@@ -249,7 +249,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
       {/* Dialog */}
       <div className="fixed inset-x-4 top-16 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl z-[101]">
         <div
-          className="bg-background rounded-lg shadow-2xl overflow-hidden"
+          className="qt-bg-popover rounded-lg shadow-2xl overflow-hidden"
           ref={dialogRef}
           role="dialog"
           aria-modal="true"

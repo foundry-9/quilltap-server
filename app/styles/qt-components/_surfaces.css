@@ -45,6 +45,18 @@
   }
 
   /**
+   * A card whose dropdown is open rises above its siblings. Without this the
+   * hover lift turns the card into a stacking context, its menu is trapped
+   * inside it, and later cards' buttons paint over the menu and take its clicks.
+   */
+  .qt-card:has([aria-haspopup][aria-expanded="true"]),
+  .qt-card-interactive:has([aria-haspopup][aria-expanded="true"]) {
+    position: relative;
+    z-index: 20;
+    translate: none;
+  }
+
+  /**
    * Entity card - for character and chat list items
    * Extends qt-card-interactive with flex column layout
    */
