@@ -81,6 +81,13 @@ async function deleteEmptyFolder(input: {
     throw new FileOpError(`Folder is not empty: ${rel}. Only empty folders can be deleted.`, 'CONFLICT');
   }
   await fs.rmdir(abs);
+  // The scanner's row for the folder goes with it, or the listing keeps it.
+  const repos = getRepositories();
+  const row = await repos.docMountFolders.findByMountPointAndPath(mp.id, rel);
+  if (row) {
+    await repos.docMountFolders.delete(row.id);
+    logger.debug('Removed filesystem folder row with the folder', { mountPointId: mp.id, path: rel });
+  }
   return { mountPointId: mp.id, path: rel };
 }
 
@@ -137,6 +144,32 @@ async function moveFolderWithinMount(input: {
 
   const oldPrefix = `${fromRel}/`;
   const newPrefix = `${toRel}/`;
+
+  // The scanner records a filesystem store's folders as rows too. Carry them
+  // along in place (ids kept, so the moved links' folderId stays right), or
+  // the old path lingers in the listing beside the new one.
+  const folderRows = await repos.docMountFolders.findByMountPointId(mp.id);
+  const sourceRow = folderRows.find((f) => f.path === fromRel);
+  if (sourceRow) {
+    const destDir = path.posix.dirname(toRel);
+    let parentId: string | null = null;
+    if (destDir !== '.') {
+      const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
+      parentId = await ensureFolderPath(mp.id, destDir);
+    }
+    await repos.docMountFolders.update(sourceRow.id, { parentId, name: path.posix.basename(toRel), path: toRel });
+    for (const row of folderRows) {
+      if (row.path.startsWith(oldPrefix)) {
+        await repos.docMountFolders.update(row.id, { path: newPrefix + row.path.slice(oldPrefix.length) });
+      }
+    }
+    logger.debug('Moved filesystem folder rows with the folder', {
+      mountPointId: mp.id,
+      fromPath: fromRel,
+      toPath: toRel,
+      rows: 1 + folderRows.filter((r) => r.path.startsWith(oldPrefix)).length,
+    });
+  }
   const links = await repos.docMountFileLinks.findByMountPointId(mp.id);
   for (const link of links) {
     if (!link.relativePath.startsWith(oldPrefix)) continue;

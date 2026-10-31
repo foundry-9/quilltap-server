@@ -4,6 +4,27 @@
 
 ### 4.12-dev
 
+#### Scriptorium folder browser (folder-browser Phase 4)
+
+- A store's detail page now browses its files with the shared folder browser: breadcrumb, folder rows (empty ones included), file rows, search across the whole store, select mode, and a ⋮ menu on every file and folder. It replaces `FileTable`.
+- New `components/document-browser/`:
+  - `useDocumentStoreSource`: the store's record and listing as TanStack queries under `mountPoints.store(id)`, so realtime events refresh it. Each write calls an existing mount-point verb and then invalidates every store it touched.
+  - `DocumentStoreBrowser` and `DocumentRow`. File menu: Open, Rename (in place), Move to…, Copy to…, Hard link to…, Where else this appears…, Unlink, Edit description…, Open in Pascal's Workbench, Download, Delete. Folder menu: Rename, Move to…, Copy to…, Delete (recursive, with a confirmation that says so). Batch Move, Copy and Delete in select mode. Upload goes into the current folder, on any writable store.
+  - `DocumentDestinationDialog`: a store select over the shared folder picker. Hard links are offered only where `linkFile` can succeed: database ↔ database, or within one filesystem store.
+  - `DocumentViewer` / `DocumentViewerModal`: read-only image, PDF, Markdown, text and `.docx` viewers. The new `FilePreviewDocx` sanitises the server's HTML with DOMPurify. The PDF and Markdown viewers load on demand.
+- Shared pieces:
+  - `lib/folder-browser/preview-kind.ts`: `previewKindOf` (`image | pdf | docx | markdown | text | unsupported`) and `mimeTypeForName`. `getPreviewType` now calls it.
+  - `lib/folder-browser/document-actions.ts`: the `BrowserAction` vocabulary, `documentFileActions` / `documentFolderActions` (gated by the store's capabilities), and `canLinkBetween`.
+  - `ItemFolderPickerDialog` is now `DestinationPickerDialog`. It adds a `link` mode and an optional container chooser; the Wardrobe and Inventory pickers use it unchanged.
+  - `FolderBrowserShell` takes `manageFolders`, so a read-only store hides its folder controls.
+  - New `buildMountFileRawUrl`, and query keys `mountPoints.content` and `mountPoints.rendered`.
+- `useDocumentStoreDetail` now reads the store through the shared TanStack query. The page's counts follow live updates, and the file list moved into the browser.
+- Fixed: `ItemActionMenu` focuses its entries with `preventScroll`. Focusing the first entry could scroll an enclosing workspace pane, and that scroll closed the menu as soon as it opened.
+- Fixed: on a filesystem store, moving a folder now moves its `doc_mount_folders` rows with it, and deleting a folder removes its row. Before, the old path stayed in the store's listing.
+- Removed the SVAR file-manager beta: `components/files/svar/`, its tests, the `@svar-ui/react-filemanager` dependency and its About-page credits. Also removed the unused `DocumentStoreFile` and `DocumentStoreBlob` types.
+- Help: `help/mount-points.md` gains "Browsing a Store", and its upload and hard-link text is updated.
+- Tests: `document-actions.test.ts`, `document-store-browser.test.tsx`, `folder-ops-fs-move.test.ts`.
+
 #### Document-store API for the folder browser (folder-browser Phase 3)
 
 - `GET /api/v1/mount-points/[id]/files` now returns `DocMountBrowserEntry` rows from the new `DocMountFileLinksRepository.listForBrowser`. `extractedText` is dropped (no UI read it from the listing). Each row gains `linkGroupId` and `linkCount` (links in any store sharing its content row).

@@ -281,6 +281,10 @@ export const queryKeys = {
     files: (id: string) => ['mount-points', 'store', id, 'files'] as const,
     /** Where one file appears (`GET …/[id]/files/<path>?action=links`). */
     links: (id: string, path: string) => ['mount-points', 'store', id, 'links', path] as const,
+    /** One file's text, for a viewer (`GET …/[id]/files/<path>`). */
+    content: (id: string, path: string) => ['mount-points', 'store', id, 'content', path] as const,
+    /** One `.docx` rendered for viewing (`GET …/[id]/files/<path>?action=render-html`). */
+    rendered: (id: string, path: string) => ['mount-points', 'store', id, 'rendered', path] as const,
   },
   tags: {
     all: ['tags'] as const,

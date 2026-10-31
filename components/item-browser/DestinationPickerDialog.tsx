@@ -1,18 +1,22 @@
 'use client'
 
 /**
- * "Move to folder…" / "Copy to folder…" for any folder-of-items tier — pick
- * where in one tier to file one or more items.
+ * "Move to…" / "Copy to…" / "Hard link to…" for any folder-of-items browser
+ * — the wardrobe's and the Inventory's tiers, the Scriptorium's stores: pick
+ * the folder (and, where the caller offers one, the container) something
+ * goes to.
  *
- * The tier's folder tree as an indented list, top level first; for a move,
- * the folder the items already share is shown but can't be chosen (a copy
- * may land beside its original). **New folder…** opens an input under the
- * highlighted folder and creates it there, then highlights it. The caller
- * supplies the tree, the folder creator and any extra choice (the wardrobe's
- * components fieldset) as `children`; **Move** / **Copy** hands the folder to
+ * The container's folder tree as an indented list, top level first; for a
+ * move, the folder the items already share is shown but can't be chosen (a
+ * copy or a link may land beside its original). **New folder…** opens an
+ * input under the highlighted folder and creates it there, then highlights
+ * it. The caller supplies the tree, the folder creator, an optional
+ * container chooser (`container`, rendered above the tree; changing
+ * `containerKey` clears the highlight) and any extra choice (the wardrobe's
+ * components fieldset) as `children`; the submit button hands the folder to
  * `onSubmit`.
  *
- * @module components/item-browser/ItemFolderPickerDialog
+ * @module components/item-browser/DestinationPickerDialog
  */
 
 import { useState, type ReactNode } from 'react'
@@ -21,12 +25,18 @@ import { Icon } from '@/components/ui/icon'
 import { folderName, folderSegments, isSameFolder, joinFolder } from '@/lib/mount-index/item-folders'
 import { showErrorToast } from '@/lib/toast'
 
-export interface ItemFolderPickerDialogProps {
+export type DestinationMode = 'move' | 'copy' | 'link'
+
+export interface DestinationPickerDialogProps {
   isOpen: boolean
-  mode: 'move' | 'copy'
+  mode: DestinationMode
   /** What is being moved, for the title. */
   subject: string
-  /** The tier's folder paths. */
+  /** A container chooser shown above the tree (a store select). */
+  container?: ReactNode
+  /** The chosen container's key; a change clears the highlighted folder. */
+  containerKey?: string
+  /** The container's folder paths. */
   folders: ReadonlyArray<{ path: string }>
   loading: boolean
   /** The root row's label, e.g. `Wardrobe (top level)`. */
@@ -45,10 +55,18 @@ export interface ItemFolderPickerDialogProps {
   children?: ReactNode
 }
 
-export function ItemFolderPickerDialog({
+const VERBS: Record<DestinationMode, { verb: string; working: string; title: string }> = {
+  move: { verb: 'Move', working: 'Moving…', title: 'Move' },
+  copy: { verb: 'Copy', working: 'Copying…', title: 'Copy' },
+  link: { verb: 'Link', working: 'Linking…', title: 'Hard link' },
+}
+
+export function DestinationPickerDialog({
   isOpen,
   mode,
   subject,
+  container,
+  containerKey = '',
   folders,
   loading,
   rootLabel,
@@ -60,8 +78,10 @@ export function ItemFolderPickerDialog({
   onClose,
   onSubmit,
   children,
-}: ItemFolderPickerDialogProps) {
-  const [highlighted, setHighlighted] = useState<string | null>(null)
+}: DestinationPickerDialogProps) {
+  const [highlight, setHighlight] = useState<{ key: string; path: string | null }>({ key: containerKey, path: null })
+  const highlighted = highlight.key === containerKey ? highlight.path : null
+  const setHighlighted = (path: string | null) => setHighlight({ key: containerKey, path })
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
 
@@ -74,7 +94,7 @@ export function ItemFolderPickerDialog({
     mode === 'move' && currentFolder !== null && isSameFolder(path, currentFolder)
   const target = highlighted
   const canSubmit = target !== null && !isCurrent(target) && !working
-  const verb = mode === 'move' ? 'Move' : 'Copy'
+  const { verb, working: workingLabel, title } = VERBS[mode]
 
   const submitNewFolder = async (): Promise<void> => {
     const name = newFolderName.trim()
@@ -125,7 +145,7 @@ export function ItemFolderPickerDialog({
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${verb} ${subject} to a folder`}
+      title={`${title} ${subject} to a folder`}
       maxWidth="md"
       closeOnClickOutside={!working}
       closeOnEscape={!working}
@@ -149,13 +169,14 @@ export function ItemFolderPickerDialog({
               disabled={!canSubmit}
               onClick={() => target !== null && void onSubmit(target)}
             >
-              {working ? (mode === 'move' ? 'Moving…' : 'Copying…') : verb}
+              {working ? workingLabel : verb}
             </button>
           </div>
         </div>
       )}
     >
       <p className="qt-text-xs qt-text-secondary mb-2">{note}</p>
+      {container}
       {loading ? (
         <div className="text-sm qt-text-secondary px-2 py-3">Loading folders…</div>
       ) : (

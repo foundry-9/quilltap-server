@@ -3,6 +3,7 @@
  */
 
 import { FileInfo } from '../types'
+import { previewKindOf } from '@/lib/folder-browser/preview-kind'
 
 export type PreviewType = 'image' | 'pdf' | 'text' | 'unsupported'
 
@@ -55,21 +56,14 @@ export interface FilePreviewActionsProps {
 
 /**
  * Determine the preview type for a file based on its MIME type and isPlainText flag
+ * (`previewKindOf`, narrowed to the viewers this modal has: Markdown reads as
+ * text, and DOCX — which only the document-store viewer renders — as unsupported).
  * @param mimeType The file's MIME type
  * @param isPlainText Optional flag from text detection (if true, file is previewable as text)
  */
 export function getPreviewType(mimeType: string, isPlainText?: boolean): PreviewType {
-  if (mimeType.startsWith('image/')) return 'image'
-  if (mimeType === 'application/pdf') return 'pdf'
-  if (
-    isPlainText ||
-    mimeType.startsWith('text/') ||
-    mimeType === 'application/json' ||
-    mimeType === 'application/javascript' ||
-    mimeType === 'application/typescript' ||
-    mimeType === 'application/xml'
-  ) {
-    return 'text'
-  }
-  return 'unsupported'
+  const kind = previewKindOf({ mimeType, isPlainText })
+  if (kind === 'markdown') return 'text'
+  if (kind === 'docx') return 'unsupported'
+  return kind
 }

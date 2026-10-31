@@ -143,6 +143,7 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
       <DocumentStoreDetailView
         storeId={selectedStoreId}
         onBack={() => setSelectedStoreId(null)}
+        onOpenStore={setSelectedStoreId}
       />
     )
   }

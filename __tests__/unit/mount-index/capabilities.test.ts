@@ -5,7 +5,7 @@
  * light costumes can't drift apart, and so a mount mid-conversion (or scanning,
  * for the convert action) correctly refuses the mutating verbs.
  *
- * Pure function — no DB, no logging, no SVAR. The route handler does the logging.
+ * Pure function — no DB, no logging. The route handler does the logging.
  */
 
 import { deriveMountCapabilities } from '@/lib/mount-index/capabilities';

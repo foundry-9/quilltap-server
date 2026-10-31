@@ -262,9 +262,6 @@ export function AboutView() {
             <span className="font-medium">Data Fetching:</span> TanStack Query
           </div>
           <div>
-            <span className="font-medium">File Manager:</span> SVAR
-          </div>
-          <div>
             <span className="font-medium">Desktop:</span> Electron
           </div>
           <div>
@@ -376,7 +373,7 @@ export function AboutView() {
           <p><span className="font-medium">AI &amp; LLM:</span> OpenAI SDK, Anthropic SDK, Google GenAI SDK, OpenRouter SDK, Model Context Protocol SDK</p>
           <p><span className="font-medium">Markdown &amp; Documents:</span> unified, remark-parse, remark-gfm, remark-math, remark-rehype, rehype-stringify, rehype-highlight, rehype-katex, remark-breaks, remark-smartypants, KaTeX, react-markdown, react-syntax-highlighter, mammoth, PDF.js, yaml, jsonrepair, MessagePack</p>
           <p><span className="font-medium">Diagrams:</span> Mermaid, Graphviz (@hpcc-js/wasm-graphviz), svg2roughjs, DOMPurify</p>
-          <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, @svar-ui/react-filemanager, sharp, Lucide Icons</p>
+          <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, sharp, Lucide Icons</p>
           <p><span className="font-medium">Terminals &amp; Realtime:</span> xterm.js, node-pty, ws, croner</p>
           <p><span className="font-medium">Filesystem &amp; Archives:</span> tar, yauzl, semver</p>
           <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Docker</p>

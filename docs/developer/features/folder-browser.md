@@ -1,6 +1,6 @@
 # One Folder Browser — Wardrobe, Inventory and the Scriptorium
 
-**Status:** Phases 1–3 done (2026-10-31). Phases 4–6 not started.
+**Status:** Phases 1–4 done (2026-10-31). Phases 5–6 not started.
 **Supersedes:** [svar-file-manager-implementation-plan.md](svar-file-manager-implementation-plan.md) — the SVAR route is abandoned in favour of growing the Wardrobe/Inventory browser into a shared library.
 
 ## Goal
@@ -347,3 +347,20 @@ Shipped as specified, with these details settled:
 - **Not yet covered:** a change made outside Quilltap to a filesystem store
   (picked up by the watcher or a rescan) does not publish yet.
 
+## Phase 4 as built (2026-10-31)
+
+Shipped as specified, with these details settled:
+
+- **Where things live.** `components/document-browser/`: `useDocumentStoreSource`, `DocumentStoreBrowser`, `DocumentRow`, `DocumentDestinationDialog`, `DocumentFileDialogs` (where else / description) and `DocumentViewer`. `DocumentViewer` is the body alone, so Phase 5's Document pane can host it; `DocumentViewerModal` wraps it for the Scriptorium.
+- **`DestinationPickerDialog`** is `ItemFolderPickerDialog` renamed and generalised: a `link` mode, a `container` slot above the tree, and `containerKey` to reset the highlight. The Wardrobe and Inventory pickers use it unchanged. Their transfer dialogs still pick a container only, because those transfers keep the folder path.
+- **`BrowserAction`** lives in `lib/folder-browser/document-actions.ts` and is used only by document rows. Wardrobe and Inventory rows keep their own richer menus.
+- **Links shown.** "Where else", Unlink and the chip are offered only for a deliberate hard link (`linkGroupId`). Files that merely share a content row (identical bytes, most often empty files) are independent and are not marked. The chip carries no count, because `linkCount` includes coincidental sharers.
+- **Hard link targets.** Database ↔ database between any stores; filesystem only within one store (a cross-store link may cross devices, which `linkFile` refuses as `EXDEV`).
+- **Viewers.** Images and PDFs read `?raw=1`; text reads `?encoding=utf-8` (a text file stored as a blob reads as base64 by default); `.docx` reads `?action=render-html` and is sanitised with DOMPurify in `FilePreviewDocx`.
+- **Uploads** go into the current folder on any writable store. On a filesystem store a file of a kind the store does not index is written to disk but not listed.
+- **Fixes found live:**
+  - `ItemActionMenu` now focuses with `preventScroll`. In a workspace tab, the focus scrolled the pane, and the scroll closed the menu.
+  - Filesystem folder move and delete now carry `doc_mount_folders` rows along. Before, a moved or deleted folder lingered in the listing.
+- **Live check (V4test):**
+  - Database stores: viewers for image, PDF, `.docx` and Markdown; hard link into another store; Where else → Go there; unlink; delete; folder rename, copy to another store, and recursive delete.
+  - A temporary filesystem store: an inode-sharing hard link, a folder move, and a recursive delete.

@@ -3,7 +3,7 @@
 /**
  * "Move to folder…" / "Copy to folder…" — pick where in one wardrobe to file
  * one or more items, or copies of them. The picker itself is the shared
- * `ItemFolderPickerDialog` (`components/item-browser/`); this adds the
+ * `DestinationPickerDialog` (`components/item-browser/`); this adds the
  * wardrobe's folder tree and the outfit components choice.
  *
  * The wardrobe's folder tree (`?action=folders`) as an indented list with the
@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { ItemFolderPickerDialog } from '@/components/item-browser/ItemFolderPickerDialog'
+import { DestinationPickerDialog } from '@/components/item-browser/DestinationPickerDialog'
 import { useWardrobeFolderMutations, useWardrobeFolders } from '@/lib/hooks/use-wardrobe-folders'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import {
@@ -83,7 +83,7 @@ export function WardrobeFolderPickerDialog({
       : `${outfits.length} of these are outfits, bundling ${componentCount} ${componentCount === 1 ? 'component' : 'components'} between them`
 
   return (
-    <ItemFolderPickerDialog
+    <DestinationPickerDialog
       isOpen={isOpen}
       mode={mode}
       subject={subject}
@@ -115,6 +115,6 @@ export function WardrobeFolderPickerDialog({
           />
         </div>
       )}
-    </ItemFolderPickerDialog>
+    </DestinationPickerDialog>
   )
 }

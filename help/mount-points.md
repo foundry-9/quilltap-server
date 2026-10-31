@@ -29,7 +29,7 @@ Database-backed stores accept a wider palette than their filesystem cousins. Mar
 
 ### Unified Uploads and the Blob Layer
 
-Every document store — regardless of backend — may hold binary assets. On database-backed stores, the **Upload** button at the top of the file list is the one-stop entrance for *anything*: Markdown, images, PDFs, Word documents, or arbitrary binaries. Uploaded files slide into the same table as scanned files, with a badge indicating their type and a row you can expand for further details: thumbnail (for images), MIME type, original filename, extraction status, and a description field that feeds the semantic search pipeline. The expanded row also offers an **Open bytes** link (the raw file in a fresh tab) and a **Download** button that retrieves the file under its original name — with a proper native save dialog in the desktop application, no right-clicking required.
+Every document store — regardless of backend — may hold binary assets. The **Upload here** button at the foot of a store's file browser is the one-stop entrance for *anything*: Markdown, images, PDFs, Word documents, or arbitrary binaries, delivered into whichever folder you are presently browsing. On a database-backed store everything uploaded is indexed and listed; on a filesystem store the file is written to disk and indexed when it is of a kind the store reads (Markdown, text, PDF, Word and the like) — anything else lands on disk but stays off the list, as the scanner would leave it. Every file, uploaded or scanned, then appears in the browser described below under [Browsing a Store](#browsing-a-store).
 
 For PDF and DOCX uploads, Quilltap extracts the plain text at the moment of ingestion, files it alongside the original bytes, chunks it, and enqueues embedding jobs — which means your AI collaborators can search the *contents* of PDFs in the same breath as your Markdown notes, without you having to pre-convert anything. When a character calls `doc_read_file` on a PDF or DOCX in a database-backed store, they receive the extracted text with a small note indicating the content was derived from the binary (the original bytes remain available separately through the blob endpoint).
 
@@ -72,7 +72,7 @@ Document stores are managed from the **Scriptorium** page, accessible via the da
 - **Scan** a store to discover new, modified, or deleted files — click the Scan button on any store's card or detail page
 - **Convert** a filesystem or Obsidian store *to* database-backed, or **Deconvert** a database-backed store *back* to filesystem — more on this most civilized piece of magic below
 - **Delete** a store, which removes all indexed data (the original files on disk are never touched)
-- **Inspect** individual files by clicking through to a store's detail page, where you can see each file's type, size, conversion status, embedding chunk count, and last-modified date
+- **Browse** a store's files and folders by clicking through to its detail page — see [Browsing a Store](#browsing-a-store)
 
 You may also manage document stores through the API at `/api/v1/mount-points` if you prefer the programmatic approach.
 
@@ -140,21 +140,44 @@ When the Scriptorium's folder picker opens inside a container, it begins at the 
 
 Rebuilding disturbs nothing you own: your data directory and your document stores are passed through from the host, and only the container itself is replaced. Should you prefer to make these arrangements by hand, `--no-store-mounts` will stay the script's hand entirely.
 
+## Browsing a Store
+
+A store's detail page lays out its contents the way the Wardrobe and the Inventory lay out theirs: a breadcrumb across the top, the folders of the present level as rows (empty ones included), then the files that sit directly inside. Click a folder to step into it and a crumb to step back out. Type in **Search this store…** and the folders politely stand aside while every file whose path matches is listed, each with the folder it lives in written beneath its name.
+
+**Looking at a file.** Click a file's name and it opens, read-only, in a viewer suited to its kind: images and PDFs as themselves, Markdown rendered and plain text shown as text, and Word documents (`.docx`) rendered as a reading copy — headings, emphasis, lists, tables and links survive the journey, though finer typography does not. Anything else offers its particulars and a **Download** button. Nothing in the viewer can alter the file.
+
+**The ⋮ menu on a file** offers, as the store permits:
+
+- **Open** and **Download**
+- **Rename** — in place, on the row; press Enter to keep the new name or Escape to think better of it
+- **Move to…** and **Copy to…** — choose a store (this one or any other that will take it) and a folder within it, making a **New folder…** on the spot if the right one does not exist yet
+- **Hard link to…** — the same file at a second address (see [Hard Links Between Shelves](#hard-links-between-shelves)); offered only where a link can succeed
+- **Where else this appears…** and **Unlink from its twins** — on a hard-linked file
+- **Edit description…** — the searchable description or transcript of an image, PDF or Word document in a database-backed store
+- **Open in Pascal's Workbench** — on a custom tool's definition in `Tools/`
+- **Delete**
+
+**The ⋮ menu on a folder** offers **Rename**, **Move to…**, **Copy to…** and **Delete**. Moving or copying a folder carries everything inside it, to this store or another. Deleting a folder deletes what is inside it too, after a confirmation that says so in as many words; on a filesystem store it declines if the folder holds files the store does not index, so nothing on your disk vanishes unseen.
+
+**Several at once.** **Select** puts a checkbox on every file; tick what you like and **Move…**, **Copy…** or **Delete** them together.
+
+The menus keep to what a store can actually do: a disabled store, or one partway through a conversion, offers viewing and downloading and nothing more. And the page keeps itself current — a file a character writes, or one you add from another window, appears without your reaching for Reload.
+
 ## Hard Links Between Shelves
 
 As of this revision, a single file in a database-backed document store may inhabit more than one shelf at a time. Imagine the Lantern paints a moody backdrop for your story and deposits the resulting `.webp` into its private gallery; later your character Friday decides she rather likes that very portrait and wishes to keep a copy in her own vault under a different name. In days past, this required minting an entirely new copy of the bytes — duplicate storage, duplicate embedding work, duplicate everything. No longer. The Scriptorium now treats each file's bytes as a single, content-addressable item, and each visible location of it (mount + path) as a hard link in the venerable filesystem sense. Two consumers may point at the same image without copying it; either may rewrite its description or re-extract its caption without disturbing the other; and when the last link to a file is withdrawn, the bytes themselves are politely retired.
 
-This applies only to database-backed mounts; filesystem and Obsidian mounts continue to keep their files on disk where each path is its own physical artefact. The user interface for orchestrating hard links across stores is still in fitting, but the underlying machinery is in place and quietly avoiding duplicate work whenever the same bytes turn up in more than one store.
+Between database-backed stores a link may cross from any store to any other. Filesystem and Obsidian stores keep their files on disk, where a link is the operating system's own hard link; there it is offered only within the one store, since a link between two stores may need to cross from one disk to another, which no filesystem permits. A link never crosses between the two kinds of store — copy instead. Make one from a file's ⋮ menu with **Hard link to…**, or with `quilltap docs link`.
 
 ### One File, Two Shelves — And It Stays That Way
 
-A link made deliberately, with `quilltap docs link`, now behaves as any reader of the old filesystems would expect: the two shelf-marks name **one** document. Amend it at either address and the amendment appears at both, immediately and without ceremony. Search results, character context, and the extracted text on both sides are brought up to date together; only the private annotations — a description you wrote for one shelf, a caption the machinery extracted for the other — remain each location's own business, as they always have.
+A link made deliberately — from the ⋮ menu or with `quilltap docs link` — now behaves as any reader of the old filesystems would expect: the two shelf-marks name **one** document. Amend it at either address and the amendment appears at both, immediately and without ceremony. Search results, character context, and the extracted text on both sides are brought up to date together; only the private annotations — a description you wrote for one shelf, a caption the machinery extracted for the other — remain each location's own business, as they always have.
 
-Do note the distinction between a link and a coincidence. Because Quilltap files bytes by their fingerprint, two documents that happen to be *identical* — two empty files, two copies of the same boilerplate heading — occupy a single shelf beneath the floorboards purely by economy. Those are **not** linked, and editing one leaves the other entirely undisturbed. Only a link you asked for is a link. `quilltap docs ls --links` reports this honestly: the count beside a file is the number of deliberate links to it, not the number of unrelated documents that happen to weigh the same.
+Do note the distinction between a link and a coincidence. Because Quilltap files bytes by their fingerprint, two documents that happen to be *identical* — two empty files, two copies of the same boilerplate heading — occupy a single shelf beneath the floorboards purely by economy. Those are **not** linked, and editing one leaves the other entirely undisturbed. Only a link you asked for is a link. The browser marks a linked file **Hard-linked**, and its **Where else this appears…** lists every address it answers to; `quilltap docs ls --links` reports this honestly: the count beside a file is the number of deliberate links to it, not the number of unrelated documents that happen to weigh the same.
 
 A copy (`quilltap docs copy`) is likewise its own document from the moment you make it, notwithstanding that it economises on storage until one side or the other is amended.
 
-Should you dissolve a link by deleting one of its addresses, the survivor reverts to being an ordinary, unaccompanied document. And when a revision leaves an old set of bytes with no shelf-mark at all pointing to it, those bytes are now retired promptly rather than lingering in the cellar — a small housekeeping oversight, corrected, which also sweeps up whatever had accumulated there before.
+Should you dissolve a link — with **Unlink from its twins**, which leaves that address keeping its present contents as a document of its own, or by deleting one of its addresses — the survivor reverts to being an ordinary, unaccompanied document. And when a revision leaves an old set of bytes with no shelf-mark at all pointing to it, those bytes are now retired promptly rather than lingering in the cellar — a small housekeeping oversight, corrected, which also sweeps up whatever had accumulated there before.
 
 ## Searching Documents
 

@@ -81,9 +81,11 @@ export function ItemActionMenu({
 
   useClickOutside(containerRef, close, { enabled: open, onEscape: closeAndRefocus, escapeCapture: true })
 
-  // Opening the menu puts focus on its first enabled entry.
+  // Opening the menu puts focus on its first enabled entry — without
+  // scrolling: the menu is fixed to the viewport, and a scroll the focus
+  // provoked in an enclosing pane (a workspace tab) would close it again.
   useEffect(() => {
-    if (open) enabledMenuItems(listRef.current)[0]?.focus()
+    if (open) enabledMenuItems(listRef.current)[0]?.focus({ preventScroll: true })
   }, [open])
 
   const onMenuKeyDown = (event: KeyboardEvent<HTMLUListElement>): void => {
@@ -101,7 +103,7 @@ export function ItemActionMenu({
     }
     if (next === null) return
     event.preventDefault()
-    buttons[next].focus()
+    buttons[next].focus({ preventScroll: true })
   }
 
   if (items.length === 0) return null

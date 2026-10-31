@@ -2,14 +2,14 @@
 
 /**
  * "Move to folder…" / "Copy to folder…" for Inventory objects: the shared
- * `ItemFolderPickerDialog` over one tier's `Inventory/` folders. A copy is a
+ * `DestinationPickerDialog` over one tier's `Inventory/` folders. A copy is a
  * new object (offered only for copyable ones); the server refuses the rest.
  *
  * @module components/inventory/InventoryFolderPickerDialog
  */
 
 import { useState } from 'react'
-import { ItemFolderPickerDialog } from '@/components/item-browser/ItemFolderPickerDialog'
+import { DestinationPickerDialog } from '@/components/item-browser/DestinationPickerDialog'
 import { useInventoryFolders } from '@/lib/hooks/use-inventory'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { folderCrumb, isSameFolder } from '@/lib/inventory/folders'
@@ -38,7 +38,7 @@ export function InventoryFolderPickerDialog({
   const subject = items.length === 1 ? `"${items[0].title || items[0].name}"` : `${items.length} objects`
 
   return (
-    <ItemFolderPickerDialog
+    <DestinationPickerDialog
       isOpen
       mode={mode}
       subject={subject}

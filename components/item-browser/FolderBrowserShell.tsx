@@ -57,6 +57,11 @@ export interface FolderBrowserShellProps<T extends Item> {
   }
   /** More ⋮ entries on a folder row (Move to…, Copy to…). */
   folderEntries?: (row: FolderRowView) => readonly MenuEntryLike[]
+  /**
+   * Whether folders here can be made, renamed and deleted; defaults to the
+   * state's `managed` (a read-only document store turns it off).
+   */
+  manageFolders?: boolean
   /** Cap the list's height (a dialog) instead of letting it grow (a card). */
   scrollList?: boolean
   /** Anything else inside the section (dialogs the browser mounts). */
@@ -77,6 +82,7 @@ export function FolderBrowserShell<T extends Item>({
   footer,
   folderHandlers,
   folderEntries,
+  manageFolders,
   scrollList = true,
   children,
 }: FolderBrowserShellProps<T>) {
@@ -84,7 +90,7 @@ export function FolderBrowserShell<T extends Item>({
     currentTier,
     currentFolder,
     inOwnTier,
-    managed,
+    managed: stateManaged,
     navigate,
     currentTierLabel,
     selectMode,
@@ -97,6 +103,7 @@ export function FolderBrowserShell<T extends Item>({
     folderIsEmpty,
     searching,
   } = state
+  const managed = stateManaged && (manageFolders ?? true)
 
   return (
     <section className="flex flex-col min-h-0 relative">
