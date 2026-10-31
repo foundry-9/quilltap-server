@@ -130,6 +130,22 @@ export function documentFolderActions(store: BrowserStore): BrowserAction[] {
   return actions
 }
 
+/**
+ * A store file Document Mode shows read-only instead of editing (an image, a
+ * PDF, a `.docx`, any other binary): where to read its bytes and what the
+ * viewer needs to know. The server sends one with an open or a read of such a
+ * file; text files have none and open in the editor.
+ */
+export interface DocumentViewTarget {
+  mountPointId: string
+  relativePath: string
+  fileName: string
+  fileType: string
+  fileSizeBytes: number
+  originalMimeType: string | null
+  updatedAt: string
+}
+
 /** The viewer a document-store row opens in. */
 export function documentPreviewKind(file: BrowserFile) {
   return previewKindOf({ name: file.fileName, mimeType: file.originalMimeType, fileType: file.fileType })

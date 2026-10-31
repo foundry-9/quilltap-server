@@ -34,7 +34,8 @@ import {
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import { getErrorMessage } from '@/lib/error-utils';
-import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory';
+import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import path from 'path';
 import fs from 'fs/promises';
@@ -242,6 +243,56 @@ export interface OpenedDocumentFile {
   mtime?: number;
   /** True when a new blank document was created (no `filePath` was given). */
   isNew: boolean;
+  /** Set for a file shown read-only (not text); `content` is then empty. */
+  viewer?: DocumentViewTarget;
+}
+
+/** Thrown when an editor write targets a file Document Mode only views. */
+export class DocumentReadOnlyError extends Error {}
+
+/**
+ * Whether a resolved document is one Document Mode shows read-only rather
+ * than edits: any file in a document store that is not a text file. Its
+ * bytes are never read as text — the viewer fetches them itself, and no
+ * model is handed them through Document Mode. Null for a text file, for a
+ * file outside a store (the legacy project and general areas, which the
+ * viewer cannot address), and for a store file that does not exist.
+ */
+export async function documentViewTargetFor(resolved: ResolvedPath): Promise<DocumentViewTarget | null> {
+  if (isTextFile(resolved.relativePath) || !resolved.mountPointId) return null;
+  const link = await getRepositories().docMountFileLinks.findByMountPointAndPath(
+    resolved.mountPointId,
+    resolved.relativePath,
+  );
+  if (link) {
+    return {
+      mountPointId: resolved.mountPointId,
+      relativePath: link.relativePath,
+      fileName: link.fileName,
+      fileType: link.fileType,
+      fileSizeBytes: link.fileSizeBytes,
+      originalMimeType: link.originalMimeType ?? null,
+      updatedAt: link.updatedAt,
+    };
+  }
+  if (resolved.mountType === 'database' || !resolved.absolutePath) return null;
+  // A file on disk the store does not index (its kind is outside the
+  // include patterns) is still there to look at.
+  try {
+    const stat = await fs.stat(resolved.absolutePath);
+    if (!stat.isFile()) return null;
+    return {
+      mountPointId: resolved.mountPointId,
+      relativePath: resolved.relativePath,
+      fileName: path.basename(resolved.relativePath),
+      fileType: 'blob',
+      fileSizeBytes: stat.size,
+      originalMimeType: null,
+      updatedAt: stat.mtime.toISOString(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -262,6 +313,17 @@ export async function openDocumentFile(
         filePath: params.filePath,
         mountPoint: params.mountPoint,
       });
+      const viewer = await documentViewTargetFor(resolved);
+      if (viewer) {
+        logger.debug('openDocumentFile: opening read-only', { filePath: params.filePath, mountPointId: viewer.mountPointId });
+        return {
+          filePath: params.filePath,
+          displayTitle: params.title || path.basename(params.filePath),
+          content: '',
+          isNew: false,
+          viewer,
+        };
+      }
       const fileData = await readFileWithMtime(resolved);
       content = fileData.content;
       mtime = fileData.mtime;
@@ -331,6 +393,10 @@ export async function writeDocumentFile(
     filePath: params.filePath,
     mountPoint: params.mountPoint,
   });
+
+  if (await documentViewTargetFor(resolved)) {
+    throw new DocumentReadOnlyError(`${params.filePath} is shown read-only and cannot be written from the editor`);
+  }
 
   let mtime: number;
   try {

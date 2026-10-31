@@ -33,7 +33,9 @@ import {
   computeRenameTarget,
   renameDocumentFile,
   deleteDocumentFile,
+  documentViewTargetFor,
   DocumentConflictError,
+  DocumentReadOnlyError,
   type DocumentAccessContext,
 } from './operator-doc-actions';
 
@@ -139,6 +141,12 @@ export async function readDocumentResponse(
   }
 
   try {
+    // A file Document Mode only views is never read as text: the viewer
+    // fetches its bytes from the store itself.
+    const viewer = await documentViewTargetFor(resolved);
+    if (viewer) {
+      return successResponse({ content: '', viewer });
+    }
     const fileData = await readFileWithMtime(resolved);
     return successResponse({
       content: fileData.content,
@@ -185,6 +193,11 @@ export async function writeDocumentResponse(
     return { ok: true, mtime };
   } catch (error) {
     const message = getErrorMessage(error);
+
+    if (error instanceof DocumentReadOnlyError) {
+      logger.warn(`Refused an editor write to a read-only ${log.subject}`, { ...log.fields, filePath: params.filePath });
+      return { ok: false, response: badRequest(message) };
+    }
 
     if (error instanceof DocumentConflictError) {
       logger.warn(`${capitalize(log.subject)} save conflict detected`, {

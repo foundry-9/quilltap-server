@@ -188,6 +188,7 @@ async function handleOpenDocument(
       content: opened.content,
       mtime: opened.mtime,
       isNew: opened.isNew,
+      ...(opened.viewer ? { viewer: opened.viewer } : {}),
     });
   } catch (error) {
     if (error instanceof DocumentMissingError) {

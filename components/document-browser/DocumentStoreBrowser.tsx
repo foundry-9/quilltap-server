@@ -16,7 +16,7 @@
  * @module components/document-browser/DocumentStoreBrowser
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { FolderBrowserShell } from '@/components/item-browser/FolderBrowserShell'
 import { pluralize, useFolderBrowserState, useItemFolderHandlers, type ItemFolderOps } from '@/components/item-browser/useFolderBrowserState'
@@ -48,6 +48,14 @@ export interface DocumentStoreBrowserProps {
   onOpenStore?: (mountPointId: string) => void
   /** Cap the list's height (a dialog) instead of letting it grow with the page. */
   scrollList?: boolean
+  /**
+   * Pick mode (Document Mode's picker): opening a file hands it here instead
+   * of showing it in the viewer. The ⋮ menus stay, so housekeeping can be
+   * done without leaving the picker.
+   */
+  onPickFile?: (entry: DocumentEntry) => void
+  /** More footer buttons, given the folder being browsed (the picker's New document here). */
+  footerActions?: (currentFolder: string) => ReactNode
 }
 
 type Transfer =
@@ -56,7 +64,13 @@ type Transfer =
 
 const tierOf = () => OWN_TIER
 
-export function DocumentStoreBrowser({ storeId, onOpenStore, scrollList = false }: DocumentStoreBrowserProps) {
+export function DocumentStoreBrowser({
+  storeId,
+  onOpenStore,
+  scrollList = false,
+  onPickFile,
+  footerActions,
+}: DocumentStoreBrowserProps) {
   const router = useRouter()
   const workspace = useWorkspaceOptional()
   const { store, storeLoading, entries, tree, listingLoading, ops } = useDocumentStoreSource(storeId)
@@ -172,7 +186,8 @@ export function DocumentStoreBrowser({ storeId, onOpenStore, scrollList = false 
   const onAction = (action: BrowserAction, entry: DocumentEntry): void => {
     switch (action) {
       case 'open':
-        setViewing(entry)
+        if (onPickFile) onPickFile(entry)
+        else setViewing(entry)
         return
       case 'move':
       case 'copy':
@@ -384,20 +399,23 @@ export function DocumentStoreBrowser({ storeId, onOpenStore, scrollList = false 
         </>
       }
       footer={
-        caps.canWrite && (
-          <label className={`qt-button-primary qt-button-sm cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="sr-only"
-              aria-label="Upload files into this folder"
-              disabled={uploading}
-              onChange={(e) => void upload(e.target.files)}
-            />
-            {uploading ? 'Uploading…' : 'Upload here'}
-          </label>
-        )
+        <>
+          {footerActions?.(currentFolder)}
+          {caps.canWrite && (
+            <label className={`qt-button-primary qt-button-sm cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="sr-only"
+                aria-label="Upload files into this folder"
+                disabled={uploading}
+                onChange={(e) => void upload(e.target.files)}
+              />
+              {uploading ? 'Uploading…' : 'Upload here'}
+            </label>
+          )}
+        </>
       }
       folderHandlers={folderHandlers}
       folderEntries={folderEntries}

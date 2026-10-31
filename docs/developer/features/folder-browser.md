@@ -1,6 +1,6 @@
 # One Folder Browser — Wardrobe, Inventory and the Scriptorium
 
-**Status:** Phases 1–4 done (2026-10-31). Phases 5–6 not started.
+**Status:** Phases 1–5 done (2026-10-31). Phase 6 not started.
 **Supersedes:** [svar-file-manager-implementation-plan.md](svar-file-manager-implementation-plan.md) — the SVAR route is abandoned in favour of growing the Wardrobe/Inventory browser into a shared library.
 
 ## Goal
@@ -364,3 +364,15 @@ Shipped as specified, with these details settled:
 - **Live check (V4test):**
   - Database stores: viewers for image, PDF, `.docx` and Markdown; hard link into another store; Where else → Go there; unlink; delete; folder rename, copy to another store, and recursive delete.
   - A temporary filesystem store: an inode-sharing hard link, a folder move, and a recursive delete.
+
+## Phase 5 as built (2026-10-31)
+
+Shipped as specified, with these details settled:
+
+- **Picker.** `DocumentStoreBrowser` gained `onPickFile` (Open hands the file over instead of viewing it) and `footerActions(currentFolder)` (the picker's New document here). The picker's own store tree, breadcrumb and new-folder form are gone. The project and general libraries still use `FileBrowser`; retiring its mount mode is the separate clean-up named under "Retired".
+- **Which files are viewed.** `documentViewTargetFor` treats any store file that is not a text file (by `isTextFile`) as read-only. That covers images, PDFs and `.docx`, plus any other binary, which shows the fallback viewer with a download. A file outside a store (the legacy project and general areas) has no view target, because the viewer reads through the mount-point API.
+- **Wire shape.** `open-document` and `read-document` return `{ content: '', viewer }`, where `viewer` is a `DocumentViewTarget` (`lib/folder-browser/document-actions.ts`). The `open-document` action and the `chat_documents` row are unchanged, so the open set, reconcile and reload work as before. `write-document` refuses a viewed file.
+- **Model exposure.** None through Document Mode: the open announcement names the file only, and characters still reach a PDF's or `.docx`'s text through `doc_read_file`.
+- **Fix found live.** Nested dialogs: a `BaseModal` now ignores an outside click or Escape that belongs to another dialog (target or focus inside one, or any open `alertdialog`).
+- **Known, not changed:** a Markdown or text file stored as a blob in a database store (an upload through the blob route) cannot be opened in the editor, because `readDatabaseDocument` reads only the documents table. This predates the folder browser.
+- **Live check (V4test):** an image from a vault picked through the browser opened in a read-only tab and survived a reload. A PDF opened through the chat API rendered in its pane, and a write to it was refused with a 400. Both closed from their own Close buttons. In the picker: Copy to… stacked over it, Escape and inner clicks closed only that dialog, and a delete confirmation's Cancel and Escape left the picker open.

@@ -549,6 +549,7 @@ export async function handleOpenDocument(
       },
       content,
       mtime,
+      ...(opened.viewer ? { viewer: opened.viewer } : {}),
       librarianMessage: librarianMessage ?? null,
     });
   } catch (error) {

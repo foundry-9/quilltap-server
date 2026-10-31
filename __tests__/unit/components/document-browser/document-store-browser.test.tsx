@@ -3,7 +3,7 @@
  * `/api/v1/mount-points` API: folder rows and navigation, the ⋮ menu gated
  * by the store's capabilities and the row (hard links), rename through the
  * item route's PATCH, a recursive folder delete after a confirmation, and a
- * move through the destination dialog.
+ * move through the destination dialog, and pick mode (Document Mode's picker).
  */
 
 import React from 'react'
@@ -158,6 +158,23 @@ describe('DocumentStoreBrowser', () => {
         body: { sourcePath: 'notes.md', destMountPointId: 'store-b', destPath: 'Inbox/notes.md' },
       }),
     )
+  })
+
+  it('in pick mode, opening a file hands it over and the footer gets the extra buttons', async () => {
+    const onPickFile = jest.fn()
+    renderWithQuery(
+      <DocumentStoreBrowser
+        storeId="store-a"
+        onPickFile={onPickFile}
+        footerActions={(folder) => <button type="button">New here {folder || '(top)'}</button>}
+      />,
+    )
+    await screen.findByText('notes.md')
+    expect(screen.getByRole('button', { name: 'New here (top)' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'notes.md' }))
+    expect(onPickFile).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'notes.md' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Drafts' }))
+    expect(await screen.findByRole('button', { name: 'New here Drafts' })).toBeInTheDocument()
   })
 
   it('hides every write on a store that allows none', async () => {

@@ -5,7 +5,10 @@
  *
  * Two-step modal:
  * Step 1: Select source (new blank document, project library, mounted stores)
- * Step 2: Browse files within the selected scope
+ * Step 2: Browse files within the selected scope — a document store through
+ *         the Scriptorium's folder browser (`DocumentStoreBrowser` in pick
+ *         mode, ⋮ menus included), the project or general library through
+ *         `FileBrowser`
  *
  * Scriptorium Phase 3.5
  *
@@ -13,12 +16,14 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { DocumentStoreBrowser } from '@/components/document-browser/DocumentStoreBrowser'
+import type { DocumentEntry } from '@/components/document-browser/useDocumentStoreSource'
 import { Icon } from '@/components/ui/icon'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
-import { formatBytes } from '@/lib/utils/format-bytes'
 import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants'
+import { showErrorToast } from '@/lib/toast'
 
 interface DocumentPickerModalProps {
   isOpen: boolean
@@ -73,14 +78,6 @@ interface ProjectLibraryTarget {
   mountType: 'filesystem' | 'obsidian' | 'database'
 }
 
-interface MountPointFile {
-  id: string
-  relativePath: string
-  size?: number
-  mimeType?: string
-  updatedAt?: string
-}
-
 interface RecentDocument {
   id: string
   filePath: string
@@ -109,27 +106,11 @@ export default function DocumentPickerModal({
   // the "Project library" button browses/opens this mount (so browse and open
   // agree); when null it falls back to the legacy `project` filesystem scope.
   const [projectLibrary, setProjectLibrary] = useState<ProjectLibraryTarget | null>(null)
-  const [mountPointFiles, setMountPointFiles] = useState<MountPointFile[]>([])
-  // Folder rows from the server (populated for database-backed mounts) so
-  // empty folders show up too. Filesystem mounts don't currently track
-  // folder rows, so this stays empty for them.
-  const [mountPointFolders, setMountPointFolders] = useState<string[]>([])
-  const [mountPointFilesLoading, setMountPointFilesLoading] = useState(false)
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([])
   const [loading, setLoading] = useState(false)
   // "Look everywhere" widens the store accordions beyond this chat's reach to
   // every enabled store (character vaults of all characters, all doc stores).
   const [lookEverywhere, setLookEverywhere] = useState(false)
-  // Current folder path for mount point tree navigation (empty string = root)
-  const [currentFolder, setCurrentFolder] = useState('')
-  // Folders created during this session — surfaced in the listing even if
-  // they're empty and so wouldn't be derived from the indexed file paths.
-  const [createdFolders, setCreatedFolders] = useState<Set<string>>(new Set())
-  // Inline "new folder" form state
-  const [showNewFolderInput, setShowNewFolderInput] = useState(false)
-  const [newFolderName, setNewFolderName] = useState('')
-  const [creatingFolder, setCreatingFolder] = useState(false)
-  const [newFolderError, setNewFolderError] = useState<string | null>(null)
 
   const fetchAccessibleStores = async (all: boolean) => {
     try {
@@ -193,35 +174,10 @@ export default function DocumentPickerModal({
       setStep('source')
       setSelectedScope('project')
       setSelectedMountPoint(null)
-      setMountPointFiles([])
-      setMountPointFolders([])
-      setCurrentFolder('')
-      setCreatedFolders(new Set())
-      setShowNewFolderInput(false)
-      setNewFolderName('')
-      setNewFolderError(null)
-      setCreatingFolder(false)
       setLookEverywhere(false)
       setProjectLibrary(null)
     }
   }, [isOpen])
-
-  const fetchMountPointFiles = async (mp: MountPoint) => {
-    try {
-      setMountPointFilesLoading(true)
-      const res = await fetch(`/api/v1/mount-points/${mp.id}/files`)
-      if (res.ok) {
-        const data = await res.json()
-        setMountPointFiles(data.files || [])
-        setMountPointFolders(Array.isArray(data.folders) ? data.folders : [])
-        setCurrentFolder('')
-      }
-    } catch (error) {
-      console.error('[DocumentPickerModal] Failed to fetch mount point files', error)
-    } finally {
-      setMountPointFilesLoading(false)
-    }
-  }
 
   const handleNewBlank = useCallback(() => {
     onSelectDocument({})
@@ -241,11 +197,6 @@ export default function DocumentPickerModal({
     setSelectedScope(scope)
     setSelectedMountPoint(mp || null)
     setStep('browse')
-
-    // Fetch files for document stores
-    if (scope === 'document_store' && mp) {
-      fetchMountPointFiles(mp)
-    }
   }, [])
 
   const handleFileSelect = useCallback((file: FileInfo) => {
@@ -257,7 +208,7 @@ export default function DocumentPickerModal({
     onClose()
   }, [onSelectDocument, selectedScope, selectedMountPoint, onClose])
 
-  const handleMountPointFileSelect = useCallback((file: MountPointFile) => {
+  const handleMountPointFileSelect = useCallback((file: DocumentEntry) => {
     onSelectDocument({
       filePath: file.relativePath,
       scope: 'document_store',
@@ -269,7 +220,7 @@ export default function DocumentPickerModal({
   // Create a brand-new "Untitled Document.md" inside the currently-browsed
   // folder of the selected mount point. The server picks the actual filename
   // (with collision numbering); we just hand it the scope and target folder.
-  const handleNewBlankInFolder = useCallback(() => {
+  const handleNewBlankInFolder = useCallback((currentFolder: string) => {
     if (!selectedMountPoint) return
     onSelectDocument({
       scope: 'document_store',
@@ -277,150 +228,22 @@ export default function DocumentPickerModal({
       targetFolder: currentFolder || undefined,
     })
     onClose()
-  }, [onSelectDocument, selectedMountPoint, currentFolder, onClose])
+  }, [onSelectDocument, selectedMountPoint, onClose])
+
+  // "Where else this appears" → Go there: browse that store, named as the
+  // shelves name it (an unreachable store falls back to the browser's note).
+  const handleOpenOtherStore = useCallback((mountPointId: string) => {
+    const store = accessibleStores.find(s => s.mountPointId === mountPointId)
+    if (store) {
+      handleSelectScope('document_store', { id: store.mountPointId, name: store.name, type: store.mountType })
+    } else {
+      showErrorToast("That store is not on this chat's shelves. Tick Look everywhere to reach it.")
+    }
+  }, [accessibleStores, handleSelectScope])
 
   const handleBack = useCallback(() => {
     setStep('source')
-    setMountPointFiles([])
   }, [])
-
-  // Compute folders and files at the current folder level for mount point tree view
-  const mountPointEntries = useMemo(() => {
-    const prefix = currentFolder ? currentFolder + '/' : ''
-    const folderSet = new Set<string>()
-    const filesAtLevel: MountPointFile[] = []
-
-    for (const file of mountPointFiles) {
-      if (!file.relativePath.startsWith(prefix)) continue
-
-      const remainder = file.relativePath.substring(prefix.length)
-      const slashIndex = remainder.indexOf('/')
-
-      if (slashIndex === -1) {
-        // File at this level
-        filesAtLevel.push(file)
-      } else {
-        // Subfolder
-        folderSet.add(remainder.substring(0, slashIndex))
-      }
-    }
-
-    // Merge server-known folder rows (database-backed mounts) so empty
-    // folders are visible even though no file path implies them.
-    for (const fullPath of mountPointFolders) {
-      const lastSlash = fullPath.lastIndexOf('/')
-      const parent = lastSlash === -1 ? '' : fullPath.substring(0, lastSlash)
-      const name = lastSlash === -1 ? fullPath : fullPath.substring(lastSlash + 1)
-      if (parent === currentFolder && name) {
-        folderSet.add(name)
-      }
-    }
-
-    // Merge folders created in this session that aren't yet reflected in
-    // the fetched lists (e.g. created on a filesystem mount).
-    for (const fullPath of createdFolders) {
-      const lastSlash = fullPath.lastIndexOf('/')
-      const parent = lastSlash === -1 ? '' : fullPath.substring(0, lastSlash)
-      const name = lastSlash === -1 ? fullPath : fullPath.substring(lastSlash + 1)
-      if (parent === currentFolder && name) {
-        folderSet.add(name)
-      }
-    }
-
-    const folders = Array.from(folderSet).sort((a, b) => a.localeCompare(b))
-    filesAtLevel.sort((a, b) => {
-      const nameA = a.relativePath.split('/').pop() || ''
-      const nameB = b.relativePath.split('/').pop() || ''
-      return nameA.localeCompare(nameB)
-    })
-
-    return { folders, files: filesAtLevel }
-  }, [mountPointFiles, mountPointFolders, currentFolder, createdFolders])
-
-  const handleNavigateFolder = useCallback((folderName: string) => {
-    setCurrentFolder(prev => prev ? `${prev}/${folderName}` : folderName)
-    setShowNewFolderInput(false)
-    setNewFolderName('')
-    setNewFolderError(null)
-  }, [])
-
-  const handleNavigateUp = useCallback(() => {
-    setCurrentFolder(prev => {
-      const lastSlash = prev.lastIndexOf('/')
-      return lastSlash === -1 ? '' : prev.substring(0, lastSlash)
-    })
-    setShowNewFolderInput(false)
-    setNewFolderName('')
-    setNewFolderError(null)
-  }, [])
-
-  const handleStartNewFolder = useCallback(() => {
-    setNewFolderName('')
-    setNewFolderError(null)
-    setShowNewFolderInput(true)
-  }, [])
-
-  const handleCancelNewFolder = useCallback(() => {
-    setShowNewFolderInput(false)
-    setNewFolderName('')
-    setNewFolderError(null)
-  }, [])
-
-  const handleSubmitNewFolder = useCallback(async () => {
-    if (!selectedMountPoint) return
-    const name = newFolderName.trim()
-    if (!name) {
-      setNewFolderError('Enter a folder name.')
-      return
-    }
-    if (/[\/\\<>:"|?*\x00-\x1f]/.test(name) || name === '.' || name === '..') {
-      setNewFolderError('That name has characters folders cannot contain.')
-      return
-    }
-    const fullPath = currentFolder ? `${currentFolder}/${name}` : name
-    if (createdFolders.has(fullPath)) {
-      setNewFolderError('A folder by that name already exists here.')
-      return
-    }
-    // Avoid colliding with a folder we already see in the listing
-    if (mountPointEntries.folders.includes(name)) {
-      setNewFolderError('A folder by that name already exists here.')
-      return
-    }
-    try {
-      setCreatingFolder(true)
-      setNewFolderError(null)
-      const res = await fetch(`/api/v1/mount-points/${selectedMountPoint.id}/folders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: fullPath }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        const message = typeof data?.error === 'string' ? data.error : 'Could not create folder.'
-        setNewFolderError(message)
-        return
-      }
-      setCreatedFolders(prev => {
-        const next = new Set(prev)
-        next.add(fullPath)
-        return next
-      })
-      setShowNewFolderInput(false)
-      setNewFolderName('')
-    } catch (error) {
-      console.error('[DocumentPickerModal] Failed to create folder', error)
-      setNewFolderError('Could not create folder.')
-    } finally {
-      setCreatingFolder(false)
-    }
-  }, [selectedMountPoint, newFolderName, currentFolder, createdFolders, mountPointEntries.folders])
-
-  // Breadcrumb segments for current folder path
-  const folderBreadcrumbs = useMemo(() => {
-    if (!currentFolder) return []
-    return currentFolder.split('/')
-  }, [currentFolder])
 
   // On the standalone (chat-less) surface everything is already "everywhere":
   // the toggle disappears and the accordion descriptions read accordingly.
@@ -657,158 +480,26 @@ export default function DocumentPickerModal({
 
           {/* File browser — different component per scope */}
           <div className="flex-1 overflow-y-auto">
-            {selectedScope === 'document_store' ? (
-              /* Mount point folder tree */
+            {selectedScope === 'document_store' && selectedMountPoint ? (
+              /* The Scriptorium's folder browser, in pick mode: opening a
+                 file opens it in Document Mode; its ⋮ menus stay. */
               <div className="p-2">
-                {mountPointFilesLoading ? (
-                  <div className="text-center py-8 qt-text-muted text-sm">Loading files...</div>
-                ) : (
-                  <div className="space-y-0.5">
-                    {/* Breadcrumb path */}
-                    {currentFolder && (
-                      <div className="flex items-center gap-1 px-3 py-1.5 mb-1 text-xs qt-text-muted">
-                        <button
-                          onClick={() => setCurrentFolder('')}
-                          className="hover:qt-text-primary transition-colors"
-                        >
-                          {selectedMountPoint?.name || 'Root'}
-                        </button>
-                        {folderBreadcrumbs.map((segment, idx) => (
-                          <span key={idx} className="flex items-center gap-1">
-                            <span>/</span>
-                            <button
-                              onClick={() => setCurrentFolder(folderBreadcrumbs.slice(0, idx + 1).join('/'))}
-                              className={idx === folderBreadcrumbs.length - 1 ? 'qt-text-primary font-medium' : 'hover:qt-text-primary transition-colors'}
-                            >
-                              {segment}
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Up navigation */}
-                    {currentFolder && (
-                      <button
-                        onClick={handleNavigateUp}
-                        aria-label="Up one folder"
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
-                      >
-                        <Icon name="arrow-left" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
-                        <span className="text-sm qt-text-secondary">..</span>
-                      </button>
-                    )}
-
-                    {/* New document here — creates "Untitled Document.md" in
-                        the currently-browsed folder. The server handles
-                        collision-safe naming so the user can pick the spot
-                        and rename later. */}
+                <DocumentStoreBrowser
+                  key={selectedMountPoint.id}
+                  storeId={selectedMountPoint.id}
+                  onPickFile={handleMountPointFileSelect}
+                  onOpenStore={handleOpenOtherStore}
+                  footerActions={(currentFolder) => (
                     <button
-                      onClick={handleNewBlankInFolder}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
+                      type="button"
+                      onClick={() => handleNewBlankInFolder(currentFolder)}
+                      className="qt-button-secondary qt-button-sm inline-flex items-center gap-1.5"
                     >
-                      <Icon name="file-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
-                      <span className="text-sm qt-text-secondary">New document here</span>
+                      <Icon name="file-plus" className="w-4 h-4" />
+                      New document here
                     </button>
-
-                    {/* New folder control */}
-                    {showNewFolderInput ? (
-                      <div className="flex flex-col gap-1 px-3 py-2 rounded-md qt-bg-surface-hover">
-                        <div className="flex items-center gap-2">
-                          <Icon name="folder-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
-                          <input
-                            aria-label="New folder name"
-                            type="text"
-                            autoFocus
-                            value={newFolderName}
-                            onChange={(e) => setNewFolderName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                void handleSubmitNewFolder()
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault()
-                                handleCancelNewFolder()
-                              }
-                            }}
-                            placeholder="New folder name"
-                            disabled={creatingFolder}
-                            className="flex-1 min-w-0 text-sm qt-input px-2 py-1 rounded"
-                          />
-                          <button
-                            onClick={() => void handleSubmitNewFolder()}
-                            disabled={creatingFolder || newFolderName.trim().length === 0}
-                            className="text-sm qt-button-primary px-2 py-1 rounded disabled:opacity-50"
-                          >
-                            {creatingFolder ? 'Creating…' : 'Create'}
-                          </button>
-                          <button
-                            onClick={handleCancelNewFolder}
-                            disabled={creatingFolder}
-                            className="text-sm qt-text-secondary hover:qt-text-primary px-2 py-1"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                        {newFolderError && (
-                          <div className="text-xs qt-text-destructive pl-6">{newFolderError}</div>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={handleStartNewFolder}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
-                      >
-                        <Icon name="folder-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
-                        <span className="text-sm qt-text-secondary">New folder</span>
-                      </button>
-                    )}
-
-                    {/* Folders */}
-                    {mountPointEntries.folders.map((folder) => (
-                      <button
-                        key={`folder-${folder}`}
-                        onClick={() => handleNavigateFolder(folder)}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
-                      >
-                        <Icon name="folder" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm qt-text-primary font-medium truncate">{folder}</div>
-                        </div>
-                        <Icon name="chevron-right" className="w-3 h-3 flex-shrink-0 qt-text-muted" />
-                      </button>
-                    ))}
-
-                    {/* Files */}
-                    {mountPointEntries.files.map((file) => {
-                      const fileName = file.relativePath.split('/').pop() || file.relativePath
-                      return (
-                        <button
-                          key={file.id}
-                          onClick={() => handleMountPointFileSelect(file)}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
-                        >
-                          <Icon name="file" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm qt-text-primary truncate" title={file.relativePath}>
-                              {fileName}
-                            </div>
-                          </div>
-                          {file.size != null && (
-                            <span className="text-xs qt-text-muted flex-shrink-0">
-                              {file.size != null ? formatBytes(file.size) : ''}
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-
-                    {/* Empty folder */}
-                    {mountPointEntries.folders.length === 0 && mountPointEntries.files.length === 0 && (
-                      <div className="text-center py-4 qt-text-muted text-sm">This folder is empty.</div>
-                    )}
-                  </div>
-                )}
+                  )}
+                />
               </div>
             ) : (
               /* Project or general library — use FileBrowser */

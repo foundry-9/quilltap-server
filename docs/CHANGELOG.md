@@ -4,6 +4,17 @@
 
 ### 4.12-dev
 
+#### Document Mode: folder browser in the picker, read-only viewers (folder-browser Phase 5)
+
+- The Open Document picker browses a store with `DocumentStoreBrowser` in pick mode, replacing its own tree, breadcrumb and new-folder form. Opening a file opens it in Document Mode, and the ⋮ menus stay. "New document here" moved into the browser's footer through the new `footerActions` prop. "Go there" switches to another store when the chat can reach it.
+- Store files that are not text (images, PDFs, `.docx`, other binaries) now open in Document Mode read-only:
+  - `documentViewTargetFor` (`lib/documents/operator-doc-actions.ts`) decides which files those are: any store file that is not a text file. `open-document` and `read-document`, on both the chat route and the standalone route, return a `viewer` target and empty content for them, and never read their bytes as text. `write-document` refuses them with a 400 (`DocumentReadOnlyError`).
+  - New `DocumentViewerPane` shows them with the Scriptorium's `DocumentViewer`, under a read-only ribbon with Download and Close. `DocumentPaneBinding` and `StandaloneDocumentView` pick it when the document has a `viewer`. The post-turn refetch skips these documents.
+  - The Librarian's open announcement is unchanged and carries no file contents.
+- Fixed: a `BaseModal` beneath another dialog closed with it. A click inside a dialog layered over it, Escape pressed there, or Escape with a confirmation open now reach only the dialog on top. `useClickOutside` now passes the event to its callbacks.
+- Help: `help/scriptorium.md` describes the picker's browser and the read-only viewers.
+- Tests: `operator-doc-view-targets.test.ts`, `BaseModal-layered.test.tsx`, and a pick-mode case in `document-store-browser.test.tsx`.
+
 #### Scriptorium folder browser (folder-browser Phase 4)
 
 - A store's detail page now browses its files with the shared folder browser: breadcrumb, folder rows (empty ones included), file rows, search across the whole store, select mode, and a ⋮ menu on every file and folder. It replaces `FileTable`.
