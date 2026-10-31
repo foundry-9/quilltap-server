@@ -46,24 +46,23 @@ import {
   type ResolvedInventoryItem,
 } from '@/lib/schemas/inventory.types';
 import { findDependents } from '@/lib/inventory/dependents';
+import { itemFolderActionHandlers } from '@/lib/mount-index/item-folder-routes';
 import { assertInventoryImageChoice } from '@/lib/inventory/item-images';
 import {
   clearOverrides,
   copyInventoryItemsToFolder,
   duplicateInventoryItem,
-  createInventoryFolder,
   createInventoryItem,
-  deleteInventoryFolder,
   deleteInventoryItem,
   detach,
   instantiate,
   moveInventoryItemsToFolder,
-  renameInventoryFolder,
+  INVENTORY_FOLDER_KIND,
   updateInventoryItem,
 } from '@/lib/inventory/item-mutations';
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { loadInventoryPool, loadPoolForLocation, type InventoryPool } from '@/lib/inventory/pool';
-import { withInventoryErrors } from '@/lib/inventory/routes/responses';
+import { inventoryErrorResponse, withInventoryErrors } from '@/lib/inventory/routes/responses';
 
 type Params = Record<string, string>;
 
@@ -221,26 +220,14 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     return created({ item: { ...item, origin: location.origin } });
   }
 
-  async function handleCreateFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = inventoryFolderPathBodySchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, true);
-    if (!resolved.ok) return resolved.response;
-    return successResponse({ folder: await createInventoryFolder(resolved.location, body.path) });
-  }
-
-  async function handleRenameFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = renameInventoryFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    return successResponse({ folder: await renameInventoryFolder(resolved.location, body.path, body.name) });
-  }
-
-  async function handleDeleteFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = inventoryFolderPathBodySchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    return successResponse(await deleteInventoryFolder(resolved.location, body.path));
-  }
+  const folderActions = itemFolderActionHandlers<P, InventoryLocation>({
+    kind: INVENTORY_FOLDER_KIND,
+    logTag,
+    logIdKey,
+    resolveLocation,
+    errorResponse: inventoryErrorResponse,
+    schemas: { path: inventoryFolderPathBodySchema, rename: renameInventoryFolderSchema },
+  });
 
   async function handleFileItems(action: 'move' | 'copy', req: NextRequest, ctx: RequestContext, params: P) {
     const body = fileInventoryItemsSchema.parse(await req.json());
@@ -282,9 +269,7 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     withActionDispatch<P>(
       {
         instantiate: withInventoryErrors(handleInstantiate),
-        'create-folder': withInventoryErrors(handleCreateFolder),
-        'rename-folder': withInventoryErrors(handleRenameFolder),
-        'delete-folder': withInventoryErrors(handleDeleteFolder),
+        ...folderActions,
         'move-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('move', req, ctx, params)),
         'copy-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('copy', req, ctx, params)),
         duplicate: withInventoryErrors(handleDuplicate),

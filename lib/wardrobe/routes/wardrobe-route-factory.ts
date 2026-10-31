@@ -47,9 +47,8 @@ import { WardrobeComponentCycleError } from '@/lib/database/repositories/vault-o
 import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   copyWardrobeItemsSchema,
-  createWardrobeFolderSchema,
   createWardrobeSchema,
-  deleteWardrobeFolderSchema,
+  wardrobeFolderPathSchema,
   moveWardrobeItemsSchema,
   renameWardrobeFolderSchema,
   updateWardrobeSchema,
@@ -62,11 +61,8 @@ import {
   WardrobeItemNotInLocationError,
 } from '@/lib/wardrobe/item-mutations';
 import { fileItemsToFolder, FolderFilingRequestError } from '@/lib/wardrobe/folder-filing';
-import {
-  createWardrobeFolder,
-  deleteWardrobeFolder,
-  renameWardrobeFolder,
-} from '@/lib/wardrobe/folder-mutations';
+import { WARDROBE_FOLDER_KIND } from '@/lib/wardrobe/folder-mutations';
+import { itemFolderActionHandlers } from '@/lib/mount-index/item-folder-routes';
 import {
   WardrobeFolderConflictError,
   WardrobeFolderNotFoundError,
@@ -244,64 +240,14 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     return successResponse({ folders });
   }
 
-  async function handleCreateFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = createWardrobeFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, true);
-    if (!resolved.ok) return resolved.response;
-    try {
-      const folder = await createWardrobeFolder(resolved.location, body.path);
-      logger.info(`${logTag} Created wardrobe folder`, {
-        [logIdKey]: resolved.location.id,
-        userId: ctx.user.id,
-        mountPointId: resolved.location.mountPointId,
-        folder: folder.path,
-        context: 'wardrobe',
-      });
-      return successResponse({ folder });
-    } catch (error) {
-      return writeErrorResponse(error);
-    }
-  }
-
-  async function handleRenameFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = renameWardrobeFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    try {
-      const folder = await renameWardrobeFolder(resolved.location, body.path, body.name);
-      logger.info(`${logTag} Renamed wardrobe folder`, {
-        [logIdKey]: resolved.location.id,
-        userId: ctx.user.id,
-        mountPointId: resolved.location.mountPointId,
-        from: body.path,
-        to: folder.path,
-        context: 'wardrobe',
-      });
-      return successResponse({ folder });
-    } catch (error) {
-      return writeErrorResponse(error);
-    }
-  }
-
-  async function handleDeleteFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = deleteWardrobeFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    try {
-      const result = await deleteWardrobeFolder(resolved.location, body.path);
-      logger.info(`${logTag} Deleted wardrobe folder`, {
-        [logIdKey]: resolved.location.id,
-        userId: ctx.user.id,
-        mountPointId: resolved.location.mountPointId,
-        folder: body.path,
-        ...result,
-        context: 'wardrobe',
-      });
-      return successResponse(result);
-    } catch (error) {
-      return writeErrorResponse(error);
-    }
-  }
+  const folderActions = itemFolderActionHandlers<P, WardrobeLocation>({
+    kind: WARDROBE_FOLDER_KIND,
+    logTag,
+    logIdKey,
+    resolveLocation,
+    errorResponse: writeErrorResponse,
+    schemas: { path: wardrobeFolderPathSchema, rename: renameWardrobeFolderSchema },
+  })
 
   /**
    * `move-items` / `copy-items`: file items into one folder of this tier, an
@@ -401,9 +347,7 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   const POST = createContextParamsHandler<P>(
     withActionDispatch<P>({
       instructions: handlePostInstructions,
-      'create-folder': handleCreateFolder,
-      'rename-folder': handleRenameFolder,
-      'delete-folder': handleDeleteFolder,
+      ...folderActions,
       'move-items': handleMoveItems,
       'copy-items': handleCopyItems,
     }, async (req, ctx, params) => {

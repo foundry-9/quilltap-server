@@ -4,6 +4,18 @@
 
 ### 4.12-dev
 
+#### Shared server folder layer for the Wardrobe and the Inventory (folder-browser Phase 2)
+
+- New `lib/mount-index/item-folder-location.ts`:
+  - `ItemFolderLocation` is the folder half of a tier location; `WardrobeLocation` and `InventoryLocation` now extend it.
+  - `locationKey` is defined once here and re-exported by both location modules.
+  - Generic `createItemFolder`, `renameItemFolder`, `deleteItemFolder` and `moveItemsToFolderIn` take an `ItemFolderKind` (the kind's rules plus its path error). `lib/wardrobe/folder-mutations.ts`, `moveItemsToFolder` and the Inventory's folder and move functions are now one-line delegates (`WARDROBE_FOLDER_KIND`, `INVENTORY_FOLDER_KIND`).
+- New `lib/mount-index/item-folder-routes.ts`: `itemFolderActionHandlers` supplies `create-folder`, `rename-folder` and `delete-folder` to both route factories, each mapping errors through its own handler. Inventory folder actions now log at info level, as the Wardrobe's already did. `copy-items` stays per kind, and so does `move-items`, since the Wardrobe's moves can carry an outfit's components.
+- `createWardrobeFolderSchema` and `deleteWardrobeFolderSchema` merged into `wardrobeFolderPathSchema`.
+- The Wardrobe's cross-tier transfer logic moved out of `app/api/v1/wardrobe/transfers/route.ts` into `transferWardrobeItem` (`lib/wardrobe/transfers.ts`), with typed refusals (`WardrobeTransferSourceNotFoundError` → 404, `WardrobeTransferRefusedError` → 400). The route only parses the request and maps errors. Same rules and same responses.
+- Removed `GET /api/v1/wardrobe/transfers` (destination options); it had no callers after Phase 1. API.md updated.
+- Tests: `__tests__/unit/lib/mount-index/item-folder-location.test.ts`. The transfer route's GET test was removed.
+
 #### Shared folder browser for the Wardrobe and the Inventory (folder-browser Phase 1)
 
 - First phase of `docs/developer/features/folder-browser.md`, which replaces the SVAR plan: one folder-and-item browser library that the Wardrobe, the Inventory and (in later phases) the Scriptorium and Document Mode share.

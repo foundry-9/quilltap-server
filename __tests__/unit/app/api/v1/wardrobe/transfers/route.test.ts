@@ -69,7 +69,7 @@ jest.mock('@/lib/wardrobe/item-images', () => ({
 }))
 
 import { randomUUID } from 'crypto'
-import { GET, POST } from '@/app/api/v1/wardrobe/transfers/route'
+import { POST } from '@/app/api/v1/wardrobe/transfers/route'
 import {
   createInMount,
   deleteInMount,
@@ -225,35 +225,6 @@ describe('wardrobe transfer route', () => {
       json: async () => body,
     }
   }
-
-  it('GET returns destination buckets for General, projects, groups, and users', async () => {
-    mockCtx.repos.projects.findAll.mockResolvedValue([
-      { id: 'project-2', name: 'Beta Project' },
-      { id: 'project-1', name: 'Alpha Project' },
-    ])
-    mockCtx.repos.groups.findAll.mockResolvedValue([
-      { id: 'group-1', name: 'Main Cast' },
-    ])
-    mockCtx.repos.characters.findByUserId.mockResolvedValue([
-      { id: 'char-2', name: 'Zara' },
-      { id: 'char-1', name: 'Ada' },
-    ])
-
-    const res = await GET({ method: 'GET', url: 'http://localhost:3000/api/v1/wardrobe/transfers' } as any)
-    const body = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(body.destinations.general).toEqual({ available: true, label: 'Quilltap General' })
-    expect(body.destinations.projects).toEqual([
-      { id: 'project-1', name: 'Alpha Project' },
-      { id: 'project-2', name: 'Beta Project' },
-    ])
-    expect(body.destinations.groups).toEqual([{ id: 'group-1', name: 'Main Cast' }])
-    expect(body.destinations.users).toEqual([
-      { id: 'char-1', name: 'Ada' },
-      { id: 'char-2', name: 'Zara' },
-    ])
-  })
 
   it('POST copy regenerates UUID for destination item', async () => {
     seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Evening coat', description: 'black wool coat' })])

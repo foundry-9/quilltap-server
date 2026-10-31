@@ -43,6 +43,7 @@ import {
   type WardrobeMount,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
+import type { ItemFolderLocation } from '@/lib/mount-index/item-folder-location';
 import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
@@ -56,14 +57,12 @@ import {
 export const WardrobeScopeSchema = z.enum(['character', 'group', 'project', 'general']);
 export type WardrobeScope = z.infer<typeof WardrobeScopeSchema>;
 
-export interface WardrobeLocation {
+/**
+ * One wardrobe tier's `Wardrobe/` folder: the shared folder half
+ * (`ItemFolderLocation`) plus the wardrobe's item reads and writes.
+ */
+export interface WardrobeLocation extends ItemFolderLocation {
   scope: WardrobeScope;
-  /** Owner id; null for General. */
-  id: string | null;
-  /** The mount holding the `Wardrobe/` folder — always set, every tier. */
-  mountPointId: string;
-  /** The owning character — `character` scope only. */
-  characterId: string | null;
   /** What a collection read tags this tier's items with. */
   origin: WardrobeOrigin;
   /** Every item in the folder; archived ones only when asked. */
@@ -82,26 +81,7 @@ export interface WardrobeLocation {
     opts?: { requireAll?: boolean },
   ): Promise<WardrobeItem[]>;
   delete(id: string): Promise<boolean>;
-  /** Every folder under `Wardrobe/` (empty ones included), with direct item counts. */
   listFolders(): Promise<WardrobeFolder[]>;
-  /**
-   * Resolve an operator's requested folder against this wardrobe's folders
-   * (`resolveWardrobeFolder`): an existing folder as stored, else the new
-   * part normalised. Throws `WardrobeFolderPathError`.
-   */
-  resolveFolder(requested: string): Promise<string>;
-  /** Create a folder (normalised path); an existing one in any casing is answered. */
-  createFolder(path: string): Promise<WardrobeFolder>;
-  /** Rename a folder in place to `newName` (one normalised segment). */
-  renameFolder(path: string, newName: string): Promise<WardrobeFolder>;
-  /** Delete a folder, sending its items and subfolders up to its parent. */
-  deleteFolder(path: string): Promise<{ movedItems: number; movedFolders: number; parent: string }>;
-  /**
-   * The mount, checked for writing: throws `CharacterArchivedError` for an
-   * archived character. For writers that reach the folder without going
-   * through create/update/delete (dressing instructions, item pictures).
-   */
-  writableMountPointId(): Promise<string>;
 }
 
 export interface ResolveWardrobeLocationOptions {
@@ -109,10 +89,7 @@ export interface ResolveWardrobeLocationOptions {
   ensure?: boolean;
 }
 
-/** A key that names one folder, for "same source and destination?" checks. */
-export function locationKey(loc: Pick<WardrobeLocation, 'scope' | 'mountPointId'>): string {
-  return `${loc.scope}:${loc.mountPointId}`;
-}
+export { locationKey } from '@/lib/mount-index/item-folder-location';
 
 /**
  * Build a location over a folder. Writes re-resolve a character's mount at

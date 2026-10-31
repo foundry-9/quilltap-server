@@ -209,8 +209,8 @@ export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
   imageFileId: UUIDSchema.nullable().optional(),
 });
 
-/** `POST …/wardrobe?action=create-folder` body. */
-export const createWardrobeFolderSchema = z.object({
+/** `POST …/wardrobe?action=create-folder` / `delete-folder` body. */
+export const wardrobeFolderPathSchema = z.object({
   path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
 });
 
@@ -218,11 +218,6 @@ export const createWardrobeFolderSchema = z.object({
 export const renameWardrobeFolderSchema = z.object({
   path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
   name: z.string().min(1, 'A folder name is required').max(200),
-});
-
-/** `POST …/wardrobe?action=delete-folder` body. */
-export const deleteWardrobeFolderSchema = z.object({
-  path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
 });
 
 /**

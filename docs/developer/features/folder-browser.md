@@ -1,6 +1,6 @@
 # One Folder Browser — Wardrobe, Inventory and the Scriptorium
 
-**Status:** Phase 1 done (2026-10-31). Phases 2–6 not started.
+**Status:** Phases 1–2 done (2026-10-31). Phases 3–6 not started.
 **Supersedes:** [svar-file-manager-implementation-plan.md](svar-file-manager-implementation-plan.md) — the SVAR route is abandoned in favour of growing the Wardrobe/Inventory browser into a shared library.
 
 ## Goal
@@ -274,8 +274,17 @@ Each phase lands green and on its own.
 >   server keeps the folder path), and neither has a link mode, so building
 >   these now would be speculative.
 >
-> `GET /api/v1/wardrobe/transfers` lost its only UI caller; Phase 2 removes
-> it when the transfer logic moves to `lib/wardrobe/transfers.ts`.
+> `GET /api/v1/wardrobe/transfers` lost its only UI caller; Phase 2 removed
+> it.
+
+> **Phase 2 as built (2026-10-31).** Shipped as specified:
+> `lib/mount-index/item-folder-location.ts` (`ItemFolderLocation`,
+> `ItemFolderKind`, the generic folder mutations and `moveItemsToFolderIn`),
+> `lib/mount-index/item-folder-routes.ts` (`itemFolderActionHandlers` for
+> `create-folder`, `rename-folder` and `delete-folder`) and
+> `lib/wardrobe/transfers.ts`. One departure: `move-items` stays per kind
+> alongside `copy-items`, because the Wardrobe's moves go through
+> `fileItemsToFolder`, which can carry an outfit's components.
 
 1. **Shared client library.**
    - Build `lib/folder-browser/`, `useFolderBrowserState`, `ItemActionMenu`,

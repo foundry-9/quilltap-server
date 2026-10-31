@@ -53,20 +53,19 @@ import {
   type InventoryScope,
 } from '@/lib/schemas/inventory.types';
 import { resolveInventoryFolder, type InventoryFolder } from '@/lib/inventory/folders';
+import type { ItemFolderLocation } from '@/lib/mount-index/item-folder-location';
 
 export { InventoryScopeSchema, type InventoryScope } from '@/lib/schemas/inventory.types';
 
 /** What Quilltap General's objects are tagged with. */
 export const GENERAL_INVENTORY_ORIGIN: InventoryOrigin = { scope: 'general', id: null, name: 'Quilltap General' };
 
-export interface InventoryLocation {
+/**
+ * One Inventory tier's `Inventory/` folder: the shared folder half
+ * (`ItemFolderLocation`) plus the Inventory's record reads and writes.
+ */
+export interface InventoryLocation extends ItemFolderLocation {
   scope: InventoryScope;
-  /** Owner id; null for General. */
-  id: string | null;
-  /** The mount holding the `Inventory/` folder. */
-  mountPointId: string;
-  /** The owning character — `character` scope only. */
-  characterId: string | null;
   /** What a collection read tags this tier's objects with. */
   origin: InventoryOrigin;
   /** Every record in the folder; archived ones only when asked. Unresolved. */
@@ -83,19 +82,9 @@ export interface InventoryLocation {
    */
   delete(ids: readonly string[], followOn?: (remaining: InventoryRecord[]) => InventoryRecordPatch[]): Promise<string[]>;
   listFolders(): Promise<InventoryFolder[]>;
-  /** Resolve an operator's requested folder against this tier's folders. */
-  resolveFolder(requested: string): Promise<string>;
-  createFolder(path: string): Promise<InventoryFolder>;
-  renameFolder(path: string, newName: string): Promise<InventoryFolder>;
-  deleteFolder(path: string): Promise<{ movedItems: number; movedFolders: number; parent: string }>;
-  /** The mount, checked for writing (throws `CharacterArchivedError`). */
-  writableMountPointId(): Promise<string>;
 }
 
-/** A key naming one folder, for "same source and destination?" checks. */
-export function locationKey(loc: Pick<InventoryLocation, 'scope' | 'mountPointId'>): string {
-  return `${loc.scope}:${loc.mountPointId}`;
-}
+export { locationKey } from '@/lib/mount-index/item-folder-location';
 
 /** Idempotent: ensure a mount's `Inventory/` folder exists; failure is logged, not thrown. */
 async function ensureInventoryFolder(mountPointId: string): Promise<void> {

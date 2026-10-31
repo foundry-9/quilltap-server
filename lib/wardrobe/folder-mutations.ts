@@ -1,81 +1,48 @@
 /**
  * Folder mutations — the one way a wardrobe folder is created, renamed or
  * deleted. The folder routes (all four tiers, through the route factory) call
- * these, so the normalisation rules (`lib/wardrobe/folders.ts`) and the
- * logging live in one place; the location does the work.
- *
- * Folders are the operator's filing. An item's folder is its path under
- * `Wardrobe/` and nothing else: a rename moves the files, a delete sends
- * them up a level, and nothing here ever deletes an item.
+ * these; the normalisation, logging and work are the shared item-folder
+ * mutations (`lib/mount-index/item-folder-location.ts`) under the wardrobe's
+ * rules.
  *
  * Server-only.
  *
  * @module lib/wardrobe/folder-mutations
  */
 
-import { logger } from '@/lib/logger';
 import {
-  normalizeWardrobeFolderName,
+  createItemFolder,
+  deleteItemFolder,
+  renameItemFolder,
+  type ItemFolderKind,
+} from '@/lib/mount-index/item-folder-location';
+import {
+  WARDROBE_FOLDER_RULES,
   WardrobeFolderPathError,
   type WardrobeFolder,
 } from '@/lib/wardrobe/folders';
 import type { WardrobeLocation } from '@/lib/wardrobe/location';
 
+/** The wardrobe's folder kind: its rules and its path error. */
+export const WARDROBE_FOLDER_KIND: ItemFolderKind = {
+  rules: WARDROBE_FOLDER_RULES,
+  pathError: (message) => new WardrobeFolderPathError(message),
+};
+
 /** Create a folder at a location (an existing one, in any casing, is answered). */
-export async function createWardrobeFolder(
-  location: WardrobeLocation,
-  path: string,
-): Promise<WardrobeFolder> {
-  const resolved = await location.resolveFolder(path);
-  if (!resolved) throw new WardrobeFolderPathError('A folder needs a name');
-  const folder = await location.createFolder(resolved);
-  logger.debug('[FolderMutations] Created wardrobe folder', {
-    scope: location.scope,
-    mountPointId: location.mountPointId,
-    requested: path,
-    folder: folder.path,
-    itemCount: folder.itemCount,
-    context: 'wardrobe',
-  });
-  return folder;
+export function createWardrobeFolder(location: WardrobeLocation, path: string): Promise<WardrobeFolder> {
+  return createItemFolder(WARDROBE_FOLDER_KIND, location, path);
 }
 
 /** Rename a folder in place; its items follow because the path is the truth. */
-export async function renameWardrobeFolder(
-  location: WardrobeLocation,
-  path: string,
-  name: string,
-): Promise<WardrobeFolder> {
-  // The folder named is an existing one, matched as stored (hand-made
-  // spellings included); the store answers a missing one with a 404.
-  const from = path.trim().replace(/^\/+|\/+$/g, '');
-  const folder = await location.renameFolder(from, normalizeWardrobeFolderName(name));
-  logger.debug('[FolderMutations] Renamed wardrobe folder', {
-    scope: location.scope,
-    mountPointId: location.mountPointId,
-    from,
-    to: folder.path,
-    itemCount: folder.itemCount,
-    context: 'wardrobe',
-  });
-  return folder;
+export function renameWardrobeFolder(location: WardrobeLocation, path: string, name: string): Promise<WardrobeFolder> {
+  return renameItemFolder(WARDROBE_FOLDER_KIND, location, path, name);
 }
 
 /** Delete a folder, sending its items and subfolders up to its parent. */
-export async function deleteWardrobeFolder(
+export function deleteWardrobeFolder(
   location: WardrobeLocation,
   path: string,
 ): Promise<{ movedItems: number; movedFolders: number }> {
-  const folder = path.trim().replace(/^\/+|\/+$/g, '');
-  const { movedItems, movedFolders, parent } = await location.deleteFolder(folder);
-  logger.debug('[FolderMutations] Deleted wardrobe folder', {
-    scope: location.scope,
-    mountPointId: location.mountPointId,
-    folder,
-    parent,
-    movedItems,
-    movedFolders,
-    context: 'wardrobe',
-  });
-  return { movedItems, movedFolders };
+  return deleteItemFolder(WARDROBE_FOLDER_KIND, location, path);
 }

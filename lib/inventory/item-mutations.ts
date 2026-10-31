@@ -47,12 +47,19 @@ import {
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
 import {
+  INVENTORY_FOLDER_RULES,
   InventoryFolderPathError,
   InventoryItemNotInLocationError,
   isSameFolder,
-  normalizeInventoryFolderName,
   type InventoryFolder,
 } from '@/lib/inventory/folders';
+import {
+  createItemFolder,
+  deleteItemFolder,
+  moveItemsToFolderIn,
+  renameItemFolder,
+  type ItemFolderKind,
+} from '@/lib/mount-index/item-folder-location';
 import { findDependents, findRecordsAnywhere, type InventoryDependent } from '@/lib/inventory/dependents';
 import {
   InventoryArchetypeInUseError,
@@ -103,10 +110,6 @@ async function lintedWrite<T extends { id: string } | null>(
 }
 
 /** A folder path as an operator sends it, slashes trimmed (the location normalises the rest). */
-function trimFolderPath(path: string): string {
-  return path.trim().replace(/^\/+|\/+$/g, '');
-}
-
 function logOp(op: string, location: InventoryLocation, meta: Record<string, unknown>): void {
   logger.debug(`[InventoryMutations] ${op}`, {
     op,
@@ -577,16 +580,12 @@ export async function duplicateInventoryItem(
 }
 
 /** File several objects of this location into one folder (one projection). */
-export async function moveInventoryItemsToFolder(
+export function moveInventoryItemsToFolder(
   location: InventoryLocation,
   itemIds: readonly string[],
   folder: string,
 ): Promise<InventoryRecord[]> {
-  const target = await location.resolveFolder(folder);
-  const uniqueIds = Array.from(new Set(itemIds));
-  const moved = await location.updateMany(uniqueIds.map((id) => ({ id, patch: { folder: target } })), { requireAll: true });
-  logOp('Moved objects to folder', location, { folder: target, requested: uniqueIds.length, moved: moved.length });
-  return moved;
+  return moveItemsToFolderIn(INVENTORY_FOLDER_KIND, location, itemIds, folder);
 }
 
 /** Copy several objects of this location into one folder; any not copyable refuses the batch. */
@@ -618,30 +617,26 @@ export async function copyInventoryItemsToFolder(
 // Folders — the operator's filing under `Inventory/`
 // ============================================================================
 
+/** The Inventory's folder kind: its rules and its path error. */
+export const INVENTORY_FOLDER_KIND: ItemFolderKind = {
+  rules: INVENTORY_FOLDER_RULES,
+  pathError: (message) => new InventoryFolderPathError(message),
+};
+
 /** Create a folder at a location (an existing one, in any casing, is answered). */
-export async function createInventoryFolder(location: InventoryLocation, path: string): Promise<InventoryFolder> {
-  const resolved = await location.resolveFolder(path);
-  if (!resolved) throw new InventoryFolderPathError('A folder needs a name');
-  const folder = await location.createFolder(resolved);
-  logOp('Created folder', location, { requested: path, folder: folder.path });
-  return folder;
+export function createInventoryFolder(location: InventoryLocation, path: string): Promise<InventoryFolder> {
+  return createItemFolder(INVENTORY_FOLDER_KIND, location, path);
 }
 
 /** Rename a folder in place; its objects follow because the path is the truth. */
-export async function renameInventoryFolder(location: InventoryLocation, path: string, name: string): Promise<InventoryFolder> {
-  const from = trimFolderPath(path);
-  const folder = await location.renameFolder(from, normalizeInventoryFolderName(name));
-  logOp('Renamed folder', location, { from, to: folder.path });
-  return folder;
+export function renameInventoryFolder(location: InventoryLocation, path: string, name: string): Promise<InventoryFolder> {
+  return renameItemFolder(INVENTORY_FOLDER_KIND, location, path, name);
 }
 
 /** Delete a folder, sending its objects and subfolders up to its parent. */
-export async function deleteInventoryFolder(
+export function deleteInventoryFolder(
   location: InventoryLocation,
   path: string,
 ): Promise<{ movedItems: number; movedFolders: number }> {
-  const folder = trimFolderPath(path);
-  const { movedItems, movedFolders, parent } = await location.deleteFolder(folder);
-  logOp('Deleted folder', location, { folder, parent, movedItems, movedFolders });
-  return { movedItems, movedFolders };
+  return deleteItemFolder(INVENTORY_FOLDER_KIND, location, path);
 }
