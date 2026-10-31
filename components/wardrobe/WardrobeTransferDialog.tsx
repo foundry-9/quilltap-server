@@ -1,16 +1,30 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+/**
+ * Move or copy one wardrobe item to another wardrobe — a character's vault, a
+ * group's or project's store, or Quilltap General. A move keeps the item's
+ * id; a copy is a new item. A composite outfit asks what becomes of its
+ * components (all or nothing). The destinations are the shared container
+ * catalogue (`useContainerCatalogue`) in the shared `ContainerSelect`, the
+ * item's own wardrobe left out; the transfer is a TanStack mutation.
+ *
+ * @module components/wardrobe/WardrobeTransferDialog
+ */
+
+import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { isComposite as isCompositeItem, type WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { useContainerCatalogue } from '@/lib/hooks/use-container-catalogue'
+import { ContainerSelect } from '@/components/item-browser/ContainerSelect'
 import {
   GENERAL_CONTAINER,
+  GENERAL_WARDROBE_NAME,
   decodeWardrobeContainer,
   encodeWardrobeContainer,
-  sameWardrobeContainer,
   type WardrobeContainer,
-  type WardrobeContainerScope,
 } from '@/lib/wardrobe/wardrobe-container'
 import {
   WardrobeComponentModeFieldset,
@@ -19,18 +33,6 @@ import {
 } from './WardrobeComponentModeFieldset'
 
 type TransferMode = 'move' | 'copy'
-
-interface DestinationOption {
-  id: string
-  name: string
-}
-
-interface DestinationsPayload {
-  general: { available: boolean; label: string }
-  projects: DestinationOption[]
-  groups: DestinationOption[]
-  users: DestinationOption[]
-}
 
 interface WardrobeTransferDialogProps {
   isOpen: boolean
@@ -68,75 +70,22 @@ export function WardrobeTransferDialog({
   onClose,
   onTransferred,
 }: WardrobeTransferDialogProps) {
-  const [loadingDestinations, setLoadingDestinations] = useState(false)
-  const [destinations, setDestinations] = useState<DestinationsPayload | null>(null)
-  const [selectedDestination, setSelectedDestination] = useState('')
-  const [working, setWorking] = useState(false)
+  const catalogue = useContainerCatalogue()
+  const excludedKey = excludeDestination ? encodeWardrobeContainer(excludeDestination) : null
+  const generalKey = encodeWardrobeContainer(GENERAL_CONTAINER)
+  // General is the natural first choice, unless the item already lives there.
+  const [chosen, setChosen] = useState<string | null>(null)
+  const selectedDestination = chosen ?? (excludedKey === generalKey ? '' : generalKey)
+  const selection = decodeWardrobeContainer(selectedDestination)
   // Composite outfits prompt for their components — all or nothing. A move
   // defaults to moving them along; a copy defaults to copying them, since an
   // outfit that arrives without its pieces is rarely what anyone meant.
   const isComposite = isCompositeItem(item)
   const [componentMode, setComponentMode] = useState<ComponentMode>(defaultComponentMode(mode))
 
-  useEffect(() => {
-    if (!isOpen) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open; async fetch callback drives the lasting state
-    setLoadingDestinations(true)
-    setDestinations(null)
-    setSelectedDestination('')
-    setComponentMode(defaultComponentMode(mode))
-
-    void fetch('/api/v1/wardrobe/transfers')
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load destinations (${res.status})`)
-        return res.json() as Promise<{ destinations: DestinationsPayload }>
-      })
-      .then((body) => {
-        setDestinations(body.destinations)
-        const generalExcluded = sameWardrobeContainer(excludeDestination, GENERAL_CONTAINER)
-        if (body.destinations.general.available && !generalExcluded) {
-          setSelectedDestination(encodeWardrobeContainer(GENERAL_CONTAINER))
-        }
-      })
-      .catch((error) => {
-        showErrorToast(error instanceof Error ? error.message : String(error))
-      })
-      .finally(() => {
-        setLoadingDestinations(false)
-      })
-  }, [isOpen, mode, excludeDestination])
-
-  const selection = useMemo(
-    () => decodeWardrobeContainer(selectedDestination),
-    [selectedDestination],
-  )
-
-  // The item's known home container is dropped from the list — the server
-  // refuses same-place transfers, so offering it would only invite a scolding.
-  const visibleDestinations = useMemo<DestinationsPayload | null>(() => {
-    if (!destinations) return null
-    if (!excludeDestination) return destinations
-    const excluded = (scope: WardrobeContainerScope, id: string | null): boolean =>
-      sameWardrobeContainer(excludeDestination, { scope, id })
-    return {
-      general: {
-        ...destinations.general,
-        available: destinations.general.available && !excluded('general', null),
-      },
-      projects: destinations.projects.filter((p) => !excluded('project', p.id)),
-      groups: destinations.groups.filter((g) => !excluded('group', g.id)),
-      users: destinations.users.filter((u) => !excluded('character', u.id)),
-    }
-  }, [destinations, excludeDestination])
-
-  const submitLabel = mode === 'move' ? 'Move item' : 'Copy item'
-  const title = mode === 'move' ? 'Move wardrobe item' : 'Copy wardrobe item'
-
-  const handleSubmit = async (): Promise<void> => {
-    if (!selection) return
-    setWorking(true)
-    try {
-      const res = await fetch('/api/v1/wardrobe/transfers', {
+  const transfer = useMutation({
+    mutationFn: async (destination: WardrobeContainer) => {
+      const result = await fetchJson('/api/v1/wardrobe/transfers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,27 +93,26 @@ export function WardrobeTransferDialog({
           itemId: item.id,
           ...(sourceCharacterId ? { sourceCharacterId } : {}),
           sourceProjectId,
-          ...(source
-            ? { source: { scope: source.scope, ...(source.id ? { id: source.id } : {}) } }
-            : {}),
+          ...(source ? { source: { scope: source.scope, ...(source.id ? { id: source.id } : {}) } } : {}),
           ...(isComposite ? { components: componentMode } : {}),
-          destination: {
-            scope: selection.scope,
-            ...(selection.id ? { id: selection.id } : {}),
-          },
+          destination: { scope: destination.scope, ...(destination.id ? { id: destination.id } : {}) },
         }),
       })
-      const body = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) {
-        throw new Error(body.error || `Failed to ${mode} wardrobe item`)
-      }
+      if (!result.ok) throw new Error(result.error || `Failed to ${mode} wardrobe item`)
+    },
+    onSuccess: async () => {
       showSuccessToast(mode === 'move' ? `Moved "${item.title}"` : `Copied "${item.title}"`)
       await onTransferred()
-    } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : String(error))
-    } finally {
-      setWorking(false)
-    }
+    },
+    onError: (error) => showErrorToast(error instanceof Error ? error.message : String(error)),
+  })
+  const working = transfer.isPending
+
+  const submitLabel = mode === 'move' ? 'Move item' : 'Copy item'
+  const title = mode === 'move' ? 'Move wardrobe item' : 'Copy wardrobe item'
+
+  const handleSubmit = (): void => {
+    if (selection) transfer.mutate(selection)
   }
 
   return (
@@ -187,11 +135,9 @@ export function WardrobeTransferDialog({
           </button>
           <button
             type="button"
-            onClick={() => {
-              void handleSubmit()
-            }}
+            onClick={handleSubmit}
             className="qt-button-primary qt-button-sm"
-            disabled={working || loadingDestinations || !selection}
+            disabled={working || catalogue.loading || !selection}
           >
             {working ? (mode === 'move' ? 'Moving…' : 'Copying…') : submitLabel}
           </button>
@@ -203,69 +149,24 @@ export function WardrobeTransferDialog({
           {mode === 'move' ? 'Move' : 'Copy'} <span className="font-medium">&quot;{item.title}&quot;</span> to:
         </p>
 
-        {loadingDestinations ? (
+        {catalogue.loading ? (
           <p className="text-sm qt-text-secondary">Loading destinations…</p>
         ) : (
           <div>
             <label htmlFor="wardrobe-transfer-destination" className="text-sm qt-text-secondary">
               Destination
             </label>
-            <select
+            <ContainerSelect
               id="wardrobe-transfer-destination"
               className="qt-select w-full mt-1"
               value={selectedDestination}
-              onChange={(e) => setSelectedDestination(e.target.value)}
+              onChange={setChosen}
+              catalogue={catalogue}
+              generalName={GENERAL_WARDROBE_NAME}
+              placeholder="Choose a wardrobe"
+              exclude={excludedKey ? [excludedKey] : []}
               disabled={working}
-            >
-              {!visibleDestinations?.general.available &&
-                visibleDestinations?.projects.length === 0 &&
-                visibleDestinations?.groups.length === 0 &&
-                visibleDestinations?.users.length === 0 && (
-                  <option value="">No destinations available</option>
-                )}
-
-              {visibleDestinations?.general.available && (
-                <optgroup label="General">
-                  <option value={encodeWardrobeContainer(GENERAL_CONTAINER)}>{visibleDestinations.general.label}</option>
-                </optgroup>
-              )}
-
-              {visibleDestinations && visibleDestinations.projects.length > 0 && (
-                <optgroup label="Projects">
-                  {visibleDestinations.projects.map((project) => (
-                    <option
-                      key={`project-${project.id}`}
-                      value={encodeWardrobeContainer({ scope: 'project', id: project.id })}
-                    >
-                      {project.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-
-              {visibleDestinations && visibleDestinations.groups.length > 0 && (
-                <optgroup label="Groups">
-                  {visibleDestinations.groups.map((group) => (
-                    <option key={`group-${group.id}`} value={encodeWardrobeContainer({ scope: 'group', id: group.id })}>
-                      {group.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-
-              {visibleDestinations && visibleDestinations.users.length > 0 && (
-                <optgroup label="Users">
-                  {visibleDestinations.users.map((user) => (
-                    <option
-                      key={`character-${user.id}`}
-                      value={encodeWardrobeContainer({ scope: 'character', id: user.id })}
-                    >
-                      {user.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            />
           </div>
         )}
 

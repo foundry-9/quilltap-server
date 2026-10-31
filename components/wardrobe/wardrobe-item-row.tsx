@@ -37,6 +37,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useFixedMenu } from '@/hooks/useFixedMenu'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
 import { WARDROBE_SLOT_META, isComposite as isCompositeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
@@ -152,9 +153,8 @@ export function WardrobeItemRow({
   const selectMode = selection !== undefined
 
   const slotPickerRef = useRef<HTMLDivElement>(null)
-  const kebabRef = useRef<HTMLDivElement>(null)
-  // Both popovers are fixed to the viewport so the dialog's scrolling list
-  // cannot clip them under its footer.
+  // The slot picker is fixed to the viewport so the dialog's scrolling list
+  // cannot clip it under its footer (the ⋮ menu does the same itself).
   const {
     anchorRef: slotPickerAnchorRef,
     menuStyle: slotPickerStyle,
@@ -162,24 +162,12 @@ export function WardrobeItemRow({
     setOpen: setSlotPickerOpen,
     close: closeSlotPicker,
   } = useFixedMenu(slotPickerRef, 240)
-  const {
-    anchorRef: kebabAnchorRef,
-    menuStyle: kebabStyle,
-    open: kebabOpen,
-    setOpen: setKebabOpen,
-    close: closeKebab,
-  } = useFixedMenu(kebabRef)
 
-  // Popovers close on an outside click or Escape — the Escape swallowed in the
-  // capture phase so the enclosing dialog stays open.
+  // The slot picker closes on an outside click or Escape — the Escape
+  // swallowed in the capture phase so the enclosing dialog stays open.
   useClickOutside(slotPickerRef, closeSlotPicker, {
     enabled: slotPickerOpen,
     onEscape: closeSlotPicker,
-    escapeCapture: true,
-  })
-  useClickOutside(kebabRef, closeKebab, {
-    enabled: kebabOpen,
-    onEscape: closeKebab,
     escapeCapture: true,
   })
 
@@ -369,179 +357,35 @@ export function WardrobeItemRow({
           )}
 
           {/* Kebab menu — item actions */}
-          <div className="relative" ref={kebabRef}>
-              <button
-                ref={kebabAnchorRef}
-                type="button"
-                onClick={() => setKebabOpen(!kebabOpen)}
-                disabled={selectMode}
-                className="qt-button-ghost qt-button-sm"
-                aria-label="More actions"
-                title="More actions"
-                aria-haspopup="menu"
-                aria-expanded={kebabOpen}
-              >
-                ⋮
-              </button>
-              {kebabOpen && (
-                <div
-                  role="menu"
-                  style={kebabStyle ?? undefined}
-                  className="z-30 min-w-[14rem] rounded border qt-border-default qt-bg-popover shadow-md"
-                >
-                  <ul className="divide-y qt-border-default">
-                    {manageable && (
-                      <>
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              closeKebab()
-                              onEdit(item)
-                            }}
-                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                          >
-                            Edit
-                          </button>
-                        </li>
-                        {onGenerateImage && (
-                          <li>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={isGeneratingImage}
-                              onClick={() => {
-                                closeKebab()
-                                onGenerateImage(item)
-                              }}
-                              className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
-                            >
-                              {isGeneratingImage ? 'Generating image…' : 'Generate image'}
-                            </button>
-                          </li>
-                        )}
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            disabled={isUpdatingDefault}
-                            onClick={() => {
-                              closeKebab()
-                              onToggleDefault(item)
-                            }}
-                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
-                          >
-                            {item.isDefault
-                              ? '☆ Unmark as default'
-                              : '★ Mark as default outfit item'}
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              closeKebab()
-                              onDuplicate(item)
-                            }}
-                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                          >
-                            Duplicate
-                          </button>
-                        </li>
-                        {onToggleArchived && (
-                          <li>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                closeKebab()
-                                onToggleArchived(item)
-                              }}
-                              className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                            >
-                              {item.archivedAt ? 'Restore from archive' : 'Archive'}
-                            </button>
-                          </li>
-                        )}
-                      </>
-                    )}
-                    {manageable && onMoveToFolder && (
-                      <li>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            closeKebab()
-                            onMoveToFolder(item)
-                          }}
-                          className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                        >
-                          Move to folder…
-                        </button>
-                      </li>
-                    )}
-                    {manageable && onCopyToFolder && (
-                      <li>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            closeKebab()
-                            onCopyToFolder(item)
-                          }}
-                          className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                        >
-                          Copy to folder…
-                        </button>
-                      </li>
-                    )}
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          closeKebab()
-                          onMove(item)
-                        }}
-                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                      >
-                        Move to another wardrobe…
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          closeKebab()
-                          onCopy(item)
-                        }}
-                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                      >
-                        Copy to another wardrobe…
-                      </button>
-                    </li>
-                    {manageable && (
-                      <li>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            closeKebab()
-                            onDelete(item)
-                          }}
-                          className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
-                        >
-                          Delete
-                        </button>
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </div>
+          <ItemActionMenu
+            disabled={selectMode}
+            entries={[
+              manageable && { key: 'edit', label: 'Edit', onSelect: () => onEdit(item) },
+              manageable && onGenerateImage && {
+                key: 'generate-image',
+                label: isGeneratingImage ? 'Generating image…' : 'Generate image',
+                disabled: isGeneratingImage,
+                onSelect: () => onGenerateImage(item),
+              },
+              manageable && {
+                key: 'default',
+                label: item.isDefault ? '☆ Unmark as default' : '★ Mark as default outfit item',
+                disabled: isUpdatingDefault,
+                onSelect: () => onToggleDefault(item),
+              },
+              manageable && { key: 'duplicate', label: 'Duplicate', onSelect: () => onDuplicate(item) },
+              manageable && onToggleArchived && {
+                key: 'archive',
+                label: item.archivedAt ? 'Restore from archive' : 'Archive',
+                onSelect: () => onToggleArchived(item),
+              },
+              manageable && onMoveToFolder && { key: 'move-to-folder', label: 'Move to folder…', onSelect: () => onMoveToFolder(item) },
+              manageable && onCopyToFolder && { key: 'copy-to-folder', label: 'Copy to folder…', onSelect: () => onCopyToFolder(item) },
+              { key: 'transfer-move', label: 'Move to another wardrobe…', onSelect: () => onMove(item) },
+              { key: 'transfer-copy', label: 'Copy to another wardrobe…', onSelect: () => onCopy(item) },
+              manageable && { key: 'delete', label: 'Delete', destructive: true, onSelect: () => onDelete(item) },
+            ]}
+          />
         </div>
       </div>
 

@@ -1,8 +1,9 @@
 'use client'
 
 /**
- * "Move to folder…" for Inventory objects: the shared
- * `ItemFolderPickerDialog` over one tier's `Inventory/` folders.
+ * "Move to folder…" / "Copy to folder…" for Inventory objects: the shared
+ * `ItemFolderPickerDialog` over one tier's `Inventory/` folders. A copy is a
+ * new object (offered only for copyable ones); the server refuses the rest.
  *
  * @module components/inventory/InventoryFolderPickerDialog
  */
@@ -20,11 +21,13 @@ import { describeInventoryRefusal } from './hooks/useInventoryItemActions'
 export function InventoryFolderPickerDialog({
   container,
   items,
+  mode,
   actions,
   onClose,
 }: {
   container: InventoryContainer
   items: ResolvedInventoryItem[]
+  mode: 'move' | 'copy'
   actions: InventoryItemActions
   onClose: () => void
 }) {
@@ -37,7 +40,7 @@ export function InventoryFolderPickerDialog({
   return (
     <ItemFolderPickerDialog
       isOpen
-      mode="move"
+      mode={mode}
       subject={subject}
       folders={folders}
       loading={loading}
@@ -46,16 +49,25 @@ export function InventoryFolderPickerDialog({
       creating={actions.mutations.pending}
       currentFolder={currentFolder}
       working={working}
-      note="Folders are for your browsing; what anyone carries stays exactly as it was."
+      note={
+        mode === 'copy'
+          ? 'Each copy is a new object of its own; nobody carries it until it is equipped.'
+          : 'Folders are for your browsing; what anyone carries stays exactly as it was.'
+      }
       onClose={onClose}
       onSubmit={async (folder) => {
         setWorking(true)
         try {
-          await actions.mutations.fileItems('move', container, items.map((i) => i.id), folder)
-          showSuccessToast(`${subject} now ${items.length === 1 ? 'sits' : 'sit'} in ${folder ? `"${folderCrumb(folder)}"` : 'the top of the inventory'}`)
+          await actions.mutations.fileItems(mode, container, items.map((i) => i.id), folder)
+          const where = folder ? `"${folderCrumb(folder)}"` : 'the top of the inventory'
+          showSuccessToast(
+            mode === 'copy'
+              ? `${items.length === 1 ? 'A copy' : 'Copies'} of ${subject} now ${items.length === 1 ? 'sits' : 'sit'} in ${where}`
+              : `${subject} now ${items.length === 1 ? 'sits' : 'sit'} in ${where}`,
+          )
           onClose()
         } catch (error) {
-          showErrorToast(describeInventoryRefusal(error, 'The objects would not be moved'))
+          showErrorToast(describeInventoryRefusal(error, mode === 'copy' ? 'The objects would not be copied' : 'The objects would not be moved'))
         } finally {
           setWorking(false)
         }

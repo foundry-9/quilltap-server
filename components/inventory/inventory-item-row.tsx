@@ -9,16 +9,15 @@
  * is borrowed from, and *archived*. In a chat an Equip / Unequip button sits
  * on the row (never on an archetype). The ⋮ menu holds Edit, Instantiate
  * (archetypes), Detach (instances), Duplicate (only when copyable), Move to
- * folder…, Move / Copy to another tier…, Archive / Restore and Delete. A row
- * borrowed from another tier keeps only the cross-tier Copy (it is filed by
- * whoever manages its own tier).
+ * folder…, Copy to folder… (only when copyable), Move / Copy to another
+ * tier…, Archive / Restore and Delete — through the shared
+ * `ItemActionMenu`. A row borrowed from another tier keeps only the
+ * cross-tier Copy (it is filed by whoever manages its own tier).
  *
  * @module components/inventory/inventory-item-row
  */
 
-import { useRef } from 'react'
-import { useClickOutside } from '@/hooks/useClickOutside'
-import { useFixedMenu } from '@/hooks/useFixedMenu'
+import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
 import type { KitState, ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
 import { inventoryOriginLabel } from '@/lib/inventory/container'
 import { InventoryGlyph } from './inventory-glyph'
@@ -29,6 +28,8 @@ export interface InventoryRowActions {
   onDetach: (item: ResolvedInventoryItem) => void
   onDuplicate: (item: ResolvedInventoryItem) => void
   onMoveToFolder: (item: ResolvedInventoryItem) => void
+  /** Copy into another folder of the same tier (copyable objects only). */
+  onCopyToFolder: (item: ResolvedInventoryItem) => void
   onTransfer: (item: ResolvedInventoryItem, mode: 'move' | 'copy') => void
   onToggleArchived: (item: ResolvedInventoryItem) => void
   onDelete: (item: ResolvedInventoryItem) => void
@@ -54,20 +55,12 @@ interface InventoryItemRowProps {
   folderCrumb?: string | null
 }
 
-const MENU_ITEM = 'block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50'
 export function InventoryItemRow({ item, manageable, actions, equip, selection, folderCrumb }: InventoryItemRowProps) {
-  const menuRef = useRef<HTMLDivElement>(null)
-  const { anchorRef: buttonRef, menuStyle, open: menuOpen, setOpen: setMenuOpen, close: closeMenu } = useFixedMenu(menuRef)
-  useClickOutside(menuRef, closeMenu, { enabled: menuOpen, onEscape: closeMenu, escapeCapture: true })
-
   const label = item.title || item.name
   const showName = !!item.title && item.title.trim().toLowerCase() !== item.name.trim().toLowerCase()
   const borrowed = manageable ? null : inventoryOriginLabel(item.origin)
   const isInstance = !!item.parentId
-  const run = (fn: (i: ResolvedInventoryItem) => void) => () => {
-    setMenuOpen(false)
-    fn(item)
-  }
+  const run = (fn: (i: ResolvedInventoryItem) => void) => () => fn(item)
 
   return (
     <div
@@ -125,97 +118,26 @@ export function InventoryItemRow({ item, manageable, actions, equip, selection, 
         )
       )}
 
-      <div className="relative" ref={menuRef}>
-        <button
-          ref={buttonRef}
-          type="button"
-          onClick={() => setMenuOpen(!menuOpen)}
-          disabled={!!selection}
-          className="qt-button-ghost qt-button-sm"
-          aria-label="More actions"
-          title="More actions"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-        >
-          ⋮
-        </button>
-        {menuOpen && (
-          <div role="menu" style={menuStyle ?? undefined} className="z-30 min-w-[14rem] rounded border qt-border-default qt-bg-popover shadow-md">
-            <ul className="divide-y qt-border-default">
-              {manageable && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={run(actions.onEdit)}>
-                    Edit
-                  </button>
-                </li>
-              )}
-              {equip && item.kind === 'kit' && equip.kitState && equip.kitState !== 'none' && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={run(equip.onUnequip)}>
-                    Unequip the kit
-                  </button>
-                </li>
-              )}
-              {item.isArchetype && !item.archivedAt && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={run(actions.onInstantiate)}>
-                    Instantiate…
-                  </button>
-                </li>
-              )}
-              {manageable && isInstance && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={run(actions.onDetach)}>
-                    Detach from archetype…
-                  </button>
-                </li>
-              )}
-              {manageable && item.canCopy && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={run(actions.onDuplicate)}>
-                    Duplicate
-                  </button>
-                </li>
-              )}
-              {manageable && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={run(actions.onMoveToFolder)}>
-                    Move to folder…
-                  </button>
-                </li>
-              )}
-              {manageable && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => { setMenuOpen(false); actions.onTransfer(item, 'move') }}>
-                    Move to another inventory…
-                  </button>
-                </li>
-              )}
-              {item.canCopy && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => { setMenuOpen(false); actions.onTransfer(item, 'copy') }}>
-                    Copy to another inventory…
-                  </button>
-                </li>
-              )}
-              {manageable && (
-                <li>
-                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={run(actions.onToggleArchived)}>
-                    {item.archivedAt ? 'Restore' : 'Archive'}
-                  </button>
-                </li>
-              )}
-              {manageable && (
-                <li>
-                  <button type="button" role="menuitem" className={`${MENU_ITEM} qt-text-destructive`} onClick={run(actions.onDelete)}>
-                    Delete
-                  </button>
-                </li>
-              )}
-            </ul>
-          </div>
-        )}
-      </div>
+      <ItemActionMenu
+        disabled={!!selection}
+        entries={[
+          manageable && { key: 'edit', label: 'Edit', onSelect: run(actions.onEdit) },
+          equip && item.kind === 'kit' && equip.kitState && equip.kitState !== 'none' && {
+            key: 'unequip-kit',
+            label: 'Unequip the kit',
+            onSelect: run(equip.onUnequip),
+          },
+          item.isArchetype && !item.archivedAt && { key: 'instantiate', label: 'Instantiate…', onSelect: run(actions.onInstantiate) },
+          manageable && isInstance && { key: 'detach', label: 'Detach from archetype…', onSelect: run(actions.onDetach) },
+          manageable && item.canCopy && { key: 'duplicate', label: 'Duplicate', onSelect: run(actions.onDuplicate) },
+          manageable && { key: 'move-to-folder', label: 'Move to folder…', onSelect: run(actions.onMoveToFolder) },
+          manageable && item.canCopy && { key: 'copy-to-folder', label: 'Copy to folder…', onSelect: run(actions.onCopyToFolder) },
+          manageable && { key: 'transfer-move', label: 'Move to another inventory…', onSelect: () => actions.onTransfer(item, 'move') },
+          item.canCopy && { key: 'transfer-copy', label: 'Copy to another inventory…', onSelect: () => actions.onTransfer(item, 'copy') },
+          manageable && { key: 'archive', label: item.archivedAt ? 'Restore' : 'Archive', onSelect: run(actions.onToggleArchived) },
+          manageable && { key: 'delete', label: 'Delete', destructive: true, onSelect: run(actions.onDelete) },
+        ]}
+      />
     </div>
   )
 }

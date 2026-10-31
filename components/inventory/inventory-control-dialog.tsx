@@ -18,9 +18,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
-import { apiFetch } from '@/lib/query/fetcher'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showAlert, showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -40,41 +38,13 @@ import { InventoryRequestError, useChatInventory } from '@/lib/hooks/use-invento
 import { InventoryBrowser } from './InventoryBrowser'
 import { CarryingNowPane } from './CarryingNowPane'
 import { InventoryItemEditor } from './inventory-item-editor'
-import { InventoryTransferDialog, type InventoryCatalogue } from './InventoryTransferDialog'
+import { InventoryTransferDialog } from './InventoryTransferDialog'
+import { useContainerCatalogue } from '@/lib/hooks/use-container-catalogue'
+import { ContainerSelect } from '@/components/item-browser/ContainerSelect'
 import { InventoryInstantiateDialog } from './InventoryInstantiateDialog'
 import { InventoryFolderPickerDialog } from './InventoryFolderPickerDialog'
 import { useInventoryListData } from './hooks/useInventoryListData'
 import { describeInventoryRefusal, useInventoryItemActions } from './hooks/useInventoryItemActions'
-
-const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name)
-
-/** Every place an object can live, for the container select. */
-function useInventoryCatalogue(): InventoryCatalogue & { charactersSettled: boolean } {
-  const characters = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters?: Array<{ id: string; name: string }> }>('/api/v1/characters', { signal }),
-  })
-  const projects = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) => apiFetch<{ projects?: Array<{ id: string; name: string }> }>('/api/v1/projects', { signal }),
-  })
-  const groups = useQuery({
-    queryKey: queryKeys.groups.list(),
-    queryFn: ({ signal }) => apiFetch<{ groups?: Array<{ id: string; name: string }> }>('/api/v1/groups', { signal }),
-  })
-  return {
-    characters: useMemo(() => [...(characters.data?.characters ?? [])].sort(byName), [characters.data]),
-    charactersSettled: characters.isFetched,
-    projects: useMemo(
-      () => (projects.data?.projects ?? []).map((p) => ({ id: p.id, name: p.name || 'Untitled project' })).sort(byName),
-      [projects.data],
-    ),
-    groups: useMemo(
-      () => (groups.data?.groups ?? []).map((g) => ({ id: g.id, name: g.name || 'Untitled group' })).sort(byName),
-      [groups.data],
-    ),
-  }
-}
 
 /** The layout-level dialog: renders the body only while open. */
 export function InventoryControlDialog() {
@@ -141,7 +111,7 @@ interface InnerProps {
 }
 
 function InventoryControlDialogInner({ initialContainer, chatId, projectId, onClose, asTab = false, fixedContainer = false }: InnerProps) {
-  const catalogue = useInventoryCatalogue()
+  const catalogue = useContainerCatalogue()
   const queryClient = useQueryClient()
   const [chosen, setChosen] = useState<InventoryContainer | null>(initialContainer)
   const firstCharacterId = catalogue.characters[0]?.id ?? null
@@ -240,38 +210,15 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
         <div className="flex flex-col gap-2 mb-3">
           <div className="flex items-center gap-2">
             <label htmlFor="inventory-container-select" className="text-sm qt-text-secondary">Inventory:</label>
-            <select
+            <ContainerSelect
               id="inventory-container-select"
               className="qt-select flex-1 max-w-md"
               value={container ? encodeInventoryContainer(container) : ''}
-              onChange={(e) => setChosen(decodeInventoryContainer(e.target.value))}
-            >
-              {!container && <option value="" disabled>Select an inventory</option>}
-              {catalogue.characters.length > 0 && (
-                <optgroup label="Characters">
-                  {catalogue.characters.map((c) => (
-                    <option key={c.id} value={encodeInventoryContainer({ scope: 'character', id: c.id })}>{c.name}</option>
-                  ))}
-                </optgroup>
-              )}
-              <optgroup label="General">
-                <option value={encodeInventoryContainer(GENERAL_INVENTORY_CONTAINER)}>{GENERAL_INVENTORY_NAME}</option>
-              </optgroup>
-              {catalogue.projects.length > 0 && (
-                <optgroup label="Projects">
-                  {catalogue.projects.map((p) => (
-                    <option key={p.id} value={encodeInventoryContainer({ scope: 'project', id: p.id })}>{p.name}</option>
-                  ))}
-                </optgroup>
-              )}
-              {catalogue.groups.length > 0 && (
-                <optgroup label="Groups">
-                  {catalogue.groups.map((g) => (
-                    <option key={g.id} value={encodeInventoryContainer({ scope: 'group', id: g.id })}>{g.name}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+              onChange={(key) => setChosen(decodeInventoryContainer(key))}
+              catalogue={catalogue}
+              generalName={GENERAL_INVENTORY_NAME}
+              placeholder="Select an inventory"
+            />
           </div>
           {container && container.scope !== 'character' && (
             <p className="qt-text-xs qt-text-secondary px-1">
@@ -337,6 +284,7 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
         <InventoryFolderPickerDialog
           container={actions.addressOf(actions.folderPicker.items[0])}
           items={actions.folderPicker.items}
+          mode={actions.folderPicker.mode}
           actions={actions}
           onClose={actions.closeFolderPicker}
         />

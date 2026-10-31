@@ -18,8 +18,10 @@
  * Mounted by the Wardrobe dialog (left column, any container) and by the
  * Prospero project page's Wardrobe card (that project's container). The data
  * comes from `useWardrobeListData`, the actions from `useWardrobeItemActions`,
- * the folder tree and its mutations from `use-wardrobe-folders`, and the view
- * rules from `lib/wardrobe/folder-view`; this file lays them out.
+ * the folder tree and its mutations from `use-wardrobe-folders`, the view
+ * state from the shared `useFolderBrowserState` and the layout from
+ * `FolderBrowserShell`; this file adds the wardrobe's filters, rows and
+ * wording.
  *
  * @module components/wardrobe/WardrobeBrowser
  */
@@ -37,23 +39,8 @@ import {
   encodeWardrobeContainer,
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
-import {
-  folderCrumb,
-  folderName,
-  folderSegments,
-  isSameFolder,
-  isUnderFolder,
-  joinFolder,
-  parentFolder,
-} from '@/lib/wardrobe/folders'
-import {
-  OWN_TIER,
-  childFolderRows,
-  tierLabel,
-  tierRows,
-  viewTierOf,
-  type FolderRowView,
-} from '@/lib/wardrobe/folder-view'
+import { folderCrumb, isSameFolder } from '@/lib/wardrobe/folders'
+import { OWN_TIER, viewTierOf } from '@/lib/wardrobe/folder-view'
 import { useWardrobeFolderMutations, useWardrobeFolders } from '@/lib/hooks/use-wardrobe-folders'
 import type { TierItem } from '@/lib/hooks/use-wardrobe-tier'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -64,10 +51,8 @@ import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeImageViewer } from './wardrobe-image-viewer'
 import { WardrobeTransferDialog } from './WardrobeTransferDialog'
 import { WardrobeFolderPickerDialog } from './WardrobeFolderPickerDialog'
-import { ItemFolderBar, NewFolderInput } from '@/components/item-browser/ItemFolderBar'
-import { ItemFolderRow } from '@/components/item-browser/ItemFolderRow'
-import { ItemSelectBar } from '@/components/item-browser/ItemSelectBar'
-import { ItemTierRow } from '@/components/item-browser/ItemTierRow'
+import { FolderBrowserShell } from '@/components/item-browser/FolderBrowserShell'
+import { useFolderBrowserState, useItemFolderHandlers } from '@/components/item-browser/useFolderBrowserState'
 import type { ComponentMode } from './WardrobeComponentModeFieldset'
 import { PronounAwareToggle } from './PronounAwareToggle'
 import type { PronounGuidanceFilter } from '@/lib/hooks/use-pronoun-guidance-filter'
@@ -103,7 +88,6 @@ export interface WardrobeBrowserProps {
 }
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
-const EMPTY_SELECTION: ReadonlySet<string> = new Set()
 
 export function WardrobeBrowser({
   container,
@@ -132,49 +116,11 @@ export function WardrobeBrowser({
   const [slotFilter, setSlotFilter] = useState<SlotFilter>('all')
   const [kindFilter, setKindFilter] = useState<ItemKind>('items')
   const [titleFilter, setTitleFilter] = useState('')
-
-  // Where in the tree we are: the tier (a character's own closet, or one
-  // borrowed wardrobe) and the folder within it. Each piece of view state
-  // remembers the container (or view) it was set in, and reads as its
-  // starting value anywhere else — so a new container opens at its root with
-  // nothing selected, and leaving a folder or toggling search drops the
-  // selection, without an effect to reset them.
-  const containerKey = container ? encodeWardrobeContainer(container) : ''
-  const [view, setView] = useState({ key: containerKey, tier: OWN_TIER, folder: '' })
-  const [selectModeState, setSelectModeState] = useState({ key: containerKey, on: false })
-  const [newFolderState, setNewFolderState] = useState({ key: '', name: '' })
   // The Move-to-folder picker's state lives in the actions hook, so the
   // dialog's `overlayOpen` counts it (bug 229).
   const picker = actions.folderPicker
   const [moving, setMoving] = useState(false)
-
   const searching = titleFilter.trim().length > 0
-  // Hiding shared wardrobes while inside one reads as the closet's root.
-  const viewIsCurrent = view.key === containerKey && (showShared || view.tier === OWN_TIER)
-  const currentTier = viewIsCurrent ? view.tier : OWN_TIER
-  const currentFolder = viewIsCurrent ? view.folder : ''
-  const inOwnTier = currentTier === OWN_TIER
-  const selectMode = selectModeState.key === containerKey && selectModeState.on
-  const setSelectMode = useCallback(
-    (on: boolean) => setSelectModeState({ key: containerKey, on }),
-    [containerKey],
-  )
-
-  const viewKey = `${containerKey}|${currentTier}|${currentFolder}|${searching}`
-  const [selection, setSelection] = useState<{ key: string; ids: ReadonlySet<string> }>(() => ({
-    key: viewKey,
-    ids: new Set(),
-  }))
-  const selectedIds: ReadonlySet<string> = selection.key === viewKey ? selection.ids : EMPTY_SELECTION
-  const clearSelection = useCallback(() => setSelection({ key: viewKey, ids: new Set() }), [viewKey])
-
-  const newFolderOpen = newFolderState.key === viewKey
-  const newFolderName = newFolderOpen ? newFolderState.name : ''
-  const setNewFolderName = (name: string) => setNewFolderState({ key: viewKey, name })
-  const closeNewFolder = () => setNewFolderState({ key: '', name: '' })
-  // Folders are managed only in the wardrobe being browsed — never in a
-  // wardrobe a character merely borrows from.
-  const managed = inOwnTier && container !== null
 
   const { folders: tree } = useWardrobeFolders(container)
   const folderOps = useWardrobeFolderMutations()
@@ -182,11 +128,6 @@ export function WardrobeBrowser({
   const tierOf = useCallback(
     (item: TierItem): string => viewTierOf(item, canManage(item), isCharacterScope),
     [canManage, isCharacterScope],
-  )
-
-  const navigate = useCallback(
-    (tier: string, folder: string) => setView({ key: containerKey, tier, folder }),
-    [containerKey],
   )
 
   // Pronoun guidance narrows the pool itself (character view, switch on), so
@@ -224,115 +165,48 @@ export function WardrobeBrowser({
     canManage,
   ])
 
-  // Everything in the tier being browsed, filters aside — what folder rows
-  // count and what "nothing hangs here" is judged against.
-  const tierItems = useMemo(
-    () => offeredItems.filter((i) => tierOf(i) === currentTier),
-    [offeredItems, tierOf, currentTier],
-  )
+  const state = useFolderBrowserState({
+    containerKey: container ? encodeWardrobeContainer(container) : '',
+    items: offeredItems,
+    filtered: filteredItems,
+    tree,
+    tierOf,
+    characterView: isCharacterScope,
+    showShared,
+    searching,
+  })
+  const { inOwnTier, currentFolder, navigate, selectMode, selectedIds, selectedItems, setSelectMode } = state
 
-  const folderRows = useMemo<FolderRowView[]>(
-    () => (searching ? [] : childFolderRows(currentFolder, tierItems, managed ? tree : [])),
-    [searching, currentFolder, tierItems, managed, tree],
-  )
-
-  const sharedTierRows = useMemo(
-    () =>
-      isCharacterScope && inOwnTier && !searching && currentFolder === '' && showShared
-        ? tierRows(offeredItems, tierOf)
-        : [],
-    [isCharacterScope, inOwnTier, searching, currentFolder, showShared, offeredItems, tierOf],
-  )
-
-  const visibleItems = useMemo(
-    () =>
-      searching
-        ? filteredItems
-        : filteredItems.filter(
-            (i) => tierOf(i) === currentTier && isSameFolder(i.folder ?? '', currentFolder),
-          ),
-    [searching, filteredItems, tierOf, currentTier, currentFolder],
-  )
-
-  const currentTierLabel = useMemo(() => {
-    if (inOwnTier) return null
-    const sample = listItems.find((i) => tierOf(i) === currentTier)
-    return sample ? tierLabel(sample.origin) : 'Shared'
-  }, [inOwnTier, listItems, tierOf, currentTier])
-
-  const folderIsEmpty =
-    !searching &&
-    folderRows.length === 0 &&
-    sharedTierRows.length === 0 &&
-    !tierItems.some((i) => isSameFolder(i.folder ?? '', currentFolder))
-
-  // ---- folder mutations ---------------------------------------------------
-
-  const submitNewFolder = async (): Promise<void> => {
-    const name = newFolderName.trim()
-    if (!name || !container) return
-    try {
-      const folder = await folderOps.createFolder(container, joinFolder(currentFolder, name))
-      showSuccessToast(`The folder "${folder.name}" is ready for hanging things in`)
-      closeNewFolder()
-    } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'The folder would not be made')
-    }
-  }
-
-  const renameFolder = async (path: string, name: string): Promise<boolean> => {
-    if (!container) return false
-    try {
-      const folder = await folderOps.renameFolder(container, path, name)
-      showSuccessToast(`Renamed to "${folder.name}"`)
-      return true
-    } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'The folder would not be renamed')
-      return false
-    }
-  }
-
-  const deleteFolder = async (path: string): Promise<void> => {
-    if (!container) return
-    const parent = parentFolder(path)
-    // The list holds archived pieces only when "Show archived" is ticked, but
-    // the server moves them all; say so rather than understate the move.
-    const count = tierItems.filter((i) => isUnderFolder(i.folder ?? '', path)).length
-    const archivedNote = showArchived ? '' : ' (and any archived pieces filed there)'
-    const parentLabel = parent ? `"${folderName(parent)}"` : 'the top of the wardrobe'
-    const message =
-      count > 0
-        ? `Send its ${plural(count, 'item')}${archivedNote} up to ${parentLabel}? Only the folder itself goes.`
-        : showArchived
-          ? `Remove the empty folder "${folderName(path)}"?`
-          : `Remove the folder "${folderName(path)}"? Anything archived in it goes up to ${parentLabel}.`
-    if (!(await actions.confirm(message))) return
-    try {
-      const result = await folderOps.deleteFolder(container, path)
-      showSuccessToast(
-        result.movedItems > 0
-          ? `Folder removed; ${plural(result.movedItems, 'item')} moved up a peg`
-          : 'Folder removed',
-      )
-      if (isUnderFolder(currentFolder, path)) navigate(currentTier, parent)
-    } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'The folder would not be removed')
-    }
-  }
+  const folderHandlers = useItemFolderHandlers({
+    state,
+    ops: container
+      ? {
+          create: (path) => folderOps.createFolder(container, path),
+          rename: (path, name) => folderOps.renameFolder(container, path, name),
+          remove: (path) => folderOps.deleteFolder(container, path),
+        }
+      : null,
+    wording: {
+      noun: 'item',
+      rootPhrase: 'the top of the wardrobe',
+      created: (name) => `The folder "${name}" is ready for hanging things in`,
+      movedUp: (count) => `Folder removed; ${count} moved up a peg`,
+      // The list holds archived pieces only when "Show archived" is ticked,
+      // but the server moves them all; say so rather than understate the move.
+      deleteMessage: ({ name, count, parentLabel }) => {
+        const archivedNote = showArchived ? '' : ' (and any archived pieces filed there)'
+        return count > 0
+          ? `Send its ${plural(count, 'item')}${archivedNote} up to ${parentLabel}? Only the folder itself goes.`
+          : showArchived
+            ? `Remove the empty folder "${name}"?`
+            : `Remove the folder "${name}"? Anything archived in it goes up to ${parentLabel}.`
+      },
+    },
+    confirm: actions.confirm,
+    describeError: (error, fallback) => (error instanceof Error ? error.message : fallback),
+  })
 
   // ---- filing items -------------------------------------------------------
-
-  const toggleSelected = useCallback(
-    (item: WardrobeItem) => {
-      setSelection((prev) => {
-        const next = new Set(prev.key === viewKey ? prev.ids : [])
-        if (next.has(item.id)) next.delete(item.id)
-        else next.add(item.id)
-        return { key: viewKey, ids: next }
-      })
-    },
-    [viewKey],
-  )
 
   const pickerHome = picker ? actions.addressOf(picker.items[0]) : null
   const pickerCurrentFolder = useMemo(() => {
@@ -363,7 +237,6 @@ export function WardrobeBrowser({
             : `${plural(filed.length, 'item')} now hang in ${where}`,
       )
       actions.closeFolderPicker()
-      clearSelection()
       setSelectMode(false)
     } catch (error) {
       showErrorToast(
@@ -374,271 +247,198 @@ export function WardrobeBrowser({
     }
   }
 
-  const selectedItems = useMemo(
-    () => listItems.filter((i) => selectedIds.has(i.id)),
-    [listItems, selectedIds],
-  )
-
-  const selectBar = selectMode && (
-    <ItemSelectBar
-      count={selectedIds.size}
-      sticky={scrollList}
-      testId="wardrobe-select-bar"
-      onCancel={() => {
-        setSelectMode(false)
-        clearSelection()
-      }}
-    >
-      <button
-        type="button"
-        className="qt-button-secondary qt-button-sm"
-        disabled={selectedItems.length === 0}
-        onClick={() => actions.openFolderPicker(selectedItems, 'move')}
-      >
-        Move to folder…
-      </button>
-      <button
-        type="button"
-        className="qt-button-secondary qt-button-sm"
-        disabled={selectedItems.length === 0}
-        onClick={() => actions.openFolderPicker(selectedItems, 'copy')}
-      >
-        Copy to folder…
-      </button>
-    </ItemSelectBar>
-  )
-
   return (
-    <section className="flex flex-col min-h-0 relative">
-      <div className="flex flex-col gap-2 mb-2">
-        <input
-          type="search"
-          value={titleFilter}
-          onChange={(e) => setTitleFilter(e.target.value)}
-          placeholder="Search wardrobe…"
-          className="qt-input qt-input-sm"
-          aria-label="Search wardrobe by title"
-        />
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div
-            role="tablist"
-            aria-label="Item kind"
-            className="inline-flex gap-1 qt-bg-muted/50 rounded-lg p-1 self-start"
-          >
-            {(['items', 'outfits'] as ItemKind[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                aria-selected={kindFilter === k}
-                onClick={() => setKindFilter(k)}
-                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                  kindFilter === k
-                    ? 'qt-bg-default text-foreground shadow-sm'
-                    : 'qt-text-secondary hover:text-foreground'
-                }`}
+    <FolderBrowserShell
+      state={state}
+      hasContainer={container !== null}
+      loading={loading}
+      testIdPrefix="wardrobe"
+      rootLabel="Wardrobe"
+      scrollList={scrollList}
+      folderHandlers={folderHandlers}
+      text={{
+        noContainer: 'Select a wardrobe to browse.',
+        folderEmpty: 'Nothing hangs here yet.',
+        noMatch: 'No items match this filter.',
+      }}
+      filters={(
+        <>
+          <input
+            type="search"
+            value={titleFilter}
+            onChange={(e) => setTitleFilter(e.target.value)}
+            placeholder="Search wardrobe…"
+            className="qt-input qt-input-sm"
+            aria-label="Search wardrobe by title"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div
+              role="tablist"
+              aria-label="Item kind"
+              className="inline-flex gap-1 qt-bg-muted/50 rounded-lg p-1 self-start"
+            >
+              {(['items', 'outfits'] as ItemKind[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  aria-selected={kindFilter === k}
+                  onClick={() => setKindFilter(k)}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    kindFilter === k
+                      ? 'qt-bg-default text-foreground shadow-sm'
+                      : 'qt-text-secondary hover:text-foreground'
+                  }`}
+                >
+                  {k === 'items' ? 'Items' : 'Outfits'}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+              Sort
+              <select
+                value={listSort}
+                onChange={(e) => setListSort(e.target.value as WardrobeListSort)}
+                className="qt-select qt-select-sm"
+                aria-label="Sort wardrobe"
               >
-                {k === 'items' ? 'Items' : 'Outfits'}
+                {WARDROBE_LIST_SORTS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SLOT_FILTERS.map((slot) => (
+              <button
+                key={slot}
+                type="button"
+                onClick={() => setSlotFilter(slot)}
+                className={`qt-button-sm ${slotFilter === slot ? 'qt-button-secondary' : 'qt-button-ghost'}`}
+              >
+                {slot === 'all' ? 'All' : WARDROBE_SLOT_META[slot].label}
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-            Sort
-            <select
-              value={listSort}
-              onChange={(e) => setListSort(e.target.value as WardrobeListSort)}
-              className="qt-select qt-select-sm"
-              aria-label="Sort wardrobe"
-            >
-              {WARDROBE_LIST_SORTS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {SLOT_FILTERS.map((slot) => (
-            <button
-              key={slot}
-              type="button"
-              onClick={() => setSlotFilter(slot)}
-              className={`qt-button-sm ${slotFilter === slot ? 'qt-button-secondary' : 'qt-button-ghost'}`}
-            >
-              {slot === 'all' ? 'All' : WARDROBE_SLOT_META[slot].label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(e) => onShowArchivedChange(e.target.checked)}
-              className="qt-checkbox"
-            />
-            Show archived
-          </label>
-          {/* Only the character view merges in other tiers; browsing a
-              container, every row already belongs to it. */}
-          {isCharacterScope && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
               <input
                 type="checkbox"
-                checked={showShared}
-                onChange={(e) => {
-                  setShowShared(e.target.checked)
-                  // Hiding shared wardrobes from inside one goes back to the closet.
-                  if (!e.target.checked && !inOwnTier) navigate(OWN_TIER, '')
-                }}
+                checked={showArchived}
+                onChange={(e) => onShowArchivedChange(e.target.checked)}
                 className="qt-checkbox"
               />
-              Show shared
+              Show archived
             </label>
-          )}
-          <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-            <input
-              type="checkbox"
-              checked={neverWornOnly}
-              onChange={(e) => setNeverWornOnly(e.target.checked)}
-              className="qt-checkbox"
-            />
-            Never worn
-          </label>
-          {isCharacterScope && pronounFilter && (
-            <PronounAwareToggle filter={pronounFilter} items={listItems} />
-          )}
-        </div>
-
-        {/* Folder bar: where we are, and the filing controls. */}
-        {container && (
-          <ItemFolderBar
-            rootLabel="Wardrobe"
-            navLabel="Wardrobe folders"
-            searching={searching}
-            tierLabel={inOwnTier ? null : currentTierLabel}
-            currentFolder={currentFolder}
-            onNavigateRoot={() => navigate(OWN_TIER, '')}
-            onNavigateTier={() => navigate(currentTier, '')}
-            onNavigateFolder={(path) => navigate(currentTier, path)}
-            managed={managed}
-            newFolderOpen={newFolderOpen}
-            onNewFolder={() => setNewFolderName('')}
-            selectMode={selectMode}
-            onToggleSelect={() => {
-              setSelectMode(!selectMode)
-              clearSelection()
-            }}
-            testId="wardrobe-folder-bar"
-          />
-        )}
-        {newFolderOpen && managed && !searching && (
-          <NewFolderInput
-            name={newFolderName}
-            onChange={setNewFolderName}
-            onSubmit={() => void submitNewFolder()}
-            onCancel={closeNewFolder}
-          />
-        )}
-      </div>
-
-      <div className={`flex-1 space-y-1 pb-12 ${scrollList ? 'overflow-y-auto max-h-[55vh]' : ''}`}>
-        {!container ? (
-          <div className="text-sm qt-text-secondary px-3 py-4">Select a wardrobe to browse.</div>
-        ) : loading ? (
-          <div className="text-sm qt-text-secondary px-3 py-4">Loading…</div>
-        ) : (
-          <>
-            {folderRows.map((row) => (
-              <ItemFolderRow
-                key={row.path}
-                row={row}
-                manageable={managed}
-                onOpen={() => navigate(currentTier, row.path)}
-                onRename={(name) => renameFolder(row.path, name)}
-                onDelete={() => void deleteFolder(row.path)}
-                testId="wardrobe-folder-row"
-              />
-            ))}
-            {sharedTierRows.map((row) => (
-              <ItemTierRow
-                key={row.key}
-                label={row.label}
-                scope={row.scope}
-                itemCount={row.itemCount}
-                onOpen={() => navigate(row.key, '')}
-                testId="wardrobe-tier-row"
-              />
-            ))}
-            {folderIsEmpty ? (
-              <div className="text-sm qt-text-secondary px-3 py-4">Nothing hangs here yet.</div>
-            ) : visibleItems.length === 0 && folderRows.length === 0 && sharedTierRows.length === 0 ? (
-              <div className="text-sm qt-text-secondary px-3 py-4">No items match this filter.</div>
-            ) : (
-              visibleItems.map((item) => (
-                <WardrobeItemRow
-                  key={item.id}
-                  item={item}
-                  allItems={resolutionPool}
-                  // Wear / +Layer show whenever a character is being dressed;
-                  // browsing a shared container there is nobody to dress.
-                  inChat={Boolean(wear)}
-                  canManage={canManage}
-                  equipLabel={wear?.equipLabel}
-                  addAction={wear?.addAction}
-                  isUpdatingDefault={actions.updatingDefaultId === item.id}
-                  onToggleDefault={actions.toggleDefault}
-                  onToggleArchived={actions.toggleArchived}
-                  onGenerateImage={actions.generateImage}
-                  generatingImageIds={actions.generatingImageIds}
-                  onOpenImage={actions.openImage}
-                  onEdit={actions.openEditor}
-                  onDuplicate={actions.duplicate}
-                  onMove={actions.move}
-                  onCopy={actions.copy}
-                  onMoveToFolder={(i) => actions.openFolderPicker([i], 'move')}
-                  onCopyToFolder={(i) => actions.openFolderPicker([i], 'copy')}
-                  selection={
-                    selectMode
-                      ? { selected: selectedIds.has(item.id), onToggle: toggleSelected }
-                      : undefined
-                  }
-                  folderCrumb={searching && item.folder ? folderCrumb(item.folder) : null}
-                  onDelete={actions.remove}
-                  onEquip={wear?.onEquip}
-                  onAddToSlot={wear?.onAddToSlot}
+            {/* Only the character view merges in other tiers; browsing a
+                container, every row already belongs to it. */}
+            {isCharacterScope && (
+              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={showShared}
+                  onChange={(e) => {
+                    setShowShared(e.target.checked)
+                    // Hiding shared wardrobes from inside one goes back to the closet.
+                    if (!e.target.checked && !inOwnTier) navigate(OWN_TIER, '')
+                  }}
+                  className="qt-checkbox"
                 />
-              ))
+                Show shared
+              </label>
             )}
-            {selectBar}
-          </>
-        )}
-      </div>
-
-      {/* Sticky create / import controls. Import-from-image analyzes a
-          reference photo against a character, so it stays character-only. */}
-      <div className="sticky bottom-0 -mx-1 px-1 pt-2 pb-1 qt-bg-default border-t qt-border-default flex items-center gap-2 justify-end">
-        {onImportFromImage && (
+            <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+              <input
+                type="checkbox"
+                checked={neverWornOnly}
+                onChange={(e) => setNeverWornOnly(e.target.checked)}
+                className="qt-checkbox"
+              />
+              Never worn
+            </label>
+            {isCharacterScope && pronounFilter && (
+              <PronounAwareToggle filter={pronounFilter} items={listItems} />
+            )}
+          </div>
+        </>
+      )}
+      renderItem={(item) => (
+        <WardrobeItemRow
+          key={item.id}
+          item={item}
+          allItems={resolutionPool}
+          // Wear / +Layer show whenever a character is being dressed;
+          // browsing a shared container there is nobody to dress.
+          inChat={Boolean(wear)}
+          canManage={canManage}
+          equipLabel={wear?.equipLabel}
+          addAction={wear?.addAction}
+          isUpdatingDefault={actions.updatingDefaultId === item.id}
+          onToggleDefault={actions.toggleDefault}
+          onToggleArchived={actions.toggleArchived}
+          onGenerateImage={actions.generateImage}
+          generatingImageIds={actions.generatingImageIds}
+          onOpenImage={actions.openImage}
+          onEdit={actions.openEditor}
+          onDuplicate={actions.duplicate}
+          onMove={actions.move}
+          onCopy={actions.copy}
+          onMoveToFolder={(i) => actions.openFolderPicker([i], 'move')}
+          onCopyToFolder={(i) => actions.openFolderPicker([i], 'copy')}
+          selection={selectMode ? { selected: selectedIds.has(item.id), onToggle: () => state.toggleSelected(item) } : undefined}
+          folderCrumb={searching && item.folder ? folderCrumb(item.folder) : null}
+          onDelete={actions.remove}
+          onEquip={wear?.onEquip}
+          onAddToSlot={wear?.onAddToSlot}
+        />
+      )}
+      selectActions={(
+        <>
           <button
             type="button"
-            onClick={onImportFromImage}
-            className="qt-button-ghost qt-button-sm"
-            title="Import wardrobe items from a reference image"
+            className="qt-button-secondary qt-button-sm"
+            disabled={selectedItems.length === 0}
+            onClick={() => actions.openFolderPicker(selectedItems, 'move')}
           >
-            Import from image
+            Move to folder…
           </button>
-        )}
-        <button
-          type="button"
-          className="qt-button-primary qt-button-sm"
-          disabled={!container}
-          onClick={() => actions.openCreate('single', [], { folder: inOwnTier ? currentFolder : '' })}
-        >
-          + New Item
-        </button>
-      </div>
-
+          <button
+            type="button"
+            className="qt-button-secondary qt-button-sm"
+            disabled={selectedItems.length === 0}
+            onClick={() => actions.openFolderPicker(selectedItems, 'copy')}
+          >
+            Copy to folder…
+          </button>
+        </>
+      )}
+      footer={(
+        <>
+          {/* Import-from-image analyzes a reference photo against a
+              character, so it stays character-only. */}
+          {onImportFromImage && (
+            <button
+              type="button"
+              onClick={onImportFromImage}
+              className="qt-button-ghost qt-button-sm"
+              title="Import wardrobe items from a reference image"
+            >
+              Import from image
+            </button>
+          )}
+          <button
+            type="button"
+            className="qt-button-primary qt-button-sm"
+            disabled={!container}
+            onClick={() => actions.openCreate('single', [], { folder: inOwnTier ? currentFolder : '' })}
+          >
+            + New Item
+          </button>
+        </>
+      )}
+    >
       {picker && pickerHome && (
         <WardrobeFolderPickerDialog
           isOpen
@@ -652,7 +452,7 @@ export function WardrobeBrowser({
           onSubmit={fileToFolder}
         />
       )}
-    </section>
+    </FolderBrowserShell>
   )
 }
 

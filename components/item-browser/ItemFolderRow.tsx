@@ -3,13 +3,14 @@
 /**
  * One subfolder in a folder-of-items browser (the wardrobe's, the
  * Inventory's): open it, or — where the browser manages folders — rename or
- * delete it from its ⋮ menu.
+ * delete it from its ⋮ menu (`ItemActionMenu`, so the keyboard, Escape and
+ * an outside click all close it).
  *
  * @module components/item-browser/ItemFolderRow
  */
 
-import { useRef, useState } from 'react'
-import { useFixedMenu } from '@/hooks/useFixedMenu'
+import { useState } from 'react'
+import { ItemActionMenu, type MenuEntryLike } from './ItemActionMenu'
 import { Icon } from '@/components/ui/icon'
 
 export interface ItemFolderRowView {
@@ -29,13 +30,22 @@ export interface ItemFolderRowProps {
   testId: string
   /** The noun counted, e.g. `item`. */
   countNoun?: string
+  /** More ⋮ entries, between Rename and Delete (Move to…, Copy to…). */
+  extraEntries?: readonly MenuEntryLike[]
 }
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
-export function ItemFolderRow({ row, manageable, onOpen, onRename, onDelete, testId, countNoun = 'item' }: ItemFolderRowProps) {
-  const menuRef = useRef<HTMLDivElement>(null)
-  const { anchorRef, menuStyle, open: menuOpen, setOpen: setMenuOpen, close: closeMenu } = useFixedMenu(menuRef, 120)
+export function ItemFolderRow({
+  row,
+  manageable,
+  onOpen,
+  onRename,
+  onDelete,
+  testId,
+  countNoun = 'item',
+  extraEntries,
+}: ItemFolderRowProps) {
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(row.name)
 
@@ -78,57 +88,23 @@ export function ItemFolderRow({ row, manageable, onOpen, onRename, onDelete, tes
       )}
       <span className="qt-text-xs qt-text-secondary flex-shrink-0">{plural(row.itemCount, countNoun)}</span>
       {manageable && !renaming && (
-        <div className="relative" ref={menuRef}>
-          <button
-            ref={anchorRef}
-            type="button"
-            className="qt-button-ghost qt-button-sm"
-            aria-label={`Folder actions for ${row.name}`}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen(!menuOpen)}
-          >
-            ⋮
-          </button>
-          {menuOpen && (
-            <div
-              role="menu"
-              style={menuStyle ?? undefined}
-              className="z-30 min-w-[10rem] rounded border qt-border-default qt-bg-popover shadow-md"
-              onMouseLeave={() => closeMenu()}
-            >
-              <ul className="divide-y qt-border-default">
-                <li>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                    onClick={() => {
-                      closeMenu()
-                      setName(row.name)
-                      setRenaming(true)
-                    }}
-                  >
-                    Rename
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
-                    onClick={() => {
-                      closeMenu()
-                      onDelete()
-                    }}
-                  >
-                    Delete
-                  </button>
-                </li>
-              </ul>
-            </div>
-          )}
-        </div>
+        <ItemActionMenu
+          label={`Folder actions for ${row.name}`}
+          room={120}
+          minWidthClass="min-w-[10rem]"
+          entries={[
+            {
+              key: 'rename',
+              label: 'Rename',
+              onSelect: () => {
+                setName(row.name)
+                setRenaming(true)
+              },
+            },
+            ...(extraEntries ?? []),
+            { key: 'delete', label: 'Delete', destructive: true, onSelect: onDelete },
+          ]}
+        />
       )}
     </div>
   )

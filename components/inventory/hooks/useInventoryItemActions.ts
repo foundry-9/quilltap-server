@@ -70,7 +70,7 @@ export function describeInventoryRefusal(error: unknown, fallback: string): stri
 export function useInventoryItemActions({ container, requestConfirmation, requestAlert }: InventoryItemActionsOptions) {
   const mutations = useInventoryMutations()
   const [editor, setEditor] = useState<InventoryEditorState | null>(null)
-  const [folderPicker, setFolderPicker] = useState<{ items: ResolvedInventoryItem[] } | null>(null)
+  const [folderPicker, setFolderPicker] = useState<{ items: ResolvedInventoryItem[]; mode: 'move' | 'copy' } | null>(null)
   const [transfer, setTransfer] = useState<{ item: ResolvedInventoryItem; mode: 'move' | 'copy' } | null>(null)
   const [instantiateFor, setInstantiateFor] = useState<
     { archetype: ResolvedInventoryItem } | { destination: InventoryContainer; folder: string } | null
@@ -188,7 +188,7 @@ export function useInventoryItemActions({ container, requestConfirmation, reques
       openEditor: (item: ResolvedInventoryItem) => setEditor({ kind: 'edit', item }),
       closeEditor: () => setEditor(null),
       folderPicker,
-      openFolderPicker: (items: ResolvedInventoryItem[]) => setFolderPicker({ items }),
+      openFolderPicker: (items: ResolvedInventoryItem[], mode: 'move' | 'copy' = 'move') => setFolderPicker({ items, mode }),
       closeFolderPicker: () => setFolderPicker(null),
       transfer,
       openTransfer: (item: ResolvedInventoryItem, mode: 'move' | 'copy') => setTransfer({ item, mode }),

@@ -25,9 +25,6 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/query/keys'
-import { apiFetch } from '@/lib/query/fetcher'
 import { useWardrobeDialog } from '@/components/providers/wardrobe-dialog-provider'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast } from '@/lib/toast'
@@ -57,65 +54,10 @@ import { OutfitHistoryTab } from './outfit-history-tab'
 import { useFittingRoom } from './hooks/useFittingRoom'
 import { useComposerHandlers } from './hooks/useComposerHandlers'
 import { usePronounGuidanceFilter } from '@/lib/hooks/use-pronoun-guidance-filter'
-
-interface CharacterSummary {
-  id: string
-  name: string
-  avatarUrl?: string | null
-}
-
-/** A project or group offered as a browsable shared wardrobe container. */
-interface ContainerSummary {
-  id: string
-  name: string
-}
+import { useContainerCatalogue } from '@/lib/hooks/use-container-catalogue'
+import { ContainerSelect } from '@/components/item-browser/ContainerSelect'
 
 type RightTab = 'live' | 'builder' | 'history'
-
-const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name)
-
-/**
- * Every place a wardrobe item can live, for the container selector: the
- * characters, projects and groups lists, read through their shared keys.
- */
-function useWardrobeCatalogue() {
-  const characters = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters?: CharacterSummary[] }>('/api/v1/characters', { signal }),
-  })
-  const projects = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ projects?: ContainerSummary[] }>('/api/v1/projects', { signal }),
-  })
-  const groups = useQuery({
-    queryKey: queryKeys.groups.list(),
-    queryFn: ({ signal }) => apiFetch<{ groups?: ContainerSummary[] }>('/api/v1/groups', { signal }),
-  })
-  return {
-    characters: useMemo(
-      () => [...(characters.data?.characters ?? [])].sort(byName),
-      [characters.data],
-    ),
-    /** Settled (successfully or not) — the auto-selection waits for this. */
-    charactersSettled: characters.isFetched,
-    projects: useMemo(
-      () =>
-        (projects.data?.projects ?? [])
-          .map((p) => ({ id: p.id, name: p.name || 'Untitled project' }))
-          .sort(byName),
-      [projects.data],
-    ),
-    groups: useMemo(
-      () =>
-        (groups.data?.groups ?? [])
-          .map((g) => ({ id: g.id, name: g.name || 'Untitled group' }))
-          .sort(byName),
-      [groups.data],
-    ),
-  }
-}
 
 /**
  * Wrapper component used by the layout. Reads context from the provider and
@@ -207,7 +149,7 @@ function WardrobeControlDialogInner({
   asTab = false,
 }: InnerProps) {
   const isInChat = chatId !== null
-  const catalogue = useWardrobeCatalogue()
+  const catalogue = useContainerCatalogue()
 
   // Which wardrobe is being browsed: a character's merged view, or one shared
   // container (Quilltap General, a project, a group) edited in place. With
@@ -425,48 +367,15 @@ function WardrobeControlDialogInner({
                 className="w-6 h-6 rounded-full object-cover qt-bg-muted border qt-border-default flex-shrink-0"
               />
             )}
-            <select
+            <ContainerSelect
               id="wardrobe-container-select"
               className="qt-select flex-1 max-w-md"
               value={selectedContainer ? encodeWardrobeContainer(selectedContainer) : ''}
-              onChange={(e) => setChosenContainer(decodeWardrobeContainer(e.target.value))}
-            >
-              {!selectedContainer && (
-                <option value="" disabled>
-                  Select a wardrobe
-                </option>
-              )}
-              {catalogue.characters.length > 0 && (
-                <optgroup label="Characters">
-                  {catalogue.characters.map((c) => (
-                    <option key={c.id} value={encodeWardrobeContainer({ scope: 'character', id: c.id })}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              <optgroup label="General">
-                <option value={encodeWardrobeContainer(GENERAL_CONTAINER)}>{GENERAL_WARDROBE_NAME}</option>
-              </optgroup>
-              {catalogue.projects.length > 0 && (
-                <optgroup label="Projects">
-                  {catalogue.projects.map((p) => (
-                    <option key={p.id} value={encodeWardrobeContainer({ scope: 'project', id: p.id })}>
-                      {p.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {catalogue.groups.length > 0 && (
-                <optgroup label="Groups">
-                  {catalogue.groups.map((g) => (
-                    <option key={g.id} value={encodeWardrobeContainer({ scope: 'group', id: g.id })}>
-                      {g.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+              onChange={(key) => setChosenContainer(decodeWardrobeContainer(key))}
+              catalogue={catalogue}
+              generalName={GENERAL_WARDROBE_NAME}
+              placeholder="Select a wardrobe"
+            />
           </div>
           {!isCharacterScope && selectedContainer && (
             <p className="qt-text-xs qt-text-secondary px-1">

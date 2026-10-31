@@ -34,7 +34,8 @@ import {
   inventoryImagesUrl,
   type InventoryContainer,
 } from '@/lib/inventory/container'
-import { inventoryRequest, useInventoryImages, useInventoryList, type InventoryItemBody } from '@/lib/hooks/use-inventory'
+import { inventoryRequest, useInventoryFolders, useInventoryImages, useInventoryList, type InventoryItemBody } from '@/lib/hooks/use-inventory'
+import { ItemFolderField } from '@/components/item-browser/ItemFolderField'
 import type { InventoryItemActions } from './hooks/useInventoryItemActions'
 import { describeInventoryRefusal } from './hooks/useInventoryItemActions'
 import { InventoryPicture } from './inventory-glyph'
@@ -130,6 +131,7 @@ export function InventoryItemEditor({
   const [touched, setTouched] = useState<Set<keyof Draft>>(new Set())
   const [saving, setSaving] = useState(false)
   const parent = useMemo(() => (item?.parentId ? poolItems.find((p) => p.id === item.parentId) ?? null : null), [item, poolItems])
+  const { folders } = useInventoryFolders(container)
 
   // A project or group kit may also name Quilltap General's objects.
   const generalExtra = useInventoryList(
@@ -274,7 +276,7 @@ export function InventoryItemEditor({
     )
   }
 
-  const textField = (key: 'name' | 'title' | 'emoji' | 'folder', label: string, placeholder?: string) => (
+  const textField = (key: 'name' | 'title' | 'emoji', label: string, placeholder?: string) => (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <label className="text-sm text-foreground" htmlFor={`inventory-${key}`}>{label}</label>
@@ -413,7 +415,18 @@ export function InventoryItemEditor({
         )}
         <div className="grid md:grid-cols-2 gap-3">
           {textField('emoji', 'Emoji glyph', isKit ? '🎒' : '🗡️')}
-          {textField('folder', 'Folder', isKit ? 'Loadouts' : 'Weapons/Edged')}
+          <ItemFolderField
+            id="inventory-folder"
+            folders={folders}
+            value={draft.folder}
+            onChange={(folder) => set('folder', folder)}
+            rootLabel="Inventory (top level)"
+            placeholder={isKit ? 'e.g., Loadouts' : 'e.g., Weapons/Edged'}
+            hint="Where it is filed for your browsing; it never changes what anyone carries."
+            labelClassName="text-sm text-foreground block mb-1"
+            inputClassName="qt-input qt-input-sm w-full"
+            selectClassName="qt-select qt-select-sm w-full"
+          />
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between">

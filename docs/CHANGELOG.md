@@ -4,6 +4,21 @@
 
 ### 4.12-dev
 
+#### Shared folder browser for the Wardrobe and the Inventory (folder-browser Phase 1)
+
+- First phase of `docs/developer/features/folder-browser.md`, which replaces the SVAR plan: one folder-and-item browser library that the Wardrobe, the Inventory and (in later phases) the Scriptorium and Document Mode share.
+- `lib/folder-browser/view.ts`: the pure view rules (`childFolderRows`, `tierRows`, `tierLabel`, `OWN_TIER`), moved out of `lib/wardrobe/folder-view.ts`, which now re-exports them and keeps only `viewTierOf`.
+- `components/item-browser/`:
+  - `useFolderBrowserState` (where the browser is, select mode and selection, the new-folder draft, and the derived rows) and `useItemFolderHandlers` (New folder / Rename / Delete over an `ItemFolderOps` port, with caller wording). These replace about 150 near-identical lines in each browser.
+  - `FolderBrowserShell`: the shared layout. `WardrobeBrowser` and `InventoryBrowser` now supply only their filters, rows, select-bar buttons, footer and wording.
+  - `ItemActionMenu`: one ⋮ menu for item and folder rows, declared as `MenuEntry[]` (falsy entries dropped). It is a WAI-ARIA menu button: focus moves into the menu on open; arrow keys, Home and End move between entries; Escape returns focus to the button and does not close an enclosing dialog; Tab or an outside click closes it. Folder rows used to close their menu only on mouse-leave. A row with no actions now shows no ⋮ instead of an empty menu.
+  - `ContainerSelect` and `lib/hooks/use-container-catalogue.ts` replace four hand-written container `<select>`s (Wardrobe and Inventory control dialogs, both transfer dialogs) and two copies of the catalogue hook.
+  - `ItemFolderField`: the editor's folder picker, shared by both editors.
+- Inventory gains **Copy to folder…** (row menu, for copyable objects, and the select bar); the server already supported `copy-items`. Its item editor's Folder field is now a folder picker instead of a text box.
+- `WardrobeTransferDialog` reads destinations from the shared catalogue and posts through a TanStack mutation instead of raw `fetch`. The destination group "Users" is now "Characters". `GET /api/v1/wardrobe/transfers` no longer has a UI caller.
+- Inventory tier-row counts now count every item in the tier, as the Wardrobe's did, not just the ones passing the current filters.
+- Tests: `__tests__/unit/components/item-browser/item-action-menu.test.tsx`, `__tests__/unit/lib/folder-browser/view.test.ts`, and a Copy to folder case in `inventory-ui.test.tsx`. `help/wardrobe.md` and `help/inventory.md` updated.
+
 #### Raised-hand status chip above the Salon composer
 
 - Raising a hand (soft interrupt) gave no feedback beyond the button's pulse, and a decline was reported only by a short toast. A new `RaisedHandChip` (`app/salon/[id]/components/RaisedHandChip.tsx`) sits in the composer's chip row beside the pending Informs and shows each step: raised, being weighed by a named speaker, then yielded / carried on / nobody asked (the stream ended with the hand still up). The outcome stays until dismissed or the operator sends or nudges. Announced via `aria-live="polite"`.
