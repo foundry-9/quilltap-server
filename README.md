@@ -288,7 +288,7 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **AI & LLM:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK
 
-**UI:** Tailwind CSS, TanStack Query, Lexical, SVAR File Manager, React Markdown, React Syntax Highlighter, KaTeX, PDF.js, sharp, Lucide Icons
+**UI:** Tailwind CSS, TanStack Query, Lexical, React Markdown, React Syntax Highlighter, KaTeX, PDF.js, sharp, Lucide Icons
 
 **Infrastructure:** Docker
 

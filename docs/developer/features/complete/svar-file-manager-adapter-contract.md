@@ -1,5 +1,7 @@
 # SVAR File Manager — Adapter Contract (backend-facing decisions)
 
+> **Superseded (2026-10-31).** The SVAR route was abandoned in favour of the shared folder browser — see [folder-browser.md](folder-browser.md). The SVAR code, its tests and the `@svar-ui/react-filemanager` dependency were removed in folder-browser Phase 4. Kept as a historical record.
+
 **Status:** Phase 1 landing (library-independent backend decisions)
 **Parent plan:** [svar-file-manager-implementation-plan.md](svar-file-manager-implementation-plan.md)
 **Last updated:** 2026-06-10

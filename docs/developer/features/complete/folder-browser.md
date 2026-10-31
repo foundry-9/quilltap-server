@@ -1,6 +1,6 @@
 # One Folder Browser — Wardrobe, Inventory and the Scriptorium
 
-**Status:** Phases 1–5 done (2026-10-31). Phase 6 not started.
+**Status:** Complete (2026-10-31). All six phases shipped; design of record.
 **Supersedes:** [svar-file-manager-implementation-plan.md](svar-file-manager-implementation-plan.md) — the SVAR route is abandoned in favour of growing the Wardrobe/Inventory browser into a shared library.
 
 ## Goal
@@ -376,3 +376,25 @@ Shipped as specified, with these details settled:
 - **Fix found live.** Nested dialogs: a `BaseModal` now ignores an outside click or Escape that belongs to another dialog (target or focus inside one, or any open `alertdialog`).
 - **Known, not changed:** a Markdown or text file stored as a blob in a database store (an upload through the blob route) cannot be opened in the editor, because `readDatabaseDocument` reads only the documents table. This predates the folder browser.
 - **Live check (V4test):** an image from a vault picked through the browser opened in a read-only tab and survived a reload. A PDF opened through the chat API rendered in its pane, and a write to it was refused with a 400. Both closed from their own Close buttons. In the picker: Copy to… stacked over it, Escape and inner clicks closed only that dialog, and a delete confirmation's Cancel and Escape left the picker open.
+
+## Phase 6 as built (2026-10-31)
+
+- **Specs retired.** `svar-file-manager-implementation-plan.md` and `svar-file-manager-adapter-contract.md` moved to `complete/` with a superseded banner pointing here. This spec moved to `complete/` as the design of record. All three are registered in `.claude/commands/update-documentation.md`.
+- **Stale pointers fixed:**
+  - `README.md` (the SVAR credit).
+  - `docs/FEATURES.md` (no drag-and-drop; the folder browser and viewers described instead).
+  - `DEAD-CODE-REPORT.md` (the kept SVAR pair is gone).
+  - `custom-tool-builder.md` (the Workbench action now lives in the ⋮ menu).
+- **API.md** documents Document Mode's `viewer` targets on both routes, and the read-only refusal on `write-document`.
+- **Help.** Already current from the phases themselves:
+  - `help/wardrobe.md` and `help/inventory.md` from Phase 1.
+  - `help/mount-points.md` ("Browsing a Store", hard links) from Phase 4.
+  - `help/scriptorium.md` (the picker, read-only viewers) from Phase 5.
+- **Memory.** The SVAR project memory was retired.
+
+### Left for later
+
+- **Drag-and-drop** (open question 4): out of scope. When it comes, it belongs in `FolderBrowserShell`, so every browser gets it at once.
+- **`FileBrowser`'s mount mode** still serves the project and general libraries in the picker. Its legacy `/api/v1/files` mode is a separate clean-up.
+- **Blob-stored text files.** A Markdown or text file stored as a blob in a database store cannot be opened in Document Mode's editor (see Phase 5).
+- **External filesystem changes.** A change made outside Quilltap to a filesystem store does not publish a realtime event (see Phase 3).

@@ -1,6 +1,8 @@
 # SVAR File Manager — Implementation Plan
 
-**Status:** Phases 0–3 shipped in 0dba2d804 (2026-06-10): adapter, capabilities API, theme bridge, and the Scriptorium heavy costume behind a "New file manager (beta)" toggle. Remaining: Phase 4 picker swaps (`SvarFilePicker` is built but unused; `FolderPicker` / `DocumentPickerModal` not yet replaced), promoting SVAR out of beta, retiring `FileBrowser`, Phase 5 help docs. Phase 0 findings: [complete/svar-bridge-spike-findings.md](complete/svar-bridge-spike-findings.md).
+> **Superseded (2026-10-31).** The SVAR route was abandoned in favour of the shared folder browser — see [folder-browser.md](folder-browser.md). The SVAR code, its tests and the `@svar-ui/react-filemanager` dependency were removed in folder-browser Phase 4. Kept as a historical record.
+
+**Status:** Phases 0–3 shipped in 0dba2d804 (2026-06-10): adapter, capabilities API, theme bridge, and the Scriptorium heavy costume behind a "New file manager (beta)" toggle. Remaining: Phase 4 picker swaps (`SvarFilePicker` is built but unused; `FolderPicker` / `DocumentPickerModal` not yet replaced), promoting SVAR out of beta, retiring `FileBrowser`, Phase 5 help docs. Phase 0 findings: [complete/svar-bridge-spike-findings.md](svar-bridge-spike-findings.md).
 **Author:** Charlie + Ariadne
 **Last updated:** 2026-06-10
 **Supersedes:** the early-May landscape survey (Chonky / Cubone / commercial rule-out → SVAR)

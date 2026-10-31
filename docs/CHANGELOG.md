@@ -4,6 +4,18 @@
 
 ### 4.12-dev
 
+#### Folder-browser docs close-out (folder-browser Phase 6)
+
+- `docs/developer/features/folder-browser.md` is complete and moved to `features/complete/`, with a "Phase 6 as built" section listing what was left for later.
+- The SVAR implementation plan and adapter contract moved to `features/complete/`, marked superseded.
+- `API.md` documents the Document Mode `viewer` target and the read-only `write-document` refusal on both routes.
+- Fixed stale references:
+  - README: the SVAR credit.
+  - FEATURES.md: claimed drag-and-drop, which does not exist; it now describes the folder browser and viewers.
+  - The dead-code report's kept SVAR pair.
+  - The custom-tool spec's FileTable pointer.
+- The documentation index (`.claude/commands/update-documentation.md`) is updated.
+
 #### Document Mode: folder browser in the picker, read-only viewers (folder-browser Phase 5)
 
 - The Open Document picker browses a store with `DocumentStoreBrowser` in pick mode, replacing its own tree, breadcrumb and new-folder form. Opening a file opens it in Document Mode, and the ⋮ menus stay. "New document here" moved into the browser's footer through the new `footerActions` prop. "Go there" switches to another store when the chat can reach it.
