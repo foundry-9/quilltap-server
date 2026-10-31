@@ -1,6 +1,6 @@
 # One Folder Browser — Wardrobe, Inventory and the Scriptorium
 
-**Status:** Phases 1–2 done (2026-10-31). Phases 3–6 not started.
+**Status:** Phases 1–3 done (2026-10-31). Phases 4–6 not started.
 **Supersedes:** [svar-file-manager-implementation-plan.md](svar-file-manager-implementation-plan.md) — the SVAR route is abandoned in favour of growing the Wardrobe/Inventory browser into a shared library.
 
 ## Goal
@@ -326,3 +326,24 @@ Each phase lands green and on its own.
 4. **Drag and drop.** None exists in Wardrobe/Inventory today. Proposed:
    out of scope for this pass. It would be a later addition to
    `FolderBrowserShell` that every browser gets at once.
+
+## Phase 3 as built (2026-10-31)
+
+Shipped as specified, with these details settled:
+
+- **Action name.** The DOCX render is `?action=render-html`, not
+  `?render=html`. The per-file GET now dispatches through `dispatchAction`
+  (`links`, `render-html`, fallback: read).
+- **Sanitising the DOCX HTML.** The server only neutralises link targets.
+  Mammoth escapes text and emits no script, but a link can carry
+  `javascript:`. Full sanitising happens in the client with DOMPurify
+  (already a dependency) in Phase 4, because there is no server-side DOM.
+- **Folder moves between stores** go file by file through `moveFile`, not
+  copy-then-delete. A database → database move then keeps each link's
+  identity and hard-link group.
+- **Live updates** are published from the `db-store-events` emitters, which
+  already describe themselves as feeding UI refresh, as well as from the
+  file and folder operations.
+- **Not yet covered:** a change made outside Quilltap to a filesystem store
+  (picked up by the watcher or a rescan) does not publish yet.
+

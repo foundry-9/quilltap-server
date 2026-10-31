@@ -270,7 +270,17 @@ export const queryKeys = {
   },
   mountPoints: {
     all: ['mount-points'] as const,
+    /** Prefix of every `list(...)` key — a store's counts appear in the list. */
+    lists: ['mount-points', 'list'] as const,
     list: (filters?: Filters) => ['mount-points', 'list', filters ?? {}] as const,
+    /** Prefix of every read about one store — the `mountPoints` topic's scoped refetch. */
+    store: (id: string) => ['mount-points', 'store', id] as const,
+    /** One store's record (`GET /api/v1/mount-points/[id]`, with capabilities). */
+    detail: (id: string) => ['mount-points', 'store', id, 'detail'] as const,
+    /** One store's browser listing (`GET …/[id]/files`: files and folders). */
+    files: (id: string) => ['mount-points', 'store', id, 'files'] as const,
+    /** Where one file appears (`GET …/[id]/files/<path>?action=links`). */
+    links: (id: string, path: string) => ['mount-points', 'store', id, 'links', path] as const,
   },
   tags: {
     all: ['tags'] as const,

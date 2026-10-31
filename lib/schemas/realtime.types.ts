@@ -34,7 +34,11 @@ export const REALTIME_TOPICS = [
   'projects',
   /** Characters and their prompts/photos. */
   'characters',
-  /** Document stores and their indexing/embedding status. */
+  /**
+   * Document stores, their indexing/embedding status, and their files and
+   * folders. Scoped by store id (`publishMountChange`): that store's browser
+   * re-reads.
+   */
   'mountPoints',
   /**
    * The Commonplace Book's rows. Scoped by *chat* id rather than by memory id

@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, errorResponse, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { createDatabaseFolder } from '@/lib/mount-index/database-store';
 import { createFilesystemFolder } from '@/lib/mount-index/scanner';
+import { publishMountChange } from '@/lib/mount-index/realtime';
 import { BasePathUnavailableError } from '@/lib/mount-index/base-path-availability';
 
 const createFolderSchema = z.object({
@@ -65,6 +66,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
           path: result.path,
           userId: user.id,
         });
+        publishMountChange(id);
         return successResponse({ path: result.path });
       }
 
@@ -101,6 +103,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
         userId: user.id,
       });
 
+      publishMountChange(id);
       return successResponse({ path: rel });
     } catch (error) {
       logger.error(

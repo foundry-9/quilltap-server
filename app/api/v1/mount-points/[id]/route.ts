@@ -8,6 +8,10 @@
  * Actions:
  * POST /api/v1/mount-points/[id]?action=scan - Trigger scan and embedding
  * POST /api/v1/mount-points/[id]?action=sync - Mirror a database store to a server-local directory
+ * POST /api/v1/mount-points/[id]?action=move-file | copy-file | link-file | unlink-file
+ * POST /api/v1/mount-points/[id]?action=delete-folder | move-folder | copy-folder
+ *   (see API.md: folder moves and copies may name another store; a folder
+ *   delete may be `recursive`)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -28,7 +32,8 @@ import {
 } from '@/lib/mount-index/conversion';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
 import { copyFile, moveFile, writeFile, deleteFile, linkFile, FileOpError } from '@/lib/mount-index/file-ops';
-import { deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
+import { copyFolder, deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
+import { publishMountChange } from '@/lib/mount-index/realtime';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { fileOpStatus } from '@/lib/mount-index/file-op-status';
 import { deriveMountCapabilities } from '@/lib/mount-index/capabilities';
@@ -546,12 +551,29 @@ const copyFileSchema = moveFileSchema.extend({
 
 const deleteFolderSchema = z.object({
   path: z.string().min(1),
+  /** Delete everything inside too (each file through the per-file delete). */
+  recursive: z.boolean().optional(),
 });
 
 const moveFolderSchema = z.object({
   fromPath: z.string().min(1),
   toPath: z.string().min(1),
+  /** Another store to move (or copy) the folder into; omitted, this one. */
+  destMountPointId: z.string().min(1).optional(),
 });
+
+const unlinkFileSchema = z.object({
+  path: z.string().min(1),
+});
+
+/** A file op's refusal as its HTTP answer, or a logged 500. */
+function fileOpFailure(err: unknown, label: string, mountPointId: string): NextResponse {
+  if (err instanceof FileOpError || err instanceof DatabaseStoreError) {
+    return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
+  }
+  logger.error(`[Mount Points v1] Error trying to ${label}`, { mountPointId }, err instanceof Error ? err : undefined);
+  return serverError(`Failed to ${label}`);
+}
 
 async function handleMoveFile(
   req: NextRequest,
@@ -669,7 +691,11 @@ async function handleDeleteFolder(
     return badRequest('Delete folder requires a non-empty path');
   }
   try {
-    const result = await deleteFolder({ mountPointId: id, relativePath: parsed.data.path });
+    const result = await deleteFolder({
+      mountPointId: id,
+      relativePath: parsed.data.path,
+      recursive: parsed.data.recursive,
+    });
     logger.info('[Mount Points v1] Deleted folder', { ...result, userId: user.id });
     return successResponse(result);
   } catch (err) {
@@ -692,7 +718,12 @@ async function handleMoveFolder(
     return badRequest('Move folder requires fromPath and toPath');
   }
   try {
-    const result = await moveFolder({ mountPointId: id, fromPath: parsed.data.fromPath, toPath: parsed.data.toPath });
+    const result = await moveFolder({
+      mountPointId: id,
+      fromPath: parsed.data.fromPath,
+      toPath: parsed.data.toPath,
+      destMountPointId: parsed.data.destMountPointId,
+    });
     logger.info('[Mount Points v1] Moved folder', { ...result, userId: user.id });
     return successResponse(result);
   } catch (err) {
@@ -702,6 +733,62 @@ async function handleMoveFolder(
     logger.error('[Mount Points v1] Error moving folder', { mountPointId: id }, err instanceof Error ? err : undefined);
     return serverError('Failed to move folder');
   }
+}
+
+async function handleCopyFolder(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = moveFolderSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Copy folder requires fromPath and toPath');
+  }
+  try {
+    const result = await copyFolder({
+      mountPointId: id,
+      fromPath: parsed.data.fromPath,
+      toPath: parsed.data.toPath,
+      destMountPointId: parsed.data.destMountPointId,
+    });
+    logger.info('[Mount Points v1] Copied folder', { ...result, userId: user.id });
+    return successResponse(result);
+  } catch (err) {
+    return fileOpFailure(err, 'copy folder', id);
+  }
+}
+
+/**
+ * `{ path }`: take a file out of its hard-link group. It keeps its content
+ * and forks on its next write; a group left with one member dissolves.
+ */
+async function handleUnlinkFile(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = unlinkFileSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Unlink requires a non-empty path');
+  }
+  const link = await repos.docMountFileLinks.findByMountPointAndPath(id, parsed.data.path);
+  if (!link) return notFound('File');
+  const result = await repos.docMountFileLinks.clearLinkGroup(link.id);
+  publishMountChange(id);
+  if (result.dissolved && result.groupId) {
+    // The one member left behind lives in some store; it changed too.
+    const siblings = await repos.docMountFileLinks.findByFileId(link.fileId);
+    for (const sibling of siblings) if (sibling.mountPointId !== id) publishMountChange(sibling.mountPointId);
+  }
+  logger.info('[Mount Points v1] Unlinked file from its hard-link group', {
+    mountPointId: id,
+    path: link.relativePath,
+    ...result,
+    userId: user.id,
+  });
+  return successResponse({ mountPointId: id, path: link.relativePath, ...result });
 }
 
 async function handleWriteFile(
@@ -878,10 +965,12 @@ export const POST = createContextParamsHandler<{ id: string }>(
       'move-file': handleMoveFile,
       'copy-file': handleCopyFile,
       'link-file': handleLinkFile,
+      'unlink-file': handleUnlinkFile,
       'write-file': handleWriteFile,
       'delete-file': handleDeleteFile,
       'delete-folder': handleDeleteFolder,
       'move-folder': handleMoveFolder,
+      'copy-folder': handleCopyFolder,
       reindex: handleReindex,
       embed: handleEmbed,
     });

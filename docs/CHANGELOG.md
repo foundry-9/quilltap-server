@@ -4,6 +4,24 @@
 
 ### 4.12-dev
 
+#### Document-store API for the folder browser (folder-browser Phase 3)
+
+- `GET /api/v1/mount-points/[id]/files` now returns `DocMountBrowserEntry` rows from the new `DocMountFileLinksRepository.listForBrowser`. `extractedText` is dropped (no UI read it from the listing). Each row gains `linkGroupId` and `linkCount` (links in any store sharing its content row).
+- Per-file `GET …/files/<path>` gains two `dispatchAction` verbs:
+  - `?action=links`: every place the file's content appears, with hard-link group members marked.
+  - `?action=render-html`: a `.docx` rendered to HTML with mammoth (`lib/mount-index/converters/docx-html.ts`). Link targets other than http(s), mailto and in-page anchors are replaced with `#`.
+- New `POST …?action=unlink-file`, backed by `DocMountFileLinksRepository.clearLinkGroup`: takes a file out of its hard-link group. It keeps its content and forks on its next write; a group of one dissolves.
+- Folder operations (`lib/mount-index/folder-ops.ts`):
+  - New `copy-folder`.
+  - `move-folder` takes an optional `destMountPointId` to move into another store.
+  - `delete-folder` takes `recursive: true`.
+  - All three walk the folder and use the existing per-file `copyFile` / `moveFile` / `deleteFile`. A copy or cross-store move that fails partway is undone. Recursive delete refuses a filesystem folder that holds files the store doesn't index.
+- Live updates for document stores:
+  - New `publishMountChange` (`lib/mount-index/realtime.ts`), called from the database-store change events, every `file-ops` entry point, the folder operations and folder create.
+  - `mountPoints` events are now scoped by store id.
+  - New query keys `mountPoints.store(id)`, `detail`, `files`, `links` and `lists`. `topic-map.ts` invalidates the store's keys plus the store lists.
+- No schema changes. API.md updated. Tests: `folder-ops-walks.test.ts`, `docx-html.test.ts`, browser listing and `clearLinkGroup` cases in `doc-mount-link-groups.integration.test.ts`, and a scoped-topic case in `topic-map.test.ts`.
+
 #### Shared server folder layer for the Wardrobe and the Inventory (folder-browser Phase 2)
 
 - New `lib/mount-index/item-folder-location.ts`:

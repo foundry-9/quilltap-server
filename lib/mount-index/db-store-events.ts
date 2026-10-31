@@ -21,6 +21,7 @@
 
 import { EventEmitter } from 'events';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { publishMountChange } from './realtime';
 
 const logger = createServiceLogger('MountIndex:DbStoreEvents');
 
@@ -63,16 +64,21 @@ const emitter = new TypedEmitter();
 // the default cap so Node doesn't warn.
 emitter.setMaxListeners(50);
 
+// Every change also tells open browsers that the store changed (the realtime
+// hint carries no data; they re-read).
 export function emitDocumentWritten(event: DocumentWrittenEvent): void {
   emitter.emit('document-written', event);
+  publishMountChange(event.mountPointId);
 }
 
 export function emitDocumentDeleted(event: DocumentDeletedEvent): void {
   emitter.emit('document-deleted', event);
+  publishMountChange(event.mountPointId);
 }
 
 export function emitDocumentMoved(event: DocumentMovedEvent): void {
   emitter.emit('document-moved', event);
+  publishMountChange(event.mountPointId);
 }
 
 export function onDocumentWritten(listener: (event: DocumentWrittenEvent) => void): () => void {

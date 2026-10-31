@@ -146,9 +146,9 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
       ]
 
     case 'mountPoints':
-      // No per-store detail key exists yet; the namespace prefix is the
-      // narrowest thing there is to invalidate.
-      return [queryKeys.mountPoints.all]
+      // Scoped by store id: that store's detail, listing and link lookups,
+      // plus the store lists (their counts move). Bare, the namespace.
+      return id ? [queryKeys.mountPoints.store(id), queryKeys.mountPoints.lists] : [queryKeys.mountPoints.all]
 
     default:
       return []

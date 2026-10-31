@@ -5635,6 +5635,8 @@ List indexed files plus the folder structure for a mount point.
 
 For filesystem/obsidian mounts the folder list is augmented with on-disk directories (so empty folders show up too). For database-backed mounts it comes from `doc_mount_folders`.
 
+Each file is a `DocMountBrowserEntry`: the joined link and content fields **without `extractedText`** (read a file's text through the per-file route), plus `linkGroupId` (non-null for a deliberate hard link) and `linkCount` (how many links in any store share this file's content row, itself included). `linkCount > 1` with a null `linkGroupId` is dedup sharing, which forks on the next write.
+
 #### `GET /api/v1/mount-points/[id]/files/[...path]`
 
 Read a single file's content. This is the canonical per-file read for the CLI and the Scriptorium file browser/editor; it resolves text documents, database blobs, and on-disk files uniformly.
@@ -5643,6 +5645,8 @@ Read a single file's content. This is the canonical per-file read for the CLI an
 - `encoding` — `utf-8` (default for text-like files) or `base64` (default for binary). Any file can be read as `base64`.
 - `offset`, `limit` — line window (UTF-8 reads only), mirroring `doc_read_file`.
 - `raw=1` (or `Accept: application/octet-stream`) — stream the raw bytes instead of a JSON envelope (used as an `<img>`/download source). Response headers include `Content-Type`, `Content-Length`, and `X-File-Sha256`.
+- `action=links` — instead of the content, every place the file's content appears: `{ linkGroupId, locations: [{ linkId, mountPointId, mountPointName, relativePath, grouped, self }] }`, the file itself first. `grouped` marks members of the same deliberate hard-link group; the rest share content by dedup only.
+- `action=render-html` — a `.docx` rendered to HTML for the read-only viewer: `{ html }` (mammoth). Link targets other than `http(s):`, `mailto:` and `#anchor` are replaced with `#`; clients must still sanitise before inserting it. Any other file type is a `400`.
 
 **Response** (JSON envelope): `200 OK`
 
@@ -5758,8 +5762,12 @@ Cross-mount and folder operations live on the `[id]` action-dispatch route (they
 - `POST /api/v1/mount-points/[id]?action=move-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Cross-mount move (rename / byte-copy / hard-link strategy chosen automatically). Returns `{ strategy, sourceSha256, destSha256, sizeBytes, ... }`.
 - `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies. The result is an **independent** document: it shares a content-addressed row with the source until either side is written and then forks. `force` skips the shared-content path and writes bytes for real; the end state is the same.
 - `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Both ends are enrolled in a `linkGroupId` (see DDL), so a later write through *either* path repoints both and re-chunks the sibling — unlike `copy-file`, which forks. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
-- `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path }`. Empty folders only (`409 NOT_EMPTY` otherwise).
-- `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath }`. Moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation).
+- `POST /api/v1/mount-points/[id]?action=unlink-file` — JSON `{ path }`. Takes the file out of its hard-link group: it keeps its current content and forks on its next write; a group left with one member dissolves. Returns `{ mountPointId, path, groupId, dissolved }` (`groupId: null` when it was in none). `404` for an unknown path.
+- `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path, recursive? }`. Without `recursive`, empty folders only (`409 NOT_EMPTY` otherwise). With `recursive: true`, every indexed file under it goes through the per-file delete (shared content is reclaimed only with its last link), then its folders, deepest first; a filesystem folder holding files the store does not index is refused (`409 CONFLICT`) before anything is deleted. Returns `{ mountPointId, path, deletedFiles }`.
+- `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath, destMountPointId? }`. Within one store, moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation). With another store's `destMountPointId`, moves file by file through `move-file` (a database → database move keeps each link's identity and hard-link group), then removes the emptied source folders; a failure part-way moves what had moved back.
+- `POST /api/v1/mount-points/[id]?action=copy-folder` — JSON `{ fromPath, toPath, destMountPointId? }`. Copies the folder and everything under it, empty subfolders included, file by file through `copy-file`, into this store or another. Refused onto an existing folder (`409 DEST_EXISTS`) or into itself (`400 INVALID_PATH`); a failure part-way removes the copies made. Returns `{ mountPointId, fromPath, destMountPointId, toPath, files, folders }`.
+
+Every file and folder operation publishes the `mountPoints` realtime topic scoped to each store it touched, so an open browser re-reads its listing.
 
 > **Mount-point files vs. the file library (`/api/v1/files`).** These mount-point endpoints address content by **(mount, relative path)** and are the one surface for Scriptorium file CRUD. `/api/v1/files` is a separate **library** layer that addresses by **file id** and carries domain metadata the mount index has no columns for (category, generation prompt/model, `linkedTo` associations, tags, image dimensions, thumbnails, avatar back-references). Its uploads already persist bytes into mount stores via the storage bridges (which now funnel through `storeMountFile`), and `GET /api/v1/files/[id]` plus `/api/v1/files/proxy/[...key]` remain the stable, persisted read URLs for library assets. Use the mount-point routes for raw file content; use `/api/v1/files` for the library/metadata layer.
 
