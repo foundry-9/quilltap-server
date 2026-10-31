@@ -71,12 +71,14 @@ jest.mock('@/lib/documents/operator-doc-actions', () => ({
   renameDocumentFile: jest.fn(),
   deleteDocumentFile: jest.fn(),
   listAllEnabledStores: jest.fn(),
+  resolveGeneralLibrary: jest.fn(),
 }));
 
 import { GET, POST } from '@/app/api/v1/documents/route';
 import { readFileWithMtime } from '@/lib/doc-edit';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import {
+  resolveGeneralLibrary,
   resolveOperatorDocPath,
   openDocumentFile,
   writeDocumentFile,
@@ -134,15 +136,18 @@ beforeEach(() => {
 // ============================================================================
 
 describe('GET ?action=accessible-stores', () => {
-  it('returns every enabled store with no project shortcut', async () => {
+  it('returns every enabled store with no project shortcut, Quilltap General held back as the General library', async () => {
     const stores = [{ id: 'store-1', name: 'Library', kind: 'document-store' }];
+    const generalLibrary = { mountPointId: 'general-1', name: 'Quilltap General', mountType: 'database' };
     listStores.mockResolvedValue(stores as never);
+    (resolveGeneralLibrary as jest.Mock).mockResolvedValue(generalLibrary);
     const { ctx } = makeCtx();
 
     const res = await GET(req('accessible-stores'), ctx);
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ stores, projectLibrary: null });
+    await expect(res.json()).resolves.toEqual({ stores, projectLibrary: null, generalLibrary });
+    expect(listStores).toHaveBeenCalledWith(expect.anything(), { exclude: new Set(['general-1']) });
   });
 
   it('500s when store enumeration fails', async () => {

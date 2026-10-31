@@ -30,10 +30,12 @@ import {
   classifyResolvedTarget,
   openDocumentFile,
   listAllEnabledStores,
+  resolveGeneralLibrary,
   documentAccessContextForChat,
   DocumentMissingError,
   type DocumentAccessContext,
   type AccessibleStoreOption,
+  type LibraryTarget,
 } from '@/lib/documents/operator-doc-actions';
 import {
   documentTargetFields,
@@ -58,7 +60,6 @@ import {
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import path from 'path';
@@ -207,13 +208,6 @@ export async function handleRecentDocuments(
  * has no official mount (legacy on-disk project files — the button falls back
  * to `project` scope there).
  */
-export interface ProjectLibraryTarget {
-  mountPointId: string;
-  /** Canonical mount name — what `document_store` opens resolve against. */
-  name: string;
-  mountType: 'filesystem' | 'obsidian' | 'database';
-}
-
 /**
  * Document stores reachable from this chat, for the Open-Document picker's
  * right-column accordions. Mirrors `collectAccessibleMountPointIds`: every
@@ -224,17 +218,14 @@ export interface ProjectLibraryTarget {
  * Group Files / Database-backed / Filesystem-backed. Group stores carry
  * `isGroupStore: true` so they bucket into Group Files regardless of backing.
  *
- * Only the project's *official* mount is held back — that one is the dedicated
- * left-column "Project library" button (returned separately as `projectLibrary`
- * so the button can browse/open the real mount). Quilltap General is NOT held
- * back: the left-column "General library" button still points at the legacy
- * on-disk general store, so the Quilltap General *mount* would otherwise be
- * unreachable.
+ * Two stores are held back, because each has its own left-column button: the
+ * project's *official* mount ("Project library", returned as `projectLibrary`)
+ * and Quilltap General ("General library", returned as `generalLibrary`).
  *
  * When `opts.all` is set (the picker's "look everywhere" mode) the chat-reach
  * restriction is dropped and EVERY enabled store is returned — character vaults
  * labelled by their owning character's name — still holding back only the
- * project-official mount. The operator may open any of these because the
+ * project-official mount and Quilltap General. The operator may open any of these because the
  * operator document actions resolve with `operatorOverride`.
  */
 export async function handleAccessibleStores(
@@ -248,11 +239,13 @@ export async function handleAccessibleStores(
       return notFound('Chat');
     }
 
-    // The project's official mount is surfaced as the left-column "Project
-    // library" button, so keep it out of the accordions to avoid duplication.
-    // (Quilltap General is intentionally NOT excluded — see the doc comment.)
+    // The project's official mount and Quilltap General are the left-column
+    // "Project library" and "General library" buttons, so keep them out of
+    // the accordions to avoid duplication.
     const seen = new Set<string>();
-    let projectLibrary: ProjectLibraryTarget | null = null;
+    const generalLibrary = await resolveGeneralLibrary(repos);
+    if (generalLibrary) seen.add(generalLibrary.mountPointId);
+    let projectLibrary: LibraryTarget | null = null;
     if (chat.projectId) {
       const project = await repos.projects.findById(chat.projectId);
       if (project?.officialMountPointId) {
@@ -347,24 +340,6 @@ export async function handleAccessibleStores(
           seen.add(mp.id);
         }
       }
-
-      // 4. Quilltap General — always accessible to every chat, so it always
-      // appears (under Database-backed, normally). Mirrors path-resolver.
-      const generalId = await getGeneralMountPointId();
-      if (generalId && !seen.has(generalId)) {
-        const mp = await repos.docMountPoints.findById(generalId);
-        if (mp?.enabled) {
-          stores.push({
-            mountPointId: mp.id,
-            name: mp.name,
-            label: mp.name,
-            kind: 'document-store' as const,
-            mountType: mp.mountType,
-            storeType: mp.storeType,
-          });
-          seen.add(mp.id);
-        }
-      }
     }
 
     logger.debug('Resolved accessible document stores for picker', {
@@ -372,13 +347,14 @@ export async function handleAccessibleStores(
       mode: opts.all ? 'all' : 'chat',
       total: stores.length,
       hasProjectLibrary: projectLibrary !== null,
+      hasGeneralLibrary: generalLibrary !== null,
       characterVaults: stores.filter(s => s.storeType === 'character').length,
       groupStores: stores.filter(s => s.isGroupStore).length,
       databaseStores: stores.filter(s => s.storeType === 'documents' && s.mountType === 'database' && !s.isGroupStore).length,
       filesystemStores: stores.filter(s => s.storeType === 'documents' && s.mountType !== 'database' && !s.isGroupStore).length,
     });
 
-    return successResponse({ stores, projectLibrary });
+    return successResponse({ stores, projectLibrary, generalLibrary });
   } catch (error) {
     logger.error('Failed to resolve accessible document stores', {
       chatId,

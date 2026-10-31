@@ -120,6 +120,36 @@ export async function readDatabaseBlobText(
 }
 
 /**
+ * A native-text file (.md, .txt, .json, .jsonl) that was uploaded, and so is
+ * stored as a blob rather than a document, read as the editor reads a
+ * document: its own bytes as UTF-8. Null for any other kind of file, or when
+ * no blob is there. Saving it writes a document at the same path, which
+ * repoints the link and collects the blob (`linkDocumentContent`).
+ */
+export async function readDatabaseBlobAsDocument(
+  mountPointId: string,
+  relativePath: string
+): Promise<{ content: string; mtime: number; size: number } | null> {
+  const rel = normaliseRelativePath(relativePath);
+  if (!detectNativeText(rel)) return null;
+  const repos = getRepositories();
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, rel);
+  if (!blob) return null;
+  const data = await repos.docMountBlobs.readData(blob.id);
+  if (!data) return null;
+  logger.debug('readDatabaseBlobAsDocument: reading an uploaded text blob as a document', {
+    mountPointId,
+    relativePath: rel,
+    size: data.length,
+  });
+  return {
+    content: data.toString('utf-8'),
+    mtime: new Date(blob.lastModified).getTime(),
+    size: data.length,
+  };
+}
+
+/**
  * Every blob in a store whose text can be searched, as `{ relativePath,
  * content }`: extractable types (PDF, DOCX, native text) with converted text.
  * `doc_grep` reads this beside `doc_mount_documents` so an upload is found

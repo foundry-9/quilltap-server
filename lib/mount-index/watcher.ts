@@ -20,6 +20,10 @@
  * ("spawn EBADF"). `fs.watch` reports only a path and "rename" / "change",
  * so {@link handleNativeEvent} reads the disk to decide what happened.
  *
+ * Whatever the watcher changes in the index (or a folder arriving or leaving)
+ * is announced with {@link publishMountChange}, debounced per store, so an
+ * open browser re-reads a store edited outside Quilltap.
+ *
  * The initial startup scan (PHASE 3.3 in instrumentation.ts) remains the
  * source of truth for baseline indexing; the watcher only reacts to events
  * that occur after it is running.
@@ -51,6 +55,7 @@ import {
   onDocumentDeleted,
   onDocumentMoved,
 } from './db-store-events';
+import { publishMountChange } from './realtime';
 import { DocMountPoint } from '@/lib/schemas/mount-index.types';
 
 const logger = createServiceLogger('MountIndex:Watcher');
@@ -76,6 +81,8 @@ interface MountWatcher {
   pendingRenames: Set<string>;
   embeddingTimer: NodeJS.Timeout | null;
   pendingEmbedding: boolean;
+  /** Debounces the realtime hint across a burst of changes. */
+  publishTimer: NodeJS.Timeout | null;
 }
 
 const watchers = new Map<string, MountWatcher>();
@@ -85,6 +92,9 @@ const FILE_DEBOUNCE_MS = 750;
 
 /** Per-mount-point debounce — batches embedding enqueue after a burst of edits */
 const EMBEDDING_DEBOUNCE_MS = 2000;
+
+/** Per-mount-point debounce — one realtime hint for a burst of changes */
+const PUBLISH_DEBOUNCE_MS = 250;
 
 /** Pause between walks when polling */
 const POLL_INTERVAL_MS = 2000;
@@ -182,6 +192,16 @@ function scheduleEmbedding(watcher: MountWatcher): void {
   }, EMBEDDING_DEBOUNCE_MS);
 }
 
+/** Tell open browsers this store changed on disk, once per burst. */
+function schedulePublish(watcher: MountWatcher): void {
+  if (watcher.publishTimer) clearTimeout(watcher.publishTimer);
+  watcher.publishTimer = setTimeout(() => {
+    watcher.publishTimer = null;
+    logger.debug('Mount watcher announcing an outside change', { mountPointId: watcher.mountPoint.id });
+    publishMountChange(watcher.mountPoint.id);
+  }, PUBLISH_DEBOUNCE_MS);
+}
+
 function debounceFileEvent(
   watcher: MountWatcher,
   relativePath: string,
@@ -245,6 +265,7 @@ async function handleAddOrChange(
       });
       await updateMountPointTotals(watcher.mountPoint.id);
       scheduleEmbedding(watcher);
+      schedulePublish(watcher);
       return;
   }
 }
@@ -262,6 +283,7 @@ async function handleUnlink(
       relativePath,
     });
     await updateMountPointTotals(watcher.mountPoint.id);
+    schedulePublish(watcher);
   }
 }
 
@@ -294,6 +316,8 @@ async function handleNativeEvent(
     await handleUnlink(watcher, relativePath);
     if (sawRename && !detectFileType(relativePath)) {
       await removeIndexedBeneath(watcher, relativePath);
+      // A folder that left, even an empty one, changes the listing.
+      schedulePublish(watcher);
     }
     return;
   }
@@ -320,6 +344,8 @@ async function handleNativeEvent(
     for (const file of files) {
       await handleAddOrChange(watcher, file.absolutePath, file.relativePath);
     }
+    // A folder that arrived, even an empty one, changes the listing.
+    schedulePublish(watcher);
   }
 }
 
@@ -377,6 +403,7 @@ async function startWatcherFor(mountPoint: DocMountPoint): Promise<void> {
     pendingRenames: new Set(),
     embeddingTimer: null,
     pendingEmbedding: false,
+    publishTimer: null,
   };
 
   let backend: 'native' | 'polling' = usePolling ? 'polling' : 'native';
@@ -535,6 +562,7 @@ async function stopWatcherFor(mountPointId: string): Promise<void> {
   watcher.fileTimers.clear();
   watcher.pendingRenames.clear();
   if (watcher.embeddingTimer) clearTimeout(watcher.embeddingTimer);
+  if (watcher.publishTimer) clearTimeout(watcher.publishTimer);
 
   try {
     await watcher.instance.close();

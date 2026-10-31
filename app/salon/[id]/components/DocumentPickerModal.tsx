@@ -5,10 +5,10 @@
  *
  * Two-step modal:
  * Step 1: Select source (new blank document, project library, mounted stores)
- * Step 2: Browse files within the selected scope — a document store through
- *         the Scriptorium's folder browser (`DocumentStoreBrowser` in pick
- *         mode, ⋮ menus included), the project or general library through
- *         `FileBrowser`
+ * Step 2: Browse the chosen store through the Scriptorium's folder browser
+ *         (`DocumentStoreBrowser` in pick mode, ⋮ menus included). The
+ *         Project library is the project's own store; the General library is
+ *         Quilltap General.
  *
  * Scriptorium Phase 3.5
  *
@@ -21,7 +21,6 @@ import type { DocumentEntry } from '@/components/document-browser/useDocumentSto
 import { Icon } from '@/components/ui/icon'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
-import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
 import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants'
 import { showErrorToast } from '@/lib/toast'
 
@@ -71,8 +70,8 @@ interface AccessibleStore {
   isGroupStore?: boolean
 }
 
-/** The project's official document store, when provisioned (see server). */
-interface ProjectLibraryTarget {
+/** A store behind a left-column button: the project's own, or Quilltap General (see server). */
+interface LibraryTarget {
   mountPointId: string
   name: string
   mountType: 'filesystem' | 'obsidian' | 'database'
@@ -99,13 +98,13 @@ export default function DocumentPickerModal({
   onSelectDocument,
 }: Readonly<DocumentPickerModalProps>) {
   const [step, setStep] = useState<'source' | 'browse'>('source')
-  const [selectedScope, setSelectedScope] = useState<'project' | 'document_store' | 'general'>('project')
   const [selectedMountPoint, setSelectedMountPoint] = useState<MountPoint | null>(null)
   const [accessibleStores, setAccessibleStores] = useState<AccessibleStore[]>([])
-  // The project's official document store, when one is provisioned. When set,
-  // the "Project library" button browses/opens this mount (so browse and open
-  // agree); when null it falls back to the legacy `project` filesystem scope.
-  const [projectLibrary, setProjectLibrary] = useState<ProjectLibraryTarget | null>(null)
+  // The project's own store and Quilltap General, behind the "Project
+  // library" and "General library" buttons. Each button is hidden while its
+  // store is missing.
+  const [projectLibrary, setProjectLibrary] = useState<LibraryTarget | null>(null)
+  const [generalLibrary, setGeneralLibrary] = useState<LibraryTarget | null>(null)
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([])
   const [loading, setLoading] = useState(false)
   // "Look everywhere" widens the store accordions beyond this chat's reach to
@@ -122,6 +121,7 @@ export default function DocumentPickerModal({
         const data = await res.json()
         setAccessibleStores(data.stores || [])
         setProjectLibrary(data.projectLibrary ?? null)
+        setGeneralLibrary(data.generalLibrary ?? null)
       }
     } catch (error) {
       console.error('[DocumentPickerModal] Failed to fetch accessible stores', error)
@@ -172,10 +172,10 @@ export default function DocumentPickerModal({
     if (!isOpen) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on close; parent renders unconditionally
       setStep('source')
-      setSelectedScope('project')
       setSelectedMountPoint(null)
       setLookEverywhere(false)
       setProjectLibrary(null)
+      setGeneralLibrary(null)
     }
   }, [isOpen])
 
@@ -193,20 +193,14 @@ export default function DocumentPickerModal({
     onClose()
   }, [onSelectDocument, onClose])
 
-  const handleSelectScope = useCallback((scope: 'project' | 'document_store' | 'general', mp?: MountPoint) => {
-    setSelectedScope(scope)
-    setSelectedMountPoint(mp || null)
+  const handleSelectStore = useCallback((mp: MountPoint) => {
+    setSelectedMountPoint(mp)
     setStep('browse')
   }, [])
 
-  const handleFileSelect = useCallback((file: FileInfo) => {
-    onSelectDocument({
-      filePath: file.filepath || file.filename,
-      scope: selectedScope,
-      mountPoint: selectedMountPoint?.name || undefined,
-    })
-    onClose()
-  }, [onSelectDocument, selectedScope, selectedMountPoint, onClose])
+  const browseLibrary = useCallback((library: LibraryTarget) => {
+    handleSelectStore({ id: library.mountPointId, name: library.name, type: library.mountType })
+  }, [handleSelectStore])
 
   const handleMountPointFileSelect = useCallback((file: DocumentEntry) => {
     onSelectDocument({
@@ -234,12 +228,15 @@ export default function DocumentPickerModal({
   // shelves name it (an unreachable store falls back to the browser's note).
   const handleOpenOtherStore = useCallback((mountPointId: string) => {
     const store = accessibleStores.find(s => s.mountPointId === mountPointId)
+    const library = [projectLibrary, generalLibrary].find(l => l?.mountPointId === mountPointId)
     if (store) {
-      handleSelectScope('document_store', { id: store.mountPointId, name: store.name, type: store.mountType })
+      handleSelectStore({ id: store.mountPointId, name: store.name, type: store.mountType })
+    } else if (library) {
+      browseLibrary(library)
     } else {
       showErrorToast("That store is not on this chat's shelves. Tick Look everywhere to reach it.")
     }
-  }, [accessibleStores, handleSelectScope])
+  }, [accessibleStores, projectLibrary, generalLibrary, handleSelectStore, browseLibrary])
 
   const handleBack = useCallback(() => {
     setStep('source')
@@ -264,7 +261,7 @@ export default function DocumentPickerModal({
   const renderStoreRow = useCallback((store: AccessibleStore) => (
     <button
       key={store.mountPointId}
-      onClick={() => handleSelectScope('document_store', { id: store.mountPointId, name: store.name, type: store.mountType })}
+      onClick={() => handleSelectStore({ id: store.mountPointId, name: store.name, type: store.mountType })}
       className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
     >
       <Icon name="file" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
@@ -273,7 +270,7 @@ export default function DocumentPickerModal({
       </div>
       <Icon name="chevron-right" className="w-3 h-3 flex-shrink-0 qt-text-muted" />
     </button>
-  ), [handleSelectScope])
+  ), [handleSelectStore])
 
   const renderEmptyBucket = () => (
     <div className="px-3 py-2 text-sm qt-text-muted">None available here.</div>
@@ -304,14 +301,10 @@ export default function DocumentPickerModal({
               </div>
             </button>
 
-            {/* Project library (if chat has a project). When the project has an
-                official document store, browse/open that mount directly so the
-                two agree; otherwise fall back to the legacy `project` scope. */}
-            {projectId && (
+            {/* Project library: the chat's project's own store. */}
+            {projectId && projectLibrary && (
               <button
-                onClick={() => projectLibrary
-                  ? handleSelectScope('document_store', { id: projectLibrary.mountPointId, name: projectLibrary.name, type: projectLibrary.mountType })
-                  : handleSelectScope('project')}
+                onClick={() => browseLibrary(projectLibrary)}
                 className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-surface-hover transition-colors text-left"
               >
                 <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
@@ -324,9 +317,10 @@ export default function DocumentPickerModal({
               </button>
             )}
 
-            {/* General library */}
+            {/* General library: Quilltap General. */}
+            {generalLibrary && (
             <button
-              onClick={() => handleSelectScope('general')}
+              onClick={() => browseLibrary(generalLibrary)}
               className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-surface-hover transition-colors text-left"
             >
               <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
@@ -334,9 +328,10 @@ export default function DocumentPickerModal({
               </div>
               <div>
                 <div className="font-medium qt-text-primary">General library</div>
-                <div className="text-sm qt-text-secondary">All non-project files</div>
+                <div className="text-sm qt-text-secondary">Quilltap General, the shelf every chat shares</div>
               </div>
             </button>
+            )}
 
             {/* Recent documents — quick reopen (this chat first, then others) */}
             <CollapsibleCard
@@ -472,15 +467,14 @@ export default function DocumentPickerModal({
               Back
             </button>
             <span className="text-sm qt-text-muted">
-              {selectedScope === 'project' ? projectName || 'Project' :
-               selectedScope === 'general' ? 'General Library' :
+              {selectedMountPoint?.id === projectLibrary?.mountPointId ? projectName || 'Project' :
+               selectedMountPoint?.id === generalLibrary?.mountPointId ? 'General Library' :
                selectedMountPoint?.name || 'Document Store'}
             </span>
           </div>
 
-          {/* File browser — different component per scope */}
           <div className="flex-1 overflow-y-auto">
-            {selectedScope === 'document_store' && selectedMountPoint ? (
+            {selectedMountPoint && (
               /* The Scriptorium's folder browser, in pick mode: opening a
                  file opens it in Document Mode; its ⋮ menus stay. */
               <div className="p-2">
@@ -501,13 +495,6 @@ export default function DocumentPickerModal({
                   )}
                 />
               </div>
-            ) : (
-              /* Project or general library — use FileBrowser */
-              <FileBrowser
-                projectId={selectedScope === 'project' ? (projectId || null) : null}
-                onFileClick={handleFileSelect}
-                showUpload={false}
-              />
             )}
           </div>
         </div>

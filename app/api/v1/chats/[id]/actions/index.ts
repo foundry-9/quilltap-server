@@ -48,7 +48,7 @@ export {
   handleRenameDocument,
   handleDeleteDocument,
 } from './documents';
-export type { AccessibleStoreOption, AccessibleStoreKind, ProjectLibraryTarget } from './documents';
+export type { AccessibleStoreOption, AccessibleStoreKind } from './documents';
 export { handleInsertAnnouncement } from './announcement';
 export { handleInform, handleGetInforms, handleCancelInform } from './inform';
 export { handleAnnouncementPreview } from './announcement-preview';

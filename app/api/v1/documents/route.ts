@@ -28,6 +28,7 @@ import {
   STANDALONE_ACCESS_CONTEXT,
   openDocumentFile,
   listAllEnabledStores,
+  resolveGeneralLibrary,
   DocumentMissingError,
 } from '@/lib/documents/operator-doc-actions';
 import {
@@ -80,14 +81,19 @@ const STANDALONE_LOG: DocumentHttpLog = { subject: 'standalone document' };
  * mode, since with no chat there is no narrower reach to default to. No
  * `projectLibrary` either (that button is the chat picker's project shortcut);
  * project-official mounts appear in the store accordions like any other store.
+ * Quilltap General is `generalLibrary`, the "General library" button, and is
+ * held back from the accordions.
  */
 async function handleAccessibleStores(
   _req: NextRequest,
   { repos }: RequestContext,
 ): Promise<NextResponse> {
   try {
-    const stores = await listAllEnabledStores(repos);
-    return successResponse({ stores, projectLibrary: null });
+    const generalLibrary = await resolveGeneralLibrary(repos);
+    const stores = await listAllEnabledStores(repos, {
+      exclude: new Set(generalLibrary ? [generalLibrary.mountPointId] : []),
+    });
+    return successResponse({ stores, projectLibrary: null, generalLibrary });
   } catch (error) {
     logger.error('Failed to resolve stores for standalone document picker', {
       error: getErrorMessage(error),

@@ -4,6 +4,28 @@
 
 ### 4.12-dev
 
+#### Folder-browser follow-ups: picker libraries, uploaded text, outside edits
+
+- `FileBrowser` no longer has a mount mode. Every place that browsed a store with it now uses the Scriptorium's folder browser:
+  - The project page's Files card ("Browse All Files") uses the new `ProjectStoreBrowser` (`components/document-browser/ProjectStoreBrowser.tsx`), which opens the project's own store. `GET /api/v1/projects/[id]/mount-points` now returns `officialMountPointId` for it.
+  - The attachment picker's project and document-store steps use the folder browser in pick mode. Its General source still uses `FileBrowser` over the `files` table.
+  - `useMountPointBlobUpload` had no callers left and was deleted.
+- Document Mode's picker no longer uses `FileBrowser`:
+  - "Project library" opens the project's own store, and is hidden when the project has none (the old fallback to the legacy `project` scope is gone).
+  - Fixed: "General library" listed the legacy general files, then opened a pick from `files/_general/`. That folder no longer exists, so every pick failed. The button now opens Quilltap General.
+  - `accessible-stores` on the chat and standalone routes returns Quilltap General as `generalLibrary` and holds it out of `stores`. The new `resolveGeneralLibrary` and `LibraryTarget` live in `lib/documents/operator-doc-actions.ts`.
+- Fixed: a Markdown, text or JSON file uploaded into a database store (stored as a blob, as chat uploads are) could not be opened in Document Mode's editor.
+  - `open-document` and `read-document` now read it through `readEditableDocument`, which falls back to the new `readDatabaseBlobAsDocument` (`lib/mount-index/database-store.ts`).
+  - The first save writes a document at the same path and the blob is collected.
+  - The `doc_*` tools are unchanged.
+- Changed: in a database store, only text the store can save (`.md`, `.txt`, `.json`, `.jsonl`) opens in the editor. Other text kinds there (`.yaml`, `.html`, …) open read-only instead of failing on save. Filesystem stores are unchanged.
+- Fixed: a change made to a filesystem store outside Quilltap did not refresh an open browser. The mount watcher now publishes `publishMountChange` (debounced 250 ms per store) when it indexes or drops a file, or when a folder arrives or leaves.
+- Help: `help/scriptorium.md` and `help/mount-points.md`. Docs: `API.md` and the folder-browser spec.
+- Tests:
+  - `operator-doc-view-targets.test.ts`: the blob fallback and read-only `.yaml` in a database store.
+  - `watcher-native.test.ts`: the realtime hint.
+  - `documents/route.test.ts`: `generalLibrary`.
+
 #### Folder-browser docs close-out (folder-browser Phase 6)
 
 - `docs/developer/features/folder-browser.md` is complete and moved to `features/complete/`, with a "Phase 6 as built" section listing what was left for later.

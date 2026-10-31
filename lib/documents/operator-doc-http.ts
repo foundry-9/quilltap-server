@@ -22,7 +22,7 @@ import type { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, conflict, notFound, serverError, errorResponse } from '@/lib/api/responses';
-import { readFileWithMtime, type DocEditScope } from '@/lib/doc-edit';
+import { type DocEditScope } from '@/lib/doc-edit';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -34,6 +34,7 @@ import {
   renameDocumentFile,
   deleteDocumentFile,
   documentViewTargetFor,
+  readEditableDocument,
   DocumentConflictError,
   DocumentReadOnlyError,
   type DocumentAccessContext,
@@ -147,7 +148,7 @@ export async function readDocumentResponse(
     if (viewer) {
       return successResponse({ content: '', viewer });
     }
-    const fileData = await readFileWithMtime(resolved);
+    const fileData = await readEditableDocument(resolved);
     return successResponse({
       content: fileData.content,
       mtime: fileData.mtime,

@@ -49,7 +49,16 @@ export const GET = createContextParamsHandler<{ id: string }>(
       // Filter out any null results (mount points that were deleted but links remain)
       const validMountPoints = mountPoints.filter((mp) => mp !== null);
 
-      return NextResponse.json({ mountPoints: validMountPoints });
+      // The project's own store, so a browser opens the store the project
+      // reads and writes rather than guessing among its linked ones.
+      const officialMountPointId = project.officialMountPointId ?? null;
+      logger.debug('[Projects v1] Listed mount points for project', {
+        projectId: id,
+        count: validMountPoints.length,
+        officialMountPointId,
+      });
+
+      return NextResponse.json({ mountPoints: validMountPoints, officialMountPointId });
     } catch (error) {
       logger.error('[Projects v1] Error listing mount points for project', { projectId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to list mount points for project');

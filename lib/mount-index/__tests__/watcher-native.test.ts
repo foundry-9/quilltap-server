@@ -53,6 +53,10 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }));
 
+jest.mock('@/lib/mount-index/realtime', () => ({
+  publishMountChange: jest.fn(),
+}));
+
 import { attachMountPoint, detachMountPoint } from '@/lib/mount-index/watcher';
 import { watch } from 'fs';
 import fs from 'fs/promises';
@@ -62,6 +66,7 @@ import {
   walkDirectory,
 } from '@/lib/mount-index/scanner';
 import { getRepositories } from '@/lib/repositories/factory';
+import { publishMountChange } from '@/lib/mount-index/realtime';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
 
 const mockWatch = watch as unknown as jest.Mock;
@@ -72,6 +77,7 @@ const mockProcess = processMountFile as jest.Mock;
 const mockRemove = removeMountFile as jest.Mock;
 const mockWalk = walkDirectory as jest.Mock;
 const mockGetRepositories = getRepositories as jest.Mock;
+const mockPublish = publishMountChange as jest.Mock;
 
 const BASE = '/Users/me/Documents';
 let nextId = 0;
@@ -247,6 +253,54 @@ describe('mount watcher on native fs.watch', () => {
     await detachMountPoint(mp.id);
 
     expect(handle.close).toHaveBeenCalled();
+  });
+});
+
+describe('realtime hints for outside changes', () => {
+  it('announces a changed file once per burst', async () => {
+    const mp = makeMountPoint();
+    const listener = await attachTracked(mp);
+    mockLstat.mockResolvedValue(fileStat);
+    mockProcess.mockResolvedValue({ status: 'modified', chunksCreated: 1 });
+
+    listener('change', 'Notes/a.md');
+    listener('change', 'Notes/b.md');
+    await jest.advanceTimersByTimeAsync(1100);
+
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    expect(mockPublish).toHaveBeenCalledWith(mp.id);
+  });
+
+  it('announces a removed file and a folder that arrived or left', async () => {
+    const mp = makeMountPoint();
+    const listener = await attachTracked(mp);
+
+    mockLstat.mockRejectedValue(enoent);
+    mockRemove.mockResolvedValue(true);
+    listener('rename', 'Notes/old.md');
+    await jest.advanceTimersByTimeAsync(1100);
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+
+    mockRemove.mockResolvedValue(false);
+    listener('rename', 'Empty');
+    await jest.advanceTimersByTimeAsync(1100);
+    expect(mockPublish).toHaveBeenCalledTimes(2);
+
+    mockLstat.mockResolvedValue(dirStat);
+    mockWalk.mockResolvedValue([]);
+    listener('rename', 'New Folder');
+    await jest.advanceTimersByTimeAsync(1100);
+    expect(mockPublish).toHaveBeenCalledTimes(3);
+  });
+
+  it('says nothing when a file is unchanged', async () => {
+    const listener = await attachTracked(makeMountPoint());
+    mockLstat.mockResolvedValue(fileStat);
+
+    listener('change', 'Notes/plan.md');
+    await jest.advanceTimersByTimeAsync(1100);
+
+    expect(mockPublish).not.toHaveBeenCalled();
   });
 });
 

@@ -5,14 +5,10 @@
  *
  * File explorer UI for browsing files within a project or general files.
  *
- * Dual-mode:
- * - Legacy mode: reads/writes via /api/v1/files and /api/v1/projects/{id}/files.
- *   Used for the general-files page and any project that doesn't have a linked
- *   database-backed Scriptorium document store.
- * - Mount mode: reads/writes directly against /api/v1/mount-points/{id}/files
- *   and /api/v1/mount-points/{id}/blobs. Selected automatically when the
- *   project has a linked database-backed documents store, or when the caller
- *   supplies a `mountPoint` prop with `mountType: 'database'`.
+ * Reads and writes the legacy files table through /api/v1/files and
+ * /api/v1/projects/{id}/files. A document store (a project's included) is
+ * browsed with the Scriptorium's folder browser instead
+ * (`components/document-browser`).
  *
  * Supports grid and list view modes with sorting.
  */
@@ -29,46 +25,14 @@ import MoveToProjectModal from './MoveToProjectModal'
 import FileDeleteConfirmation from './FileDeleteConfirmation'
 import OrphanCleanupModal from './OrphanCleanupModal'
 import { useProjectFileUpload } from './useProjectFileUpload'
-import { useMountPointBlobUpload } from './useMountPointBlobUpload'
-import { buildMountBlobUrl, buildMountFileItemUrl } from './mountBlobUrl'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
-import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming'
 
 // Re-export FileInfo for backwards compatibility
 export type { FileInfo }
 
-type DocumentStoreFileType = 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | 'blob'
-
-interface DocumentStoreFileRow {
-  id: string
-  mountPointId: string
-  relativePath: string
-  fileName: string
-  fileType: DocumentStoreFileType
-  fileSizeBytes: number
-  lastModified: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface FileBrowserMountPoint {
-  id: string
-  mountType: 'filesystem' | 'obsidian' | 'database'
-  storeType?: 'documents' | 'character'
-  name?: string
-}
-
 interface FileBrowserProps {
   /** Project ID to browse (null for general files) */
   projectId: string | null
-  /**
-   * Optional pre-resolved mount point. When provided and mountType is
-   * 'database', the browser reads/writes through the mount-point APIs
-   * instead of the legacy files table. If omitted and a projectId is
-   * supplied, the component will try to resolve a linked mount point
-   * itself by calling /api/v1/projects/{id}/mount-points.
-   */
-  mountPoint?: FileBrowserMountPoint | null
   /** Optional title override */
   title?: string
   /** Called when a file is clicked */
@@ -81,7 +45,7 @@ interface FileBrowserProps {
   className?: string
 }
 
-/** Database folder type from API (legacy mode only) */
+/** Database folder type from API */
 interface DbFolder {
   id: string
   path: string
@@ -90,97 +54,14 @@ interface DbFolder {
   projectId: string | null
 }
 
-function deriveMimeTypeFromName(fileName: string): string {
-  const ext = fileName.toLowerCase().split('.').pop() || ''
-  switch (ext) {
-    case 'webp': return 'image/webp'
-    case 'png': return 'image/png'
-    case 'jpg':
-    case 'jpeg': return 'image/jpeg'
-    case 'gif': return 'image/gif'
-    case 'svg': return 'image/svg+xml'
-    case 'heic': return 'image/heic'
-    case 'heif': return 'image/heif'
-    case 'avif': return 'image/avif'
-    case 'tiff':
-    case 'tif': return 'image/tiff'
-    case 'mp4': return 'video/mp4'
-    case 'mov': return 'video/quicktime'
-    case 'webm': return 'video/webm'
-    case 'mp3': return 'audio/mpeg'
-    case 'wav': return 'audio/wav'
-    case 'ogg': return 'audio/ogg'
-    case 'txt': return 'text/plain'
-    case 'md':
-    case 'markdown': return 'text/markdown'
-    case 'html':
-    case 'htm': return 'text/html'
-    case 'json': return 'application/json'
-    case 'jsonl':
-    case 'ndjson': return 'application/jsonl'
-    case 'csv': return 'text/csv'
-    case 'zip': return 'application/zip'
-    default: return 'application/octet-stream'
-  }
-}
-
-function mimeTypeForDocumentStoreFile(row: DocumentStoreFileRow): string {
-  switch (row.fileType) {
-    case 'pdf': return 'application/pdf'
-    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    case 'markdown': return 'text/markdown'
-    case 'txt': return 'text/plain'
-    case 'json': return 'application/json'
-    case 'jsonl': return 'application/jsonl'
-    case 'blob': return deriveMimeTypeFromName(row.fileName)
-  }
-}
-
-/**
- * Translate a mount-point relativePath (e.g. "images/foo.webp") into the
- * legacy folderPath convention used by FileBrowserGrid/List (e.g. "/images/").
- */
-function folderPathFromRelativePath(relativePath: string): string {
-  const lastSlash = relativePath.lastIndexOf('/')
-  if (lastSlash < 0) return '/'
-  return `/${relativePath.slice(0, lastSlash)}/`
-}
-
-function documentStoreFileToFileInfo(row: DocumentStoreFileRow): FileInfo {
-  const mimeType = mimeTypeForDocumentStoreFile(row)
-  return {
-    id: row.id,
-    originalFilename: row.fileName,
-    filename: row.fileName,
-    mimeType,
-    size: row.fileSizeBytes,
-    // Category isn't tracked in doc_mount_files. Use a harmless default.
-    category: row.fileType === 'blob' ? 'binary' : 'document',
-    folderPath: folderPathFromRelativePath(row.relativePath),
-    createdAt: row.createdAt,
-    updatedAt: row.lastModified || row.updatedAt,
-    mountPointId: row.mountPointId,
-    relativePath: row.relativePath,
-  }
-}
-
 export default function FileBrowser({
   projectId,
-  mountPoint: mountPointProp,
   title,
   onFileClick,
   showUpload = false,
   onFilesChange,
   className = '',
 }: Readonly<FileBrowserProps>) {
-  // When the caller supplies `mountPoint` explicitly, we use that verbatim.
-  // Otherwise we resolve by calling /api/v1/projects/{id}/mount-points once.
-  // `autoResolved === null` means the lookup hasn't finished yet; we track
-  // the projectId it was resolved against so switching projects briefly
-  // shows nothing rather than the previous project's mount.
-  const [autoResolved, setAutoResolved] = useState<
-    { projectId: string; value: FileBrowserMountPoint | null } | null
-  >(null)
   const [files, setFiles] = useState<FileInfo[]>([])
   const [dbFolders, setDbFolders] = useState<DbFolder[]>([])
   const [loading, setLoading] = useState(true)
@@ -211,61 +92,13 @@ export default function FileBrowser({
     uniqueSize: number
   } | null>(null)
 
-  // Derived: the mount point we actually use. Prop wins; otherwise the
-  // auto-resolved value — but only when it belongs to the current projectId.
-  const resolvedMountPoint: FileBrowserMountPoint | null =
-    mountPointProp !== undefined
-      ? (mountPointProp ?? null)
-      : (autoResolved && autoResolved.projectId === projectId ? autoResolved.value : null)
-
-  // Derived: whether the mount-point lookup has settled. The prop counts as
-  // "settled" immediately; otherwise we wait for the auto-resolve fetch
-  // against the current projectId.
-  const mountResolved =
-    mountPointProp !== undefined ||
-    !projectId ||
-    (autoResolved !== null && autoResolved.projectId === projectId)
-
-  // Mount-mode gate: only true for database-backed stores. Filesystem/obsidian
-  // mounts still use the legacy path since their files live on disk.
-  const isMountMode = !!resolvedMountPoint && resolvedMountPoint.mountType === 'database'
-  const mountPointId = isMountMode ? resolvedMountPoint!.id : ''
-
-  // Auto-resolve a linked database-backed documents store when the caller
-  // supplied a projectId but no mountPoint prop. Silent failure falls back
-  // to legacy mode; one missing link shouldn't take down the browser.
-  useEffect(() => {
-    if (mountPointProp !== undefined) return
-    if (!projectId) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch(`/api/v1/projects/${projectId}/mount-points`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        const list = (data.mountPoints || []) as FileBrowserMountPoint[]
-        // Prefer the project's auto-created "Project Files: ..." store over
-        // any manually-linked stores so Browse All Files lands where uploads
-        // do. pickPrimaryProjectStore falls back to the first eligible store
-        // if no name-match is found (e.g. projects that were only ever linked
-        // by hand, or whose auto-created store was renamed).
-        const normalised = list.map(mp => ({ ...mp, name: mp.name ?? '' }))
-        const first = pickPrimaryProjectStore(normalised)
-        if (!cancelled) setAutoResolved({ projectId, value: first })
-      } catch (error) {
-        console.warn('[FileBrowser] Failed to resolve linked mount point; falling back to legacy mode', {
-          projectId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        if (!cancelled) setAutoResolved({ projectId, value: null })
-      }
-    })()
-    return () => { cancelled = true }
-  }, [projectId, mountPointProp])
-
-  // Upload hooks. Both are instantiated unconditionally (React hook rules);
-  // the UI only surfaces the one matching the active mode.
-  const legacyUpload = useProjectFileUpload({
+  const {
+    uploading,
+    uploadProgress,
+    fileInputRef,
+    handleFileSelect,
+    triggerFileSelect,
+  } = useProjectFileUpload({
     projectId: projectId || '',
     folderPath: currentFolder,
     onSuccess: () => {
@@ -273,38 +106,11 @@ export default function FileBrowser({
       onFilesChange?.()
     },
   })
-  const mountUpload = useMountPointBlobUpload({
-    mountPointId,
-    folderPath: currentFolder,
-    onSuccess: () => {
-      fetchFiles()
-      onFilesChange?.()
-    },
-  })
-
-  const uploading = isMountMode ? mountUpload.uploading : legacyUpload.uploading
-  const uploadProgress = isMountMode ? mountUpload.uploadProgress : legacyUpload.uploadProgress
-  const fileInputRef = isMountMode ? mountUpload.fileInputRef : legacyUpload.fileInputRef
-  const handleFileSelect = isMountMode ? mountUpload.handleFileSelect : legacyUpload.handleFileSelect
-  const triggerFileSelect = isMountMode ? mountUpload.triggerFileSelect : legacyUpload.triggerFileSelect
-
   const fetchFiles = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!mountResolved) return
     try {
       // A silent refresh (workspace tab re-activation) keeps the current
       // listing on screen instead of flipping back to the loading state.
       if (!opts?.silent) setLoading(true)
-
-      if (isMountMode && resolvedMountPoint) {
-        const res = await fetch(`/api/v1/mount-points/${resolvedMountPoint.id}/files`)
-        if (!res.ok) throw new Error('Failed to fetch files')
-        const data = await res.json()
-        const rows = (data.files || []) as DocumentStoreFileRow[]
-        setFiles(rows.map(documentStoreFileToFileInfo))
-        // No DB folders API for mount points yet — folders come from relativePath prefixes.
-        setDbFolders([])
-        return
-      }
 
       const filesUrl = projectId
         ? `/api/v1/projects/${projectId}?action=list-files`
@@ -341,7 +147,7 @@ export default function FileBrowser({
     } finally {
       setLoading(false)
     }
-  }, [projectId, mountResolved, isMountMode, resolvedMountPoint])
+  }, [projectId])
 
   useEffect(() => {
     fetchFiles()
@@ -353,11 +159,10 @@ export default function FileBrowser({
     void fetchFiles({ silent: true })
   })
 
-  // Batch thumbnail pre-generation — only useful for the legacy endpoint,
-  // which drives a server-side sharp pipeline keyed by files.id. Mount-mode
-  // images are served raw and scaled client-side.
+  // Batch thumbnail pre-generation: a server-side sharp pipeline keyed by
+  // files.id.
   useEffect(() => {
-    if (loading || files.length === 0 || isMountMode) return
+    if (loading || files.length === 0) return
 
     const imageFileIds = files
       .filter(f => f.mimeType?.startsWith('image/'))
@@ -370,7 +175,7 @@ export default function FileBrowser({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fileIds: imageFileIds.slice(0, 100) }),
     }).catch(() => { /* best-effort */ })
-  }, [loading, files, isMountMode])
+  }, [loading, files])
 
   const orphanedCount = useMemo(() =>
     files.filter(f => f.fileStatus === 'orphaned').length,
@@ -469,23 +274,6 @@ export default function FileBrowser({
     if (!confirmed) return
 
     try {
-      const target = files.find(f => f.id === fileId)
-
-      if (isMountMode && target?.mountPointId && target?.relativePath) {
-        const res = await fetch(
-          buildMountFileItemUrl(target.mountPointId, target.relativePath),
-          { method: 'DELETE' }
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body?.error || `Delete failed (${res.status})`)
-        }
-        setFiles(files.filter(f => f.id !== fileId))
-        showSuccessToast('File deleted')
-        onFilesChange?.()
-        return
-      }
-
       const res = await fetch(`/api/v1/files/${fileId}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
 
@@ -647,16 +435,9 @@ export default function FileBrowser({
     }
   }, [fetchFiles])
 
-  // Move-to-project makes sense only for legacy files (the files row carries
-  // the project scope). Mount-blob files live inside a specific mount point,
-  // and cross-store moves aren't wired up yet — suppress the affordance.
-  const moveToProjectHandler = isMountMode ? undefined : handleMoveToProject
-
   const displayTitle = title || (projectId ? 'Project Files' : 'General Files')
 
-  const showNewFolderButton = !isMountMode
-  const showSyncButton = !isMountMode
-  const showCleanupButton = !isMountMode && orphanedCount > 0
+  const showCleanupButton = orphanedCount > 0
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
@@ -664,7 +445,7 @@ export default function FileBrowser({
         <h2 className="qt-heading-4">{displayTitle}</h2>
         <div className="flex items-center gap-2">
           {showUpload && (
-            (isMountMode || projectId) ? (
+            projectId ? (
               <button
                 onClick={triggerFileSelect}
                 disabled={uploading}
@@ -675,15 +456,13 @@ export default function FileBrowser({
               </button>
             ) : null
           )}
-          {showNewFolderButton && (
-            <button
-              onClick={() => setShowCreateFolder(true)}
-              className="qt-button qt-button-secondary p-2"
-              title="New Folder"
-            >
-              {'\u{1F4C1}'}+
-            </button>
-          )}
+          <button
+            onClick={() => setShowCreateFolder(true)}
+            className="qt-button qt-button-secondary p-2"
+            title="New Folder"
+          >
+            {'\u{1F4C1}'}+
+          </button>
           <button
             onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
             className="qt-button qt-button-secondary p-2"
@@ -702,16 +481,14 @@ export default function FileBrowser({
               <span className="text-xs qt-text-warning">{orphanedCount}</span>
             </button>
           )}
-          {showSyncButton && (
-            <button
-              onClick={handleSync}
-              disabled={isSyncing || loading}
-              className="qt-button qt-button-secondary p-2"
-              title="Sync filesystem — scan disk for new or removed files"
-            >
-              {isSyncing ? '⏳' : '\u{1F504}'}
-            </button>
-          )}
+          <button
+            onClick={handleSync}
+            disabled={isSyncing || loading}
+            className="qt-button qt-button-secondary p-2"
+            title="Sync filesystem — scan disk for new or removed files"
+          >
+            {isSyncing ? '⏳' : '\u{1F504}'}
+          </button>
           <button
             onClick={() => { void fetchFiles() }}
             disabled={loading}
@@ -749,11 +526,6 @@ export default function FileBrowser({
               })}
             </>
           )}
-          {isMountMode && resolvedMountPoint && (
-            <span className="qt-text-xs qt-text-secondary ml-auto" title={`Linked Scriptorium store: ${resolvedMountPoint.name || resolvedMountPoint.id}`}>
-              {'\u{1F4DA}'} {resolvedMountPoint.name || 'Document Store'}
-            </span>
-          )}
         </div>
       </div>
 
@@ -772,7 +544,7 @@ export default function FileBrowser({
               onFolderClick={handleFolderClick}
               onGoUp={handleGoUp}
               onDeleteFile={handleDeleteFile}
-              onMoveToProject={moveToProjectHandler}
+              onMoveToProject={handleMoveToProject}
             />
           ) : (
             <FileBrowserList
@@ -785,7 +557,7 @@ export default function FileBrowser({
               onFolderClick={handleFolderClick}
               onGoUp={handleGoUp}
               onDeleteFile={handleDeleteFile}
-              onMoveToProject={moveToProjectHandler}
+              onMoveToProject={handleMoveToProject}
             />
           )}
         </div>
@@ -808,7 +580,7 @@ export default function FileBrowser({
             setSelectedFile(null)
             onFilesChange?.()
           }}
-          onMoveToProject={isMountMode ? undefined : (fileId) => {
+          onMoveToProject={(fileId) => {
             const file = files.find(f => f.id === fileId)
             if (file) {
               handleMoveToProject(fileId, file.originalFilename || file.filename || 'file')
@@ -823,20 +595,18 @@ export default function FileBrowser({
         />
       )}
 
-      {showNewFolderButton && (
-        <CreateFolderModal
-          isOpen={showCreateFolder}
-          onClose={() => setShowCreateFolder(false)}
-          currentFolder={currentFolder}
-          projectId={projectId}
-          onSuccess={(folderPath) => {
-            fetchFiles()
-            setCurrentFolder(folderPath)
-          }}
-        />
-      )}
+      <CreateFolderModal
+        isOpen={showCreateFolder}
+        onClose={() => setShowCreateFolder(false)}
+        currentFolder={currentFolder}
+        projectId={projectId}
+        onSuccess={(folderPath) => {
+          fetchFiles()
+          setCurrentFolder(folderPath)
+        }}
+      />
 
-      {moveModalFile && !isMountMode && (
+      {moveModalFile && (
         <MoveToProjectModal
           isOpen={!!moveModalFile}
           onClose={() => setMoveModalFile(null)}
@@ -872,7 +642,7 @@ export default function FileBrowser({
         />
       )}
 
-      {showUpload && (isMountMode || projectId) && (
+      {showUpload && projectId && (
         <input
           ref={fileInputRef}
           type="file"
@@ -885,6 +655,3 @@ export default function FileBrowser({
     </div>
   )
 }
-
-// Referenced for the blob URL helper that some callers may want.
-export { buildMountBlobUrl }

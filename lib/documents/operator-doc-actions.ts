@@ -26,14 +26,16 @@ import {
   type ResolvedPath,
 } from '@/lib/doc-edit';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
-import { mimeForExtension } from '@/lib/mount-index/path-utils';
+import { detectNativeText, mimeForExtension } from '@/lib/mount-index/path-utils';
 import {
   moveDatabaseDocument,
   deleteDatabaseDocument,
   readDatabaseDocument,
+  readDatabaseBlobAsDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import { getErrorMessage } from '@/lib/error-utils';
+import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory';
 import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions';
 import type { ChatMetadata } from '@/lib/schemas/types';
@@ -259,7 +261,13 @@ export class DocumentReadOnlyError extends Error {}
  * viewer cannot address), and for a store file that does not exist.
  */
 export async function documentViewTargetFor(resolved: ResolvedPath): Promise<DocumentViewTarget | null> {
-  if (isTextFile(resolved.relativePath) || !resolved.mountPointId) return null;
+  if (!resolved.mountPointId) return null;
+  // A database store saves only native text (.md, .txt, .json, .jsonl), so
+  // any other text kind there (.yaml, .html, …) is shown, not edited.
+  const editable = resolved.mountType === 'database'
+    ? !!detectNativeText(resolved.relativePath)
+    : isTextFile(resolved.relativePath);
+  if (editable) return null;
   const link = await getRepositories().docMountFileLinks.findByMountPointAndPath(
     resolved.mountPointId,
     resolved.relativePath,
@@ -296,6 +304,26 @@ export async function documentViewTargetFor(resolved: ResolvedPath): Promise<Doc
 }
 
 /**
+ * Read a file the editor can open. A native-text upload in a database store
+ * is a blob, not a document, so when no document is there its own bytes are
+ * read instead; the first save turns it into a document. Throws ENOENT as
+ * {@link readFileWithMtime} does when neither is there.
+ */
+export async function readEditableDocument(
+  resolved: ResolvedPath,
+): Promise<{ content: string; mtime: number; size: number }> {
+  try {
+    return await readFileWithMtime(resolved);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    if (resolved.mountType !== 'database' || !resolved.mountPointId) throw error;
+    const blob = await readDatabaseBlobAsDocument(resolved.mountPointId, resolved.relativePath);
+    if (!blob) throw error;
+    return blob;
+  }
+}
+
+/**
  * The file half of opening a document: read an existing file, or pick an
  * unused "Untitled Document.md" name and create it blank. Throws
  * {@link DocumentMissingError} when a named file can't be read.
@@ -324,7 +352,7 @@ export async function openDocumentFile(
           viewer,
         };
       }
-      const fileData = await readFileWithMtime(resolved);
+      const fileData = await readEditableDocument(resolved);
       content = fileData.content;
       mtime = fileData.mtime;
     } catch (error) {
@@ -590,6 +618,29 @@ export interface AccessibleStoreOption {
    * sets it.
    */
   isGroupStore?: boolean;
+}
+
+/** A store the picker reaches from a left-column button (Project library, General library). */
+export interface LibraryTarget {
+  mountPointId: string;
+  /** Canonical mount name — what `document_store` opens resolve against. */
+  name: string;
+  mountType: 'filesystem' | 'obsidian' | 'database';
+}
+
+/**
+ * Quilltap General, the instance-wide store behind the picker's "General
+ * library" button. Null when it is not provisioned or is disabled.
+ */
+export async function resolveGeneralLibrary(repos: RepositoryContainer): Promise<LibraryTarget | null> {
+  const generalId = await getGeneralMountPointId();
+  if (!generalId) return null;
+  const mp = await repos.docMountPoints.findById(generalId);
+  if (!mp?.enabled) {
+    logger.debug('resolveGeneralLibrary: Quilltap General is missing or disabled', { generalId });
+    return null;
+  }
+  return { mountPointId: mp.id, name: mp.name, mountType: mp.mountType };
 }
 
 /**

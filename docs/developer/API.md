@@ -3053,9 +3053,9 @@ leaf is listed under every slot its own `types` cover — not only the slot it w
 
 #### `GET /api/v1/chats/[id]?action=accessible-stores`
 
-The document stores the Open-Document picker offers for this chat. Default mode returns only what the chat can reach: each present character participant's vault, the official and linked stores of the groups those characters belong to (`isGroupStore: true`), stores linked to the chat's project, and Quilltap General. `?all=true` ("look everywhere") returns every enabled store, character vaults labelled by owner. The project's official store is always held back and returned separately as `projectLibrary`.
+The document stores the Open-Document picker offers for this chat. Default mode returns only what the chat can reach: each present character participant's vault, the official and linked stores of the groups those characters belong to (`isGroupStore: true`), and stores linked to the chat's project. `?all=true` ("look everywhere") returns every enabled store, character vaults labelled by owner. Two stores are always held back and returned separately, because each has its own button: the project's official store as `projectLibrary`, and Quilltap General as `generalLibrary`. Each is `null` when missing or disabled.
 
-**Response**: `200 OK` — `{ stores: [{ mountPointId, name, label, kind: 'character'|'document-store', mountType, storeType, characterId?, isGroupStore? }], projectLibrary: { mountPointId, name, mountType } | null }`. `404` for an unknown chat.
+**Response**: `200 OK` — `{ stores: [{ mountPointId, name, label, kind: 'character'|'document-store', mountType, storeType, characterId?, isGroupStore? }], projectLibrary: { mountPointId, name, mountType } | null, generalLibrary: { mountPointId, name, mountType } | null }`. `404` for an unknown chat.
 
 #### `GET /api/v1/chats/[id]?action=group-stores`
 
@@ -5779,7 +5779,7 @@ Every file and folder operation publishes the `mountPoints` realtime topic scope
 
 Chat-less Document Mode operations for the left rail's standalone document tabs. These reuse the same shared core as the chat-scoped document actions (`lib/documents/operator-doc-actions.ts`) but create **no `chat_documents` rows and post no Librarian announcements** — no conversation is attached, so nothing is notified of edits. All actions resolve paths with the operator override (any enabled store is reachable). The `project` scope is not accepted here (no chat means no project context); project files are reachable through their project's official document store by mount name.
 
-- `GET /api/v1/documents?action=accessible-stores` — every enabled store (the picker's chat-less "look everywhere"). Returns `{ stores, projectLibrary: null }`; character vaults are labelled by their owning character.
+- `GET /api/v1/documents?action=accessible-stores` — every enabled store (the picker's chat-less "look everywhere"). Returns `{ stores, projectLibrary: null, generalLibrary }`; Quilltap General is held back from `stores` as `generalLibrary`, and character vaults are labelled by their owning character.
 - `POST /api/v1/documents?action=recent-documents` — recently-opened documents across all chats (sourced from `chat_documents` history), deduped by file identity, `project`-scoped rows filtered out. Returns `{ documents }`.
 - `POST /api/v1/documents?action=open-document` — JSON `{ filePath?, title?, scope? ('document_store' | 'general', default 'general'), mountPoint?, targetFolder? }`. Reads an existing file, or (no `filePath`) creates a collision-safe "Untitled Document.md" in `targetFolder`. Returns `{ document: { filePath, scope, mountPoint, displayTitle }, content, mtime, isNew, viewer? }` (`viewer` for a read-only store file — see [Chat Documents](#chat-documents-document-mode)). `404` if a named file is missing.
 - `POST /api/v1/documents?action=read-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ content, mtime }`, or `{ content: '', viewer }` for a read-only store file.
@@ -7236,7 +7236,7 @@ When a new chat is created within a project, it inherits these default tool sett
 
 #### `GET /api/v1/projects/[id]/mount-points`
 
-List the mount points (document stores) linked to a project.
+List the mount points (document stores) linked to a project. Returns `{ mountPoints, officialMountPointId }`; `officialMountPointId` names the project's own store (or `null`), which the folder browser opens for the project.
 
 #### `POST /api/v1/projects/[id]/mount-points`
 

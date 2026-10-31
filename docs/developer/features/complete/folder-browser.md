@@ -374,7 +374,7 @@ Shipped as specified, with these details settled:
 - **Wire shape.** `open-document` and `read-document` return `{ content: '', viewer }`, where `viewer` is a `DocumentViewTarget` (`lib/folder-browser/document-actions.ts`). The `open-document` action and the `chat_documents` row are unchanged, so the open set, reconcile and reload work as before. `write-document` refuses a viewed file.
 - **Model exposure.** None through Document Mode: the open announcement names the file only, and characters still reach a PDF's or `.docx`'s text through `doc_read_file`.
 - **Fix found live.** Nested dialogs: a `BaseModal` now ignores an outside click or Escape that belongs to another dialog (target or focus inside one, or any open `alertdialog`).
-- **Known, not changed:** a Markdown or text file stored as a blob in a database store (an upload through the blob route) cannot be opened in the editor, because `readDatabaseDocument` reads only the documents table. This predates the folder browser.
+- **Known, not changed:** a Markdown or text file stored as a blob in a database store (an upload through the blob route) cannot be opened in the editor, because `readDatabaseDocument` reads only the documents table. This predates the folder browser. (Fixed afterwards; see "Follow-up fixes".)
 - **Live check (V4test):** an image from a vault picked through the browser opened in a read-only tab and survived a reload. A PDF opened through the chat API rendered in its pane, and a write to it was refused with a 400. Both closed from their own Close buttons. In the picker: Copy to… stacked over it, Escape and inner clicks closed only that dialog, and a delete confirmation's Cancel and Escape left the picker open.
 
 ## Phase 6 as built (2026-10-31)
@@ -395,6 +395,21 @@ Shipped as specified, with these details settled:
 ### Left for later
 
 - **Drag-and-drop** (open question 4): out of scope. When it comes, it belongs in `FolderBrowserShell`, so every browser gets it at once.
-- **`FileBrowser`'s mount mode** still serves the project and general libraries in the picker. Its legacy `/api/v1/files` mode is a separate clean-up.
-- **Blob-stored text files.** A Markdown or text file stored as a blob in a database store cannot be opened in Document Mode's editor (see Phase 5).
-- **External filesystem changes.** A change made outside Quilltap to a filesystem store does not publish a realtime event (see Phase 3).
+- **`FileBrowser`'s legacy mode** still serves the General Files page (`/files`) and the attachment picker's General source, over the `files` table. Retiring it is a separate clean-up.
+
+### Follow-up fixes (after Phase 6)
+
+The other three items first left for later were fixed in one follow-up:
+
+- **`FileBrowser`'s mount mode is gone.** Every place that browsed a store through it now uses the store browser:
+  - The Prospero Files card's "Browse All Files" uses `ProjectStoreBrowser` (`components/document-browser/ProjectStoreBrowser.tsx`). It opens the project's own store, which `GET /api/v1/projects/[id]/mount-points` now names as `officialMountPointId`.
+  - The attachment picker's project and store steps use the same browser in pick mode.
+  - Document Mode's picker no longer uses `FileBrowser` at all. "Project library" opens the project's store and is hidden when there is none. "General library" now opens Quilltap General, returned by `accessible-stores` as `generalLibrary` and held out of the accordions. Before, it listed the legacy general files and then resolved a pick against `files/_general/`, which no longer exists, so every pick failed.
+  - `useMountPointBlobUpload` lost its last caller and was deleted.
+- **Blob-stored text files open in the editor.** `readEditableDocument` (`operator-doc-actions.ts`) falls back to `readDatabaseBlobAsDocument` (`database-store.ts`), which reads a native-text blob's own bytes as UTF-8, when no document is at the path. The first save writes a document; `linkDocumentContent` repoints the link and collects the blob. The `doc_*` tools are unchanged and still read such files as read-only extracted text (bug 260).
+  - `documentViewTargetFor` now treats a database store's text as editable only if the store can save it (`.md`, `.txt`, `.json`, `.jsonl`). Other text kinds there, such as `.yaml` or `.html`, open read-only.
+- **External filesystem changes publish a realtime hint.** The mount watcher calls `publishMountChange` (debounced 250 ms per store) when it indexes, re-indexes or drops a file, or when a folder arrives or leaves. Open browsers re-read their listing.
+- **Live check (V4test):**
+  - A chat-uploaded `.md` blob opened in the editor; saving it turned it into a document, and its text was restored afterwards.
+  - On a scratch filesystem store, a file and a folder written from the shell, and then a file deleted, each showed up in the open browser without a reload.
+  - Both pickers' library buttons, the Files card and the attachment picker's project step opened the store browser.
