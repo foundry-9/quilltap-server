@@ -111,6 +111,7 @@
 
   .qt-intervene-toggle:hover {
     background-color: var(--qt-intervene-toggle-hover-bg, var(--color-accent));
+    color: var(--qt-intervene-toggle-hover-fg, var(--color-accent-foreground));
   }
 
   /* A field the author has hidden from the dialog: the hand, struck through.

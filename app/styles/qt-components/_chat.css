@@ -314,6 +314,13 @@
     outline: none;
   }
 
+  /* The tint alone was too faint to find; keyboard focus also gets the ring
+     every other control wears (WCAG 2.4.7). */
+  .qt-chat-system-bar:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
   .qt-chat-system-bar-sender {
     color: var(--qt-chat-system-bar-sender-fg);
     font-weight: 600;
@@ -344,9 +351,9 @@
     white-space: nowrap;
   }
 
+  /* Full strength: at 0.75 opacity the timestamp fell to ~3:1 on the bar. */
   .qt-chat-system-bar-time {
     color: var(--qt-chat-system-bar-fg);
-    opacity: 0.75;
     white-space: nowrap;
   }
 
@@ -409,6 +416,13 @@
   .qt-chat-announcement-chip:focus-visible {
     background: var(--qt-chat-system-bar-hover-bg);
     outline: none;
+  }
+
+  /* The tint alone was too faint to find; keyboard focus also gets the ring
+     every other control wears (WCAG 2.4.7). */
+  .qt-chat-announcement-chip:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
   }
 
   /* Inside a chip the kind must not greedily fill the row (that is what made the
@@ -814,6 +828,13 @@
   .qt-mention-chip:focus-visible {
     background: color-mix(in srgb, var(--color-primary) 26%, transparent);
     outline: none;
+  }
+
+  /* The tint alone was too faint to find; keyboard focus also gets the ring
+     every other control wears (WCAG 2.4.7). */
+  .qt-mention-chip:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
   }
 
   /* ==========================================================================

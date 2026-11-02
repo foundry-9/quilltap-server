@@ -1403,7 +1403,7 @@
 
 .qt-floating-dialog-close:hover {
   background: var(--color-accent);
-  color: var(--color-foreground);
+  color: var(--color-accent-foreground);
 }
 
 .qt-floating-dialog-body {
@@ -1737,6 +1737,13 @@
   outline: none;
 }
 
+/* The tint alone was too faint to find; keyboard focus also gets the ring
+   every other control wears (WCAG 2.4.7). */
+.qt-chat-system-bar:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
 .qt-chat-system-bar-sender {
   color: var(--qt-chat-system-bar-sender-fg);
   font-weight: 600;
@@ -1767,9 +1774,9 @@
   white-space: nowrap;
 }
 
+/* Full strength: at 0.75 opacity the timestamp fell to ~3:1 on the bar. */
 .qt-chat-system-bar-time {
   color: var(--qt-chat-system-bar-fg);
-  opacity: 0.75;
   white-space: nowrap;
 }
 
@@ -1831,6 +1838,13 @@
 .qt-chat-announcement-chip:focus-visible {
   background: var(--qt-chat-system-bar-hover-bg);
   outline: none;
+}
+
+/* The tint alone was too faint to find; keyboard focus also gets the ring
+   every other control wears (WCAG 2.4.7). */
+.qt-chat-announcement-chip:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
 }
 
 /* Inside a chip the kind must not greedily fill the row; cap it so a long kind
@@ -2925,6 +2939,13 @@
 .qt-mention-chip:focus-visible {
   background: color-mix(in srgb, var(--color-primary) 26%, transparent);
   outline: none;
+}
+
+/* The tint alone was too faint to find; keyboard focus also gets the ring
+   every other control wears (WCAG 2.4.7). */
+.qt-mention-chip:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
 }
 
 /* ==========================================================================
@@ -4947,6 +4968,31 @@
   box-shadow: 0 3px 0 0 var(--qt-tab-active-border) inset;
 }
 
+/* The tab's selectable part: a bare button carrying the icon and label, so
+   the tab is keyboard-operable without nesting the close button inside it.
+   Its focus ring is drawn on the whole tab, which is what the eye reads. */
+.qt-tab-select {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.qt-tab-select:focus-visible {
+  outline: none;
+}
+
+.qt-tab-strip .qt-tab:has(.qt-tab-select:focus-visible) {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
 .qt-tab-label {
   max-width: 14rem;
   overflow: hidden;
@@ -4963,7 +5009,8 @@
   height: 1.5rem;
   margin: -0.175rem -0.25rem -0.175rem 0;
   border-radius: 0.25rem;
-  opacity: 0.55;
+  /* 0.8, not 0.55: the dimmer cross fell under the 3:1 a control's icon needs. */
+  opacity: 0.8;
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
@@ -5388,7 +5435,7 @@ li:is(.qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue) {
 
 .qt-storyteller-mode-option:hover {
   background: var(--qt-storyteller-mode-hover-bg, var(--color-accent));
-  color: var(--qt-storyteller-mode-hover-fg, var(--color-foreground));
+  color: var(--qt-storyteller-mode-hover-fg, var(--color-accent-foreground));
 }
 
 .qt-storyteller-mode-option-active,
@@ -5649,6 +5696,7 @@ li:is(.qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue) {
 
 .qt-intervene-toggle:hover {
   background-color: var(--qt-intervene-toggle-hover-bg, var(--color-accent));
+  color: var(--qt-intervene-toggle-hover-fg, var(--color-accent-foreground));
 }
 
 /* A field the author has hidden from the dialog. */
@@ -5664,6 +5712,271 @@ li:is(.qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue) {
     currentColor calc(50% + 0.75px),
     transparent calc(50% + 0.75px)
   );
+}
+
+/* ============================================================================
+   ALERTS
+   ============================================================================ */
+
+.qt-alert,
+.qt-alert-success,
+.qt-alert-warning,
+.qt-alert-error,
+.qt-alert-info {
+  border-radius: 0.5rem;
+  border-width: 1px;
+  border-style: solid;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.qt-alert-success {
+  background-color: var(--qt-alert-success-bg);
+  color: var(--qt-alert-success-fg);
+  border-color: var(--qt-alert-success-border);
+}
+
+.qt-alert-warning {
+  background-color: var(--qt-alert-warning-bg);
+  color: var(--qt-alert-warning-fg);
+  border-color: var(--qt-alert-warning-border);
+}
+
+.qt-alert-error {
+  background-color: var(--qt-alert-error-bg);
+  color: var(--qt-alert-error-fg);
+  border-color: var(--qt-alert-error-border);
+}
+
+.qt-alert-info {
+  background-color: var(--qt-alert-info-bg);
+  color: var(--qt-alert-info-fg);
+  border-color: var(--qt-alert-info-border);
+}
+
+/* Secondary-text helpers inside an alert take the alert's own foreground.
+   qt-text-small and its kin paint the muted grey, which on an alert's tint
+   fell to ~3.6:1 (Art Deco dark) and ~4.1:1 (default dark); the alert's
+   foreground is the colour chosen to sit on that tint. Specificity is two
+   classes — enough to outrank the helper, no more. */
+:is(.qt-alert, .qt-alert-success, .qt-alert-warning, .qt-alert-error, .qt-alert-info)
+  :is(.qt-text-small, .qt-text-muted, .qt-text-secondary, .qt-text-xs) {
+  color: inherit;
+}
+
+/* A link inside an alert's running text takes the alert's colour (qt-link's
+   muted grey fell to ~3.6:1 on the tint) and is underlined, so it is not
+   told from the words around it by colour alone (WCAG 1.4.1). */
+:is(.qt-alert, .qt-alert-success, .qt-alert-warning, .qt-alert-error, .qt-alert-info) a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ============================================================================
+   SETTINGS PAGE - Background image readability
+   When a subsystem background image is shown on the settings page,
+   tabs and header text need opaque/contrasted treatments to remain legible.
+   ============================================================================ */
+
+/* Frosted header banner behind title and subtitle */
+.qt-page-container[style*="--story-background-url"] .qt-settings-header {
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  background: color-mix(in srgb, var(--color-background) 80%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Opaque inactive tab backgrounds. 90/10, not 85/15: the stronger tint left
+   the muted tab label at 4.3:1 on the default and Rains light palettes. */
+.qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab {
+  background: color-mix(in srgb, var(--color-background) 90%, var(--color-muted-foreground) 10%);
+  border-color: var(--color-border);
+}
+
+.qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab:hover:not(.qt-tab-active) {
+  background: color-mix(in srgb, var(--color-background) 84%, var(--color-muted-foreground) 16%);
+}
+
+/* Active tab matches the panel background so it merges into it */
+.qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab.qt-tab-active {
+  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  border-color: var(--color-border);
+}
+
+.qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab.qt-tab-active::after {
+  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+}
+
+/* Remove gap between tabs and panel so they connect as a folder */
+.qt-page-container[style*="--story-background-url"] .qt-tab-divider {
+  display: none;
+}
+
+/* Collapse the margin between tab nav wrapper and content panel */
+.qt-page-container[style*="--story-background-url"] :has(> .qt-tab-group) {
+  margin-bottom: 0 !important;
+}
+
+.qt-page-container[style*="--story-background-url"] .qt-tab-group {
+  /* Nudge tabs down onto the panel border so the active tab overlaps it */
+  position: relative;
+  z-index: 1;
+  margin-bottom: -1px;
+}
+
+/* Settings content panel - the "folder" body below the tabs. */
+.qt-page-container[style*="--story-background-url"] .qt-settings-panel {
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  padding: 1.5rem 1rem;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  min-height: 40vh;
+}
+
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
+
+.qt-footer {
+  border-top-width: 1px;
+  border-top-style: solid;
+  padding: 1rem;
+  background: var(--qt-app-header-bg);
+  border-color: var(--qt-footer-border);
+  backdrop-filter: var(--qt-app-header-blur);
+  -webkit-backdrop-filter: var(--qt-app-header-blur);
+  position: relative;
+  z-index: 20;
+}
+
+.qt-footer-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--qt-footer-fg);
+}
+
+.qt-footer-link {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  color: var(--qt-footer-fg);
+}
+
+.qt-footer-link:hover {
+  color: var(--qt-footer-link-hover);
+}
+
+.qt-footer-path {
+  font-family: monospace;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  display: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 24rem;
+  color: var(--qt-footer-fg);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+/* Full strength at rest: the old 0.7 opacity left the path at ~2.9:1 on the
+   footer. Hover marks itself by colour and underline instead. */
+.qt-footer-path:hover {
+  color: var(--qt-footer-link-hover);
+  text-decoration: underline;
+}
+
+.qt-footer-separator {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .qt-footer-path,
+  .qt-footer-separator {
+    display: inline;
+  }
+}
+
+/* ============================================================================
+   SETTINGS FORM SHELLS
+   Shared semantic wrappers for settings cards and toggle rows.
+   ============================================================================ */
+
+.qt-settings-shell {
+  padding: 1rem;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 0.25rem;
+  border-color: var(--qt-card-border);
+  background: color-mix(in srgb, var(--color-card) 96%, transparent);
+}
+
+.qt-settings-shell-tight {
+  padding: 0.75rem;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 0.25rem;
+  border-color: var(--qt-card-border);
+  background: color-mix(in srgb, var(--color-card) 96%, transparent);
+}
+
+.qt-settings-section-heading {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--qt-text-primary-fg, var(--color-foreground));
+}
+
+.qt-settings-field-group > :not(:last-child) {
+  margin-bottom: 0.5rem;
+}
+
+.qt-settings-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  border-color: var(--qt-card-border);
+  transition: background-color 150ms ease;
+}
+
+/* The accent fill carries its own foreground: on themes with a bold accent
+   (Art Deco and Great Estate dark, Madman's Box) the row's ordinary text
+   fell to ~1.4:1 on hover. */
+.qt-settings-toggle-row:hover {
+  background: var(--qt-card-hover-bg, var(--color-accent));
+  color: var(--qt-card-hover-fg, var(--color-accent-foreground));
+}
+
+.qt-settings-toggle-row:hover :where(*) {
+  color: var(--qt-card-hover-fg, var(--color-accent-foreground));
 }
 
 /* ============================================================================

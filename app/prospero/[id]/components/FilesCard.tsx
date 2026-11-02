@@ -83,6 +83,7 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
         {/* Header - always visible */}
         <button
           onClick={onToggle}
+          aria-expanded={expanded}
           className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
         >
           <div className="flex items-center gap-3">

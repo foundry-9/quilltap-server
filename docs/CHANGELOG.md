@@ -4,6 +4,28 @@
 
 ### 4.12-dev
 
+#### UI: WCAG 2.2 AA pass (release checklist 13)
+
+Contrast table, axe sweep of every bundled theme in light and dark, and a component audit of this cycle's UI changes.
+
+- Accent hovers: `.qt-settings-toggle-row`, `.qt-storyteller-mode-option`, `.qt-floating-dialog-close` and `.qt-intervene-toggle` now set `--color-accent-foreground` on hover. They kept the resting text colour on the accent fill, which dropped to about 1.4:1 on Art Deco dark, Great Estate dark and Madman's Box.
+- Ten raw `hover:bg-accent/50` call sites (memory cascade dialog, prompt/subprompt/progression cards, library file picker, connection-profile drag handle) now use `hover:qt-bg-surface-hover`.
+- Alerts: `qt-text-small` / `-muted` / `-secondary` / `-xs` inside a `qt-alert*` inherit the alert foreground; links inside alerts inherit it too and are underlined (1.4.1). `qt-link`'s muted grey was 3.6-4.1:1 on the warning tint.
+- `.qt-footer-path` and `.qt-chat-system-bar-time` no longer use opacity (2.9:1 and 3.0:1).
+- Settings-page tabs over a story background: inactive tint 85/15 to 90/10 (muted label was 4.3:1).
+- Earl Grey `--text-400` 45.5% to 43% (light) and 59% to 61% (dark); Rains dark `--text-400` 59% to 61%.
+- Art Deco light: `--qt-brand-fg` gold to `--deco-bronze` (the brand word was 1.1:1 on parchment), link and footer hover to the primary navy; dark keeps the gold. Great Estate light: brand and the same hovers to `hsl(43 70% 28%)` (was 1.7:1); dark keeps the gold.
+- Earl Grey and Rains: the `.qt-alert-*` overrides coloured text with `--X-100` in both modes (warning was 2.4:1 on white); they now use the per-mode `--qt-alert-*-fg` tokens.
+- Light-mode alert text darkened to clear 4.5:1 on the alert tint: success in Art Deco, Earl Grey, Great Estate, Old School and Rains (were 3.9-4.5:1); Earl Grey info; Great Estate warning.
+- Theme versions: Art Deco 1.0.14, Earl Grey 1.3.11, Great Estate 1.0.11, Old School 1.0.15, Rains 1.3.15.
+- `SlideOverPanel` is `inert` while closed. It stays mounted off-screen for the slide, and its controls (the LLM Inspector's filter, refresh, close and log rows) were in the Tab order beyond the viewport edge, where the focus trap held keyboard users. Test: `__tests__/unit/components/ui/SlideOverPanel-inert.test.tsx`.
+- `.qt-chat-system-bar`, `.qt-chat-announcement-chip` and `.qt-mention-chip` get a 2px ring on `:focus-visible`; focus was shown only by a faint tint.
+- Workspace tab strip (`components/workspace/TabStrip.tsx`): tabs were `div role="tab"` with no tabindex, so they could not be reached by keyboard, and nested the close button. Each tab is now a `button role="tab"` with roving tabindex; arrows / Home / End move and select, Delete closes. The close cross is `aria-hidden`, `tabIndex={-1}`. New `.qt-tab-select`; focus ring drawn on the tab. Close cross opacity 0.55 to 0.8. Test: `__tests__/unit/components/workspace/tab-strip-keyboard.test.tsx`.
+- Names and states: Markdown toolbar buttons get `aria-label` (were named "B", "I", "H1"; the glyph is kept where the words lack it, e.g. "Heading 4 (H4)"); code-block button `aria-pressed`; `aria-pressed` on search type chips, wardrobe slot filters, wardrobe dialog view switch, announcement character picker, setup role picker, and the Aurora favorite / Carina / user-control toggles; `aria-expanded` on the RNG custom-roll and Prospero files card toggles; emoji-only file-browser buttons get labels with the glyph `aria-hidden`; search "(3/10)" button gets a label.
+- Staff announcement bars dropped an `aria-label` that replaced their visible text (2.5.3); collapsed-sidebar avatar label includes the visible queue number.
+- Aurora favorite star: 24px minimum target (was 14x17).
+- theme-storybook 1.0.97: mirrors the above and ports the alert, footer, settings-shell and settings-background families.
+
 #### Tests: release-checklist coverage pass
 
 Release-checklist item 2. Tests for 4.12 modules that had none; committed in 4310d435f with the file-provider change.

@@ -493,6 +493,7 @@ export default function InsertAnnouncementDialog({
                         key={c.id}
                         type="button"
                         onClick={() => handleSelectCharacter(c.id)}
+                        aria-pressed={characterId === c.id}
                         className={`w-full px-3 py-2 text-left text-sm flex items-center gap-3 ${
                           characterId === c.id ? 'qt-bg-primary/20' : 'hover:qt-bg-primary/10'
                         }`}

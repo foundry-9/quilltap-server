@@ -135,12 +135,14 @@ export default function ProfileSetupPage() {
 
         {/* Archetype selection */}
         <div>
-          <label className="qt-text-label block mb-2">How would you describe your role?</label>
-          <div className="space-y-2">
+          <p id="setup-role-heading" className="qt-text-label block mb-2">How would you describe your role?</p>
+          <div className="space-y-2" role="group" aria-labelledby="setup-role-heading">
             {ARCHETYPES.map((archetype) => (
               <button
                 key={archetype.id}
+                type="button"
                 onClick={() => setSelectedArchetype(archetype.id)}
+                aria-pressed={selectedArchetype === archetype.id}
                 disabled={loading}
                 className={`w-full p-4 text-left rounded-lg transition-all ${
                   selectedArchetype === archetype.id
@@ -155,7 +157,7 @@ export default function ProfileSetupPage() {
           </div>
         </div>
 
-        {error && <p className="qt-alert qt-alert-error text-sm">{error}</p>}
+        {error && <p role="alert" className="qt-alert qt-alert-error text-sm">{error}</p>}
 
         <button
           onClick={handleSubmit}

@@ -246,6 +246,7 @@ export function RngDropdown({
             <button
               type="button"
               onClick={() => setIsCustomOpen(!isCustomOpen)}
+              aria-expanded={isCustomOpen}
               disabled={isLoading}
               className="w-full px-3 py-2 text-left text-sm hover:qt-bg-muted transition-colors disabled:opacity-50 flex items-center justify-between"
               role="menuitem"

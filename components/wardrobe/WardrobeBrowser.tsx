@@ -316,6 +316,7 @@ export function WardrobeBrowser({
                 key={slot}
                 type="button"
                 onClick={() => setSlotFilter(slot)}
+                aria-pressed={slotFilter === slot}
                 className={`qt-button-sm ${slotFilter === slot ? 'qt-button-secondary' : 'qt-button-ghost'}`}
               >
                 {slot === 'all' ? 'All' : WARDROBE_SLOT_META[slot].label}

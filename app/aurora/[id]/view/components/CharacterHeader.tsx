@@ -166,16 +166,20 @@ export function CharacterHeader({
               <button
                 onClick={onToggleFavorite}
                 disabled={togglingFavorite}
-                className="text-2xl qt-text-favorite transition-transform hover:scale-110 disabled:opacity-50"
+                className="text-2xl qt-text-favorite transition-transform hover:scale-110 disabled:opacity-50 inline-flex items-center justify-center min-w-6 min-h-6"
                 title={character?.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                aria-label="Favorite"
+                aria-pressed={!!character?.isFavorite}
               >
-                {character?.isFavorite ? '⭐' : '☆'}
+                <span aria-hidden="true">{character?.isFavorite ? '⭐' : '☆'}</span>
               </button>
               <button
                 onClick={onToggleCarina}
                 disabled={togglingCarina}
                 className={`transition hover:scale-110 disabled:opacity-50 ${character?.canBeCarina ? 'qt-text-favorite' : 'qt-text-secondary'}`}
                 title={character?.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
+                aria-label="Carina answers (@-queries)"
+                aria-pressed={!!character?.canBeCarina}
               >
                 <Icon name="monitor" className="w-6 h-6" />
               </button>
@@ -184,6 +188,8 @@ export function CharacterHeader({
                 disabled={togglingControlledBy}
                 className={`transition hover:scale-110 disabled:opacity-50 ${character?.controlledBy === 'user' ? 'qt-text-favorite' : 'qt-text-secondary'}`}
                 title={character?.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
+                aria-label="You play this character"
+                aria-pressed={character?.controlledBy === 'user'}
               >
                 <Icon name="user" className="w-6 h-6" />
               </button>

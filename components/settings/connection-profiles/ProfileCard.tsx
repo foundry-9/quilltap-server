@@ -33,7 +33,7 @@ const DragHandle = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTML
     return (
       <button
         ref={ref}
-        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-accent/50 qt-text-secondary hover:text-foreground transition-colors touch-none"
+        className="cursor-grab active:cursor-grabbing p-1 rounded hover:qt-bg-surface-hover qt-text-secondary hover:qt-text transition-colors touch-none"
         aria-label="Drag to reorder"
         {...props}
       >
