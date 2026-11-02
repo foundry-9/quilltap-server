@@ -13,6 +13,7 @@ import { formatNameWithPronouns } from '../../format-utils'
 import { renderTurnContext } from '../window'
 import {
   AGREEMENTS_INSTRUCTION_BLOCK,
+  REPAIRS_INSTRUCTION_BLOCK,
   AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE,
   ESTABLISHED_FACT_INSTRUCTION_BLOCK,
   EVENT_INSTRUCTION_BLOCK,
@@ -85,6 +86,8 @@ ${ORIENTING_CONTEXT_SKIP_BULLET}
 
 ${AGREEMENTS_INSTRUCTION_BLOCK}
 
+${REPAIRS_INSTRUCTION_BLOCK}
+
 ${ESTABLISHED_FACT_INSTRUCTION_BLOCK}
 
 DEDUPLICATION
@@ -99,7 +102,9 @@ IMPORTANCE — calibrate to these anchors
   0.85  The subject had a self-revelation that changes how they
         understand themselves, or made a personal commitment
         (one the subject spoke themselves) to another person about
-        their relationship.
+        their relationship — or made a repair: forgave, accepted an
+        apology, or made amends, scored at least as high as what it
+        repairs.
   0.65  The subject formed a substantive new opinion, plan, or
         position — including a commitment to build, file, fix, or
         rule on something.

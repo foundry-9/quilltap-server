@@ -82,6 +82,7 @@ This document tracks planned features and improvements for Quilltap.
 - [X] AI direct character edit
   - [X] Give the AI instructions, it proposes edits to the character
   - [ ] Optionally can adjust or delete memories
+- [x] Prompt trust, part two — "the probation": drop the "times they slipped" ledger from the trust disposition and sample prompts, add a companion default-yes and a universal no-mind-reading rule, rescope the group-scene anti-chorus rules, and teach the extractor and binder to record repairs (design: [prompt-trust-the-probation.md](prompt-trust-the-probation.md)) — implemented 4.12-dev; live V4test eval outstanding
 
 ### External Integrations
 

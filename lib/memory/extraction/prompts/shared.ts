@@ -157,6 +157,29 @@ export const AGREEMENTS_INSTRUCTION_BLOCK = `AGREEMENTS, PROPOSALS, AND CONDITIO
   drops the limit records a different, larger thing than was said.`
 
 /**
+ * Shared by the SELF and OTHER bodies. Mechanism 7 of the probation spec:
+ * offenses and confessions were extracted at 0.85–0.95 while the later
+ * apology-accepted or forgiveness had no rule at all, so a character's book
+ * filled with hurts and no resolutions. A repair is a hinge, scored no lower
+ * than what it repairs — and, like assent, never manufactured.
+ * See docs/developer/features/prompt-trust-the-probation.md §9.1.
+ */
+export const REPAIRS_INSTRUCTION_BLOCK = `REPAIRS AND RESOLUTIONS — a repair is a hinge
+- When this exchange resolves an earlier hurt or conflict — an apology
+  accepted, forgiveness given, amends made, a grudge set down — record
+  it as a resolution, and name what it resolves: "Jackie told Charlie
+  she had forgiven him for acting without asking her; she said it was
+  finished."
+- A resolution is at least as important as the hurt it resolves. Never
+  score it below the offense it settles.
+- Record a resolution only on the forgiving party's own words or
+  unmistakable action in this transcript. An apology alone is not
+  forgiveness: record it as an apology, attributed, and if it went
+  unanswered, say so.
+- Forgiveness is not provisional unless the forgiving party said so in
+  words. Do not add "for now" or "on probation" that was not said.`
+
+/**
  * Shared by every extraction body that reads seat lines (SELF, OTHER, the
  * episode pass). A line the operator posted as established fact arrives
  * framed (`lib/chat/established-fact.ts`); this is how the extractor is told

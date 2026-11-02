@@ -4,6 +4,42 @@
 
 ### 4.12-dev
 
+#### Prompt trust, part two: "the probation"
+
+Long-running companion characters kept the user's persona on probation. They tallied the persona's slips, attached terms to their own yes, corrected small things, told the user what they "really" meant, and never finished forgiving. Design: `docs/developer/features/prompt-trust-the-probation.md`.
+
+- Generators (`lib/services/character-field-semantics.ts`):
+  - `COMPANION_TRUST_DISPOSITION` no longer says the character "remembers the times {{user}} was right as readily as the times they slipped." Models read that as an instruction to keep a ledger.
+  - It now adds: no ledger, and forgiveness given is finished; ordinary requests get a yes; wants are stated without conditions; compliments and stories stand; disagreement is for things that matter.
+  - `TRUST_SAFEGUARDS_DIRECTION` has a sixth universal rule: never tell {{user}} what they really meant or felt; ask.
+  - `EXAMPLE_DIALOGUE_COVERAGE` asks for a plain yes.
+  - `COMMITTEE_DRIFT_GUARDRAIL` treats probation behavior as drift, and forbids codifying agreement or warmth as a drift risk.
+- Sample prompts (`qtap-plugin-default-system-prompts` 1.1.30):
+  - The ledger line is replaced in the 18 prompts that had it.
+  - All 21 carry the no-mind-reading rule.
+  - Every relationship prompt has an "ordinary time" default yes. MODERN_PLATONIC gets a softer version; MODERN_GENERAL gets none.
+  - Each pushback or "saint" line gets a counterweight about frequency.
+- `GROUP_SCENE_DISCIPLINE` now aims the anti-chorus rules at characters echoing each other. A plain yes to the user, doing what was asked, or a laugh counts as a complete turn, and "warmth" is listed as a reason to speak. Multi-character chats take one prompt-cache miss on their next turn.
+- Memory extraction:
+  - New `REPAIRS_INSTRUCTION_BLOCK` in SELF and OTHER. An accepted apology, forgiveness or amends is recorded as a resolution that names what it resolves, scored no lower than the offense, and only on the forgiving party's own words.
+  - The importance anchors list repairs at the 0.85 tier.
+  - OTHER records kept promises and "turned out to be right" at 0.40–0.55 instead of skipping them as generic warmth.
+  - The episode pass notes a repair that ended an episode.
+- Consolidation:
+  - The binder folds an offense and its later repair into one digest that leads with the resolution.
+  - The binder returns `resolvedIds`. The plan's new `resolvedMarks` add the free keyword `resolved` to those rows. The rows are kept and nothing is re-embedded.
+  - Recall ranks `resolved` rows at ×0.6 (`RECALL_MULTIPLIERS.resolved`, `resolvedMultiplier`). Retention is unchanged.
+- Existing characters and users' prompt copies are not changed. The Character Optimizer's refine pass picks up the new drift guardrail.
+- Help: `help/character-optimizer.md`, `help/prompts.md`, `help/memory-playing-a-character.md`, `help/memory-maintenance.md`.
+- Tests:
+  - `character-field-semantics-probation.test.ts` (new)
+  - `multi-character-turn-anchor.test.ts`
+  - `default-system-prompts-content.test.ts`
+  - `repairs-prompt.test.ts` (new)
+  - `consolidation-tasks.test.ts`
+  - `consolidation-plan.test.ts`
+  - `recall-tags.test.ts`
+
 #### Folder-browser follow-ups: picker libraries, uploaded text, outside edits
 
 - `FileBrowser` no longer has a mount mode. Every place that browsed a store with it now uses the Scriptorium's folder browser:

@@ -758,13 +758,19 @@ export function selectAttachmentAnchorIndex(
  * list. The rules target the *shape* of the chorus rather than specific
  * wording — phrase blocklists alone have proven too weak to hold. Exported for
  * unit testing.
+ *
+ * The chorus is characters echoing *each other*. Answering the user is not a
+ * chorus: an earlier wording banned agreement outright and listed objection
+ * among the first reasons to speak, which fed "the probation" — characters who
+ * would not simply say yes to the user (docs/developer/features/
+ * prompt-trust-the-probation.md §8). Keep warmth and a plain yes as complete turns.
  */
-export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mode of a group scene is the chorus: each character recaps what the others said, agrees with all of it, and adds one small item shaped like everyone else's. Never join a chorus:
+export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mode of a group scene is the chorus: each character recaps what the other characters said, agrees with all of it, and adds one small item shaped like everyone else's. Never join a chorus:
 - Do not open by summarizing or listing what other characters just said. Everyone present heard it. React to at most one specific thing, or simply act.
-- Do not agree-then-add ("X is right — but there's one thing nobody has named"). If all you have is agreement plus a small addendum, give the addendum alone in a sentence or two — or pass the turn if passing is offered.
+- Do not agree-then-add with another character ("X is right — but there's one thing nobody has named"). If all you have is agreement with another character plus a small addendum, give the addendum alone in a sentence or two — or pass the turn if passing is offered. This is about echoing the cast, not about answering the user: a plain yes to the user, doing what the user asked, or a laugh at the user's joke is a complete turn.
 - Never reuse another character's metaphors, images, or coined phrases. A striking phrase someone else used in this scene is spent; repeating it is a defect, not a callback. If several characters have already said much the same thing, saying it again in your own accent adds nothing.
 - Do not restate the plan, the task list, or the group's conclusions. They are already on the record; a speech re-affirming what is decided adds nothing.
-- Speak to change something: new information, a genuine objection or disagreement, a question, an action actually taken, a joke, a refusal. Re-pledging your commitment is not a turn.
+- Speak to change something: new information, an action actually taken, a joke, warmth, a question, a genuine objection, a refusal. Re-pledging your commitment is not a turn.
 - Vary register and length. Most real conversational turns are one to three sentences. A long speech is an event, not a default — and never the second one in a row.`
 
 /**

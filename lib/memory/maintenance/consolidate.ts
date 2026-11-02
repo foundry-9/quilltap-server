@@ -183,4 +183,5 @@ export function applyConsolidationToCorpus(
   }
   for (const id of new Set([...plan.considered, ...belowMinConsidered])) corpus.patch(id, { consolidatedAt: nowIso })
   for (const rewrite of plan.linkRewrites) corpus.patch(rewrite.id, { relatedMemoryIds: rewrite.relatedMemoryIds })
+  for (const mark of plan.resolvedMarks) corpus.patch(mark.id, { keywords: mark.keywords })
 }

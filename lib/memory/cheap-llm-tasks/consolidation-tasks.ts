@@ -83,6 +83,12 @@ export const ConsolidationOutputSchema = z.object({
   digests: z.array(ConsolidationDigestSchema),
   keepStandalone: z.array(z.string().trim().min(1)).default([]),
   contradictions: z.array(ConsolidationContradictionSchema).default([]),
+  /**
+   * Handles of notes recording a hurt that a repair among these notes settles
+   * (prompt-trust-the-probation.md §9.6). Advisory: unknown handles are dropped
+   * with a warning, never failing the cluster.
+   */
+  resolvedIds: z.array(z.string().trim().min(1)).default([]),
 })
 
 export type ConsolidationDigestOutput = z.infer<typeof ConsolidationDigestSchema>
@@ -98,6 +104,8 @@ export interface ValidatedConsolidation {
   contradictions: ConsolidationContradiction[]
   /** Inputs the model listed nowhere (already folded into `keepStandalone`). */
   unlisted: string[]
+  /** Input handles whose hurt a repair in these notes settles (unknown handles dropped). */
+  resolvedIds: string[]
 }
 
 export type ConsolidationValidation =
@@ -157,6 +165,12 @@ export function validateConsolidationOutput(
     (c) => inputs.has(c.olderId) && inputs.has(c.newerId) && c.olderId !== c.newerId,
   )
 
+  const resolvedIds = Array.from(new Set(output.resolvedIds.filter((h) => inputs.has(h))))
+  const droppedResolved = output.resolvedIds.filter((h) => !inputs.has(h))
+  if (droppedResolved.length > 0) {
+    logger.warn('Consolidation answer named unknown resolvedIds; dropped', { dropped: droppedResolved })
+  }
+
   return {
     ok: true,
     value: {
@@ -164,6 +178,7 @@ export function validateConsolidationOutput(
       keepStandalone: [...standalone, ...unlisted],
       contradictions,
       unlisted,
+      resolvedIds,
     },
   }
 }
@@ -216,9 +231,21 @@ THE RULES OF THE BINDERY
   the subject is the holder; otherwise third person, past or present tense
   as fits, using names, never bare pronouns.
 - Keep each digest to one tight paragraph — two to five sentences.
+- An offense and its later repair are one thread. When the notes hold a
+  hurt and a later apology, forgiveness, or amends for it, bind them into
+  one entry that leads with the resolution and keeps the history in a
+  clause: "Jackie forgave Charlie in October for acting without asking
+  her; she had been angry about it since the summer." That digest's
+  importance is the resolution's, not the offense's. If no repair appears
+  in the notes, do not imply one.
+- List in "resolvedIds" every note recording a hurt that a repair among
+  these notes settles, whether you bound it or kept it standalone. Never
+  list a note whose hurt the notes do not show was repaired. Usually the
+  list is empty.
 
 EVERY HANDLE APPEARS EXACTLY ONCE: in one digest's "memberIds", or in
 "keepStandalone". Never in two places. Use only the handles given.
+("resolvedIds" is a separate list and may repeat handles from either.)
 
 OUTPUT — a single JSON object, no prose, no code fences:
 {
@@ -234,7 +261,8 @@ OUTPUT — a single JSON object, no prose, no code fences:
     }
   ],
   "keepStandalone": ["m2"],
-  "contradictions": [ { "olderId": "m1", "newerId": "m4", "note": "what changed" } ]
+  "contradictions": [ { "olderId": "m1", "newerId": "m4", "note": "what changed" } ],
+  "resolvedIds": []
 }
 
 TAGS — each digest's "keywords" must end with exactly one value from each axis:
