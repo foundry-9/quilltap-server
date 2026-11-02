@@ -1,6 +1,6 @@
 # Refactor 4.12 — The theme-storybook mirror is generated, not hand-written
 
-**Status:** Proposed (2026-11-02). Part of the [4.12 refactor set](refactor-4-12.md). Touches `packages/theme-storybook`, so the publish rule in CLAUDE.md applies to the first shipping change.
+**Status:** Phases 1 and 2 implemented (2026-11-02); Phase 3 not started. Decisions taken: the package publishes at release (a `publish-theme-storybook` job in `release.yml`), and storybook-only rules are dropped. Report: [refactor-4-12/storybook-css-diff.md](refactor-4-12/storybook-css-diff.md). Originally proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Touches `packages/theme-storybook`, so the publish rule in CLAUDE.md applies to the first shipping change.
 
 ## 1. The problem
 
@@ -116,3 +116,12 @@ The "port the whole family" and "mirror faithfully, including quirks" sentences 
 - **Tailwind compile API stability.** `@tailwindcss/node`'s `compile` is what `@tailwindcss/postcss` itself uses, but it is not a documented public contract. The fixture test is the tripwire; the fallback is running the entry through PostCSS with `@tailwindcss/postcss`, which is documented.
 - **Output churn on Tailwind upgrades.** A minor Tailwind bump may reorder or reword declarations and produce a large mirror diff. That is noise, not drift, and the gate makes the regeneration a one-command step in the upgrade commit.
 - **Package consumers who read the file as documentation.** The generated file is less commented than the hand copy. The family banners survive (they are in the app source), and the README gains a "where the rules come from" section.
+
+## 10. As built (2026-11-02)
+
+- **Generator:** `scripts/lib/storybook-css.mjs` (shared core), `scripts/generate-storybook-css.mjs` (`npm run generate:storybook-css`, `--out` for a scratch path), `scripts/check-storybook-css.mjs` (fifth `npm run lint` gate). The token map and the class-based `dark` variant moved to `app/styles/theme-tokens.css`; the app's compiled CSS is byte-identical before and after the move.
+- **Comments.** Tailwind drops ordinary comments, hoists every `/*! */` comment to the top of the output, drops unknown at-rules and merges same-named `@layer` blocks, so §5.1's "keep the family banners" could not be had by a header pass. The generator inlines each family (in `_index.css` order) instead of `@import`ing `_index.css`, turns every statement-level comment (top level, or directly inside a top-level `@layer`) into a marker rule that compiles through untouched, and swaps the markers back into the original comments after autoprefixing. Comments inside rule bodies are dropped. With the comments stripped, the output is identical to a plain `@import "_index.css"` compile.
+- **Tailwind license banner** is kept (it ships Tailwind-generated `@property` and `@layer properties` blocks). The layer-order statement is `@layer properties, theme, base, components, utilities;`, the order the app gets.
+- **Test:** `__tests__/unit/scripts/generate-storybook-css.test.ts`. `@tailwindcss/node` registers module hooks, which Jest's sandbox refuses, so the compile half runs the real module in a child `node` process; the comment marking is tested in-process.
+- **Decorator.** The default theme rendered without `data-theme`, and the app's `--qt-*` defaults sit on `[data-theme]`, so `ThemeDecorator` now always sets it (plus a `light`/`dark` class and `data-color-mode`), matching `applyThemeToDom`.
+- **Tabs story** follows `EntityTabs`: `qt-tab-divider` under the group, unstyled panel.

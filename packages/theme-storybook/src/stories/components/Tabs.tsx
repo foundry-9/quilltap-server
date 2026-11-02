@@ -38,9 +38,11 @@ export const Tabs: React.FC = () => {
             Notifications
           </button>
         </div>
-        <div>
+        {/* Same shape as the app's EntityTabs: the panel itself carries no qt-* class. */}
+        <div className="qt-tab-divider" />
+        <div role="tabpanel" style={{ padding: '1rem 0' }}>
           {activeTab === 'tab1' && (
-            <div className="qt-tab-content">
+            <div>
               <h4 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Account Settings</h4>
               <p style={{ color: 'var(--color-muted-foreground)' }}>
                 Manage your account settings and preferences.
@@ -48,7 +50,7 @@ export const Tabs: React.FC = () => {
             </div>
           )}
           {activeTab === 'tab2' && (
-            <div className="qt-tab-content">
+            <div>
               <h4 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>General Settings</h4>
               <p style={{ color: 'var(--color-muted-foreground)' }}>
                 Configure general application settings.
@@ -56,7 +58,7 @@ export const Tabs: React.FC = () => {
             </div>
           )}
           {activeTab === 'tab3' && (
-            <div className="qt-tab-content">
+            <div>
               <h4 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Notification Preferences</h4>
               <p style={{ color: 'var(--color-muted-foreground)' }}>
                 Choose how you want to receive notifications.

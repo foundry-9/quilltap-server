@@ -450,6 +450,49 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  # @quilltap/theme-storybook carries its own semver (bumped per change) and
+  # ships a qt-components.css generated from app/styles/qt-components/, so it
+  # publishes here, at release, rather than by hand per change. A version
+  # already on the registry is skipped; the job stands apart from publish-npm
+  # so a storybook failure never holds back the CLI.
+  publish-theme-storybook:
+    name: Publish theme-storybook to npm
+    runs-on: ubuntu-latest
+    needs: create-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup
+        with:
+          install: 'false'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Check whether this version is already published
+        id: check
+        working-directory: packages/theme-storybook
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@quilltap/theme-storybook@${VERSION}" version >/dev/null 2>&1; then
+            echo "@quilltap/theme-storybook@${VERSION} is already published; skipping."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install package dependencies
+        if: steps.check.outputs.publish == 'true'
+        working-directory: packages/theme-storybook
+        run: npm ci
+
+      - name: Publish to npm
+        if: steps.check.outputs.publish == 'true'
+        working-directory: packages/theme-storybook
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   notify-website:
     name: Notify website of release
     runs-on: ubuntu-latest
