@@ -105,6 +105,18 @@ This document tracks planned features and improvements for Quilltap.
 - [X] All bundled themes converted from npm plugins to `.qtap-theme` bundles
 - [X] Deprecated and removed npm theme plugin directories
 - [X] Get theme-storybook to match the app for everything
+- [ ] Generate the theme-storybook `qt-components.css` from the app's source instead of mirroring by hand (design: [refactor-4-12-storybook-css-generated.md](refactor-4-12-storybook-css-generated.md))
+
+### Refactor programmes
+
+- [ ] Refactor 4.12 — seven deep-refactor specs for what the 4.12-dev cycle touched, ranked and with the things examined and left alone (index: [refactor-4-12.md](refactor-4-12.md))
+  - [ ] theme-storybook CSS generated, not mirrored ([spec](refactor-4-12-storybook-css-generated.md))
+  - [ ] one document core for the operator routes and the `doc_*` tools ([spec](refactor-4-12-document-core.md))
+  - [ ] one image transport budget on the way to a provider ([spec](refactor-4-12-image-transport-budget.md))
+  - [ ] one tier walk: reach, location and order settled once ([spec](refactor-4-12-tier-walk.md))
+  - [ ] Salon stream frames as a tagged union ([spec](refactor-4-12-salon-stream-frames.md))
+  - [ ] the browser family finished, and the `FileBrowser` retirement decisions ([spec](refactor-4-12-browser-family.md))
+  - [ ] one recursive watcher core under both filesystem watchers ([spec](refactor-4-12-native-watcher-core.md))
 
 ### Virgil: Setup & Onboarding
 
