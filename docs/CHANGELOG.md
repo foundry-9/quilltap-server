@@ -4,6 +4,14 @@
 
 ### 4.12-dev
 
+#### Document Mode: no direct filesystem access in the operator actions
+
+Release-checklist file-provider audit. `lib/documents/operator-doc-actions.ts` imported `fs/promises` directly; it no longer does.
+
+- New `statResolvedFile`, `moveResolvedFile` and `deleteResolvedFile` (`lib/doc-edit/path-resolver.ts`, exported from `lib/doc-edit`) sit beside `readFileWithMtime` / `writeFileWithMtimeCheck`. `documentViewTargetFor`, `renameDocumentFile`, `deleteDocumentFile` and `resolvedPathExists` use them.
+- `statResolvedFile` returns null only for a missing path (ENOENT / ENOTDIR); other errors such as permission failures now throw. Previously delete reported any stat error as not-found, and rename treated any access error as a free destination.
+- Test: `lib/doc-edit/__tests__/resolved-file-ops.test.ts`.
+
 #### Salon avatars: full-size view and carried items
 
 - Clicking the picture in a message row's desktop avatar opens it in the Salon image viewer (`ImageModal`), the same one Aurora's announcement thumbnails use. `Avatar` takes a new `onImageClick` prop that wraps only the picture, not the name/title.

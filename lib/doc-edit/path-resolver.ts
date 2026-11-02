@@ -789,6 +789,47 @@ export async function readFileWithMtime(
   }
 }
 
+/** What {@link statResolvedFile} reports about a path on disk. */
+export interface ResolvedFileStat {
+  isFile: boolean;
+  size: number;
+  mtime: Date;
+}
+
+/**
+ * Stat the on-disk file behind a filesystem-backed ResolvedPath. Returns null
+ * when nothing is there (ENOENT / ENOTDIR), so callers probe existence without
+ * catching; any other error (permissions, I/O) bubbles rather than reading as
+ * "absent". Database-backed paths have no disk file and also give null.
+ */
+export async function statResolvedFile(resolved: ResolvedPath): Promise<ResolvedFileStat | null> {
+  if (isDatabaseBacked(resolved) || !resolved.absolutePath) return null;
+  try {
+    const stats = await fs.stat(resolved.absolutePath);
+    return { isFile: stats.isFile(), size: stats.size, mtime: stats.mtime };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return null;
+    throw error;
+  }
+}
+
+/**
+ * Move a file between two filesystem-backed ResolvedPaths, creating the
+ * destination's parent directory. The caller checks for a taken destination.
+ */
+export async function moveResolvedFile(from: ResolvedPath, to: ResolvedPath): Promise<void> {
+  logger.debug('Moving resolved file', { from: from.relativePath, to: to.relativePath });
+  await fs.mkdir(path.dirname(to.absolutePath), { recursive: true });
+  await fs.rename(from.absolutePath, to.absolutePath);
+}
+
+/** Delete the on-disk file behind a filesystem-backed ResolvedPath. */
+export async function deleteResolvedFile(resolved: ResolvedPath): Promise<void> {
+  logger.debug('Deleting resolved file', { path: resolved.relativePath });
+  await fs.unlink(resolved.absolutePath);
+}
+
 /**
  * Write a file with optional mtime-based concurrency check.
  * If expectedMtime is provided and the file's current mtime doesn't match,

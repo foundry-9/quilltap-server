@@ -13,6 +13,9 @@ jest.mock('@/lib/doc-edit', () => ({
   resolveDocEditPath: jest.fn(),
   readFileWithMtime: jest.fn(),
   writeFileWithMtimeCheck: jest.fn(),
+  statResolvedFile: jest.fn().mockResolvedValue(null),
+  moveResolvedFile: jest.fn(),
+  deleteResolvedFile: jest.fn(),
   reindexSingleFile: jest.fn(),
   isTextFile: jest.fn((filePath: string) => /\.(md|markdown|txt|json|jsonl|ndjson|yaml|yml|xml|html|htm|css|js|ts|jsx|tsx|py|rb|sh|bash|zsh|csv|toml|ini|cfg|conf|log|env)$/i.test(filePath) || filePath.endsWith('.gitignore') || filePath.endsWith('.editorconfig')),
 }))
@@ -43,21 +46,12 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   documentHiddenFromCharacters: jest.fn(async () => false),
 }))
 
-jest.mock('fs/promises', () => ({
-  mkdir: jest.fn(),
-  writeFile: jest.fn(),
-  stat: jest.fn(),
-  access: jest.fn(),
-  rename: jest.fn(),
-}))
-
 const {
   resolveDocEditPath,
   readFileWithMtime,
   writeFileWithMtimeCheck,
+  statResolvedFile,
 } = require('@/lib/doc-edit')
-
-const fsp = require('fs/promises')
 
 const {
   handleRecentDocuments,
@@ -217,11 +211,10 @@ describe('chats [id] document actions', () => {
       scope: 'general',
       relativePath: 'Untitled Document.md',
     })
-    // pickUntitledDocumentPath probes existence via fs.access. ENOENT means
+    // pickUntitledDocumentPath probes existence via statResolvedFile. null means
     // the candidate name is free, so the first attempt ("Untitled Document.md")
-    // wins and we don't need additional resolve/access mocks.
-    const fs = require('fs/promises')
-    fs.access.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    // wins and we don't need additional resolve/stat mocks.
+    statResolvedFile.mockResolvedValueOnce(null)
     writeFileWithMtimeCheck.mockResolvedValueOnce({ mtime: 987654321 })
     ctx.repos.chatDocuments.openDocument.mockImplementationOnce(async (_chatId: string, data: any) => ({
       id: 'doc-blank',
@@ -368,7 +361,7 @@ describe('chats [id] document actions', () => {
       mountPointId: 'm1',
       mountPointName: 'Notes',
     })
-    fsp.access.mockResolvedValueOnce(undefined)
+    statResolvedFile.mockResolvedValueOnce({ isFile: true, size: 1, mtime: new Date() })
 
     const response = await handleResolveDocument(
       resolveReq({ filePath: 'today.md', scope: 'document_store', mountPoint: 'Notes' }),
@@ -395,7 +388,7 @@ describe('chats [id] document actions', () => {
       mountPointId: 'm1',
       mountPointName: 'Notes',
     })
-    fsp.access.mockResolvedValueOnce(undefined)
+    statResolvedFile.mockResolvedValueOnce({ isFile: true, size: 1, mtime: new Date() })
 
     const response = await handleResolveDocument(
       resolveReq({ filePath: 'cover.webp', scope: 'document_store', mountPoint: 'Notes' }),
@@ -420,7 +413,7 @@ describe('chats [id] document actions', () => {
       mountPointId: 'm1',
       mountPointName: 'Notes',
     })
-    fsp.access.mockRejectedValueOnce(Object.assign(new Error('nope'), { code: 'ENOENT' }))
+    statResolvedFile.mockResolvedValueOnce(null)
 
     const response = await handleResolveDocument(
       resolveReq({ filePath: 'missing.md', scope: 'document_store', mountPoint: 'Notes' }),
