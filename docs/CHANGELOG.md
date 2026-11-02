@@ -4,6 +4,17 @@
 
 ### 4.12-dev
 
+#### Tests: release-checklist coverage pass
+
+Release-checklist item 2. Tests for 4.12 modules that had none; committed in 4310d435f with the file-provider change.
+
+- `__tests__/unit/migrations/reindex-chat-message-fts-character-only.test.ts`: rebuilds a pre-#121 index (old insert trigger, Staff rows indexed), confirms search returns them, then checks the migration replaces the trigger and drops Staff and announcement rows.
+- `__tests__/unit/migrations/add-profile-max-images-per-request.test.ts`: column added, existing profiles backfilled to 4, user-set caps kept on rerun.
+- `__tests__/unit/lib/mount-index/item-folder-routes.test.ts`: only create-folder provisions a store; unresolved locations and refusals answer through the caller's responses.
+- `__tests__/unit/hooks/useFixedMenu.test.ts`: up/down placement; closes on resize and on scroll outside its container.
+- `__tests__/unit/lib/hooks/use-container-catalogue.test.tsx`: sorting, unnamed-row placeholders, characters read settles on failure.
+- `__tests__/unit/components/item-browser/useFolderBrowserState.test.tsx`: per-container and per-view state reset, folder create/rename/delete handlers.
+
 #### Document Mode: no direct filesystem access in the operator actions
 
 Release-checklist file-provider audit. `lib/documents/operator-doc-actions.ts` imported `fs/promises` directly; it no longer does.
