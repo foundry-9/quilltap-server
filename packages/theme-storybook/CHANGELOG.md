@@ -8,6 +8,7 @@ All notable changes to `@quilltap/theme-storybook` will be documented in this fi
 - Fallbacks that named custom properties nobody defines (`hsl(var(--primary))`, `var(--qt-text-secondary)`, `var(--qt-content-bg-hover)` with no default, `var(--qt-badge-primary-border)`) now point at `--color-*` tokens, mirroring the app. Affects Lexical checkboxes and links, typeahead and emoji-picker secondary text, the formatting-button hover and the NanoGPT badge border.
 
 ### Added
+- `tsup.config.ts` marks `/api/*` as external, so `url()`s pointing at server-served theme assets (the help Guide's Art Deco textures) are left as-is instead of failing the build.
 - Families the mirror was missing: the help dialog (`qt-help-*`, including the Guide tab), Document Mode chrome (`qt-doc-*`), `qt-chat-sidebar-resizer*`, `qt-memory-source-highlight` and the `.qt-chat-message-content a` link rules.
 
 ## [1.0.85] - 2026-10-26
