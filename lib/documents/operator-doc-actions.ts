@@ -21,6 +21,9 @@ import {
   readFileWithMtime,
   writeFileWithMtimeCheck,
   reindexSingleFile,
+  statResolvedFile,
+  moveResolvedFile,
+  deleteResolvedFile,
   isTextFile,
   type DocEditScope,
   type ResolvedPath,
@@ -40,7 +43,6 @@ import { getRepositories, type RepositoryContainer } from '@/lib/repositories/fa
 import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import path from 'path';
-import fs from 'fs/promises';
 
 /**
  * Who is reaching for documents: the chat route fills this from the chat's
@@ -114,7 +116,7 @@ export async function resolveOperatorDocPath(
 /**
  * Probe whether a resolved doc-edit path currently has a file. Database-backed
  * stores answer via readDatabaseDocument (NOT_FOUND → false); filesystem
- * scopes use fs.access. Any other error bubbles, since we don't want to
+ * scopes stat the disk. Any other error bubbles, since we don't want to
  * silently treat permission failures as "doesn't exist" and overwrite.
  */
 export async function resolvedPathExists(resolved: ResolvedPath): Promise<boolean> {
@@ -133,16 +135,7 @@ export async function resolvedPathExists(resolved: ResolvedPath): Promise<boolea
     }
   }
 
-  try {
-    await fs.access(resolved.absolutePath);
-    return true;
-  } catch (error) {
-    const code = error instanceof Error && 'code' in error
-      ? (error as NodeJS.ErrnoException).code
-      : undefined;
-    if (code === 'ENOENT') return false;
-    throw error;
-  }
+  return (await statResolvedFile(resolved)) !== null;
 }
 
 /** Classify a resolved target for qtap:// link gating: document, image, or other. */
@@ -286,21 +279,17 @@ export async function documentViewTargetFor(resolved: ResolvedPath): Promise<Doc
   if (resolved.mountType === 'database' || !resolved.absolutePath) return null;
   // A file on disk the store does not index (its kind is outside the
   // include patterns) is still there to look at.
-  try {
-    const stat = await fs.stat(resolved.absolutePath);
-    if (!stat.isFile()) return null;
-    return {
-      mountPointId: resolved.mountPointId,
-      relativePath: resolved.relativePath,
-      fileName: path.basename(resolved.relativePath),
-      fileType: 'blob',
-      fileSizeBytes: stat.size,
-      originalMimeType: null,
-      updatedAt: stat.mtime.toISOString(),
-    };
-  } catch {
-    return null;
-  }
+  const stat = await statResolvedFile(resolved);
+  if (!stat || !stat.isFile) return null;
+  return {
+    mountPointId: resolved.mountPointId,
+    relativePath: resolved.relativePath,
+    fileName: path.basename(resolved.relativePath),
+    fileType: 'blob',
+    fileSizeBytes: stat.size,
+    originalMimeType: null,
+    updatedAt: stat.mtime.toISOString(),
+  };
 }
 
 /**
@@ -490,7 +479,7 @@ export function computeRenameTarget(currentFilePath: string, newTitle: string): 
 /**
  * Move a document's underlying file to its rename target. Dispatches on mount
  * type: database-backed stores route through moveDatabaseDocument while
- * filesystem-backed scopes use fs.rename (matching the pattern in
+ * filesystem-backed scopes use moveResolvedFile (matching the pattern in
  * doc_move_file). Throws {@link DocumentConflictError} when the destination is
  * taken; DatabaseStoreError UNSUPPORTED bubbles for the route to map.
  */
@@ -531,15 +520,10 @@ export async function renameDocumentFile(
     return;
   }
 
-  try {
-    await fs.access(resolvedNew.absolutePath);
+  if (await statResolvedFile(resolvedNew)) {
     throw new DocumentConflictError('A file already exists at that name.');
-  } catch (error) {
-    if (error instanceof DocumentConflictError) throw error;
-    // destination free — proceed
   }
-  await fs.mkdir(path.dirname(resolvedNew.absolutePath), { recursive: true });
-  await fs.rename(resolvedOld.absolutePath, resolvedNew.absolutePath);
+  await moveResolvedFile(resolvedOld, resolvedNew);
 
   if (params.scope === 'document_store' && resolvedOld.mountPointId) {
     scheduleDocumentStoreRefresh(
@@ -554,7 +538,7 @@ export async function renameDocumentFile(
 
 /**
  * Delete a document's underlying file. Database-backed stores route through
- * deleteDatabaseDocument; filesystem scopes use fs.unlink. Returns a status
+ * deleteDatabaseDocument; filesystem scopes use deleteResolvedFile. Returns a status
  * for the route to map ('not-found' → 404, 'not-a-file' → 400).
  */
 export async function deleteDocumentFile(
@@ -576,15 +560,10 @@ export async function deleteDocumentFile(
     return deleted ? 'deleted' : 'not-found';
   }
 
-  try {
-    const stat = await fs.stat(resolved.absolutePath);
-    if (!stat.isFile()) {
-      return 'not-a-file';
-    }
-  } catch {
-    return 'not-found';
-  }
-  await fs.unlink(resolved.absolutePath);
+  const stat = await statResolvedFile(resolved);
+  if (!stat) return 'not-found';
+  if (!stat.isFile) return 'not-a-file';
+  await deleteResolvedFile(resolved);
   return 'deleted';
 }
 

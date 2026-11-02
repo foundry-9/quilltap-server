@@ -28,6 +28,9 @@ export {
   resolveDocEditPath,
   readFileWithMtime,
   writeFileWithMtimeCheck,
+  statResolvedFile,
+  moveResolvedFile,
+  deleteResolvedFile,
   getAccessibleMountPoints,
   isTextFile,
   resolveSelfVaultMountPointId,
@@ -39,6 +42,7 @@ export {
   type DocEditScope,
   type PathResolutionContext,
   type ResolvedPath,
+  type ResolvedFileStat,
 } from './path-resolver';
 
 export {
