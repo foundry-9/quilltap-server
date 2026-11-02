@@ -6,7 +6,7 @@
  * DELETE /api/v1/projects/[id]/mount-points - Unlink a mount point from a project
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
@@ -58,7 +58,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
         officialMountPointId,
       });
 
-      return NextResponse.json({ mountPoints: validMountPoints, officialMountPointId });
+      return successResponse({ mountPoints: validMountPoints, officialMountPointId });
     } catch (error) {
       logger.error('[Projects v1] Error listing mount points for project', { projectId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to list mount points for project');
