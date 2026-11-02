@@ -4,6 +4,10 @@
 
 ### 4.12-dev
 
+#### Docs: draft 4.12.0 release notes
+
+- New `docs/releases/4.12.0.md` (`draft: true`), covering the cycle since 4.11.0.
+
 #### Tests: release-checklist coverage pass
 
 Release-checklist item 2. Tests for 4.12 modules that had none; committed in 4310d435f with the file-provider change.
