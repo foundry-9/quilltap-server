@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### Tests: backup/restore coverage for 4.12 columns
+
+Release-checklist item 10. Both new 4.12 columns (`chat_messages.isEstablishedFact`, `connection_profiles.maxImagesPerRequest`) were already in backup, restore, `.qtap` export/import, the export schema and DDL. `maxImagesPerRequest` had no restore test.
+
+- `__tests__/unit/lib/backup/restore-field-fidelity.test.ts`: a stored cap restores unchanged, and an archive older than the column restores with the default of 4.
+
 #### Tests: release-checklist coverage pass
 
 Release-checklist item 2. Tests for 4.12 modules that had none; committed in 4310d435f with the file-provider change.
