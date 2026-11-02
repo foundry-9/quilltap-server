@@ -24,7 +24,33 @@ Contrast table, axe sweep of every bundled theme in light and dark, and a compon
 - Names and states: Markdown toolbar buttons get `aria-label` (were named "B", "I", "H1"; the glyph is kept where the words lack it, e.g. "Heading 4 (H4)"); code-block button `aria-pressed`; `aria-pressed` on search type chips, wardrobe slot filters, wardrobe dialog view switch, announcement character picker, setup role picker, and the Aurora favorite / Carina / user-control toggles; `aria-expanded` on the RNG custom-roll and Prospero files card toggles; emoji-only file-browser buttons get labels with the glyph `aria-hidden`; search "(3/10)" button gets a label.
 - Staff announcement bars dropped an `aria-label` that replaced their visible text (2.5.3); collapsed-sidebar avatar label includes the visible queue number.
 - Aurora favorite star: 24px minimum target (was 14x17).
-- theme-storybook 1.0.97: mirrors the above and ports the alert, footer, settings-shell and settings-background families.
+- theme-storybook 1.0.98: mirrors the above and ports the alert, footer, settings-shell and settings-background families.
+
+#### UI: undefined CSS custom properties repointed at real tokens
+
+Release-checklist item 13. About 105 declarations in `app/styles/qt-components/` read custom properties the app never defines (`--primary`, `--muted`, `--border`, `--foreground`, `--card`, `--accent`, `--destructive`, `--background`, `--input`, `--qt-primary`, `--qt-border`, `--qt-text-primary`, `--qt-text-secondary`, `--qt-text-muted`). Each such declaration was invalid at computed-value time, so the rule fell back to inherited or initial values on every theme.
+
+- Affected: the help dialog (composer, nav buttons, suggested links, entity picker, guide search/topics/reader, welcome card), Document Mode chrome (dividers, header, title input, toolbar, status bar, URI bar), Lexical checkboxes and links, links in Salon messages, emoji picker and typeahead secondary text, the chat sidebar resizer, the memory-source highlight, and the formatting-button and NanoGPT badge hovers.
+- `hsl(var(--X))` → `var(--color-X)`; `hsl(var(--X) / N)` → `color-mix(in srgb, var(--color-X) N%, transparent)`; `--qt-primary` → `--color-primary`; `--qt-border` → `--color-border`; `--qt-text-primary` → `--color-foreground`; `--qt-text-secondary` / `--qt-text-muted` → `--color-muted-foreground`. Per-theme hook variables are kept as the first `var()` argument; only fallbacks changed. Hooks with no default (`--qt-content-bg-hover`, `--qt-badge-primary-border`) now fall back to `--color-muted` / `--color-primary`; `--qt-primary-fg` falls back to `--color-primary-foreground` instead of `#fff`.
+- The Document Mode title input and the help entity-picker filter regain a visible focus indicator (WCAG 2.4.7).
+- New lint gate `scripts/check-css-vars.mjs` (in `npm run lint`): fails on any `var()` in `app/**/*.css` whose property is not declared in app or bundled-theme CSS or set from TypeScript, unless it has a fallback that itself resolves. Fallbacks are checked even when the property is defined. Also rejects `hsl()` around `--color-*` / `--theme-*`. Escape hatch: `css-var-exception` on the line.
+- `@quilltap/theme-storybook` mirrors the fixes and gains the help dialog, Document Mode, sidebar resizer, memory-highlight and message-link families it was missing.
+
+#### Docs: draft 4.12.0 release notes
+
+- New `docs/releases/4.12.0.md` (`draft: true`), covering the cycle since 4.11.0.
+
+#### CLI: README native-module note corrected
+
+Release-checklist item 12. No CLI commands, flags or completions changed since 4.11.0; the completion coverage tests pass.
+
+- `packages/quilltap/README.md` said no native module is ever compiled. Corrected: the SQLCipher driver and `sharp` are prebuilt and the driver is never rebuilt; `node-pty` compiles on Linux, and `sharp` / `node-pty` are rebuilt automatically after a Node.js upgrade.
+
+#### Tests: backup/restore coverage for 4.12 columns
+
+Release-checklist item 10. Both new 4.12 columns (`chat_messages.isEstablishedFact`, `connection_profiles.maxImagesPerRequest`) were already in backup, restore, `.qtap` export/import, the export schema and DDL. `maxImagesPerRequest` had no restore test.
+
+- `__tests__/unit/lib/backup/restore-field-fidelity.test.ts`: a stored cap restores unchanged, and an archive older than the column restores with the default of 4.
 
 #### Tests: release-checklist coverage pass
 

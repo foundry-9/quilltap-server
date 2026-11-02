@@ -2,6 +2,24 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.98] - 2026-11-02
+
+### Fixed
+- Contrast and focus fixes mirrored from the app's WCAG pass: `.qt-storyteller-mode-option:hover`, `.qt-floating-dialog-close:hover` and `.qt-intervene-toggle:hover` use `--color-accent-foreground` on the accent fill; `.qt-chat-system-bar-time` drops its 0.75 opacity; `.qt-tab-close` rests at 0.8 opacity; `.qt-chat-system-bar`, `.qt-chat-announcement-chip` and `.qt-mention-chip` get a 2px ring on `:focus-visible`.
+
+### Added
+- `.qt-tab-select` (the workspace tab's selectable button) and a focus ring on `.qt-tab-strip .qt-tab:has(.qt-tab-select:focus-visible)`.
+- Families the mirror was missing: alerts (`qt-alert*`, with secondary text and links inheriting the alert colour and links underlined), the footer (`qt-footer*`, path without opacity), settings form shells (`qt-settings-shell*`, `-section-heading`, `-field-group`, `-toggle-row` with an accent-foreground hover) and the settings page's story-background treatment (inactive tab tint 90/10).
+
+## [1.0.97] - 2026-11-02
+
+### Fixed
+- Fallbacks that named custom properties nobody defines (`hsl(var(--primary))`, `var(--qt-text-secondary)`, `var(--qt-content-bg-hover)` with no default, `var(--qt-badge-primary-border)`) now point at `--color-*` tokens, mirroring the app. Affects Lexical checkboxes and links, typeahead and emoji-picker secondary text, the formatting-button hover and the NanoGPT badge border.
+
+### Added
+- `tsup.config.ts` marks `/api/*` as external, so `url()`s pointing at server-served theme assets (the help Guide's Art Deco textures) are left as-is instead of failing the build.
+- Families the mirror was missing: the help dialog (`qt-help-*`, including the Guide tab), Document Mode chrome (`qt-doc-*`), `qt-chat-sidebar-resizer*`, `qt-memory-source-highlight` and the `.qt-chat-message-content a` link rules.
+
 ## [1.0.85] - 2026-10-26
 
 ### Added

@@ -957,13 +957,13 @@
    */
   .qt-chat-message-content a,
   .qt-chat-message-content a.qt-link {
-    color: var(--qt-link-color, hsl(var(--primary)));
+    color: var(--qt-link-color, var(--color-primary));
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .qt-chat-message-content a:hover,
   .qt-chat-message-content a.qt-link:hover {
-    color: var(--qt-link-hover-color, hsl(var(--primary)));
+    color: var(--qt-link-hover-color, var(--color-primary));
     text-decoration: underline;
   }
 
@@ -1301,12 +1301,12 @@
   .qt-lexical-li-unchecked::before {
     content: '';
     @apply absolute left-0 top-1 w-4 h-4 rounded border cursor-pointer;
-    border-color: var(--qt-border-color, hsl(var(--border)));
+    border-color: var(--qt-border-color, var(--color-border));
   }
 
   .qt-lexical-li-checked::before {
-    background: hsl(var(--primary));
-    border-color: hsl(var(--primary));
+    background: var(--color-primary);
+    border-color: var(--color-primary);
     /* Checkmark via CSS */
     content: '';
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
@@ -1327,7 +1327,7 @@
 
   .qt-lexical-link {
     @apply underline;
-    color: var(--qt-link-color, hsl(var(--primary)));
+    color: var(--qt-link-color, var(--color-primary));
   }
 
   .qt-lexical-code-block {
@@ -1711,7 +1711,7 @@
   }
 
   .qt-formatting-button:hover:not(:disabled) {
-    background: var(--qt-content-bg-hover);
+    background: var(--qt-content-bg-hover, var(--color-muted));
     border-color: var(--color-foreground);
   }
 
@@ -1851,7 +1851,7 @@
   .qt-emoji-picker-group-header {
     @apply sticky top-0 z-10 px-1 py-1 text-xs font-semibold;
     background: var(--qt-popover-bg);
-    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+    color: var(--qt-text-secondary-fg, var(--color-muted-foreground));
   }
 
   .qt-emoji-picker-row {
@@ -1870,7 +1870,7 @@
   }
 
   .qt-emoji-picker-cell:hover {
-    background: var(--qt-content-bg-hover);
+    background: var(--qt-content-bg-hover, var(--color-muted));
   }
 
   .qt-emoji-picker-cell:focus-visible {
@@ -1884,7 +1884,7 @@
    */
   .qt-emoji-picker-message {
     @apply px-2 py-6 text-center text-sm;
-    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+    color: var(--qt-text-secondary-fg, var(--color-muted-foreground));
   }
 
   /* ==========================================================================
@@ -2246,7 +2246,7 @@
     @apply flex items-center justify-center;
     width: 6px;
     cursor: col-resize;
-    background: var(--qt-border);
+    background: var(--color-border);
     transition: background 0.15s ease;
     user-select: none;
     touch-action: none;
@@ -2254,7 +2254,7 @@
 
   .qt-doc-divider:hover,
   .qt-doc-divider.qt-doc-divider-active {
-    background: var(--qt-primary);
+    background: var(--color-primary);
   }
 
   /** Grip dots indicator on the divider */
@@ -2267,12 +2267,12 @@
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: var(--qt-text-muted);
+    background: var(--color-muted-foreground);
   }
 
   .qt-doc-divider:hover .qt-doc-divider-grip span,
   .qt-doc-divider.qt-doc-divider-active .qt-doc-divider-grip span {
-    background: var(--qt-primary-fg, #fff);
+    background: var(--qt-primary-fg, var(--color-primary-foreground));
   }
 
   /**
@@ -2284,7 +2284,7 @@
     @apply overflow-hidden;
     min-width: 360px;
     background: color-mix(in srgb, var(--qt-content-bg) 92%, transparent);
-    border-left: 1px solid var(--qt-border);
+    border-left: 1px solid var(--color-border);
   }
 
   /**
@@ -2308,7 +2308,7 @@
     @apply flex items-center justify-center;
     height: 6px;
     cursor: row-resize;
-    background: var(--qt-border);
+    background: var(--color-border);
     transition: background 0.15s ease;
     user-select: none;
     touch-action: none;
@@ -2316,7 +2316,7 @@
 
   .qt-doc-vertical-divider:hover,
   .qt-doc-vertical-divider.qt-doc-vertical-divider-active {
-    background: var(--qt-primary);
+    background: var(--color-primary);
   }
 
   .qt-doc-vertical-divider-grip {
@@ -2328,12 +2328,12 @@
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: var(--qt-text-muted);
+    background: var(--color-muted-foreground);
   }
 
   .qt-doc-vertical-divider:hover .qt-doc-vertical-divider-grip span,
   .qt-doc-vertical-divider.qt-doc-vertical-divider-active .qt-doc-vertical-divider-grip span {
-    background: var(--qt-primary-fg, #fff);
+    background: var(--qt-primary-fg, var(--color-primary-foreground));
   }
 
   /**
@@ -2353,7 +2353,7 @@
   .qt-doc-header {
     @apply flex items-center gap-2 px-4 py-2;
     @apply flex-shrink-0;
-    border-bottom: 1px solid var(--qt-border);
+    border-bottom: 1px solid var(--color-border);
     background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
   }
 
@@ -2367,58 +2367,58 @@
   /** Editable document title in the header */
   .qt-doc-title {
     @apply flex-1 text-sm font-medium truncate;
-    color: var(--qt-text-primary);
+    color: var(--color-foreground);
   }
 
   .qt-doc-title-input {
     @apply text-sm font-medium w-full;
     @apply bg-transparent border-b border-dashed;
-    border-color: var(--qt-border);
-    color: var(--qt-text-primary);
+    border-color: var(--color-border);
+    color: var(--color-foreground);
     outline: none;
   }
 
   .qt-doc-title-input:focus {
-    border-color: var(--qt-primary);
+    border-color: var(--color-primary);
   }
 
   /** Header action buttons (maximize, show chat, exit) */
   .qt-doc-header-button {
     @apply p-1.5 rounded transition-colors;
-    color: var(--qt-text-secondary);
+    color: var(--color-muted-foreground);
   }
 
   .qt-doc-header-button:hover {
-    color: var(--qt-text-primary);
-    background: var(--qt-hover-bg, color-mix(in srgb, var(--qt-text-primary) 10%, transparent));
+    color: var(--color-foreground);
+    background: var(--qt-hover-bg, color-mix(in srgb, var(--color-foreground) 10%, transparent));
   }
 
   /** Compact qtap:// URL line shown under the document header */
   .qt-doc-uri-row {
     @apply flex items-center gap-2 px-4 py-1;
     @apply flex-shrink-0;
-    border-bottom: 1px solid var(--qt-border);
+    border-bottom: 1px solid var(--color-border);
     background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
   }
 
   .qt-doc-uri-label {
     @apply text-[10px] font-semibold uppercase tracking-wide;
-    color: var(--qt-text-muted);
+    color: var(--color-muted-foreground);
   }
 
   .qt-doc-uri-value {
     @apply min-w-0 flex-1 truncate text-xs font-mono;
-    color: var(--qt-text-secondary);
+    color: var(--color-muted-foreground);
   }
 
   .qt-doc-uri-copy-button {
     @apply p-1 rounded transition-colors;
-    color: var(--qt-text-secondary);
+    color: var(--color-muted-foreground);
   }
 
   .qt-doc-uri-copy-button:hover {
-    color: var(--qt-text-primary);
-    background: var(--qt-hover-bg, color-mix(in srgb, var(--qt-text-primary) 10%, transparent));
+    color: var(--color-foreground);
+    background: var(--qt-hover-bg, color-mix(in srgb, var(--color-foreground) 10%, transparent));
   }
 
   /**
@@ -2428,7 +2428,7 @@
   .qt-doc-toolbar {
     @apply flex items-center gap-1 px-4 py-1.5;
     @apply flex-shrink-0;
-    border-bottom: 1px solid var(--qt-border);
+    border-bottom: 1px solid var(--color-border);
     background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
   }
 
@@ -2451,8 +2451,8 @@
     @apply flex items-center gap-4 px-4 py-1;
     @apply flex-shrink-0;
     @apply text-xs;
-    border-top: 1px solid var(--qt-border);
-    color: var(--qt-text-muted);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-muted-foreground);
     background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
   }
 
@@ -2884,7 +2884,7 @@
   .qt-chat-sidebar-resizer:hover::before,
   .qt-chat-sidebar-resizer:focus-visible::before,
   .qt-chat-sidebar-resizer-active::before {
-    background: var(--qt-primary);
+    background: var(--color-primary);
   }
 
   .qt-chat-sidebar-resizer:focus-visible {
@@ -2910,7 +2910,7 @@
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: var(--qt-text-muted);
+    background: var(--color-muted-foreground);
   }
 
   .qt-chat-sidebar-header {
@@ -2945,7 +2945,7 @@
   }
 
   .qt-chat-pause-button:hover {
-    background: var(--qt-content-bg-hover);
+    background: var(--qt-content-bg-hover, var(--color-muted));
   }
 
   .qt-chat-pause-button-paused {
@@ -3285,7 +3285,7 @@
   }
 
   .qt-chat-sidebar-collapsed-pause:hover {
-    background: var(--qt-content-bg-hover);
+    background: var(--qt-content-bg-hover, var(--color-muted));
   }
 
   .qt-chat-sidebar-collapsed-pause-paused {
@@ -3393,7 +3393,7 @@
     content: '';
     position: absolute;
     inset: -4px;
-    border: 2px solid var(--qt-primary);
+    border: 2px solid var(--color-primary);
     border-radius: var(--qt-chat-message-radius);
     pointer-events: none;
     animation: memory-highlight-border 3s ease-out forwards;
@@ -3404,7 +3404,7 @@
       background-color: transparent;
     }
     50% {
-      background-color: hsl(var(--primary) / 0.1);
+      background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
     }
   }
 
@@ -3698,7 +3698,7 @@
   font: inherit;
   line-height: 1.4;
   cursor: help;
-  color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+  color: var(--qt-text-secondary-fg, var(--color-muted-foreground));
   opacity: 0.8;
   user-select: none;
   white-space: nowrap;

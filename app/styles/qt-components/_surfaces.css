@@ -476,8 +476,8 @@
     @apply ring-offset-background placeholder:text-muted-foreground;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
-    border: 1px solid var(--qt-input-border, hsl(var(--input)));
-    background: var(--qt-input-bg, hsl(var(--background)));
+    border: 1px solid var(--qt-input-border, var(--color-input));
+    background: var(--qt-input-bg, var(--color-background));
   }
 
   .qt-help-composer-send {
@@ -516,7 +516,7 @@
   }
 
   .qt-help-past-chat:hover {
-    background: hsl(var(--accent));
+    background: var(--color-accent);
   }
 
   /**
@@ -531,21 +531,21 @@
    */
   .qt-help-error {
     @apply px-3 py-2 text-xs;
-    background: color-mix(in srgb, hsl(var(--destructive)) 10%, transparent);
-    color: hsl(var(--destructive));
-    border-bottom: 1px solid color-mix(in srgb, hsl(var(--destructive)) 20%, transparent);
+    background: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+    color: var(--color-destructive);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-destructive) 20%, transparent);
   }
 
   .qt-help-nav-button {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer;
-    background: var(--qt-help-nav-bg, hsl(var(--primary) / 0.1));
-    color: var(--qt-help-nav-fg, hsl(var(--primary)));
-    border: 1px solid var(--qt-help-nav-border, hsl(var(--primary) / 0.2));
+    background: var(--qt-help-nav-bg, color-mix(in srgb, var(--color-primary) 10%, transparent));
+    color: var(--qt-help-nav-fg, var(--color-primary));
+    border: 1px solid var(--qt-help-nav-border, color-mix(in srgb, var(--color-primary) 20%, transparent));
   }
 
   .qt-help-nav-button:hover {
-    background: var(--qt-help-nav-hover-bg, hsl(var(--primary) / 0.2));
-    border-color: var(--qt-help-nav-hover-border, hsl(var(--primary) / 0.4));
+    background: var(--qt-help-nav-hover-bg, color-mix(in srgb, var(--color-primary) 20%, transparent));
+    border-color: var(--qt-help-nav-hover-border, color-mix(in srgb, var(--color-primary) 40%, transparent));
   }
 
   /* Suggested links container — appears below messages with search-derived links */
@@ -555,20 +555,20 @@
 
   .qt-help-suggested-links-label {
     @apply text-[10px] uppercase tracking-wider font-medium mb-1.5;
-    color: var(--qt-help-suggested-label, hsl(var(--muted-foreground)));
+    color: var(--qt-help-suggested-label, var(--color-muted-foreground));
   }
 
   .qt-help-suggested-link {
     @apply inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded transition-colors cursor-pointer;
-    background: var(--qt-help-suggested-bg, hsl(var(--muted) / 0.5));
-    color: var(--qt-help-suggested-fg, hsl(var(--muted-foreground)));
-    border: 1px solid var(--qt-help-suggested-border, hsl(var(--border)));
+    background: var(--qt-help-suggested-bg, color-mix(in srgb, var(--color-muted) 50%, transparent));
+    color: var(--qt-help-suggested-fg, var(--color-muted-foreground));
+    border: 1px solid var(--qt-help-suggested-border, var(--color-border));
   }
 
   .qt-help-suggested-link:hover {
-    background: var(--qt-help-suggested-hover-bg, hsl(var(--primary) / 0.1));
-    color: var(--qt-help-suggested-hover-fg, hsl(var(--primary)));
-    border-color: var(--qt-help-suggested-hover-border, hsl(var(--primary) / 0.3));
+    background: var(--qt-help-suggested-hover-bg, color-mix(in srgb, var(--color-primary) 10%, transparent));
+    color: var(--qt-help-suggested-hover-fg, var(--color-primary));
+    border-color: var(--qt-help-suggested-hover-border, color-mix(in srgb, var(--color-primary) 30%, transparent));
   }
 
   /* Entity picker — overlay for resolving parameterised help URLs */
@@ -582,25 +582,25 @@
     @apply flex flex-col rounded-lg shadow-lg overflow-hidden;
     width: min(320px, calc(100% - 2rem));
     max-height: min(400px, calc(100% - 2rem));
-    background: var(--qt-help-picker-bg, hsl(var(--card)));
-    border: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+    background: var(--qt-help-picker-bg, var(--color-card));
+    border: 1px solid var(--qt-help-picker-border, var(--color-border));
   }
 
   .qt-help-entity-picker-header {
     @apply flex items-center justify-between px-3 py-2 text-sm font-medium;
-    border-bottom: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+    border-bottom: 1px solid var(--qt-help-picker-border, var(--color-border));
   }
 
   .qt-help-entity-picker-filter {
     @apply w-full px-2 py-1 text-xs rounded;
-    background: var(--qt-help-picker-filter-bg, hsl(var(--muted)));
-    border: 1px solid var(--qt-help-picker-border, hsl(var(--border)));
+    background: var(--qt-help-picker-filter-bg, var(--color-muted));
+    border: 1px solid var(--qt-help-picker-border, var(--color-border));
     color: inherit;
     outline: none;
   }
 
   .qt-help-entity-picker-filter:focus {
-    border-color: hsl(var(--primary) / 0.5);
+    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
   }
 
   .qt-help-entity-picker-list {
@@ -609,12 +609,12 @@
 
   .qt-help-entity-picker-item {
     @apply w-full text-left px-3 py-1.5 text-sm truncate transition-colors cursor-pointer;
-    color: var(--qt-help-picker-fg, hsl(var(--foreground)));
+    color: var(--qt-help-picker-fg, var(--color-foreground));
   }
 
   .qt-help-entity-picker-item:hover {
-    background: var(--qt-help-picker-hover-bg, hsl(var(--primary) / 0.1));
-    color: var(--qt-help-picker-hover-fg, hsl(var(--primary)));
+    background: var(--qt-help-picker-hover-bg, color-mix(in srgb, var(--color-primary) 10%, transparent));
+    color: var(--qt-help-picker-hover-fg, var(--color-primary));
   }
 
   /* ==========================================================================
@@ -742,18 +742,18 @@
 
   .qt-help-guide-search-icon {
     @apply absolute left-2.5 w-4 h-4 pointer-events-none;
-    color: var(--qt-help-guide-search-icon, hsl(var(--muted-foreground)));
+    color: var(--qt-help-guide-search-icon, var(--color-muted-foreground));
   }
 
   .qt-help-guide-search-input {
     @apply w-full pl-9 pr-8 py-1.5 text-sm rounded-md border;
-    background: var(--qt-help-guide-search-bg, hsl(var(--background)));
-    border-color: var(--qt-help-guide-search-border, hsl(var(--border)));
-    color: var(--qt-help-guide-search-fg, hsl(var(--foreground)));
+    background: var(--qt-help-guide-search-bg, var(--color-background));
+    border-color: var(--qt-help-guide-search-border, var(--color-border));
+    color: var(--qt-help-guide-search-fg, var(--color-foreground));
   }
 
   .qt-help-guide-search-input::placeholder {
-    color: var(--qt-help-guide-search-placeholder, hsl(var(--muted-foreground)));
+    color: var(--qt-help-guide-search-placeholder, var(--color-muted-foreground));
   }
 
   .qt-help-guide-search-input:focus {
@@ -762,18 +762,18 @@
 
   .qt-help-guide-search-clear {
     @apply absolute right-2 p-0.5 rounded-sm transition-colors;
-    color: var(--qt-help-guide-search-icon, hsl(var(--muted-foreground)));
+    color: var(--qt-help-guide-search-icon, var(--color-muted-foreground));
   }
 
   .qt-help-guide-search-clear:hover {
-    color: var(--qt-help-guide-search-fg, hsl(var(--foreground)));
+    color: var(--qt-help-guide-search-fg, var(--color-foreground));
   }
 
   /* Category accordion */
 
   .qt-help-guide-category {
     @apply border-b;
-    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+    border-color: var(--qt-help-guide-border, color-mix(in srgb, var(--color-border) 50%, transparent));
   }
 
   .qt-help-guide-category:last-child {
@@ -782,11 +782,11 @@
 
   .qt-help-guide-category-header {
     @apply w-full flex items-center gap-2 py-2 px-1 text-left text-sm transition-colors cursor-pointer;
-    color: var(--qt-help-guide-category-fg, hsl(var(--foreground)));
+    color: var(--qt-help-guide-category-fg, var(--color-foreground));
   }
 
   .qt-help-guide-category-header:hover {
-    color: var(--qt-help-guide-category-hover, hsl(var(--primary)));
+    color: var(--qt-help-guide-category-hover, var(--color-primary));
   }
 
   .qt-help-guide-category-chevron {
@@ -803,7 +803,7 @@
 
   .qt-help-guide-category-badge {
     @apply text-xs flex-shrink-0;
-    color: var(--qt-help-guide-badge-fg, hsl(var(--muted-foreground)));
+    color: var(--qt-help-guide-badge-fg, var(--color-muted-foreground));
   }
 
   .qt-help-guide-category-topics {
@@ -814,16 +814,16 @@
 
   .qt-help-guide-topic {
     @apply w-full text-left py-1 pl-7 pr-2 text-sm truncate transition-colors cursor-pointer rounded-sm;
-    color: var(--qt-help-guide-topic-fg, hsl(var(--muted-foreground)));
+    color: var(--qt-help-guide-topic-fg, var(--color-muted-foreground));
   }
 
   .qt-help-guide-topic:hover {
-    color: var(--qt-help-guide-topic-hover, hsl(var(--foreground)));
-    background: var(--qt-help-guide-topic-hover-bg, hsl(var(--accent) / 0.5));
+    color: var(--qt-help-guide-topic-hover, var(--color-foreground));
+    background: var(--qt-help-guide-topic-hover-bg, color-mix(in srgb, var(--color-accent) 50%, transparent));
   }
 
   .qt-help-guide-topic-active {
-    color: var(--qt-help-guide-topic-active-fg, hsl(var(--primary)));
+    color: var(--qt-help-guide-topic-active-fg, var(--color-primary));
     font-weight: 500;
   }
 
@@ -831,19 +831,19 @@
 
   .qt-help-guide-back {
     @apply flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b flex-shrink-0 transition-colors cursor-pointer;
-    color: var(--qt-help-guide-back-fg, hsl(var(--primary)));
-    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+    color: var(--qt-help-guide-back-fg, var(--color-primary));
+    border-color: var(--qt-help-guide-border, color-mix(in srgb, var(--color-border) 50%, transparent));
   }
 
   .qt-help-guide-back:hover {
-    background: var(--qt-help-guide-back-hover-bg, hsl(var(--accent) / 0.3));
+    background: var(--qt-help-guide-back-hover-bg, color-mix(in srgb, var(--color-accent) 30%, transparent));
   }
 
   .qt-help-guide-reader {
     @apply flex-1 overflow-y-auto px-4 py-3;
     font-size: 0.8125rem;
     line-height: 1.625;
-    color: var(--qt-help-guide-reader-fg, hsl(var(--foreground)));
+    color: var(--qt-help-guide-reader-fg, var(--color-foreground));
     overflow-x: hidden;
     min-width: 0;
   }
@@ -854,7 +854,7 @@
 
   .qt-help-guide-reader h2 {
     @apply text-base font-semibold mt-5 mb-2;
-    color: var(--qt-help-guide-heading-fg, hsl(var(--foreground)));
+    color: var(--qt-help-guide-heading-fg, var(--color-foreground));
   }
 
   .qt-help-guide-reader h3 {
@@ -888,34 +888,34 @@
   .qt-help-guide-reader th,
   .qt-help-guide-reader td {
     @apply px-2 py-1 border text-left;
-    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+    border-color: var(--qt-help-guide-border, color-mix(in srgb, var(--color-border) 50%, transparent));
   }
 
   .qt-help-guide-reader th {
     @apply font-semibold;
-    background: var(--qt-help-guide-table-header-bg, hsl(var(--muted) / 0.5));
+    background: var(--qt-help-guide-table-header-bg, color-mix(in srgb, var(--color-muted) 50%, transparent));
   }
 
   .qt-help-guide-reader hr {
     @apply my-4;
-    border-color: var(--qt-help-guide-border, hsl(var(--border) / 0.5));
+    border-color: var(--qt-help-guide-border, color-mix(in srgb, var(--color-border) 50%, transparent));
   }
 
   .qt-help-guide-inline-code {
     @apply px-1 py-0.5 rounded text-xs;
-    background: var(--qt-help-guide-code-bg, hsl(var(--muted)));
-    color: var(--qt-help-guide-code-fg, hsl(var(--foreground)));
+    background: var(--qt-help-guide-code-bg, var(--color-muted));
+    color: var(--qt-help-guide-code-fg, var(--color-foreground));
   }
 
   .qt-help-guide-code-block {
     @apply rounded-md p-3 mb-2 text-xs;
-    background: var(--qt-help-guide-code-bg, hsl(var(--muted)));
+    background: var(--qt-help-guide-code-bg, var(--color-muted));
     white-space: pre-wrap !important;
     word-break: break-all;
     overflow-wrap: anywhere;
     max-width: 100%;
     overflow: hidden;
-    color: var(--qt-help-guide-code-fg, hsl(var(--foreground)));
+    color: var(--qt-help-guide-code-fg, var(--color-foreground));
   }
 
   /* Navigation callout button (replaces "Open this page in Quilltap" blockquote) */
@@ -928,7 +928,7 @@
 
   .qt-help-guide-doc-link {
     @apply cursor-pointer underline;
-    color: var(--qt-help-guide-link-fg, hsl(var(--primary)));
+    color: var(--qt-help-guide-link-fg, var(--color-primary));
   }
 
   .qt-help-guide-doc-link:hover {
@@ -937,7 +937,7 @@
 
   .qt-help-guide-page-link {
     @apply cursor-pointer underline;
-    color: var(--qt-help-guide-link-fg, hsl(var(--primary)));
+    color: var(--qt-help-guide-link-fg, var(--color-primary));
   }
 
   .qt-help-guide-page-link:hover {
@@ -948,18 +948,18 @@
 
   .qt-help-welcome-card {
     @apply rounded-lg border p-3 mb-3;
-    background: var(--qt-help-welcome-bg, hsl(var(--primary) / 0.05));
-    border-color: var(--qt-help-welcome-border, hsl(var(--primary) / 0.2));
+    background: var(--qt-help-welcome-bg, color-mix(in srgb, var(--color-primary) 5%, transparent));
+    border-color: var(--qt-help-welcome-border, color-mix(in srgb, var(--color-primary) 20%, transparent));
   }
 
   .qt-help-welcome-title {
     @apply text-sm font-semibold mb-1;
-    color: var(--qt-help-welcome-title-fg, hsl(var(--foreground)));
+    color: var(--qt-help-welcome-title-fg, var(--color-foreground));
   }
 
   .qt-help-welcome-text {
     @apply text-xs mb-2;
-    color: var(--qt-help-welcome-text-fg, hsl(var(--muted-foreground)));
+    color: var(--qt-help-welcome-text-fg, var(--color-muted-foreground));
   }
 
   .qt-help-welcome-links {
@@ -968,7 +968,7 @@
 
   .qt-help-welcome-link {
     @apply flex items-center gap-1.5 text-xs py-0.5 transition-colors cursor-pointer text-left;
-    color: var(--qt-help-welcome-link-fg, hsl(var(--primary)));
+    color: var(--qt-help-welcome-link-fg, var(--color-primary));
   }
 
   .qt-help-welcome-link:hover {
@@ -977,7 +977,7 @@
 
   .qt-help-welcome-footer {
     @apply text-xs;
-    color: var(--qt-help-welcome-text-fg, hsl(var(--muted-foreground)));
+    color: var(--qt-help-welcome-text-fg, var(--color-muted-foreground));
   }
 
   /* ==========================================================================
@@ -1099,12 +1099,12 @@
 
   .qt-typeahead-option-detail {
     @apply flex-none text-xs;
-    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+    color: var(--qt-text-secondary-fg, var(--color-muted-foreground));
   }
 
   .qt-typeahead-empty {
     @apply px-2 py-3 text-center text-sm;
-    color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+    color: var(--qt-text-secondary-fg, var(--color-muted-foreground));
   }
 
   /**
