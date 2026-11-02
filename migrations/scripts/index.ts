@@ -463,6 +463,8 @@ import { stripAnthropicSamplingParametersMigration } from './strip-anthropic-sam
 import { reindexChatMessageFtsCharacterOnlyMigration } from './reindex-chat-message-fts-character-only';
 // Deus Ex Machina: chat_messages.isEstablishedFact (operator lines posted as established fact)
 import { addEstablishedFactFieldMigration } from './add-established-fact-field-v1';
+// Vision input cap: connection_profiles.maxImagesPerRequest
+import { addProfileMaxImagesPerRequestMigration } from './add-profile-max-images-per-request-v1';
 
 /**
  * All available migrations.
@@ -954,6 +956,8 @@ export const migrations: Migration[] = [
   reindexChatMessageFtsCharacterOnlyMigration,
   // Deus Ex Machina: chat_messages.isEstablishedFact (operator lines posted as established fact)
   addEstablishedFactFieldMigration,
+  // Vision input cap: connection_profiles.maxImagesPerRequest (most images sent in one request)
+  addProfileMaxImagesPerRequestMigration,
 ];
 
 export {
@@ -1418,5 +1422,6 @@ export {
   stripAnthropicSamplingParametersMigration,
   reindexChatMessageFtsCharacterOnlyMigration,
   addEstablishedFactFieldMigration,
+  addProfileMaxImagesPerRequestMigration,
 };
 

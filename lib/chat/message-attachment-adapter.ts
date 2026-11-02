@@ -22,15 +22,24 @@
  * take the bytes gets the array back untouched — same reference, no copy, no
  * describer spent.
  *
+ * It is also where a profile's per-request image cap
+ * (`resolveMaxImagesPerRequest`) is enforced. Some vision models refuse a
+ * request carrying more than four images outright; images past the cap are
+ * described in text instead of sent. The newest messages' images are kept
+ * first, and within a message the attachments that come first.
+ *
  * @module chat/message-attachment-adapter
  */
 
 import {
   needsFallbackProcessing,
   processFileAttachmentFallback,
+  generateImageDescription,
   formatFallbackAsMessagePrefix,
   type ImageDescriptionOptions,
 } from '@/lib/chat/file-attachment-fallback'
+import { resolveMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils'
+import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import { getErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/logger'
 
@@ -82,6 +91,37 @@ export function collectAttachmentMimeTypes(
   return Array.from(seen)
 }
 
+function isImageAttachment(value: unknown): value is LoadedAttachment {
+  return isLoadedAttachment(value) && value.mimeType.startsWith('image/')
+}
+
+/**
+ * The images in a message array that `profile` would be sent raw but that
+ * fall past its per-request cap. Walked newest message first, and within a
+ * message in array order, so the cap spends itself on the most recent turn.
+ * Identity-keyed: the caller tests the very attachment objects it walks.
+ */
+export function findImagesOverCap(
+  messages: readonly AttachmentBearingMessage[],
+  profile: ConnectionProfile
+): Set<unknown> {
+  const cap = resolveMaxImagesPerRequest(profile)
+  const overCap = new Set<unknown>()
+  let kept = 0
+  for (let i = messages.length - 1; i >= 0; i--) {
+    for (const attachment of messages[i].attachments ?? []) {
+      if (!isImageAttachment(attachment)) continue
+      if (!profileCanReceiveAttachment(profile, attachment.mimeType)) continue
+      if (kept < cap) {
+        kept++
+      } else {
+        overCap.add(attachment)
+      }
+    }
+  }
+  return overCap
+}
+
 /**
  * Re-run the attachment decision for `profile` and return an array it can
  * actually accept.
@@ -104,12 +144,23 @@ export async function adaptMessagesForProfile<T extends AttachmentBearingMessage
   logContext: Record<string, unknown> = {},
   options: ImageDescriptionOptions = {}
 ): Promise<T[]> {
-  const needsWork = messages.some(m =>
+  const overCap = findImagesOverCap(messages, profile)
+  const needsWork = overCap.size > 0 || messages.some(m =>
     (m.attachments ?? []).some(
       a => isLoadedAttachment(a) && needsFallbackProcessing(profile, a.mimeType)
     )
   )
   if (!needsWork) return messages
+
+  if (overCap.size > 0) {
+    logger.info('[Attachment] Images exceed the profile\'s per-request cap; describing the overflow', {
+      ...logContext,
+      profileId: profile.id,
+      profileName: profile.name,
+      maxImagesPerRequest: resolveMaxImagesPerRequest(profile),
+      overCap: overCap.size,
+    })
+  }
 
   logger.info('[Attachment] Re-deciding attachments for a substituted profile', {
     ...logContext,
@@ -136,26 +187,32 @@ export async function adaptMessagesForProfile<T extends AttachmentBearingMessage
         keep.push(attachment)
         continue
       }
-      if (!needsFallbackProcessing(profile, attachment.mimeType)) {
+      const pastCap = overCap.has(attachment)
+      if (!pastCap && !needsFallbackProcessing(profile, attachment.mimeType)) {
         keep.push(attachment)
         continue
       }
 
       try {
-        const result = await processFileAttachmentFallback(
-          {
-            id: attachment.id,
-            filepath: attachment.filepath ?? `/api/v1/files/${attachment.id}`,
-            filename: attachment.filename,
-            mimeType: attachment.mimeType,
-            size: attachment.size,
-          },
-          attachment as never,
-          profile,
-          repos as never,
-          userId,
-          options,
-        )
+        // Past the cap the profile could read the image but may not be sent
+        // it, so the describer is asked directly — `processFileAttachmentFallback`
+        // would wave a readable image through untouched.
+        const result = pastCap
+          ? await generateImageDescription(attachment as never, repos as never, userId, options)
+          : await processFileAttachmentFallback(
+              {
+                id: attachment.id,
+                filepath: attachment.filepath ?? `/api/v1/files/${attachment.id}`,
+                filename: attachment.filename,
+                mimeType: attachment.mimeType,
+                size: attachment.size,
+              },
+              attachment as never,
+              profile,
+              repos as never,
+              userId,
+              options,
+            )
         prefix += formatFallbackAsMessagePrefix(result)
         // Mirror `loadAndProcessFiles`: the bytes ride along only when the
         // profile natively supports them, which `needsFallbackProcessing`

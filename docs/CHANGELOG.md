@@ -4,6 +4,18 @@
 
 ### 4.12-dev
 
+#### Connection profiles: most images per request
+
+Some vision models reject a request that carries more than four images. A Salon turn could send more than that (this turn's uploads, uploads the character had not seen, and every Lantern image since the character last spoke), and the whole turn failed.
+
+- New `connection_profiles.maxImagesPerRequest` (INTEGER, default 4; migration `add-profile-max-images-per-request-v1`). Read only through `resolveMaxImagesPerRequest()` in `lib/llm/connection-profile-utils.ts`; request bodies validate through `parseMaxImagesPerRequest()` (1–50).
+- `adaptMessagesForProfile` (`lib/chat/message-attachment-adapter.ts`) enforces the cap: images past it are replaced by their descriptions. The newest messages' images are kept first. `findImagesOverCap` picks the overflow.
+- Salon context build (`context-builder.service.ts`): the Lantern walk spends the cap newest-first after uploads and re-sent uploads, and describes older images instead of sending them. The adapter then runs on the final array to catch uploads over the cap.
+- Fallback chain (`provider-failover.service.ts`): each understudy gets the array re-adapted for its own cap.
+- Profile editor: "Most images per request" field under the vision checkbox. Create/update routes accept the field.
+- Restore and `.qtap` import seed the default for older archives (`seedLegacyConnectionProfileFields`). Export schema and DDL updated.
+- Help: `help/connection-profiles.md`.
+
 #### Prompt trust, part two: "the probation"
 
 Long-running companion characters kept the user's persona on probation. They tallied the persona's slips, attached terms to their own yes, corrected small things, told the user what they "really" meant, and never finished forgiving. Design: `docs/developer/features/prompt-trust-the-probation.md`.

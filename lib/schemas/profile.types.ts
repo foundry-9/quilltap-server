@@ -39,6 +39,11 @@ export type ApiKey = z.infer<typeof ApiKeySchema>;
 // CONNECTION PROFILES
 // ============================================================================
 
+/** Images sent to a vision profile in one request when it names no cap of its own. */
+export const DEFAULT_MAX_IMAGES_PER_REQUEST = 4;
+/** The highest per-request image cap a profile may store. */
+export const MAX_IMAGES_PER_REQUEST_CEILING = 50;
+
 export const ConnectionProfileSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -152,6 +157,16 @@ export const ConnectionProfileSchema = z.object({
   isDangerousCompatible: z.boolean().default(false),
   /** Whether this profile accepts image attachments (vision input). Set per-profile so users can enable it on OpenRouter/Ollama models that proxy vision-capable LLMs. */
   supportsImageUpload: z.boolean().default(false),
+  /**
+   * The most images this profile is sent in one request. Some vision models
+   * refuse a request carrying more than four, and a Salon turn can gather
+   * more (uploads, unseen uploads re-sent, Lantern images). Ignored when
+   * `supportsImageUpload` is false. Never read this field directly: resolve
+   * it through `resolveMaxImagesPerRequest()` in
+   * `lib/llm/connection-profile-utils.ts`, which supplies the default for a
+   * missing or junk value.
+   */
+  maxImagesPerRequest: z.number().int().min(1).max(MAX_IMAGES_PER_REQUEST_CEILING).default(DEFAULT_MAX_IMAGES_PER_REQUEST),
   tags: z.array(UUIDSchema).default([]),
 
   /** Custom sort order for display (lower numbers appear first) */

@@ -21,18 +21,26 @@
 import {
   adaptMessagesForProfile,
   collectAttachmentMimeTypes,
+  findImagesOverCap,
 } from '@/lib/chat/message-attachment-adapter'
 import {
   formatFallbackAsMessagePrefix,
+  generateImageDescription,
   needsFallbackProcessing,
   processFileAttachmentFallback,
 } from '@/lib/chat/file-attachment-fallback'
+import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 
 jest.mock('@/lib/chat/file-attachment-fallback', () => ({
   needsFallbackProcessing: jest.fn(),
   processFileAttachmentFallback: jest.fn(),
   formatFallbackAsMessagePrefix: jest.fn(),
+  generateImageDescription: jest.fn(),
+}))
+
+jest.mock('@/lib/llm/image-transport', () => ({
+  profileCanReceiveAttachment: jest.fn(),
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -42,6 +50,8 @@ jest.mock('@/lib/logger', () => ({
 const mockNeedsFallback = jest.mocked(needsFallbackProcessing)
 const mockProcessFallback = jest.mocked(processFileAttachmentFallback)
 const mockFormatPrefix = jest.mocked(formatFallbackAsMessagePrefix)
+const mockDescribe = jest.mocked(generateImageDescription)
+const mockCanReceive = jest.mocked(profileCanReceiveAttachment)
 
 const PROFILE = {
   id: 'profile-1',
@@ -60,6 +70,8 @@ beforeEach(() => {
     result => `[described ${(result as { id?: string }).id ?? '?'}]\n\n`
   )
   mockProcessFallback.mockImplementation(async file => ({ id: file.id }) as never)
+  mockDescribe.mockImplementation(async file => ({ id: file.id }) as never)
+  mockCanReceive.mockReturnValue(false)
 })
 
 describe('collectAttachmentMimeTypes', () => {
@@ -204,5 +216,70 @@ describe('adaptMessagesForProfile — a describer that fails', () => {
         'user-1'
       )
     ).resolves.toHaveLength(1)
+  })
+})
+
+describe('adaptMessagesForProfile — the per-request image cap', () => {
+  const VISION = {
+    ...PROFILE,
+    name: 'Vision profile',
+    supportsImageUpload: true,
+    maxImagesPerRequest: 4,
+  } as unknown as ConnectionProfile
+
+  beforeEach(() => {
+    mockNeedsFallback.mockReturnValue(false)
+    mockCanReceive.mockReturnValue(true)
+  })
+
+  it('returns the same array reference at or under the cap', async () => {
+    const messages = [
+      { role: 'user', content: 'look', attachments: [image('a'), image('b'), image('c'), image('d')] },
+    ]
+    expect(await adaptMessagesForProfile(messages, VISION, {}, 'u1')).toBe(messages)
+    expect(mockDescribe).not.toHaveBeenCalled()
+  })
+
+  it('sends the first four of six and describes the other two', async () => {
+    const six = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => image(id))
+    const [out] = await adaptMessagesForProfile(
+      [{ role: 'user', content: 'look', attachments: six }],
+      VISION,
+      {},
+      'u1'
+    )
+    expect((out.attachments ?? []).map(a => (a as { id: string }).id)).toEqual(['a', 'b', 'c', 'd'])
+    expect(out.content).toBe('[described e]\n\n[described f]\n\nlook')
+    expect(mockDescribe).toHaveBeenCalledTimes(2)
+    expect(mockProcessFallback).not.toHaveBeenCalled()
+  })
+
+  it('spends the cap on the newest message first', async () => {
+    const overCap = findImagesOverCap(
+      [
+        { role: 'user', content: 'old', attachments: [image('old1'), image('old2')] },
+        { role: 'user', content: 'new', attachments: [image('n1'), image('n2'), image('n3')] },
+      ],
+      { ...VISION, maxImagesPerRequest: 4 } as ConnectionProfile
+    )
+    expect([...overCap].map(a => (a as { id: string }).id)).toEqual(['old2'])
+  })
+
+  it('falls back to the default of four for a profile with no stored cap', async () => {
+    const legacy = { ...VISION, maxImagesPerRequest: undefined } as unknown as ConnectionProfile
+    const overCap = findImagesOverCap(
+      [{ role: 'user', content: 'x', attachments: ['a', 'b', 'c', 'd', 'e'].map(id => image(id)) }],
+      legacy
+    )
+    expect(overCap.size).toBe(1)
+  })
+
+  it('does not count images the profile cannot receive — those take the ordinary fallback', async () => {
+    mockCanReceive.mockReturnValue(false)
+    const overCap = findImagesOverCap(
+      [{ role: 'user', content: 'x', attachments: ['a', 'b', 'c', 'd', 'e'].map(id => image(id)) }],
+      VISION
+    )
+    expect(overCap.size).toBe(0)
   })
 })

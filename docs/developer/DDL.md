@@ -1238,7 +1238,12 @@ CREATE TABLE "connection_profiles" (
   -- Quilltap may draft ONE further candidate of the same or better modelClass
   -- quality. Off by default (an auto-pick spends money at a provider the user
   -- did not choose for this call). See lib/llm/fallback/tier-picker.ts.
-  "allowTierFallback" INTEGER DEFAULT 0
+  "allowTierFallback" INTEGER DEFAULT 0,
+  -- The most images sent to this profile in one request (vision input). Some
+  -- models refuse a request carrying more than four. A Salon turn keeps the
+  -- newest and describes the rest in text. Read it only through
+  -- resolveMaxImagesPerRequest() (lib/llm/connection-profile-utils.ts).
+  "maxImagesPerRequest" INTEGER DEFAULT 4
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

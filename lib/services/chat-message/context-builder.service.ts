@@ -19,9 +19,12 @@ import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
 import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { LANTERN_IMAGE_BASE64_BUDGET } from '@/lib/files/llm-image-budget'
+import { resolveMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils'
+import { adaptMessagesForProfile } from '@/lib/chat/message-attachment-adapter'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
   processFileAttachmentFallback,
+  generateImageDescription,
   formatFallbackAsMessagePrefix,
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
@@ -1245,6 +1248,16 @@ export async function buildMessageContext(
         // about an image is never what overruns a request body.
         let imageBudgetLeft = LANTERN_IMAGE_BASE64_BUDGET
         let droppedForBudget = 0
+        // The profile's per-request image cap, less what this turn's uploads
+        // and re-sent uploads already claim. Past it the newest pictures are
+        // still sent and the older ones are described in text, never dropped:
+        // the describer reuses a generated image's own prompt, so it is free.
+        let imageSlotsLeft = Math.max(
+          0,
+          resolveMaxImagesPerRequest(connectionProfile) -
+            mergedAttachmentsToSend.filter(a => (a as { mimeType?: string }).mimeType?.startsWith('image/')).length,
+        )
+        let describedForCap = 0
         const lanternPrefixesNewestFirst: string[] = []
         for (const fileAttachment of [...extra].reverse()) {
           const fileMetadata = {
@@ -1276,13 +1289,30 @@ export async function buildMessageContext(
             // `loadChatFilesForLLM` — so this measures the true cost, not the
             // stored file's `size`.
             const wireBytes = fileAttachment.data?.length ?? 0
+            if (fileAttachment.mimeType.startsWith('image/') && imageSlotsLeft <= 0) {
+              const described = formatFallbackAsMessagePrefix(
+                await generateImageDescription(fileAttachment, options.repos, userId, { chatId: chat.id }),
+              )
+              if (described) lanternPrefixesNewestFirst.push(described)
+              describedForCap++
+              continue
+            }
             if (wireBytes > imageBudgetLeft) {
               droppedForBudget++
               continue
             }
             imageBudgetLeft -= wireBytes
+            if (fileAttachment.mimeType.startsWith('image/')) imageSlotsLeft--
             lanternAttachmentsToKeep.push(fileAttachment)
           }
+        }
+        if (describedForCap > 0) {
+          logger.info('Unseen assistant images exceeded the profile\'s per-request image cap; the oldest were described instead', {
+            describedForCap,
+            kept: lanternAttachmentsToKeep.length,
+            maxImagesPerRequest: resolveMaxImagesPerRequest(connectionProfile),
+            characterParticipantId: characterParticipant.id,
+          })
         }
         if (droppedForBudget > 0) {
           logger.warn('Unseen assistant images exceeded the per-turn byte budget; the oldest were not sent', {
@@ -1323,7 +1353,7 @@ export async function buildMessageContext(
   }
 
   // Prepare final messages for LLM
-  const formattedMessages = formattedContextMessages.map((msg, idx) => {
+  const assembledMessages = formattedContextMessages.map((msg, idx) => {
     const isAnchor = idx === attachmentAnchorIndex
     const content = isAnchor && lanternImagePrefix
       ? lanternImagePrefix + msg.content
@@ -1343,6 +1373,21 @@ export async function buildMessageContext(
       name: msg.name,
     }
   })
+
+  // The profile's per-request image cap. The Lantern walk above already spent
+  // it on its own images; this catches what the walk cannot — more uploads in
+  // one send than the cap allows — and describes the overflow in text. With
+  // nothing over the cap it hands back the same array.
+  const formattedMessages = assembledMessages.length > 0 && mergedAttachmentsToSend.length > 0
+    ? await adaptMessagesForProfile(
+        assembledMessages,
+        connectionProfile,
+        options.repos ?? getRepositories(),
+        userId,
+        { chatId: chat.id, characterParticipantId: characterParticipant.id },
+        { chatId: chat.id },
+      )
+    : assembledMessages
 
   if (isMultiCharacter) {
     applyMultiCharacterTurnAnchor(

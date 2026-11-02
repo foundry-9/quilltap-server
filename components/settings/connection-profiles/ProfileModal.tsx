@@ -14,6 +14,7 @@ import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connectio
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
+import { MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -954,6 +955,29 @@ export function ProfileModal({
                   Supports image attachments (vision input)
                 </label>
               </div>
+              {form.formData.supportsImageUpload && (
+                <div className="ml-6">
+                  <label htmlFor="maxImagesPerRequest" className="block qt-text-label mb-2">
+                    Most images per request
+                  </label>
+                  <input
+                    type="number"
+                    id="maxImagesPerRequest"
+                    name="maxImagesPerRequest"
+                    value={form.formData.maxImagesPerRequest}
+                    onChange={(e) => form.setField('maxImagesPerRequest', e.target.value)}
+                    min="1"
+                    max={MAX_IMAGES_PER_REQUEST_CEILING}
+                    step="1"
+                    className="qt-input"
+                    aria-describedby="maxImagesPerRequest-hint"
+                  />
+                  <p id="maxImagesPerRequest-hint" className="qt-text-xs mt-1">
+                    Some models refuse a request with more than a handful of pictures. When a turn
+                    gathers more than this, the newest are sent and the rest are described in words.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

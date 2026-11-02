@@ -412,6 +412,15 @@ The **Supports image attachments (vision input)** checkbox tells Quilltap that t
 
 **What happens under the hood:** every bit of Quilltap that asks "can this profile see pictures?" — the Salon's attachment handler, the wardrobe image analyzer, the Aurora wizard's *Describe from image* step, the *Image Description Profile* dropdown in Chat settings — consults this checkbox. Existing installs were seeded automatically: profiles on OpenAI, Anthropic, Google, and Grok had the box pre‑ticked to match their prior behaviour; everything else starts unticked, so users who want vision on OpenRouter or Ollama must opt in explicitly.
 
+### Most images per request
+
+Once the box is ticked, a small companion field appears beneath it: **Most images per request**, which arrives set to **4**. It is the largest number of pictures this profile will be handed in a single request, and it exists because a number of otherwise perfectly sighted models have a firm rule about the size of the portfolio they will look at. Offer one of them six and it does not glance at four and ignore two; it slams the door on the lot, and the character's turn fails with it.
+
+A Salon turn can gather more pictures than one might suppose. Your own attachments, anything you sent while the character was out of the room, and every portrait and backdrop the Lantern has painted since that character last spoke all queue up for the same turn. When the queue is longer than the cap, Quilltap sends the newest pictures whole and describes the rest in words, the same way a profile without vision is served. A picture the Lantern painted is described for free, from the very prompt that made it, so nothing is lost but the brushwork.
+
+The cap follows the model, not the chat. If a profile fails and its understudy takes the turn, the understudy's own cap applies.
+
+Leave it at 4 unless you know your model's appetite: raise it for a model that will happily look at a dozen, lower it for one that will only look at one.
 
 ### Two questions, not one
 

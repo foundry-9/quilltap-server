@@ -1325,6 +1325,16 @@
           "minimum": 1,
           "description": "Maximum output tokens for this profile"
         },
+        "supportsImageUpload": {
+          "type": "boolean",
+          "description": "Whether this profile's model accepts image attachments (vision input)."
+        },
+        "maxImagesPerRequest": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "The most images sent to this profile in one request. Images past the cap are described in text instead. Defaults to 4; absent in older bundles, which import with the default."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_apiKeyLabel": {

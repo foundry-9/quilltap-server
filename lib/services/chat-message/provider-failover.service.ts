@@ -841,10 +841,17 @@ async function walkFallbackChain(
     resetStreamingBuffersForSwap(state)
 
     try {
+      // The array was built for the primary. An understudy that takes fewer
+      // images per request gets the overflow described (same reference back
+      // when nothing changes); one that can't see images at all was already
+      // left out of the chain.
+      const understudyMessages = await adaptMessagesForProfile(
+        formattedMessages, understudy, repos, context.userId, { chatId, kind: candidate.kind }, { chatId },
+      )
       await restreamInto(state, {
         connectionProfile: understudy,
         apiKey: keyResolution.apiKey,
-        formattedMessages,
+        formattedMessages: understudyMessages,
         modelParams,
         actualTools,
         useNativeWebSearch,
