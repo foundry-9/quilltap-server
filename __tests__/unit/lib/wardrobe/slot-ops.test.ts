@@ -19,6 +19,7 @@ const {
   dissolveCompositeToLeaves,
   dissolveCompositesInSlots,
   layLeavesIntoSlots,
+  spreadAcrossCoveredSlots,
   wearItemIntoSlots,
   wornBundlesFor,
 } = require('@/lib/wardrobe/slot-ops')
@@ -362,6 +363,33 @@ describe('computeDisplacedSlots take-off modes', () => {
     const next = computeDisplacedSlots(worn, { mode: 'clear_slot', slot: 'top' })
     expect(next).toEqual({ ...worn, top: [] })
     expect(worn.top).toEqual(['vest', 'shirt'])
+  })
+})
+
+describe('spreadAcrossCoveredSlots', () => {
+  const dress = makeItem('dress', ['top', 'bottom'])
+
+  it('puts a multi-slot garment named under one slot into every slot it covers', () => {
+    const worn: EquippedSlots = { ...empty(), top: ['dress'] }
+    expect(spreadAcrossCoveredSlots(worn, buildMap([dress]))).toEqual({
+      ...empty(),
+      top: ['dress'],
+      bottom: ['dress'],
+    })
+  })
+
+  it('appends as the outermost layer and keeps existing order', () => {
+    const worn: EquippedSlots = { ...empty(), top: ['dress'], bottom: ['slip'] }
+    const result = spreadAcrossCoveredSlots(worn, buildMap([dress, makeItem('slip', ['bottom'])]))
+    expect(result.top).toEqual(['dress'])
+    expect(result.bottom).toEqual(['slip', 'dress'])
+  })
+
+  it('leaves unknown ids and correctly placed items untouched, without mutating input', () => {
+    const worn: EquippedSlots = { ...empty(), top: ['mystery', 'shirt'], bottom: ['trousers'] }
+    const result = spreadAcrossCoveredSlots(worn, WARDROBE)
+    expect(result).toEqual(worn)
+    expect(result).not.toBe(worn)
   })
 })
 

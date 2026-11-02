@@ -4,6 +4,16 @@
 
 ### 4.12-dev
 
+#### Green Room: multi-slot picks fill every slot they cover
+
+When a character dressed themselves at chat start (`llm_choose`), the cheap LLM often listed a multi-slot garment (a dress covering top and bottom) under only one slot. The parser kept it only there, so the other slot stayed empty. Composites were already spread by `dissolveCompositesInSlots`; plain multi-slot items were not.
+
+- New `spreadAcrossCoveredSlots` (`lib/wardrobe/slot-ops.ts`): puts every item in a snapshot into every slot its `types` declare, appended as the outermost layer.
+- `applyOutfitSelections` runs it on the LLM's pick after dissolving composites.
+- The outfit-selection prompt now says a multi-slot item is worn in all the slots it covers.
+- The wardrobe dialog's single-slot `add_to_slot` is unchanged.
+- Help: `help/wardrobe.md`.
+
 #### Connection profiles: most images per request
 
 Some vision models reject a request that carries more than four images. A Salon turn could send more than that (this turn's uploads, uploads the character had not seen, and every Lantern image since the character last spoke), and the whole turn failed.

@@ -29,6 +29,8 @@ Choose items that are contextually appropriate. For example, formal wear for a b
 
 You MUST respond with ONLY a JSON object mapping slot names to ARRAYS of wardrobe item IDs. Valid slots are: "top", "bottom", "footwear", "accessories", "hair". Use an empty array [] for any slot you want to leave empty. The "hair" slot holds a hairstyle or hairdo (braided, permed, elegantly coiffed, a wig) — not the hair itself. Leave "hair" empty for the character's natural, unstyled hair.
 
+An item that covers more than one slot (its "covers" list names several — a dress covering top and bottom, a jumpsuit, a full-body costume) is worn in ALL of the slots it covers. List it under each of them; do not also choose something else for a slot it already fills unless you mean it to be layered with it.
+
 You may put multiple items in the same slot to layer them (e.g. a t-shirt under a sweater); list them inner-to-outer.
 
 If the available wardrobe contains a composite item (its description mentions it bundles other items, or its title implies an outfit set), you may pick that composite directly — equipping it places it in all the slots it covers.

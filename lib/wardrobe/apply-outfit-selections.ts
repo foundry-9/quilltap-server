@@ -21,7 +21,11 @@
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import { dissolveCompositeToLeaves, dissolveCompositesInSlots } from '@/lib/wardrobe/slot-ops';
+import {
+  dissolveCompositeToLeaves,
+  dissolveCompositesInSlots,
+  spreadAcrossCoveredSlots,
+} from '@/lib/wardrobe/slot-ops';
 import type { EquipSource } from '@/lib/database/repositories/wardrobe-wear.repository';
 import {
   CLOTHING_SLOT_TYPES,
@@ -189,6 +193,11 @@ function manualWornBundles(
     if (leaves) result.push({ id: bundle.id, leafIds: leaves.map((leaf) => leaf.id) });
   }
   return result;
+}
+
+/** Total slot placements in a snapshot, for logging whether a pass changed it. */
+function outfitSlotCount(slots: EquippedSlots): number {
+  return WARDROBE_SLOT_TYPES.reduce((n, slot) => n + (slots[slot]?.length ?? 0), 0);
 }
 
 /**
@@ -455,7 +464,18 @@ export async function applyOutfitSelections(
                     // The prompt lets the model pick a bundle outright; break
                     // it into its parts before it's stored, so the wardrobe
                     // reads as garments rather than an opaque card.
-                    chosen = dissolveCompositesInSlots(result.result.slots, pool.byId);
+                    // Then make each garment occupy every slot it covers:
+                    // the model often lists a dress only under "top", which
+                    // left the bottom slot reading as bare.
+                    const dissolved = dissolveCompositesInSlots(result.result.slots, pool.byId);
+                    const spread = spreadAcrossCoveredSlots(dissolved.slots, pool.byId);
+                    if (outfitSlotCount(spread) !== outfitSlotCount(dissolved.slots)) {
+                      logger.debug('[applyOutfitSelections] Spread multi-slot picks across every slot they cover', {
+                        chatId,
+                        characterId,
+                      });
+                    }
+                    chosen = { slots: spread, wornBundles: dissolved.wornBundles };
                     deliberatelyUnclothed = declaredBare && !picked;
                   } else {
                     logger.warn('[applyOutfitSelections] LLM outfit selection failed, falling back to defaults', {
