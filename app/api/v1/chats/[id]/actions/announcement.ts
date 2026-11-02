@@ -7,9 +7,9 @@
  * POST /api/v1/chats/[id]?action=announcement
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound } from '@/lib/api/responses';
+import { badRequest, created, notFound } from '@/lib/api/responses';
 import { postAdhocAnnouncement, postEstablishedFact } from '@/lib/services/announcer/writer';
 import { resolveAnnouncementAudience } from '@/lib/services/announcer/audience';
 import { insertAnnouncementSchema } from '../schemas';
@@ -36,7 +36,7 @@ export async function handleInsertAnnouncement(
       return badRequest('Failed to post established fact (empty content or unknown chat).');
     }
     logger.info('[Chats v1] Established fact posted', { chatId, messageId: fact.id });
-    return NextResponse.json({ success: true, message: fact }, { status: 201 });
+    return created({ success: true, message: fact });
   }
 
   // For the 'character' branch, verify the referenced character actually exists
@@ -76,5 +76,5 @@ export async function handleInsertAnnouncement(
     targetCount: audience.targetParticipantIds?.length ?? 0,
   });
 
-  return NextResponse.json({ success: true, message }, { status: 201 });
+  return created({ success: true, message });
 }
