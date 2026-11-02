@@ -4,6 +4,13 @@
 
 ### 4.12-dev
 
+#### Docs: Refactor 4.12 specs
+
+Seven proposed deep-refactor specs for code the 4.12-dev cycle touched, with an index that ranks them and lists what was examined and left alone. No code changes.
+
+- `docs/developer/features/refactor-4-12.md` (index) and one spec each for: generating the theme-storybook `qt-components.css` from the app CSS instead of mirroring it by hand; one document core behind the operator's Document Mode routes and the `doc_*` tools; one image transport budget on the way to a provider; one tier walk with the reach rules settled; the Salon's SSE protocol as a tagged union; the remaining Wardrobe / Inventory browser pairs and the `FileBrowser` retirement decisions; one recursive watcher core under both filesystem watchers.
+- Each spec names the bugs it would file first and the decisions it needs. `ROADMAP.md` gains a "Refactor programmes" section; the documentation index lists the new files.
+
 #### UI: WCAG 2.2 AA pass (release checklist 13)
 
 Contrast table, axe sweep of every bundled theme in light and dark, and a component audit of this cycle's UI changes.
