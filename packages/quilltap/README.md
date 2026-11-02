@@ -65,7 +65,7 @@ quilltap --update
 
 ## How It Works
 
-The `quilltap` npm package is a lightweight CLI launcher (~10 KB). On first run, it downloads the pre-built application from [GitHub Releases](https://github.com/foundry-9/quilltap-server/releases) and caches it in a platform-specific directory. Native modules (`better-sqlite3`, `sharp`) ship as prebuilt binaries for your platform — nothing is compiled on install. On Linux, the SQLCipher driver needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, RHEL 9 or newer); older hosts should run the Docker image.
+The `quilltap` npm package is a lightweight CLI launcher (~10 KB). On first run, it downloads the pre-built application from [GitHub Releases](https://github.com/foundry-9/quilltap-server/releases) and caches it in a platform-specific directory. The SQLCipher database driver (`better-sqlite3`) and `sharp` ship as prebuilt binaries for your platform — the driver is never compiled or rebuilt. `node-pty` (terminals) uses its prebuilds where they exist and compiles on Linux; if a Node.js upgrade leaves `sharp` or `node-pty` built for the old version, the next run rebuilds them automatically. On Linux, the SQLCipher driver needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, RHEL 9 or newer); older hosts should run the Docker image.
 
 ### Cache Locations
 

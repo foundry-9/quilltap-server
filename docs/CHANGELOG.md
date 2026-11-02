@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### CLI: README native-module note corrected
+
+Release-checklist item 12. No CLI commands, flags or completions changed since 4.11.0; the completion coverage tests pass.
+
+- `packages/quilltap/README.md` said no native module is ever compiled. Corrected: the SQLCipher driver and `sharp` are prebuilt and the driver is never rebuilt; `node-pty` compiles on Linux, and `sharp` / `node-pty` are rebuilt automatically after a Node.js upgrade.
+
 #### Tests: release-checklist coverage pass
 
 Release-checklist item 2. Tests for 4.12 modules that had none; committed in 4310d435f with the file-provider change.
