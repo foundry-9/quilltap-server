@@ -55,7 +55,7 @@
      ALERT TOKENS
      ========================================================================== */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
-  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-fg: hsl(142 76% 23%);  /* darkened for 4.5:1 on the alert tint */
   --qt-alert-success-border: hsl(142 76% 36% / 0.3);
 
   --qt-alert-warning-bg: hsl(38 92% 50% / 0.1);

@@ -126,6 +126,18 @@ function CharPickerToolbarButton({
 }
 
 /**
+ * Accessible name for a Markdown button: the tooltip's plain words ("Bold"),
+ * keeping the visible glyph when the words don't already contain it
+ * ("Heading 4 (H4)") so a voice-control user can say what they see (2.5.3).
+ */
+function markdownButtonName(format: { label: string; tooltip: string }): string {
+  const { label, tooltip } = format
+  return /^[A-Za-z0-9]+$/.test(label) && !tooltip.toLowerCase().includes(label.toLowerCase())
+    ? `${tooltip} (${label})`
+    : tooltip
+}
+
+/**
  * Formatting toolbar for document editing mode.
  *
  * Displays Markdown formatting buttons (bold, italic, headers, lists)
@@ -496,6 +508,7 @@ export default function FormattingToolbar({
               onClick={() => handleMarkdownClick(format)}
               disabled={disabled}
               className={`qt-formatting-button qt-formatting-button-${format.type}`}
+              aria-label={markdownButtonName(format)}
             >
               {format.label}
             </button>
@@ -532,6 +545,8 @@ export default function FormattingToolbar({
             onClick={handleCodeBlockClick}
             disabled={disabled}
             className={`qt-formatting-button qt-formatting-button-code-block${inCodeBlock ? ' qt-formatting-button-active' : ''}`}
+            aria-label="Code block"
+            aria-pressed={inCodeBlock}
           >
             {inCodeBlock ? '/CODE' : 'CODE'}
           </button>

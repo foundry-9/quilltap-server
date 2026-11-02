@@ -330,7 +330,9 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
               {ALL_TYPES.map((type) => (
                 <button
                   key={type}
+                  type="button"
                   onClick={() => toggleType(type)}
+                  aria-pressed={selectedTypes.includes(type)}
                   className={selectedTypes.includes(type)
                     ? 'qt-filter-chip-active'
                     : 'qt-filter-chip'

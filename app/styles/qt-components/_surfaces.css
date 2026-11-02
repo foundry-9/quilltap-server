@@ -329,7 +329,7 @@
   }
 
   .qt-floating-dialog-close {
-    @apply p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors;
+    @apply p-1 rounded hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors;
   }
 
   /**

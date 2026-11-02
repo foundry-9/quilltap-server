@@ -405,6 +405,7 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
               <button
                 onClick={() => onTypeCountClick(searchType)}
                 className="text-primary hover:underline cursor-pointer"
+                aria-label={`Show all ${totalForType} ${TYPE_LABELS_PLURAL[searchType].toLowerCase()}`}
                 title={`Show all ${totalForType} ${TYPE_LABELS_PLURAL[searchType].toLowerCase()}`}
               >
                 ({displayedCount}/{totalForType})

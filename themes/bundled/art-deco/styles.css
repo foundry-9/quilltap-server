@@ -81,7 +81,7 @@
      ALERT TOKENS
      ========================================================================== */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
-  --qt-alert-success-fg: hsl(142 76% 22%);
+  --qt-alert-success-fg: hsl(142 76% 18%);  /* darkened for 4.5:1 on the alert tint */
   --qt-alert-success-border: hsl(142 76% 36% / 0.3);
 
   --qt-alert-warning-bg: hsl(43 85% 55% / 0.12);
@@ -339,18 +339,21 @@
      LINK VARIABLES
      ========================================================================== */
   --qt-link-color: var(--deco-bronze);
-  --qt-link-hover-color: var(--deco-gold);
+  /* Light mode: the bright --deco-gold sat at ~1.1:1 on parchment, so hover
+     goes to the navy primary; the dark block restores the gold. */
+  --qt-link-hover-color: var(--color-primary);
   --qt-link-decoration: underline;
 
   /* ==========================================================================
      FOOTER VARIABLES
      ========================================================================== */
-  --qt-footer-link-hover: var(--deco-gold);
+  --qt-footer-link-hover: var(--color-primary);
 
   /* ==========================================================================
      BRAND VARIABLES
      ========================================================================== */
-  --qt-brand-fg: var(--deco-gold);
+  /* Bronze in light mode (5.5:1 on the card; the gold was 1.1:1); gold in dark. */
+  --qt-brand-fg: var(--deco-bronze);
 
   /* ==========================================================================
      AUTH PAGE VARIABLES
@@ -470,6 +473,9 @@
 [data-theme="art-deco"].dark {
   /* Deco tokens — brighter gold for dark backgrounds */
   --deco-gold: hsl(43 90% 58%);
+  /* The gilt that light mode cannot carry on parchment. */
+  --qt-brand-fg: var(--deco-gold);
+  --qt-footer-link-hover: var(--deco-gold);
   --deco-gold-light: hsl(43 80% 68%);
   --deco-gold-dark: hsl(43 75% 38%);
   /* Brighter gold chevron so it reads on the dark inputs. Mirrors --deco-gold

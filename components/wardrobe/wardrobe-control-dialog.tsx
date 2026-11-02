@@ -422,6 +422,7 @@ function WardrobeControlDialogInner({
                   <button
                     type="button"
                     onClick={() => setRightTab('live')}
+                  aria-pressed={rightTab === 'live'}
                     className={`qt-tab ${rightTab === 'live' ? 'qt-tab-active' : ''}`}
                   >
                     Live outfit
@@ -435,6 +436,7 @@ function WardrobeControlDialogInner({
                 <button
                   type="button"
                   onClick={() => setRightTab('builder')}
+                  aria-pressed={rightTab === 'builder'}
                   className={`qt-tab ${rightTab === 'builder' ? 'qt-tab-active' : ''}`}
                 >
                   Outfit Builder
@@ -443,6 +445,7 @@ function WardrobeControlDialogInner({
                   <button
                     type="button"
                     onClick={() => setRightTab('history')}
+                  aria-pressed={rightTab === 'history'}
                     className={`qt-tab ${rightTab === 'history' ? 'qt-tab-active' : ''}`}
                   >
                     History

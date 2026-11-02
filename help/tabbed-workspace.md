@@ -74,6 +74,12 @@ aside while you are typing in a field:
 - **Ctrl/⌘ + Alt + \\** — throw the room into two panes (sending the current tab to
   the right), or, if already divided, gather it back into one.
 
+The tab strip itself also takes the keyboard's orders. **Tab** onto a pane's
+strip and you land on the tab in view; from there **← / →** walk along the row
+(wrapping at the ends), **Home** and **End** jump to the first and last, and
+**Delete** closes the tab you are standing on — the keyboard's answer to the
+little ✕, which is there for the mouse alone.
+
 Should a great many tabs crowd a single strip, it scrolls of its own accord to
 keep the one you are reading in plain sight.
 

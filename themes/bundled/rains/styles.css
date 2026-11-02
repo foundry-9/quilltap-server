@@ -172,7 +172,7 @@
   --text-100: 40 8% 90%;    /* #e8e6e3 - primary alt */
   --text-200: 40 5% 65%;    /* #a8a6a3 - secondary */
   --text-300: 40 4% 62%;    /* tertiary */
-  --text-400: 40 3% 59%;    /* muted (4.5:1 on sidebar) */
+  --text-400: 40 3% 61%;    /* muted (4.5:1 on sidebar and on the tinted settings tabs) */
   --text-500: 40 2% 38%;    /* #636160 - very muted */
 
   /* Always Colors */
@@ -719,7 +719,7 @@
 
   /* Alert Tokens */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
-  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-fg: hsl(142 76% 24%);  /* darkened for 4.5:1 on the alert tint */
   --qt-alert-success-border: hsl(142 76% 36% / 0.3);
 
   --qt-alert-warning-bg: hsl(38 92% 50% / 0.1);
@@ -1212,25 +1212,29 @@
 [data-theme="rains"] .qt-alert-error {
   background: hsl(var(--danger-900) / 0.35);
   border-color: hsl(var(--danger-100) / 0.5);
-  color: hsl(var(--danger-100));
+  /* The per-mode alert token: --danger-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-error-fg);
 }
 
 [data-theme="rains"] .qt-alert-warning {
   background: hsl(var(--warning-900) / 0.35);
   border-color: hsl(var(--warning-100) / 0.5);
-  color: hsl(var(--warning-100));
+  /* The per-mode alert token: --warning-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-warning-fg);
 }
 
 [data-theme="rains"] .qt-alert-success {
   background: hsl(var(--success-900) / 0.35);
   border-color: hsl(var(--success-100) / 0.5);
-  color: hsl(var(--success-100));
+  /* The per-mode alert token: --success-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-success-fg);
 }
 
 [data-theme="rains"] .qt-alert-info {
   background: hsl(var(--accent-secondary-900) / 0.35);
   border-color: hsl(var(--accent-secondary-100) / 0.5);
-  color: hsl(var(--accent-secondary-100));
+  /* The per-mode alert token: --accent-secondary-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-info-fg);
 }
 
 /* Navbar link styling */

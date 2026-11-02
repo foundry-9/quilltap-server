@@ -451,8 +451,9 @@ export default function FileBrowser({
                 disabled={uploading}
                 className="qt-button qt-button-secondary p-2"
                 title={uploading ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...` : 'Upload Files'}
+                aria-label={uploading ? `Uploading ${uploadProgress?.current} of ${uploadProgress?.total}` : 'Upload files'}
               >
-                {uploading ? '⏳' : '\u{1F4E4}'}
+                <span aria-hidden="true">{uploading ? '⏳' : '\u{1F4E4}'}</span>
               </button>
             ) : null
           )}
@@ -460,15 +461,17 @@ export default function FileBrowser({
             onClick={() => setShowCreateFolder(true)}
             className="qt-button qt-button-secondary p-2"
             title="New Folder"
+            aria-label="New folder"
           >
-            {'\u{1F4C1}'}+
+            <span aria-hidden="true">{'\u{1F4C1}'}+</span>
           </button>
           <button
             onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
             className="qt-button qt-button-secondary p-2"
             title={viewMode === 'list' ? 'Grid view' : 'List view'}
+            aria-label={viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view'}
           >
-            {viewMode === 'list' ? '▦' : '☰'}
+            <span aria-hidden="true">{viewMode === 'list' ? '▦' : '☰'}</span>
           </button>
           {showCleanupButton && (
             <button
@@ -476,8 +479,9 @@ export default function FileBrowser({
               disabled={isCleaningUp || loading}
               className="qt-button qt-button-secondary p-2 flex items-center gap-1"
               title={`${orphanedCount} untracked file${orphanedCount !== 1 ? 's' : ''} — click to clean up`}
+              aria-label={`Clean up ${orphanedCount} untracked file${orphanedCount !== 1 ? 's' : ''}`}
             >
-              {isCleaningUp ? '⏳' : '\u{1F9F9}'}
+              <span aria-hidden="true">{isCleaningUp ? '⏳' : '\u{1F9F9}'}</span>
               <span className="text-xs qt-text-warning">{orphanedCount}</span>
             </button>
           )}
@@ -486,16 +490,18 @@ export default function FileBrowser({
             disabled={isSyncing || loading}
             className="qt-button qt-button-secondary p-2"
             title="Sync filesystem — scan disk for new or removed files"
+            aria-label="Sync filesystem"
           >
-            {isSyncing ? '⏳' : '\u{1F504}'}
+            <span aria-hidden="true">{isSyncing ? '⏳' : '\u{1F504}'}</span>
           </button>
           <button
             onClick={() => { void fetchFiles() }}
             disabled={loading}
             className="qt-button qt-button-secondary p-2"
             title="Refresh"
+            aria-label="Refresh file list"
           >
-            {'↻'}
+            <span aria-hidden="true">{'↻'}</span>
           </button>
         </div>
       </div>

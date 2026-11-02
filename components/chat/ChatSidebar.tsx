@@ -731,7 +731,7 @@ function CollapsedStrip({
               onClick={expandSidebar}
               className={avatarClasses.join(' ')}
               title={`${name}${statusLabel}${isCurrentTurn ? ' (current turn)' : ''}${turnEntry?.position ? ` (#${turnEntry.position})` : ''}`}
-              aria-label={`${name}${statusLabel} - click to expand sidebar`}
+              aria-label={`${name}${statusLabel}${turnEntry?.position ? ` ${turnEntry.position}` : ''}, expand sidebar`}
             >
               <div className="relative">
                 <Avatar

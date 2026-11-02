@@ -64,7 +64,7 @@ describe('FormattingToolbar', () => {
     textarea.focus()
     textarea.setSelectionRange(0, textarea.value.length)
 
-    fireEvent.click(screen.getByRole('button', { name: 'B' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
 
     await waitFor(() => {
       expect(textarea.value).toBe('**Hello**')
@@ -78,7 +78,7 @@ describe('FormattingToolbar', () => {
     textarea.focus()
     textarea.setSelectionRange(0, 0)
 
-    fireEvent.click(screen.getByRole('button', { name: 'H4' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Heading 4 (H4)' }))
 
     await waitFor(() => {
       expect(textarea.value).toBe('#### Hello')
@@ -92,7 +92,7 @@ describe('FormattingToolbar', () => {
     textarea.focus()
     textarea.setSelectionRange(textarea.value.length, textarea.value.length)
 
-    fireEvent.click(screen.getByRole('button', { name: 'CODE' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Code block' }))
 
     await waitFor(() => {
       expect(textarea.value).toBe('Hello\n```\n\n```')

@@ -556,7 +556,7 @@ function ScopeCard({
   return (
     <button
       onClick={onClick}
-      className="qt-card w-full text-left p-4 hover:bg-accent/50 transition-colors cursor-pointer flex items-center gap-3"
+      className="qt-card w-full text-left p-4 hover:qt-bg-surface-hover transition-colors cursor-pointer flex items-center gap-3"
     >
       <span className="text-xl">{icon}</span>
       <div>
@@ -619,7 +619,7 @@ function GalleryPanel({
               type="button"
               onClick={() => onPick(entry)}
               disabled={linking}
-              className="qt-card w-full text-left p-2 hover:bg-accent/50 transition-colors cursor-pointer disabled:opacity-50"
+              className="qt-card w-full text-left p-2 hover:qt-bg-surface-hover transition-colors cursor-pointer disabled:opacity-50"
               title={entry.caption || entry.fileName}
             >
               <img

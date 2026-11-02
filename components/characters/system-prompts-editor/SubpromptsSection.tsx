@@ -65,7 +65,7 @@ export function SubpromptsSection({ characterId, characterName }: SubpromptsSect
       ) : (
         <div className="space-y-3">
           {subprompts.map((s) => (
-            <div key={s.id} className="qt-card hover:bg-accent/50 transition">
+            <div key={s.id} className="qt-card hover:qt-bg-surface-hover transition">
               <div className="flex justify-between items-start">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
