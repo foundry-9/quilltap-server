@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### CLI: README native-module note corrected
+
+Release-checklist item 12. No CLI commands, flags or completions changed since 4.11.0; the completion coverage tests pass.
+
+- `packages/quilltap/README.md` said no native module is ever compiled. Corrected: the SQLCipher driver and `sharp` are prebuilt and the driver is never rebuilt; `node-pty` compiles on Linux, and `sharp` / `node-pty` are rebuilt automatically after a Node.js upgrade.
+
 #### Tests: backup/restore coverage for 4.12 columns
 
 Release-checklist item 10. Both new 4.12 columns (`chat_messages.isEstablishedFact`, `connection_profiles.maxImagesPerRequest`) were already in backup, restore, `.qtap` export/import, the export schema and DDL. `maxImagesPerRequest` had no restore test.
