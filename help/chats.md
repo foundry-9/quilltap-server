@@ -139,6 +139,8 @@ The main area where conversation happens:
 
 - **Your Messages** — Appear on one side with your avatar
 - **Character Messages** — Appear with the character's avatar, name, and a small provider/model badge showing which LLM service generated the response
+- **The Portrait, Writ Large** — Click a character's (or your own) picture beside a message and it opens full size in the image viewer, exactly as Aurora's thumbnail does when she announces a fresh likeness. The name and title beneath it are not part of the bargain; aim for the picture itself.
+- **What They Carry** — Beneath the name and title, and above the provider badge, sits a little row of everything that character has equipped in this chat: the item's own drawing if it has one, its emoji if not, and failing both a two-letter monogram of its name. Rest the pointer on one (or tab to it) and a card unfolds with the item's full name and description. See [The Inventory](/help/inventory) for how things are taken up and set down.
 - **System Messages** — Background operations like memory extraction (if enabled)
 - **Timestamps** — Show when messages were sent
 

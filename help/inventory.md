@@ -105,6 +105,8 @@ What a character carries is **per chat**, just as their outfit is. Opening the I
 
 Each row in the list beside it has an **Equip** button too. Archetypes and archived items cannot be carried.
 
+Whatever a character carries is also worn on their sleeve, so to speak: a row of glyphs sits under their name and title beside each of their messages in the Salon — the item's SVG, else its emoji, else a two-letter monogram — and hovering one reveals its full name and description.
+
 Every equip or unequip posts a short line from Pascal in the chat — *"Vivienne takes up Excalibur and a signet ring."* — and, if the character's avatar is drawn per chat, redraws it with the new burden in hand.
 
 ### Equipped by default

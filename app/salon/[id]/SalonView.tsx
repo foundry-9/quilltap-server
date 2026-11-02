@@ -1312,6 +1312,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
         if (participant?.character) {
           return {
             name: participant.character.name,
+            characterId: participant.character.id,
             title: participant.character.title ?? null,
             avatarUrl: participant.character.avatarUrl ?? null,
             defaultImage: participant.character.defaultImage ?? null,
@@ -1362,6 +1363,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
         if (participant?.character) {
           return {
             name: participant.character.name,
+            characterId: participant.character.id,
             title: participant.character.title ?? null,
             avatarUrl: participant.character.avatarUrl ?? null,
             defaultImage: participant.character.defaultImage ?? null,
@@ -1378,21 +1380,21 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
         if (participant.type === 'CHARACTER' && participant.character) {
-          return { name: participant.character.name, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
+          return { name: participant.character.name, characterId: participant.character.id, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
         }
       }
     }
     if (message.role === 'USER') {
       const userChar = participantsWithImpersonation.getFirstUserCharacter()
       if (userChar) {
-        return { name: userChar.name, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
+        return { name: userChar.name, characterId: userChar.id, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
       } else if (chat?.user) {
         return { name: chat.user.name || 'User', title: null, avatarUrl: chat.user.image ?? null, defaultImage: null }
       }
     } else if (message.role === 'ASSISTANT') {
       const character = participantsWithImpersonation.getFirstCharacter()
       if (character) {
-        return { name: character.name, title: character.title, avatarUrl: character.avatarUrl, defaultImage: character.defaultImage }
+        return { name: character.name, characterId: character.id, title: character.title, avatarUrl: character.avatarUrl, defaultImage: character.defaultImage }
       }
     }
     return null

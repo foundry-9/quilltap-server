@@ -279,6 +279,8 @@ function MessageRowInner({
             messageAvatar={messageAvatar}
             dangerous={isDangerousChat}
             badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
+            chatId={chatId}
+            onImageClick={onImageClick}
           />
         )}
         <div className="qt-chat-message-body group">
@@ -327,6 +329,8 @@ function MessageRowInner({
           messageAvatar={messageAvatar}
           dangerous={isDangerousChat}
           badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
+          chatId={chatId}
+          onImageClick={onImageClick}
         />
       )}
       <div className="qt-chat-message-body group">
@@ -616,7 +620,7 @@ function MessageRowInner({
       </div>
       {/* Desktop avatar - user (right side) */}
       {message.role === 'USER' && shouldShowAvatars && messageAvatar && (
-        <MessageDesktopAvatar messageAvatar={messageAvatar} />
+        <MessageDesktopAvatar messageAvatar={messageAvatar} chatId={chatId} onImageClick={onImageClick} />
       )}
     </div>
   )
@@ -661,6 +665,7 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Avatar info (compare by value since it's an object)
   if (prev.messageAvatar?.name !== next.messageAvatar?.name) return false
   if (prev.messageAvatar?.avatarUrl !== next.messageAvatar?.avatarUrl) return false
+  if (prev.messageAvatar?.characterId !== next.messageAvatar?.characterId) return false
 
   // Rendering patterns (reference equality is fine - they're stable)
   if (prev.renderingPatterns !== next.renderingPatterns) return false

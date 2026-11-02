@@ -4,6 +4,14 @@
 
 ### 4.12-dev
 
+#### Salon avatars: full-size view and carried items
+
+- Clicking the picture in a message row's desktop avatar opens it in the Salon image viewer (`ImageModal`), the same one Aurora's announcement thumbnails use. `Avatar` takes a new `onImageClick` prop that wraps only the picture, not the name/title.
+- Below the name and title, above the provider/route badge, the avatar now lists every inventory item the character has equipped in the chat, by glyph (SVG, else emoji, else a two-letter abbreviation), each with a `Tooltip` showing the full name and description.
+- New `useChatCarriedItems(chatId, characterId)` (`lib/hooks/use-inventory.ts`) shares the `?action=inventory` query and cache entry with `useChatInventory`, so the column costs one request per chat and refetches on the `chats` realtime topic.
+- `InventoryGlyph` takes `fallback: 'abbreviation'` (`inventoryAbbreviation`); the emoji glyph no longer sets a native `title`.
+- `getMessageAvatar` (`SalonView.tsx`) now returns `characterId`; `MessageRow`'s memo compares it.
+
 #### Green Room: multi-slot picks fill every slot they cover
 
 When a character dressed themselves at chat start (`llm_choose`), the cheap LLM often listed a multi-slot garment (a dress covering top and bottom) under only one slot. The parser kept it only there, so the other slot stayed empty. Composites were already spread by `dissolveCompositesInSlots`; plain multi-slot items were not.

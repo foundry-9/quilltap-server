@@ -279,12 +279,11 @@ export interface CarriedEntry {
   kits: Record<string, KitState>
 }
 
-/** What a chat's cast carries, and the gestures that change it. */
-export function useChatInventory(chatId: string | null) {
-  const queryClient = useQueryClient()
-  const query = useQuery({
+/** The one read of a chat's carried sets, shared by every reader of it. */
+function chatInventoryQuery(chatId: string | null) {
+  return {
     queryKey: queryKeys.inventory.equipped(chatId ?? 'none'),
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const data = await apiFetch<{ inventory?: Record<string, CarriedEntry>; projectId?: string | null }>(
         `/api/v1/chats/${chatId}?action=inventory`,
         { signal },
@@ -292,7 +291,28 @@ export function useChatInventory(chatId: string | null) {
       return { inventory: data?.inventory ?? {}, projectId: data?.projectId ?? null }
     },
     enabled: chatId !== null,
+  }
+}
+
+const NOTHING_CARRIED: ResolvedInventoryItem[] = []
+
+/**
+ * What one character carries in a chat, read-only — the Salon's avatar column
+ * shows it. Shares the cache entry (and the `chats` realtime refetch) with
+ * `useChatInventory`, so every avatar in the transcript costs one request.
+ */
+export function useChatCarriedItems(chatId: string | null | undefined, characterId: string | null | undefined): ResolvedInventoryItem[] {
+  const query = useQuery({
+    ...chatInventoryQuery(chatId && characterId ? chatId : null),
+    select: (data) => (characterId && data.inventory[characterId]?.equipped) || NOTHING_CARRIED,
   })
+  return query.data ?? NOTHING_CARRIED
+}
+
+/** What a chat's cast carries, and the gestures that change it. */
+export function useChatInventory(chatId: string | null) {
+  const queryClient = useQueryClient()
+  const query = useQuery(chatInventoryQuery(chatId))
   const mutation = useMutation({
     mutationFn: ({ action, body }: { action: string; body: unknown }) =>
       inventoryRequest<Record<string, unknown>>(`/api/v1/chats/${chatId}?action=${action}`, 'POST', body),
