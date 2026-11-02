@@ -1,6 +1,6 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-11-02
 **Tool Used**: knip
 **Codebase**: Quilltap v4.11-dev
 
@@ -12,12 +12,36 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | 0 remaining as of 2026-10-31: the kept-with-reason SVAR pair went with the whole SVAR file manager (`components/files/svar/`), retired in folder-browser Phase 4. 2 remaining as of 2026-10-26 (SVAR pair, kept-with-reason); 2026-10-26 deleted the importer-less `components/inventory/index.ts` barrel. 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Files | 0 as of 2026-11-02 (knip clean). 0 remaining as of 2026-10-31: the kept-with-reason SVAR pair went with the whole SVAR file manager (`components/files/svar/`), retired in folder-browser Phase 4. 2 remaining as of 2026-10-26 (SVAR pair, kept-with-reason); 2026-10-26 deleted the importer-less `components/inventory/index.ts` barrel. 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
 | Unused Dependencies | None flagged as of 2026-10-13 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1338 (2026-10-26, before removals; new Inventory/Pascal/Scenario surface). 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Exports | 1359 (2026-11-02; 1363 before the sweep). 1338 (2026-10-26, before removals; new Inventory/Pascal/Scenario surface). 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 859 (2026-11-02; 860 before the sweep). 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 4 in ErrorCode (preserved for future use; `UNAUTHORIZED` joined the list on 2026-09-04 when its only consumer, `requireAuth`, was removed) |
-| Duplicate Exports | 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+| Duplicate Exports | 78 (2026-11-02, unchanged). 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+
+---
+
+## 2026-11-02 — v4.11 release sweep, second pass (knip)
+
+knip flagged **0 unused files**, **1363 unused exports**, **860 unused exported types**, 4 unused enum members and 78 duplicate exports; no unused or unlisted dependencies. Run with `node_modules` present (`npm ci --ignore-scripts`); without it knip reports ~1,270 spurious unused files.
+
+Method as on 2026-10-26: every flagged symbol was scored by identifier references outside its defining file across all tracked source, and those with none were read by hand. Also listed: exports referenced only by tests and not used in-file (only test-helper fixtures under `__tests__/`, kept).
+
+Verified with `npx tsc` (exit 0), `eslint` on the changed files (clean) and the full `npm run test:unit` suite: **1,269 suites passed / 18,047 tests / 90 snapshots**, 1 suite and 3 tests skipped (pre-existing). Re-running knip: exports 1363 → 1359, types 860 → 859.
+
+### Removed
+
+| File | Removed | Why |
+|------|---------|-----|
+| `lib/inventory/item-mutations.ts` | `createInventoryFolder`, `renameInventoryFolder`, `deleteInventoryFolder` (+ their three `lib/mount-index/item-folder-location` imports and the `InventoryFolder` type import) | No callers. The Inventory folder routes go through `INVENTORY_FOLDER_KIND` and the shared `item-folder-routes.ts`. `INVENTORY_FOLDER_KIND` stays. |
+| `lib/inventory/folders.ts` | `normalizeInventoryFolderName` (+ unused `normalizeItemFolderName` import) | No callers; renames normalise the name inside `renameItemFolder`. |
+| `lib/services/announcer/writer.ts` | `AnnouncementRouteSender` | Unused type alias. |
+
+### Kept — with reason
+
+- **`ChatProvider`** (`components/providers/chat-context.tsx`) — still has no caller; the 2026-10-26 follow-up (decide whether to mount it or delete it along with `useChatContext`) remains open.
+- **Theme API** (`signJSON`, `verifyJSONSignature`, `validateTheme*`, `createDefaultThemePreference`, `ThemeCompatibility`, `RegistryPreviewColors`), **`stopMountWatchers`**, **`isMemoryMaintenanceSchedulerRunning`**, the `z.infer` / tool-input type aliases and the `__tests__/helpers` / fixtures exports — standing keeps, unchanged in character.
+- **4 `ErrorCode` enum members and 78 duplicate exports** — unchanged.
 
 ---
 

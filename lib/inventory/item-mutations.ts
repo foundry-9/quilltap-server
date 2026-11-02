@@ -51,13 +51,9 @@ import {
   InventoryFolderPathError,
   InventoryItemNotInLocationError,
   isSameFolder,
-  type InventoryFolder,
 } from '@/lib/inventory/folders';
 import {
-  createItemFolder,
-  deleteItemFolder,
   moveItemsToFolderIn,
-  renameItemFolder,
   type ItemFolderKind,
 } from '@/lib/mount-index/item-folder-location';
 import { findDependents, findRecordsAnywhere, type InventoryDependent } from '@/lib/inventory/dependents';
@@ -622,21 +618,3 @@ export const INVENTORY_FOLDER_KIND: ItemFolderKind = {
   rules: INVENTORY_FOLDER_RULES,
   pathError: (message) => new InventoryFolderPathError(message),
 };
-
-/** Create a folder at a location (an existing one, in any casing, is answered). */
-export function createInventoryFolder(location: InventoryLocation, path: string): Promise<InventoryFolder> {
-  return createItemFolder(INVENTORY_FOLDER_KIND, location, path);
-}
-
-/** Rename a folder in place; its objects follow because the path is the truth. */
-export function renameInventoryFolder(location: InventoryLocation, path: string, name: string): Promise<InventoryFolder> {
-  return renameItemFolder(INVENTORY_FOLDER_KIND, location, path, name);
-}
-
-/** Delete a folder, sending its objects and subfolders up to its parent. */
-export function deleteInventoryFolder(
-  location: InventoryLocation,
-  path: string,
-): Promise<{ movedItems: number; movedFolders: number }> {
-  return deleteItemFolder(INVENTORY_FOLDER_KIND, location, path);
-}

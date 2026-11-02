@@ -48,9 +48,6 @@ export type AnnouncerSender =
   | { kind: 'character'; characterId: string }
   | { kind: 'custom'; displayName: string };
 
-/** A sender for the announcement route: an announcer, or an established fact (no speaker). */
-export type AnnouncementRouteSender = AnnouncerSender | { kind: 'fact' };
-
 export interface AdhocAnnouncementParams {
   chatId: string;
   /** Plain Markdown body of the announcement bubble. */
