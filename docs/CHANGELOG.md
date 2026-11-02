@@ -4,6 +4,10 @@
 
 ### 4.12-dev
 
+#### Docs: draft 4.12.0 release notes
+
+- New `docs/releases/4.12.0.md` (`draft: true`), covering the cycle since 4.11.0.
+
 #### CLI: README native-module note corrected
 
 Release-checklist item 12. No CLI commands, flags or completions changed since 4.11.0; the completion coverage tests pass.
