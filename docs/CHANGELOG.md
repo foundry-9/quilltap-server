@@ -4,6 +4,16 @@
 
 ### 4.12-dev
 
+#### UI: undefined CSS custom properties repointed at real tokens
+
+Release-checklist item 13. About 105 declarations in `app/styles/qt-components/` read custom properties the app never defines (`--primary`, `--muted`, `--border`, `--foreground`, `--card`, `--accent`, `--destructive`, `--background`, `--input`, `--qt-primary`, `--qt-border`, `--qt-text-primary`, `--qt-text-secondary`, `--qt-text-muted`). Each such declaration was invalid at computed-value time, so the rule fell back to inherited or initial values on every theme.
+
+- Affected: the help dialog (composer, nav buttons, suggested links, entity picker, guide search/topics/reader, welcome card), Document Mode chrome (dividers, header, title input, toolbar, status bar, URI bar), Lexical checkboxes and links, links in Salon messages, emoji picker and typeahead secondary text, the chat sidebar resizer, the memory-source highlight, and the formatting-button and NanoGPT badge hovers.
+- `hsl(var(--X))` → `var(--color-X)`; `hsl(var(--X) / N)` → `color-mix(in srgb, var(--color-X) N%, transparent)`; `--qt-primary` → `--color-primary`; `--qt-border` → `--color-border`; `--qt-text-primary` → `--color-foreground`; `--qt-text-secondary` / `--qt-text-muted` → `--color-muted-foreground`. Per-theme hook variables are kept as the first `var()` argument; only fallbacks changed. Hooks with no default (`--qt-content-bg-hover`, `--qt-badge-primary-border`) now fall back to `--color-muted` / `--color-primary`; `--qt-primary-fg` falls back to `--color-primary-foreground` instead of `#fff`.
+- The Document Mode title input and the help entity-picker filter regain a visible focus indicator (WCAG 2.4.7).
+- New lint gate `scripts/check-css-vars.mjs` (in `npm run lint`): fails on any `var()` in `app/**/*.css` whose property is not declared in app or bundled-theme CSS or set from TypeScript, unless it has a fallback that itself resolves. Fallbacks are checked even when the property is defined. Also rejects `hsl()` around `--color-*` / `--theme-*`. Escape hatch: `css-var-exception` on the line.
+- `@quilltap/theme-storybook` mirrors the fixes and gains the help dialog, Document Mode, sidebar resizer, memory-highlight and message-link families it was missing.
+
 #### Docs: draft 4.12.0 release notes
 
 - New `docs/releases/4.12.0.md` (`draft: true`), covering the cycle since 4.11.0.

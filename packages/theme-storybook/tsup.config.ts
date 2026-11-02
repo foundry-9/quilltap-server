@@ -12,5 +12,9 @@ export default defineConfig({
   external: ['react', '@storybook/react', 'storybook'],
   esbuildOptions(options) {
     options.jsx = 'automatic';
+    // qt-components.css mirrors app rules that point at assets the Quilltap
+    // server serves (`/api/themes/assets/...`). Leave those URLs alone rather
+    // than trying to bundle them.
+    options.external = [...(options.external ?? []), '/api/*'];
   },
 });
