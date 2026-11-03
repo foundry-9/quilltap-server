@@ -201,7 +201,12 @@ export async function pickUntitledDocumentPath(
   return { filePath, resolved };
 }
 
-/** Fire-and-forget re-index + embedding + stats refresh after a store write. */
+/**
+ * Fire-and-forget re-index (with hard-link siblings) + embedding + stats
+ * refresh after a store write. Callers gate on the resolved path's
+ * `mountPointId`, never on its scope: a `project`-scope path into a project's
+ * official store needs the same pass (#133).
+ */
 export function scheduleDocumentStoreRefresh(
   mountPointId: string,
   relativePath: string,
@@ -210,6 +215,12 @@ export function scheduleDocumentStoreRefresh(
   filePath: string,
 ): void {
   reindexSingleFile(mountPointId, relativePath, absolutePath)
+    // Hard-linked siblings share these bytes and need their own chunk sets
+    // rebuilt, as `doc_*` tool writes already do.
+    .then(async () => {
+      const { reindexLinkGroupSiblings } = await import('@/lib/mount-index/link-groups');
+      await reindexLinkGroupSiblings(mountPointId, relativePath);
+    })
     .then(() => Promise.all([
       enqueueEmbeddingJobsForMountPoint(mountPointId),
       repos.docMountPoints.refreshStats(mountPointId),
@@ -390,7 +401,7 @@ function isMtimeConflict(error: unknown): boolean {
 
 /**
  * Write a document's content with mtime conflict detection, scheduling the
- * store re-index for document_store scope. An mtime mismatch from
+ * store re-index whenever the path lands in a store (#133). An mtime mismatch from
  * {@link writeFileWithMtimeCheck} surfaces as a {@link DocumentConflictError}
  * (keeping the writer's own message) for the route to map to a 409.
  */
@@ -431,7 +442,7 @@ export async function writeDocumentFile(
     throw error;
   }
 
-  if (params.scope === 'document_store' && resolved.mountPointId) {
+  if (resolved.mountPointId) {
     scheduleDocumentStoreRefresh(
       resolved.mountPointId,
       resolved.relativePath,
@@ -525,9 +536,9 @@ export async function renameDocumentFile(
   }
   await moveResolvedFile(resolvedOld, resolvedNew);
 
-  if (params.scope === 'document_store' && resolvedOld.mountPointId) {
+  if (resolvedNew.mountPointId) {
     scheduleDocumentStoreRefresh(
-      resolvedOld.mountPointId,
+      resolvedNew.mountPointId,
       resolvedNew.relativePath,
       resolvedNew.absolutePath,
       repos,

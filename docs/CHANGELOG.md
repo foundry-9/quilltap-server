@@ -4,6 +4,10 @@
 
 ### 4.12-dev
 
+#### Refactor: one document core for Document Mode and the `doc_*` tools (Refactor 4.12, spec 2)
+
+- Fix (#133): a Document Mode save or rename into a store now re-indexes whenever the path lands in a store (`mountPointId`), not only in `document_store` scope. A `project`-scope save into a project's official store used to skip the chunk/embed pass until the next periodic scan. Operator saves now also re-index hard-link siblings, as tool writes do.
+
 #### Fix: theme-storybook stories use only real `qt-*` classes
 
 Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.
