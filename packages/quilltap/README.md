@@ -65,7 +65,7 @@ quilltap --update
 
 ## How It Works
 
-The `quilltap` npm package is a lightweight CLI launcher (~10 KB). On first run, it downloads the pre-built application from [GitHub Releases](https://github.com/foundry-9/quilltap-server/releases) and caches it in a platform-specific directory. Native modules (`better-sqlite3`, `sharp`) are compiled for your platform when you install the npm package.
+The `quilltap` npm package is a lightweight CLI launcher (~10 KB). On first run, it downloads the pre-built application from [GitHub Releases](https://github.com/foundry-9/quilltap-server/releases) and caches it in a platform-specific directory. The SQLCipher database driver (`better-sqlite3`) and `sharp` ship as prebuilt binaries for your platform — the driver is never compiled or rebuilt. `node-pty` (terminals) uses its prebuilds where they exist and compiles on Linux; if a Node.js upgrade leaves `sharp` or `node-pty` built for the old version, the next run rebuilds them automatically. On Linux, the SQLCipher driver needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, RHEL 9 or newer); older hosts should run the Docker image.
 
 ### Cache Locations
 
@@ -112,7 +112,7 @@ Every subcommand then accepts `--instance <name>` in place of `--data-dir`. The 
 
 ## Database Tool
 
-The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. They are SQLCipher-encrypted, so the stock `sqlite3` binary **cannot** open them — this is the way in. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
+The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. They are encrypted with ChaCha20-Poly1305 (SQLite3 Multiple Ciphers), so neither the stock `sqlite3` binary nor `sqlcipher` can open them — this is the way in. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
 
 ### Subcommands
 
@@ -170,7 +170,7 @@ quilltap db backup                          # online snapshot of all three DBs
 quilltap db backup main --out /tmp/snap     # one DB to a chosen directory
 quilltap db backup --json                   # parseable per-target sizes + durations
 
-quilltap db integrity                       # cipher_integrity_check + integrity_check
+quilltap db integrity                       # integrity_check (decrypts + verifies every page it reads)
 quilltap db integrity llm-logs              # one DB; exit 0 ok, 1 issues, 2 open failure
 ```
 

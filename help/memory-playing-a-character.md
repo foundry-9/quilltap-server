@@ -39,6 +39,17 @@ The Book is now a stickler about consent, and nowhere more so than for the chara
 
 Memories formed before this rule arrived are left as they were. If some of them claim an agreement that never happened, [Regenerate the Commonplace Book](memory-regenerate.md) re-extracts the conversation under the new rules (or simply delete the offending entry).
 
+## What Counts as a Repair
+
+A book that remembers every wrong and none of the mending makes for a grudging reader, and a character who reads it nightly becomes one. So the Book now treats a **repair** as one of the things most worth keeping:
+
+- **Forgiveness is a hinge.** An apology accepted, forgiveness given, or amends made is recorded as a resolution that names what it resolves ("Jackie forgave Charlie for acting without asking her; she said it was finished"), and it is scored at least as high as the hurt it settles.
+- **It is never invented.** An apology alone is not forgiveness. Forgiveness is recorded only on the forgiving party's own words or unmistakable action, and it is never quietly marked "for now" unless someone said so.
+- **Reliability counts for something.** Watching characters now note when someone kept a promise, turned out to be right, or showed up when it counted, at a modest weight. The book then has something to set beside the slips.
+- **Old hurts recede once mended.** When [Memory Maintenance](memory-maintenance.md) binds a hurt together with its repair, the digest leads with the repair, and the old hurt is marked *resolved*. It is still remembered, but it no longer comes to mind first.
+
+If a character is still nursing a grudge that the story has long since settled, a **keystone** memory (see [Recall Relevance](memory-recall-relevance.md#keystones-facts-set-in-stone)) stating the settled fact plainly ("I forgave him, and it is finished") is the most direct remedy.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

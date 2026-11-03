@@ -94,10 +94,6 @@ run(
   `Creating multi-platform manifest for ${channel}`
 );
 
-// Rebuild better-sqlite3 for the local platform (Docker build compiles for Linux)
-console.log('');
-run('npm rebuild better-sqlite3', 'Rebuilding better-sqlite3 for local development');
-
 console.log('');
 console.log('Done! Pushed:');
 console.log(`  ${IMAGE}:${version} (amd64 + arm64)`);

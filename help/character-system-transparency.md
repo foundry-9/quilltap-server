@@ -24,7 +24,7 @@ The wording is intentional. Switching the toggle on hands a non-trivial set of c
 A character whose System Transparency is **off** loses three things at once, regardless of any other setting elsewhere in Quilltap:
 
 1. **The `self_inventory` tool is withheld.** Even if the chat or the project has the tool turned on for everyone, this character will not be offered it. They cannot read off their own vault contents (nor the vaults of any groups they belong to), memory totals, conversation totals, assembled system prompt, last-turn LLM usage, nor the `context` ledger by which the tool enumerates this very chat, its project, their groups, the other characters seated alongside them, and the files attached to the conversation. Gone too is the **core-file checklist** (`vault.coreFiles`) — the nine files every character vault is meant to keep, from `properties.json` to `physical-prompts.json`, each marked present, empty or missing, with a line on what belongs inside — and the **holdings** tally, which counts the garments and outfits within reach, the Inventory's objects, kits and archetypes (and how many are in hand in this chat), and the custom tools the character may run, each split by whether it lives in their own vault, a group's, the project's or Quilltap General.
-2. **Messages from the Staff are filtered from the character's view of the conversation.** Any announcement authored by the Lantern (image generations), Aurora (avatar refreshes), the Librarian (Document Mode opens and saves), Prospero, or the Host is stripped out of the messages handed to the LLM on this character's turn. The user still sees those messages in the chat — only the opaque character is spared them.
+2. **The Staff go unnamed in the character's view of the conversation.** An announcement authored by the Lantern (image generations), Aurora (avatar refreshes), the Librarian (Document Mode opens and saves), Prospero, or the Host still reaches the character — it is news of the scene, after all — but in its plain, persona-free wording, with no Staff member's name or voice attached. And because a shared room ought to share one reality, the rule is chat-wide: if *any* character in the conversation keeps their transparency off, every character in it hears the Staff in that plain wording. The user still sees the full, named version in the chat — only the models are spared the names. An established fact posted from the [Deus Ex Machina](deus-ex-machina.md) tab follows the same rule: transparent rooms hear the Host make it known, opaque rooms hear it with no speaker at all.
 3. **Every character vault is closed to the document tools.** None of the `doc_*` family — `doc_read_file`, `doc_list_files`, `doc_grep`, `doc_write_file`, and so on — will resolve a path that points at a character vault. Not the character's own vault. Not a peer's vault, even when Shared Vaults is enabled at the chat level. Nor will the reserved `self` shorthand find anything to point at. **Nor are they so much as named.** A vault that cannot be opened is not listed either: `doc_list_files` and `doc_grep`, asked to survey everything within reach, return the group, project and general shelves and make no mention of a vault — a discretion that would be rather undone by reciting the titles on a locked cabinet before declining to unlock it.
 
    **Vaults, and nothing besides.** Group stores, project-linked stores, and Quilltap General remain perfectly accessible — and a character's *group* stores are hers by membership, not by transparency, so the shelf her club keeps in common stays open to her whichever way this switch is thrown. Should you ever find an opaque character insisting she cannot reach a store she plainly belongs to, that is a fault and not a policy.
@@ -55,13 +55,14 @@ The setting follows the character through exports and imports: a `.qtap` charact
 
 ## Interaction with Chat- and Project-Level Settings
 
-The three things gated by System Transparency are each *also* configurable at the chat and project level — independently of the character. The character-level switch does not replace those settings; it overrides them in one direction only:
+Two of the three things gated by System Transparency are *also* configurable at the chat and project level, independently of the character. The character-level switch does not replace those settings; it overrides them in one direction only:
 
 - Chat or project disabled `self_inventory`? The character won't see it either.
-- Chat or project disabled Staff messages? The character won't see them either.
 - Chat or project disabled vault access for tools? The character won't see it either.
-- Chat or project enabled all three? The character with System Transparency **off** still sees none of them.
-- Chat or project enabled all three? The character with System Transparency **on** sees them subject to the chat/project rules.
+- Chat or project enabled both? The character with System Transparency **off** still sees neither.
+- Chat or project enabled both? The character with System Transparency **on** sees them subject to the chat/project rules.
+
+The Staff's names are the exception: there is no chat or project switch for them. They are decided by the room's cast alone, as described above — one opaque character, and the whole room hears the plain wording.
 
 In short: an opaque character is opaque, no matter what permissive setting is in force around them. A transparent character defers to whatever the chat and project would normally do.
 

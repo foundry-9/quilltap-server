@@ -21,7 +21,6 @@ import {
   isItemDocumentPath,
   isSafeItemFolderPath,
   isValidItemFolderPath,
-  normalizeItemFolderName,
   normalizeItemFolderPathOrRoot,
   resolveItemFolder,
   type ItemFolder,
@@ -96,11 +95,6 @@ const pathError = (message: string) => new InventoryFolderPathError(message);
 /** A folder an existing object carries, in normal form or the root. */
 export function normalizeInventoryFolderPathOrRoot(input: string | null | undefined): string {
   return normalizeItemFolderPathOrRoot(INVENTORY_FOLDER_RULES, input);
-}
-
-/** Normalise a folder *name* — one segment, as a rename takes it. */
-export function normalizeInventoryFolderName(input: string | null | undefined): string {
-  return normalizeItemFolderName(INVENTORY_FOLDER_RULES, input, pathError);
 }
 
 /** True when `path` is structurally safe to write under `Inventory/`. */

@@ -15,12 +15,14 @@ import { Icon } from '@/components/ui/icon'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import type { RoleplayTemplate } from '@/lib/schemas/template.types'
+import { InlineBrahmaProfileSelect } from '@/components/brahma-console/InlineBrahmaProfileSelect'
 
 interface ModelBehaviorCardProps {
   project: Project
   onAgentModeChange: (enabled: boolean | null) => void
   onAnswerConfirmationOverrideChange: (value: 'ON' | 'OFF' | null) => void
   onDefaultRoleplayTemplateChange: (templateId: string | null) => void
+  onBrahmaConnectionProfileChange: (profileId: string | null) => void
   expanded: boolean
   onToggle: () => void
   onProjectUpdate?: () => void
@@ -32,6 +34,7 @@ export function ModelBehaviorCard({
   onAgentModeChange,
   onAnswerConfirmationOverrideChange,
   onDefaultRoleplayTemplateChange,
+  onBrahmaConnectionProfileChange,
   expanded,
   onToggle,
   onProjectUpdate,
@@ -80,7 +83,7 @@ export function ModelBehaviorCard({
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Model Behavior</h3>
             <p className="qt-text-small qt-text-secondary">
-              Agent mode, roleplay template &amp; tool defaults
+              Agent mode, roleplay template, inline Brahma &amp; tool defaults
             </p>
           </div>
         </div>
@@ -149,6 +152,21 @@ export function ModelBehaviorCard({
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Inline Brahma engine */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface">
+            <h4 id={`${fieldId}-f3`} className="qt-label text-foreground mb-1">Inline Brahma Engine</h4>
+            <p className="qt-text-xs qt-text-secondary mb-2">
+              The connection profile Brahma consults on when summoned with <code>@Brahma:</code> or <code>@Brahma?</code> in this project&apos;s chats. Leave on inherit to use the engine named under Settings &rarr; Chat &rarr; Brahma Console.
+            </p>
+            <InlineBrahmaProfileSelect
+              ariaLabelledBy={`${fieldId}-f3`}
+              value={project.brahmaConnectionProfileId ?? null}
+              onChange={onBrahmaConnectionProfileChange}
+              inheritLabel="Inherit from global setting"
+              className="qt-input w-full max-w-xs"
+            />
           </div>
 
           {/* Default Tool Settings */}

@@ -7,7 +7,7 @@ import type { TurnState } from '@/lib/chat/turn-manager'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 import type { Message, CharacterData, ChatSettings } from '../types'
 import type { SwipeState } from '../hooks/useChatData'
-import type { RenderItem } from '../announcement-render-items'
+import { isCollapsedAnnouncement, type RenderItem } from '../announcement-render-items'
 import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
@@ -324,10 +324,10 @@ export function VirtualizedMessageList({
                   editContent={editContent}
                   viewSourceMessageIds={viewSourceMessageIds}
                   isSystemMessageCollapsed={
-                    // Carina reference answers always render as a full row (with
-                    // the answerer's avatar + the answer), never a collapsed chip.
-                    message.systemSender !== 'carina' &&
-                    !!message.systemSender && !expandedSystemMessageIds.has(message.id)
+                    // Same rule that packs chip groups, so an always-expanded
+                    // announcement (Carina, mail, Pascal, established fact) never
+                    // falls back to MessageRow's collapsed chip.
+                    isCollapsedAnnouncement(message, expandedSystemMessageIds)
                   }
                   onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                   swipeState={swipeState}

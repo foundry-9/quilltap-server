@@ -17,8 +17,12 @@ import './css/qt-components.css';
 /**
  * Theme decorator that wraps stories with theme context
  *
- * Applies the selected theme and color mode to the story container.
- * Themes are applied via data-theme attribute, color mode via .dark class.
+ * Applies the selected theme and color mode to the story container the way
+ * Quilltap applies them to <html>: data-theme is always set ("default" when no
+ * theme is chosen), the color mode is a .light or .dark class, and
+ * data-color-mode mirrors it. qt-components.css is compiled from the app, so
+ * its variable defaults sit on [data-theme] / [data-theme].dark and need the
+ * attribute present to apply.
  */
 export const ThemeDecorator: Decorator = (Story, context) => {
   const globals = context.globals as { theme?: string; colorMode?: string };
@@ -27,8 +31,9 @@ export const ThemeDecorator: Decorator = (Story, context) => {
 
   return (
     <div
-      data-theme={theme === 'default' ? undefined : theme}
-      className={colorMode === 'dark' ? 'dark' : ''}
+      data-theme={theme}
+      data-color-mode={colorMode === 'dark' ? 'dark' : 'light'}
+      className={colorMode === 'dark' ? 'dark' : 'light'}
       style={{
         padding: '2rem',
         minHeight: '100vh',

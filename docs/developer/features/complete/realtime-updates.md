@@ -238,6 +238,20 @@ Everything in §5 landed. The differences worth knowing:
   `topic-map` row, because the Salon's transcript is not a TanStack query. Design of record:
   [salon-realtime-transcript.md](salon-realtime-transcript.md).
 
+- **Later (2026-11): the item browsers got topics of their own.** `inventory` (the Inventory) and
+  then `wardrobe` (4.12, with the shared folder hooks) are published by their server *location* — the
+  one door every write to a tier's `Inventory/` or `Wardrobe/` folder goes through
+  (`lib/inventory/location.ts`, `lib/wardrobe/location.ts`) — once a write lands and only when it
+  changed something. Both are collection-wide (no id): `wardrobe` refreshes `queryKeys.wardrobe.lists`
+  and `folderLists`; `inventory` its lists, folders, archetype pickers and carried sets. In the job
+  child the location's publish is a no-op, so `topicsForWriteBatch` names the topic when a buffered
+  document-store write touches a path under `Wardrobe/` or `Inventory/` (and, for the wardrobe, any
+  buffered `wardrobe.*` repository write). The client's folder writes (`lib/hooks/use-item-folders.ts`)
+  leave their refresh to the topic while the socket is up and refresh by hand only while it is down
+  (`refreshUnlessRealtime`, `lib/query/refresh-unless-realtime.ts`). What a chat's cast *wears* or
+  *carries* stays the `chats` topic's. `__tests__/unit/lib/{inventory,wardrobe}/chokepoints.test.ts`
+  pin that every location write publishes and no read does.
+
 ### Verified
 
 Unit: bus coalescing, topic-map dispatch (including unknown-topic tolerance), `useNow` boundary

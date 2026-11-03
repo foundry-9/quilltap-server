@@ -33,13 +33,7 @@
 import type { Provider } from '@/lib/schemas/types';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search';
-import {
-  LITERAL_BOOST_CHARACTER,
-  LITERAL_BOOST_GROUP,
-  LITERAL_BOOST_PROJECT,
-  LITERAL_BOOST_GLOBAL,
-} from '@/lib/embedding/literal-boost';
-import { dedupeTierTriple } from '@/lib/mount-index/tiered-mount-pool';
+import { bucketMounts } from '@/lib/mount-index/reach';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { formatSelfUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { estimateTokens } from '@/lib/tokens/token-counter';
@@ -137,31 +131,17 @@ export async function retrieveKnowledgeForTurn(
   const candidateLimit = params.candidateLimit ?? DEFAULT_CANDIDATE_LIMIT;
   const inlineThreshold = params.inlineTokenThreshold ?? DEFAULT_INLINE_TOKEN_THRESHOLD;
 
-  // Build the tier plan, dropping duplicates between tiers so the same
-  // mount can't enter the pool twice if a user has somehow linked their
-  // character vault into a project, etc. Dedup is delegated to the shared
-  // `dedupeTierTriple` so the priority (character > group > project > global)
-  // stays identical to the scriptorium search / wardrobe / path resolver.
-  const { characterMountPointId, groupMountPointIds, projectMountPointIds, globalMountPointId } = dedupeTierTriple({
+  // Build the tier plan from the caller's pool. The pool comes from
+  // `resolveTieredMountPool`, already deduped (character > group > project >
+  // global), so it is bucketed as-is by the shared `bucketMounts` — the same
+  // tiers and literal-phrase boosts the scriptorium search uses.
+  const tiers: Array<{ tier: KnowledgeTier; mountPointIds: string[]; boost: number }> = bucketMounts({
     characterMountPointId: params.characterMountPointId ?? null,
+    participantMountPointIds: [],
     groupMountPointIds: params.groupMountPointIds ?? [],
     projectMountPointIds: params.projectMountPointIds ?? [],
     globalMountPointId: params.globalMountPointId ?? null,
   });
-
-  const tiers: Array<{ tier: KnowledgeTier; mountPointIds: string[]; boost: number }> = [];
-  if (characterMountPointId) {
-    tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER });
-  }
-  if ((groupMountPointIds ?? []).length > 0) {
-    tiers.push({ tier: 'group', mountPointIds: groupMountPointIds ?? [], boost: LITERAL_BOOST_GROUP });
-  }
-  if (projectMountPointIds.length > 0) {
-    tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT });
-  }
-  if (globalMountPointId) {
-    tiers.push({ tier: 'global', mountPointIds: [globalMountPointId], boost: LITERAL_BOOST_GLOBAL });
-  }
 
   if (tiers.length === 0) return empty;
 

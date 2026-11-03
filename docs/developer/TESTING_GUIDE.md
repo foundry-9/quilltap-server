@@ -26,7 +26,6 @@ Quilltap uses Jest for unit testing with the following goals:
 
 - **Unit tests** (`__tests__/unit/`) - Test individual functions, classes, and modules in isolation
 - **Integration tests** (`__tests__/integration/`) - Test API routes and multi-module interactions
-- **E2E tests** (Playwright) - Test complete user workflows in the browser
 
 This guide focuses on **unit tests**.
 

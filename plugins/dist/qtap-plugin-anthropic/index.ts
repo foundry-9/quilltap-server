@@ -56,6 +56,8 @@ const capabilities = {
   embeddings: false,
   webSearch: false,
   toolUse: true,
+  // API version 2026-10-21 refuses temperature/top_p/top_k on every model.
+  samplingParameters: false,
 } as const;
 
 /**
@@ -132,7 +134,7 @@ const optionsSchema: ProviderOptionsSchema = {
     },
     {
       title: 'Extended Thinking',
-      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, temperature and top_p are left at their defaults (extended thinking requires this), and max_tokens is raised above the budget if needed (the API requires budget ≥ 1024 and < max_tokens).",
+      helpText: "Let the model reason before answering. The reasoning is shown in chat (display only) and never re-fed to the model. While thinking is on, max_tokens is raised above the budget if needed (the API requires budget ≥ 1024 and < max_tokens).",
       fields: [
         {
           key: 'extendedThinking',

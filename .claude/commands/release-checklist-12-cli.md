@@ -20,7 +20,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
    - **Shell completions** shipped with the CLI (look for completion scripts under `packages/quilltap/`). New commands/flags must appear there.
    - [CLI.md](../../docs/developer/CLI.md) — developer-only notes: the Docker startup script, the bind planner, the sync module map, completion-template internals. Not a command reference; only update it when one of those changes.
    - Any other CLI tooling (man pages, `--help` text).
-4. Sanity-check the CLI still runs against a real instance (read-only by default; `--write` gates changes, and per project convention it's fine to `cd packages/quilltap && npm rebuild` if you hit a better-sqlite3 ABI mismatch):
+4. Sanity-check the CLI still runs against a real instance (read-only by default; `--write` gates changes):
    ```bash
    node packages/quilltap/bin/quilltap.js --data-dir <instance-root> --help
    ```

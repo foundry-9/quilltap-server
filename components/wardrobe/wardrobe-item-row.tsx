@@ -11,7 +11,7 @@
  *    column tab is active).
  *  - `[+]` icon that adds the item to a slot. For single-slot items this
  *    targets the item's only slot directly; for multi-slot items it opens
- *    a small popover that lets the user pick.
+ *    the shared `ItemActionMenu` to pick one.
  *  - `⋮` kebab menu with secondary actions: Edit, Generate image, toggle the
  *    default-outfit flag, Duplicate, Archive, Move to folder…, Copy to folder…, Move to another
  *    wardrobe…, Copy to another wardrobe…, and Delete. Which of these appear
@@ -34,8 +34,8 @@
  * …` / `Never worn`); an item read without a `wear` annotation is never worn.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { useClickOutside } from '@/hooks/useClickOutside'
+import { useMemo, useState } from 'react'
+import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
 import { WARDROBE_SLOT_META, isComposite as isCompositeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
@@ -150,26 +150,6 @@ export function WardrobeItemRow({
   const originLabel = wardrobeOriginLabel(item.origin)
   const selectMode = selection !== undefined
 
-  const [slotPickerOpen, setSlotPickerOpen] = useState(false)
-  const [kebabOpen, setKebabOpen] = useState(false)
-  const slotPickerRef = useRef<HTMLDivElement>(null)
-  const kebabRef = useRef<HTMLDivElement>(null)
-
-  // Popovers close on an outside click or Escape — the Escape swallowed in the
-  // capture phase so the enclosing dialog stays open.
-  const closeSlotPicker = useCallback(() => setSlotPickerOpen(false), [])
-  const closeKebab = useCallback(() => setKebabOpen(false), [])
-  useClickOutside(slotPickerRef, closeSlotPicker, {
-    enabled: slotPickerOpen,
-    onEscape: closeSlotPicker,
-    escapeCapture: true,
-  })
-  useClickOutside(kebabRef, closeKebab, {
-    enabled: kebabOpen,
-    onEscape: closeKebab,
-    escapeCapture: true,
-  })
-
   const components = useMemo(() => {
     if (!isComposite) return []
     const byId = new Map(allItems.map((i) => [i.id, i]))
@@ -177,15 +157,6 @@ export function WardrobeItemRow({
       .map((id) => byId.get(id))
       .filter((c): c is RowItem => Boolean(c))
   }, [allItems, item.componentItemIds, isComposite])
-
-  const handleAddClick = (): void => {
-    if (!onAddToSlot) return
-    if (item.types.length === 1) {
-      onAddToSlot(item, item.types[0])
-      return
-    }
-    setSlotPickerOpen((v) => !v)
-  }
 
   const addTooltip =
     item.types.length === 1
@@ -309,12 +280,13 @@ export function WardrobeItemRow({
           )}
 
           {/* Single-icon add button. For single-typed items it adds directly;
-              for multi-typed it opens a slot picker. */}
+              for multi-typed it opens a slot picker — the shared menu, fixed
+              to the viewport so the dialog's scrolling list cannot clip it. */}
           {inChat && onAddToSlot && (
-            <div className="relative">
+            item.types.length === 1 ? (
               <button
                 type="button"
-                onClick={handleAddClick}
+                onClick={() => onAddToSlot(item, item.types[0])}
                 disabled={selectMode}
                 className="qt-button-ghost qt-button-sm"
                 title={addTooltip}
@@ -322,205 +294,57 @@ export function WardrobeItemRow({
               >
                 +
               </button>
-              {slotPickerOpen && item.types.length > 1 && (
-                <div
-                  ref={slotPickerRef}
-                  className="absolute right-0 top-full mt-1 z-30 min-w-[10rem] rounded border qt-border-default qt-bg-default shadow-md"
-                >
-                  <ul className="divide-y qt-border-default">
-                    {item.types.map((slot) => (
-                      <li key={slot}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onAddToSlot(item, slot)
-                            setSlotPickerOpen(false)
-                          }}
-                          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
-                        >
-                          <span>{WARDROBE_SLOT_META[slot].label}</span>
-                          <SlotBadge slot={slot} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            ) : (
+              <ItemActionMenu
+                label={addTooltip}
+                trigger={{ content: '+', ariaLabel: addTooltip }}
+                disabled={selectMode}
+                room={240}
+                minWidthClass="min-w-[10rem]"
+                entries={item.types.map((slot) => ({
+                  key: `slot-${slot}`,
+                  label: (
+                    <span className="flex items-center justify-between gap-2">
+                      <span>{WARDROBE_SLOT_META[slot].label}</span>
+                      <SlotBadge slot={slot} />
+                    </span>
+                  ),
+                  onSelect: () => onAddToSlot(item, slot),
+                }))}
+              />
+            )
           )}
 
           {/* Kebab menu — item actions */}
-          <div className="relative" ref={kebabRef}>
-              <button
-                type="button"
-                onClick={() => setKebabOpen((v) => !v)}
-                disabled={selectMode}
-                className="qt-button-ghost qt-button-sm"
-                aria-label="More actions"
-                title="More actions"
-                aria-haspopup="menu"
-                aria-expanded={kebabOpen}
-              >
-                ⋮
-              </button>
-              {kebabOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
-                >
-                  <ul className="divide-y qt-border-default">
-                    {manageable && (
-                      <>
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setKebabOpen(false)
-                              onEdit(item)
-                            }}
-                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                          >
-                            Edit
-                          </button>
-                        </li>
-                        {onGenerateImage && (
-                          <li>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={isGeneratingImage}
-                              onClick={() => {
-                                setKebabOpen(false)
-                                onGenerateImage(item)
-                              }}
-                              className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
-                            >
-                              {isGeneratingImage ? 'Generating image…' : 'Generate image'}
-                            </button>
-                          </li>
-                        )}
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            disabled={isUpdatingDefault}
-                            onClick={() => {
-                              setKebabOpen(false)
-                              onToggleDefault(item)
-                            }}
-                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
-                          >
-                            {item.isDefault
-                              ? '☆ Unmark as default'
-                              : '★ Mark as default outfit item'}
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setKebabOpen(false)
-                              onDuplicate(item)
-                            }}
-                            className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                          >
-                            Duplicate
-                          </button>
-                        </li>
-                        {onToggleArchived && (
-                          <li>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setKebabOpen(false)
-                                onToggleArchived(item)
-                              }}
-                              className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                            >
-                              {item.archivedAt ? 'Restore from archive' : 'Archive'}
-                            </button>
-                          </li>
-                        )}
-                      </>
-                    )}
-                    {manageable && onMoveToFolder && (
-                      <li>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setKebabOpen(false)
-                            onMoveToFolder(item)
-                          }}
-                          className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                        >
-                          Move to folder…
-                        </button>
-                      </li>
-                    )}
-                    {manageable && onCopyToFolder && (
-                      <li>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setKebabOpen(false)
-                            onCopyToFolder(item)
-                          }}
-                          className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                        >
-                          Copy to folder…
-                        </button>
-                      </li>
-                    )}
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setKebabOpen(false)
-                          onMove(item)
-                        }}
-                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                      >
-                        Move to another wardrobe…
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setKebabOpen(false)
-                          onCopy(item)
-                        }}
-                        className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                      >
-                        Copy to another wardrobe…
-                      </button>
-                    </li>
-                    {manageable && (
-                      <li>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setKebabOpen(false)
-                            onDelete(item)
-                          }}
-                          className="block w-full text-left px-3 py-2 text-sm qt-text-destructive hover:qt-bg-muted"
-                        >
-                          Delete
-                        </button>
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </div>
+          <ItemActionMenu
+            disabled={selectMode}
+            entries={[
+              manageable && { key: 'edit', label: 'Edit', onSelect: () => onEdit(item) },
+              manageable && onGenerateImage && {
+                key: 'generate-image',
+                label: isGeneratingImage ? 'Generating image…' : 'Generate image',
+                disabled: isGeneratingImage,
+                onSelect: () => onGenerateImage(item),
+              },
+              manageable && {
+                key: 'default',
+                label: item.isDefault ? '☆ Unmark as default' : '★ Mark as default outfit item',
+                disabled: isUpdatingDefault,
+                onSelect: () => onToggleDefault(item),
+              },
+              manageable && { key: 'duplicate', label: 'Duplicate', onSelect: () => onDuplicate(item) },
+              manageable && onToggleArchived && {
+                key: 'archive',
+                label: item.archivedAt ? 'Restore from archive' : 'Archive',
+                onSelect: () => onToggleArchived(item),
+              },
+              manageable && onMoveToFolder && { key: 'move-to-folder', label: 'Move to folder…', onSelect: () => onMoveToFolder(item) },
+              manageable && onCopyToFolder && { key: 'copy-to-folder', label: 'Copy to folder…', onSelect: () => onCopyToFolder(item) },
+              { key: 'transfer-move', label: 'Move to another wardrobe…', onSelect: () => onMove(item) },
+              { key: 'transfer-copy', label: 'Copy to another wardrobe…', onSelect: () => onCopy(item) },
+              manageable && { key: 'delete', label: 'Delete', destructive: true, onSelect: () => onDelete(item) },
+            ]}
+          />
         </div>
       </div>
 

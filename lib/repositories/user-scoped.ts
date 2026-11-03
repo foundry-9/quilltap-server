@@ -32,6 +32,7 @@ import {
   type LLMLogCacheStatsRow,
 } from '@/lib/database/repositories';
 import { getRepositories, getRepositoriesSafe } from './factory';
+import type { GlobalMessageSearchHit } from '@/lib/database/repositories/chats-search.ops';
 import type {
   Character,
   ChatMetadata,
@@ -227,7 +228,7 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
   async searchMessagesGlobal(
     searchText: string,
     limit?: number
-  ): Promise<Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }>> {
+  ): Promise<GlobalMessageSearchHit[]> {
     const chats = await this.findAll();
     const chatIds = chats.map(c => c.id);
     return this.baseRepo.searchMessagesGlobal(chatIds, searchText, limit);

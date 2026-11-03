@@ -360,7 +360,7 @@ export default function RoleplayTemplatesTab() {
             aria-labelledby={editTitleId}
             tabIndex={-1}
             onKeyDown={handleEditFocusKeyDown}
-            className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4"
+            className="qt-dialog w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4"
           >
             <div className="p-6">
               <h2 id={editTitleId} className="qt-heading-3 mb-4">
@@ -886,7 +886,7 @@ export default function RoleplayTemplatesTab() {
             aria-labelledby={previewTitleId}
             tabIndex={-1}
             onKeyDown={handlePreviewFocusKeyDown}
-            className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4"
+            className="qt-dialog w-full max-w-3xl max-h-[90vh] overflow-y-auto mx-4"
           >
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">

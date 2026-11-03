@@ -10,8 +10,10 @@ import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals
 
 describe('Message Navigation Utilities', () => {
   // Import functions after mocks are set up
-  let navigateToMessage: typeof import('@/lib/chat/message-navigation').navigateToMessage
-  let getPendingMessageNavigation: typeof import('@/lib/chat/message-navigation').getPendingMessageNavigation
+  let requestMessageReveal: typeof import('@/lib/chat/message-navigation').requestMessageReveal
+  let takePendingMessageReveal: typeof import('@/lib/chat/message-navigation').takePendingMessageReveal
+  let revealRequestFromSalonHref: typeof import('@/lib/chat/message-navigation').revealRequestFromSalonHref
+  let MESSAGE_REVEAL_EVENT: string
   let scrollToMessage: typeof import('@/lib/chat/message-navigation').scrollToMessage
 
   beforeEach(() => {
@@ -24,8 +26,10 @@ describe('Message Navigation Utilities', () => {
     // Fresh import for each test
     jest.isolateModules(() => {
       const navModule = require('@/lib/chat/message-navigation')
-      navigateToMessage = navModule.navigateToMessage
-      getPendingMessageNavigation = navModule.getPendingMessageNavigation
+      requestMessageReveal = navModule.requestMessageReveal
+      takePendingMessageReveal = navModule.takePendingMessageReveal
+      revealRequestFromSalonHref = navModule.revealRequestFromSalonHref
+      MESSAGE_REVEAL_EVENT = navModule.MESSAGE_REVEAL_EVENT
       scrollToMessage = navModule.scrollToMessage
     })
   })
@@ -36,73 +40,53 @@ describe('Message Navigation Utilities', () => {
   })
 
   // ============================================================================
-  // navigateToMessage Tests
-  // Note: Full navigation tests require window.location mocking which is
-  // not possible in jsdom. Testing the storage and logging aspects only.
+  // Reveal requests (`?msg=` links)
   // ============================================================================
-  describe('navigateToMessage', () => {
-    // jsdom doesn't allow redefining window.location, so we test what we can
-    // by checking sessionStorage before the navigation call changes the page
+  describe('requestMessageReveal / takePendingMessageReveal', () => {
+    it('is taken once, by the chat it names', () => {
+      requestMessageReveal('chat-a', 'msg-1')
 
-    it('should store scroll message ID in sessionStorage', () => {
-      // Since navigateToMessage changes window.location.href which causes issues in tests,
-      // we test the sessionStorage operations separately via getPendingMessageNavigation
-      sessionStorage.setItem('scrollToMessageId', 'msg-test')
-      expect(sessionStorage.getItem('scrollToMessageId')).toBe('msg-test')
+      expect(takePendingMessageReveal('chat-b')).toBeNull()
+      expect(takePendingMessageReveal('chat-a')).toBe('msg-1')
+      expect(takePendingMessageReveal('chat-a')).toBeNull()
     })
 
-    it('should store highlight message ID in sessionStorage', () => {
-      sessionStorage.setItem('highlightMessageId', 'msg-test')
-      expect(sessionStorage.getItem('highlightMessageId')).toBe('msg-test')
+    it('announces the request to an open Salon', () => {
+      const listener = jest.fn()
+      window.addEventListener(MESSAGE_REVEAL_EVENT, listener)
+      requestMessageReveal('chat-a', 'msg-1')
+      window.removeEventListener(MESSAGE_REVEAL_EVENT, listener)
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({ chatId: 'chat-a', messageId: 'msg-1' })
     })
 
-    // Note: Full integration test for navigateToMessage with actual navigation
-    // would be covered in e2e/integration tests
+    it('replaces an earlier request', () => {
+      requestMessageReveal('chat-a', 'msg-1')
+      requestMessageReveal('chat-a', 'msg-2')
+
+      expect(takePendingMessageReveal('chat-a')).toBe('msg-2')
+    })
+
+    it('discards a malformed stored request', () => {
+      sessionStorage.setItem('pendingMessageReveal', '{not json')
+
+      expect(takePendingMessageReveal('chat-a')).toBeNull()
+      expect(sessionStorage.getItem('pendingMessageReveal')).toBeNull()
+    })
   })
 
-  // ============================================================================
-  // getPendingMessageNavigation Tests
-  // ============================================================================
-  describe('getPendingMessageNavigation', () => {
-    it('should return stored navigation values', () => {
-      sessionStorage.setItem('scrollToMessageId', 'msg-123')
-      sessionStorage.setItem('highlightMessageId', 'msg-123')
-
-      const result = getPendingMessageNavigation()
-
-      expect(result.scrollTo).toBe('msg-123')
-      expect(result.highlight).toBe('msg-123')
+  describe('revealRequestFromSalonHref', () => {
+    it('reads the chat and message from a Message search result link', () => {
+      expect(revealRequestFromSalonHref('/salon/chat-a?msg=msg-1')).toEqual({ chatId: 'chat-a', messageId: 'msg-1' })
+      expect(revealRequestFromSalonHref('/salon/chat-a/?x=1&msg=msg-1')).toEqual({ chatId: 'chat-a', messageId: 'msg-1' })
     })
 
-    it('should clear stored values after reading', () => {
-      sessionStorage.setItem('scrollToMessageId', 'msg-123')
-      sessionStorage.setItem('highlightMessageId', 'msg-123')
-
-      getPendingMessageNavigation()
-
-      expect(sessionStorage.getItem('scrollToMessageId')).toBeNull()
-      expect(sessionStorage.getItem('highlightMessageId')).toBeNull()
-    })
-
-    it('should return null values when nothing is stored', () => {
-      const result = getPendingMessageNavigation()
-
-      expect(result.scrollTo).toBeNull()
-      expect(result.highlight).toBeNull()
-    })
-
-    it('should handle navigation data when navigation is pending', () => {
-      sessionStorage.setItem('scrollToMessageId', 'msg-123')
-
-      const result = getPendingMessageNavigation()
-
-      expect(result.scrollTo).toBe('msg-123')
-    })
-
-    it('should return null values when no navigation is pending', () => {
-      const result = getPendingMessageNavigation()
-
-      expect(result.scrollTo).toBeNull()
+    it('returns null for links without a message', () => {
+      expect(revealRequestFromSalonHref('/salon/chat-a')).toBeNull()
+      expect(revealRequestFromSalonHref('/salon/chat-a?tab=x')).toBeNull()
+      expect(revealRequestFromSalonHref('/salon/new?msg=m')).toBeNull()
+      expect(revealRequestFromSalonHref('/aurora/x?msg=m')).toBeNull()
     })
   })
 

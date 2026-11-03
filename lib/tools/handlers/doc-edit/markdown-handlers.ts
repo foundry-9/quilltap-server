@@ -10,8 +10,6 @@
 import path from 'path';
 import {
   resolveDocEditPath,
-  readFileWithMtime,
-  writeFileWithMtimeCheck,
   isTextFile,
   parseFrontmatter,
   updateFrontmatterInContent,
@@ -22,6 +20,7 @@ import {
   type DocEditScope,
 } from '@/lib/doc-edit';
 import { postLibrarianWriteAnnouncement, contentHiddenFromCharacters } from '@/lib/services/librarian-notifications/writer';
+import { readDocument, writeDocument } from '@/lib/documents/core';
 
 import type { DocReadFrontmatterInput, DocReadFrontmatterOutput } from '../../doc-read-frontmatter-tool';
 import type { DocUpdateFrontmatterInput, DocUpdateFrontmatterOutput } from '../../doc-update-frontmatter-tool';
@@ -34,7 +33,6 @@ import {
   buildReadResolutionContext,
   buildWriteResolutionContext,
   resolveActorOrigin,
-  triggerReindexIfNeeded,
   uriForResolvedPath,
   assertCharacterMayRead,
   assertCharacterMayWrite,
@@ -60,7 +58,7 @@ export async function handleReadFrontmatter(
   }
 
   const uri = await uriForResolvedPath(resolved);
-  const { content } = await readFileWithMtime(resolved);
+  const { content } = await readDocument(resolved);
   const parsed = parseFrontmatter(content);
 
   if (parsed.data === null) {
@@ -114,7 +112,7 @@ export async function handleUpdateFrontmatter(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved);
+  const { content } = await readDocument(resolved);
 
   const newContent = updateFrontmatterInContent(
     content,
@@ -122,9 +120,7 @@ export async function handleUpdateFrontmatter(
     input.replace_all ?? false
   );
 
-  const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
-
-  await triggerReindexIfNeeded(resolved);
+  const { mtime } = await writeDocument(resolved, newContent);
 
   const editedUri = await uriForResolvedPath(resolved);
   const displayTitle = path.basename(input.path);
@@ -181,7 +177,7 @@ export async function handleReadHeading(
   }
 
   const uri = await uriForResolvedPath(resolved);
-  const { content } = await readFileWithMtime(resolved);
+  const { content } = await readDocument(resolved);
 
   try {
     const heading = findHeadingSection(content, headingArg, levelArg);
@@ -232,7 +228,7 @@ export async function handleUpdateHeading(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved);
+  const { content } = await readDocument(resolved);
 
   try {
     const heading = findHeadingSection(content, headingArg, levelArg);
@@ -243,9 +239,7 @@ export async function handleUpdateHeading(
       input.preserve_subheadings !== false
     );
 
-    const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
-
-    await triggerReindexIfNeeded(resolved);
+    const { mtime } = await writeDocument(resolved, newContent);
 
     const editedUri = await uriForResolvedPath(resolved);
     const displayTitle = path.basename(input.path);

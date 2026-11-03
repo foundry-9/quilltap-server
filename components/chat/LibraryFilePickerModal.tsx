@@ -11,7 +11,9 @@
  * Step 1 ("scope"): pick a source.
  * Step 2 ("browse-project" | "browse-gallery" | "browse-mount"): browse the
  *   selected source. The Gallery view is a custom thumbnail grid backed by
- *   `/api/v1/photos`; everything else delegates to `FileBrowser`.
+ *   `/api/v1/photos`; a project or a document store opens in the
+ *   Scriptorium's folder browser (pick mode); the General library is
+ *   `FileBrowser` over the legacy files table.
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -20,7 +22,10 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
-import FileBrowser, { type FileInfo, type FileBrowserMountPoint } from '@/components/files/FileBrowser'
+import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
+import { DocumentStoreBrowser } from '@/components/document-browser/DocumentStoreBrowser'
+import { ProjectStoreBrowser } from '@/components/document-browser/ProjectStoreBrowser'
+import type { DocumentEntry } from '@/components/document-browser/useDocumentStoreSource'
 
 interface LibraryFilePickerModalProps {
   isOpen: boolean
@@ -112,7 +117,7 @@ export default function LibraryFilePickerModal({
   const [step, setStep] = useState<Step>('scope')
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedScopeName, setSelectedScopeName] = useState<string>('General')
-  const [selectedMount, setSelectedMount] = useState<FileBrowserMountPoint | null>(null)
+  const [selectedMount, setSelectedMount] = useState<MountPointSummary | null>(null)
   const [linking, setLinking] = useState(false)
 
   const { data: projectsData, isLoading: projectsLoading } = useQuery({
@@ -215,12 +220,7 @@ export default function LibraryFilePickerModal({
   }, [])
 
   const handleMountScopeSelect = useCallback((mount: MountPointSummary) => {
-    setSelectedMount({
-      id: mount.id,
-      mountType: mount.mountType,
-      storeType: mount.storeType,
-      name: mount.name,
-    })
+    setSelectedMount(mount)
     setSelectedScopeName(mount.name)
     setStep('browse-mount')
   }, [])
@@ -294,6 +294,30 @@ export default function LibraryFilePickerModal({
       }
     },
     [chatId, linking, onFileLinked, onClose, attachMountFile]
+  )
+
+  // A file picked in the store browser (a project's store or any other).
+  const handlePickEntry = useCallback(
+    async (entry: DocumentEntry) => {
+      if (linking) return
+      try {
+        setLinking(true)
+        await attachMountFile(entry.mountPointId, entry.relativePath, entry.fileName)
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error)
+        console.error('[LibraryFilePickerModal] Failed to attach store file', {
+          chatId,
+          mountPointId: entry.mountPointId,
+          relativePath: entry.relativePath,
+          error: errorMessage,
+        })
+        showErrorToast(errorMessage || 'Failed to attach file')
+      } finally {
+        setLinking(false)
+      }
+    },
+    [chatId, linking, attachMountFile]
   )
 
   const handleGalleryPick = useCallback(
@@ -384,23 +408,29 @@ export default function LibraryFilePickerModal({
       {step === 'browse-project' && (
         <div className="min-h-[50vh] relative">
           {linking && <LinkingOverlay />}
-          <FileBrowser
-            projectId={selectedProjectId}
-            onFileClick={handleFileClick}
-            showUpload={false}
-          />
+          {selectedProjectId ? (
+            <div className="p-2">
+              <ProjectStoreBrowser projectId={selectedProjectId} onPickFile={handlePickEntry} scrollList />
+            </div>
+          ) : (
+            <FileBrowser
+              onFileClick={handleFileClick}
+            />
+          )}
         </div>
       )}
 
       {step === 'browse-mount' && selectedMount && (
         <div className="min-h-[50vh] relative">
           {linking && <LinkingOverlay />}
-          <FileBrowser
-            projectId={null}
-            mountPoint={selectedMount}
-            onFileClick={handleFileClick}
-            showUpload={false}
-          />
+          <div className="p-2">
+            <DocumentStoreBrowser
+              key={selectedMount.id}
+              storeId={selectedMount.id}
+              onPickFile={handlePickEntry}
+              scrollList
+            />
+          </div>
         </div>
       )}
 
@@ -524,7 +554,7 @@ function ScopeCard({
   return (
     <button
       onClick={onClick}
-      className="qt-card w-full text-left p-4 hover:bg-accent/50 transition-colors cursor-pointer flex items-center gap-3"
+      className="qt-card w-full text-left p-4 hover:qt-bg-surface-hover transition-colors cursor-pointer flex items-center gap-3"
     >
       <span className="text-xl">{icon}</span>
       <div>
@@ -587,7 +617,7 @@ function GalleryPanel({
               type="button"
               onClick={() => onPick(entry)}
               disabled={linking}
-              className="qt-card w-full text-left p-2 hover:bg-accent/50 transition-colors cursor-pointer disabled:opacity-50"
+              className="qt-card w-full text-left p-2 hover:qt-bg-surface-hover transition-colors cursor-pointer disabled:opacity-50"
               title={entry.caption || entry.fileName}
             >
               <img

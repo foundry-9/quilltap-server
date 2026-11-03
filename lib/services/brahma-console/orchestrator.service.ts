@@ -67,6 +67,7 @@ import { triggerContextSummaryCheck } from '@/lib/services/chat-message/memory-t
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
+import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 
 const logger = createServiceLogger('BrahmaConsoleOrchestrator')
 
@@ -120,7 +121,8 @@ export async function handleBrahmaConsoleMessage(
   userId: string,
   options: BrahmaConsoleSendOptions
 ): Promise<ReadableStream<Uint8Array>> {
-  const encoder = new TextEncoder()
+  // This route's client reads the pre-4.12 untagged-bag SSE shape.
+  const encoder = legacyFrameEncoder()
 
   return new ReadableStream({
     async start(controller) {

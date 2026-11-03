@@ -14,7 +14,7 @@
  * route is spelled.
  *
  * With `onOpen` the thumbnail is its own button (open the picture full screen
- * in `WardrobeImageViewer`). Leave it off where the thumbnail already sits
+ * in `ItemImageViewer`). Leave it off where the thumbnail already sits
  * inside a button — the pickers — since buttons do not nest.
  *
  * Design of record: docs/developer/features/complete/wardrobe-item-images.md §6.2–6.3

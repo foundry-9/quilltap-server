@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.11.1--bugfix.0-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.12.1--bugfix.0-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -61,7 +61,7 @@ That second question deserves a moment of your attention. As AI models grow more
 
 | | Desktop App | Docker | Node.js (`npx`) |
 | --- | --- | --- | --- |
-| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 24+ |
+| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 24+ (on Linux, glibc 2.35+: Ubuntu 22.04 / Debian 12 or newer) |
 | **First launch** | Double-click the app | Fast — pulls the container image | Fast — downloads app files, runs directly |
 | **AI sandbox** | ✅ in Docker mode · ❌ in Direct mode | ✅ Container isolation — the strongest option we ship | ❌ No isolation (runs with your permissions) |
 | **Best for** | A native window, managed updates, instance management — over any of the three back ends | Anyone who wants the AI kept behind a door; server deployments, Linux users | Quick evaluation, developers, the impatient |
@@ -132,7 +132,7 @@ npm run dev        # Development mode with hot reload
 npm run build && npm run start   # Production build
 ```
 
-Requires **Node.js 24+** and **git**. See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Docker images from source.
+Requires **Node.js 24+** and **git** (on Linux, glibc 2.35 or newer for the encrypted-SQLite driver). See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Docker images from source.
 
 ### Your First Ten Minutes
 
@@ -150,13 +150,13 @@ Whichever route you took, the first visit goes like this:
 
 Quilltap's subsystems are personified as the Staff of an Estate, and they speak up in the chat when something happens in the room. You'll meet them throughout the interface and the help pages; here is who they are and what they do. The long-form tour, with the mechanics behind each, is in [docs/FEATURES.md](docs/FEATURES.md).
 
-**The Salon** is the chat. It opens as a two-pane workspace of tabs — chats, documents, terminals, characters, settings — each staying live in the background, so a conversation streaming in one tab keeps going while you read a document beside it. Every open tab stays current the moment something changes, without a reload. Characters can draw **diagrams** right in a reply (Mermaid, Graphviz or plain SVG, hand-drawn or clean), and you can stop a reply mid-sentence or raise your hand to ask for the floor. **Document Mode** turns any chat into a side-by-side editor: prose in one pane, conversation in the other, the LLM aware of both.
+**The Salon** is the chat. It opens as a two-pane workspace of tabs — chats, documents, terminals, characters, settings — each staying live in the background, so a conversation streaming in one tab keeps going while you read a document beside it. Every open tab stays current the moment something changes, without a reload. Characters can draw **diagrams** right in a reply (Mermaid, Graphviz or plain SVG, hand-drawn or clean), and you can stop a reply mid-sentence or raise your hand to ask for the floor. Post a line as **established fact** — Deus Ex Machina — and it becomes true in the story, known to every character whether or not they were in the room, and carried into every summary and memory. The search bar looks in the open conversation first, and a hit from global search opens scrolled to the very message. **Document Mode** turns any chat into a side-by-side editor: prose in one pane, conversation in the other, the LLM aware of both.
 
 **Aurora** keeps the characters. A character is a persistent identity — personality, backstory, system prompts, pronouns, aliases, physical description — with a **private vault** of files on disk that you can hand-edit, version-control, or gift. Each can carry several named system prompts and scenarios, short per-chat **subprompts**, and **progressions** (a pregnancy, a cask maturing) whose elapsed time she hears reported. Aurora also runs the **wardrobe**: a persistent closet of garments and outfits, with pictures, folders, and a ledger of who wore what. Characters whose story has ended can be **archived** into a single encrypted bundle rather than deleted, and rehydrated later with nothing lost.
 
 **The Commonplace Book** is memory. It is deliberately not a transcript: a background model distills what characters *learn* — facts, preferences, relationship dynamics, the occasional memorable quote — the way a friend's memory works, by impression rather than recording. Memories that are used stay protected; memories merely admired fade to an archive shelf, where they remain searchable but are never whispered unbidden. Hand-written memories are never removed. Characters also remember each other, and keep a summary of every conversation they've taken part in. (When you need verbatim recall, the search bar at the top of every screen is your eidetic index — full-text search across every chat, memory, character, and document store.)
 
-**The Scriptorium** holds the documents. Projects organize work with custom instructions, folders, files, and scenarios. Document stores come in three flavors — **filesystem** (your files, under their own names, watched for outside edits), **Obsidian** (your vault, indexed without being taken over), and **database-backed** (files and binaries inside the encrypted index, with text extracted from PDFs and DOCX). Convert between them without re-embedding, or keep a store and a folder in step both ways with `npx quilltap sync`. Markdown rendering handles wikilinks, code, LaTeX, and PDF preview; semantic search spans the whole project.
+**The Scriptorium** holds the documents. Projects organize work with custom instructions, folders, files, and scenarios. Document stores come in three flavors — **filesystem** (your files, under their own names, watched for outside edits), **Obsidian** (your vault, indexed without being taken over), and **database-backed** (files and binaries inside the encrypted index, with text extracted from PDFs and DOCX). Every store, Document Mode's picker, the Wardrobe and the Inventory browse with one **folder browser** — breadcrumbs, search, select mode, moves, copies and hard links — and pictures, PDFs and Word files open in a read-only viewer. Convert between store types without re-embedding, or keep a store and a folder in step both ways with `npx quilltap sync`. Markdown rendering handles wikilinks, code, LaTeX, and PDF preview; semantic search spans the whole project.
 
 **Prospero** is the tool-user. In Agent Mode the AI uses tools iteratively — web search, image generation, file management, memory search, and any MCP server you connect — and you can invoke any tool yourself from the chat toolbar. Every connection profile can name an **understudy** to step in when a provider rejects a key, throttles, or times out; chains are short, never recurse, and never stick, so an outage heals itself.
 
@@ -288,11 +288,11 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **AI & LLM:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK
 
-**UI:** Tailwind CSS, TanStack Query, Lexical, SVAR File Manager, React Markdown, React Syntax Highlighter, KaTeX, PDF.js, sharp, Lucide Icons
+**UI:** Tailwind CSS, TanStack Query, Lexical, React Markdown, React Syntax Highlighter, KaTeX, PDF.js, sharp, Lucide Icons
 
 **Infrastructure:** Docker
 
-**Testing:** Jest, Playwright, Testing Library
+**Testing:** Jest, Testing Library
 
 **Build & Tooling:** tsx, cross-env
 

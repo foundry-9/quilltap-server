@@ -35,15 +35,15 @@ Override with `QUILLTAP_DATA_DIR` env var, `--data-dir` CLI flag, or `SQLITE_PAT
 
 ## Encryption
 
-All three databases are encrypted with **SQLCipher** (AES-256-CBC with HMAC-SHA512). The standard `sqlite3` CLI **cannot** open them.
+All three databases are encrypted with **ChaCha20-Poly1305**, the default cipher of SQLite3 Multiple Ciphers (the `better-sqlite3-multiple-ciphers` driver). They are not SQLCipher-format files: neither the standard `sqlite3` CLI nor `sqlcipher` can open them.
 
 ### How the key works
 
-1. A 32-byte random **pepper** (base64-encoded) is the actual SQLCipher key
+1. A 32-byte random **pepper** (base64-encoded) is the actual database key
 2. The pepper is wrapped with AES-256-GCM + PBKDF2 (600,000 iterations, SHA-256) and stored in the instance's single `data/quilltap.dbkey` file
 3. An optional user passphrase protects the `.dbkey` wrapper; without one, a sentinel value is used
 4. At runtime, the pepper lands in `process.env.ENCRYPTION_MASTER_PEPPER`
-5. SQLCipher receives it as a raw hex key: `PRAGMA key = "x'<hex>'"`
+5. Every connection receives it as a raw hex key, `PRAGMA key = "x'<hex>'"`, through `applySqlcipherKey()`; a raw key skips the driver's own PBKDF2
 
 ### Runtime PRAGMAs
 
@@ -1014,6 +1014,7 @@ CREATE TABLE "chat_messages" (
   "dangerFlags" TEXT DEFAULT NULL,
   "targetParticipantIds" TEXT DEFAULT NULL,
   "isSilentMessage" INTEGER DEFAULT NULL,
+  "isEstablishedFact" INTEGER DEFAULT NULL,   -- Deus Ex Machina: 1 on an operator USER row posted as established fact (true, known to everyone, needing no verification). Set only by recordOperatorPost; NULL everywhere else. The stored body is what was typed — the frame a model reads is applied at read time by lib/chat/established-fact.ts. The machine-delivered kind is a Host row (systemSender='host', systemKind='established-fact', participantId NULL, content = opaqueContent) and does not use this column. Added by add-established-fact-field-v1.
   "systemSender" TEXT DEFAULT NULL,
   "hostEvent" TEXT DEFAULT NULL,
   "systemKind" TEXT DEFAULT NULL,
@@ -1081,8 +1082,16 @@ CREATE TRIGGER "chat_messages_fts_au" AFTER UPDATE OF "content" ON "chat_message
 Facts that constrain anything touching this:
 
 - **Only eligible rows are indexed** — `type='message'`,
-  `role IN ('USER','ASSISTANT')`, non-null `content`. That is the filter global
-  search has always applied. Eligibility is decided at INSERT time only.
+  `role IN ('USER','ASSISTANT')`, non-null `content`, `systemSender IS NULL`,
+  `customAnnouncer IS NULL` (the same judgement as `isCharacterAuthoredMessage`).
+  Staff rows carry role `ASSISTANT`, so before #121 they were indexed too;
+  `reindex-chat-message-fts-character-only-v1` dropped them. The search query
+  re-applies the filter to the joined row. Eligibility is decided at INSERT
+  time only.
+- **A changed trigger definition is replaced, not skipped.**
+  `ensureChatMessageFtsSchema` compares each trigger's `sqlite_master.sql` with
+  the module's DDL (`staleChatMessageFtsTriggers`) and drops any that differ
+  before replaying `IF NOT EXISTS`.
 - **The triggers call `qt_text()`.** A connection that opens without the
   function fails any write to `chat_messages` with "no such function" — a loud
   failure instead of silent index drift.
@@ -1229,7 +1238,12 @@ CREATE TABLE "connection_profiles" (
   -- Quilltap may draft ONE further candidate of the same or better modelClass
   -- quality. Off by default (an auto-pick spends money at a provider the user
   -- did not choose for this call). See lib/llm/fallback/tier-picker.ts.
-  "allowTierFallback" INTEGER DEFAULT 0
+  "allowTierFallback" INTEGER DEFAULT 0,
+  -- The most images sent to this profile in one request (vision input). Some
+  -- models refuse a request carrying more than four. A Salon turn keeps the
+  -- newest and describes the rest in text. Read it only through
+  -- resolveMaxImagesPerRequest() (lib/llm/connection-profile-utils.ts).
+  "maxImagesPerRequest" INTEGER DEFAULT 4
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
@@ -1254,7 +1268,7 @@ columns. Everything else lives in the project's **official document store**
 | `description` | `description.md` | Markdown body |
 | `instructions` | `instructions.md` | Markdown body |
 | `state` | `state.json` | the JSON object |
-| `allowAnyCharacter`, `characterRoster`, `color`, `icon`, `defaultDisabledTools`, `defaultDisabledToolGroups`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultRoleplayTemplateId`, `defaultAlertCharactersOfLanternImages`, `storyBackgroundsEnabled`, `staticBackgroundImageId`, `storyBackgroundImageId`, `backgroundDisplayMode` | `properties.json` | one flat JSON object |
+| `allowAnyCharacter`, `characterRoster`, `color`, `icon`, `defaultDisabledTools`, `defaultDisabledToolGroups`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultRoleplayTemplateId`, `defaultAlertCharactersOfLanternImages`, `answerConfirmationOverride`, `brahmaConnectionProfileId` (4.12, inline `@Brahma` profile override), `storyBackgroundsEnabled`, `staticBackgroundImageId`, `storyBackgroundImageId`, `backgroundDisplayMode` | `properties.json` | one flat JSON object |
 
 The repository (`projects.repository.ts`) overlays these files on read
 (`applyProjectStoreOverlay`) and routes them back to the store on write, so the
@@ -1800,6 +1814,7 @@ Known keys (others may be present from migrations / startup hooks):
 - `memoryExtractionLimits` (4.4+) — JSON: `{enabled, maxPerHour, softStartFraction, softFloor}` (`maxPerHour` 1–10,000). Per-instance memory extraction rate limits, edited on the Extraction Grain card. Read by `lib/background-jobs/handlers/memory-extraction.ts` and the dry-run extraction route; updated by `POST /api/v1/memories?action=extraction-limits-config`. Migrated from `chat_settings.memoryExtractionLimits` for SINGLE_USER_ID by `migrate-extraction-knobs-to-instance-settings-v1`.
 - `memoryRecall` (4.7+) — JSON: `{scopePolicy: 'down-weight' | 'exclude', expandRelated: boolean, perTurnConversationSummaries: boolean}`. Per-instance Commonplace Book recall relevance settings. `scopePolicy` controls what happens to a `scope: narrow` memory whose `projectId` differs from the current chat's project (cross-project leakage): `down-weight` (default) applies a strong recall penalty, `exclude` filters it out entirely. `expandRelated` (default `false`, added in Phase 2) is the opt-in related-memory one-hop expansion toggle: when on, recall pulls each top hit's strongly-linked related memories in as extra candidates (capped at 3 per hit, 10 total), scores them against the same query embedding, and re-ranks the union. `perTurnConversationSummaries` (default `false`, added in 4.9) makes every turn's consolidated Commonplace Book whisper carry a freshly-searched relevant-past-conversations list from the character's vault `Conversation Summaries/` folder, reusing the vector the turn's memory search already embedded (no extra embedding call); off, that list refreshes only at chat start / character join, on each summary fold, and on retrospective turns. Read on the per-turn recall path (`lib/chat/context-manager.ts`, `lib/services/chat-message/pre-compute.service.ts`) via `getMemoryRecallSettings`; updated by `POST /api/v1/memories?action=recall-config`. No column on `chat_settings` (every memory knob lives instance-wide, behind `resolveMemorySettings`). Schema: `MemoryRecallSettingsSchema` in `lib/schemas/settings.types.ts`.
 - `dataRetention` (4.8+) — JSON: `{staleChatDays: number}` (1–3650, default 30). Per-instance stale-chat retention window: how many days a chat must sit with no *played* message (participant character or human user; feature whispers don't count) before the daily maintenance sweep collapses its regenerable data — superseded generated images, `chats.compressionCache`/`compiledIdentityStacks`, and the discardable `chat_messages` columns (`rawResponse`, `reasoningContent`, `reasoningSegments`, `renderedHtml`, `debugMemoryLogs`). Conversation-chunk embeddings are deliberately **not** touched (4.10+): they are ~1 KB each and are what lets semantic search reach old conversations. Resolved by `resolveStaleChatDays()` (`lib/background-jobs/maintenance/retention-constants.ts`); accessors in `lib/instance-settings`; updated by `PUT /api/v1/settings/data-retention` (Settings → Chat → Data Retention). Schema: `DataRetentionSettingsSchema` in `lib/schemas/settings.types.ts`.
+- `brahmaConsole` — JSON: `{maxAgentTurns: number, inlineConnectionProfileId?: UUID | null}` (`maxAgentTurns` 5–200, default 50). The Brahma Console's agent-turn budget (resolved by `resolveBrahmaMaxAgentTurns`) and, since 4.12, the connection profile the inline `@Brahma:` / `@Brahma?` answerer uses in Salon chats (null = the user's default profile; a project's `brahmaConnectionProfileId` in `properties.json` overrides it; resolved only by `resolveInlineBrahmaConnectionProfile` in `lib/services/brahma-console/inline-profile.ts`, which lets a stale id fall through). Updated by `PUT /api/v1/settings/brahma-console` (Settings → Chat → Brahma Console; the PUT merges over the stored value). Backup restore in new-account mode remaps `inlineConnectionProfileId`. Schema: `BrahmaConsoleSettingsSchema` in `lib/schemas/settings.types.ts`.
 - `taboo` (4.8+) — JSON: `{phrases: string[]}` (each 1–200 chars after trim, at most 500 entries, default `[]`). Per-instance list of phrases characters must never say. Normalized on write (trim, drop empties, case-insensitive dedupe, **user order preserved** — the rendering sits in the cacheable system-prompt prefix, so order is deliberately not sorted). Read once per turn by `buildContext()` (`lib/chat/context-manager.ts`) via `getTabooSettings` and rendered by `renderTabooSection` (`lib/chat/context/system-prompt-builder.ts`) between the universal math-formatting note and the per-turn tool instructions; an empty list renders no section at all. Updated by `PUT /api/v1/settings/taboo` (Settings → Chat → Taboo). Accessors in `lib/instance-settings`. Schema: `TabooSettingsSchema` in `lib/schemas/settings.types.ts`.
 - `lastMaintenanceSweepAt` (4.7+) — ISO 8601 timestamp of the last completed scheduled-maintenance pass. Written/read by `lib/background-jobs/scheduled-maintenance.ts` to skip the startup tick when a sweep ran within the last 20 h (dev-restart friendliness). Internal; not exported.
 - `lanternBackgroundsMountPointId` (4.3+) — UUID of the global "Lantern Backgrounds" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/lantern-store-bridge.ts`; written by `provision-lantern-backgrounds-mount-v1`. Used to land story-background job output and generic `generate_image` tool output when no project context is available.
@@ -2246,7 +2261,7 @@ Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last l
 
 | File | Purpose |
 |------|---------|
-| `lib/database/backends/sqlite/client.ts` | Main DB connection, SQLCipher key, PRAGMAs |
+| `lib/database/backends/sqlite/client.ts` | Main DB connection, encryption key, PRAGMAs |
 | `lib/database/backends/sqlite/llm-logs-client.ts` | LLM logs DB connection |
 | `lib/database/backends/sqlite/mount-index-client.ts` | Mount index DB connection |
 | `lib/database/backends/sqlite/backend.ts` | Backend lifecycle, initialization |

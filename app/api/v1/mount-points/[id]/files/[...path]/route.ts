@@ -2,6 +2,8 @@
  * Mount Points API v1 — Canonical per-file item endpoint.
  *
  * GET    /api/v1/mount-points/[id]/files/<path>  — Read file content
+ *          ?action=links        — every place the file's content appears
+ *          ?action=render-html  — a .docx as HTML, for the read-only viewer
  * PUT    /api/v1/mount-points/[id]/files/<path>  — Write/overwrite file content
  * DELETE /api/v1/mount-points/[id]/files/<path>  — Delete the file
  * PATCH  /api/v1/mount-points/[id]/files/<path>  — Rename and/or set description
@@ -25,6 +27,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createContextParamsHandler } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
@@ -34,6 +37,8 @@ import { moveFile, deleteFile } from '@/lib/mount-index/file-ops';
 import { FileOpError } from '@/lib/mount-index/file-op-error';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { fileOpStatus } from '@/lib/mount-index/file-op-status';
+import { renderDocxToHtml } from '@/lib/mount-index/converters/docx-html';
+import type { DocMountLinkLocation } from '@/lib/schemas/mount-index.types';
 
 type Params = { id: string; path: string[] };
 
@@ -66,56 +71,120 @@ const readQuerySchema = z.object({
   raw: z.coerce.boolean().optional(),
 });
 
-export const GET = createContextParamsHandler<Params>(
-  async (req: NextRequest, _ctx: RequestContext, { id, path }) => {
-    // Raw (still-encoded) join for error-logging context until we can safely
-    // decode; joinPath() may throw FileOpError on malformed encoding.
-    let relativePath = path.join('/');
-    try {
-      relativePath = joinPath(path);
-      const url = new URL(req.url);
-      const parsed = readQuerySchema.safeParse({
-        encoding: url.searchParams.get('encoding') ?? undefined,
-        offset: url.searchParams.get('offset') ?? undefined,
-        limit: url.searchParams.get('limit') ?? undefined,
-        raw: url.searchParams.get('raw') ?? undefined,
-      });
-      if (!parsed.success) {
-        return badRequest(`Invalid query: ${parsed.error.issues.map(i => i.message).join(', ')}`);
-      }
-
-      const accept = req.headers.get('accept') ?? '';
-      const wantsRaw = parsed.data.raw === true || accept.includes('application/octet-stream');
-
-      if (wantsRaw) {
-        const { bytes, mimeType, sha256, sizeBytes } = await readMountFileBytes(id, relativePath);
-        // Buffer is already a Uint8Array; hand back a bounds-respecting view
-        // (no copy). The Response honours byteOffset/byteLength, so a pooled
-        // Buffer can't bleed neighbouring bytes. The cast satisfies the DOM
-        // BodyInit type, which wants Uint8Array<ArrayBuffer> rather than the
-        // ArrayBufferLike-generic view.
-        const body = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-        return new NextResponse(body as unknown as BodyInit, {
-          status: 200,
-          headers: {
-            'Content-Type': mimeType,
-            'Content-Length': String(sizeBytes),
-            'Cache-Control': 'private, max-age=3600',
-            'X-File-Sha256': sha256,
-          },
-        });
-      }
-
-      const result = await readMountFile(id, relativePath, {
-        encoding: parsed.data.encoding,
-        offset: parsed.data.offset,
-        limit: parsed.data.limit,
-      });
-      return successResponse(result);
-    } catch (error) {
-      return handleFileOpError(error, 'read file', { mountPointId: id, relativePath });
+async function handleRead(req: NextRequest, id: string, path: string[]): Promise<NextResponse> {
+  // Raw (still-encoded) join for error-logging context until we can safely
+  // decode; joinPath() may throw FileOpError on malformed encoding.
+  let relativePath = path.join('/');
+  try {
+    relativePath = joinPath(path);
+    const url = new URL(req.url);
+    const parsed = readQuerySchema.safeParse({
+      encoding: url.searchParams.get('encoding') ?? undefined,
+      offset: url.searchParams.get('offset') ?? undefined,
+      limit: url.searchParams.get('limit') ?? undefined,
+      raw: url.searchParams.get('raw') ?? undefined,
+    });
+    if (!parsed.success) {
+      return badRequest(`Invalid query: ${parsed.error.issues.map(i => i.message).join(', ')}`);
     }
+
+    const accept = req.headers.get('accept') ?? '';
+    const wantsRaw = parsed.data.raw === true || accept.includes('application/octet-stream');
+
+    if (wantsRaw) {
+      const { bytes, mimeType, sha256, sizeBytes } = await readMountFileBytes(id, relativePath);
+      // Buffer is already a Uint8Array; hand back a bounds-respecting view
+      // (no copy). The Response honours byteOffset/byteLength, so a pooled
+      // Buffer can't bleed neighbouring bytes. The cast satisfies the DOM
+      // BodyInit type, which wants Uint8Array<ArrayBuffer> rather than the
+      // ArrayBufferLike-generic view.
+      const body = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      return new NextResponse(body as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          'Content-Type': mimeType,
+          'Content-Length': String(sizeBytes),
+          'Cache-Control': 'private, max-age=3600',
+          'X-File-Sha256': sha256,
+        },
+      });
+    }
+
+    const result = await readMountFile(id, relativePath, {
+      encoding: parsed.data.encoding,
+      offset: parsed.data.offset,
+      limit: parsed.data.limit,
+    });
+    return successResponse(result);
+  } catch (error) {
+    return handleFileOpError(error, 'read file', { mountPointId: id, relativePath });
   }
+}
+
+/** `?action=links`: every place this file's content appears, and which are hard-linked to it. */
+async function handleLinks(ctx: RequestContext, id: string, path: string[]): Promise<NextResponse> {
+  let relativePath = path.join('/');
+  try {
+    relativePath = joinPath(path);
+    const { repos } = ctx;
+    const link = await repos.docMountFileLinks.findByMountPointAndPath(id, relativePath);
+    if (!link) return notFound('File');
+    const siblings = await repos.docMountFileLinks.findByFileId(link.fileId);
+    const grouped = link.linkGroupId
+      ? await repos.docMountFileLinks.findByLinkGroupId(link.linkGroupId)
+      : [];
+    // A grouped sibling normally shares the content row; one mid-write may not
+    // yet, so the group is unioned in.
+    const byId = new Map([...siblings, ...grouped].map((l) => [l.id, l]));
+    const names = new Map<string, string>();
+    for (const mountPointId of new Set(Array.from(byId.values()).map((l) => l.mountPointId))) {
+      const mp = await repos.docMountPoints.findById(mountPointId);
+      names.set(mountPointId, mp?.name ?? 'Unknown store');
+    }
+    const locations: DocMountLinkLocation[] = Array.from(byId.values())
+      .map((l) => ({
+        linkId: l.id,
+        mountPointId: l.mountPointId,
+        mountPointName: names.get(l.mountPointId) ?? 'Unknown store',
+        relativePath: l.relativePath,
+        grouped: Boolean(link.linkGroupId) && l.linkGroupId === link.linkGroupId,
+        self: l.id === link.id,
+      }))
+      .sort((a, b) => Number(b.self) - Number(a.self) || a.mountPointName.localeCompare(b.mountPointName) || a.relativePath.localeCompare(b.relativePath));
+    logger.debug('[Mount Points v1] Listed file locations', { mountPointId: id, relativePath, count: locations.length });
+    return successResponse({ linkGroupId: link.linkGroupId ?? null, locations });
+  } catch (error) {
+    return handleFileOpError(error, 'list file locations', { mountPointId: id, relativePath });
+  }
+}
+
+/** `?action=render-html`: a `.docx` as HTML for the read-only viewer. */
+async function handleRenderHtml(id: string, path: string[]): Promise<NextResponse> {
+  let relativePath = path.join('/');
+  try {
+    relativePath = joinPath(path);
+    const { bytes, fileType } = await readMountFileBytes(id, relativePath);
+    if (fileType !== 'docx' && !relativePath.toLowerCase().endsWith('.docx')) {
+      return badRequest('Only .docx files can be rendered to HTML');
+    }
+    const { html, warnings } = await renderDocxToHtml(bytes);
+    logger.debug('[Mount Points v1] Rendered DOCX for viewing', { mountPointId: id, relativePath, warnings: warnings.length });
+    return successResponse({ html });
+  } catch (error) {
+    return handleFileOpError(error, 'render file', { mountPointId: id, relativePath });
+  }
+}
+
+export const GET = createContextParamsHandler<Params>(
+  async (req: NextRequest, ctx: RequestContext, { id, path }) =>
+    dispatchAction(
+      req,
+      {
+        links: () => handleLinks(ctx, id, path),
+        'render-html': () => handleRenderHtml(id, path),
+      },
+      () => handleRead(req, id, path),
+    ),
 );
 
 // ============================================================================

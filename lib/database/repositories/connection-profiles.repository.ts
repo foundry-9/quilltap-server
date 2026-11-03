@@ -16,6 +16,32 @@ import {
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 import { getCollection, ensureCollection } from '../manager';
+import { acceptsSamplingParameters } from '@/lib/plugins/provider-validation';
+import { withoutSamplingParameters } from '@/lib/llm/sampling-params';
+
+/**
+ * Drop the sampling keys from a parameters blob bound for a provider that
+ * refuses them (`capabilities.samplingParameters: false`). Every profile write
+ * passes through here, so an editor save, an auto-configure, an import or a
+ * restore cannot put back what the provider would reject.
+ */
+function sanitizeParametersForProvider(
+  provider: string,
+  parameters: Record<string, unknown>,
+  profileId?: string
+): Record<string, unknown> {
+  if (acceptsSamplingParameters(provider)) return parameters;
+  const { parameters: cleaned, removed } = withoutSamplingParameters(parameters);
+  if (removed.length > 0) {
+    logger.debug('Stripped sampling parameters the provider does not accept', {
+      context: 'ConnectionProfilesRepository',
+      profileId,
+      provider,
+      removed,
+    });
+  }
+  return cleaned;
+}
 
 /**
  * Connection Profiles Repository
@@ -70,7 +96,12 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
   ): Promise<ConnectionProfile> {
     return this.safeQuery(
       async () => {
-        const profile = await this._create(data, options);
+        const profile = await this._create(
+          data.parameters
+            ? { ...data, parameters: sanitizeParametersForProvider(data.provider, data.parameters) }
+            : data,
+          options
+        );
 
         logger.info('Connection profile created successfully', {
           profileId: profile.id,
@@ -91,7 +122,24 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
   async update(id: string, data: Partial<ConnectionProfile>): Promise<ConnectionProfile | null> {
     return this.safeQuery(
       async () => {
-        const profile = await this._update(id, data);
+        // A change of provider can make the stored parameters wrong even when
+        // the patch does not carry them, so either field re-checks the blob.
+        let patch = data;
+        if (data.parameters !== undefined || data.provider !== undefined) {
+          const existing = data.provider !== undefined && data.parameters !== undefined
+            ? null
+            : await this.findById(id);
+          const provider = data.provider ?? existing?.provider;
+          const parameters = data.parameters ?? existing?.parameters;
+          if (provider && parameters) {
+            const cleaned = sanitizeParametersForProvider(provider, parameters, id);
+            if (cleaned !== parameters) {
+              patch = { ...data, parameters: cleaned };
+            }
+          }
+        }
+
+        const profile = await this._update(id, patch);
 
         if (profile) {
           logger.info('Connection profile updated successfully', { profileId: id });

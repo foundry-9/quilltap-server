@@ -18,6 +18,7 @@ import { useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { parseHrefToIntent } from '@/lib/navigation/route-to-intent'
+import { requestMessageReveal, revealRequestFromSalonHref } from '@/lib/chat/message-navigation'
 
 export function useWorkspaceNavigate(): (href: string) => void {
   const ws = useWorkspaceOptional()
@@ -29,6 +30,8 @@ export function useWorkspaceNavigate(): (href: string) => void {
         const intent = parseHrefToIntent(href)
         if (intent) {
           ws.openTab(intent.kind, intent.payload)
+          const reveal = revealRequestFromSalonHref(href)
+          if (reveal) requestMessageReveal(reveal.chatId, reveal.messageId)
           return
         }
       }

@@ -14,6 +14,7 @@ import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connectio
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
+import { MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -749,7 +750,13 @@ export function ProfileModal({
             {!isCourier && (
             <div className="border-t qt-border-default pt-4">
               <h4 className="font-medium text-sm mb-3">Model Parameters (Optional)</h4>
-              <div className="grid grid-cols-3 gap-4">
+              {!reqs.supportsSamplingParameters && (
+                <p className="qt-text-xs mb-3">
+                  This provider chooses its own temperature and Top P; only the token ceiling is yours to set.
+                </p>
+              )}
+              <div className={reqs.supportsSamplingParameters ? 'grid grid-cols-3 gap-4' : 'grid grid-cols-1 gap-4'}>
+                {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="temperature" className="block qt-text-label mb-2">
                     Temperature ({form.formData.temperature})
@@ -766,6 +773,7 @@ export function ProfileModal({
                   />
                   <p className="qt-text-xs mt-1">0 = deterministic, 2 = creative</p>
                 </div>
+                )}
 
                 <div>
                   <label htmlFor="maxTokens" className="block qt-text-label mb-2">
@@ -787,6 +795,7 @@ export function ProfileModal({
                   </p>
                 </div>
 
+                {reqs.supportsSamplingParameters && (
                 <div>
                   <label htmlFor="topP" className="block qt-text-label mb-2">
                     Top P ({form.formData.topP})
@@ -803,6 +812,7 @@ export function ProfileModal({
                   />
                   <p className="qt-text-xs mt-1">Nucleus sampling (0-1)</p>
                 </div>
+                )}
               </div>
             </div>
             )}
@@ -945,6 +955,29 @@ export function ProfileModal({
                   Supports image attachments (vision input)
                 </label>
               </div>
+              {form.formData.supportsImageUpload && (
+                <div className="ml-6">
+                  <label htmlFor="maxImagesPerRequest" className="block qt-text-label mb-2">
+                    Most images per request
+                  </label>
+                  <input
+                    type="number"
+                    id="maxImagesPerRequest"
+                    name="maxImagesPerRequest"
+                    value={form.formData.maxImagesPerRequest}
+                    onChange={(e) => form.setField('maxImagesPerRequest', e.target.value)}
+                    min="1"
+                    max={MAX_IMAGES_PER_REQUEST_CEILING}
+                    step="1"
+                    className="qt-input"
+                    aria-describedby="maxImagesPerRequest-hint"
+                  />
+                  <p id="maxImagesPerRequest-hint" className="qt-text-xs mt-1">
+                    Some models refuse a request with more than a handful of pictures. When a turn
+                    gathers more than this, the newest are sent and the rest are described in words.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"

@@ -2,6 +2,10 @@
  * Mount Points API v1 - Mount Point Files Endpoint
  *
  * GET /api/v1/mount-points/[id]/files - List indexed files for a mount point
+ *
+ * `{ files, folders }`: every file as a browser row (`DocMountBrowserEntry` —
+ * no extracted text, plus its hard-link group and how many locations share
+ * its content), and every folder path (empty ones included).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,7 +30,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
       }
 
       const [files, folderRows] = await Promise.all([
-        repos.docMountFiles.findByMountPointId(id),
+        repos.docMountFileLinks.listForBrowser(id),
         repos.docMountFolders.findByMountPointId(id),
       ]);
 
@@ -49,6 +53,11 @@ export const GET = createContextParamsHandler<{ id: string }>(
       }
 
       const folders = Array.from(folderSet);
+      logger.debug('[Mount Points v1] Listed files for browser', {
+        mountPointId: id,
+        files: files.length,
+        folders: folders.length,
+      });
 
       return NextResponse.json({ files, folders });
     } catch (error) {

@@ -9,9 +9,9 @@
  * - write-document: Write file content from the document editor
  * - rename-document: Rename the active document's file (filesystem or database-backed)
  *
- * The file mechanics (path resolution, blank-document naming, read/write with
- * mtime checks, rename/delete moves) live in the shared core
- * `lib/documents/operator-doc-actions`, which the chat-less standalone route
+ * The file mechanics live in the document core (`lib/documents/core`), reached
+ * through the operator layer (`lib/documents/operator-doc-actions` and
+ * `operator-doc-http`), which the chat-less standalone route
  * (`/api/v1/documents`) drives too. This module adds what is chat-specific:
  * chat_documents row tracking, the chat's documentMode flag, and Librarian
  * announcements.
@@ -23,29 +23,33 @@ import { logger } from '@/lib/logger';
 import { successResponse, badRequest, notFound, serverError, errorResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { DocEditScope } from '@/lib/doc-edit';
-import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveCastPool } from '@/lib/mount-index/reach';
 import {
   resolveOperatorDocPath,
-  resolvedPathExists,
   classifyResolvedTarget,
-  openDocumentFile,
   listAllEnabledStores,
+  resolveGeneralLibrary,
   documentAccessContextForChat,
-  DocumentMissingError,
+  storeOptionFor,
   type DocumentAccessContext,
   type AccessibleStoreOption,
+  type LibraryTarget,
 } from '@/lib/documents/operator-doc-actions';
+import { documentExists, sweepChatDocumentsAfterMove } from '@/lib/documents/core';
 import {
   documentTargetFields,
   openDocumentFields,
   writeDocumentFields,
+  resolveDocumentForRoute,
+  openDocumentResponse,
+  openedDocumentPayload,
   readDocumentResponse,
   writeDocumentResponse,
   resolveRenameTarget,
   renameDocumentResponse,
-  sweepRenamedDocumentTracking,
   deleteDocumentResponse,
   dedupeRecentDocuments,
+  recentDocumentsResponse,
   type DocumentHttpLog,
 } from '@/lib/documents/operator-doc-http';
 import {
@@ -57,8 +61,6 @@ import {
   documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/error-utils';
-import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import path from 'path';
@@ -124,6 +126,15 @@ async function getChatContext(
   return documentAccessContextForChat(chat);
 }
 
+/** The document a chat_documents row names, as the operator layer addresses it. */
+function documentTargetOf(doc: ChatDocument): { filePath: string; scope: DocEditScope; mountPoint?: string } {
+  return {
+    filePath: doc.filePath,
+    scope: doc.scope as DocEditScope,
+    mountPoint: doc.mountPoint ?? undefined,
+  };
+}
+
 /** How this route's log lines name the file, and the chat they belong to. */
 function documentLog(chatId: string): DocumentHttpLog {
   return { subject: 'document', fields: { chatId } };
@@ -176,21 +187,7 @@ export async function handleRecentDocuments(
       fromOtherChats: ordered.length - thisChatReturned,
     });
 
-    return successResponse({
-      documents: ordered.map(doc => ({
-        id: doc.id,
-        chatId: doc.chatId,
-        filePath: doc.filePath,
-        scope: doc.scope,
-        mountPoint: doc.mountPoint,
-        displayTitle: doc.displayTitle,
-        // "Continue editing" only makes sense for the doc active in THIS chat;
-        // an other-chat row is offered as a fresh "Reopen" here.
-        isActive: doc.isActive && doc.chatId === chatId,
-        fromCurrentChat: doc.chatId === chatId,
-        updatedAt: doc.updatedAt,
-      })),
-    });
+    return recentDocumentsResponse(ordered, chatId);
   } catch (error) {
     logger.error('Failed to get recent documents', {
       chatId,
@@ -207,13 +204,6 @@ export async function handleRecentDocuments(
  * has no official mount (legacy on-disk project files — the button falls back
  * to `project` scope there).
  */
-export interface ProjectLibraryTarget {
-  mountPointId: string;
-  /** Canonical mount name — what `document_store` opens resolve against. */
-  name: string;
-  mountType: 'filesystem' | 'obsidian' | 'database';
-}
-
 /**
  * Document stores reachable from this chat, for the Open-Document picker's
  * right-column accordions. Mirrors `collectAccessibleMountPointIds`: every
@@ -224,22 +214,19 @@ export interface ProjectLibraryTarget {
  * Group Files / Database-backed / Filesystem-backed. Group stores carry
  * `isGroupStore: true` so they bucket into Group Files regardless of backing.
  *
- * Only the project's *official* mount is held back — that one is the dedicated
- * left-column "Project library" button (returned separately as `projectLibrary`
- * so the button can browse/open the real mount). Quilltap General is NOT held
- * back: the left-column "General library" button still points at the legacy
- * on-disk general store, so the Quilltap General *mount* would otherwise be
- * unreachable.
+ * Two stores are held back, because each has its own left-column button: the
+ * project's *official* mount ("Project library", returned as `projectLibrary`)
+ * and Quilltap General ("General library", returned as `generalLibrary`).
  *
  * When `opts.all` is set (the picker's "look everywhere" mode) the chat-reach
  * restriction is dropped and EVERY enabled store is returned — character vaults
  * labelled by their owning character's name — still holding back only the
- * project-official mount. The operator may open any of these because the
+ * project-official mount and Quilltap General. The operator may open any of these because the
  * operator document actions resolve with `operatorOverride`.
  */
 export async function handleAccessibleStores(
   chatId: string,
-  { repos }: RequestContext,
+  { repos, user }: RequestContext,
   opts: { all?: boolean } = {}
 ): Promise<NextResponse> {
   try {
@@ -248,11 +235,13 @@ export async function handleAccessibleStores(
       return notFound('Chat');
     }
 
-    // The project's official mount is surfaced as the left-column "Project
-    // library" button, so keep it out of the accordions to avoid duplication.
-    // (Quilltap General is intentionally NOT excluded — see the doc comment.)
+    // The project's official mount and Quilltap General are the left-column
+    // "Project library" and "General library" buttons, so keep them out of
+    // the accordions to avoid duplication.
     const seen = new Set<string>();
-    let projectLibrary: ProjectLibraryTarget | null = null;
+    const generalLibrary = await resolveGeneralLibrary(repos);
+    if (generalLibrary) seen.add(generalLibrary.mountPointId);
+    let projectLibrary: LibraryTarget | null = null;
     if (chat.projectId) {
       const project = await repos.projects.findById(chat.projectId);
       if (project?.officialMountPointId) {
@@ -268,17 +257,15 @@ export async function handleAccessibleStores(
       }
     }
 
-    // Group stores reachable from this chat: the union of every group's
-    // official + linked stores across all (non-removed) character participants.
-    // Surfaced as their own "Group Files" bucket in both default and
-    // look-everywhere modes. Resolved once and reused to tag/collect below.
-    const groupMountIds = new Set<string>();
-    for (const participant of chat.participants) {
-      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
-      if (participant.status === 'removed') continue;
-      const ids = await resolveGroupMountPointIdsForCharacter(participant.characterId);
-      for (const id of ids) groupMountIds.add(id);
-    }
+    // The chat's reach as a cast: every live character participant's vault,
+    // the union of their groups' stores, the project's stores and General —
+    // one walk (`resolveCastPool`). The group tier is surfaced as its own
+    // "Group Files" bucket in both default and look-everywhere modes.
+    const castIds = chat.participants
+      .filter((p) => p.type === 'CHARACTER' && !!p.characterId && p.status !== 'removed')
+      .map((p) => p.characterId as string);
+    const reach = await resolveCastPool({ userId: user.id, projectId: chat.projectId ?? null, characterIds: castIds });
+    const groupMountIds = new Set(reach.groupMountPointIds);
 
     let stores: AccessibleStoreOption[];
 
@@ -286,84 +273,39 @@ export async function handleAccessibleStores(
       // "Look everywhere": every enabled store, regardless of chat reach.
       stores = await listAllEnabledStores(repos, { exclude: seen, groupMountIds });
     } else {
-      // Default: only stores reachable from this chat.
+      // Default: only stores reachable from this chat, nearest tier first
+      // (character > group > project).
       stores = [];
 
       // 1. Participant character vaults.
-      for (const participant of chat.participants) {
-        if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
-        if (participant.status === 'removed') continue;
-        const vault = await getCharacterVaultStore(participant.characterId);
-        if (!vault || seen.has(vault.mountPointId)) continue;
-        const mp = await repos.docMountPoints.findById(vault.mountPointId);
+      for (const { characterId, mountPointId } of reach.castVaults) {
+        if (seen.has(mountPointId)) continue;
+        const mp = await repos.docMountPoints.findById(mountPointId);
         if (!mp) continue;
-        const character = await repos.characters.findById(participant.characterId);
-        stores.push({
-          mountPointId: mp.id,
-          name: mp.name,
-          label: character?.name ?? mp.name,
-          kind: 'character' as const,
-          mountType: mp.mountType,
-          storeType: mp.storeType,
-          characterId: participant.characterId,
-        });
+        const character = await repos.characters.findById(characterId);
+        stores.push(storeOptionFor(mp, 'character', {
+          owner: { id: characterId, name: character?.name },
+        }));
         seen.add(mp.id);
       }
 
       // 2. Group stores — official + linked stores of every group a character
-      //    participant belongs to. Resolved above; collected before project
-      //    links so group precedence holds (character > group > project).
-      for (const id of groupMountIds) {
+      //    participant belongs to.
+      for (const id of reach.groupMountPointIds) {
         if (seen.has(id)) continue;
         const mp = await repos.docMountPoints.findById(id);
         if (!mp || !mp.enabled) continue;
-        stores.push({
-          mountPointId: mp.id,
-          name: mp.name,
-          label: mp.name,
-          kind: 'document-store' as const,
-          mountType: mp.mountType,
-          storeType: mp.storeType,
-          isGroupStore: true,
-        });
+        stores.push(storeOptionFor(mp, 'document-store', { isGroupStore: true }));
         seen.add(mp.id);
       }
 
       // 3. Document stores linked to the chat's project.
-      if (chat.projectId) {
-        const links = await repos.projectDocMountLinks.findByProjectId(chat.projectId);
-        for (const link of links) {
-          if (seen.has(link.mountPointId)) continue;
-          const mp = await repos.docMountPoints.findById(link.mountPointId);
-          if (!mp) continue;
-          stores.push({
-            mountPointId: mp.id,
-            name: mp.name,
-            label: mp.name,
-            kind: 'document-store' as const,
-            mountType: mp.mountType,
-            storeType: mp.storeType,
-          });
-          seen.add(mp.id);
-        }
-      }
-
-      // 4. Quilltap General — always accessible to every chat, so it always
-      // appears (under Database-backed, normally). Mirrors path-resolver.
-      const generalId = await getGeneralMountPointId();
-      if (generalId && !seen.has(generalId)) {
-        const mp = await repos.docMountPoints.findById(generalId);
-        if (mp?.enabled) {
-          stores.push({
-            mountPointId: mp.id,
-            name: mp.name,
-            label: mp.name,
-            kind: 'document-store' as const,
-            mountType: mp.mountType,
-            storeType: mp.storeType,
-          });
-          seen.add(mp.id);
-        }
+      for (const id of reach.projectMountPointIds) {
+        if (seen.has(id)) continue;
+        const mp = await repos.docMountPoints.findById(id);
+        if (!mp) continue;
+        stores.push(storeOptionFor(mp, 'document-store'));
+        seen.add(mp.id);
       }
     }
 
@@ -372,13 +314,14 @@ export async function handleAccessibleStores(
       mode: opts.all ? 'all' : 'chat',
       total: stores.length,
       hasProjectLibrary: projectLibrary !== null,
+      hasGeneralLibrary: generalLibrary !== null,
       characterVaults: stores.filter(s => s.storeType === 'character').length,
       groupStores: stores.filter(s => s.isGroupStore).length,
       databaseStores: stores.filter(s => s.storeType === 'documents' && s.mountType === 'database' && !s.isGroupStore).length,
       filesystemStores: stores.filter(s => s.storeType === 'documents' && s.mountType !== 'database' && !s.isGroupStore).length,
     });
 
-    return successResponse({ stores, projectLibrary });
+    return successResponse({ stores, projectLibrary, generalLibrary });
   } catch (error) {
     logger.error('Failed to resolve accessible document stores', {
       chatId,
@@ -493,26 +436,18 @@ export async function handleOpenDocument(
     ? 'general'
     : requestedScope;
 
-  let opened;
-  try {
-    opened = await openDocumentFile(chatContext, {
-      filePath: data.filePath,
-      title: data.title,
-      scope: effectiveScope,
-      mountPoint: data.mountPoint,
-      targetFolder: data.targetFolder,
-    });
-  } catch (error) {
-    if (error instanceof DocumentMissingError) {
-      // 404 (not 400) so the client can distinguish a genuinely missing file
-      // from a malformed request and surface a friendly toast instead of the
-      // dev error overlay.
-      return errorResponse(error.message, 404);
-    }
-    return serverError(`Failed to create blank document: ${getErrorMessage(error)}`);
+  const result = await openDocumentResponse(chatContext, {
+    filePath: data.filePath,
+    title: data.title,
+    scope: effectiveScope,
+    mountPoint: data.mountPoint,
+    targetFolder: data.targetFolder,
+  }, documentLog(chatId));
+  if (!result.ok) {
+    return result.response;
   }
-
-  const { filePath, displayTitle, content, mtime } = opened;
+  const { opened } = result;
+  const { filePath, displayTitle, content } = opened;
 
   try {
     const doc = await repos.chatDocuments.openDocument(chatId, {
@@ -540,15 +475,13 @@ export async function handleOpenDocument(
     });
 
     return successResponse({
-      document: {
+      ...openedDocumentPayload(opened, {
         id: doc.id,
         filePath: doc.filePath,
         scope: doc.scope,
         mountPoint: doc.mountPoint,
         displayTitle: doc.displayTitle,
-      },
-      content,
-      mtime,
+      }),
       librarianMessage: librarianMessage ?? null,
     });
   } catch (error) {
@@ -659,7 +592,7 @@ export async function handleResolveDocument(
       characterId: selfCharacterId,
     });
 
-    const exists = await resolvedPathExists(resolved);
+    const exists = await documentExists(resolved);
     const kind = exists ? await classifyResolvedTarget(context.repos, resolved) : 'other'
     return successResponse({ exists, kind });
   } catch (error) {
@@ -692,7 +625,6 @@ export async function handleWriteDocument(
 
   const written = await writeDocumentResponse(
     chatContext,
-    context.repos,
     {
       filePath: data.filePath,
       scope: data.scope as DocEditScope,
@@ -746,13 +678,13 @@ export async function handleRenameDocument(
     return badRequest('No active document to rename');
   }
 
-  const target = resolveRenameTarget(doc.filePath, data.newTitle);
-  if (!target.ok) {
-    return target.response;
+  const renameTarget = resolveRenameTarget(doc.filePath, data.newTitle);
+  if (!renameTarget.ok) {
+    return renameTarget.response;
   }
-  const { newFilePath, newDisplayTitle } = target;
+  const { newFilePath, newDisplayTitle } = renameTarget;
 
-  if (target.unchanged) {
+  if (renameTarget.unchanged) {
     return successResponse({
       document: {
         id: doc.id,
@@ -769,25 +701,14 @@ export async function handleRenameDocument(
     return badRequest('Chat not found');
   }
 
+  const target = documentTargetOf(doc);
+  const resolution = await resolveDocumentForRoute(chatContext, target, documentLog(chatId), 'rename');
+  if (!resolution.ok) {
+    return resolution.response;
+  }
+  const resolvedOld = resolution.resolved;
   // Capture the read-policy BEFORE the rename moves the link off the old path,
   // so a character_read:false document isn't announced to characters.
-  let resolvedOld;
-  try {
-    resolvedOld = await resolveOperatorDocPath(chatContext, {
-      scope: doc.scope as DocEditScope,
-      filePath: doc.filePath,
-      mountPoint: doc.mountPoint ?? undefined,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.warn('Failed to resolve document path for rename', {
-      chatId,
-      from: doc.filePath,
-      to: newFilePath,
-      error: message,
-    });
-    return badRequest(`Could not resolve path: ${message}`);
-  }
   const hiddenFromCharacters = await documentHiddenFromCharacters(
     resolvedOld.mountPointId,
     resolvedOld.relativePath,
@@ -795,13 +716,8 @@ export async function handleRenameDocument(
 
   const renamed = await renameDocumentResponse(
     chatContext,
-    repos,
-    {
-      scope: doc.scope as DocEditScope,
-      mountPoint: doc.mountPoint ?? undefined,
-      oldFilePath: doc.filePath,
-      newFilePath,
-    },
+    resolvedOld,
+    { scope: target.scope, mountPoint: target.mountPoint, oldFilePath: target.filePath, newFilePath },
     documentLog(chatId),
   );
   if (!renamed.ok) {
@@ -817,16 +733,16 @@ export async function handleRenameDocument(
   // Sweep any other chats' (or the standalone) recent-document rows still
   // pointing at the old path. The row above is already at newFilePath, so it
   // won't re-match here.
-  await sweepRenamedDocumentTracking(
-    repos,
+  await sweepChatDocumentsAfterMove(
     {
       scope: doc.scope,
       mountPoint: doc.mountPoint,
+      mountPointId: resolvedOld.mountPointId,
       oldFilePath: doc.filePath,
       newFilePath,
       newDisplayTitle,
     },
-    documentLog(chatId),
+    { repos, logFields: { chatId } },
   );
 
   const librarianMessage = await postLibrarianRenameAnnouncement({
@@ -878,22 +794,12 @@ export async function handleDeleteDocument(
     return badRequest('Chat not found');
   }
 
-  let resolved;
-  try {
-    resolved = await resolveOperatorDocPath(chatContext, {
-      scope: doc.scope as DocEditScope,
-      filePath: doc.filePath,
-      mountPoint: doc.mountPoint ?? undefined,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.warn('Failed to resolve document path for delete', {
-      chatId,
-      filePath: doc.filePath,
-      error: message,
-    });
-    return badRequest(`Could not resolve path: ${message}`);
+  const target = documentTargetOf(doc);
+  const resolution = await resolveDocumentForRoute(chatContext, target, documentLog(chatId), 'delete');
+  if (!resolution.ok) {
+    return resolution.response;
   }
+  const { resolved } = resolution;
 
   // Capture the read-policy BEFORE the delete removes the link row, so a
   // character_read:false document isn't announced to characters.
@@ -902,15 +808,7 @@ export async function handleDeleteDocument(
     resolved.relativePath,
   );
 
-  const deleted = await deleteDocumentResponse(
-    chatContext,
-    {
-      scope: doc.scope as DocEditScope,
-      mountPoint: doc.mountPoint ?? undefined,
-      filePath: doc.filePath,
-    },
-    documentLog(chatId),
-  );
+  const deleted = await deleteDocumentResponse(resolved, target, documentLog(chatId));
   if (!deleted.ok) {
     return deleted.response;
   }

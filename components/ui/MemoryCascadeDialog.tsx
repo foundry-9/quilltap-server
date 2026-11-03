@@ -74,7 +74,7 @@ export function MemoryCascadeDialog({
         <p className="qt-text-small mb-4">What would you like to do with the memories?</p>
 
         <div className="space-y-2 mb-4">
-          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-accent/50 transition-colors">
+          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
             <input
               type="radio"
               name="cascadeAction"
@@ -91,7 +91,7 @@ export function MemoryCascadeDialog({
             </div>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-accent/50 transition-colors">
+          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
             <input
               type="radio"
               name="cascadeAction"
@@ -108,7 +108,7 @@ export function MemoryCascadeDialog({
             </div>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-accent/50 transition-colors">
+          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
             <input
               type="radio"
               name="cascadeAction"
@@ -126,7 +126,7 @@ export function MemoryCascadeDialog({
           </label>
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer mb-6 p-2 rounded-lg hover:bg-accent/50 transition-colors">
+        <label className="flex items-center gap-2 cursor-pointer mb-6 p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
           <input
             type="checkbox"
             checked={rememberChoice}

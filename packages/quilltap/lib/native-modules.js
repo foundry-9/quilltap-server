@@ -1,9 +1,15 @@
 'use strict';
 
-// Shared helpers for keeping native modules compiled against the current Node
-// ABI. Used by both the runtime CLI entry (bin/quilltap.js) and the package's
-// `postinstall` hook, so a fresh install picks up the correct binaries up front
-// and a later Node upgrade still self-heals on first run.
+// Shared helpers for keeping native modules *usable* under the running Node.
+// Used by both the runtime CLI entry (bin/quilltap.js) and the package's
+// `postinstall` hook.
+//
+// The SQLCipher driver (better-sqlite3-multiple-ciphers, aliased as
+// better-sqlite3) is a Node-API addon that ships one prebuilt binary per
+// platform inside its npm tarball, so there is nothing to compile and no Node
+// ABI to drift. The only ways it can fail to load are a platform with no
+// prebuild or a host libc older than the binary; we detect and explain those,
+// never rebuild. sharp and node-pty keep their `npm rebuild` heal.
 
 const path = require('path');
 const { execSync } = require('child_process');
@@ -21,123 +27,61 @@ function resolveModuleDir(moduleName) {
   }
 }
 
-// Locate the SQLCipher binding (better-sqlite3-multiple-ciphers, aliased as
-// better-sqlite3). Returns the absolute path to better_sqlite3.node, or null.
+const SUPPORTED_DRIVER_TARGETS = [
+  'darwin-x64', 'darwin-arm64',
+  'linux-x64', 'linux-arm64',
+  'linuxmusl-x64', 'linuxmusl-arm64',
+  'win32-x64', 'win32-arm64',
+];
+const GLIBC_FLOOR = '2.35';
+
+// Which SQLCipher binding file would the driver's loader pick on this host?
+// Asks the package's own `lib/binding.js#getPrebuildPath()` (required by
+// absolute path on purpose: the package's `exports` map blocks the subpath
+// form). A v12 or from-source copy has no prebuilds, so fall back to the
+// from-source build/ location to describe that install truthfully. Returns the absolute
+// path, or null when neither exists.
 function betterSqlite3BindingPath() {
+  const fs = require('fs');
   const modDir = resolveModuleDir('better-sqlite3-multiple-ciphers')
               || resolveModuleDir('better-sqlite3');
   if (!modDir) return null;
-  return path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
-}
-
-// Read the Node ABI (NODE_MODULE_VERSION) a node-gyp/NAN addon was compiled
-// against, by scanning for its `node_register_module_v<ABI>` export — a few-KB
-// byte read, no dlopen, no rebuild. Returns the ABI as a string, or null when
-// the symbol is absent (e.g. an N-API build, which is ABI-stable) or unreadable.
-function readCompiledAbi(bindingPath) {
   try {
-    const buf = require('fs').readFileSync(bindingPath);
-    const m = /node_register_module_v(\d+)/.exec(buf.toString('latin1'));
-    return m ? m[1] : null;
+    const prebuild = require(path.join(modDir, 'lib', 'binding.js')).getPrebuildPath();
+    if (prebuild) return prebuild;
   } catch {
-    return null;
+    // older layout — no lib/binding.js
   }
+  const built = path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
+  return fs.existsSync(built) ? built : null;
 }
 
-// True when the SQLCipher binding is missing or was built for a different Node
-// ABI than the one we're running. Reads the compiled-for ABI straight from the
-// binary; only falls back to an actual load probe if the symbol can't be read.
-function betterSqlite3NeedsRebuild() {
-  const bindingPath = betterSqlite3BindingPath();
-  if (!bindingPath) return true; // unresolvable → needs (re)build
-  if (!require('fs').existsSync(bindingPath)) return true;
-  const compiledAbi = readCompiledAbi(bindingPath);
-  if (compiledAbi) return compiledAbi !== process.versions.modules;
-  // Symbol unreadable — fall back to the authoritative dlopen probe.
-  try {
-    require(bindingPath);
-    return false;
-  } catch (err) {
-    return !!(err.message && err.message.includes('NODE_MODULE_VERSION'));
+// Turn a failed driver load into a reason the user can act on. Pure; exported
+// for tests. Returns { kind, message, hint }.
+function classifyDriverLoadFailure({ platform, arch, prebuildPath, error }) {
+  if (!prebuildPath) {
+    return {
+      kind: 'unsupported-platform',
+      message: `the SQLCipher driver has no prebuilt binary for ${platform}-${arch}.`,
+      hint: `Supported targets: ${SUPPORTED_DRIVER_TARGETS.join(', ')}. ` +
+        'On anything else, run the Quilltap Docker image.',
+    };
   }
-}
-
-// Locate an executable installed by a dependency, given the package directory
-// that needs it. Checks the package's own `.bin` first, then the `.bin` beside
-// it (the hoisted case, which is the usual one). Returns null when absent.
-function findBinFor(pkgDir, tool) {
-  const fs = require('fs');
-  const names = process.platform === 'win32' ? [`${tool}.cmd`, `${tool}.exe`, tool] : [tool];
-  const dirs = [
-    path.join(pkgDir, 'node_modules', '.bin'),  // nested install
-    path.join(pkgDir, '..', '.bin'),            // hoisted alongside the package
-  ];
-  for (const dir of dirs) {
-    for (const name of names) {
-      const candidate = path.join(dir, name);
-      if (fs.existsSync(candidate)) return candidate;
-    }
+  const errMessage = (error && error.message) || String(error || 'unknown error');
+  const glibc = /GLIBC_(\d+\.\d+)/.exec(errMessage);
+  if (glibc) {
+    return {
+      kind: 'glibc-too-old',
+      message: `the SQLCipher driver needs glibc ${GLIBC_FLOOR} or newer ` +
+        `(this host lacks GLIBC_${glibc[1]}).`,
+      hint: 'Use Ubuntu 22.04, Debian 12, RHEL 9 or newer, or run the Quilltap Docker image.',
+    };
   }
-  return null;
-}
-
-// Rebuild ONE native package in place, addressed by its directory.
-//
-// Deliberately does NOT go through `npm rebuild <name>`, which fails this job
-// two different ways:
-//
-//   1. npm refuses install scripts for any package not listed in the root
-//      package.json `allowScripts` map (keyed `name@version`). The root
-//      SQLCipher copy is installed under the ALIAS `better-sqlite3`, which is
-//      not a key there, so the rebuild dies with EALLOWSCRIPTS.
-//   2. Asking for the real name (`better-sqlite3-multiple-ciphers`) at the root
-//      instead resolves a phantom directory: npm reports "rebuilt dependencies
-//      successfully" and the binding on disk is untouched. A success message is
-//      worse than an error.
-//
-// Running the package's own build chain (`prebuild-install || node-gyp rebuild`,
-// exactly what its `install` script does) in its own directory sidesteps both:
-// no name resolution, no npm script policy. `prebuild-install` downloads the
-// prebuilt binary for the running ABI and needs network; node-gyp compiles and
-// needs a toolchain.
-//
-// Returns { ok, reason }. Never throws. Verifies the result rather than trusting
-// the exit code — see (2): the whole failure mode here is a rebuild that claims
-// to have worked.
-function rebuildNativePackage(pkgDir, bindingPath) {
-  const fs = require('fs');
-  if (!fs.existsSync(pkgDir)) return { ok: false, reason: `no package at ${pkgDir}` };
-
-  const before = fs.existsSync(bindingPath) ? readCompiledAbi(bindingPath) : null;
-  const attempts = [];
-
-  const prebuild = findBinFor(pkgDir, 'prebuild-install');
-  if (prebuild) attempts.push({ label: 'prebuild-install', cmd: `"${prebuild}"` });
-
-  const nodeGyp = findBinFor(pkgDir, 'node-gyp');
-  if (nodeGyp) attempts.push({ label: 'node-gyp rebuild', cmd: `"${nodeGyp}" rebuild --release` });
-
-  if (attempts.length === 0) {
-    return { ok: false, reason: 'neither prebuild-install nor node-gyp is installed' };
-  }
-
-  const failures = [];
-  for (const attempt of attempts) {
-    try {
-      execSync(attempt.cmd, { cwd: pkgDir, stdio: 'inherit' });
-    } catch (err) {
-      failures.push(`${attempt.label}: ${err.message.split('\n')[0]}`);
-      continue;
-    }
-    // Trust nothing but the binary. A tool can exit 0 having done nothing.
-    const after = fs.existsSync(bindingPath) ? readCompiledAbi(bindingPath) : null;
-    if (after === process.versions.modules) return { ok: true, reason: attempt.label };
-    failures.push(
-      `${attempt.label}: exited 0 but the binding is still ${after ?? 'missing'} ` +
-      `(wanted ${process.versions.modules}${before ? `, was ${before}` : ''})`,
-    );
-  }
-  return { ok: false, reason: failures.join('; ') };
+  return {
+    kind: 'load-failed',
+    message: `the SQLCipher driver failed to load: ${errMessage.split('\n')[0]}`,
+    hint: 'Reinstall the quilltap package; if it persists, file an issue quoting the line above.',
+  };
 }
 
 // Rebuild the named native modules against the current Node ABI. Prints a
@@ -163,36 +107,30 @@ function rebuildModules(moduleNames) {
   }
 }
 
-// Fast pre-flight for the ONE ABI-fragile native module every DB path needs:
-// better-sqlite3-multiple-ciphers (SQLCipher). sharp and node-pty are N-API and
-// ABI-stable, so they can't hit this failure. Detects an ABI mismatch from the
-// binary itself and rebuilds before anything tries to load it, so a Node upgrade
-// self-heals instead of throwing. Cheap no-op when already healthy. Never throws.
+// Fast pre-flight for the SQLCipher driver every DB path needs. Loads the
+// binding the driver would pick; when it won't load, prints why and what to do.
+// Prints nothing when healthy, never rebuilds, never throws. Returns true when
+// the binding loads, false otherwise.
 function ensureDatabaseNativeModule() {
+  let prebuildPath = null;
+  let error = null;
   try {
-    if (!betterSqlite3NeedsRebuild()) return true;
-  } catch {
-    return true; // detection hiccup — let the real load be the source of truth
+    prebuildPath = betterSqlite3BindingPath();
+    if (prebuildPath) require(prebuildPath);
+  } catch (err) {
+    error = err;
   }
+  if (prebuildPath && !error) return true;
 
-  const bindingPath = betterSqlite3BindingPath();
-  if (!bindingPath) {
-    console.error('  Warning: could not locate the SQLCipher binding to rebuild.');
-    return false;
-  }
-  // build/Release/better_sqlite3.node → the package directory above it.
-  const pkgDir = path.resolve(path.dirname(bindingPath), '..', '..');
-
-  console.log(`  Rebuilding the SQLCipher binding for Node.js ${process.version}...`);
-  const result = rebuildNativePackage(pkgDir, bindingPath);
-  if (result.ok) {
-    console.log(`  Done (${result.reason}).`);
-    console.log('');
-    return true;
-  }
+  const { message, hint } = classifyDriverLoadFailure({
+    platform: process.platform,
+    arch: process.arch,
+    prebuildPath,
+    error,
+  });
   console.error('');
-  console.error(`  Warning: failed to rebuild the SQLCipher binding — ${result.reason}`);
-  console.error(`  Try running: (cd ${pkgDir} && ./node_modules/.bin/prebuild-install)`);
+  console.error(`  Warning: ${message}`);
+  console.error(`  Try: ${hint}`);
   console.error('');
   return false;
 }
@@ -239,21 +177,14 @@ function reconcileNodePtySpawnHelper() {
   }
 }
 
-// Check if native modules are compiled for the current Node.js version.
-// This handles the case where npx caches the package but the user upgrades
-// Node.js — the cached native modules will have a stale NODE_MODULE_VERSION.
-// Returns true if everything was healthy or successfully rebuilt; false on
-// rebuild failure. Never throws.
+// Check that native modules load under the current Node.js version. sharp and
+// node-pty are rebuilt when npx cached them under an older Node; the SQLCipher
+// driver is only checked and explained (see ensureDatabaseNativeModule).
+// Returns true if everything was healthy or successfully rebuilt; false
+// otherwise. Never throws.
 function ensureNativeModules() {
+  const driverOk = ensureDatabaseNativeModule();
   const needsRebuild = [];
-
-  // Check better-sqlite3-multiple-ciphers (provides SQLCipher encryption support).
-  // The main app depends on this via an npm alias as 'better-sqlite3', so we must
-  // ensure the SQLCipher-capable version is available and link it as 'better-sqlite3'.
-  // This is the only ABI-fragile binding — detected straight from the binary.
-  if (betterSqlite3NeedsRebuild()) {
-    needsRebuild.push('better-sqlite3-multiple-ciphers');
-  }
 
   // Check sharp: loads its native binding eagerly on require.
   try {
@@ -283,19 +214,16 @@ function ensureNativeModules() {
 
   if (needsRebuild.length === 0) {
     reconcileNodePtySpawnHelper();
-    return true;
+    return driverOk;
   }
 
-  return rebuildModules(needsRebuild);
+  return rebuildModules(needsRebuild) && driverOk;
 }
 
 module.exports = {
   resolveModuleDir,
-  readCompiledAbi,
   betterSqlite3BindingPath,
-  betterSqlite3NeedsRebuild,
-  findBinFor,
-  rebuildNativePackage,
+  classifyDriverLoadFailure,
   ensureDatabaseNativeModule,
   ensureNativeModules,
   reconcileNodePtySpawnHelper,

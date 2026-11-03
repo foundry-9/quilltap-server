@@ -11,6 +11,10 @@
 
 import { ConnectionProfile } from '@/lib/schemas/types'
 import {
+  DEFAULT_MAX_IMAGES_PER_REQUEST,
+  MAX_IMAGES_PER_REQUEST_CEILING,
+} from '@/lib/schemas/profile.types'
+import {
   getSupportedMimeTypes,
   supportsMimeType,
 } from './attachment-support'
@@ -137,6 +141,36 @@ export function profileSupportsMimeType(
     return profile.supportsImageUpload === true
   }
   return supportsMimeType(profile.provider, mimeType, profile.baseUrl ?? undefined)
+}
+
+/**
+ * The most images a profile may be sent in one request.
+ *
+ * The one reader of `maxImagesPerRequest`: a missing, non-integer or
+ * out-of-range value (a row or bundle older than the column, a hand-edited
+ * archive) resolves to `DEFAULT_MAX_IMAGES_PER_REQUEST` rather than to "no
+ * cap", since an uncapped request is what some models refuse.
+ */
+export function resolveMaxImagesPerRequest(
+  profile: { maxImagesPerRequest?: number | null } | null | undefined
+): number {
+  const raw = profile?.maxImagesPerRequest
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw >= 1 && raw <= MAX_IMAGES_PER_REQUEST_CEILING) {
+    return raw
+  }
+  return DEFAULT_MAX_IMAGES_PER_REQUEST
+}
+
+/**
+ * Validate a `maxImagesPerRequest` value from a request body. Accepts an
+ * integer or a numeric string; returns null for anything that isn't a whole
+ * number between 1 and `MAX_IMAGES_PER_REQUEST_CEILING`.
+ */
+export function parseMaxImagesPerRequest(value: unknown): number | null {
+  const parsed = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
+  if (typeof parsed !== 'number' || !Number.isInteger(parsed)) return null
+  if (parsed < 1 || parsed > MAX_IMAGES_PER_REQUEST_CEILING) return null
+  return parsed
 }
 
 /**

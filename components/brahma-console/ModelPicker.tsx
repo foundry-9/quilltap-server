@@ -67,7 +67,7 @@ export function ModelPicker({ profiles, activeId, onSelect, disabled }: ModelPic
 
       {open && profiles.length > 0 && (
         <div
-          className="absolute right-0 mt-1 z-50 min-w-[220px] max-h-[280px] overflow-y-auto rounded qt-bg-surface qt-border-default border shadow-lg py-1"
+          className="absolute right-0 mt-1 z-50 min-w-[220px] max-h-[280px] overflow-y-auto rounded qt-bg-popover qt-border-default border shadow-lg py-1"
           role="listbox"
         >
           {profiles.map(profile => {

@@ -7,10 +7,10 @@
  * POST /api/v1/chats/[id]?action=announcement
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound } from '@/lib/api/responses';
-import { postAdhocAnnouncement } from '@/lib/services/announcer/writer';
+import { badRequest, created, notFound } from '@/lib/api/responses';
+import { postAdhocAnnouncement, postEstablishedFact } from '@/lib/services/announcer/writer';
 import { resolveAnnouncementAudience } from '@/lib/services/announcer/audience';
 import { insertAnnouncementSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -18,10 +18,26 @@ import type { RequestContext } from '@/lib/api/middleware';
 export async function handleInsertAnnouncement(
   req: NextRequest,
   chatId: string,
-  { repos }: RequestContext,
+  { repos, user }: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = insertAnnouncementSchema.parse(body);
+
+  // An established fact (Deus Ex Machina): no speaker, always public — the
+  // schema has already refused an audience. Its own writer, then its own
+  // memory job.
+  if (validated.sender.kind === 'fact') {
+    const fact = await postEstablishedFact({
+      chatId,
+      userId: user.id,
+      contentMarkdown: validated.contentMarkdown,
+    });
+    if (!fact) {
+      return badRequest('Failed to post established fact (empty content or unknown chat).');
+    }
+    logger.info('[Chats v1] Established fact posted', { chatId, messageId: fact.id });
+    return created({ success: true, message: fact });
+  }
 
   // For the 'character' branch, verify the referenced character actually exists
   // so we fail fast with a clear error rather than persisting a dangling reference.
@@ -60,5 +76,5 @@ export async function handleInsertAnnouncement(
     targetCount: audience.targetParticipantIds?.length ?? 0,
   });
 
-  return NextResponse.json({ success: true, message }, { status: 201 });
+  return created({ success: true, message });
 }

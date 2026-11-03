@@ -1,16 +1,16 @@
 # Database Encryption
 
-This document describes Quilltap's database-at-rest encryption system using SQLCipher. For user-facing documentation, see [help/database-protection.md](../help/database-protection.md).
+This document describes Quilltap's database-at-rest encryption system: ChaCha20-Poly1305 page encryption from SQLite3 Multiple Ciphers. For user-facing documentation, see [help/database-protection.md](../help/database-protection.md).
 
 ## Overview
 
-All Quilltap databases are encrypted at rest using **SQLCipher** via the `better-sqlite3-multiple-ciphers` npm package (aliased as `better-sqlite3`). Every byte on disk is encrypted — there is no plaintext window after initial setup. This replaces the earlier approach of per-field AES-256-GCM encryption on individual API key values.
+All Quilltap databases are encrypted at rest using **ChaCha20-Poly1305**, the default cipher of [SQLite3 Multiple Ciphers](https://utelle.github.io/SQLite3MultipleCiphers/), compiled into the `better-sqlite3-multiple-ciphers` npm package (aliased as `better-sqlite3`). Every page on disk is encrypted with ChaCha20 and authenticated with a Poly1305 tag, so a page that has been altered or decrypted with the wrong key fails to read rather than returning garbage. Every byte on disk is encrypted — there is no plaintext window after initial setup. This replaces the earlier approach of per-field AES-256-GCM encryption on individual API key values.
 
 ### Key Concepts
 
 | Term | Description |
 |------|-------------|
-| **Pepper** | A 32-byte random value (44-char base64 string) used as the SQLCipher database key. Lives in `process.env.ENCRYPTION_MASTER_PEPPER` at runtime. |
+| **Pepper** | A 32-byte random value (44-char base64 string) used as the database key. Lives in `process.env.ENCRYPTION_MASTER_PEPPER` at runtime. |
 | **`.dbkey` file** | A JSON file on disk that stores the pepper, encrypted with AES-256-GCM. Located at `<data-dir>/quilltap.dbkey`. One per instance. |
 | **Passphrase** | An optional user-supplied string used to derive the AES key that wraps the pepper inside the `.dbkey` file. When omitted, an internal sentinel (`__quilltap_no_passphrase__`) is used instead — the `.dbkey` file is always encrypted. |
 
@@ -31,8 +31,11 @@ lib/startup/
 └── pepper-vault.ts           # Legacy pepper vault (migration support only)
 
 lib/database/backends/sqlite/
-├── client.ts                 # Main DB connection — applies SQLCipher key pragma
-└── llm-logs-client.ts        # LLM logs DB connection — applies same key pragma
+├── client.ts                 # Main DB connection
+├── llm-logs-client.ts        # LLM logs DB connection
+├── mount-index-client.ts     # Mount-index DB connection
+├── child-client.ts           # The job child's readonly connection
+└── sqlcipher-key.ts          # applySqlcipherKey() — the one place the pepper becomes a key pragma
 
 app/api/v1/system/unlock/
 └── route.ts                  # Unlock/setup/change-passphrase API endpoints
@@ -45,7 +48,7 @@ migrations/scripts/
 └── drop-pepper-vault.ts               # Drops legacy pepper_vault table
 ```
 
-### How the Key Reaches SQLCipher
+### How the Key Reaches the Database
 
 The pepper flows from the `.dbkey` file to the database connection:
 
@@ -57,17 +60,21 @@ The pepper flows from the `.dbkey` file to the database connection:
                               PRAGMA key = "x'<hex>'"
 ```
 
-Using SQLCipher's raw key format (`x'...'`) bypasses SQLCipher's own internal KDF, since we already performed key derivation via PBKDF2 when unwrapping the `.dbkey` file. This is set as the very first pragma before any other database operations.
+A raw key (`x'...'`, 64 hex digits) is used as the 256-bit ChaCha20 key directly: SQLite3 Multiple Ciphers skips its own PBKDF2-SHA256 pass (the `kdf_iter` it would otherwise run), since the pepper is already 32 random bytes. The per-database 16-byte salt is still generated and stored in the file header. The key is set as the very first pragma, before any other pragma or query touches the file. No `PRAGMA cipher` is issued, so the driver's default (`chacha20`, `legacy = 0`) applies.
 
-Relevant code in `lib/database/backends/sqlite/client.ts`:
+Every connection — main, LLM logs, mount index, the job child's readonly connection, and ad-hoc maintenance connections — keys itself through `applySqlcipherKey()` in `lib/database/backends/sqlite/sqlcipher-key.ts`:
 
 ```typescript
-const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
-if (sqlcipherKey) {
+export function applySqlcipherKey(db: DatabaseType): boolean {
+  const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+  if (!sqlcipherKey) return false;
   const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-  sqliteDatabase.pragma(`key = "x'${keyHex}'"`);
+  db.pragma(`key = "x'${keyHex}'"`);
+  return true;
 }
 ```
+
+> **Naming.** `applySqlcipherKey`, `sqlcipher-key.ts`, the `.pre-sqlcipher.bak` backup and a few other identifiers say "SQLCipher" for historical reasons. The databases are not SQLCipher-format files, and the `sqlcipher` command-line tool cannot open them.
 
 ## The `.dbkey` File Format
 
@@ -254,13 +261,13 @@ npx quilltap db --llm-logs --tables
 npx quilltap db --data-dir /path/to/data --tables
 ```
 
-**Important**: The standard `sqlite3` CLI cannot open SQLCipher-encrypted databases. Always use the Quilltap CLI.
+**Important**: Neither the standard `sqlite3` CLI nor the `sqlcipher` CLI can open these databases. Always use the Quilltap CLI.
 
 ## Security Summary
 
 | Aspect | Implementation |
 |--------|---------------|
-| Database encryption | SQLCipher (AES-256 in CBC mode with HMAC-SHA512) |
+| Database encryption | ChaCha20-Poly1305 per page (SQLite3 Multiple Ciphers default cipher), 256-bit raw key, own KDF bypassed |
 | Pepper generation | `crypto.randomBytes(32)` → base64 (44 chars) |
 | Pepper wrapping | AES-256-GCM with PBKDF2 key derivation |
 | PBKDF2 iterations | 600,000 (upgraded from 100,000 in legacy system) |

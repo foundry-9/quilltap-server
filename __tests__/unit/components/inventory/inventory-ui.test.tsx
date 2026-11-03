@@ -137,6 +137,31 @@ describe('InventoryBrowser', () => {
     expect(await screen.findByText('Archetype')).toBeInTheDocument()
   })
 
+  it('offers Copy to folder… only for a copyable object of its own tier, and opens the picker in copy mode', () => {
+    const openFolderPicker = jest.fn()
+    const ROPE = obj('rope', { name: 'rope', canCopy: true })
+    renderWithQuery(
+      <InventoryBrowser
+        container={{ scope: 'character', id: 'c-viv' }}
+        data={{ ...data, items: [SWORD, ROPE] }}
+        actions={makeActions({ openFolderPicker })}
+        showArchived={false}
+        onShowArchivedChange={jest.fn()}
+      />,
+    )
+    const menuOf = (title: string) => {
+      const row = screen.getByText(title).closest('[data-testid="inventory-item-row"]') as HTMLElement
+      fireEvent.click(within(row).getByRole('button', { name: 'More actions' }))
+    }
+    menuOf('Excalibur')
+    expect(screen.queryByRole('menuitem', { name: 'Copy to folder…' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    menuOf('rope')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy to folder…' }))
+    expect(openFolderPicker).toHaveBeenCalledWith([ROPE], 'copy')
+  })
+
   it('in a chat: Equipped only, the Equipped chip and a kit\'s state', () => {
     renderBrowser({
       carried: { equipped: [RING], kits: { kit: 'some' } },

@@ -46,6 +46,7 @@ The Console is a capable, concise, neutral assistant. Beyond plain conversation,
 
 - **Search** — It can search across your past conversations and every one of your document stores, including the knowledge folders within them.
 - **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well.
+- **The clerk's shortcuts** — Four ready-made enquiries that answer the commonest questions in a single stroke each. See *The clerk's shortcuts*, below.
 - **The ledgers themselves** — It can put **read-only questions** straight to the databases that keep your establishment running. See *Consulting the ledgers*, below.
 - **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly.
 
@@ -56,6 +57,17 @@ The Console's replies arrive as they are composed, word following word across th
 Above each such answer sits a small, dimmed **Thinking** panel. While the engine deliberates the panel stands open, and you may watch the chain of thought unspool in real time; once the answer is settled the panel folds itself shut, leaving the reply uncluttered. Press it open again at any time, on a fresh answer or one long since concluded, to revisit how the engine reasoned its way there.
 
 This musing is shown to you and to you alone. Like everything in the thinking panel throughout Quilltap, it is **for your eyes only** — never fed back to the engine, never filed into a memory, never counted as part of the answer. Engines that do not reason aloud simply show no panel at all.
+
+## The clerk's shortcuts
+
+Most of what one asks the Console about one's own world falls into a handful of shapes — *who is she?*, *what does he remember?*, *where was that said, and when?* — and for each the Console keeps a ready-made enquiry rather than drafting fresh queries from first principles:
+
+- **Look up a character** — name, aliases, pronouns, the core of the character file (identity, description, personality, manifesto), the physical description, how many memories they hold, and the conversations they have taken part in, first and most recent. One call, where it once took half a dozen.
+- **Look up memories** — searches the characters' commonplace books by meaning: one character's, or everyone's at once; narrowed to memories *about* a particular person, or to a span of dates. Each memory comes back with its holder, its subject, when it happened, and the conversation it came from (by id, title and date).
+- **Look up messages** — searches every conversation's text through the same swift index as the search bar, returning the conversation's id, title and date, the speaker, and the passage in question. It may be narrowed to the conversations a character attended, or to the lines a character spoke.
+- **Read messages** — fetches the few lines around a found passage, each labelled with its speaker and its hour, so the Console can confirm what was said before it reports it.
+
+So a question such as *"how old is Laura?"* runs: look her up, search her memories for her age, then search the conversations if the memories leave room for doubt — and when the sources disagree, the Console lays out every answer with the place it found it. Looking at memories this way is **inspection, not remembrance**: it marks nothing as recalled and leaves every character's recollection exactly as it was.
 
 ## Consulting the ledgers
 
@@ -69,7 +81,7 @@ Three points of etiquette govern the arrangement:
 
 ### Seeing the Console's working
 
-You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, two tidy panels slip into the transcript at that very spot. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed to the row cap. Both panels appear the instant the query lands and may be folded shut with a tap, so the conversation stays unhurried while the evidence remains within easy reach.
+You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, two tidy panels slip into the transcript at that very spot. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed — to the row cap, or because the rows were too bulky to carry whole, in which case the longest entries are shortened and the Console is told to ask a narrower question. Both panels appear the instant the query lands and may be folded shut with a tap, so the conversation stays unhurried while the evidence remains within easy reach.
 
 Should a query go awry — a misremembered column, a table that isn't there — the **Result** panel reports the ledger's own complaint in plain words rather than a polite shrug, so you (and the engine) can see exactly what went wrong. The Console takes such a rebuff as a cue to inspect the ledger's true shape and try again, rather than guess a second time.
 
@@ -78,6 +90,14 @@ Should a query go awry — a misremembered column, a table that isn't there — 
 The Console need not be summoned from the sidebar to be of use. From inside any Salon conversation it answers to the name **Brahma**, reached through the same reference-desk machinery as any [Carina](carina.md) answerer — type `@Brahma:` for a public reply or `@Brahma?` for a whispered one, or let a tool-using character consult it via `ask_carina`. The answer drops straight into the conversation as a tidy reference card.
 
 Consulted this way, the Console keeps all of its console powers — the read-only ledger inspection and document-store access described above — but loses every scrap of continuity: each Salon query is wholly standalone, with no memory of the surrounding scene or of any earlier Brahma consultation, and it forms no memories afterward. Because those powers are not to be handed about lightly, the Salon line opens only for you (the proprietor), for your own user-controlled persona, and for characters you have granted **system transparency**; to anyone else, Brahma simply does not answer. See [Carina](carina.md) for the full etiquette.
+
+### Choosing the engine for `@Brahma`
+
+The floating Console has its own model picker; the Salon line does not, so it is told which engine to use. In **Settings → Chat → Brahma Console**, the picker labelled **Engine for `@Brahma` in the Salon** names the connection profile that answers. Leave it at **Use my default profile** and Brahma borrows your default, as it always has.
+
+A project may overrule that choice for its own conversations: open the project, find the **Model Behavior** card, and set **Inline Brahma Engine** (see [Project Settings](project-settings.md)). The order of precedence is plain — the project's choice, then the global setting, then your default profile — and should a chosen profile since have been deleted, Brahma quietly moves down the list rather than falling silent.
+
+Enquiries of this sort reward a capable engine. A model that handles tools deftly will find Laura's age in three or four steps; a small or "flash" model may wander the ledgers until its turns run out.
 
 ## Setting the Console's patience
 
@@ -92,7 +112,7 @@ A generous ceiling costs nothing on questions the Console dispatches quickly, an
 The Console is, by design, an amnesiac of impeccable discretion:
 
 - **It keeps no memories.** Nothing said in the Console is ever filed away into your characters' commonplace books. When a conversation ends, only the visible transcript remains.
-- **It recalls no memories, either.** The memory stores are simply not among the things its **search** can draw upon — that remains intentional, not an oversight. (Its read-only SQL window may *inspect* the memory ledger for tallies and summaries, as *Consulting the ledgers* describes; reading is not recalling, and it remembers nothing of what it reads.)
+- **It recalls no memories, either.** The memory stores are simply not among the things its general **search** can draw upon — that remains intentional, not an oversight. (Its *look up memories* shortcut and its read-only SQL window may *inspect* your characters' memories, as *The clerk's shortcuts* and *Consulting the ledgers* describe; reading is not recalling, marks nothing as recalled, and it remembers nothing of what it reads.)
 - **It is not page-aware.** Unlike the Help Chat, the Console neither knows nor tracks which screen you are viewing. It will not volunteer help about your current page, because it has no notion of where you are.
 - **It has no character.** No identity, no personality, no avatar, no roleplay. It speaks in its own plain voice.
 
@@ -103,7 +123,7 @@ To direct the user to the home page (the floating Console button sits at the bot
 help_navigate(url: "/")
 ```
 
-To take the user straight to the Console's turn-budget setting:
+To take the user straight to the Console's settings (the turn budget and the engine for `@Brahma` in the Salon):
 ```
 help_navigate(url: "/settings?tab=chat&section=brahma-console")
 ```
@@ -115,3 +135,4 @@ help_navigate(url: "/settings?tab=chat&section=brahma-console")
 - [Connection Profiles](connection-profiles.md) --- Establish the engines the Console can call upon
 - [The Scriptorium](scriptorium.md) --- The document stores the Console can read and write
 - [Carina](carina.md) --- Reaching the Console by name (`@Brahma`) from inside a Salon
+- [Project Settings](project-settings.md) --- A project's own engine for `@Brahma`

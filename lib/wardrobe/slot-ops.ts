@@ -222,6 +222,35 @@ export function dissolveCompositesInSlots(
 }
 
 /**
+ * Make every item in a slots snapshot occupy every slot its own `types`
+ * declare — a dress listed only under `top` is also put in `bottom` — the same
+ * shape `wearItemIntoSlots` gives a leaf. For snapshots composed outside the
+ * wear gestures (the cheap LLM's chat-start pick), where an item can arrive
+ * under just one of its slots. Existing layer order is kept; a missing slot
+ * gets the id appended (outermost). Ids the lookup can't resolve are left as
+ * they are. Run it after {@link dissolveCompositesInSlots}: a composite's
+ * leaves are already spread, and a composite id that survived is spread over
+ * its own `types`.
+ *
+ * Deliberately not applied to the wardrobe dialog's `add_to_slot`, which is
+ * single-slot by design.
+ */
+export function spreadAcrossCoveredSlots(
+  currentSlots: EquippedSlots,
+  itemsById: WearableLookup,
+): EquippedSlots {
+  let slots = cloneEquippedSlots(currentSlots);
+  for (const slot of WARDROBE_SLOT_TYPES) {
+    for (const id of currentSlots[slot] ?? []) {
+      const item = itemsById.get(id);
+      if (!item) continue;
+      for (const covered of slotsOf(item)) slots = addIdToSlot(slots, covered, id);
+    }
+  }
+  return slots;
+}
+
+/**
  * The composite credit a put-on gesture claims: the composite and the leaves
  * it dissolved into, or nothing when the item is a leaf or could not dissolve.
  */

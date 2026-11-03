@@ -59,7 +59,7 @@ export function PromptList({
       {prompts.map((prompt) => (
         <div
           key={prompt.id}
-          className="qt-card hover:bg-accent/50 transition"
+          className="qt-card hover:qt-bg-surface-hover transition"
         >
           <div className="flex justify-between items-start">
             <div className="flex-1 min-w-0">

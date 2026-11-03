@@ -37,6 +37,8 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   queryKeys.inventory.folderLists,
   queryKeys.inventory.archetypeLists,
   queryKeys.inventory.equippedLists,
+  queryKeys.wardrobe.lists,
+  queryKeys.wardrobe.folderLists,
   // Held custom-tool runs (operator intervention). Also under the custom-tools
   // namespace the popup reads, which a reconnect may as well refresh too.
   queryKeys.customTools.all,
@@ -145,10 +147,18 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
         queryKeys.inventory.equippedLists,
       ]
 
+    case 'wardrobe':
+      // A wardrobe file or folder was written — through any wardrobe location
+      // (the operator's dialog, a character's wardrobe_* tool, a Pascal
+      // effect), or by a job child's buffered write; an open browser's lists
+      // and folder trees re-read. The browser leaves its own folder writes'
+      // refresh to this (`lib/hooks/use-item-folders.ts`).
+      return [queryKeys.wardrobe.lists, queryKeys.wardrobe.folderLists]
+
     case 'mountPoints':
-      // No per-store detail key exists yet; the namespace prefix is the
-      // narrowest thing there is to invalidate.
-      return [queryKeys.mountPoints.all]
+      // Scoped by store id: that store's detail, listing and link lookups,
+      // plus the store lists (their counts move). Bare, the namespace.
+      return id ? [queryKeys.mountPoints.store(id), queryKeys.mountPoints.lists] : [queryKeys.mountPoints.all]
 
     default:
       return []

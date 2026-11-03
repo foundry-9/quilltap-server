@@ -380,6 +380,16 @@ export const BrahmaConsoleSettingsSchema = z.object({
    * stops a loop that repeats itself regardless of this number.
    */
   maxAgentTurns: z.number().int().min(5).max(200).default(50),
+  /**
+   * Connection profile the inline Brahma (the `@Brahma:` / `@Brahma?` Carina
+   * answerer in a Salon chat) answers with. null/undefined = the user's
+   * default connection profile. A project's `brahmaConnectionProfileId`
+   * overrides it; a stale id falls through. Resolved only by
+   * `resolveInlineBrahmaConnectionProfile`
+   * (`lib/services/brahma-console/inline-profile.ts`). The standalone Console
+   * keeps its own per-chat picker and ignores this.
+   */
+  inlineConnectionProfileId: UUIDSchema.nullable().optional(),
 });
 
 export type BrahmaConsoleSettings = z.infer<typeof BrahmaConsoleSettingsSchema>;

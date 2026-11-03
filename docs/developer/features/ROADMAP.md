@@ -41,7 +41,9 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
 - [X] Better selectable saved scenarios and prompts per chat
+- [ ] Deus Ex Machina — mark a composer line as established fact (`/deus`, ⌘/Ctrl+Shift+Enter) or post a speakerless fact from the Insert Announcement dialog; framed for every model as true and known to all, never named to them; reaches absent seats, summaries and memories (design: [deus-ex-machina.md](deus-ex-machina.md)) — implemented 4.12-dev; live V4test verification outstanding
 - [ ] Composer `#` document references — type `#` to point a message at a Scriptorium document; the model is told where it is, or handed its text when it cannot use tools (design: [composer-document-references.md](composer-document-references.md))
+- [x] SQLCipher driver to `better-sqlite3-multiple-ciphers` 13 — Node-API prebuilds, no compile anywhere, CLI ABI heal retired, Docker image pruned to one binary; no shell/server gate by decision (design: [complete/better-sqlite3-multiple-ciphers-v13.md](complete/better-sqlite3-multiple-ciphers-v13.md); shell notes: [better-sqlite3-multiple-ciphers-v13-shell-notes.md](better-sqlite3-multiple-ciphers-v13-shell-notes.md))
 - [x] Diagrams in the Salon, iteration 1 — closed `mermaid` / `dot` / `svg` fences render live as themed SVG; per-character `canDrawDiagrams` and `diagramStyle` (hand-drawn / clean) in the vault's `properties.json`; prompt note only for drawing characters (design: [complete/diagrams.md](complete/diagrams.md))
 - [ ] Diagrams, iteration 2 — server-side render, save a diagram to the gallery or a store, a one-shot repair suggestion for a broken diagram, diagrams beyond the Salon (see the sketch in [complete/diagrams.md](complete/diagrams.md#iteration-2-sketch-not-in-scope))
 - [x] Scenarios from anywhere — browse every character, project, group and General scenario from either picker; a chat keeps a source pointer; one `resolveScenarioLocation` (design: [complete/scenarios-from-anywhere.md](complete/scenarios-from-anywhere.md))
@@ -80,6 +82,7 @@ This document tracks planned features and improvements for Quilltap.
 - [X] AI direct character edit
   - [X] Give the AI instructions, it proposes edits to the character
   - [ ] Optionally can adjust or delete memories
+- [x] Prompt trust, part two — "the probation": drop the "times they slipped" ledger from the trust disposition and sample prompts, add a companion default-yes and a universal no-mind-reading rule, rescope the group-scene anti-chorus rules, and teach the extractor and binder to record repairs (design: [prompt-trust-the-probation.md](prompt-trust-the-probation.md)) — implemented 4.12-dev; live V4test eval outstanding
 
 ### External Integrations
 
@@ -102,6 +105,18 @@ This document tracks planned features and improvements for Quilltap.
 - [X] All bundled themes converted from npm plugins to `.qtap-theme` bundles
 - [X] Deprecated and removed npm theme plugin directories
 - [X] Get theme-storybook to match the app for everything
+- [X] Generate the theme-storybook `qt-components.css` from the app's source instead of mirroring by hand (design: [refactor-4-12-storybook-css-generated.md](refactor-4-12-storybook-css-generated.md))
+
+### Refactor programmes
+
+- [ ] Refactor 4.12 — seven deep-refactor specs for what the 4.12-dev cycle touched, ranked and with the things examined and left alone (index: [refactor-4-12.md](refactor-4-12.md))
+  - [X] theme-storybook CSS generated, not mirrored ([spec](refactor-4-12-storybook-css-generated.md))
+  - [ ] one document core for the operator routes and the `doc_*` tools ([spec](refactor-4-12-document-core.md))
+  - [X] one image transport budget on the way to a provider ([spec](refactor-4-12-image-transport-budget.md))
+  - [ ] one tier walk: reach, location and order settled once ([spec](refactor-4-12-tier-walk.md))
+  - [X] Salon stream frames as a tagged union ([spec](refactor-4-12-salon-stream-frames.md))
+  - [ ] the browser family finished, and the `FileBrowser` retirement decisions ([spec](refactor-4-12-browser-family.md))
+  - [x] one recursive watcher core under both filesystem watchers ([spec](refactor-4-12-native-watcher-core.md))
 
 ### Virgil: Setup & Onboarding
 

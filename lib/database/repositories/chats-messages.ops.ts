@@ -74,6 +74,7 @@ export const ChatMessageRowSchema = z.object({
   confirmationOriginalContent: z.string().nullable().optional(),
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
+  isEstablishedFact: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Operator line posted as established fact (Deus Ex Machina; SQLite stores as 0/1). Frame applied at read time, never stored.
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna', 'pascal']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
   systemKind: z.string().nullable().optional(),  // Sub-classification of a Staff-authored message (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender.
   // Neutral, persona-free rewrite of `content` for Staff-authored messages.

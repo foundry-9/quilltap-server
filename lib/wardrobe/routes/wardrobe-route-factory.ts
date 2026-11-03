@@ -10,9 +10,12 @@
  * Every tier is a location (`resolveWardrobeLocation`), so the handler bodies
  * are written once: list / create (each with `?action=instructions`), the
  * folder actions (`GET ?action=folders`; `POST ?action=create-folder`,
- * `rename-folder`, `delete-folder`, `move-items`, `copy-items`), and get (with
- * `?action=wear-history`) / update / delete. Each route file is a config.
- * Rules that hold everywhere:
+ * `rename-folder`, `delete-folder`, `move-items`, `copy-items`), `POST
+ * ?action=duplicate`, and get (with `?action=wear-history`) / update /
+ * delete. Each route file is a config. The config shape, the per-tier labels,
+ * the resolver, the read probe, `?action=folders` and the error mapping are
+ * the shared item-route preamble (`lib/mount-index/item-folder-routes.ts`),
+ * which the Inventory's factory uses too. Rules that hold everywhere:
  *
  *   - an item read or written is serialized the same way — `origin` and
  *     `wear` attached — on GET, POST and PUT (`serializeWardrobeItems`);
@@ -21,7 +24,9 @@
  *     404 and a folder collision a 409;
  *   - a PUT checks the item exists before it checks the picture choice;
  *   - a character must be the requesting user's (the location checks);
- *   - a write to an archived character's vault is a 409.
+ *   - a write to an archived character's vault is a 409;
+ *   - no GET provisions a store: a project or group with no store yet, or an
+ *     unprovisioned General, lists as empty (`mountPointId: null`).
  *
  * The character collection GET also answers `?scope=group`: the group tier of
  * that character's wearable pool, each item tagged with its group.
@@ -33,23 +38,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, withActionDispatch } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
-import {
-  badRequest,
-  conflict,
-  created,
-  notFound,
-  serverError,
-  successResponse,
-} from '@/lib/api/responses';
+import { badRequest, conflict, created, notFound, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 import { WardrobeComponentCycleError } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
 import {
   copyWardrobeItemsSchema,
-  createWardrobeFolderSchema,
   createWardrobeSchema,
-  deleteWardrobeFolderSchema,
+  duplicateWardrobeItemSchema,
+  wardrobeFolderPathSchema,
   moveWardrobeItemsSchema,
   renameWardrobeFolderSchema,
   updateWardrobeSchema,
@@ -59,19 +57,17 @@ import {
   componentLookupFor,
   createItem,
   updateItem,
-  WardrobeItemNotInLocationError,
+  WARDROBE_FOLDER_KIND,
 } from '@/lib/wardrobe/item-mutations';
 import { fileItemsToFolder, FolderFilingRequestError } from '@/lib/wardrobe/folder-filing';
 import {
-  createWardrobeFolder,
-  deleteWardrobeFolder,
-  renameWardrobeFolder,
-} from '@/lib/wardrobe/folder-mutations';
-import {
-  WardrobeFolderConflictError,
-  WardrobeFolderNotFoundError,
-  WardrobeFolderPathError,
-} from '@/lib/wardrobe/folders';
+  itemRoutePreamble,
+  type ItemErrorKind,
+  type ItemRouteConfig,
+  type ItemRouteKind,
+} from '@/lib/mount-index/item-folder-routes';
+import { draftFromItem, draftToPayload } from '@/lib/wardrobe/item-draft';
+import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
 import { cleanupEquippedRefs, cleanupItemImages, imageChoiceError } from '@/lib/wardrobe/item-route-steps';
 import {
   resolveWardrobeLocation,
@@ -89,22 +85,31 @@ import {
 type Params = Record<string, string>;
 type Repos = RequestContext['repos'];
 
-export interface WardrobeRouteConfig<P extends Params> {
-  scope: WardrobeScope;
-  /** The owner id from the route params; null for General. */
-  paramsToId: (params: P) => string | null;
-  /** Log-message prefix, e.g. `'[Projects v1]'`. */
-  logTag: string;
-  /** Metadata key naming the owner id in log lines, e.g. `'projectId'`. */
-  logIdKey: string;
-}
+/** A wardrobe route file's config: the shared item-route shape. */
+export type WardrobeRouteConfig<P extends Params> = ItemRouteConfig<P, WardrobeScope>;
 
-/** The labels each tier's 404s have always carried. */
-const LABELS: Record<WardrobeScope, { owner: string; item: string }> = {
-  character: { owner: 'Character', item: 'Wardrobe item' },
-  group: { owner: 'Group', item: 'Group wardrobe item' },
-  project: { owner: 'Project', item: 'Project wardrobe item' },
-  general: { owner: 'Quilltap General', item: 'Archetype wardrobe item' },
+/** The wardrobe's own refusals, beside the folder and tombstone ones every kind shares. */
+export const WARDROBE_ITEM_ERRORS: ItemErrorKind = {
+  noun: 'wardrobe',
+  refusals: (error) => {
+    if (error instanceof WardrobeComponentCycleError) return badRequest(error.message);
+    if (error instanceof FolderFilingRequestError) return badRequest(error.message);
+    return null;
+  },
+};
+
+/** What the shared preamble needs to know about the wardrobe. */
+const WARDROBE_ROUTE_KIND: ItemRouteKind<WardrobeLocation> = {
+  folderKind: WARDROBE_FOLDER_KIND,
+  itemLabels: {
+    character: 'Wardrobe item',
+    group: 'Group wardrobe item',
+    project: 'Project wardrobe item',
+    general: 'Archetype wardrobe item',
+  },
+  resolve: resolveWardrobeLocation,
+  errors: WARDROBE_ITEM_ERRORS,
+  folderSchemas: { path: wardrobeFolderPathSchema, rename: renameWardrobeFolderSchema },
 };
 
 /** Attach the origin and wear tally every wardrobe response carries. */
@@ -121,60 +126,20 @@ async function serializeOne(item: WardrobeItem, origin: WardrobeOrigin, repos: R
   return serialized;
 }
 
-/** Map the write-side refusals every tier shares; rethrow anything else. */
-function writeErrorResponse(error: unknown): NextResponse {
-  if (error instanceof WardrobeComponentCycleError) return badRequest(error.message);
-  if (error instanceof WardrobeFolderPathError) return badRequest(error.message);
-  if (error instanceof WardrobeItemNotInLocationError) return badRequest(error.message);
-  if (error instanceof FolderFilingRequestError) return badRequest(error.message);
-  if (error instanceof WardrobeFolderNotFoundError) return notFound('Wardrobe folder');
-  if (error instanceof WardrobeFolderConflictError) return conflict(error.message);
-  if (error instanceof CharacterArchivedError) {
-    return conflict("An archived character's wardrobe cannot be changed");
-  }
-  throw error;
-}
-
-function makeResolver<P extends Params>(config: WardrobeRouteConfig<P>) {
-  const labels = LABELS[config.scope];
-  /**
-   * Resolve the tier's location, or the response to answer. `ensure`
-   * provisions a missing project/group store and folder; every handler that
-   * lists, creates or writes instructions passes it.
-   */
-  return async function resolveLocation(
-    ctx: RequestContext,
-    params: P,
-    ensure: boolean,
-  ): Promise<{ ok: true; location: WardrobeLocation } | { ok: false; response: NextResponse }> {
-    const location = await resolveWardrobeLocation(
-      config.scope,
-      config.paramsToId(params),
-      ctx.repos,
-      ctx.user.id,
-      { ensure },
-    );
-    if (location) return { ok: true, location };
-    if (config.scope === 'general') {
-      return { ok: false, response: serverError('Quilltap General store is not provisioned yet') };
-    }
-    return { ok: false, response: notFound(labels.owner) };
-  };
-}
-
 // ============================================================================
 // Collection — GET (list) / POST (create), each with ?action=instructions
 // ============================================================================
 
 export function createWardrobeCollectionHandlers<P extends Params>(config: WardrobeRouteConfig<P>) {
   const { scope, logTag, logIdKey } = config;
-  const resolveLocation = makeResolver(config);
+  const preamble = itemRoutePreamble(WARDROBE_ROUTE_KIND, config);
+  const { labels, resolveLocation, probe, errorResponse } = preamble;
 
-  async function handleGetInstructions(req: NextRequest, ctx: RequestContext, params: P) {
-    const location = await resolveWardrobeLocation(scope, config.paramsToId(params), ctx.repos, ctx.user.id, {
-      ensure: scope !== 'character',
-    });
-    if (!location && scope !== 'general') return notFound(LABELS[scope].owner);
+  async function handleGetInstructions(_req: NextRequest, ctx: RequestContext, params: P) {
+    // A read probe: a tier with no store yet simply has no instructions.
+    const probed = await probe(ctx, params);
+    if (!probed.ok) return probed.response;
+    const { location } = probed;
     const mountPointId = location?.mountPointId ?? null;
     return handleReadWardrobeInstructions(mountPointId, ({ present }) => {
       logger.debug(`${logTag} Read dressing instructions`, {
@@ -214,94 +179,9 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     });
   }
 
-  // --------------------------------------------------------------------------
-  // Folders — the operator's filing under this tier's `Wardrobe/`
-  // --------------------------------------------------------------------------
-
-  async function handleGetFolders(_req: NextRequest, ctx: RequestContext, params: P) {
-    // A read probe never provisions a store: a project or group with no store
-    // yet (or an unprovisioned General) simply has no folders.
-    const id = config.paramsToId(params);
-    const location = await resolveWardrobeLocation(scope, id, ctx.repos, ctx.user.id, { ensure: false });
-    if (!location) {
-      if (scope === 'general') return successResponse({ folders: [] });
-      if (scope !== 'character' && id) {
-        const owner = scope === 'project' ? await ctx.repos.projects.findById(id) : await ctx.repos.groups.findById(id);
-        if (owner) {
-          logger.debug(`${logTag} No store yet; no wardrobe folders`, { [logIdKey]: id, context: 'wardrobe' });
-          return successResponse({ folders: [] });
-        }
-      }
-      return notFound(LABELS[scope].owner);
-    }
-    const folders = await location.listFolders();
-    logger.debug(`${logTag} Listed wardrobe folders`, {
-      [logIdKey]: location.id,
-      mountPointId: location.mountPointId,
-      count: folders.length,
-      context: 'wardrobe',
-    });
-    return successResponse({ folders });
-  }
-
-  async function handleCreateFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = createWardrobeFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, true);
-    if (!resolved.ok) return resolved.response;
-    try {
-      const folder = await createWardrobeFolder(resolved.location, body.path);
-      logger.info(`${logTag} Created wardrobe folder`, {
-        [logIdKey]: resolved.location.id,
-        userId: ctx.user.id,
-        mountPointId: resolved.location.mountPointId,
-        folder: folder.path,
-        context: 'wardrobe',
-      });
-      return successResponse({ folder });
-    } catch (error) {
-      return writeErrorResponse(error);
-    }
-  }
-
-  async function handleRenameFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = renameWardrobeFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    try {
-      const folder = await renameWardrobeFolder(resolved.location, body.path, body.name);
-      logger.info(`${logTag} Renamed wardrobe folder`, {
-        [logIdKey]: resolved.location.id,
-        userId: ctx.user.id,
-        mountPointId: resolved.location.mountPointId,
-        from: body.path,
-        to: folder.path,
-        context: 'wardrobe',
-      });
-      return successResponse({ folder });
-    } catch (error) {
-      return writeErrorResponse(error);
-    }
-  }
-
-  async function handleDeleteFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = deleteWardrobeFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    try {
-      const result = await deleteWardrobeFolder(resolved.location, body.path);
-      logger.info(`${logTag} Deleted wardrobe folder`, {
-        [logIdKey]: resolved.location.id,
-        userId: ctx.user.id,
-        mountPointId: resolved.location.mountPointId,
-        folder: body.path,
-        ...result,
-        context: 'wardrobe',
-      });
-      return successResponse(result);
-    } catch (error) {
-      return writeErrorResponse(error);
-    }
-  }
+  // Folders — `GET ?action=folders` and the folder writes are the shared
+  // preamble's; item filing below carries an outfit's components.
+  const { getFolders: handleGetFolders, folderActions } = preamble;
 
   /**
    * `move-items` / `copy-items`: file items into one folder of this tier, an
@@ -320,7 +200,7 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     try {
       result = await fileItemsToFolder(ctx.repos, ctx.user.id, location, { action, ...body });
     } catch (error) {
-      return writeErrorResponse(error);
+      return errorResponse(error);
     }
     logger.info(`${logTag} ${action === 'move' ? 'Moved' : 'Copied'} wardrobe items to folder`, {
       [logIdKey]: location.id,
@@ -349,13 +229,12 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   /** The character tier's `?scope=group`: the group tier, each item tagged with its group. */
   async function listGroupTier(req: NextRequest, ctx: RequestContext, location: WardrobeLocation) {
     const characterId = location.characterId as string;
-    const groups = await resolveGroupMountsForCharacter(characterId);
-    const originByMount = new Map<string, WardrobeOrigin>();
-    for (const { group, mountPointIds } of groups) {
-      for (const mp of mountPointIds) originByMount.set(mp, { scope: 'group', id: group.id, name: group.name });
-    }
+    const groups = await groupMountsFor(characterId);
+    const originByMount: Map<string, WardrobeOrigin> = groupOriginMap(groups);
+    // Strongest first in the tier (membership order, first group claims); the
+    // repository shadows later-over-earlier, so read it reversed.
     const items = await ctx.repos.wardrobe.readSharedTiers(
-      Array.from(originByMount.keys()),
+      Array.from(originByMount.keys()).reverse(),
       readIncludeArchived(req),
       (mp) => originByMount.get(mp)!,
     );
@@ -370,16 +249,59 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     return successResponse({ wardrobeItems });
   }
 
+  /**
+   * `{ itemId }`: a copy of one of this tier's items beside the original — the
+   * same folder, every editable field, titled by `nextCopyTitle` against the
+   * tier's titles (archived ones included). A composite's component ids are
+   * copied verbatim; the members are not cloned. Goes through `createItem`.
+   */
+  async function handleDuplicate(req: NextRequest, ctx: RequestContext, params: P) {
+    const { itemId } = duplicateWardrobeItemSchema.parse(await req.json());
+    const resolved = await resolveLocation(ctx, params, false);
+    if (!resolved.ok) return resolved.response;
+    const { location } = resolved;
+    const current = await location.findItem(itemId);
+    if (!current) return notFound(labels.item);
+
+    const title = nextCopyTitle(current.title, (await location.readItems(true)).map((i) => i.title));
+    const body = createWardrobeSchema.parse(draftToPayload({ ...draftFromItem(current), title }));
+    logger.debug(`${logTag} Duplicating wardrobe item`, {
+      [logIdKey]: location.id,
+      itemId,
+      title,
+      folder: body.folder ?? '',
+      context: 'wardrobe',
+    });
+
+    let stored: WardrobeItem;
+    try {
+      const lookup = (body.componentItemIds?.length ?? 0) > 0
+        ? await componentLookupFor(ctx.repos, location)
+        : undefined;
+      stored = await createItem(location, body, { lookup });
+    } catch (error) {
+      return errorResponse(error);
+    }
+
+    logger.info(`${logTag} Duplicated wardrobe item`, {
+      [logIdKey]: location.id,
+      userId: ctx.user.id,
+      mountPointId: location.mountPointId,
+      itemId,
+      copyId: stored.id,
+      title: stored.title,
+      context: 'wardrobe',
+    });
+    return created({ wardrobeItem: await serializeOne(stored, location.origin, ctx.repos) });
+  }
+
   const GET = createContextParamsHandler<P>(
     withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders }, async (req, ctx, params) => {
-      const location = await resolveWardrobeLocation(scope, config.paramsToId(params), ctx.repos, ctx.user.id, {
-        ensure: scope !== 'character',
-      });
-      if (!location) {
-        // An unprovisioned General simply has nothing in it yet.
-        if (scope === 'general') return successResponse({ wardrobeItems: [] });
-        return notFound(LABELS[scope].owner);
-      }
+      // A read probe never provisions: a tier with no store yet lists as empty.
+      const probed = await probe(ctx, params);
+      if (!probed.ok) return probed.response;
+      const { location } = probed;
+      if (!location) return successResponse({ mountPointId: null, wardrobeItems: [] });
       if (scope === 'character' && new URL(req.url).searchParams.get('scope') === 'group') {
         return listGroupTier(req, ctx, location);
       }
@@ -401,11 +323,10 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   const POST = createContextParamsHandler<P>(
     withActionDispatch<P>({
       instructions: handlePostInstructions,
-      'create-folder': handleCreateFolder,
-      'rename-folder': handleRenameFolder,
-      'delete-folder': handleDeleteFolder,
+      ...folderActions,
       'move-items': handleMoveItems,
       'copy-items': handleCopyItems,
+      duplicate: handleDuplicate,
     }, async (req, ctx, params) => {
       // Parse before resolving: an invalid body must never provision a store.
       const body = createWardrobeSchema.parse(await req.json());
@@ -420,7 +341,7 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
           : undefined;
         stored = await createItem(location, body, { lookup });
       } catch (error) {
-        return writeErrorResponse(error);
+        return errorResponse(error);
       }
 
       logger.info(`${logTag} Created wardrobe item`, {
@@ -445,9 +366,8 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
 export function createWardrobeItemHandlers<P extends Params & { itemId: string }>(
   config: WardrobeRouteConfig<P>,
 ) {
-  const { scope, logTag, logIdKey } = config;
-  const labels = LABELS[scope];
-  const resolveLocation = makeResolver(config);
+  const { logTag, logIdKey } = config;
+  const { labels, resolveLocation, errorResponse } = itemRoutePreamble(WARDROBE_ROUTE_KIND, config);
 
   /** The tier's location and the item in it, or the 404 to answer. */
   async function findItem(
@@ -505,7 +425,7 @@ export function createWardrobeItemHandlers<P extends Params & { itemId: string }
       const lookup = composite && touchesComposition ? await componentLookupFor(ctx.repos, location) : undefined;
       item = await updateItem(location, current, { ...fields, archived }, { lookup });
     } catch (error) {
-      return writeErrorResponse(error);
+      return errorResponse(error);
     }
     if (!item) return notFound(labels.item);
 
@@ -530,7 +450,7 @@ export function createWardrobeItemHandlers<P extends Params & { itemId: string }
     try {
       await location.writableMountPointId();
     } catch (error) {
-      return writeErrorResponse(error);
+      return errorResponse(error);
     }
 
     await cleanupEquippedRefs(ctx.repos, params.itemId, logTag, meta);
@@ -539,7 +459,7 @@ export function createWardrobeItemHandlers<P extends Params & { itemId: string }
     try {
       success = await location.delete(params.itemId);
     } catch (error) {
-      return writeErrorResponse(error);
+      return errorResponse(error);
     }
     if (!success) return notFound(labels.item);
 

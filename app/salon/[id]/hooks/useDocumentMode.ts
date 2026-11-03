@@ -28,6 +28,7 @@ import {
   requestDocumentWrite,
   toActiveDocument,
 } from './documentModeApi'
+import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions'
 
 export interface ActiveDocument {
   id: string
@@ -37,6 +38,8 @@ export interface ActiveDocument {
   displayTitle: string
   content: string
   mtime?: number
+  /** Set for a file shown read-only (an image, PDF, .docx…); `content` is then empty. */
+  viewer?: DocumentViewTarget
 }
 
 export type DocumentMode = 'normal' | 'split' | 'focus'
@@ -434,7 +437,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
         targetFolder: params.targetFolder,
       })
 
-      const doc: ActiveDocument = toActiveDocument(data.document, data.content || '', data.mtime)
+      const doc: ActiveDocument = toActiveDocument(data.document, data.content || '', data.mtime, data.viewer)
 
       applyDocContent(doc)
       setFocusedDocId(doc.id)
@@ -562,7 +565,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
         if (existing?.isDirty) continue
         const contentData = await readDocumentContent(rec.filePath, rec.scope, rec.mountPoint)
         const fresh = contentData.content || ''
-        if (existing && fresh === (savedContentRefs.current.get(rec.id) ?? '')) {
+        if (existing && !contentData.viewer === !existing.document.viewer && fresh === (savedContentRefs.current.get(rec.id) ?? '')) {
           // Unchanged on disk — just refresh mtime/title without a remount.
           updateEntry(rec.id, e => ({
             ...e,
@@ -574,7 +577,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
           }))
           continue
         }
-        applyDocContent(toActiveDocument(rec, fresh, contentData.mtime))
+        applyDocContent(toActiveDocument(rec, fresh, contentData.mtime, contentData.viewer))
       }
 
       const focused = focusedDocIdRef.current
@@ -600,7 +603,9 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
   // dirty panes so pending user edits aren't lost.
   const handleLLMEditEnd = useCallback(async () => {
     for (const entry of openDocsRef.current) {
-      if (entry.isDirty) continue
+      // A viewed file has no text to refetch; its viewer follows the store's
+      // realtime events on its own.
+      if (entry.isDirty || entry.document.viewer) continue
       const doc = entry.document
       try {
         const data = await readDocumentContent(doc.filePath, doc.scope, doc.mountPoint)

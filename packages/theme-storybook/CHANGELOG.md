@@ -2,6 +2,49 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.100] - 2026-11-03
+
+### Fixed
+- Stories no longer use `qt-*` classes the app does not define. Each demo now uses the class names and markup of the app component it shows:
+  - Badges: the variants are primary, secondary, info, success, warning, destructive and the single `qt-badge-outline` (`qt-badge-default` and `qt-badge-outline-{primary,success,warning,destructive}` never existed). Provider badges are the five embedding providers (`openai`, `ollama`, `openrouter`, `nanogpt`, `builtin`), each class standing alone as in `ProviderBadge`; `anthropic` and `google` never existed. The ThemeComparison badge row follows.
+  - Chat: announcement-bar chevrons are SVG `chevron-right` / `chevron-down` glyphs sized by `qt-chat-system-bar-chevron`, as `AnnouncementChip` renders them (expanded bars, Pascal's included, point down and keep the `qt-chat-system-bar-chevron-down` hook). The "Typing Indicator" (`qt-typing-indicator`) is replaced by the app's writing indicator: the rocking `thinking` quill under `qt-thinking-indicator`, large while a reply is awaited and small after streaming prose. Confirmation badges carry `qt-text-xs`, `type="button"` and an `aria-hidden` glyph, as `ConfirmationBadge` does; `qt-confirmation-badge-label` stays, as an unstyled hook the app also uses.
+  - Tabs: the Navigation Bar demo uses the `_layout.css` structure (`qt-navbar` > `qt-navbar-container` > `qt-navbar-section`), `qt-navbar-link` / `qt-navbar-link-active` links, and `qt-navbar-toggle` icon buttons. A base-layer reset scoped to the demo stands in for Tailwind's preflight, so links no longer underline and buttons no longer show browser chrome, and the actions sit on the right instead of wrapping below the links.
+
+## [1.0.99] - 2026-11-02
+
+### Changed
+- `src/css/qt-components.css` is now generated from the app's `app/styles/qt-components/` by `npm run generate:storybook-css` (Tailwind's compiler, every `@apply` expanded, autoprefixed) instead of hand-mirrored. Never edit it; the app repo's lint fails when it is stale. Section comments at statement level are kept; comments inside rule bodies are not.
+- The file now carries the app's whole component surface: 334 classes the hand copy lacked are added (893 `qt-*` classes in all).
+- Hover rules compile inside `@media (hover: hover)`, as in the app, instead of a bare `:hover`.
+- Rules sit in `@layer components` / `@layer utilities` with a leading `@layer properties, theme, base, components, utilities;`, so unlayered theme CSS overrides them as it does in Quilltap. The file uses CSS nesting as Tailwind emits it.
+- Component variable defaults (`--qt-*`) now live on `[data-theme]` / `[data-theme].dark` as in the app, not on `:root`.
+- `ThemeDecorator` always sets `data-theme` (`"default"` when no theme is chosen), a `light` or `dark` class, and `data-color-mode`, matching how Quilltap marks `<html>`. Without the attribute the `--qt-*` defaults do not apply.
+- The Tabs story's panel follows the app's `EntityTabs`: a `qt-tab-divider` under the tab group and an unstyled panel.
+
+### Fixed
+- Dark mode in Storybook. `quilltap-defaults.css` declared the `--color-*` aliases only on `:root`, where they resolved against the light `--theme-*` values; the decorator's `.dark` on the story container changed `--theme-*` but no alias, so every `var(--color-*)` stayed light. The aliases are now re-declared on `[data-theme]`, `.dark` and `.light` as well.
+
+### Removed
+- Rules that existed only in the hand copy: `qt-dialog-backdrop`, `qt-hamburger`, `qt-left-sidebar-header`, `qt-left-sidebar-mobile-open`, `qt-left-sidebar-overlay`, `qt-left-sidebar-overlay-visible`, `qt-tab-content`; un-scoped copies of `qt-chat-dialogue` / `-narration` / `-ooc` / `-inner-monologue`, `qt-rp-*` and `qt-roleplay-*` (the app scopes them under `.qt-chat-message-content`); `.qt-avatar img`.
+
+## [1.0.98] - 2026-11-02
+
+### Fixed
+- Contrast and focus fixes mirrored from the app's WCAG pass: `.qt-storyteller-mode-option:hover`, `.qt-floating-dialog-close:hover` and `.qt-intervene-toggle:hover` use `--color-accent-foreground` on the accent fill; `.qt-chat-system-bar-time` drops its 0.75 opacity; `.qt-tab-close` rests at 0.8 opacity; `.qt-chat-system-bar`, `.qt-chat-announcement-chip` and `.qt-mention-chip` get a 2px ring on `:focus-visible`.
+
+### Added
+- `.qt-tab-select` (the workspace tab's selectable button) and a focus ring on `.qt-tab-strip .qt-tab:has(.qt-tab-select:focus-visible)`.
+- Families the mirror was missing: alerts (`qt-alert*`, with secondary text and links inheriting the alert colour and links underlined), the footer (`qt-footer*`, path without opacity), settings form shells (`qt-settings-shell*`, `-section-heading`, `-field-group`, `-toggle-row` with an accent-foreground hover) and the settings page's story-background treatment (inactive tab tint 90/10).
+
+## [1.0.97] - 2026-11-02
+
+### Fixed
+- Fallbacks that named custom properties nobody defines (`hsl(var(--primary))`, `var(--qt-text-secondary)`, `var(--qt-content-bg-hover)` with no default, `var(--qt-badge-primary-border)`) now point at `--color-*` tokens, mirroring the app. Affects Lexical checkboxes and links, typeahead and emoji-picker secondary text, the formatting-button hover and the NanoGPT badge border.
+
+### Added
+- `tsup.config.ts` marks `/api/*` as external, so `url()`s pointing at server-served theme assets (the help Guide's Art Deco textures) are left as-is instead of failing the build.
+- Families the mirror was missing: the help dialog (`qt-help-*`, including the Guide tab), Document Mode chrome (`qt-doc-*`), `qt-chat-sidebar-resizer*`, `qt-memory-source-highlight` and the `.qt-chat-message-content a` link rules.
+
 ## [1.0.85] - 2026-10-26
 
 ### Added

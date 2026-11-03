@@ -99,6 +99,13 @@ import {
   executeRunSqlTool,
 } from '@/lib/tools/handlers/run-sql-handler';
 import {
+  executeLookupCharacterTool,
+  executeLookupMemoriesTool,
+  executeLookupMessagesTool,
+  executeReadMessagesTool,
+  type BrahmaLookupResult,
+} from '@/lib/tools/handlers/brahma-lookup-handler';
+import {
   executeUpsertAnnotationTool,
   formatUpsertAnnotationResults,
   type UpsertAnnotationToolContext,
@@ -262,6 +269,18 @@ export interface ToolExecutionContext {
 /**
  * Execute a tool call with full context
  */
+// The Brahma Console's lookup shortcuts, by tool name. Operator surface only.
+const BRAHMA_LOOKUP_HANDLERS: Record<
+  string,
+  (input: unknown, context: { userId: string }) => Promise<BrahmaLookupResult>
+> = {
+  lookup_character: executeLookupCharacterTool,
+  lookup_memories: executeLookupMemoriesTool,
+  lookup_messages: executeLookupMessagesTool,
+  read_messages: executeReadMessagesTool,
+};
+const BRAHMA_LOOKUP_TOOL_NAMES = Object.keys(BRAHMA_LOOKUP_HANDLERS);
+
 // Built-in tool names that are handled directly by this module
 // These should NOT be routed to the plugin registry.
 // Doc-edit tools are sourced from DOC_EDIT_TOOL_NAMES (single source of truth).
@@ -290,8 +309,9 @@ const BUILT_IN_TOOLS = new Set<string>([
   'upsert_annotation',
   'delete_annotation',
   'search',
-  // Brahma Console — read-only SQL access (operator surface only)
+  // Brahma Console — read-only SQL access + lookup shortcuts (operator surface only)
   'run_sql',
+  ...BRAHMA_LOOKUP_TOOL_NAMES,
   // Wardrobe tools
   'wardrobe_list',
   'wardrobe_read',
@@ -1035,6 +1055,30 @@ export async function executeToolCallWithContext(
 
       return {
         toolName: 'run_sql',
+        success: result.success,
+        result: result.success ? result : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle the Brahma lookup shortcuts. Same double gate as run_sql: only
+    // offered to the console, and never executed off the operator surface —
+    // they read every character's memories and every conversation.
+    const brahmaLookup = BRAHMA_LOOKUP_HANDLERS[toolCall.name]
+    if (brahmaLookup) {
+      if (!context.operatorSurface) {
+        return {
+          toolName: toolCall.name,
+          success: false,
+          result: null,
+          error: `${toolCall.name} is only available in the Brahma Console.`,
+        };
+      }
+
+      const result = await brahmaLookup(toolCall.arguments, { userId });
+
+      return {
+        toolName: toolCall.name,
         success: result.success,
         result: result.success ? result : null,
         error: result.success ? undefined : result.error,

@@ -235,6 +235,7 @@ function projectMessageForNewChat(
     hostEvent: newHostEvent,
     targetParticipantIds: newTargets,
     isSilentMessage: source.isSilentMessage ?? null,
+    isEstablishedFact: source.isEstablishedFact ?? null,
     dangerFlags: source.dangerFlags ?? null,
     // Intentionally NOT copied:
     // - rawResponse, tokenCount, promptTokens, completionTokens

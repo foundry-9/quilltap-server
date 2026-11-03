@@ -14,6 +14,8 @@ import {
   contextMultiplier,
   participantMultiplier,
   freshEventMultiplier,
+  resolvedMultiplier,
+  RESOLVED_KEYWORD,
   combineRecallMultipliers,
   RECALL_MULTIPLIERS,
   RECALL_TUNING_DEFAULTS,
@@ -395,5 +397,31 @@ describe('combineRecallMultipliers', () => {
     const r = combineRecallMultipliers(memory, ctx())
     expect(r.multiplier).toBeLessThanOrEqual(MULTIPLIER_CLAMP.max)
     expect(r.multiplier).toBeGreaterThanOrEqual(MULTIPLIER_CLAMP.min)
+  })
+})
+
+describe('resolvedMultiplier (probation §9.6)', () => {
+  it('ranks a settled hurt down without excluding it, case-insensitively', () => {
+    const r = resolvedMultiplier({ keywords: ['brad', 'Resolved', 'past', 'scope: wide', 'relationships'] })
+    expect(r.multiplier).toBe(RECALL_MULTIPLIERS.resolved)
+    expect(r.fired).toEqual(['resolved↓'])
+    expect(resolvedMultiplier({ keywords: ['present', 'scope: wide', 'information'] }).multiplier).toBe(1)
+    expect(resolvedMultiplier({ keywords: null }).multiplier).toBe(1)
+  })
+
+  it('is not a targeting tag', () => {
+    expect(parseTargetingTags([RESOLVED_KEYWORD])).toEqual({
+      temporal: DEFAULT_TEMPORAL,
+      scope: DEFAULT_SCOPE,
+      context: DEFAULT_CONTEXT,
+    })
+  })
+
+  it('folds into the combined multiplier and stays a penalty, never an exclude', () => {
+    const memory = { projectId: PROJ_A, keywords: ['past', 'scope: wide', 'relationships', RESOLVED_KEYWORD] }
+    const r = combineRecallMultipliers(memory, ctx())
+    expect(r.exclude).toBe(false)
+    expect(r.multiplier).toBeCloseTo(RECALL_MULTIPLIERS.temporalPast * RECALL_MULTIPLIERS.resolved, 5)
+    expect(r.fired).toContain('resolved↓')
   })
 })

@@ -147,6 +147,22 @@ The priority chain for the roleplay template of a new chat:
 
 Leave the dropdown on "Inherit from global default" and the project quietly defers to whatever your global default happens to be. Should a chat have been created before a project default was appointed and still carry no template of its own, it will adopt the project's default the next time it speaks.
 
+## Inline Brahma Engine
+
+When you ring the Brahma Console from a chat with `@Brahma:` or `@Brahma?`, some engine must answer. A project may name its own:
+
+1. Open the **Model Behavior** card
+2. Find the **Inline Brahma Engine** dropdown
+3. Choose a connection profile, or "Inherit from global setting" to leave it unset
+4. Changes save automatically
+
+The priority chain for an `@Brahma` consultation in one of the project's chats:
+1. The project's Inline Brahma Engine (most specific)
+2. The global **Engine for `@Brahma` in the Salon** (under **Settings → Chat → Brahma Console**)
+3. Your default connection profile
+
+A profile that has since been deleted is passed over without fuss, and the next link in the chain answers instead. See [Brahma Console](brahma-console.md) for what Brahma can do once rung.
+
 ## Character Access Settings
 
 Control which characters may use their tools on the project's files and shared wardrobe. (Who may *chat* in the project is never restricted.)

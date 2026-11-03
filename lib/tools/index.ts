@@ -519,6 +519,20 @@ export {
   type RunSqlResult,
 } from './handlers/run-sql-handler';
 
+// Brahma Console lookup shortcuts (operator surface only)
+export { lookupCharacterToolDefinition, validateLookupCharacterInput } from './lookup-character-tool';
+export { lookupMemoriesToolDefinition, validateLookupMemoriesInput } from './lookup-memories-tool';
+export { lookupMessagesToolDefinition, validateLookupMessagesInput } from './lookup-messages-tool';
+export { readMessagesToolDefinition, validateReadMessagesInput } from './read-messages-tool';
+export {
+  executeLookupCharacterTool,
+  executeLookupMemoriesTool,
+  executeLookupMessagesTool,
+  executeReadMessagesTool,
+  type BrahmaLookupToolContext,
+  type BrahmaLookupResult,
+} from './handlers/brahma-lookup-handler';
+
 // Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,

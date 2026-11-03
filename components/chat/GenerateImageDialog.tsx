@@ -251,7 +251,7 @@ export default function GenerateImageDialog({
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border qt-border-default rounded-lg qt-shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
+                  <div className="absolute top-full left-0 right-0 mt-1 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
                     <div className="p-2 border-b qt-border-default">
                       <input
                         aria-label="Search characters"

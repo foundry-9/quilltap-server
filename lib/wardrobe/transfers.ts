@@ -1,0 +1,439 @@
+/**
+ * Wardrobe transfers — moving or copying one wardrobe item between tiers (a
+ * character's vault, a group's or project's store, Quilltap General). The
+ * one path the operator's transfer route (`POST /api/v1/wardrobe/transfers`)
+ * takes; the Inventory's twin is `lib/inventory/transfers.ts`.
+ *
+ * For a composite (outfit), `components` brings its same-container
+ * components along — all or nothing — with the outfit's `componentItemIds`
+ * rewritten to the components' destination ids when copies mint fresh ones.
+ *
+ * The wear ledger (`wardrobe_wear_stats`) is keyed by item id and is never
+ * written here: a move keeps the id, so the tally follows the garment for
+ * free (the source-side delete goes straight to the store, not through
+ * `cleanupEquippedRefs`, so it does not drop the rows); a copy mints a fresh
+ * id and is a new garment whose ledger starts empty.
+ *
+ * Every transferred item keeps its folder: it lands at the same path under the
+ * destination's `Wardrobe/`, and the folder is created there as needed.
+ *
+ * Pictures (`Wardrobe/images/<itemId>/` in the source mount) travel with every
+ * transferred item: a move re-links them into the destination mount at the
+ * same path and re-points their `files` rows, dropping the source links once
+ * the source item is gone; a copy links them under the copy's new id with
+ * fresh `files` rows, and the copy's `imageFileId` points at its own copy.
+ *
+ * Server-only.
+ *
+ * @module lib/wardrobe/transfers
+ */
+
+import { randomUUID } from 'crypto'
+import { z } from 'zod'
+import { logger } from '@/lib/logger'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { normalizeWardrobeFolderPathOrRoot } from '@/lib/wardrobe/folders'
+import { collectContainerComponents } from '@/lib/wardrobe/expand-composites'
+import { createItem } from '@/lib/wardrobe/item-mutations'
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool'
+import {
+  WardrobeScopeSchema,
+  groupLocationsForCharacter,
+  locationForMount,
+  locationKey,
+  resolveWardrobeLocation,
+  type WardrobeLocation,
+} from '@/lib/wardrobe/location'
+import {
+  carryItemImages,
+  commitMovedImages,
+  type PendingImageMove,
+} from '@/lib/wardrobe/item-images'
+
+/** What travels with a composite: its same-container components, or nothing. */
+type ComponentMode = 'move' | 'copy' | 'none'
+
+/** The item named is in none of the tiers probed (a 404). */
+export class WardrobeTransferSourceNotFoundError extends Error {
+  constructor() {
+    super('Wardrobe item not found')
+    this.name = 'WardrobeTransferSourceNotFoundError'
+  }
+}
+
+/** The transfer is refused before anything is written (a 400). */
+export class WardrobeTransferRefusedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'WardrobeTransferRefusedError'
+  }
+}
+
+interface ResolvedSource {
+  location: WardrobeLocation
+  item: WardrobeItem
+  /**
+   * Every item in the source folder (the same list the item was found in).
+   * Used to gather a composite's same-folder components so they can travel
+   * with it — components living in *other* tiers stay put.
+   */
+  containerItems: WardrobeItem[]
+}
+
+export const wardrobeTransferRequestSchema = z
+  .object({
+    action: z.enum(['move', 'copy']),
+    itemId: z.string().min(1),
+    /**
+     * Character-view source hint: the item is probed across the character's
+     * reachable tiers in precedence order (vault → groups → project → General). Kept for the
+     * dialog's character view, where a merged item's home tier isn't known.
+     */
+    sourceCharacterId: z.string().min(1).optional(),
+    sourceProjectId: z.string().nullable().optional(),
+    /**
+     * Explicit source container. Used when the dialog is browsing a shared
+     * container directly (General / a project / a group), where there is no
+     * selected character to probe from and the home tier is already known.
+     */
+    source: z
+      .object({
+        scope: WardrobeScopeSchema,
+        id: z.string().optional(),
+      })
+      .optional(),
+    destination: z.object({
+      scope: WardrobeScopeSchema,
+      id: z.string().optional(),
+    }),
+    /**
+     * For a composite (outfit): what to do with the components that live in
+     * the same source container. `move` relocates them (ids kept), `copy`
+     * duplicates them at the destination (fresh ids; the transferred outfit's
+     * `componentItemIds` are rewritten to match), `none`/omitted transfers the
+     * outfit alone. All-or-nothing — no per-component picking. A `copy`
+     * action refuses `components: 'move'` (it would strand the original).
+     */
+    components: z.enum(['move', 'copy', 'none']).optional(),
+  })
+  .refine((body) => Boolean(body.sourceCharacterId || body.source), {
+    message: 'Either sourceCharacterId or source is required',
+  })
+  .refine((body) => !(body.action === 'copy' && body.components === 'move'), {
+    message: 'Copying an outfit cannot move its components — the original outfit still needs them',
+  })
+
+export type WardrobeTransferRequest = z.infer<typeof wardrobeTransferRequestSchema>
+
+export interface WardrobeTransferResult {
+  wardrobeItem: WardrobeItem
+  action: 'move' | 'copy'
+  componentsTransferred: number
+  /** Planned component references that did not read back at the destination. */
+  unresolvedComponentIds: string[]
+}
+
+/**
+ * Look `itemId` up in a location. The hit carries the folder's whole item list
+ * so a composite's same-folder components can be gathered.
+ */
+async function findInLocation(
+  location: WardrobeLocation,
+  itemId: string,
+): Promise<ResolvedSource | null> {
+  const containerItems = await location.readItems(true)
+  const item = containerItems.find((i) => i.id === itemId)
+  if (!item) return null
+  return { location, item, containerItems }
+}
+
+/**
+ * Probe the tiers a character wears from, in precedence order — their vault,
+ * then their groups' stores (membership order, the first group to claim a
+ * store keeps it), then every store of the project (official first), then
+ * General — for the item. The same walk and order as the wearable pool. A
+ * probe only reads: a store that doesn't exist yet is skipped, never
+ * provisioned (bug 192).
+ */
+async function resolveSourceItem(
+  userId: string,
+  sourceCharacterId: string,
+  sourceProjectId: string | null,
+  itemId: string,
+  repos: RepositoryContainer,
+): Promise<ResolvedSource | null> {
+  const personal = await resolveWardrobeLocation('character', sourceCharacterId, repos, userId)
+  if (!personal) return null
+  const own = await findInLocation(personal, itemId)
+  if (own) return own
+
+  // The source character is the one wearing the item, so their memberships
+  // are the right scope — matching how the wearable pool resolves the tier.
+  for (const group of await groupLocationsForCharacter(sourceCharacterId)) {
+    const hit = await findInLocation(group, itemId)
+    if (hit) return hit
+  }
+
+  if (sourceProjectId) {
+    for (const project of await projectLocations(sourceProjectId, repos, userId)) {
+      const hit = await findInLocation(project, itemId)
+      if (hit) return hit
+    }
+  }
+
+  const general = await resolveWardrobeLocation('general', null, repos, userId)
+  return general ? findInLocation(general, itemId) : null
+}
+
+/**
+ * The project tier as locations: the official store (through the location, so
+ * it carries the project's origin), then every other linked store, tagged
+ * with the project too. Read-only — nothing is provisioned.
+ */
+async function projectLocations(
+  projectId: string,
+  repos: RepositoryContainer,
+  userId: string,
+): Promise<WardrobeLocation[]> {
+  const official = await resolveWardrobeLocation('project', projectId, repos, userId)
+  const mountPointIds = await resolveProjectMountPointIds(projectId)
+  if (!official && mountPointIds.length === 0) return []
+  const origin = official?.origin ?? {
+    scope: 'project' as const,
+    id: projectId,
+    name: (await repos.projects.findByIdRaw(projectId))?.name || 'Project',
+  }
+  return mountPointIds.map((mountPointId) =>
+    official && official.mountPointId === mountPointId
+      ? official
+      : locationForMount({ mountPointId, scope: 'project', characterId: null }, projectId, origin),
+  )
+}
+
+/**
+ * Write a transferred item at the destination, keeping its identity, history,
+ * provenance and archived state (`planned` already carries the id it lands as).
+ */
+function createAtDestination(destination: WardrobeLocation, planned: WardrobeItem): Promise<WardrobeItem> {
+  return createItem(destination, planned, {
+    preserve: {
+      id: planned.id,
+      createdAt: planned.createdAt,
+      updatedAt: planned.updatedAt,
+      archivedAt: planned.archivedAt ?? null,
+      imageFileId: planned.imageFileId ?? null,
+      migratedFromClothingRecordId: planned.migratedFromClothingRecordId ?? null,
+    },
+  })
+}
+
+/**
+ * Move or copy one wardrobe item (and, for an outfit, its same-container
+ * components as `components` says) to another tier. Every refusal is decided
+ * before anything is written.
+ */
+export async function transferWardrobeItem(
+  repos: RepositoryContainer,
+  userId: string,
+  body: WardrobeTransferRequest,
+): Promise<WardrobeTransferResult> {
+  const explicit = body.source
+    ? await resolveWardrobeLocation(body.source.scope, body.source.id, repos, userId)
+    : null
+  const source = body.source
+    ? explicit && (await findInLocation(explicit, body.itemId))
+    : await resolveSourceItem(
+        userId,
+        body.sourceCharacterId as string,
+        body.sourceProjectId ?? null,
+        body.itemId,
+        repos,
+      )
+  if (!source) throw new WardrobeTransferSourceNotFoundError()
+
+  const destination = await resolveWardrobeLocation(
+    body.destination.scope,
+    body.destination.id,
+    repos,
+    userId,
+    { ensure: true },
+  )
+  if (!destination) throw new WardrobeTransferRefusedError('Invalid destination')
+
+  if (locationKey(source.location) === locationKey(destination)) {
+    throw new WardrobeTransferRefusedError('Source and destination are the same')
+  }
+
+  const action = body.action
+  const componentMode: ComponentMode = body.components ?? 'none'
+  const now = new Date().toISOString()
+  const destinationCharacterId = destination.characterId
+
+  // The components travelling along: the transitive closure of the outfit's
+  // components that live in the same source container. All-or-nothing.
+  const travellingComponents =
+    componentMode === 'none'
+      ? []
+      : collectContainerComponents([source.item], source.containerItems)
+
+  // Plan every write up front so id remapping is consistent across the
+  // whole set. Moves keep ids; copies mint fresh ones — and every
+  // `componentItemIds` reference to a travelling component is rewritten to
+  // that component's destination id, so the outfit still points at the very
+  // pieces that made the journey with it.
+  const idMap = new Map<string, string>()
+  for (const component of travellingComponents) {
+    idMap.set(component.id, componentMode === 'copy' ? randomUUID() : component.id)
+  }
+  const remapComponentIds = (ids: readonly string[]): string[] =>
+    ids.map((id) => idMap.get(id) ?? id)
+
+  const plannedComponents: WardrobeItem[] = travellingComponents.map((component) => ({
+    ...component,
+    id: idMap.get(component.id) as string,
+    characterId: destinationCharacterId,
+    componentItemIds: remapComponentIds(component.componentItemIds),
+    folder: normalizeWardrobeFolderPathOrRoot(component.folder),
+    createdAt: componentMode === 'copy' ? now : component.createdAt,
+    updatedAt: componentMode === 'copy' ? now : component.updatedAt,
+  }))
+
+  const nextItem: WardrobeItem = {
+    ...source.item,
+    id: action === 'copy' ? randomUUID() : source.item.id,
+    characterId: destinationCharacterId,
+    componentItemIds: remapComponentIds(source.item.componentItemIds),
+    folder: normalizeWardrobeFolderPathOrRoot(source.item.folder),
+    createdAt: action === 'copy' ? now : source.item.createdAt,
+    updatedAt: action === 'copy' ? now : source.item.updatedAt,
+  }
+
+  // Refuse the whole transfer before writing anything if any planned id is
+  // already taken at the destination — all-or-nothing means no half-landed
+  // outfits.
+  const destinationItems = await destination.readItems(true)
+  const destinationIds = new Set(destinationItems.map((item) => item.id))
+  for (const planned of [nextItem, ...plannedComponents]) {
+    if (destinationIds.has(planned.id)) {
+      throw new WardrobeTransferRefusedError(
+        `An item with the ID of "${planned.title}" already exists at the destination`,
+      )
+    }
+  }
+
+  // A move writes to the source too (its item and its picture links go), so
+  // its writable mount is resolved before anything is written: an archived
+  // source character refuses here (the tombstone), not half-way through.
+  if (action === 'move' || componentMode === 'move') {
+    await source.location.writableMountPointId()
+  }
+
+  // Pictures are linked at the destination before the items land, so a
+  // landed item's `imageFileId` never dangles. A copy's pointer is rewritten
+  // to its own copied file; a move's rows are re-pointed only after the
+  // source item is gone (commitMovedImages), so a failure before then leaves
+  // the source whole.
+  const destinationMountPointId = await destination.writableMountPointId()
+  const travellers: Array<{ original: WardrobeItem; planned: WardrobeItem; mode: 'move' | 'copy' }> = [
+    ...travellingComponents.map((component, i) => ({
+      original: component,
+      planned: plannedComponents[i],
+      mode: (componentMode === 'copy' ? 'copy' : 'move') as 'move' | 'copy',
+    })),
+    { original: source.item, planned: nextItem, mode: action },
+  ]
+  const pendingImageMoves: Array<{ itemId: string; pending: PendingImageMove }> = []
+  for (const traveller of travellers) {
+    const { fileIdMap, pendingMove } = await carryItemImages(repos, {
+      mode: traveller.mode,
+      sourceItemId: traveller.original.id,
+      destinationItemId: traveller.planned.id,
+      destinationMountPointId,
+      userId: userId,
+    })
+    const currentImage = traveller.original.imageFileId
+    traveller.planned.imageFileId = currentImage ? fileIdMap.get(currentImage) ?? null : null
+    if (traveller.mode === 'move') {
+      pendingImageMoves.push({ itemId: traveller.original.id, pending: pendingMove })
+    }
+  }
+
+  // Components land first so the outfit's references resolve the moment it
+  // arrives; the write layer tolerates missing components, but there is no
+  // reason to create that window.
+  for (const planned of plannedComponents) {
+    await createAtDestination(destination, planned)
+  }
+  const stored = await createAtDestination(destination, nextItem)
+
+  if (action === 'move') {
+    // `components: 'copy'` leaves the originals at the source (they were
+    // duplicated, not relocated); only `'move'` removes them.
+    if (componentMode === 'move') {
+      for (const component of travellingComponents) {
+        const removed = await source.location.delete(component.id)
+        if (!removed) {
+          throw new Error('Failed to remove a component from source after move')
+        }
+      }
+    }
+    const removed = await source.location.delete(source.item.id)
+    if (!removed) {
+      throw new Error('Failed to remove item from source after move')
+    }
+  }
+
+  // The moved items' source-side picture links go once their items have.
+  for (const { itemId, pending } of pendingImageMoves) {
+    await commitMovedImages(repos, itemId, pending)
+  }
+
+  // Post-write verification: read the outfit BACK from the destination and
+  // check that its component references survived the storage round-trip
+  // exactly as planned — the vault serializes references as title slugs, so
+  // a subtle resolution bug shows up here, not in the pre-projection value
+  // `createAtDestination` returned. Anything planned-but-absent from the
+  // read-back list is reported.
+  const afterItems = await destination.readItems(true)
+  const afterOutfit = afterItems.find((item) => item.id === stored.id)
+  const readBackIds = new Set(afterOutfit?.componentItemIds ?? [])
+  const unresolvedComponentIds = nextItem.componentItemIds.filter(
+    (id) => !readBackIds.has(id),
+  )
+  if (!afterOutfit || unresolvedComponentIds.length > 0) {
+    logger.error('[WardrobeTransfers] Transferred outfit did not read back with its planned component references', {
+      userId: userId,
+      outfitId: stored.id,
+      outfitFoundAtDestination: Boolean(afterOutfit),
+      plannedComponentIds: nextItem.componentItemIds,
+      readBackComponentIds: afterOutfit?.componentItemIds ?? [],
+      unresolvedComponentIds,
+      destinationScope: destination.scope,
+      destinationMountPointId: destination.mountPointId,
+    })
+  }
+
+  logger.info('[WardrobeTransfers] Wardrobe item transferred', {
+    userId: userId,
+    action,
+    componentMode,
+    itemId: source.item.id,
+    resultItemId: stored.id,
+    folder: stored.folder ?? '',
+    componentsTransferred: plannedComponents.length,
+    sourceScope: source.location.scope,
+    destinationScope: destination.scope,
+    sourceCharacterId: source.location.characterId,
+    destinationCharacterId: destination.characterId,
+    sourceMountPointId: source.location.mountPointId,
+    destinationMountPointId: destination.mountPointId,
+  })
+
+  return {
+    wardrobeItem: stored,
+    action,
+    componentsTransferred: plannedComponents.length,
+    unresolvedComponentIds,
+  }
+}

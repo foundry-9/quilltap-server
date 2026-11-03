@@ -183,9 +183,9 @@ export const ThemeComparison: React.FC = () => {
         <div style={{ marginBottom: '1.5rem' }}>
           <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--color-muted-foreground)' }}>Badges</h4>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <span className="qt-badge qt-badge-default">Default</span>
             <span className="qt-badge qt-badge-primary">Primary</span>
             <span className="qt-badge qt-badge-secondary">Secondary</span>
+            <span className="qt-badge qt-badge-info">Info</span>
             <span className="qt-badge qt-badge-success">Success</span>
             <span className="qt-badge qt-badge-warning">Warning</span>
             <span className="qt-badge qt-badge-destructive">Destructive</span>

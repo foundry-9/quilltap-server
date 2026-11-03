@@ -22,7 +22,7 @@ export interface UseClickOutsideOptions {
    * Optional callback for Escape key press.
    * If provided, will add a keydown listener for Escape.
    */
-  onEscape?: () => void;
+  onEscape?: (event: KeyboardEvent) => void;
 
   /**
    * Listen for Escape in the capture phase and swallow it (`stopPropagation`
@@ -38,7 +38,7 @@ export interface UseClickOutsideOptions {
  * Hook to detect clicks outside a referenced element.
  *
  * @param ref - The ref of the element to detect clicks outside of
- * @param onClickOutside - Callback fired when a click occurs outside the ref
+ * @param onClickOutside - Callback fired (with the event) when a click occurs outside the ref
  * @param options - Optional configuration
  *
  * @example
@@ -60,7 +60,7 @@ export interface UseClickOutsideOptions {
  */
 export function useClickOutside(
   ref: RefObject<HTMLElement | null>,
-  onClickOutside: () => void,
+  onClickOutside: (event: MouseEvent) => void,
   options: UseClickOutsideOptions = {}
 ): void {
   const { enabled = true, excludeRefs = [], onEscape, escapeCapture = false } = options;
@@ -92,7 +92,7 @@ export function useClickOutside(
       }
 
       // Click is outside all tracked elements
-      onClickOutside();
+      onClickOutside(event);
     };
 
     const handleKeyDown = onEscape
@@ -105,7 +105,7 @@ export function useClickOutside(
               event.stopPropagation();
               event.preventDefault();
             }
-            onEscape();
+            onEscape(event);
           }
         }
       : undefined;

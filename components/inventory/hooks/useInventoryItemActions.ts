@@ -23,6 +23,7 @@ import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
 import { containerOfOrigin, type InventoryContainer } from '@/lib/inventory/container'
 import { InventoryRequestError, useInventoryMutations } from '@/lib/hooks/use-inventory'
 import { inventoryLabel } from '@/lib/inventory/resolve'
+import { useItemOverlays } from '@/components/item-browser/useItemOverlays'
 
 export type InventoryEditorState =
   | { kind: 'create'; mode: 'item' | 'kit' | 'archetype'; folder: string }
@@ -69,12 +70,10 @@ export function describeInventoryRefusal(error: unknown, fallback: string): stri
 
 export function useInventoryItemActions({ container, requestConfirmation, requestAlert }: InventoryItemActionsOptions) {
   const mutations = useInventoryMutations()
-  const [editor, setEditor] = useState<InventoryEditorState | null>(null)
-  const [folderPicker, setFolderPicker] = useState<{ items: ResolvedInventoryItem[] } | null>(null)
-  const [transfer, setTransfer] = useState<{ item: ResolvedInventoryItem; mode: 'move' | 'copy' } | null>(null)
   const [instantiateFor, setInstantiateFor] = useState<
     { archetype: ResolvedInventoryItem } | { destination: InventoryContainer; folder: string } | null
   >(null)
+  const overlays = useItemOverlays<ResolvedInventoryItem, InventoryEditorState>(instantiateFor !== null)
 
   /** The tier an object lives in (a borrowed one is addressed at its own tier). */
   const addressOf = useCallback(
@@ -174,25 +173,16 @@ export function useInventoryItemActions({ container, requestConfirmation, reques
     [mutations, addressOf],
   )
 
-  const overlayOpen = editor !== null || folderPicker !== null || transfer !== null || instantiateFor !== null
-
+  const { openEditorWith } = overlays
   return useMemo(
     () => ({
+      ...overlays,
       mutations,
       addressOf,
       requestConfirmation,
       requestAlert,
-      overlayOpen,
-      editor,
-      openCreate: (mode: 'item' | 'kit' | 'archetype', folder = '') => setEditor({ kind: 'create', mode, folder }),
-      openEditor: (item: ResolvedInventoryItem) => setEditor({ kind: 'edit', item }),
-      closeEditor: () => setEditor(null),
-      folderPicker,
-      openFolderPicker: (items: ResolvedInventoryItem[]) => setFolderPicker({ items }),
-      closeFolderPicker: () => setFolderPicker(null),
-      transfer,
-      openTransfer: (item: ResolvedInventoryItem, mode: 'move' | 'copy') => setTransfer({ item, mode }),
-      closeTransfer: () => setTransfer(null),
+      openCreate: (mode: 'item' | 'kit' | 'archetype', folder = '') => openEditorWith({ kind: 'create', mode, folder }),
+      openEditor: (item: ResolvedInventoryItem) => openEditorWith({ kind: 'edit', item }),
       instantiateFor,
       openInstantiateArchetype: (archetype: ResolvedInventoryItem) => setInstantiateFor({ archetype }),
       openInstantiateInto: (destination: InventoryContainer, folder: string) => setInstantiateFor({ destination, folder }),
@@ -202,7 +192,7 @@ export function useInventoryItemActions({ container, requestConfirmation, reques
       toggleArchived,
       duplicate,
     }),
-    [mutations, addressOf, requestConfirmation, requestAlert, overlayOpen, editor, folderPicker, transfer, instantiateFor, detach, remove, toggleArchived, duplicate],
+    [overlays, openEditorWith, mutations, addressOf, requestConfirmation, requestAlert, instantiateFor, detach, remove, toggleArchived, duplicate],
   )
 }
 

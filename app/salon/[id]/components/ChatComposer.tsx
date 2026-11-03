@@ -2,9 +2,12 @@
 
 import { useRef, useState, useCallback, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { Tooltip } from '@/components/ui/Tooltip'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import PendingInformChips from '@/components/chat/PendingInformChips'
+import RaisedHandChip from './RaisedHandChip'
+import type { RaisedHandStatus } from '../hooks/useSSEStreaming'
 import { SpeakingAsAvatar, voiceRehearsalTitle, type VoiceRehearsalCue } from './SpeakingAsAvatar'
 import type { AvatarImageSource } from '@/components/ui/Avatar'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
@@ -16,6 +19,8 @@ import {
   type SlashCustomToolRef,
 } from '@/components/chat/lexical/slash-commands/context'
 import { useSlashCommandRunner } from '@/components/chat/useSlashCommandRunner'
+import type { ComposerSubmitOptions } from '@/components/chat/lexical/plugins/KeyboardPlugin'
+import { showInfoToast } from '@/lib/toast'
 import type { AttachedFile, PendingToolResult } from '../types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
 
@@ -87,7 +92,13 @@ interface ChatComposerProps {
   isDocumentModeActive?: boolean
 
   // Callbacks
-  onSubmit: (e: React.FormEvent) => void
+  /**
+   * Submit the composer. `opts.establishedFact` posts the line as established
+   * fact (Deus Ex Machina) — armed with `/deus`, or sent once with
+   * Cmd/Ctrl+Shift+Enter. Return `false` when nothing was sent, so an armed
+   * composer stays armed.
+   */
+  onSubmit: (e: React.FormEvent, opts?: ComposerSubmitOptions) => boolean | void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   onAttachFileClick?: () => void
   onImagePaste: (file: File) => Promise<void>
@@ -108,6 +119,10 @@ interface ChatComposerProps {
   onToggleRaisedHand: () => void
   /** The operator's hand is up, waiting on the next speaker's answer. */
   handRaised?: boolean
+  /** Where the raised hand stands, for the chip above the form. */
+  handStatus?: RaisedHandStatus | null
+  /** Put away the raised hand's outcome note. */
+  onDismissHandStatus?: () => void
   /**
    * Whether anyone could be asked to yield — a room with a rotation (more than
    * one character). A lone character's reply hands the floor back anyway.
@@ -200,6 +215,8 @@ export function ChatComposer({
   onStopStreaming,
   onToggleRaisedHand,
   handRaised = false,
+  handStatus = null,
+  onDismissHandStatus,
   canRaiseHand = false,
   stopping = false,
   onPendingToolResult,
@@ -224,6 +241,37 @@ export function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<ComposerEditorHandle>(null)
+
+  // Deus Ex Machina: the next line is posted as established fact. Armed per
+  // chat (the state holds the chat id it was armed in), so switching chats
+  // disarms it; never persisted with the draft, so a reload disarms it too.
+  const [factArmedForChat, setFactArmedForChat] = useState<string | null>(null)
+  const factArmed = factArmedForChat === id
+  // The Cmd/Ctrl+Shift+Enter shortcut sends one line as fact without arming;
+  // the flag rides from the key handler to the form submit through this ref.
+  const shortcutFactRef = useRef(false)
+  const currentText = useCallback(
+    () => (showSource ? input : editorRef.current?.getMarkdown() ?? ''),
+    [showSource, input],
+  )
+  const toggleEstablishedFact = useCallback(() => {
+    if (factArmed) {
+      setFactArmedForChat(null)
+      return
+    }
+    // A fact needs words: an attachments-only composer cannot be armed.
+    if (!currentText().trim() && attachedFiles.length > 0) {
+      showInfoToast('A fact must be written down — attachments alone cannot be established.')
+      return
+    }
+    setFactArmedForChat(id)
+  }, [factArmed, currentText, attachedFiles.length, id])
+  const handleFormSubmit = useCallback((e: React.FormEvent) => {
+    const establishedFact = factArmed || shortcutFactRef.current
+    shortcutFactRef.current = false
+    const sent = onSubmit(e, establishedFact ? { establishedFact: true } : undefined)
+    if (establishedFact && sent !== false) setFactArmedForChat(null)
+  }, [factArmed, onSubmit])
   // Track the Lexical editor instance in state so it's available during render
   // (refs can't be read during render in React 19)
   const [lexicalEditor, setLexicalEditor] = useState<import('lexical').LexicalEditor | null>(null)
@@ -266,6 +314,7 @@ export function ChatComposer({
         announce: onInsertAnnouncementClick,
         mail: onComposeMailClick,
         inform: onInformClick,
+        deus: toggleEstablishedFact,
         ...(onPendingToolResult ? buildQuickRollActions(id, onPendingToolResult) : {}),
       },
       openRunTool: onOpenRunTool,
@@ -282,6 +331,7 @@ export function ChatComposer({
     onInsertAnnouncementClick,
     onComposeMailClick,
     onInformClick,
+    toggleEstablishedFact,
     onPendingToolResult,
     onOpenRunTool,
     onOpenCustomTool,
@@ -294,11 +344,18 @@ export function ChatComposer({
   // form submit — the page's onSubmit reads markdown straight from the editor
   // handle (`getMarkdown()`), which is why we no longer round-trip through
   // setInput here (that was the per-keystroke re-render source).
-  const handleEditorSubmit = useCallback(() => {
+  const handleEditorSubmit = useCallback((opts?: ComposerSubmitOptions) => {
     // Belt and braces: the editor is already disabled, but a keystroke racing
     // the lock must not put a message on top of a turn in flight.
     if (composerLocked) return
     const markdown = editorRef.current?.getMarkdown() ?? ''
+    if (opts?.establishedFact) {
+      if (!markdown.trim()) {
+        showInfoToast('A fact must be written down — there is nothing here to establish.')
+        return
+      }
+      shortcutFactRef.current = true
+    }
     if (markdown.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
       const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
       if (form) {
@@ -358,15 +415,16 @@ export function ChatComposer({
               <Icon name="alert-circle" className="w-5 h-5 flex-shrink-0" />
             )}
             <span className="qt-label flex-1">{toolExecutionStatus.message}</span>
-            <button
-              type="button"
-              onClick={onDismissToolExecutionStatus}
-              className="qt-button-ghost flex-shrink-0 p-1"
-              title="Dismiss"
-              aria-label="Dismiss notice"
-            >
-              <Icon name="close" className="w-4 h-4" />
-            </button>
+            <Tooltip content="Dismiss">
+              <button
+                type="button"
+                onClick={onDismissToolExecutionStatus}
+                className="qt-button-ghost flex-shrink-0 p-1"
+                aria-label="Dismiss notice"
+              >
+                <Icon name="close" className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
         )}
 
@@ -404,6 +462,36 @@ export function ChatComposer({
           <PendingInformChips chatId={id} participantNames={informParticipantNames} />
         )}
 
+        {/* The raised hand (soft interrupt): up, being weighed, then answered. */}
+        <RaisedHandChip
+          status={handStatus}
+          onLower={onToggleRaisedHand}
+          onDismiss={() => onDismissHandStatus?.()}
+        />
+
+        {/* Deus Ex Machina, armed: the next line is posted as established
+            fact. Announced politely to assistive tech as it comes and goes. */}
+        <div aria-live="polite">
+          {factArmed && (
+            <div className="qt-chat-attachment-list mb-2">
+              <div className="qt-chat-tool-result-chip">
+                <Icon name="deus-ex-machina" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
+                <span className="text-foreground">Deus Ex Machina: this line will be established as fact</span>
+                <Tooltip content="Disarm Deus Ex Machina">
+                  <button
+                    type="button"
+                    onClick={() => setFactArmedForChat(null)}
+                    className="qt-chat-attachment-chip-remove"
+                    aria-label="Disarm Deus Ex Machina"
+                  >
+                    <Icon name="close" className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Attached files and pending tool results preview */}
         {(attachedFiles.length > 0 || pendingToolResults.length > 0) && (
           <div className="qt-chat-attachment-list mb-2">
@@ -421,14 +509,16 @@ export function ChatComposer({
                 <span className="text-foreground max-w-[150px] truncate">
                   {file.filename}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveAttachedFile(file.id)}
-                  className="qt-chat-attachment-chip-remove"
-                  title="Remove attachment"
-                >
-                  <Icon name="close" className="w-4 h-4" />
-                </button>
+                <Tooltip content="Remove attachment">
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachedFile(file.id)}
+                    className="qt-chat-attachment-chip-remove"
+                    aria-label={`Remove attachment ${file.filename}`}
+                  >
+                    <Icon name="close" className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             ))}
 
@@ -437,20 +527,31 @@ export function ChatComposer({
               <div
                 key={result.id}
                 className="qt-chat-tool-result-chip group relative"
-                title={`${result.requestPrompt}\n\n${result.formattedResult}`}
               >
-                <span className="text-base leading-none">{result.icon}</span>
-                <span className="text-foreground max-w-[200px] truncate">
-                  {result.summary}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onRemovePendingToolResult(result.id)}
-                  className="qt-chat-attachment-chip-remove"
-                  title="Remove tool result"
+                <Tooltip
+                  content={
+                    <div className="qt-tooltip-body whitespace-pre-wrap">
+                      {`${result.requestPrompt}\n\n${result.formattedResult}`}
+                    </div>
+                  }
+                  interactive
+                  anchorClassName="gap-2 min-w-0"
                 >
-                  <Icon name="close" className="w-4 h-4" />
-                </button>
+                  <span className="text-base leading-none">{result.icon}</span>
+                  <span className="text-foreground max-w-[200px] truncate">
+                    {result.summary}
+                  </span>
+                </Tooltip>
+                <Tooltip content="Remove tool result">
+                  <button
+                    type="button"
+                    onClick={() => onRemovePendingToolResult(result.id)}
+                    className="qt-chat-attachment-chip-remove"
+                    aria-label={`Remove tool result ${result.summary}`}
+                  >
+                    <Icon name="close" className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             ))}
           </div>
@@ -480,7 +581,7 @@ export function ChatComposer({
           />
         )}
 
-        <form id={`composer-form-${id}`} onSubmit={onSubmit} className="qt-chat-composer-inner">
+        <form id={`composer-form-${id}`} onSubmit={handleFormSubmit} className="qt-chat-composer-inner">
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
@@ -502,6 +603,11 @@ export function ChatComposer({
                 src={speakingAs.character}
                 canType={hasActiveCharacters && !composerLocked && !streaming && !waitingForResponse}
                 voiceRehearsal={voiceRehearsal}
+                establishedFact={{
+                  armed: factArmed,
+                  onToggle: toggleEstablishedFact,
+                  disabled: composerLocked || !hasActiveCharacters,
+                }}
               />
             </div>
           )}
@@ -529,51 +635,63 @@ export function ChatComposer({
             {/* Main toolbar buttons - composition mode, document, terminal */}
             <div className="qt-chat-toolbar">
               {/* Composition mode toggle button */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleDocumentEditingMode()
-                }}
-                className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
-                title={documentEditingMode
+              <Tooltip
+                content={(documentEditingMode
                   ? `Switch to chat mode (Enter to send)`
-                  : `Switch to composition mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`}
+                  : `Switch to composition mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`)
+                  + ` · ${isMac ? 'Cmd' : 'Ctrl'}+Shift+Enter sends as established fact`}
               >
-                <Icon name="file" className="w-5 h-5" />
-              </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleDocumentEditingMode()
+                  }}
+                  className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
+                  aria-label={documentEditingMode ? 'Switch to chat mode' : 'Switch to composition mode'}
+                  aria-pressed={documentEditingMode}
+                >
+                  <Icon name="file" className="w-5 h-5" />
+                </button>
+              </Tooltip>
 
               {/* Open Document button — stays available even with documents
                   already open, so the user can keep adding more. */}
               {onOpenDocumentClick && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onOpenDocumentClick()
-                  }}
-                  className="qt-chat-toolbar-button qt-doc-open-button"
-                  title={isDocumentModeActive
+                <Tooltip
+                  content={isDocumentModeActive
                     ? 'Open another document'
                     : `Open document (${isMac ? 'Cmd' : 'Ctrl'}+Shift+D)`}
                 >
-                  <Icon name="pencil" className="w-5 h-5" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenDocumentClick()
+                    }}
+                    className="qt-chat-toolbar-button qt-doc-open-button"
+                    aria-label={isDocumentModeActive ? 'Open another document' : 'Open document'}
+                  >
+                    <Icon name="pencil" className="w-5 h-5" />
+                  </button>
+                </Tooltip>
               )}
 
               {/* Open Terminal button */}
               {onOpenTerminalClick && !isTerminalModeActive && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onOpenTerminalClick()
-                  }}
-                  className="qt-chat-toolbar-button"
-                  title="Open terminal"
-                >
-                  <Icon name="code" className="w-5 h-5" />
-                </button>
+                <Tooltip content="Open terminal">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenTerminalClick()
+                    }}
+                    className="qt-chat-toolbar-button"
+                    aria-label="Open terminal"
+                  >
+                    <Icon name="code" className="w-5 h-5" />
+                  </button>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -590,7 +708,10 @@ export function ChatComposer({
             />
           )}
           {/* Keep Lexical mounted but hidden during source mode to preserve undo history */}
-          <div className="flex-1 min-w-0 self-stretch" style={showSource ? { display: 'none' } : undefined}>
+          <div
+            className={`flex-1 min-w-0 self-stretch${factArmed ? ' qt-chat-composer-established-fact' : ''}`}
+            style={showSource ? { display: 'none' } : undefined}
+          >
             <LexicalComposerWrapper
               ref={composerRefCallback}
               input={input}
@@ -610,32 +731,28 @@ export function ChatComposer({
 
           {/* Right side buttons: Send, raise a hand (soft interrupt), Stop (hard). */}
           <div className="qt-chat-composer-actions">
-            <button
-              type="submit"
-              disabled={composerLocked || isGenerating || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
-              className="qt-chat-composer-send"
-              title={!hasActiveCharacters
+            <Tooltip
+              content={!hasActiveCharacters
                 ? "Add a character to start chatting"
                 : isGenerating
                   ? "Generating..."
-                  : voiceRehearsal && speakingAs
-                    ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
-                    : "Send message"}
-              aria-label="Send message"
+                  : factArmed
+                    ? 'Send as established fact'
+                    : voiceRehearsal && speakingAs
+                      ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
+                      : "Send message"}
             >
-              <Icon name="send" className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleRaisedHand()
-              }}
-              disabled={!isGenerating || !canRaiseHand || stopping}
-              className={`qt-chat-composer-send qt-chat-interrupt-button${handRaised ? ' qt-chat-interrupt-button-raised' : ''}`}
-              aria-pressed={handRaised}
-              aria-label={handRaised ? 'Lower your hand' : 'Raise your hand to interrupt'}
-              title={!isGenerating
+              <button
+                type="submit"
+                disabled={composerLocked || isGenerating || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+                className="qt-chat-composer-send"
+                aria-label={factArmed ? 'Send as established fact' : 'Send message'}
+              >
+                <Icon name="send" className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={!isGenerating
                 ? 'Raise your hand (while someone is speaking)'
                 : !canRaiseHand
                   ? 'Only one character is present — the floor returns to you after this reply'
@@ -643,25 +760,40 @@ export function ChatComposer({
                     ? 'Hand raised — the next speaker will be asked to yield. Click to lower it.'
                     : 'Raise your hand — the next speaker may yield the floor to you'}
             >
-              <Icon name="hand-raised" className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onStopStreaming()
-              }}
-              disabled={!isGenerating || stopping}
-              className="qt-chat-composer-send qt-chat-stop-button"
-              aria-label="Stop"
-              title={stopping
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleRaisedHand()
+                }}
+                disabled={!isGenerating || !canRaiseHand || stopping}
+                className={`qt-chat-composer-send qt-chat-interrupt-button${handRaised ? ' qt-chat-interrupt-button-raised' : ''}`}
+                aria-pressed={handRaised}
+                aria-label={handRaised ? 'Lower your hand' : 'Raise your hand to interrupt'}
+              >
+                <Icon name="hand-raised" className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <Tooltip
+              content={stopping
                 ? 'Stopping…'
                 : isGenerating
                   ? 'Stop — cut the reply off here and take the floor'
                   : 'Stop (while someone is speaking)'}
             >
-              <Icon name="stop-sign" className="w-5 h-5" />
-            </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onStopStreaming()
+                }}
+                disabled={!isGenerating || stopping}
+                className="qt-chat-composer-send qt-chat-stop-button"
+                aria-label="Stop"
+              >
+                <Icon name="stop-sign" className="w-5 h-5" />
+              </button>
+            </Tooltip>
           </div>
         </form>
       </div>

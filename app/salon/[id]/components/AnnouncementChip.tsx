@@ -114,8 +114,6 @@ export const AnnouncementChip = memo(function AnnouncementChip({
   participantNames?: Record<string, string>
   announcerNames?: Record<string, string>
 }) {
-  const senderName = getAnnouncementSenderName(message, announcerNames)
-  const kindLabel = getSystemKindDisplayLabel(message)
   const accent = getAnnouncementAccentClasses(message)
   const isWhisper = !!message.targetParticipantIds?.length
   return (
@@ -128,7 +126,6 @@ export const AnnouncementChip = memo(function AnnouncementChip({
         isWhisper ? ' qt-chat-announcement-chip-whisper' : ''
       }`}
       aria-expanded={false}
-      aria-label={`Expand ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
     >
       <AnnouncementBarContents
         message={message}

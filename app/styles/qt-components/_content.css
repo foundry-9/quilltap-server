@@ -109,14 +109,15 @@
     -webkit-backdrop-filter: blur(8px);
   }
 
-  /* Opaque inactive tab backgrounds */
+  /* Opaque inactive tab backgrounds. 90/10, not 85/15: the stronger tint left
+     the muted tab label at 4.3:1 on the default and Rains light palettes. */
   .qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab {
-    background: color-mix(in srgb, var(--color-background) 85%, var(--color-muted-foreground) 15%);
+    background: color-mix(in srgb, var(--color-background) 90%, var(--color-muted-foreground) 10%);
     border-color: var(--color-border);
   }
 
   .qt-page-container[style*="--story-background-url"] .qt-tab-group .qt-tab:hover:not(.qt-tab-active) {
-    background: color-mix(in srgb, var(--color-background) 78%, var(--color-muted-foreground) 22%);
+    background: color-mix(in srgb, var(--color-background) 84%, var(--color-muted-foreground) 16%);
   }
 
   /* Active tab matches the panel background so it merges into it */
@@ -1483,8 +1484,17 @@
     transition: background-color 150ms ease;
   }
 
+  /* The accent fill carries its own foreground: on themes with a bold accent
+     (Art Deco and Great Estate dark, Madman's Box) the row's ordinary text
+     fell to ~1.4:1 on hover. The :where() keeps the flip at zero specificity
+     so the hover rule decides it, as qt-hover-accent does. */
   .qt-settings-toggle-row:hover {
     background: var(--qt-card-hover-bg, var(--color-accent));
+    color: var(--qt-card-hover-fg, var(--color-accent-foreground));
+  }
+
+  .qt-settings-toggle-row:hover :where(*) {
+    color: var(--qt-card-hover-fg, var(--color-accent-foreground));
   }
 
   /* ==========================================================================
@@ -1717,6 +1727,27 @@
     background-color: var(--qt-alert-info-bg);
     color: var(--qt-alert-info-fg);
     border-color: var(--qt-alert-info-border);
+  }
+
+  /**
+   * Secondary-text helpers inside an alert take the alert's own foreground.
+   * qt-text-small and its kin paint the muted grey, which on an alert's tint
+   * fell to ~3.6:1 (Art Deco dark) and ~4.1:1 (default dark); the alert's
+   * foreground is the colour chosen to sit on that tint. Specificity is two
+   * classes — enough to outrank the helper, no more.
+   */
+  :is(.qt-alert, .qt-alert-success, .qt-alert-warning, .qt-alert-error, .qt-alert-info)
+    :is(.qt-text-small, .qt-text-muted, .qt-text-secondary, .qt-text-xs) {
+    color: inherit;
+  }
+
+  /* A link inside an alert's running text takes the alert's colour (qt-link's
+     muted grey fell to ~3.6:1 on the tint) and is underlined, so it is not
+     told from the words around it by colour alone (WCAG 1.4.1). */
+  :is(.qt-alert, .qt-alert-success, .qt-alert-warning, .qt-alert-error, .qt-alert-info) a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   /* ==========================================================================
@@ -1998,7 +2029,7 @@
   .qt-badge-provider-nanogpt {
     background: var(--qt-badge-primary-bg);
     color: var(--qt-badge-primary-fg);
-    border: 1px solid var(--qt-badge-primary-border);
+    border: 1px solid var(--qt-badge-primary-border, var(--color-primary));
   }
 
   /**

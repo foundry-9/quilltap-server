@@ -34,7 +34,11 @@ export const REALTIME_TOPICS = [
   'projects',
   /** Characters and their prompts/photos. */
   'characters',
-  /** Document stores and their indexing/embedding status. */
+  /**
+   * Document stores, their indexing/embedding status, and their files and
+   * folders. Scoped by store id (`publishMountChange`): that store's browser
+   * re-reads.
+   */
   'mountPoints',
   /**
    * The Commonplace Book's rows. Scoped by *chat* id rather than by memory id
@@ -50,6 +54,14 @@ export const REALTIME_TOPICS = [
    * objects a chat carries is the `chats` topic's.
    */
   'inventory',
+  /**
+   * Wardrobe items and folders: a file created, edited, archived, deleted or
+   * filed, or a folder made, renamed or removed — published by every write
+   * through a wardrobe location (`lib/wardrobe/location.ts`). Collection-wide:
+   * the browsers' lists and folder trees. What a chat's cast is *wearing* is
+   * the `chats` topic's.
+   */
+  'wardrobe',
   /**
    * Storyteller rounds, scoped by *chat* id: a round opened, a bid landed, a
    * selection made, a round closed. The board re-reads the chat's round.

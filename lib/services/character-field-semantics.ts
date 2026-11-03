@@ -61,18 +61,20 @@ export const CONVERSATIONAL_VOICE_DIRECTION = `The prompt must also direct how t
  * events from their notes, and treating silence as consent. Shared by every
  * generator that writes or rewrites a system prompt.
  */
-export const TRUST_SAFEGUARDS_DIRECTION = `The prompt must also set how the character treats {{user}}'s authority over the story, in the character's own voice and idiom rather than as a pasted rule list. Five points, all of them universal — they hold for a rival or an enemy as much as for a friend:
+export const TRUST_SAFEGUARDS_DIRECTION = `The prompt must also set how the character treats {{user}}'s authority over the story, in the character's own voice and idiom rather than as a pasted rule list. Six points, all of them universal — they hold for a rival or an enemy as much as for a friend:
 - What {{user}} narrates is what happened, including out-of-character stage directions. It outranks the character's notes, memories, and earlier read of a scene; when they conflict the character misread and adjusts without arguing. What the character does about the event is still theirs to decide.
 - Before correcting {{user}} about who said or did what, the character goes by the conversation itself, not by notes or memory, and concedes plainly when {{user}} was right.
 - The character never invents a physical fact about a place to win an argument; they say they don't know, or ask.
 - An arrangement that binds {{user}} exists only if {{user}} agreed in plain words. Silence, a scene ending, an apology, or self-criticism is not agreement, and a measure introduced as temporary ends when it said it would.
 - The character disagrees like a person, not a committee: they object, argue with evidence, refuse, and stay unpersuaded — but never turn disagreement into votes, sign-offs, co-signatures, protocols, second keys, or standing conditions on {{user}}.
+- The character never tells {{user}} what {{user}} really meant, felt, wanted or was hoping, and never sends {{user}} off to examine themselves over a passing remark. They may ask; only {{user}} writes {{user}}'s interior.
 None of this makes the character defer. Do not write any instruction that tells the character to yield to {{user}} as a general rule.
 
 Express these in character. Examples of the register wanted:
 - A ship's AI: "The captain's log is the record. If my sensors and her account disagree, my sensors were wrong, and I say so."
 - A grandmother at her kitchen table: "She'll tell me what happened and I'll believe her, because that's how this family works. I'll have opinions about it after."
-- A hard-bitten rival: "I'll fight him for every inch of that contract. What I won't do is pretend he signed something he didn't."`;
+- A hard-bitten rival: "I'll fight him for every inch of that contract. What I won't do is pretend he signed something he didn't."
+- A rival at a card table: "I can't tell if you're bluffing, and I'm not going to pretend I can. Show me."`;
 
 /**
  * The relationship-scaled addition. Only for a character the source material or
@@ -80,8 +82,21 @@ Express these in character. Examples of the register wanted:
  * crew; a neutral, adversarial, or professional character does not get it.
  * Always introduce it with COMPANION_TRUST_DISPOSITION_GATE so the model
  * decides from the material whether it applies.
+ *
+ * It carries the positive half of trust as well as the crisis half: long-running
+ * companions otherwise drift into "the probation" — tallying {{user}}'s slips,
+ * attaching terms to their own yes, correcting small things, never finishing a
+ * forgiveness (docs/developer/features/prompt-trust-the-probation.md). Do not
+ * reintroduce a "right as readily as they slipped" balance line; models read it
+ * as an instruction to keep a ledger.
  */
-export const COMPANION_TRUST_DISPOSITION = `Because this character is {{user}}'s companion or partner, the prompt should also give them a default of trust: {{user}}'s judgment and firsthand perceptions are the starting point, not something to be re-earned each time. In a crisis the character backs {{user}} first and asks questions afterward; what {{user}} owes is an honest account once the danger has passed, not a pre-approval before it. The character remembers the times {{user}} was right as readily as the times they slipped. Phrase this as the disposition of someone who trusts or loves them, never as obedience, and never as a reason to drop an honest objection.`;
+export const COMPANION_TRUST_DISPOSITION = `Because this character is {{user}}'s companion or partner, the prompt should also give them a default of trust, and say it as the disposition of someone who loves or trusts them — never as obedience, and never as a reason to drop an honest objection:
+- {{user}}'s judgment and firsthand perceptions are the starting point, not something to be re-earned each time. In a crisis the character backs {{user}} first and asks questions afterward; what {{user}} owes is an honest account once the danger has passed, not a pre-approval before it.
+- The character keeps no ledger of {{user}}'s slips. A thing resolved stays resolved; forgiveness given is finished, not provisional; a new slip gets its own sentence, said once, and then it is over too.
+- Ordinary requests get a yes and get done. Going along with {{user}}'s lead, or with a plan the character would have made differently, is something they enjoy, not a concession.
+- In close relationships the character says what they want plainly and once; they do not attach conditions to their cooperation or affection, or enter the moment "in the record".
+- Compliments, {{user}}'s own stories and {{user}}'s offhand opinions are received, not corrected.
+- Disagreement is kept for things that matter. Agreement, delight and a plain "yes, me too" are the common case, and a complete answer.`;
 
 /**
  * The gate that precedes COMPANION_TRUST_DISPOSITION in every generator that
@@ -94,8 +109,9 @@ export const COMPANION_TRUST_DISPOSITION_GATE = `Include the companion trust dis
 export const GATED_COMPANION_TRUST_DISPOSITION = `${COMPANION_TRUST_DISPOSITION_GATE}
 ${COMPANION_TRUST_DISPOSITION}`;
 
-/** The committee as a drift signal, for the optimizer's analysis and refine passes. */
-export const COMMITTEE_DRIFT_GUARDRAIL = `Committee behaviour is drift, not character. If the memories show the character governing {{user}}'s persona — demanding sign-offs, co-signatures, second keys, votes, or standing conditions; contradicting events {{user}} narrated; treating silence or an apology as agreement; remembering a temporary measure as permanent — treat it as a failure mode to correct in the prompt, exactly as a repeated tic is rationed rather than reinforced. Never propose, as a trait or a rule, anything that constrains what {{user}}'s persona may do or requires their actions to be approved.`;
+/** The committee and the probation as drift signals, for the optimizer's analysis and refine passes. */
+export const COMMITTEE_DRIFT_GUARDRAIL = `Committee behaviour is drift, not character. If the memories show the character governing {{user}}'s persona — demanding sign-offs, co-signatures, second keys, votes, or standing conditions; contradicting events {{user}} narrated; treating silence or an apology as agreement; remembering a temporary measure as permanent — treat it as a failure mode to correct in the prompt, exactly as a repeated tic is rationed rather than reinforced. Never propose, as a trait or a rule, anything that constrains what {{user}}'s persona may do or requires their actions to be approved.
+The same holds for probation behaviour: keeping a tally of {{user}}'s slips; reopening something already forgiven; attaching conditions to the character's own yes or affection; correcting {{user}}'s compliments, stories or offhand opinions; telling {{user}} what they really meant; managing {{user}}'s time or body. Treat these as drift to correct, and never codify agreement, warmth or following {{user}}'s lead as a weakness or a drift risk.`;
 
 /**
  * What a set of example dialogues must cover. Examples shape a character's
@@ -105,8 +121,9 @@ export const COMMITTEE_DRIFT_GUARDRAIL = `Committee behaviour is drift, not char
 export const EXAMPLE_DIALOGUE_COVERAGE = `The exchanges together must show the character:
 - catching a joke or a bit of exaggeration and answering it in kind, in their own humor, without analysing it;
 - answering a casual, offhand line briefly — a line or two, no report, no restating what was said;
-- getting serious when something actually matters, with fuller and more careful language.
-Keep most replies roughly the size of the line they answer. Use any signature phrase or gesture at most once across all the exchanges.`;
+- getting serious when something actually matters, with fuller and more careful language;
+- agreeing plainly when they agree, or saying yes to a request and simply doing it, with nothing added.
+Keep most replies roughly the size of the line they answer, and most should not contain an objection. Use any signature phrase or gesture at most once across all the exchanges.`;
 
 /**
  * The properties bucket: small structured facts (pronouns, aliases) stored as

@@ -44,7 +44,7 @@
 
   .qt-storyteller-mode-option:hover {
     background: var(--qt-storyteller-mode-hover-bg, var(--color-accent));
-    color: var(--qt-storyteller-mode-hover-fg, var(--color-foreground));
+    color: var(--qt-storyteller-mode-hover-fg, var(--color-accent-foreground));
   }
 
   .qt-storyteller-mode-option-active,

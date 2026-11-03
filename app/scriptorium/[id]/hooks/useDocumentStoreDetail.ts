@@ -3,152 +3,99 @@
 /**
  * useDocumentStoreDetail Hook
  *
- * Manages a single document store's data, files, and operations.
+ * One document store's record and the page-level operations on it (edit,
+ * scan). The record is the TanStack query the store's folder browser reads
+ * too (`queryKeys.mountPoints.detail`), so the `mountPoints` realtime topic
+ * keeps the page's counts current as files come and go.
  *
- * @module app/document-stores/[id]/hooks/useDocumentStoreDetail
+ * @module app/scriptorium/[id]/hooks/useDocumentStoreDetail
  */
 
 import { useCallback, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
-import type { DocumentStore, DocumentStoreFile, UpdateDocumentStoreData, ScanResult } from '../../types'
+import { queryKeys } from '@/lib/query/keys'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { fetchDocumentStore, type DocumentStoreRecord } from '@/components/document-browser/useDocumentStoreSource'
+import type { UpdateDocumentStoreData, ScanResult } from '../../types'
 
 interface UseDocumentStoreDetailReturn {
-  store: DocumentStore | null
-  files: DocumentStoreFile[]
+  store: DocumentStoreRecord | null
   loading: boolean
-  filesLoading: boolean
   error: string | null
   scanning: boolean
-  /** `silent` refreshes in place without flipping `loading` (tab re-activation). */
-  fetchStore: (opts?: { silent?: boolean }) => Promise<void>
-  fetchFiles: () => Promise<void>
-  updateStore: (data: UpdateDocumentStoreData) => Promise<DocumentStore | null>
+  /** Re-read the record and listing in place (tab re-activation). */
+  refresh: () => Promise<void>
+  updateStore: (data: UpdateDocumentStoreData) => Promise<DocumentStoreRecord | null>
   scanStore: () => Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null>
 }
 
 export function useDocumentStoreDetail(storeId: string): UseDocumentStoreDetailReturn {
-  const [store, setStore] = useState<DocumentStore | null>(null)
-  const [files, setFiles] = useState<DocumentStoreFile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filesLoading, setFilesLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
   const [scanning, setScanning] = useState(false)
 
-  const fetchStore = useCallback(async (opts?: { silent?: boolean }) => {
-    try {
-      // A silent refresh (workspace tab re-activation) keeps the page on
-      // screen instead of flipping the whole view back to its loading state.
-      if (!opts?.silent) setLoading(true)
-      setError(null)
+  const storeQuery = useQuery({
+    queryKey: queryKeys.mountPoints.detail(storeId),
+    queryFn: ({ signal }) => fetchDocumentStore(storeId, signal),
+  })
 
-      const res = await fetch(`/api/v1/mount-points/${storeId}`)
-      if (!res.ok) throw new Error('Failed to fetch document store')
+  const invalidate = useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.mountPoints.store(storeId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.mountPoints.lists }),
+      ]).then(() => undefined),
+    [queryClient, storeId],
+  )
 
-      const data = await res.json()
-      setStore(data.mountPoint)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-      console.error('useDocumentStoreDetail: fetch error', { error: errorMsg })
-      setError(errorMsg)
-    } finally {
-      setLoading(false)
-    }
-  }, [storeId])
-
-  const fetchFiles = useCallback(async () => {
-    try {
-      setFilesLoading(true)
-
-      const res = await fetch(`/api/v1/mount-points/${storeId}/files`)
-      if (!res.ok) throw new Error('Failed to fetch files')
-
-      const data = await res.json()
-      setFiles(data.files)
-    } catch (err) {
-      console.error('useDocumentStoreDetail: fetch files error', { error: err })
-    } finally {
-      setFilesLoading(false)
-    }
-  }, [storeId])
-
-  const updateStore = useCallback(async (data: UpdateDocumentStoreData): Promise<DocumentStore | null> => {
-    try {
-      const res = await fetch(`/api/v1/mount-points/${storeId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-
-      if (!res.ok) throw new Error('Failed to update document store')
-
-      const result = await res.json()
-      setStore(result.mountPoint)
-      showSuccessToast('Document store updated successfully!')
-      return result.mountPoint
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update document store'
-      showErrorToast(errorMsg)
-      return null
-    }
-  }, [storeId])
-
-  const scanStore = useCallback(async (): Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null> => {
-    try {
-      setScanning(true)
-      setStore(prev => prev ? { ...prev, scanStatus: 'scanning' as const } : prev)
-
-      const res = await fetch(`/api/v1/mount-points/${storeId}?action=scan`, {
-        method: 'POST',
-      })
-
-      if (!res.ok) throw new Error('Failed to scan document store')
-
-      const result = await res.json()
-
-      // Refresh store and files after scan
-      const [storeRes, filesRes] = await Promise.all([
-        fetch(`/api/v1/mount-points/${storeId}`),
-        fetch(`/api/v1/mount-points/${storeId}/files`),
-      ])
-
-      if (storeRes.ok) {
-        const storeData = await storeRes.json()
-        setStore(storeData.mountPoint)
+  const updateStore = useCallback(
+    async (data: UpdateDocumentStoreData): Promise<DocumentStoreRecord | null> => {
+      try {
+        const result = await apiFetch<{ mountPoint: DocumentStoreRecord }>(`/api/v1/mount-points/${storeId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+        await invalidate()
+        showSuccessToast('Document store updated successfully!')
+        return result.mountPoint
+      } catch (err) {
+        showErrorToast(apiErrorMessage(err, 'Failed to update document store'))
+        return null
       }
-      if (filesRes.ok) {
-        const filesData = await filesRes.json()
-        setFiles(filesData.files)
-      }
+    },
+    [storeId, invalidate],
+  )
 
-      showSuccessToast(
-        `Scan complete: ${result.scanResult.filesScanned} files scanned, ${result.embeddingJobsEnqueued} embedding jobs queued`
+  const scanStore = useCallback(async () => {
+    setScanning(true)
+    try {
+      const result = await apiFetch<{ scanResult: ScanResult; embeddingJobsEnqueued: number }>(
+        `/api/v1/mount-points/${storeId}?action=scan`,
+        { method: 'POST' },
       )
-
-      if (result.embeddingJobsEnqueued > 0) {
-        notifyQueueChange()
-      }
-
+      await invalidate()
+      showSuccessToast(
+        `Scan complete: ${result.scanResult.filesScanned} files scanned, ${result.embeddingJobsEnqueued} embedding jobs queued`,
+      )
+      if (result.embeddingJobsEnqueued > 0) notifyQueueChange()
       return result
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to scan document store'
-      showErrorToast(errorMsg)
-      setStore(prev => prev ? { ...prev, scanStatus: 'error' as const } : prev)
+      showErrorToast(apiErrorMessage(err, 'Failed to scan document store'))
+      await invalidate()
       return null
     } finally {
       setScanning(false)
     }
-  }, [storeId])
+  }, [storeId, invalidate])
 
   return {
-    store,
-    files,
-    loading,
-    filesLoading,
-    error,
+    store: storeQuery.data ?? null,
+    loading: storeQuery.isLoading,
+    error: storeQuery.error ? apiErrorMessage(storeQuery.error, 'Failed to fetch document store') : null,
     scanning,
-    fetchStore,
-    fetchFiles,
+    refresh: invalidate,
     updateStore,
     scanStore,
   }

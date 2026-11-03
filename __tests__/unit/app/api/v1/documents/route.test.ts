@@ -68,31 +68,37 @@ jest.mock('@/lib/documents/operator-doc-actions', () => ({
   resolveOperatorDocPath: jest.fn(),
   openDocumentFile: jest.fn(),
   writeDocumentFile: jest.fn(),
-  renameDocumentFile: jest.fn(),
-  deleteDocumentFile: jest.fn(),
   listAllEnabledStores: jest.fn(),
+  resolveGeneralLibrary: jest.fn(),
+}));
+
+// The document core's file moves and deletes; the rest of the core is real.
+jest.mock('@/lib/documents/core', () => ({
+  ...jest.requireActual('@/lib/documents/core'),
+  renameDocument: jest.fn(),
+  deleteDocument: jest.fn(),
 }));
 
 import { GET, POST } from '@/app/api/v1/documents/route';
 import { readFileWithMtime } from '@/lib/doc-edit';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import {
+  resolveGeneralLibrary,
   resolveOperatorDocPath,
   openDocumentFile,
   writeDocumentFile,
-  renameDocumentFile,
-  deleteDocumentFile,
   listAllEnabledStores,
   DocumentConflictError,
   DocumentMissingError,
 } from '@/lib/documents/operator-doc-actions';
+import { renameDocument, deleteDocument } from '@/lib/documents/core';
 import { MAX_RECENT_DOCUMENTS, STANDALONE_CHAT_ID } from '@/lib/chat-documents/constants';
 
 const listStores = listAllEnabledStores as jest.MockedFunction<typeof listAllEnabledStores>;
 const openDoc = openDocumentFile as jest.MockedFunction<typeof openDocumentFile>;
 const writeDoc = writeDocumentFile as jest.MockedFunction<typeof writeDocumentFile>;
-const renameDoc = renameDocumentFile as jest.MockedFunction<typeof renameDocumentFile>;
-const deleteDoc = deleteDocumentFile as jest.MockedFunction<typeof deleteDocumentFile>;
+const renameDoc = renameDocument as jest.MockedFunction<typeof renameDocument>;
+const deleteDoc = deleteDocument as jest.MockedFunction<typeof deleteDocument>;
 const resolvePath = resolveOperatorDocPath as jest.MockedFunction<typeof resolveOperatorDocPath>;
 const readWithMtime = readFileWithMtime as jest.MockedFunction<typeof readFileWithMtime>;
 
@@ -100,7 +106,8 @@ function makeCtx() {
   const chatDocuments = {
     findRecentAcrossChats: jest.fn(async () => [] as unknown[]),
     openDocument: jest.fn(async () => undefined),
-    renameFilePathInStore: jest.fn(async () => undefined),
+    findByFilePath: jest.fn(async (_filePath: string) => [] as unknown[]),
+    update: jest.fn(async (id: string) => ({ id }) as unknown),
   };
   const ctx = { user: { id: 'user-1' }, repos: { chatDocuments } } as never;
   return { ctx, chatDocuments };
@@ -127,6 +134,7 @@ function recentRow(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  renameDoc.mockResolvedValue({ ok: true });
 });
 
 // ============================================================================
@@ -134,15 +142,18 @@ beforeEach(() => {
 // ============================================================================
 
 describe('GET ?action=accessible-stores', () => {
-  it('returns every enabled store with no project shortcut', async () => {
+  it('returns every enabled store with no project shortcut, Quilltap General held back as the General library', async () => {
     const stores = [{ id: 'store-1', name: 'Library', kind: 'document-store' }];
+    const generalLibrary = { mountPointId: 'general-1', name: 'Quilltap General', mountType: 'database' };
     listStores.mockResolvedValue(stores as never);
+    (resolveGeneralLibrary as jest.Mock).mockResolvedValue(generalLibrary);
     const { ctx } = makeCtx();
 
     const res = await GET(req('accessible-stores'), ctx);
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ stores, projectLibrary: null });
+    await expect(res.json()).resolves.toEqual({ stores, projectLibrary: null, generalLibrary });
+    expect(listStores).toHaveBeenCalledWith(expect.anything(), { exclude: new Set(['general-1']) });
   });
 
   it('500s when store enumeration fails', async () => {
@@ -429,7 +440,6 @@ describe('POST ?action=write-document', () => {
     await expect(res.json()).resolves.toEqual({ success: true, mtime: 4242 });
     expect(writeDoc).toHaveBeenCalledWith(
       expect.anything(),
-      ctx.repos,
       expect.objectContaining({ filePath: 'Notes/a.md', content: '# B', mtime: 4241 })
     );
   });
@@ -483,11 +493,17 @@ describe('POST ?action=rename-document', () => {
         displayTitle: 'Better Name.md',
       },
     });
-    expect(renameDoc).toHaveBeenCalledWith(
+    // The source and the target are each resolved once, then moved.
+    expect(resolvePath).toHaveBeenCalledWith(
       expect.anything(),
-      ctx.repos,
-      expect.objectContaining({ oldFilePath: 'Notes/a.md', newFilePath: 'Notes/Better Name.md' })
+      expect.objectContaining({ filePath: 'Notes/a.md', scope: 'general' })
     );
+    expect(resolvePath).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ filePath: 'Notes/Better Name.md', scope: 'general' })
+    );
+    expect(resolvePath).toHaveBeenCalledTimes(2);
+    expect(renameDoc).toHaveBeenCalledTimes(1);
   });
 
   it('keeps an explicitly typed extension', async () => {
@@ -504,6 +520,9 @@ describe('POST ?action=rename-document', () => {
 
   it('repoints the recent-documents history at the new name', async () => {
     const { ctx, chatDocuments } = makeCtx();
+    chatDocuments.findByFilePath.mockResolvedValue([
+      { id: 'recent-1', chatId: STANDALONE_CHAT_ID, scope: 'document_store', mountPoint: 'Library', filePath: 'Notes/a.md' },
+    ]);
 
     await POST(
       req('rename-document', {
@@ -515,18 +534,16 @@ describe('POST ?action=rename-document', () => {
       ctx
     );
 
-    expect(chatDocuments.renameFilePathInStore).toHaveBeenCalledWith(
-      'document_store',
-      'Library',
-      'Notes/a.md',
-      'Notes/Better Name.md',
-      'Better Name.md'
-    );
+    expect(chatDocuments.findByFilePath).toHaveBeenCalledWith('Notes/a.md');
+    expect(chatDocuments.update).toHaveBeenCalledWith('recent-1', {
+      filePath: 'Notes/Better Name.md',
+      displayTitle: 'Better Name.md',
+    });
   });
 
   it('succeeds even when history tracking fails after the rename landed', async () => {
     const { ctx, chatDocuments } = makeCtx();
-    chatDocuments.renameFilePathInStore.mockRejectedValue(new Error('tracking table locked'));
+    chatDocuments.findByFilePath.mockRejectedValue(new Error('tracking table locked'));
 
     const res = await POST(
       req('rename-document', { filePath: 'Notes/a.md', newTitle: 'Better Name' }),
@@ -543,7 +560,7 @@ describe('POST ?action=rename-document', () => {
 
     expect(res.status).toBe(200);
     expect(renameDoc).not.toHaveBeenCalled();
-    expect(chatDocuments.renameFilePathInStore).not.toHaveBeenCalled();
+    expect(chatDocuments.findByFilePath).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -561,7 +578,7 @@ describe('POST ?action=rename-document', () => {
   });
 
   it('409s when a file already sits at the new name', async () => {
-    renameDoc.mockRejectedValue(new DocumentConflictError('exists'));
+    renameDoc.mockResolvedValue({ ok: false, reason: 'destination-taken' });
     const { ctx } = makeCtx();
 
     const res = await POST(req('rename-document', { filePath: 'Notes/a.md', newTitle: 'B' }), ctx);
@@ -605,10 +622,11 @@ describe('POST ?action=delete-document', () => {
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ success: true });
-    expect(deleteDoc).toHaveBeenCalledWith(
+    expect(resolvePath).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ filePath: 'Notes/a.md', scope: 'general' })
     );
+    expect(deleteDoc).toHaveBeenCalledTimes(1);
   });
 
   it('404s when the file is already gone', async () => {

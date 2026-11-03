@@ -13,7 +13,7 @@
  * project's official store lives in
  * `lib/mount-index/ensure-owner-store.ts` and pulls in repository code
  * (Node-only). Keep that split: anything that needs `getRepositories()`
- * MUST NOT live here, or the FileBrowser bundle picks up `child_process`.
+ * MUST NOT live here, or the client bundle (ProjectStoreBrowser) picks up `child_process`.
  *
  * @module mount-index/project-store-naming
  */

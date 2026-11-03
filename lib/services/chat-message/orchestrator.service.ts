@@ -21,7 +21,8 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { takeRaisedHand, waitForEarlierTurns } from '@/lib/chat/turn-control'
-import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
+import { collectAttachmentMimeTypes } from '@/lib/chat/image-transport-budget'
+import { frameEstablishedFact } from '@/lib/chat/established-fact'
 import { postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
@@ -53,6 +54,7 @@ import {
   encodeStorytellerRoundEvent,
   encodeStorytellerBidEvent,
   encodeRoundOpenEvent,
+  encodeHandAskedEvent,
   safeEnqueue,
   type TurnStatusEmitter,
 } from './streaming.service'
@@ -61,7 +63,8 @@ import { buildBidSection, buildPlanSection } from '@/lib/storyteller/prompts'
 import type { StorytellerBidCallOutcome, StorytellerBidOffer, StorytellerTurnContext } from '@/lib/storyteller/types'
 import type { StorytellerOrder } from '@/lib/schemas/storyteller.types'
 import { runDry } from '@/lib/repositories/dry-scope'
-import { sinkController, taggingController } from '@/lib/storyteller/sse-tag'
+import { sinkController, sharedStreamController } from '@/lib/storyteller/sse-tag'
+import { seatedFrameEncoder } from '@/lib/chat/stream-frames'
 import { finalizeMessageResponse, runStorytellerRoundHousekeeping } from './message-finalizer.service'
 import { dispatchCourierTransport } from './courier-transport.service'
 import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
@@ -122,7 +125,28 @@ export const sendMessageSchema = z.object({
   targetParticipantIds: z.array(z.string()).nullable().optional(),
   /** The user-controlled participant the human is "Speaking As" for this message */
   speakingAsParticipantId: z.uuid().nullable().optional(),
+  /**
+   * Post this line as established fact (the Salon's "Deus Ex Machina"): true
+   * in the story, known to everyone. Public only, and it needs words.
+   */
+  isEstablishedFact: z.boolean().optional(),
 }).superRefine((data, ctx) => {
+  if (data.isEstablishedFact) {
+    if (data.targetParticipantIds && data.targetParticipantIds.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'An established fact is public; it cannot be whispered',
+        path: ['isEstablishedFact'],
+      })
+    }
+    if (data.content.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'An established fact needs words',
+        path: ['isEstablishedFact'],
+      })
+    }
+  }
   if (data.content.trim().length === 0 &&
       (!data.fileIds || data.fileIds.length === 0) &&
       (!data.pendingToolResults || data.pendingToolResults.length === 0)) {
@@ -319,14 +343,15 @@ export async function handleStorytellerRun(
       turns,
       order: request.order,
       runTurn: async (turn, storyteller) => {
-        const turnController = turn.concurrent ? taggingController(controller, turn.participantId) : controller
+        // A concurrent turn shares the stream: its frames carry its seat, and
+        // its finishing must not close the stream the others still write to.
         const result = await processMessage(
           repos,
           chatId,
           userId,
           { continueMode: true, respondingParticipantId: turn.participantId, storyteller },
-          turnController,
-          encoder,
+          turn.concurrent ? sharedStreamController(controller) : controller,
+          turn.concurrent ? seatedFrameEncoder(turn.participantId) : encoder,
           ledger
         )
         return {
@@ -577,6 +602,10 @@ async function processMessage(
       characterId: character.id,
       participantId: characterParticipant.id,
     })
+    safeEnqueue(controller, encodeHandAskedEvent(encoder, {
+      participantId: characterParticipant.id,
+      characterName: character.name,
+    }))
   }
 
   if (!hold && !isBid) {
@@ -615,6 +644,7 @@ async function processMessage(
         attachedFiles: fileProcessing.attachedFiles,
         pendingToolResults: options.pendingToolResults,
         targetParticipantIds: options.targetParticipantIds,
+        isEstablishedFact: options.isEstablishedFact,
         poster: { participant: userParticipant, participantId: userParticipantId },
         dangerFlags,
         context: existingMessages,
@@ -739,7 +769,12 @@ async function processMessage(
         defaultTimestampConfig: chatSettings.defaultTimestampConfig,
       } : null,
       toolInstructions: slate.toolInstructions,
-      newUserMessage: isContinueMode ? undefined : fileProcessing.messageContentPrefix + content,
+      // An established fact reaches the model framed, exactly as the stored
+      // row will read from history on every later turn.
+      newUserMessage: isContinueMode
+        ? undefined
+        : fileProcessing.messageContentPrefix
+          + (options.isEstablishedFact && content ? frameEstablishedFact(content, { kind: 'seat', voice: 'plain' }) : content),
       activeUserParticipantId: speakingAsParticipantId,
       isContinueMode,
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,

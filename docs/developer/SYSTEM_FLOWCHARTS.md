@@ -612,7 +612,7 @@ flowchart TD
     COMP --> SCENE["3. buildTurnSceneState()<br/>stored scene + live wardrobe<br/>+ per-recipient cache<br/><i>turn-scene-state.ts</i>"]
     SCENE --> RECALL["4. assembleTurnRecall() ∥ retrieveTurnKnowledge()<br/>→ compressTurnMemories()<br/><i>turn-recall.ts</i>"]
     RECALL --> WHISPER["5. Staff whispers<br/>postTurnTimestamp → offerCoreWhisper<br/>→ postCommonplaceWhispers (+ scene commit, sweep)<br/>→ announceTurnMail<br/><i>turn-whispers.ts</i>"]
-    WHISPER --> TRAIL["6. Trailing sections, read in parallel<br/>progressions ∥ Inventory ∥ referent ledger<br/>+ closing echo ∥ inform block; turn notes<br/><i>turn-trailing.ts, inform-block.ts</i>"]
+    WHISPER --> TRAIL["6. Trailing sections, read in parallel<br/>progressions ∥ Inventory ∥ referent ledger<br/>+ closing echo ∥ inform block ∥ established-fact reminder; turn notes<br/><i>turn-trailing.ts, inform-block.ts, established-fact-reminder.ts</i>"]
     TRAIL --> MEASURE["countMessagesTokens() over blocks 1–3,<br/>timestamp line, trailing message<br/>(scene note over the candidate rows)<br/>+ reservedOutgoingTokens"]
     MEASURE --> HIST["7. turnHistoryRows() → packTurnHistory()<br/>window cut (both chat shapes),<br/>summary anchors, pack to what is left<br/><i>turn-history.ts</i>"]
     HIST --> ASM["buildLeadingSystemBlocks()<br/>+ historyContextMessages()<br/>+ timestamp line + trailing message"]

@@ -10,25 +10,14 @@
  * @module app/scriptorium/[id]/DocumentStoreDetailView
  */
 
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useDocumentStoreDetail } from './hooks/useDocumentStoreDetail'
-import { FileTable } from './components'
+import { DocumentStoreBrowser } from '@/components/document-browser/DocumentStoreBrowser'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { Icon } from '@/components/ui/icon'
-import dynamic from 'next/dynamic'
-import { deriveMountCapabilities } from '@/lib/mount-index/capabilities'
-import type { DocMountPoint } from '@/lib/schemas/mount-index.types'
 import type { UpdateDocumentStoreData } from '../types'
-
-// Heavy SVAR file manager (Phase 3) — lazy + client-only so the default
-// FileTable path never loads the SVAR runtime. Opt-in via the toggle below;
-// FileTable stays the default until parity is confirmed.
-const SvarFileManager = dynamic(
-  () => import('@/components/files/svar/SvarFileManager').then((m) => m.SvarFileManager),
-  { ssr: false, loading: () => <p className="qt-section-title p-6">Summoning the file manager…</p> }
-)
 
 export interface DocumentStoreDetailViewProps {
   storeId: string
@@ -36,36 +25,19 @@ export interface DocumentStoreDetailViewProps {
   /** Background style for the standalone route. In-tab, the tab owns the
       arbitrated workspace backdrop, so this is omitted there. */
   style?: CSSProperties
+  /** Open another store (the browser's "where else this appears" jumps there). */
+  onOpenStore?: (storeId: string) => void
 }
 
-export function DocumentStoreDetailView({ storeId, onBack, style }: DocumentStoreDetailViewProps) {
-  const {
-    store,
-    files,
-    loading,
-    filesLoading,
-    error,
-    scanning,
-    fetchStore,
-    fetchFiles,
-    updateStore,
-    scanStore,
-  } = useDocumentStoreDetail(storeId)
+export function DocumentStoreDetailView({ storeId, onBack, style, onOpenStore }: DocumentStoreDetailViewProps) {
+  const { store, loading, error, scanning, refresh, updateStore, scanStore } = useDocumentStoreDetail(storeId)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [useSvarFileManager, setUseSvarFileManager] = useState(false)
-
-  useEffect(() => {
-    fetchStore()
-    fetchFiles()
-  }, [fetchStore, fetchFiles])
 
   // Navigating back to the containing workspace tab refreshes the store and
-  // its file list in place (silent — no loading flip, which would swap the
-  // page for its loading state).
+  // its listing in place (a background refetch — the page stays on screen).
   useOnTabActivated(() => {
-    void fetchStore({ silent: true })
-    void fetchFiles()
+    void refresh()
   })
 
   const handleUpdate = async (id: string, data: UpdateDocumentStoreData) => {
@@ -228,36 +200,12 @@ export function DocumentStoreDetailView({ storeId, onBack, style }: DocumentStor
         </div>
       )}
 
-      {/* Files section — unified tree: text documents, pdf/docx extracts, and
-          arbitrary binary blobs all show here. Database-backed stores expose
-          an Upload button in this table; filesystem stores get populated by
-          scans. */}
+      {/* Files and folders — text documents, pdf/docx extracts and binary
+          blobs alike, browsed like the wardrobe: folders, a ⋮ menu on each
+          row, and read-only viewers. */}
       <div className="border-t qt-border-default/60 pt-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="qt-heading-3">Indexed Files</h2>
-          <button
-            onClick={() => setUseSvarFileManager((v) => !v)}
-            className="qt-button-ghost inline-flex items-center gap-1.5 text-sm"
-            title="Preview the new SVAR-powered file manager"
-          >
-            <Icon name="layers" className="w-4 h-4" />
-            {useSvarFileManager ? 'Classic view' : 'New file manager (beta)'}
-          </button>
-        </div>
-        {useSvarFileManager ? (
-          <SvarFileManager
-            mountId={store.id}
-            capabilities={deriveMountCapabilities(store as unknown as DocMountPoint)}
-          />
-        ) : (
-          <FileTable
-            files={files}
-            loading={filesLoading}
-            mountPointId={store.id}
-            mountType={store.mountType}
-            onRefresh={fetchFiles}
-          />
-        )}
+        <h2 className="qt-heading-3 mb-4">Files</h2>
+        <DocumentStoreBrowser key={store.id} storeId={store.id} onOpenStore={onOpenStore} />
       </div>
 
       {/* Edit dialog */}

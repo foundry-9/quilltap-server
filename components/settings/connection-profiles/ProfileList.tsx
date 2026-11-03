@@ -65,6 +65,12 @@ export function ProfileList({
     return provider?.configRequirements?.requiresApiKey ?? true
   }
 
+  // Whether a provider takes temperature / top_p; unknown providers show them
+  const providerTakesSamplingParameters = (providerName: string): boolean => {
+    const provider = providers.find((p) => p.name === providerName)
+    return provider?.capabilities?.samplingParameters ?? true
+  }
+
   // Sort profiles by sortIndex (API returns them sorted, but ensure client matches)
   const sortedProfiles = [...profiles].sort((a, b) => {
     const aIndex = a.sortIndex ?? 0
@@ -158,6 +164,7 @@ export function ProfileList({
                   profile={profile}
                   cheapDefaultProfileId={cheapDefaultProfileId}
                   providerRequiresApiKey={providerRequiresApiKey(profile.provider)}
+                  providerTakesSamplingParameters={providerTakesSamplingParameters(profile.provider)}
                   onEdit={onEdit}
                   onDelete={onDelete}
                   deleteConfirming={deleteConfirming}

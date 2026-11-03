@@ -55,7 +55,7 @@ export default preview;
 
 The package provides two CSS files:
 - `quilltap-defaults.css` - Default theme tokens (colors, fonts, spacing)
-- `qt-components.css` - Component class definitions
+- `qt-components.css` - Component class definitions, generated from Quilltap's own source (see [Where the component rules come from](#where-the-component-rules-come-from))
 
 Import them in your preview or let the preset handle it:
 
@@ -244,7 +244,7 @@ Theme plugins should define these `--theme-*` tokens, which are automatically al
 
 ## Component Classes
 
-All Quilltap components use `qt-*` prefixed classes. Your theme CSS can override these classes to customize component appearance beyond color tokens.
+All Quilltap components use `qt-*` prefixed classes; the lists below are a sample, and `qt-components.css` has the full set. Your theme CSS can override these classes to customize component appearance beyond color tokens.
 
 ### Buttons
 - `.qt-button` - Base button styles
@@ -272,14 +272,12 @@ All Quilltap components use `qt-*` prefixed classes. Your theme CSS can override
 ### Badges
 - `.qt-badge` - Base badge
 - `.qt-badge-primary`, `.qt-badge-secondary`, etc. - Variants
-- `.qt-badge-outline-*` - Outline variants
+- `.qt-badge-outline` - Outline variant
 
 ### Chat
-- `.qt-chat-message` - Message container
 - `.qt-chat-message` - Chat message container
 - `.qt-chat-message-user`, `.qt-chat-message-assistant` - Role variants
-- `.qt-chat-input` - Chat input field
-- `.qt-typing-indicator` - Typing animation
+- `.qt-chat-composer` - Message composer
 
 ### Dialogs
 - `.qt-dialog-overlay` - Modal backdrop
@@ -303,7 +301,7 @@ All Quilltap components use `qt-*` prefixed classes. Your theme CSS can override
 
 ### ThemeDecorator
 
-A Storybook decorator that applies theme classes and handles dark mode:
+A Storybook decorator that marks the story container the way Quilltap marks `<html>`: `data-theme` is always set (`"default"` when no theme is chosen), the colour mode is a `light` or `dark` class, and `data-color-mode` mirrors it. The component variable defaults in `qt-components.css` sit on `[data-theme]` and `[data-theme].dark`, so a custom decorator must set the attribute too.
 
 ```typescript
 import { ThemeDecorator } from '@quilltap/theme-storybook';
@@ -326,6 +324,19 @@ import '@quilltap/theme-storybook/css/quilltap-defaults.css';
 // Component class definitions
 import '@quilltap/theme-storybook/css/qt-components.css';
 ```
+
+## Where the component rules come from
+
+`css/qt-components.css` is not written by hand. It is generated from Quilltap's `app/styles/qt-components/*.css` by `npm run generate:storybook-css` in the [quilltap-server](https://github.com/foundry-9/quilltap-server) repository: Tailwind's compiler expands every `@apply` against the same token map the app uses, and the output is autoprefixed. The repository's lint fails if the committed file is stale, so it always matches the app at the package's version.
+
+What that means for a theme author:
+
+- **Every `qt-*` class the app uses is present**, with the app's values.
+- **Rules are layered as in the app.** Component rules sit in `@layer components` (and the `qt-bg-*` / `qt-text-*` / `qt-border-*` families in `@layer utilities`); your theme CSS, unlayered, overrides them without needing extra specificity.
+- **Hover is media-gated** (`@media (hover: hover)`), as in the app, so touch devices see the same behaviour in Storybook as in Quilltap.
+- **CSS nesting** appears as Tailwind emits it (`&:hover`, nested `@media`).
+- **Section comments are kept; comments inside rules are not.** For the reasoning behind a rule, read the app source named in the section banner.
+- **Icon defaults** (`[data-icon]`) point at `/images/icons/*.svg`, served by Quilltap but not by your Storybook. Serve them yourself if you render `qt-icon` elements in stories.
 
 ## License
 

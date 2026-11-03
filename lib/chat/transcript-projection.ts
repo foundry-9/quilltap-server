@@ -236,6 +236,7 @@ export async function projectChatTranscript(
           routeTrail: event.routeTrail || null,
           targetParticipantIds: event.targetParticipantIds || null,
           isSilentMessage: event.isSilentMessage || null,
+          isEstablishedFact: event.isEstablishedFact || null,
           systemSender: event.systemSender || null,
           systemKind: event.systemKind || null,
           // Host structured payload — projected so the client can reconstruct

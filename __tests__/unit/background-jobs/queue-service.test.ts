@@ -2,6 +2,7 @@ import {
   enqueueJob,
   enqueueMemoryExtraction,
   enqueueMemoryExtractionBatch,
+  enqueueCharacterAvatarGeneration,
   getJobStatus,
   getQueueStats,
   cancelJob,
@@ -229,5 +230,33 @@ describe('queue lookups and maintenance', () => {
     expect(deadCutoff.toISOString()).toBe('2024-01-02T00:00:00.000Z');
 
     spy.mockRestore();
+  });
+});
+
+describe('enqueueCharacterAvatarGeneration', () => {
+  const payload = { chatId: 'chat-1', characterId: 'char-1' } as any;
+
+  it('collapses onto a still-PENDING avatar job for the same character', async () => {
+    backgroundJobs.findPendingForChat.mockResolvedValue([
+      { id: 'avatar-pending', type: 'CHARACTER_AVATAR_GENERATION', status: 'PENDING', payload },
+    ]);
+
+    const result = await enqueueCharacterAvatarGeneration('user-1', payload);
+
+    expect(result).toEqual({ jobId: 'avatar-pending', isNew: false });
+    expect(backgroundJobs.create).not.toHaveBeenCalled();
+  });
+
+  it('enqueues a fresh job when the only avatar job is already PROCESSING', async () => {
+    // A processing job has built its prompt; an outfit change after that must not be absorbed.
+    backgroundJobs.findPendingForChat.mockResolvedValue([
+      { id: 'avatar-running', type: 'CHARACTER_AVATAR_GENERATION', status: 'PROCESSING', payload },
+    ]);
+
+    const result = await enqueueCharacterAvatarGeneration('user-1', payload);
+
+    expect(result.isNew).toBe(true);
+    expect(result.jobId).toBe('job-123');
+    expect(backgroundJobs.create).toHaveBeenCalledTimes(1);
   });
 });

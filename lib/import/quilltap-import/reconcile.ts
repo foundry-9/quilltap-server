@@ -521,6 +521,15 @@ export async function reconcileRelationships(
         }
       }
 
+      // Remap brahmaConnectionProfileId (inline @Brahma's project profile)
+      if (project.brahmaConnectionProfileId) {
+        const newBrahmaProfileId = remapId(project.brahmaConnectionProfileId, idMaps.connectionProfiles);
+        if (newBrahmaProfileId) {
+          updates.brahmaConnectionProfileId = newBrahmaProfileId;
+          hasUpdates = true;
+        }
+      }
+
       // Remap defaultRoleplayTemplateId (custom templates get fresh ids on import)
       if (project.defaultRoleplayTemplateId) {
         const newTemplateId = remapId(project.defaultRoleplayTemplateId, idMaps.roleplayTemplates);

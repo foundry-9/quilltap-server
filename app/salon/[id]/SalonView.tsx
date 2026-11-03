@@ -21,7 +21,8 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
-import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
+import { MESSAGE_REVEAL_EVENT, takePendingMessageReveal, type MessageRevealRequest } from '@/lib/chat/message-navigation'
+import { findConversationMatches, type ConversationSearchSource } from '@/lib/chat/conversation-search'
 import {
   getConciergeProvenance,
   getConciergeReason,
@@ -83,7 +84,9 @@ import { retryUncensoredTurnUrl, type ConciergeRetryHandlers } from './concierge
 import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
-import { buildRenderItems } from './announcement-render-items'
+import { buildRenderItems, type RenderItem } from './announcement-render-items'
+import { useSearchHighlight } from './hooks/useSearchHighlight'
+import { getAnnouncementSenderName } from './components/system-message-labels'
 import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
@@ -109,7 +112,7 @@ import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
-import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
+import { ChatHeaderBreadcrumb } from '@/components/chat/ChatHeaderBreadcrumb'
 import { ReplyAnnouncer } from '@/components/chat/ReplyAnnouncer'
 
 /** Fallback re-read cadence for the avatar watch, while the socket is down. */
@@ -120,9 +123,15 @@ const AVATAR_WATCH_TIMEOUT_MS = 2 * 60_000
 export interface SalonViewProps {
   /** The conversation this Salon tab renders. */
   chatId: string
+  /**
+   * A message to open scrolled to — the legacy `/salon/<id>?msg=` route's
+   * `msg`. Inside the workspace the same request arrives through
+   * `requestMessageReveal` instead.
+   */
+  revealMessageId?: string
 }
 
-export function SalonView({ chatId }: SalonViewProps) {
+export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // Keep the internal name `id` (used pervasively below) bound to the prop so
   // the streaming hooks and the ~1700 lines that follow are untouched.
   const id = chatId
@@ -786,6 +795,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     scrollOnStreamComplete,
     isAutoScrollEnabled,
     isSettled,
+    isInitialScrollDone,
     isAtBottom,
     scrollToBottom,
   } = useAutoScroll({
@@ -951,20 +961,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     setTurnSelectionResult(result)
   }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds, chat?.cycleOrderParticipantIds])
 
-  // --- Handle scroll-to-message from memory provenance navigation ---
-  useEffect(() => {
-    if (loading || messages.length === 0) return
-    const pendingNav = getPendingMessageNavigation()
-    if (pendingNav.scrollTo) {
-      setTimeout(() => {
-        scrollToMessage(pendingNav.scrollTo!, {
-          behavior: 'smooth',
-          highlight: !!pendingNav.highlight,
-          highlightDuration: 3000,
-        })
-      }, 500)
-    }
-  }, [loading, messages.length])
 
   // --- Quick-hide logic ---
   const chatContext = useChatContext()
@@ -1163,7 +1159,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   }, [terminalModeHook])
 
   // --- Toolbar setup ---
-  const { setLeftContent, setRightContent } = usePageToolbar()
+  const { setLeftContent, setRightContent, setConversationSearch } = usePageToolbar()
 
   // Extract stable setter from modals to avoid unstable object reference in effect deps
   const { setModalImage } = modals
@@ -1183,108 +1179,59 @@ export function SalonView({ chatId }: SalonViewProps) {
         return null
       }
 
-      setLeftContent(
-        <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
-          {chat.projectId && chat.projectName && (
-            <>
-              <a
-                href={`/projects/${chat.projectId}`}
-                className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
-              >
-                <Icon name="folder" className="w-4 h-4" />
-                <span>{chat.projectName}</span>
-              </a>
-              <span className="qt-text-muted">/</span>
-            </>
-          )}
-          {llmCharacters.map((character) => {
-            const avatarUrl = getCharacterAvatarUrl(character)
-            return (
-              <span key={character.id} className="contents">
-                <a
-                  href={`/aurora/${character.id}/view?tab=conversations`}
-                  className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
-                >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={character.name}
-                      className="w-5 h-5 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full qt-bg-muted flex items-center justify-center">
-                      <span className="text-xs font-medium qt-text-secondary">
-                        {character.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <span>{character.name}</span>
-                </a>
-                <span className="qt-text-muted">/</span>
-              </span>
-            )
-          })}
-          {visibleStoryBackgroundUrl && (
-            <button
-              type="button"
-              onClick={() => setModalImage({
-                src: visibleStoryBackgroundUrl,
-                filename: storyBackgroundFilename || 'story_background.png',
-                fileId: storyBackgroundFileId || undefined,
-              })}
-              className="flex-shrink-0 rounded overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-              title="View story background"
+      // Moderated is the default and renders no badge — the pill means
+      // "something other than the default is set." Everything the pill
+      // says comes from the presentation table, so it speaks the same
+      // words as the list marks and the sidebar's helper text; who set
+      // Unmoderated goes in the tooltip, never the colour.
+      const conciergeBadge = (() => {
+        const conciergeState = getConciergeState(chat)
+        if (conciergeState === 'moderated') return null
+
+        const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
+        const description = describeConciergeState(
+          conciergeState,
+          {
+            setBy: getConciergeProvenance(chat),
+            reason: getConciergeReason(chat),
+            refusalCount: chat.conciergeRefusalCount,
+          },
+          chat.dangerCategories ?? undefined,
+        )
+        const toneSuffix = conciergeToneSuffix(tone)
+
+        return (
+          <Tooltip content={<ConciergeTooltipBody {...description} />} placement="bottom">
+            <span
+              className={`qt-danger-badge${toneSuffix ? ` qt-danger-badge${toneSuffix}` : ''} flex-shrink-0`}
+              role="img"
+              aria-label={`Concierge: ${label}`}
             >
-              <img
-                src={visibleStoryBackgroundUrl}
-                alt="Story background"
-                className="w-8 h-5 object-cover"
-              />
-            </button>
-          )}
-          {(() => {
-            // Moderated is the default and renders no badge — the pill means
-            // "something other than the default is set." Everything the pill
-            // says comes from the presentation table, so it speaks the same
-            // words as the list marks and the sidebar's helper text; who set
-            // Unmoderated goes in the tooltip, never the colour.
-            const conciergeState = getConciergeState(chat)
-            if (conciergeState === 'moderated') return null
+              <Icon name={icon} className="w-3 h-3" />
+              {label}
+            </span>
+          </Tooltip>
+        )
+      })()
 
-            const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
-            const description = describeConciergeState(
-              conciergeState,
-              {
-                setBy: getConciergeProvenance(chat),
-                reason: getConciergeReason(chat),
-                refusalCount: chat.conciergeRefusalCount,
-              },
-              chat.dangerCategories ?? undefined,
-            )
-            const toneSuffix = conciergeToneSuffix(tone)
-
-            return (
-              <Tooltip content={<ConciergeTooltipBody {...description} />} placement="bottom">
-                <span
-                  className={`qt-danger-badge${toneSuffix ? ` qt-danger-badge${toneSuffix}` : ''} flex-shrink-0`}
-                  role="img"
-                  aria-label={`Concierge: ${label}`}
-                >
-                  <Icon name={icon} className="w-3 h-3" />
-                  {label}
-                </span>
-              </Tooltip>
-            )
-          })()}
-          <a
-            href={`/salon/${id}`}
-            className="qt-text-primary truncate hover:text-foreground transition-colors"
-            title={chat.title}
-          >
-            {chat.title}
-          </a>
-          <CopyChatIdButton chatId={id} variant="inline" />
-        </div>
+      setLeftContent(
+        <ChatHeaderBreadcrumb
+          chatId={id}
+          title={chat.title}
+          project={chat.projectId && chat.projectName ? { id: chat.projectId, name: chat.projectName } : null}
+          characters={llmCharacters.map(character => ({
+            id: character.id,
+            name: character.name,
+            avatarUrl: getCharacterAvatarUrl(character),
+          }))}
+          storyBackgroundUrl={visibleStoryBackgroundUrl}
+          onOpenStoryBackground={() => setModalImage({
+            src: visibleStoryBackgroundUrl!,
+            filename: storyBackgroundFilename || 'story_background.png',
+            fileId: storyBackgroundFileId || undefined,
+          })}
+          conciergeBadge={conciergeBadge}
+        />
       )
     } else {
       setLeftContent(null)
@@ -1365,6 +1312,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         if (participant?.character) {
           return {
             name: participant.character.name,
+            characterId: participant.character.id,
             title: participant.character.title ?? null,
             avatarUrl: participant.character.avatarUrl ?? null,
             defaultImage: participant.character.defaultImage ?? null,
@@ -1415,6 +1363,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         if (participant?.character) {
           return {
             name: participant.character.name,
+            characterId: participant.character.id,
             title: participant.character.title ?? null,
             avatarUrl: participant.character.avatarUrl ?? null,
             defaultImage: participant.character.defaultImage ?? null,
@@ -1431,25 +1380,179 @@ export function SalonView({ chatId }: SalonViewProps) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
         if (participant.type === 'CHARACTER' && participant.character) {
-          return { name: participant.character.name, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
+          return { name: participant.character.name, characterId: participant.character.id, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
         }
       }
     }
     if (message.role === 'USER') {
       const userChar = participantsWithImpersonation.getFirstUserCharacter()
       if (userChar) {
-        return { name: userChar.name, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
+        return { name: userChar.name, characterId: userChar.id, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
       } else if (chat?.user) {
         return { name: chat.user.name || 'User', title: null, avatarUrl: chat.user.image ?? null, defaultImage: null }
       }
     } else if (message.role === 'ASSISTANT') {
       const character = participantsWithImpersonation.getFirstCharacter()
       if (character) {
-        return { name: character.name, title: character.title, avatarUrl: character.avatarUrl, defaultImage: character.defaultImage }
+        return { name: character.name, characterId: character.id, title: character.title, avatarUrl: character.avatarUrl, defaultImage: character.defaultImage }
       }
     }
     return null
   }, [participantsWithImpersonation, chat?.user, chat?.participants, chat?.offSceneCharacters])
+
+  // --- In-conversation search (header search bar) ---
+  // The header search bar looks inside this chat before searching everywhere.
+  // The source is one stable object per chat that reads the transcript through
+  // a ref, so publishing it never churns the toolbar on a streamed token.
+  const [searchHighlightQuery, setSearchHighlightQuery] = useState<string | null>(null)
+  useSearchHighlight(messagesContainerRef, searchHighlightQuery)
+  const [pendingReveal, setPendingReveal] = useState<{ messageId: string; nonce: number } | null>(null)
+  const searchStateRef = useRef({ messages, renderMessages, renderItems, getMessageAvatar, announcerNames })
+  useEffect(() => {
+    searchStateRef.current = { messages, renderMessages, renderItems, getMessageAvatar, announcerNames }
+  }, [messages, renderMessages, renderItems, getMessageAvatar, announcerNames])
+
+  // Scroll a message to the top of the transcript and flash it. The list is
+  // virtualized, so the row may not exist yet: expand a collapsed announcement
+  // (its text is only on screen expanded), ask the virtualizer for the index,
+  // then nudge until the row's top sits at the container's top.
+  const revealMessage = useCallback((messageId: string) => {
+    // A global search hit can name a line this view doesn't show — a whisper
+    // to someone else, or another variant of a reply. Say so rather than
+    // silently going nowhere.
+    const { messages: allMessages, renderMessages: shown } = searchStateRef.current
+    if (!shown.some(m => m.id === messageId)) {
+      const hidden = allMessages.find(m => m.id === messageId)
+      showInfoToast(
+        hidden?.targetParticipantIds?.length
+          ? 'That line was a whisper meant for other ears. Choose “Show all whispers” in the sidebar to see it.'
+          : 'That line isn’t on the page — it may belong to another version of a reply, or have been tidied away.',
+      )
+      return
+    }
+    const inChipGroup = searchStateRef.current.renderItems.some(
+      item => item.kind === 'announcement-group' && item.members.some(m => m.message.id === messageId),
+    )
+    if (inChipGroup) {
+      setExpandedSystemMessageIds(prev => (prev.has(messageId) ? prev : new Set(prev).add(messageId)))
+    }
+    setPendingReveal({ messageId, nonce: Date.now() })
+  }, [])
+  const revealMessageRef = useRef(revealMessage)
+  useEffect(() => {
+    revealMessageRef.current = revealMessage
+  }, [revealMessage])
+
+  // --- Scroll to a requested message (`?msg=` links, e.g. a Message search result) ---
+  // A request made before this Salon mounted (or loaded) waits in storage until
+  // the transcript is here; one made while it is open arrives as an event.
+  // Either way only a request for this chat is taken, and only once the
+  // initial scroll to the newest message is done (`isInitialScrollDone`), which would
+  // otherwise carry the view straight back down. Declared after the refs they
+  // read are refreshed, so a just-mounted Salon sees its loaded transcript.
+  const routeRevealTakenRef = useRef(false)
+  useEffect(() => {
+    if (loading || !isInitialScrollDone || messages.length === 0) return
+    let target = takePendingMessageReveal(id)
+    if (!target && revealMessageId && !routeRevealTakenRef.current) {
+      routeRevealTakenRef.current = true
+      target = revealMessageId
+    }
+    if (target) revealMessageRef.current(target)
+  }, [loading, isInitialScrollDone, messages.length, id, revealMessageId])
+  useEffect(() => {
+    if (loading || !isInitialScrollDone) return
+    const onReveal = (event: Event) => {
+      const request = (event as CustomEvent<MessageRevealRequest>).detail
+      if (request?.chatId !== id) return
+      const target = takePendingMessageReveal(id)
+      if (target) revealMessageRef.current(target)
+    }
+    window.addEventListener(MESSAGE_REVEAL_EVENT, onReveal)
+    return () => window.removeEventListener(MESSAGE_REVEAL_EVENT, onReveal)
+  }, [loading, isInitialScrollDone, id])
+
+  useEffect(() => {
+    if (!pendingReveal) return
+    const { messageId } = pendingReveal
+    const index = renderItems.findIndex((item: RenderItem) =>
+      item.kind === 'message' ? item.id === messageId : item.members.some(m => m.message.id === messageId),
+    )
+    if (index < 0) return
+    // Still a chip: the expansion above hasn't rendered yet; this effect re-runs when it does.
+    if (renderItems[index].kind === 'announcement-group') return
+
+    virtualizer.scrollToIndex(index, { align: 'start' })
+    let frame = 0
+    let attempts = 0
+    let lastScrollTop = -1
+    let hiddenFrames = 0
+    const settle = () => {
+      const container = messagesContainerRef.current
+      if (!container || ++attempts > 40) {
+        setPendingReveal(null)
+        return
+      }
+      // A kept-alive tab is display:none until it is activated, and a request
+      // can arrive in the same tick as the activation: wait until it shows.
+      if (container.clientHeight === 0) {
+        if (++hiddenFrames > 600) {
+          setPendingReveal(null)
+          return
+        }
+        attempts--
+        frame = requestAnimationFrame(settle)
+        return
+      }
+      const row = container.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
+      if (!row) {
+        virtualizer.scrollToIndex(index, { align: 'start' })
+        frame = requestAnimationFrame(settle)
+        return
+      }
+      const offset = row.getBoundingClientRect().top - container.getBoundingClientRect().top - 12
+      // Keep nudging while rows above are still being measured, until the row
+      // is at the top or the container can scroll no further.
+      if (Math.abs(offset) > 2 && container.scrollTop !== lastScrollTop) {
+        lastScrollTop = container.scrollTop
+        container.scrollTop += offset
+        frame = requestAnimationFrame(settle)
+        return
+      }
+      row.classList.add('qt-memory-source-highlight')
+      setTimeout(() => row.classList.remove('qt-memory-source-highlight'), 3000)
+      setPendingReveal(null)
+    }
+    frame = requestAnimationFrame(settle)
+    return () => cancelAnimationFrame(frame)
+  }, [pendingReveal, renderItems, virtualizer])
+
+  const conversationSearchSource = useMemo<ConversationSearchSource>(() => ({
+    chatId: id,
+    search: (query, limit) => {
+      const { renderMessages: rows, getMessageAvatar: avatarOf, announcerNames: announcers } = searchStateRef.current
+      return findConversationMatches(rows, query, {
+        limit,
+        speakerOf: message =>
+          message.systemSender
+            ? getAnnouncementSenderName(message, announcers)
+            : avatarOf(message)?.name ?? null,
+      })
+    },
+    reveal: messageId => revealMessageRef.current(messageId),
+    setHighlight: query => setSearchHighlightQuery(query),
+  }), [id])
+
+  // Offer this chat to the header search bar — not while quick-hide is
+  // covering it, when the transcript isn't on screen to search.
+  useEffect(() => {
+    if (chatHidden) return
+    setConversationSearch(conversationSearchSource)
+    return () => {
+      conversationSearchSource.setHighlight(null)
+      setConversationSearch(null)
+    }
+  }, [chatHidden, conversationSearchSource, setConversationSearch])
 
   // --- Reattribute handler ---
   const handleReattribute = useCallback((messageId: string) => {
@@ -1817,7 +1920,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
           isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
-          onSubmit={(e) => {
+          onSubmit={(e, submitOpts) => {
+            const establishedFact = !!submitOpts?.establishedFact
             // Read the live text straight from the editor handle — page `input`
             // intentionally lags while typing (that's the decoupling). Except in
             // raw-source view (bug 67), where the textarea is the edited surface
@@ -1834,8 +1938,16 @@ export function SalonView({ chatId }: SalonViewProps) {
               clearDraft,
               persistDraft,
             }
+            // Deus Ex Machina: a fact needs words, and the server refuses one
+            // without them. Nothing is cleared, and the composer stays armed.
+            if (establishedFact && !text.trim()) {
+              e.preventDefault()
+              showInfoToast('A fact must be written down — attachments alone cannot be established.')
+              return false
+            }
             // In Their Own Words takes the submit over when it is armed; it has
-            // already called preventDefault and nothing has been cleared.
+            // already called preventDefault and nothing has been cleared. It
+            // never takes an established fact: the exact words are what is true.
             if (
               impersonationVoice.intercept(e, {
                 text,
@@ -1846,6 +1958,7 @@ export function SalonView({ chatId }: SalonViewProps) {
                 attachedFiles,
                 pendingToolResults,
                 sendArgs,
+                establishedFact,
               })
             ) {
               return
@@ -1859,6 +1972,7 @@ export function SalonView({ chatId }: SalonViewProps) {
               sendArgs.setPendingToolResults,
               sendArgs.clearDraft,
               sendArgs.persistDraft,
+              establishedFact ? { establishedFact: true } : undefined,
             )
           }}
           onFileSelect={handleFileSelect}
@@ -1882,6 +1996,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           onStopStreaming={sseStreaming.stopStreaming}
           onToggleRaisedHand={sseStreaming.toggleRaisedHand}
           handRaised={sseStreaming.handRaised}
+          handStatus={sseStreaming.handStatus}
+          onDismissHandStatus={sseStreaming.dismissHandStatus}
           canRaiseHand={!participantsWithImpersonation.isSingleCharacterChat && chat?.chatType !== 'autonomous'}
           stopping={sseStreaming.stopping}
           onPendingToolResult={handleAddPendingToolResult}

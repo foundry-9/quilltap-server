@@ -11,6 +11,7 @@ import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext,
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolMessage, GeneratedImage, ToolProcessingResult } from './types'
 import { encodeStatusEvent } from './streaming.service'
+import { encodeFrame } from '@/lib/chat/stream-frames'
 
 const logger = createServiceLogger('ToolExecutionService')
 
@@ -91,13 +92,11 @@ export async function processToolCalls(
   const generatedImagePaths: GeneratedImage[] = []
 
   // Send tool detection info with tool names for proper UI handling
-  controller.enqueue(
-    encoder.encode(`data: ${JSON.stringify({
-      toolsDetected: toolCalls.length,
-      toolNames: toolCalls.map(tc => tc.name),
-      toolArguments: toolCalls.map(tc => tc.arguments),
-    })}\n\n`)
-  )
+  controller.enqueue(encodeFrame(encoder, {
+    kind: 'toolsDetected',
+    names: toolCalls.map(tc => tc.name),
+    arguments: toolCalls.map(tc => tc.arguments),
+  }))
 
   for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex++) {
     const toolCall = toolCalls[toolIndex]
@@ -158,23 +157,14 @@ export async function processToolCalls(
     // text (same string persisted as the tool message's content) so live UIs
     // can show a useful message instead of a generic "failed" — the result
     // field itself is often null on error.
-    const toolResultPayload: Record<string, unknown> = {
+    controller.enqueue(encodeFrame(encoder, {
+      kind: 'toolResult',
       index: toolIndex,
       name: toolResult.toolName,
       success: toolResult.success,
       result: toolResult.result,
-    };
-    if (!toolResult.success) {
-      toolResultPayload.error = resultText;
-    }
-
-    controller.enqueue(
-      encoder.encode(
-        `data: ${JSON.stringify({
-          toolResult: toolResultPayload,
-        })}\n\n`
-      )
-    )
+      ...(toolResult.success ? {} : { error: resultText }),
+    }))
   }
 
   return { toolMessages, generatedImagePaths }

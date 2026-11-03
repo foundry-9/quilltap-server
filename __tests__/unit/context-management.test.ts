@@ -23,6 +23,7 @@ import {
 } from '@/lib/llm/model-context-data'
 
 import { calculateContextBudget, buildContext } from '@/lib/chat/context-manager'
+import { ESTABLISHED_FACT_REMINDER_HEADER } from '@/lib/chat/established-fact'
 import {
   buildSystemPrompt,
   buildOtherParticipantsInfo,
@@ -931,6 +932,89 @@ describe('Context Manager', () => {
       expect(userMsg.role).toBe('user')
       expect(userMsg.content).toContain('You also recall about the others present')
       expect(userMsg.content).toContain('## Memories About Other Characters')
+    })
+
+    it('appends the established-fact reminder after everything else is equal, and only the trailing message changes', async () => {
+      const facts = [
+        {
+          type: 'message', id: 'f-seat', role: 'USER', content: 'The bridge to Ashford collapsed.',
+          participantId: 'participant-user', isEstablishedFact: true, attachments: [],
+          createdAt: '2026-10-01T10:00:00.000Z',
+        },
+        {
+          type: 'message', id: 'f-machine', role: 'ASSISTANT', content: 'The river has risen.',
+          opaqueContent: 'The river has risen.', participantId: null, systemSender: 'host',
+          systemKind: 'established-fact', attachments: [], createdAt: '2026-10-01T10:01:00.000Z',
+        },
+      ]
+      const run = async (events: unknown[]) => {
+        mockedGetRepositories.mockReturnValue({
+          memories: {
+            findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+            findHotDigests: jest.fn().mockResolvedValue([]),
+          },
+          characters: {
+            findByIdRaw: jest.fn(async (id: string) => participantCharacters.get(id) ?? null),
+          },
+          chats: { getMessages: jest.fn().mockResolvedValue(events) },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        } as any)
+        mockedSearchRecall.mockResolvedValue(noRecall)
+        return buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-facts',
+            userId: 'user',
+            participants: allParticipants,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 2,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          },
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          newUserMessage: 'Ready for the next task?',
+          embeddingProfileId: null,
+          skipMemories: true,
+          maxMemories: 1,
+          minMemoryImportance: 0.3,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+            { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+          ],
+        })
+      }
+
+      const without = await run([])
+      const withFacts = await run(facts)
+
+      // Everything but the trailing message is byte-identical.
+      expect(withFacts.messages.slice(0, -1)).toEqual(without.messages.slice(0, -1))
+      const before = without.messages[without.messages.length - 1].content as string
+      const after = withFacts.messages[withFacts.messages.length - 1].content as string
+      expect(after.startsWith(before)).toBe(true)
+      const added = after.slice(before.length)
+      expect(added).toContain(ESTABLISHED_FACT_REMINDER_HEADER)
+      expect(added).toContain('Alex: The bridge to Ashford collapsed.')
+      expect(added).toContain('The river has risen.')
+      expect(added).not.toMatch(/deus\s+ex\s+machina/i)
     })
 
     it('does not repeat an archive digest in the inter-character section (bug 224)', async () => {

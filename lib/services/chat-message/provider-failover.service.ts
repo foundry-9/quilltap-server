@@ -28,9 +28,9 @@ import { readCurrentConciergeOnDuty, readCurrentConciergeState } from '@/lib/ser
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
-  adaptMessagesForProfile,
+  applyImageTransportBudget,
   collectAttachmentMimeTypes,
-} from '@/lib/chat/message-attachment-adapter'
+} from '@/lib/chat/image-transport-budget'
 import {
   buildFallbackChain,
   classifyFallbackTrigger,
@@ -502,10 +502,13 @@ export async function attemptUncensoredRetry(
   try {
     // The array was built for the profile that just refused. An explicitly
     // configured uncensored profile is honoured ahead of the scan, so it may
-    // still be one that cannot read this turn's images — re-decide before
-    // spending the attempt, or the gateway 400s (bug 106).
+    // still be one that cannot read this turn's images, or takes fewer per
+    // request — re-apply the transport budget before spending the attempt, or
+    // the gateway 400s (bug 106).
     const reroutedMessages = repos
-      ? await adaptMessagesForProfile(formattedMessages, reroute, repos, userId, { chatId }, { chatId })
+      ? (await applyImageTransportBudget(formattedMessages, reroute, {
+          repos, userId, logContext: { chatId }, describeOptions: { chatId },
+        })).messages
       : formattedMessages
 
     if (substitute) resetStreamingBuffersForSwap(state)
@@ -841,10 +844,20 @@ async function walkFallbackChain(
     resetStreamingBuffersForSwap(state)
 
     try {
+      // The array was built for the primary. The understudy gets the whole
+      // transport budget re-applied for its own profile — count, bytes and
+      // capability — with the overflow described or omitted with a note
+      // (same reference back when nothing changes). One that can't see images
+      // at all was already left out of the chain.
+      const { messages: understudyMessages } = await applyImageTransportBudget(
+        formattedMessages, understudy, {
+          repos, userId: context.userId, logContext: { chatId, kind: candidate.kind }, describeOptions: { chatId },
+        },
+      )
       await restreamInto(state, {
         connectionProfile: understudy,
         apiKey: keyResolution.apiKey,
-        formattedMessages,
+        formattedMessages: understudyMessages,
         modelParams,
         actualTools,
         useNativeWebSearch,

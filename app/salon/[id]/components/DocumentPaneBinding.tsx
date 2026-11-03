@@ -15,6 +15,7 @@
 
 import { useCallback } from 'react'
 import DocumentPane from './DocumentPane'
+import { DocumentViewerPane } from './DocumentViewerPane'
 import type { OpenDocEntry, DocumentMode, UseDocumentModeReturn } from '../hooks/useDocumentMode'
 
 interface DocumentPaneBindingProps {
@@ -36,6 +37,17 @@ export function DocumentPaneBinding({ entry, mode, roleplayTemplateId, doc }: Do
   const onFocusResolved = useCallback((pixelTop: number) => doc.setDocAttentionTop(docId, pixelTop), [doc, docId])
   const onFocusCleared = useCallback(() => doc.setDocAttentionTop(docId, null), [doc, docId])
   const onFocusProcessed = useCallback(() => doc.clearDocFocusRequest(docId), [doc, docId])
+
+  // A file shown read-only (an image, PDF, .docx…) gets the viewer, not the editor.
+  if (entry.document.viewer) {
+    return (
+      <DocumentViewerPane
+        displayTitle={entry.document.displayTitle}
+        viewer={entry.document.viewer}
+        onCloseDocument={onCloseDocument}
+      />
+    )
+  }
 
   return (
     <DocumentPane

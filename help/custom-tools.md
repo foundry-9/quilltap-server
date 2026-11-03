@@ -669,7 +669,7 @@ To switch off an inherited tool rather than replace it, define it nearer and mar
 
 The name is then suppressed at that tier and every tier beyond it.
 
-If two stores at the *same* distance both define a name, Quilltap picks one deterministically and notes the fact — but this is a coin-toss you did not intend to write, and is worth tidying up.
+If two stores at the *same* distance both define a name, seniority settles it, exactly as it does for garments and inventory: among a character's groups, the group they joined *first* is dealt; within a project, its own official store outranks the stores merely linked to it. Quilltap notes the collision all the same, for it is a tie you did not intend to write and is worth tidying up. (Before Quilltap 4.12 the tie went to whichever store had the alphabetically smaller internal id — a coin-toss in all but name — so a character in two groups may now be dealt the other group's version.)
 
 ## Who may reach for it at all
 
@@ -810,9 +810,11 @@ The composer offers a shorter road. Type `/pascal` at the start of a word to ope
 
 ### Presets — hands set aside for later
 
-Memory of the last hand is all very well, but some tools are run the same three ways for a season at a stretch, and for those the dialog offers **presets**. Beneath a tool's parameters — provided it has any, and provided the roll runs as a character with a vault to keep things in — you will find a modest row of conveniences: a dropdown of hands set aside earlier, a box for naming a new one, **Save preset**, and **Reset to defaults**.
+Memory of the last hand is all very well, but some tools are run the same three ways for a season at a stretch, and for those the dialog offers **presets**. Beneath a tool's parameters — provided it has any — you will find a modest row of conveniences: a dropdown of hands set aside earlier, a box for naming a new one, **Save preset**, **Reset to defaults**, and beneath them a **Save into** selector naming the store the next one will be filed in.
 
-**Save preset** files the figures currently in the boxes under the name you give, as a small JSON document in the running character's vault: `Tools/{tool}.{preset}.settings.json`, sitting companionably beside the tool definitions themselves. It is an ordinary file — you may read it, edit it, or discard it from [The Scriptorium](scriptorium.md) like any other, and it travels with the character wherever the vault goes. Saving under a name already taken quietly replaces the earlier hand, which is usually what you meant.
+**Save preset** files the figures currently in the boxes under the name you give, as a small JSON document named `Tools/{tool}.{preset}.settings.json`, sitting companionably beside the tool definitions themselves. Where it goes is the business of **Save into**, which offers every store on the running character's walk — their vault, their groups' stores, the project's store, and Quilltap General — and starts, unless you say otherwise, on the character's own vault. File a hand in a group or project store and everyone who sits at that table may deal it; file it in the vault and it is the character's alone, travelling with them wherever the vault goes. It is an ordinary file either way — you may read it, edit it, or discard it from [The Scriptorium](scriptorium.md) like any other. Saving under a name already taken *in the same store* quietly replaces the earlier hand, which is usually what you meant.
+
+The dropdown looks for presets precisely where Pascal looks for the tool itself, by the rules in [Which tool wins](#which-tool-wins-the-matter-of-tiers): the character's vault first, then their groups' stores, then the project's, then Quilltap General. Each entry names the store it came from. Should two stores both hold a preset of one name, the nearer one is dealt and the farther one waits politely behind it — so a personal `aggressive` in the vault outranks the table's shared `aggressive` without disturbing a comma of it, and hovering over the entry tells you whom it outranks. A character with no vault to speak of still sees the shared presets, and the nearest shared store takes the vault's place as the default for saving.
 
 The name itself is kept respectable by force: lowercase letters, digits, hyphens, and underscores, and nothing else — no spaces, no dots, and certainly no directory separators. The box simply declines to accept anything the filename could not carry.
 

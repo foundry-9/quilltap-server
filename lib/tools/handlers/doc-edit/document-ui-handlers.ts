@@ -10,7 +10,6 @@
  */
 
 import path from 'path';
-import fs from 'fs/promises';
 import { projectRosterAdmits } from '@/lib/projects/roster-access';
 import {
   resolveDocEditPath,
@@ -26,7 +25,7 @@ import {
   documentHiddenFromCharacters,
   toLibrarianOpenKind,
 } from '@/lib/services/librarian-notifications/writer';
-import { databaseDocumentExists } from '@/lib/mount-index/database-store';
+import { ensureDocument, readDocument, viewTargetFor } from '@/lib/documents/core';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import {
   logger,
@@ -77,7 +76,11 @@ export async function handleOpenDocument(
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
   const input = applyQtapUriToInput(rawInput);
   const repos = getRepositories();
-  const scope = (input.scope || 'project') as 'document_store' | 'project' | 'general';
+  const requestedScope = (input.scope || 'project') as 'document_store' | 'project' | 'general';
+  // What the chat_documents row, the result and the announcement name: the
+  // scope the file actually lives in. For an existing file that is the one
+  // asked for; a new blank document picks its own (#137).
+  let scope = requestedScope;
   const mode = input.mode || 'split';
   let filePath = input.path;
   let displayTitle = input.title || 'Untitled document';
@@ -97,19 +100,20 @@ export async function handleOpenDocument(
     // Treated as a read so peer vaults are reachable when the chat's
     // cross-character read flag is enabled.
     try {
-      const resolved = await resolveDocEditPath(scope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
+      const resolved = await resolveDocEditPath(requestedScope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
       // character_read:false → not-found for characters (operator unaffected).
       await assertCharacterMayRead(resolved, context);
       hiddenFromCharacters = await documentHiddenFromCharacters(resolved.mountPointId, resolved.relativePath);
       storeName = publishedMountPoint(resolved, input.mount_point);
       docUri = await uriForResolvedPath(resolved);
-      if (resolved.mountType === 'database' && resolved.mountPointId) {
-        const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
-        if (!exists) throw new Error(`File not found: ${filePath}`);
-        mtime = Date.now();
+      // Open what the operator's Document Mode would open: a file it only
+      // views (an image, a PDF) by its view target, anything else — an
+      // uploaded text blob included — by reading it through the core.
+      const viewer = await viewTargetFor(resolved);
+      if (viewer) {
+        mtime = Date.parse(viewer.updatedAt);
       } else {
-        const stat = await fs.stat(resolved.absolutePath);
-        mtime = stat.mtimeMs;
+        ({ mtime } = await readDocument(resolved));
       }
       // Use filename as display title if not provided
       if (!input.title) {
@@ -139,12 +143,25 @@ export async function handleOpenDocument(
         projectId: context.projectId,
         characterId: context.characterId,
       });
-      // Create the blank file
-      await fs.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-      await fs.writeFile(resolved.absolutePath, '', 'utf-8');
-      const stat = await fs.stat(resolved.absolutePath);
-      mtime = stat.mtimeMs;
+      // Create the blank file through the core's writer — a database store
+      // gets a document row and every store its refresh, never raw `fs`.
+      const ensured = await ensureDocument(resolved);
+      if (!ensured.created) {
+        return { success: false, error: `Failed to create blank document: ${filePath} already exists` };
+      }
+      mtime = ensured.mtime;
       docUri = await uriForResolvedPath(resolved);
+      // Record where it was made, not where the call asked: the caller's
+      // scope and mount_point play no part in choosing the location (#137).
+      scope = targetScope;
+      storeName = publishedMountPoint(resolved, undefined);
+      logger.debug('doc_open_document: created a blank document', {
+        chatId: context.chatId,
+        filePath,
+        requestedScope,
+        scope,
+        mountPoint: storeName,
+      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { success: false, error: `Failed to create blank document: ${errorMsg}` };

@@ -11,12 +11,19 @@
  */
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import type { ConversationSearchSource } from '@/lib/chat/conversation-search'
 
 export interface PageToolbarContextValue {
   leftContent: ReactNode | null
   setLeftContent: (content: ReactNode | null) => void
   rightContent: ReactNode | null
   setRightContent: (content: ReactNode | null) => void
+  /**
+   * The open conversation the header search bar looks inside first — set by
+   * the Salon, null everywhere else. Follows tab focus like the slots above.
+   */
+  conversationSearch: ConversationSearchSource | null
+  setConversationSearch: (source: ConversationSearchSource | null) => void
 }
 
 /**
@@ -30,6 +37,7 @@ export const PageToolbarContext = createContext<PageToolbarContextValue | null>(
 export function PageToolbarProvider({ children }: { children: ReactNode }) {
   const [leftContent, setLeftContentState] = useState<ReactNode | null>(null)
   const [rightContent, setRightContentState] = useState<ReactNode | null>(null)
+  const [conversationSearch, setConversationSearchState] = useState<ConversationSearchSource | null>(null)
 
   const setLeftContent = useCallback((content: ReactNode | null) => {
     setLeftContentState(content)
@@ -39,8 +47,14 @@ export function PageToolbarProvider({ children }: { children: ReactNode }) {
     setRightContentState(content)
   }, [])
 
+  const setConversationSearch = useCallback((source: ConversationSearchSource | null) => {
+    setConversationSearchState(() => source)
+  }, [])
+
   return (
-    <PageToolbarContext.Provider value={{ leftContent, setLeftContent, rightContent, setRightContent }}>
+    <PageToolbarContext.Provider
+      value={{ leftContent, setLeftContent, rightContent, setRightContent, conversationSearch, setConversationSearch }}
+    >
       {children}
     </PageToolbarContext.Provider>
   )

@@ -18,6 +18,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DocumentPane from '@/app/salon/[id]/components/DocumentPane'
+import { DocumentViewerPane } from '@/app/salon/[id]/components/DocumentViewerPane'
+import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions'
 import type { ActiveDocument } from '@/app/salon/[id]/hooks/useDocumentMode'
 import type { DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { useWorkspace } from '@/components/providers/workspace-provider'
@@ -83,6 +85,7 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
     document: { filePath: string; scope: ActiveDocument['scope']; mountPoint?: string | null; displayTitle?: string }
     content?: string
     mtime?: number
+    viewer?: DocumentViewTarget
   }> | null>(null)
 
   useEffect(() => { docRef.current = doc }, [doc])
@@ -157,6 +160,7 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
           displayTitle: data.document.displayTitle || data.document.filePath,
           content: data.content || '',
           mtime: data.mtime,
+          ...(data.viewer ? { viewer: data.viewer } : {}),
         })
         refreshTab(data.document.filePath, data.document.displayTitle || data.document.filePath)
       })
@@ -374,6 +378,13 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
       <div className="flex items-center justify-center h-full">
         <p className="qt-text-muted text-sm">Fetching the manuscript…</p>
       </div>
+    )
+  }
+
+  // A file shown read-only (an image, PDF, .docx…) gets the viewer, not the editor.
+  if (doc.viewer) {
+    return (
+      <DocumentViewerPane displayTitle={doc.displayTitle} viewer={doc.viewer} onCloseDocument={handleCloseDocument} />
     )
   }
 

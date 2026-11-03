@@ -240,82 +240,33 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
-   * Rewrite chat_documents rows in a specific (scope, mountPoint) whose
-   * filePath exactly matches `oldPath`. Used after `doc_move_file` succeeds
-   * so any chat with the moved file open in Document Mode keeps tracking it
-   * at the new path instead of 404'ing on the next reload. The displayTitle
-   * is refreshed to the new basename, matching the convention used by both
-   * `openDocument` and the UI-initiated rename.
+   * Every row (any chat, any scope) whose filePath is exactly `filePath`. The
+   * document core's move sweep reads these and keeps the ones whose recorded
+   * address reaches the moved file's store (`lib/documents/core/move.ts`).
    */
-  async renameFilePathInStore(
-    scope: string,
-    mountPoint: string | null | undefined,
-    oldPath: string,
-    newPath: string,
-    newDisplayTitle: string,
-  ): Promise<number> {
+  async findByFilePath(filePath: string): Promise<ChatDocument[]> {
     return this.safeQuery(
-      async () => {
-        const normalizedMount = mountPoint ?? null;
-        const stale = await this.findByFilter({
-          scope,
-          filePath: oldPath,
-        } as TypedQueryFilter<ChatDocument>);
-        const matching = stale.filter(r => (r.mountPoint ?? null) === normalizedMount);
-        let count = 0;
-        for (const row of matching) {
-          const updated = await this.update(row.id, {
-            filePath: newPath,
-            displayTitle: newDisplayTitle,
-          });
-          if (updated) count++;
-        }
-        return count;
-      },
-      'Error renaming chat document filePath in store',
-      { scope, mountPoint, oldPath, newPath },
-      0,
+      async () => this.findByFilter({ filePath } as TypedQueryFilter<ChatDocument>),
+      'Error finding chat documents by file path',
+      { filePath },
+      [],
     );
   }
 
   /**
-   * Rewrite chat_documents rows in a specific (scope, mountPoint) whose
-   * filePath sits under `oldFolderPath` after a folder is moved/renamed.
-   * Rewrites the prefix to `newFolderPath` and refreshes displayTitle to
-   * the new basename. Used after `doc_move_folder` succeeds.
+   * Every row (any chat, any scope) whose filePath sits under `folderPath/`.
+   * The folder counterpart of {@link findByFilePath}.
    */
-  async renameFolderPathInStore(
-    scope: string,
-    mountPoint: string | null | undefined,
-    oldFolderPath: string,
-    newFolderPath: string,
-  ): Promise<number> {
+  async findUnderFolder(folderPath: string): Promise<ChatDocument[]> {
     return this.safeQuery(
       async () => {
-        const normalizedMount = mountPoint ?? null;
-        const oldPrefix = oldFolderPath.endsWith('/') ? oldFolderPath : `${oldFolderPath}/`;
-        const newPrefix = newFolderPath.endsWith('/') ? newFolderPath : `${newFolderPath}/`;
-        const all = await this.findByFilter({ scope } as TypedQueryFilter<ChatDocument>);
-        const matching = all.filter(r =>
-          (r.mountPoint ?? null) === normalizedMount &&
-          r.filePath.startsWith(oldPrefix)
-        );
-        let count = 0;
-        for (const row of matching) {
-          const newFilePath = newPrefix + row.filePath.slice(oldPrefix.length);
-          const slash = newFilePath.lastIndexOf('/');
-          const newDisplayTitle = slash >= 0 ? newFilePath.slice(slash + 1) : newFilePath;
-          const updated = await this.update(row.id, {
-            filePath: newFilePath,
-            displayTitle: newDisplayTitle,
-          });
-          if (updated) count++;
-        }
-        return count;
+        const prefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
+        const all = await this.findAll();
+        return all.filter(r => r.filePath.startsWith(prefix));
       },
-      'Error renaming chat document folder path in store',
-      { scope, mountPoint, oldFolderPath, newFolderPath },
-      0,
+      'Error finding chat documents under a folder',
+      { folderPath },
+      [],
     );
   }
 

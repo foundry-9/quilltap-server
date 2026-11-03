@@ -95,8 +95,10 @@ export interface RunSqlOutput {
   rows: Array<Record<string, unknown>>;
   /** Rows returned (after the max_rows cap). */
   rowCount: number;
-  /** True if the result hit max_rows and was truncated. */
+  /** True if the result hit max_rows or the size budget and was truncated. */
   truncated: boolean;
+  /** Present when the size budget shortened cells or dropped rows. */
+  note?: string;
 }
 
 /** What this tool does to the world: reads, changes nothing. */

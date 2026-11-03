@@ -124,10 +124,17 @@
 
 /* ==========================================================================
    SEMANTIC ALIASES
-   These map theme tokens to --color-* variables used by components
+   These map theme tokens to --color-* variables used by components.
+   A var() in a custom property resolves where it is declared, so the aliases
+   are re-declared on the decorated story container ([data-theme], .dark,
+   .light) as well as :root; otherwise a .dark below :root would change the
+   --theme-* tokens and leave every --color-* alias on its light value.
    ========================================================================== */
 
-:root {
+:root,
+[data-theme],
+.dark,
+.light {
   --color-background: var(--theme-background);
   --color-foreground: var(--theme-foreground);
   --color-card: var(--theme-card);

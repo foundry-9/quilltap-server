@@ -60,17 +60,20 @@ jest.mock('@/lib/api/responses', () => ({
 jest.mock('@/lib/services/chat-message/regenerate-swipe.service', () => ({
   regenerateMessageAsSwipe: jest.fn(),
 }))
-// The SSE encoders are thin `TextEncoder` wrappers in the real module; the
-// fakes keep the frame shape so a test can read the stream back as JSON.
-jest.mock('@/lib/services/chat-message/streaming.service', () => ({
-  encodeContentChunk: (enc: TextEncoder, content: string) => enc.encode(`data: ${JSON.stringify({ content })}\n\n`),
-  encodeReasoningChunk: (enc: TextEncoder, reasoning: string) => enc.encode(`data: ${JSON.stringify({ reasoning })}\n\n`),
-  encodeStatusEvent: (enc: TextEncoder, status: any) => enc.encode(`data: ${JSON.stringify({ status })}\n\n`),
-  encodeErrorEvent: (enc: TextEncoder, error: string, errorType: string, details: string) =>
-    enc.encode(`data: ${JSON.stringify({ error, errorType, details })}\n\n`),
+// The SSE encoders are one-line `encodeFrame` calls in the real module; the
+// fakes make the same calls so a test can read the stream back as frames.
+jest.mock('@/lib/services/chat-message/streaming.service', () => {
+  const { encodeFrame } = jest.requireActual('@/lib/chat/stream-frames')
+  return {
+  encodeContentChunk: (enc: TextEncoder, text: string) => encodeFrame(enc, { kind: 'content', text }),
+  encodeReasoningChunk: (enc: TextEncoder, text: string) => encodeFrame(enc, { kind: 'reasoning', text }),
+  encodeStatusEvent: (enc: TextEncoder, status: any) => encodeFrame(enc, { kind: 'status', status }),
+  encodeErrorEvent: (enc: TextEncoder, message: string, errorType: string, details: string) =>
+    encodeFrame(enc, { kind: 'error', message, errorType, details }),
   safeEnqueue: (controller: any, data: any) => { controller.enqueue(data); return true },
   safeClose: (controller: any) => { controller.close() },
-}))
+  }
+})
 jest.mock('@/lib/services/chat-message/request-helpers', () => ({
   sseStreamResponse: (stream: any) => ({ __kind: 'sse', stream }),
 }))
@@ -266,9 +269,9 @@ describe('POST /api/v1/messages/[id]?action=swipe&stream=1', () => {
 
     const events = await readStream(res.stream)
     expect(events[0].status.stage).toBe('gathering')
-    expect(events.filter(e => e.content).map(e => e.content)).toEqual(['the new ', 'line'])
-    expect(events.find(e => e.reasoning)?.reasoning).toBe('thinking about it')
-    expect(events.at(-1)).toEqual({ done: true, message: newSwipe })
+    expect(events.filter(e => e.kind === 'content').map(e => e.text)).toEqual(['the new ', 'line'])
+    expect(events.find(e => e.kind === 'reasoning')?.text).toBe('thinking about it')
+    expect(events.at(-1)).toEqual({ kind: 'swipeDone', message: newSwipe })
   })
 
   it('reports a mid-stream failure as an error event, not a dropped connection', async () => {
@@ -281,7 +284,8 @@ describe('POST /api/v1/messages/[id]?action=swipe&stream=1', () => {
     const res: any = await POST(swipeReq(true), params)
     const events = await readStream(res.stream)
 
-    expect(events.at(-1).error).toBe('Failed to generate alternative response')
+    expect(events.at(-1).kind).toBe('error')
+    expect(events.at(-1).message).toBe('Failed to generate alternative response')
     expect(events.at(-1).details).toBe('provider went quiet')
   })
 

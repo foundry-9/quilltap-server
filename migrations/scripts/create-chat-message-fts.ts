@@ -44,7 +44,10 @@ export const createChatMessageFtsMigration: Migration = {
   id: MIGRATION_ID,
   description: 'Create the FTS5 index behind global chat-message search',
   introducedInVersion: '4.10.0',
-  dependsOn: ['sqlite-initial-schema-v1'],
+  // The insert trigger reads systemSender and customAnnouncer (#121); a trigger
+  // naming a missing column is created without complaint and then fails every
+  // INSERT into chat_messages.
+  dependsOn: ['sqlite-initial-schema-v1', 'add-system-sender-field-v1', 'add-custom-announcer-field-v1'],
 
   async shouldRun(): Promise<boolean> {
     if (!isSQLiteBackend()) return false;

@@ -14,6 +14,7 @@
 
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
+import { frameEstablishedFact } from '@/lib/chat/established-fact'
 
 export interface TurnCharacterSlice {
   characterId: string
@@ -297,7 +298,9 @@ export function buildTurnTranscript(
 
     if (!scanning) {
       if (m.id === options.turnOpenerMessageId && m.role === 'USER') {
-        userMessage = m.content
+        // An opener posted as established fact reaches the extractor framed,
+        // so it is remembered as a fact of the world, not as the user's claim.
+        userMessage = m.isEstablishedFact ? frameEstablishedFact(m.content, { kind: 'seat', voice: 'plain' }) : m.content
         scanning = true
         turnTimestamp = m.createdAt ?? turnTimestamp
         // Promote a user-controlled opener to a first-class slice so its driver
@@ -318,7 +321,7 @@ export function buildTurnTranscript(
               characterId: character.id,
               characterName: character.name,
               characterPronouns: character.pronouns ?? null,
-              text: m.content,
+              text: userMessage ?? m.content,
               contributingMessageIds: [m.id],
               lastMessageCreatedAt: m.createdAt ?? null,
               isUserControlled: true,

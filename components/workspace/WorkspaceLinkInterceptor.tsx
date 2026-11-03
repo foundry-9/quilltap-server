@@ -36,6 +36,7 @@ import { usePathname } from 'next/navigation'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
 import { parseHrefToIntent } from '@/lib/navigation/route-to-intent'
+import { requestMessageReveal, revealRequestFromSalonHref } from '@/lib/chat/message-navigation'
 
 export function WorkspaceLinkInterceptor() {
   const ws = useWorkspaceOptional()
@@ -84,6 +85,10 @@ export function WorkspaceLinkInterceptor() {
       // client navigation (it only pushes when !e.defaultPrevented).
       e.preventDefault()
       openTab(intent.kind, intent.payload)
+      // A `?msg=` on a Salon link (a Message search result) is not part of the
+      // tab — the tab is the chat — but a one-off request to its Salon.
+      const reveal = revealRequestFromSalonHref(href)
+      if (reveal) requestMessageReveal(reveal.chatId, reveal.messageId)
     }
 
     document.addEventListener('click', onClick, true) // capture

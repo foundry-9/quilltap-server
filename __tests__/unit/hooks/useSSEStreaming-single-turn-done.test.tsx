@@ -12,6 +12,8 @@ import { useSSEStreaming } from '@/app/salon/[id]/hooks/useSSEStreaming'
 import type { Message } from '@/app/salon/[id]/types'
 import { showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import type { StreamFrame } from '@/lib/chat/stream-frames'
+import { doneFrame } from '../../helpers/salon-stream-golden'
 
 jest.mock('@/lib/toast', () => ({
   showSuccessToast: jest.fn(),
@@ -24,7 +26,7 @@ jest.mock('@/components/layout/queue-status-badges', () => ({
   notifyQueueChange: jest.fn(),
 }))
 
-function frame(event: Record<string, unknown>): string {
+function frame(event: StreamFrame): string {
   return `data: ${JSON.stringify(event)}\n\n`
 }
 
@@ -108,7 +110,7 @@ function setup(chunks: string[]) {
   return { send, fetchChat, setRespondingParticipantId, assistant: () => messages.find((m) => m.role === 'ASSISTANT') }
 }
 
-const TURN_START = frame({ turnStart: true, participantId: 'participant-1', characterName: 'Ada', chainDepth: 0 })
+const TURN_START = frame({ kind: 'turnStart', participantId: 'participant-1', characterName: 'Ada', chainDepth: 0 })
 
 describe('useSSEStreaming — a single-character turn (bug 242)', () => {
   beforeEach(() => {
@@ -118,8 +120,8 @@ describe('useSSEStreaming — a single-character turn (bug 242)', () => {
   it('runs the end-of-turn work after a depth-0 turnStart and done', async () => {
     const h = setup([
       TURN_START,
-      frame({ content: 'Good evening to you.' }),
-      frame({ done: true, messageId: 'assistant-1', participantId: 'participant-1' }),
+      frame({ kind: 'content', text: 'Good evening to you.' }),
+      frame(doneFrame({ messageId: 'assistant-1', participantId: 'participant-1' })),
     ])
 
     await h.send()
@@ -133,7 +135,7 @@ describe('useSSEStreaming — a single-character turn (bug 242)', () => {
   it('shows the empty-response toast after a depth-0 turnStart', async () => {
     const h = setup([
       TURN_START,
-      frame({ done: true, emptyResponse: true, messageId: 'assistant-1', participantId: 'participant-1' }),
+      frame(doneFrame({ outcome: 'empty', messageId: 'assistant-1', participantId: 'participant-1' })),
     ])
 
     await h.send()

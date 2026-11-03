@@ -50,6 +50,8 @@ export interface OperatorPostParams {
   attachedFiles: Pick<AttachedFile, 'id' | 'filename' | 'mimeType'>[]
   pendingToolResults?: PendingToolResultInput[]
   targetParticipantIds?: string[] | null
+  /** The line is posted as established fact (Deus Ex Machina). Persisted on the USER row. */
+  isEstablishedFact?: boolean
   /** The seat the post is attributed to (null: the bare operator). */
   poster: { participant: ChatParticipantBase | null; participantId: string | null }
   /** The Concierge's per-message flags for this post, when it screened one. */
@@ -89,9 +91,13 @@ export async function recordOperatorPost(params: OperatorPostParams): Promise<Op
       attachments: params.fileIds || [],
       participantId: params.poster.participantId,
       targetParticipantIds: params.targetParticipantIds || null,
+      ...(params.isEstablishedFact ? { isEstablishedFact: true } : {}),
     })
     ledger.userMessagePersisted = true
-    logger.debug('[OperatorPost] User message persisted', { chatId, userMessageId })
+    logger.debug('[OperatorPost] User message persisted', { chatId, userMessageId, isEstablishedFact: !!params.isEstablishedFact })
+    if (params.isEstablishedFact) {
+      logger.info('[OperatorPost] Operator line posted as established fact', { chatId, userMessageId })
+    }
 
     await linkAttachments(params, userMessageId)
     await announceImageUploads(params)

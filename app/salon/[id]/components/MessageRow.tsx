@@ -1,5 +1,6 @@
 'use client'
 
+import { isEstablishedFactAnnouncement, isEstablishedFactSeatLine } from '@/lib/chat/established-fact'
 import { memo, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
@@ -7,11 +8,7 @@ import ToolMessage from '@/components/chat/ToolMessage'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
-import {
-  getAnnouncementSenderName,
-  getSystemKindDisplayLabel,
-  getAnnouncementAccentClasses,
-} from './system-message-labels'
+import { getAnnouncementAccentClasses } from './system-message-labels'
 import { AnnouncementChip, AnnouncementBarContents } from './AnnouncementChip'
 import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
@@ -217,6 +214,10 @@ function MessageRowInner({
   // was generated — NOT the participant's current status. Changing a character to silent
   // should not retroactively restyle their old messages.
   const isSilentMessage = !!message.isSilentMessage
+  // Deus Ex Machina: an operator line posted as established fact wears a
+  // ribbon; a machine-delivered fact renders as a full-width band, no avatar.
+  const isFactSeatLine = isEstablishedFactSeatLine(message)
+  const isFactBand = isEstablishedFactAnnouncement(message)
 
   const messageRowClasses = ['qt-chat-message-row']
   if (message.role === 'USER') {
@@ -224,6 +225,7 @@ function MessageRowInner({
   } else {
     messageRowClasses.push('qt-chat-message-row-assistant')
   }
+  if (isFactBand) messageRowClasses.push('qt-chat-established-fact-row')
 
   // "Not Dangerous" overrides a flag; only flags still standing blur or
   // collapse the message. The chips themselves stay (struck through) as the
@@ -273,6 +275,8 @@ function MessageRowInner({
             messageAvatar={messageAvatar}
             dangerous={isDangerousChat}
             badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
+            chatId={chatId}
+            onImageClick={onImageClick}
           />
         )}
         <div className="qt-chat-message-body group">
@@ -314,18 +318,19 @@ function MessageRowInner({
       key={message.id}
       className={messageRowClasses.join(' ')}
     >
-      {/* Desktop avatar - assistant (left side) */}
-      {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
+      {/* Desktop avatar - assistant (left side). An established-fact band has
+          no speaker, so no avatar. */}
+      {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && !isFactBand && (
         <MessageDesktopAvatar
           messageAvatar={messageAvatar}
           dangerous={isDangerousChat}
           badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
+          chatId={chatId}
+          onImageClick={onImageClick}
         />
       )}
       <div className="qt-chat-message-body group">
         {message.systemSender && !isEditing && onToggleSystemMessageExpanded && (() => {
-          const senderName = getAnnouncementSenderName(message, announcerNames)
-          const kindLabel = getSystemKindDisplayLabel(message)
           // A Pascal roll wears its outcome state on the bar's leading edge.
           const accent = getAnnouncementAccentClasses(message)
           return (
@@ -334,7 +339,6 @@ function MessageRowInner({
               onClick={() => onToggleSystemMessageExpanded(message.id)}
               className={`qt-chat-system-bar qt-chat-system-bar-expanded${accent ? ` ${accent}` : ''}`}
               aria-expanded={true}
-              aria-label={`Collapse ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
             >
               <AnnouncementBarContents
                 message={message}
@@ -350,7 +354,7 @@ function MessageRowInner({
             message.role === 'USER'
               ? 'qt-chat-message-user'
               : 'qt-chat-message-assistant'
-          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}${regeneration ? ' qt-chat-message-regenerating' : ''}`}
+          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}${isFactBand ? ' qt-chat-established-fact-band' : ''}${regeneration ? ' qt-chat-message-regenerating' : ''}`}
           aria-busy={regeneration ? true : undefined}
         >
           {isEditing ? (
@@ -392,6 +396,12 @@ function MessageRowInner({
               {isSilentMessage && !isWhisper && (
                 <div className="qt-chat-silent-label">
                   silent — inner thoughts and actions only
+                </div>
+              )}
+              {/* Deus Ex Machina ribbon: this line was posted as established fact */}
+              {isFactSeatLine && (
+                <div className="qt-chat-message-established-fact">
+                  Deus Ex Machina — established as fact
                 </div>
               )}
               {/* A line being re-rolled shows the regeneration in place of its
@@ -603,7 +613,7 @@ function MessageRowInner({
       </div>
       {/* Desktop avatar - user (right side) */}
       {message.role === 'USER' && shouldShowAvatars && messageAvatar && (
-        <MessageDesktopAvatar messageAvatar={messageAvatar} />
+        <MessageDesktopAvatar messageAvatar={messageAvatar} chatId={chatId} onImageClick={onImageClick} />
       )}
     </div>
   )
@@ -648,6 +658,7 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Avatar info (compare by value since it's an object)
   if (prev.messageAvatar?.name !== next.messageAvatar?.name) return false
   if (prev.messageAvatar?.avatarUrl !== next.messageAvatar?.avatarUrl) return false
+  if (prev.messageAvatar?.characterId !== next.messageAvatar?.characterId) return false
 
   // Rendering patterns (reference equality is fine - they're stable)
   if (prev.renderingPatterns !== next.renderingPatterns) return false

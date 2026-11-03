@@ -1,72 +1,13 @@
 'use strict';
 
-// Jest globalSetup — two jobs, both of which must happen BEFORE any suite runs:
-// arm the V8 Sparkplug segfault guard (below), and heal a stale native
-// SQLCipher binding.
+// Jest globalSetup — arms the V8 Sparkplug segfault guard (below) before any
+// suite runs.
 //
 // The real-binding suites (db-backup, graph-integrity, memories-commands, the
-// migration / content-hash / run-sql-handler suites) load the actual
-// better-sqlite3 native addon rather than the mock. After a Node.js upgrade that
-// addon is compiled against the old ABI and throws NODE_MODULE_VERSION on load,
-// turning every one of those suites red until someone rebuilds by hand. This
-// mirrors the CLI's `ensureDatabaseNativeModule()` heal so `npm run test:unit`
-// self-corrects instead.
-//
-// Two copies can back those suites (see the `loadDriver()` fallback chain in
-// __tests__/unit/packages/quilltap/*.js): the per-package
-// better-sqlite3-multiple-ciphers install used locally, and the root
-// better-sqlite3 alias used in CI. We heal whichever exists. Detection reuses
-// the same binary-symbol scan the CLI uses — no dlopen, no error-string matching.
-
-const fs = require('fs');
-const path = require('path');
-const { readCompiledAbi, rebuildNativePackage } = require('./packages/quilltap/lib/native-modules');
-
-const ROOT = __dirname;
-
-// Each candidate copy is addressed by its DIRECTORY, not by an npm package name.
-// This used to shell out to `npm rebuild <name>` and both spellings failed:
-// `better-sqlite3` (the root alias) is refused with EALLOWSCRIPTS because it is
-// not a key in the root package.json `allowScripts` map, and
-// `better-sqlite3-multiple-ciphers` at the root reports success while rebuilding
-// a phantom directory. `rebuildNativePackage` runs the package's own
-// `prebuild-install || node-gyp rebuild` chain in place instead, and verifies
-// the binding's ABI actually moved before calling it healed.
-const COPIES = [
-  {
-    label: 'better-sqlite3 (root alias)',
-    pkgDir: path.join(ROOT, 'node_modules', 'better-sqlite3'),
-  },
-  {
-    label: 'better-sqlite3-multiple-ciphers (packages/quilltap)',
-    pkgDir: path.join(ROOT, 'packages', 'quilltap', 'node_modules', 'better-sqlite3-multiple-ciphers'),
-  },
-];
-
-function healCopy(copy) {
-  if (!fs.existsSync(copy.pkgDir)) return; // not installed here — nothing to heal
-  const bindingPath = path.join(copy.pkgDir, 'build', 'Release', 'better_sqlite3.node');
-  const running = process.versions.modules;
-  const exists = fs.existsSync(bindingPath);
-  const compiledAbi = exists ? readCompiledAbi(bindingPath) : null;
-  // Rebuild when the binary is missing, or its compiled-for ABI differs from the
-  // running one. A readable-and-matching ABI (or an unreadable symbol on an
-  // existing file) is left alone — the suite's own load surfaces anything else.
-  const needsRebuild = !exists || (compiledAbi !== null && compiledAbi !== running);
-  if (!needsRebuild) return;
-
-  console.log(
-    `\n  [jest] Native ABI mismatch for ${copy.label} ` +
-      `(built ${compiledAbi ?? 'missing'}, running ${running}). Rebuilding for Node ${process.version}...`,
-  );
-  const result = rebuildNativePackage(copy.pkgDir, bindingPath);
-  if (result.ok) {
-    console.log(`  [jest] Rebuilt ${copy.label} via ${result.reason}.\n`);
-  } else {
-    console.error(`  [jest] Failed to rebuild ${copy.label} — ${result.reason}`);
-    console.error(`  [jest] Try: (cd ${copy.pkgDir} && ./node_modules/.bin/prebuild-install)\n`);
-  }
-}
+// migration / content-hash / run-sql-handler suites) load the actual SQLCipher
+// driver rather than the mock. It is a Node-API addon whose prebuilt binary
+// ships inside the npm package, so a Node upgrade no longer needs any healing
+// here.
 
 // --- V8 Sparkplug segfault guard (nodejs/node#62393) ---
 //
@@ -99,5 +40,4 @@ function armSparkplugGuard() {
 
 module.exports = async function globalSetup() {
   armSparkplugGuard();
-  for (const copy of COPIES) healCopy(copy);
 };

@@ -188,6 +188,31 @@ export interface DocMountFileLinkWithContent extends DocMountFileLink {
   source: DocMountFile['source'];
 }
 
+/**
+ * One row of a store browser's listing (`GET /api/v1/mount-points/[id]/files`):
+ * the joined link without its extracted text (fetched per file when wanted),
+ * plus how many locations share its content row. `linkCount > 1` with a null
+ * `linkGroupId` is dedup sharing (forks on first write); a non-null
+ * `linkGroupId` is a deliberate hard link (writes reach every member).
+ */
+export interface DocMountBrowserEntry extends Omit<DocMountFileLinkWithContent, 'extractedText'> {
+  linkGroupId: string | null;
+  /** Every link (any store) that shares this link's content row, itself included. */
+  linkCount: number;
+}
+
+/** One place a file appears, for the "where else is this?" answer. */
+export interface DocMountLinkLocation {
+  linkId: string;
+  mountPointId: string;
+  mountPointName: string;
+  relativePath: string;
+  /** In the same deliberate hard-link group as the file asked about. */
+  grouped: boolean;
+  /** This is the file asked about. */
+  self: boolean;
+}
+
 // ============================================================================
 // DOCUMENT MOUNT CHUNK
 // ============================================================================

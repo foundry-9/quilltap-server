@@ -229,13 +229,25 @@ export const insertAnnouncementSchema = z.object({
     z.object({ kind: z.literal('staff'), staffId: STAFF_SENDER_ENUM }),
     z.object({ kind: z.literal('character'), characterId: z.uuid() }),
     z.object({ kind: z.literal('custom'), displayName: z.string().min(1).max(120) }),
+    // An established fact (the Salon's "Deus Ex Machina" tab): no speaker,
+    // always public. Posted as a Host row by `postEstablishedFact`.
+    z.object({ kind: z.literal('fact') }),
   ]),
   /**
    * Whisper audience: CHAT PARTICIPANT ids (not character ids). Omitted / null
    * posts the announcement publicly, as it always has. Every id is re-verified
-   * against the chat's current participants server-side.
+   * against the chat's current participants server-side. Refused with a
+   * `fact` sender — an established fact is known to everyone.
    */
   targetParticipantIds: z.array(z.uuid()).nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.sender.kind === 'fact' && data.targetParticipantIds != null) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'An established fact is public; it cannot be whispered',
+      path: ['targetParticipantIds'],
+    });
+  }
 });
 
 export const insertAnnouncementPreviewSchema = z.object({

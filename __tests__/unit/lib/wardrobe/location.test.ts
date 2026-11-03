@@ -26,8 +26,11 @@ jest.mock('@/lib/mount-index/ensure-owner-store', () => ({
 }));
 
 const mockEnsureFolder = jest.fn();
+jest.mock('@/lib/mount-index/folder-paths', () => ({
+  ensureFolderPath: (...args: unknown[]) => mockEnsureFolder(...args),
+}));
 jest.mock('@/lib/mount-index/shared-wardrobe', () => ({
-  ensureSharedWardrobeFolder: (...args: unknown[]) => mockEnsureFolder(...args),
+  SHARED_WARDROBE_FOLDER: 'Wardrobe',
 }));
 
 const mockReadMountItems = jest.fn();
@@ -61,11 +64,11 @@ function makeRepos() {
       ),
     },
     projects: {
-      findById: jest.fn(async (id: string) =>
+      findByIdRaw: jest.fn(async (id: string) =>
         id === 'proj-1' ? { id, name: 'Manor', officialMountPointId: null } : id === 'proj-2' ? { id, name: 'Abbey', officialMountPointId: 'proj-mp-2' } : null,
       ),
     },
-    groups: { findById: jest.fn(async (id: string) => (id === 'grp-1' ? { id, name: 'Guild', officialMountPointId: 'grp-mp' } : null)) },
+    groups: { findByIdRaw: jest.fn(async (id: string) => (id === 'grp-1' ? { id, name: 'Guild', officialMountPointId: 'grp-mp' } : null)) },
   };
 }
 
@@ -116,7 +119,7 @@ describe('resolveWardrobeLocation', () => {
   it('ensure provisions the store and its Wardrobe folder for a writer', async () => {
     const loc = await resolveWardrobeLocation('project', 'proj-1', makeRepos() as never, USER, { ensure: true });
     expect(mockEnsureOwnerStore).toHaveBeenCalledWith('project', 'proj-1', 'Manor');
-    expect(mockEnsureFolder).toHaveBeenCalledWith('proj-mp-new');
+    expect(mockEnsureFolder).toHaveBeenCalledWith('proj-mp-new', 'Wardrobe');
     expect(loc?.mountPointId).toBe('proj-mp-new');
   });
 

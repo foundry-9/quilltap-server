@@ -8,6 +8,8 @@ import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { providerAcceptsApiKey, providerRequiresApiKey } from '@/lib/llm/api-key-support'
 import type { ApiKey, ProfileFormData, ConnectionProfile, ProviderConfig } from '../types'
 import { initialFormState } from '../types'
+import { parseMaxImagesPerRequest, resolveMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils'
+import { DEFAULT_MAX_IMAGES_PER_REQUEST } from '@/lib/schemas/profile.types'
 
 /**
  * Hook for managing profile form state and operations
@@ -36,10 +38,28 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         requiresBaseUrl: provider?.configRequirements?.requiresBaseUrl ?? false,
         supportsWebSearch: provider?.capabilities?.webSearch ?? false,
         supportsToolUse: provider?.capabilities?.toolUse ?? false,
+        supportsSamplingParameters: provider?.capabilities?.samplingParameters ?? true,
       }
     },
     [providers]
   )
+
+  /**
+   * The editor's sampling controls as they are allowed to leave the form.
+   * `temperature` / `top_p` are dropped for a provider that declares
+   * `capabilities.samplingParameters: false` (the sliders are hidden there);
+   * `max_tokens` always goes.
+   */
+  const outboundSamplingParameters = useCallback((): Record<string, number> => {
+    const out: Record<string, number> = {
+      max_tokens: parseInt(String(form.formData.maxTokens)),
+    }
+    if (getProviderRequirements(form.formData.provider).supportsSamplingParameters) {
+      out.temperature = parseFloat(String(form.formData.temperature))
+      out.top_p = parseFloat(String(form.formData.topP))
+    }
+    return out
+  }, [getProviderRequirements, form.formData.provider, form.formData.maxTokens, form.formData.temperature, form.formData.topP])
 
   /**
    * The base URL as it is allowed to leave the form.
@@ -150,6 +170,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         multiCharacterPrefill:
           profile.multiCharacterPrefill ?? defaultMultiCharacterPrefill(profile.provider),
         supportsImageUpload: profile.supportsImageUpload ?? false,
+        maxImagesPerRequest: String(resolveMaxImagesPerRequest(profile)),
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
         modelClass: profile.modelClass ?? '',
@@ -202,9 +223,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
     // come from the schema-driven `parameters` form field, which already
     // matches the wire-side key names each plugin reads.
     const parameters: Record<string, any> = {
-      temperature: parseFloat(String(form.formData.temperature)),
-      max_tokens: parseInt(String(form.formData.maxTokens)),
-      top_p: parseFloat(String(form.formData.topP)),
+      ...outboundSamplingParameters(),
       ...form.formData.parameters,
     }
 
@@ -220,6 +239,8 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
       pseudoToolMode: form.formData.pseudoToolMode,
       multiCharacterPrefill: form.formData.multiCharacterPrefill,
       supportsImageUpload: form.formData.supportsImageUpload,
+      maxImagesPerRequest:
+        parseMaxImagesPerRequest(form.formData.maxImagesPerRequest) ?? DEFAULT_MAX_IMAGES_PER_REQUEST,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
       modelClass: form.formData.modelClass || null,
@@ -244,7 +265,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
     requestBody.baseUrl = outboundBaseUrl()
 
     return requestBody
-  }, [form.formData, outboundBaseUrl, outboundApiKeyId])
+  }, [form.formData, outboundBaseUrl, outboundApiKeyId, outboundSamplingParameters])
 
   const handleConnect = useCallback(
     async (onSuccess?: (data: any) => void) => {
@@ -346,11 +367,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
             apiKeyId: outboundApiKeyId() || undefined,
             baseUrl: outboundBaseUrl() || undefined,
             modelName: form.formData.modelName,
-            parameters: {
-              temperature: parseFloat(String(form.formData.temperature)),
-              max_tokens: parseInt(String(form.formData.maxTokens)),
-              top_p: parseFloat(String(form.formData.topP)),
-            },
+            parameters: outboundSamplingParameters(),
           }),
         })
 
@@ -367,7 +384,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
 
       return result
     },
-    [form.formData, testMessageOp, outboundBaseUrl, outboundApiKeyId]
+    [form.formData, testMessageOp, outboundBaseUrl, outboundApiKeyId, outboundSamplingParameters]
   )
 
   const handleAutoConfigure = useCallback(

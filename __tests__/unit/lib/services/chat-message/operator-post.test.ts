@@ -106,6 +106,18 @@ describe('recordOperatorPost', () => {
     ])
   })
 
+  it('persists the established-fact flag on the USER row, and only when asked', async () => {
+    const asFact = setup({ isEstablishedFact: true })
+    await recordOperatorPost(asFact.params)
+    const factRow = asFact.repos.chats.addMessage.mock.calls.find(([, m]) => m.role === 'USER')![1] as Record<string, unknown>
+    expect(factRow.isEstablishedFact).toBe(true)
+
+    const plain = setup()
+    await recordOperatorPost(plain.params)
+    const plainRow = plain.repos.chats.addMessage.mock.calls.find(([, m]) => m.role === 'USER')![1] as Record<string, unknown>
+    expect(plainRow).not.toHaveProperty('isEstablishedFact')
+  })
+
   it('lists every named file on the USER row but links only the chat\'s own', async () => {
     const { params, repos } = setup()
     await recordOperatorPost(params)

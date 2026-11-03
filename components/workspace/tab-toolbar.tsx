@@ -34,16 +34,21 @@ import {
   type PageToolbarContextValue,
 } from '@/components/providers/page-toolbar-provider'
 import { useWorkspace } from '@/components/providers/workspace-provider'
+import type { ConversationSearchSource } from '@/lib/chat/conversation-search'
 
-type ToolbarSide = 'left' | 'right'
 interface ToolbarSlots {
   left: ReactNode | null
   right: ReactNode | null
+  /** The tab's in-conversation search source (Salon tabs only). */
+  search: ConversationSearchSource | null
 }
+type ToolbarSide = keyof ToolbarSlots
+
+const EMPTY_SLOTS: ToolbarSlots = { left: null, right: null, search: null }
 
 interface TabToolbarRegistryValue {
   toolbars: Record<string, ToolbarSlots>
-  setSlot: (tabId: string, side: ToolbarSide, content: ReactNode | null) => void
+  setSlot: <K extends ToolbarSide>(tabId: string, side: K, content: ToolbarSlots[K]) => void
   clearTab: (tabId: string) => void
 }
 
@@ -58,9 +63,9 @@ export function TabToolbarRegistryProvider({ children }: { children: ReactNode }
   const [toolbars, setToolbars] = useState<Record<string, ToolbarSlots>>({})
 
   const setSlot = useCallback(
-    (tabId: string, side: ToolbarSide, content: ReactNode | null) => {
+    <K extends ToolbarSide>(tabId: string, side: K, content: ToolbarSlots[K]) => {
       setToolbars((prev) => {
-        const existing = prev[tabId] ?? { left: null, right: null }
+        const existing = prev[tabId] ?? EMPTY_SLOTS
         if (existing[side] === content) return prev
         return { ...prev, [tabId]: { ...existing, [side]: content } }
       })
@@ -120,6 +125,10 @@ export function TabToolbarProvider({
     (content: ReactNode | null) => setSlot(tabId, 'right', content),
     [setSlot, tabId]
   )
+  const setConversationSearch = useCallback(
+    (source: ConversationSearchSource | null) => setSlot(tabId, 'search', source),
+    [setSlot, tabId]
+  )
 
   useEffect(() => {
     return () => clearTab(tabId)
@@ -132,8 +141,10 @@ export function TabToolbarProvider({
       rightContent: slots?.right ?? null,
       setLeftContent,
       setRightContent,
+      conversationSearch: slots?.search ?? null,
+      setConversationSearch,
     }),
-    [slots?.left, slots?.right, setLeftContent, setRightContent]
+    [slots?.left, slots?.right, slots?.search, setLeftContent, setRightContent, setConversationSearch]
   )
 
   return <PageToolbarContext.Provider value={value}>{children}</PageToolbarContext.Provider>
@@ -151,21 +162,24 @@ export function TabToolbarProvider({
 export function WorkspaceToolbarBridge() {
   const { toolbars } = useTabToolbarRegistry()
   const { state } = useWorkspace()
-  const { setLeftContent, setRightContent } = usePageToolbar()
+  const { setLeftContent, setRightContent, setConversationSearch } = usePageToolbar()
 
   const activeTabId = state.panes[state.focusedPane]?.activeTabId ?? null
   const slots = activeTabId ? toolbars[activeTabId] : null
   const left = slots?.left ?? null
   const right = slots?.right ?? null
+  const search = slots?.search ?? null
 
   useEffect(() => {
     setLeftContent(left)
     setRightContent(right)
+    setConversationSearch(search)
     return () => {
       setLeftContent(null)
       setRightContent(null)
+      setConversationSearch(null)
     }
-  }, [left, right, setLeftContent, setRightContent])
+  }, [left, right, search, setLeftContent, setRightContent, setConversationSearch])
 
   return null
 }

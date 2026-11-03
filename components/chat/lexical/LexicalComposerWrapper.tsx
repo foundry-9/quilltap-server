@@ -37,7 +37,7 @@ import { composerTheme } from './theme'
 import type { ComposerEditorHandle } from './types'
 import { useMarkdownBridge, COMPOSER_TRANSFORMERS } from './plugins/MarkdownBridgePlugin'
 import { ComposerSyncPlugin } from './plugins/ComposerSyncPlugin'
-import KeyboardPlugin from './plugins/KeyboardPlugin'
+import KeyboardPlugin, { type ComposerSubmitOptions } from './plugins/KeyboardPlugin'
 import { ImagePastePlugin } from './plugins/ImagePastePlugin'
 import {
   ExternalControlPlugin,
@@ -65,8 +65,8 @@ interface LexicalComposerWrapperProps {
   onContentChange: (hasContent: boolean) => void
   /** Debounced full-markdown emit for draft persistence (no parent re-render). */
   onPersistDraft?: (markdown: string) => void
-  /** Callback to submit the message */
-  onSubmit: () => void
+  /** Callback to submit the message (`establishedFact` from the Cmd/Ctrl+Shift+Enter shortcut) */
+  onSubmit: (opts?: ComposerSubmitOptions) => void
   /** Callback when an image is pasted */
   onImagePaste: (file: File) => Promise<void>
   /** Whether document editing mode is enabled */

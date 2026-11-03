@@ -22,6 +22,7 @@ import * as posixPath from 'path/posix';
 import { logger } from '@/lib/logger';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
+  DocMountBrowserEntry,
   DocMountFile,
   DocMountFileLink,
   DocMountFileLinkSchema,
@@ -691,6 +692,109 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
     );
   }
 
+  /**
+   * A store browser's listing: every link in a mount joined with its content
+   * fields, WITHOUT `extractedText` (the heavy column — a browser fetches it
+   * per file), and with `linkCount`, the number of links anywhere sharing the
+   * link's content row.
+   */
+  async listForBrowser(mountPointId: string): Promise<DocMountBrowserEntry[]> {
+    return this.withRawDb(
+      [],
+      (db) => {
+        const rows = db.prepare(`
+          SELECT
+            l.id, l.fileId, l.mountPointId, l.relativePath, l.fileName,
+            l.folderId, l.originalFileName, l.originalMimeType,
+            l.description, l.descriptionUpdatedAt,
+            l.conversionStatus, l.conversionError, l.plainTextLength,
+            l.extractedTextSha256, l.extractionStatus, l.extractionError,
+            l.chunkCount, l.allowEmbed, l.allowCharacterRead, l.allowCharacterWrite,
+            l.linkGroupId, l.lastModified, l.createdAt, l.updatedAt,
+            f.sha256, f.fileSizeBytes, f.fileType, f.source,
+            (SELECT COUNT(*) FROM doc_mount_file_links s WHERE s.fileId = l.fileId) AS linkCount
+          FROM doc_mount_file_links l
+          JOIN doc_mount_files f ON f.id = l.fileId
+          WHERE l.mountPointId = ?
+        `).all(mountPointId) as Array<Omit<JoinedRow, 'extractedText'> & { linkCount: number }>;
+        logger.debug('Listed file links for browser', { mountPointId, count: rows.length });
+        return rows.map((row) => ({
+          id: row.id,
+          fileId: row.fileId,
+          mountPointId: row.mountPointId,
+          relativePath: row.relativePath,
+          fileName: row.fileName,
+          folderId: row.folderId ?? null,
+          originalFileName: row.originalFileName ?? null,
+          originalMimeType: row.originalMimeType ?? null,
+          description: row.description ?? '',
+          descriptionUpdatedAt: row.descriptionUpdatedAt ?? null,
+          conversionStatus: row.conversionStatus,
+          conversionError: row.conversionError ?? null,
+          plainTextLength: row.plainTextLength ?? null,
+          extractedTextSha256: row.extractedTextSha256 ?? null,
+          extractionStatus: row.extractionStatus,
+          extractionError: row.extractionError ?? null,
+          chunkCount: row.chunkCount ?? 0,
+          allowEmbed: coerceAllow(row.allowEmbed),
+          allowCharacterRead: coerceAllow(row.allowCharacterRead),
+          allowCharacterWrite: coerceAllow(row.allowCharacterWrite),
+          linkGroupId: row.linkGroupId ?? null,
+          lastModified: row.lastModified,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          sha256: row.sha256,
+          fileSizeBytes: row.fileSizeBytes,
+          fileType: row.fileType,
+          source: row.source,
+          linkCount: Number(row.linkCount) || 1,
+        }));
+      },
+      'Error listing file links for browser',
+      { mountPointId },
+    );
+  }
+
+  /**
+   * Take a link out of its hard-link group. The link keeps its content row
+   * (so it reads exactly as before), and the next write through it forks a
+   * row of its own, as an ungrouped dedup share does. A group left with one
+   * member is dissolved, as `deleteWithGC` does. Returns the group the link
+   * left, or null when it was in none (or is gone).
+   */
+  async clearLinkGroup(linkId: string): Promise<{ groupId: string | null; dissolved: boolean }> {
+    return this.withRawDb(
+      { groupId: null, dissolved: false },
+      (db) => {
+        const tx = db.transaction(() => {
+          const link = db.prepare(
+            'SELECT linkGroupId FROM doc_mount_file_links WHERE id = ?'
+          ).get(linkId) as { linkGroupId: string | null } | undefined;
+          if (!link?.linkGroupId) return { groupId: null, dissolved: false };
+          const now = new Date().toISOString();
+          db.prepare(
+            'UPDATE doc_mount_file_links SET linkGroupId = NULL, updatedAt = ? WHERE id = ?'
+          ).run(now, linkId);
+          const survivors = db.prepare(
+            'SELECT id FROM doc_mount_file_links WHERE linkGroupId = ?'
+          ).all(link.linkGroupId) as { id: string }[];
+          const dissolved = survivors.length <= 1;
+          if (dissolved) {
+            db.prepare(
+              'UPDATE doc_mount_file_links SET linkGroupId = NULL, updatedAt = ? WHERE linkGroupId = ?'
+            ).run(now, link.linkGroupId);
+          }
+          return { groupId: link.linkGroupId, dissolved };
+        });
+        const result = tx();
+        logger.debug('Cleared hard-link group from link', { linkId, ...result });
+        return result;
+      },
+      'Error clearing hard-link group',
+      { linkId },
+    );
+  }
+
   // ============================================================================
   // Timestamps
   // ============================================================================
@@ -1186,11 +1290,18 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
         if (contentChanged) {
           dropChunksForLinks(db, [linkId]);
         }
+        // A document link carries no derived text (its content is the text),
+        // so the extraction fields are always cleared. Without this, a write
+        // over an uploaded text blob at the same path kept the blob's
+        // `extractedText` — read first by `docs grep` and the blob readers —
+        // describing the old revision.
         db.prepare(
           `UPDATE doc_mount_file_links SET
              fileId = ?, folderId = ?,
              plainTextLength = ?,
              conversionStatus = 'converted', conversionError = NULL,
+             extractedText = NULL, extractedTextSha256 = NULL,
+             extractionStatus = 'none', extractionError = NULL,
              allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              ${contentChanged ? 'chunkCount = 0,' : ''}
              lastModified = ?, updatedAt = ?

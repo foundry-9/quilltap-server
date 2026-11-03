@@ -27,7 +27,6 @@ packages
 # (the regular Dockerfile copies from a builder stage that has the repo cloned in).
 !packages/quilltap
 packages/quilltap/node_modules
-playwright-report
 .storybook
 storybook-static
 __tests__

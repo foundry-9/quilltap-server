@@ -1,5 +1,6 @@
 import type { Message } from '../types'
 import { staffDisplayName } from '@/lib/chat/staff-display-names'
+import { isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'project-context': 'project information',
@@ -47,6 +48,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'autonomous-room-nearing-end': 'nearing the end',
   'mail-delivery': 'mail delivery',
   inform: 'out of character',
+  'established-fact': 'Deus Ex Machina',
   'custom-tool-result': 'roll outcome',
   'custom-tool-error': "the table couldn't deal",
   'inventory-change': 'inventory',
@@ -282,14 +284,17 @@ export function getAnnouncementOutcomeState(
 }
 
 /**
- * Accent classes for the announcement bar/chip wrapper of a Pascal roll — the
- * same `qt-pascal-result` family the Workbench's outcome rows and the Proving
- * Bench's miniature wear, so a success reads as a success wherever it appears.
+ * Per-kind accent classes for an announcement's bar/chip wrapper. A Pascal
+ * roll wears its outcome state — the same `qt-pascal-result` family the
+ * Workbench's outcome rows and the Proving Bench's miniature wear, so a
+ * success reads as a success wherever it appears. A machine-delivered
+ * established fact (Deus Ex Machina) wears `qt-chat-established-fact`.
  * Empty for every other Staff message, which keeps its plain bar.
  */
 export function getAnnouncementAccentClasses(
-  message: Pick<Message, 'systemSender' | 'pascalMeta'>,
+  message: Pick<Message, 'systemSender' | 'systemKind' | 'pascalMeta'>,
 ): string {
+  if (isEstablishedFactAnnouncement(message)) return 'qt-chat-established-fact'
   const state = getAnnouncementOutcomeState(message)
   return state ? `qt-pascal-result qt-pascal-result--${state}` : ''
 }
@@ -359,6 +364,8 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     // A nudge is a deliberate operator summon — worth an amber dot, but not the
     // red reserved for structural room changes (add / remove / status).
     nudge: 'medium',
+    // An established fact (Deus Ex Machina) changes what is true in the story.
+    'established-fact': 'high',
     '*': 'medium',
   },
   concierge: { danger: 'high', refusal: 'high', '*': 'high' },

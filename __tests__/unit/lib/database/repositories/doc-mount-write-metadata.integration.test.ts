@@ -281,6 +281,32 @@ describe('bug 156: an overwrite retires the chunks it invalidated', () => {
 // Caller-supplied timestamps
 // ---------------------------------------------------------------------------
 
+describe('a document written over an uploaded text blob', () => {
+  // An uploaded `.md` can live at a path as a blob carrying its own derived
+  // text; `doc_str_replace` and Document Mode save a document over it. The
+  // link must stop describing the upload, or `docs grep` and the blob readers
+  // keep finding the old revision under the new content.
+  it('drops the blob’s extracted text and extraction status', async () => {
+    const UPLOAD = '# Ledger\nThe quartermaster counts forty-two lantern-wicks.';
+    const link = await writeBlob('mp-1', 'ledger.md', Buffer.from(UPLOAD), {
+      description: 'The quartermaster’s ledger.',
+      extractedText: UPLOAD,
+      extractedTextSha256: shaOf(UPLOAD),
+      extractionStatus: 'converted',
+    });
+
+    const edited = await writeDoc('mp-1', 'ledger.md', '# Ledger\nThe quartermaster counts forty-three lantern-wicks.');
+
+    expect(edited.id).toBe(link.id);
+    const row = linkRow(link.id);
+    expect(row.extractedText).toBeNull();
+    expect(row.extractedTextSha256).toBeNull();
+    expect(row.extractionStatus).toBe('none');
+    // The caption is the operator's, not derived: it stays.
+    expect(row.description).toBe('The quartermaster’s ledger.');
+  });
+});
+
 describe('per-location timestamps may be supplied by the writer', () => {
   const MTIME = '2026-09-19T14:02:11.000Z';
   const BIRTH = '2024-01-05T09:30:00.000Z';

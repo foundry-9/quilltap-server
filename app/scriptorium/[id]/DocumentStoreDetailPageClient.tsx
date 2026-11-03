@@ -18,6 +18,7 @@ export function DocumentStoreDetailPageClient({ storeId }: { storeId: string }) 
     <DocumentStoreDetailView
       storeId={storeId}
       onBack={() => router.push('/scriptorium')}
+      onOpenStore={(id) => router.push(`/scriptorium/${id}`)}
       style={bgStyle}
     />
   )

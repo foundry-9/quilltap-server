@@ -567,26 +567,32 @@ Update the retention window. Merges with the current value and validates (intege
 Read the instance-wide Brahma Console settings (`instance_settings['brahmaConsole']`, not a `chat_settings`
 column — same class as the data-retention knob). Holds the agent-turn budget the streaming orchestrator and
 the one-shot `@Brahma` Carina path both read through `resolveBrahmaMaxAgentTurns`. Defaults to 50; the
-duplicate/stale-query guard still stops a self-repeating loop regardless of this number.
+duplicate/stale-query guard still stops a self-repeating loop regardless of this number. Also holds
+`inlineConnectionProfileId`, the engine for `@Brahma` in the Salon: `resolveInlineBrahmaConnectionProfile`
+tries the chat's project's `brahmaConnectionProfileId`, then this, then the default profile (a stale id
+falls through with a warning). `null` means "use the default."
 
 **Response:**
 
 ```json
 {
-  "maxAgentTurns": 50
+  "maxAgentTurns": 50,
+  "inlineConnectionProfileId": null
 }
 ```
 
 #### `PUT /api/v1/settings/brahma-console`
 
 Update the Console settings. The body is merged over the current value before validation (integer, 5-200
-turns), so a partial body is a partial update rather than a wipe.
+turns), so a partial body is a partial update rather than a wipe — setting the profile leaves the turn
+budget alone and vice versa.
 
 **Request Body:**
 
 ```json
 {
-  "maxAgentTurns": 80
+  "maxAgentTurns": 80,
+  "inlineConnectionProfileId": "uuid-or-null"
 }
 ```
 
@@ -2065,19 +2071,20 @@ Create a new archetype wardrobe item.
 
 **Response**: `201 Created` — `{ wardrobeItem }`, serialized exactly as a `GET` serializes it (with `origin` and `wear`).
 
-All four tiers' item endpoints (General, character, project, group) are one implementation, `lib/wardrobe/routes/wardrobe-route-factory.ts`, and answer alike:
+All four tiers' item endpoints (General, character, project, group) are one implementation, `lib/wardrobe/routes/wardrobe-route-factory.ts`, and answer alike. Its preamble — the route config, per-tier 404 labels, the location resolver, the read probe, `?action=folders`, the folder writes and the error mapping (`withItemErrors`) — is shared with the Inventory's factory in `lib/mount-index/item-folder-routes.ts`:
 
 - `POST` and `PUT` return `{ wardrobeItem }` with `origin` and `wear`, like `GET`. (The project `POST` no longer returns the refreshed `wardrobeItems` list.) Collection `GET`s also return the tier's `mountPointId`.
 - A component cycle is a **400** on create and update, every tier.
 - A `PUT` answers 404 for a missing item before it checks `imageFileId`.
 - A composite's `types` are recomputed server-side from its components (`buildCompositeTypes`): the components' slots plus any designated extras. They widen, never narrow — a `PUT` that changes components without restating `types` keeps every slot the item already claimed.
 - A character's endpoints require the character to belong to the requesting user; a write to an archived character's vault is a **409**.
-- General's collection `GET` answers `{ wardrobeItems: [] }` while Quilltap General is unprovisioned; a write there is a 500.
+- **No `GET` provisions a store.** A project or group with no store yet, and Quilltap General while unprovisioned, list as `{ mountPointId: null, wardrobeItems: [] }`; a write to an unprovisioned General is a 500. Writes (create, duplicate, `create-folder`, `instructions`) are what provision a missing project or group store.
+- Item 404s name the tier: `Wardrobe item`, `Group wardrobe item`, `Project wardrobe item`, `Archetype wardrobe item` (General).
 - Every item carries **`folder`**: its path under the tier's `Wardrobe/` (`''` = top level, e.g. `"Formal/Evening"`). It is derived from the item file's path on read and is never stored in frontmatter. Create and update bodies accept an optional `folder` (create defaults to the top level; update leaves it unchanged when omitted); it is resolved by `resolveWardrobeFolder` (`lib/wardrobe/folders.ts`): a folder the tier already has (in any casing, hand-made Scriptorium spellings included) is used exactly as stored; otherwise the new part is normalised — segments trimmed and sanitised like file names, at most 8 deep, never `.`/`..` or `images` — and anything else is a **400**. An update naming the item's current folder moves nothing. `create-folder` and `move-items` resolve the same way. Folders are filing only; they never affect the wearable pool. Transfers keep an item's folder at the destination.
 
 ##### Wardrobe folders (every tier's collection route)
 
-The same actions (five folder actions plus `instructions`) on `/api/v1/wardrobe`, `/api/v1/characters/[id]/wardrobe`, `/api/v1/projects/[id]/wardrobe` and `/api/v1/groups/[id]/wardrobe`. Clients build the URL with `wardrobeCollectionActionUrl()` (`lib/wardrobe/wardrobe-container.ts`).
+The same actions (five folder actions, `duplicate` and `instructions`) on `/api/v1/wardrobe`, `/api/v1/characters/[id]/wardrobe`, `/api/v1/projects/[id]/wardrobe` and `/api/v1/groups/[id]/wardrobe`. Clients build the URL with `wardrobeCollectionActionUrl()` (`lib/wardrobe/wardrobe-container.ts`).
 
 | Verb | Action | Body | Result |
 |---|---|---|---|
@@ -2087,7 +2094,8 @@ The same actions (five folder actions plus `instructions`) on `/api/v1/wardrobe`
 | `POST` | `?action=delete-folder` | `{ path }` | `{ movedItems, movedFolders }`; items (archived included) and subfolders move up to the parent, merging case-insensitively; only folder rows are deleted; a folder holding non-item files (anything that is not a parseable item `.md`), or a subfolder of its own name, is a **409** before anything moves |
 | `POST` | `?action=move-items` | `{ itemIds, folder, components? }` | `{ items, componentsCarried }` (serialised with `origin` and `wear`); an id not filed in this tier (a borrowed item) is a **400** naming it, before anything moves. `components` (`move` / `copy` / `none`, default `none`) covers composites' same-tier components, nested ones included (borrowed pieces never travel): `move` files them in the same batch (one projection); `copy` creates `(copy)`-titled copies in the folder and rewires the moved outfits to them. Logic: `fileItemsToFolder` (`lib/wardrobe/folder-filing.ts`) |
 | `POST` | `?action=copy-items` | `{ itemIds, folder, components? }` | `{ items, componentsCarried }` — the copies: fresh ids, `(copy)` titles (`nextCopyTitle`), pictures copied under the new id. `components` is `copy` or `none` (default); with `copy` the components are copied too and every copy is rewired to the copied pieces. Copying both an outfit and one of its pieces always rewires the copy to the copied piece. Same borrowed-id **400** |
-| `GET` | `?action=instructions` | — | `{ instructions: string \| null }` — the tier's dressing-instructions file (`null` when absent or the tier has no store yet); a read probe that never provisions (General is the one tier that provisions on read) |
+| `POST` | `?action=duplicate` | `{ itemId }` | `201 { wardrobeItem }` (serialised with `origin` and `wear`) — a copy of one of this tier's items beside the original: same folder, every editable field (description, image prompt, types, appropriateness, `isDefault`, `replace`, pronoun guidance; a composite's `componentItemIds` verbatim, members not cloned), a fresh id, no picture, not archived, titled by `nextCopyTitle` against every title in the tier (archived ones included: `Cloak` → `Cloak (copy)`, then `Cloak (copy 2)`). Written through `createItem`. An item not in this tier is a **404** with the tier's label; the store is never provisioned; an archived character's vault is a **409** |
+| `GET` | `?action=instructions` | — | `{ instructions: string \| null }` — the tier's dressing-instructions file (`null` when absent or the tier has no store yet); a read probe that never provisions, on every tier |
 | `POST` | `?action=instructions` | `{ instructions: string \| null }` | `{ instructions }` — written trimmed; `null` or blank clears the file and answers `{ instructions: null }`. Clearing on an unprovisioned General is a no-op; a write against an archived character is a **409** |
 
 Folder writes against an archived character's vault are a **409**, like every other write.
@@ -2110,7 +2118,7 @@ Every wardrobe item (all tiers) carries an optional **`imageFileId`** — its cu
 
 #### `/api/v1/wardrobe/[itemId]/images`
 
-One route for an item's pictures in every tier; the item's container rides in the query: `?scope=character|project|group|general&id=<containerId>` (`id` omitted for `general`). The item must live in that container (404 otherwise). Writes against an archived character's item answer **409** (the tombstone). Clients build URLs through `wardrobeItemImagesUrl()` in `lib/wardrobe/item-images-client.ts`.
+One route for an item's pictures in every tier; the item's container rides in the query: `?scope=character|project|group|general&id=<containerId>` (`id` omitted for `general`). The item must live in that container (404 otherwise). Writes against an archived character's item answer **409** (the tombstone). Clients build URLs through `wardrobeItemImagesUrl()` in `lib/wardrobe/item-images-client.ts`. The handlers are the shared `createItemImagesRoute` (`lib/mount-index/item-images-route.ts`), which also serves `/api/v1/inventory/[itemId]/images`; the route file is the wardrobe's adapter, and `link-image` is its kind-only action.
 
 | Method | Action | Body | Response |
 |---|---|---|---|
@@ -2157,13 +2165,9 @@ Generate a one-off character avatar against an arbitrary equipped-slot snapshot 
 
 **Response**: `{ fileId, url, mimeType, prompt }`
 
-#### `GET /api/v1/wardrobe/transfers`
-
-Return the destination options for moving or copying a wardrobe item between tiers (character vault, group stores, project stores, Quilltap General).
-
 #### `POST /api/v1/wardrobe/transfers`
 
-Move or copy one wardrobe item between wardrobe tiers. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
+Move or copy one wardrobe item between wardrobe tiers. The rules live in `transferWardrobeItem` (`lib/wardrobe/transfers.ts`); the route only parses and maps refusals (404 when the item is in none of the tiers probed, 400 for an invalid destination, the same source and destination, or an id already taken there, 409 for an archived character). The former `GET` (destination options) was removed in 4.12; clients read the characters, projects and groups lists instead. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
 For a composite (outfit), the optional `components: 'move'|'copy'|'none'` field brings the transitive closure of its **same-container** components along — all or nothing (components living in other tiers stay put). `move` keeps component ids; `copy` mints fresh ids and rewrites `componentItemIds` on the transferred outfit (and on any nested composites that travelled) to the new ids, so references stay resolvable at the destination. `action: 'copy'` with `components: 'move'` is refused (it would strand the original outfit). Pictures travel with every transferred item: a move re-links them into the destination mount (same path, same deduplicated blob) and re-points their `files` rows, then drops the source links; a copy links them under the new id with fresh `files` rows and points the copy's `imageFileId` at its own copy. Every planned id is checked against the destination before anything is written; a post-write verification confirms the stored outfit's travelled component references resolve, reporting `componentsTransferred` (and `unresolvedComponentIds` if verification ever fails).
 
@@ -2296,7 +2300,7 @@ Every GENERATED image file linked to a wardrobe item in the character's wearable
 
 ### Inventory (Pascal the Croupier)
 
-One `.json` file per object under a tier's `Inventory/` folder; four tiers, one route factory (`lib/inventory/routes/inventory-route-factory.ts`). Every object on the wire is **resolved**: an instance carries its archetype's fields where it does not override them, plus `overriddenFields`, `parentMissing`, `parentName` and `origin`. Refusals answer `409` (or `400`) with `details.code`: `ARCHETYPE_IN_USE` (with `dependents` and `holders`), `ARCHIVED_DEPENDENTS` (with `characters`), `NOT_COPYABLE`, `CAP_EXCEEDED` (with `itemId`, `itemName`, `cap`), `INVALID_PARENT`, `KIT_NESTING`, `KIT_STRANDED` (with `itemId`, `kits`: a move that would leave kits naming an object they can no longer reach), `NOT_EQUIPPABLE`, `INVALID_SHAPE` (400), `NOT_A_PARTICIPANT` (400), `INVALID_SVG` (400). A write to an archived character's vault is `409`.
+One `.json` file per object under a tier's `Inventory/` folder; four tiers, one route factory (`lib/inventory/routes/inventory-route-factory.ts`), whose preamble (config, per-tier labels, resolver, read probe, `?action=folders`, folder writes, error mapping) is shared with the wardrobe's in `lib/mount-index/item-folder-routes.ts`. Item 404s name the tier: `Inventory object`, `Group inventory object`, `Project inventory object`, `General inventory object`. Every object on the wire is **resolved**: an instance carries its archetype's fields where it does not override them, plus `overriddenFields`, `parentMissing`, `parentName` and `origin`. Refusals answer `409` (or `400`) with `details.code`: `ARCHETYPE_IN_USE` (with `dependents` and `holders`), `ARCHIVED_DEPENDENTS` (with `characters`), `NOT_COPYABLE`, `CAP_EXCEEDED` (with `itemId`, `itemName`, `cap`), `INVALID_PARENT`, `KIT_NESTING`, `KIT_STRANDED` (with `itemId`, `kits`: a move that would leave kits naming an object they can no longer reach), `NOT_EQUIPPABLE`, `INVALID_SHAPE` (400), `NOT_A_PARTICIPANT` (400), `INVALID_SVG` (400). A write to an archived character's vault is `409`.
 
 #### Collection — `/api/v1/characters/[id]/inventory`, `/api/v1/groups/[id]/inventory`, `/api/v1/projects/[id]/inventory`, `/api/v1/inventory` (Quilltap General)
 
@@ -2323,7 +2327,7 @@ One `.json` file per object under a tier's `Inventory/` folder; four tiers, one 
 
 #### `/api/v1/inventory/[itemId]/images?scope=<scope>&id=<containerId>`
 
-The wardrobe item images route's shape over `Inventory/images/<itemId>/`: `GET` (an instance with none of its own lists its archetype's, `inherited: true`), `POST ?action=generate` (subject `imageDescription ?? description ?? name`; log type `INVENTORY_ITEM_IMAGE`), `upload`, `set-current`, `delete-image`, `GET ?action=save-targets`, `POST ?action=save-to-store`.
+The wardrobe item images route's shape — the same `createItemImagesRoute` (`lib/mount-index/item-images-route.ts`), with the Inventory's adapter — over `Inventory/images/<itemId>/` (no `link-image`; `save-to-store` lets out only what the `GET` lists, an instance's inherited pictures included): `GET` (an instance with none of its own lists its archetype's, `inherited: true`), `POST ?action=generate` (subject `imageDescription ?? description ?? name`; log type `INVENTORY_ITEM_IMAGE`), `upload`, `set-current`, `delete-image`, `GET ?action=save-targets`, `POST ?action=save-to-store`.
 
 #### Chat actions
 
@@ -2729,7 +2733,7 @@ The chat's open or running round, else its latest closed one (the board's summar
 
 ##### `POST /api/v1/chats/[id]?action=storyteller-run`
 
-Run the operator's selection. **Request Body**: `{ "roundId": "...", "participantIds": ["..."], "order": "sequential" | "simultaneous", "keepOrder": boolean }` (`order` defaults to `sequential`). The chosen seats run in the turn manager's rotation order unless `keepOrder` is `true`, in which case they run in `participantIds` order (the operator dragged the board's cards into place); this also orders an all-at-once round's Act / Destroy tail. Only seats whose bid status is `bid` may be chosen, and a `destroy`-tier bid only on its own (`400`); a round that is no longer open answers `409`. The response is an SSE stream in the chain dialect: `turnStart` (chainDepth ≥ 1) before each sequential speaker, the turn's own events, `turnComplete`, and one `chainComplete` (`user_turn`, `yielded`, or `stopped` with `paused: true`). With `simultaneous`, Simple and Lookup turns run concurrently (at most 4 per connection profile) and every frame they write carries `participantId` and `concurrent: true`; Act and Destroy turns follow one at a time. Each turn runs under its bid's effect ceiling and stores the bid on its reply (`chat_messages.storytellerBid`).
+Run the operator's selection. **Request Body**: `{ "roundId": "...", "participantIds": ["..."], "order": "sequential" | "simultaneous", "keepOrder": boolean }` (`order` defaults to `sequential`). The chosen seats run in the turn manager's rotation order unless `keepOrder` is `true`, in which case they run in `participantIds` order (the operator dragged the board's cards into place); this also orders an all-at-once round's Act / Destroy tail. Only seats whose bid status is `bid` may be chosen, and a `destroy`-tier bid only on its own (`400`); a round that is no longer open answers `409`. The response is an SSE stream in the chain dialect: `turnStart` (chainDepth ≥ 1) before each sequential speaker, the turn's own events, `turnComplete`, and one `chainComplete` (`user_turn`, `yielded`, or `stopped` with `paused: true`). With `simultaneous`, Simple and Lookup turns run concurrently (at most 4 per connection profile) and every frame they write carries `seat: { participantId, concurrent: true }`; Act and Destroy turns follow one at a time. Each turn runs under its bid's effect ceiling and stores the bid on its reply (`chat_messages.storytellerBid`).
 
 ##### `POST /api/v1/chats/[id]?action=storyteller-ask`
 
@@ -3057,9 +3061,9 @@ leaf is listed under every slot its own `types` cover — not only the slot it w
 
 #### `GET /api/v1/chats/[id]?action=accessible-stores`
 
-The document stores the Open-Document picker offers for this chat. Default mode returns only what the chat can reach: each present character participant's vault, the official and linked stores of the groups those characters belong to (`isGroupStore: true`), stores linked to the chat's project, and Quilltap General. `?all=true` ("look everywhere") returns every enabled store, character vaults labelled by owner. The project's official store is always held back and returned separately as `projectLibrary`.
+The document stores the Open-Document picker offers for this chat. Default mode returns only what the chat can reach: each present character participant's vault, the official and linked stores of the groups those characters belong to (`isGroupStore: true`), and stores linked to the chat's project. `?all=true` ("look everywhere") returns every enabled store, character vaults labelled by owner. Two stores are always held back and returned separately, because each has its own button: the project's official store as `projectLibrary`, and Quilltap General as `generalLibrary`. Each is `null` when missing or disabled.
 
-**Response**: `200 OK` — `{ stores: [{ mountPointId, name, label, kind: 'character'|'document-store', mountType, storeType, characterId?, isGroupStore? }], projectLibrary: { mountPointId, name, mountType } | null }`. `404` for an unknown chat.
+**Response**: `200 OK` — `{ stores: [{ mountPointId, name, label, kind: 'character'|'document-store', mountType, storeType, characterId?, isGroupStore? }], projectLibrary: { mountPointId, name, mountType } | null, generalLibrary: { mountPointId, name, mountType } | null }`. `404` for an unknown chat.
 
 #### `GET /api/v1/chats/[id]?action=group-stores`
 
@@ -3385,6 +3389,36 @@ List the roster for the run dialog. Because a character-tier store shadows farth
 ```
 
 `characterLabel` is present on variant rows, and on a single-variant row that fell back off the operator's own character (above). `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`. `references` is always present, all-false with empty lists for a tool that quotes nothing.
+
+#### `GET /api/v1/chats/[id]/custom-tools?action=presets`
+
+One tool's run presets (`Tools/{tool}.{preset}.settings.json`) as one character sees them, walked like the roster: the character's vault, then group stores, then project stores, then Quilltap General. The nearest preset of a name wins; farther ones are listed in its `shadows`. Resolved fresh per request (`resolveToolPresetPool`, `lib/pascal/tool-preset-pool.ts`).
+
+**Query Parameters**: `tool` (required, a tool name), `asCharacterId` (optional; defaults to the operator's own character, as `?action=run` does). `400` for a malformed tool name, a character not in the chat, or a chat with no character participants.
+
+**Response**:
+```json
+{
+  "presets": [
+    {
+      "name": "aggressive",
+      "path": "Tools/unlock.aggressive.settings.json",
+      "tier": "character",
+      "mountPointId": "mp-vault",
+      "mountName": "Charlie Character Vault",
+      "shadows": [{ "tier": "group", "mountPointId": "mp-group", "mountName": "Heist Crew Store" }]
+    }
+  ],
+  "stores": [
+    { "tier": "character", "mountPointId": "mp-vault", "mountName": "Charlie Character Vault" },
+    { "tier": "group", "mountPointId": "mp-group", "mountName": "Heist Crew Store" },
+    { "tier": "global", "mountPointId": "mp-general", "mountName": "Quilltap General" }
+  ],
+  "unread": []
+}
+```
+
+`stores` is every enabled store on the walk, nearest first: where the run dialog may save a preset. `unread` lists stores whose `Tools/` folder could not be listed (`reason` included); they stay in `stores`. The files themselves are read and written through the mount-points file routes.
 
 #### `POST /api/v1/chats/[id]/custom-tools?action=run`
 
@@ -3718,7 +3752,9 @@ Post an ad-hoc announcement bubble, publicly or whispered to named participants.
 }
 ```
 
-`sender.kind` is one of `"system"`, `"character"`, or a `systemSender` value (e.g. `"lantern"`, `"host"`). For `character` senders the referenced character must exist.
+`sender.kind` is one of `"staff"` (with `staffId`, a `systemSender` value such as `"lantern"` or `"host"`), `"character"` (with `characterId`), `"custom"` (with `displayName`), or `"fact"`. For `character` senders the referenced character must exist.
+
+A `fact` sender (`{ "kind": "fact" }`, the dialog's Deus Ex Machina tab) posts an **established fact** with no speaker: a public Host row with `systemKind: 'established-fact'`, no participant, and `content` = `opaqueContent` = the trimmed text, written by `postEstablishedFact` (`lib/services/announcer/writer.ts`). It then enqueues `ESTABLISHED_FACT_MEMORIES`, which admits the fact verbatim as one MANUAL memory (`pass: 'established-fact'`) for every non-removed LLM seat; an enqueue failure does not undo the post. A `fact` sender with any non-null `targetParticipantIds` is a `400`.
 
 `targetParticipantIds` is optional. Omitted, `null`, or empty posts a public announcement (the default). Otherwise the announcement is persisted as a whisper: only those participants' LLM contexts include it. The ids are **chat participant ids, not character ids**, and each is re-verified against the chat's current participants — a removed participant or an id from another chat is rejected.
 
@@ -3863,13 +3899,15 @@ The chat-scoped Document Mode actions. All are `POST /api/v1/chats/[id]?action=<
 | `active-document` | — | `{ document \| null }` — the earliest-opened open document (legacy single-pane) |
 | `open-documents` | — | `{ documents }` — every open document, oldest first; content is fetched per document with `read-document` |
 | `recent-documents` | — | `{ documents }` — this chat's documents first, then recent ones from other chats, deduped by file identity and capped; each adds `chatId`, `isActive`, `fromCurrentChat`, `updatedAt` |
-| `open-document` | `{ filePath?, title?, scope?, mountPoint?, targetFolder?, mode?: 'split'\|'focus' }` | `{ document, content, mtime, librarianMessage }` — no `filePath` creates a blank document in `targetFolder`; a missing named file is a **404**; sets the chat's `documentMode` (default `split`) |
+| `open-document` | `{ filePath?, title?, scope?, mountPoint?, targetFolder?, mode?: 'split'\|'focus' }` | `{ document, content, mtime, viewer?, librarianMessage }` — a store file that is not text (image, PDF, `.docx`, other binary) opens read-only: `content` is empty, `mtime` absent and `viewer` names it (see below); no `filePath` creates a blank document in `targetFolder`; a missing named file is a **404**; sets the chat's `documentMode` (default `split`) |
 | `close-document` | `{ chatDocumentId? }` | `{ success }` — omitted id closes the earliest-opened; `documentMode` returns to `normal` when the last one closes |
-| `read-document` | `{ filePath, scope, mountPoint? }` | `{ content, mtime }`; unresolvable path **400**, missing file **404** |
+| `read-document` | `{ filePath, scope, mountPoint? }` | `{ content, mtime }`, or `{ content: '', viewer }` for a read-only file; unresolvable path **400**, missing file **404** |
 | `resolve-document` | `{ filePath, scope, mountPoint? }` | `{ exists, kind }` — an existence probe that never returns bytes, used to gate clickable `qtap://` links; any resolution failure answers `{ exists: false, kind: 'other' }`. The `self` mount resolves only when the chat has exactly one character participant |
-| `write-document` | `{ filePath, scope, mountPoint?, content, mtime?, diffContent? }` | `{ success, mtime, librarianMessage }` — a stale `mtime` is a **409**; `diffContent` makes the Librarian announce the save |
+| `write-document` | `{ filePath, scope, mountPoint?, content, mtime?, diffContent? }` | `{ success, mtime, librarianMessage }` — a stale `mtime` is a **409**; a read-only file is a **400**; `diffContent` makes the Librarian announce the save |
 | `rename-document` | `{ newTitle, chatDocumentId? }` | `{ document, librarianMessage }` — `newTitle` is the new basename in the same directory (old extension inherited when omitted, separators rejected); other chats' recent-document rows follow the rename |
 | `delete-document` | `{ chatDocumentId? }` | `{ success, librarianMessage }` — deletes the underlying file, closes the document and recomputes `documentMode` |
+
+**Read-only files.** Document Mode edits text files only. For any other file in a document store, `open-document` and `read-document` return `viewer: { mountPointId, relativePath, fileName, fileType, fileSizeBytes, originalMimeType, updatedAt }` (`DocumentViewTarget`, `lib/folder-browser/document-actions.ts`) and never read the bytes as text; the client shows them through `GET /api/v1/mount-points/[id]/files/<path>?raw=1` (and `?action=render-html` for `.docx`). The decision is `viewTargetFor` (`lib/documents/core/view-target.ts`). A file outside a store (the legacy project and general areas) has no viewer and is read as before. The standalone `/api/v1/documents` actions behave the same way.
 
 ### Chat Photo Albums
 
@@ -4231,7 +4269,7 @@ not block it.
 
 - Without `stream=1`: `201 Created` with `{ "message": <swipe> }`.
 - With `&stream=1`: `text/event-stream`, the same narration as the swipe stream (`status`,
-  `content` deltas, cumulative `reasoning`, then `{ done: true, message }`, or an `error` event).
+  `content` deltas, cumulative `reasoning`, then `swipeDone` with the persisted swipe, or an `error` frame).
 
 **Errors**: `404` chat or message; `400` for a non-assistant or Staff message;
 `409 { "error": "locked" }` on a Locked chat; `409 { "error": "no-understudy" }` when no uncensored
@@ -4341,27 +4379,43 @@ Send a message and get streaming response.
 }
 ```
 
-**Response**: Server-Sent Events (text/event-stream)
+`isEstablishedFact` (optional boolean) posts the operator's line as an **established fact** (the Salon's "Deus Ex Machina"): persisted on the USER row as `chat_messages.isEstablishedFact`, framed for every model at read time by `lib/chat/established-fact.ts`. It is refused (`400`) with a non-empty `targetParticipantIds` (a fact is public) and with empty `content` (a fact needs words).
+
+**Response**: Server-Sent Events (`text/event-stream`). Every `data:` line is one **Salon stream frame**, a tagged union on `kind` defined (and validated) in `lib/chat/stream-frames.ts`; that schema is the reference, and the client reads it only through `parseFrame`. Keep-alives are SSE comment lines (`: keep-alive`).
 
 ```
-data: {"type":"start"}
+data: {"kind":"turnStart","participantId":"…","characterName":"Ada","chainDepth":0}
 
-data: {"type":"token","content":"I"}
+data: {"kind":"content","text":"I"}
 
-data: {"type":"token","content":"'m doing well"}
+data: {"kind":"content","text":"'m doing well"}
 
-data: {"type":"done","messageId":"msg-uuid"}
+data: {"kind":"done","outcome":"finished","messageId":"msg-uuid","participantId":"…","usage":{…},"cacheUsage":null,"attachmentResults":null,"toolsExecuted":false}
+
+data: {"kind":"chainComplete","reason":"user_turn","nextSpeakerId":null,"chainDepth":0}
 ```
 
-**Tool Calls**:
+| `kind` | Meaning |
+|---|---|
+| `content` | A delta of the reply (`text`) — append it. |
+| `reasoning` | Cumulative thinking (`text`) — replace it. Display only. |
+| `status` | A status line (`status: { stage, message, toolName?, characterName?, characterId? }`). |
+| `fileProcessing` | Attachments the fallback pipeline described or converted (`info`). |
+| `toolsDetected` | A batch of tool calls (`names`, `arguments`). |
+| `toolResult` | One call's result (`index`, `name`, `success`, `result`, `error` on failure). |
+| `turnStart` | A character is about to respond (`chainDepth` 0 before the first turn, ≥ 1 for a chained one). |
+| `done` | A turn closed. `outcome` is `finished`, `skipped` (a pass), `yielded` (a bare yield to the raised hand), `stopped` (hard stop before any prose) or `empty` (with `emptyResponseReason`). Carries `messageId`, usage, `attachmentResults`, `provider` / `modelName`, `routeTrail`, reasoning, and `pendingExternalTurn` for a Courier placeholder. |
+| `turnComplete` | A chained turn finished. |
+| `chainComplete` | The chain stopped (`reason`, `paused`, `heldUserTurn`); the stream ends. |
+| `error` | The turn failed after the stream opened (`message`, `errorType`, `details`, `userMessagePersisted`, `pendingToolResultsPersisted`). |
+| `pendingExternalTurn` | The Courier parked a placeholder for a manual turn. |
+| `posted` | A message the server already saved mid-turn (`what`: `carinaAnswer`, `hostAnnouncement` or `pascalResult`; `message`). |
+| `storytellerRound` / `storytellerBid` / `roundOpen` | The Storyteller board. |
+| `handAsked` / `handAnswered` | The operator's raised hand was taken / answered (`yielded`). |
+| `confirmationResult` | The answer-confirmation check resolved (`content` only on a rewrite). |
+| `swipeDone` | A swipe regeneration finished (swipe streams only). |
 
-When tools are called (image generation, memory search, web search):
-
-```
-data: {"type":"tool_call","name":"generate_image","arguments":{...}}
-
-data: {"type":"tool_result","name":"generate_image","result":{...}}
-```
+Any frame may carry `seat: { participantId, concurrent: true }` — a Storyteller "all at once" turn sharing the stream.
 
 #### `GET /api/v1/messages/[id]`
 
@@ -4409,11 +4463,13 @@ generating. Without it, generates a new one.
 
 | Frame | Meaning |
 |---|---|
-| `{"status":{"stage","message",…}}` | A step of the regeneration. Stages: `gathering`, `sending`, `regenerating`, `saving`. |
-| `{"content":"…"}` | A **delta** of the new line — append it. |
-| `{"reasoning":"…"}` | **Cumulative** reasoning so far — replace it. DISPLAY ONLY. |
-| `{"done":true,"message":{…}}` | The persisted swipe. Always last on success. |
-| `{"error","errorType","details"}` | The generation failed *after* the stream opened. |
+| `{"kind":"status","status":{"stage","message",…}}` | A step of the regeneration. Stages: `gathering`, `sending`, `regenerating`, `saving`. |
+| `{"kind":"content","text":"…"}` | A **delta** of the new line — append it. |
+| `{"kind":"reasoning","text":"…"}` | **Cumulative** reasoning so far — replace it. DISPLAY ONLY. |
+| `{"kind":"swipeDone","message":{…}}` | The persisted swipe. Always last on success. |
+| `{"kind":"error","message","errorType","details"}` | The generation failed *after* the stream opened. |
+
+These are Salon stream frames (`lib/chat/stream-frames.ts`).
 
 A failure *before* the stream opens (unknown message, non-assistant message,
 staff message) is an ordinary JSON error response, so callers should check
@@ -5605,6 +5661,8 @@ List indexed files plus the folder structure for a mount point.
 
 For filesystem/obsidian mounts the folder list is augmented with on-disk directories (so empty folders show up too). For database-backed mounts it comes from `doc_mount_folders`.
 
+Each file is a `DocMountBrowserEntry`: the joined link and content fields **without `extractedText`** (read a file's text through the per-file route), plus `linkGroupId` (non-null for a deliberate hard link) and `linkCount` (how many links in any store share this file's content row, itself included). `linkCount > 1` with a null `linkGroupId` is dedup sharing, which forks on the next write.
+
 #### `GET /api/v1/mount-points/[id]/files/[...path]`
 
 Read a single file's content. This is the canonical per-file read for the CLI and the Scriptorium file browser/editor; it resolves text documents, database blobs, and on-disk files uniformly.
@@ -5613,6 +5671,8 @@ Read a single file's content. This is the canonical per-file read for the CLI an
 - `encoding` — `utf-8` (default for text-like files) or `base64` (default for binary). Any file can be read as `base64`.
 - `offset`, `limit` — line window (UTF-8 reads only), mirroring `doc_read_file`.
 - `raw=1` (or `Accept: application/octet-stream`) — stream the raw bytes instead of a JSON envelope (used as an `<img>`/download source). Response headers include `Content-Type`, `Content-Length`, and `X-File-Sha256`.
+- `action=links` — instead of the content, every place the file's content appears: `{ linkGroupId, locations: [{ linkId, mountPointId, mountPointName, relativePath, grouped, self }] }`, the file itself first. `grouped` marks members of the same deliberate hard-link group; the rest share content by dedup only.
+- `action=render-html` — a `.docx` rendered to HTML for the read-only viewer: `{ html }` (mammoth). Link targets other than `http(s):`, `mailto:` and `#anchor` are replaced with `#`; clients must still sanitise before inserting it. Any other file type is a `400`.
 
 **Response** (JSON envelope): `200 OK`
 
@@ -5728,8 +5788,12 @@ Cross-mount and folder operations live on the `[id]` action-dispatch route (they
 - `POST /api/v1/mount-points/[id]?action=move-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Cross-mount move (rename / byte-copy / hard-link strategy chosen automatically). Returns `{ strategy, sourceSha256, destSha256, sizeBytes, ... }`.
 - `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies. The result is an **independent** document: it shares a content-addressed row with the source until either side is written and then forks. `force` skips the shared-content path and writes bytes for real; the end state is the same.
 - `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Both ends are enrolled in a `linkGroupId` (see DDL), so a later write through *either* path repoints both and re-chunks the sibling — unlike `copy-file`, which forks. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
-- `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path }`. Empty folders only (`409 NOT_EMPTY` otherwise).
-- `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath }`. Moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation).
+- `POST /api/v1/mount-points/[id]?action=unlink-file` — JSON `{ path }`. Takes the file out of its hard-link group: it keeps its current content and forks on its next write; a group left with one member dissolves. Returns `{ mountPointId, path, groupId, dissolved }` (`groupId: null` when it was in none). `404` for an unknown path.
+- `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path, recursive? }`. Without `recursive`, empty folders only (`409 NOT_EMPTY` otherwise). With `recursive: true`, every indexed file under it goes through the per-file delete (shared content is reclaimed only with its last link), then its folders, deepest first; a filesystem folder holding files the store does not index is refused (`409 CONFLICT`) before anything is deleted. Returns `{ mountPointId, path, deletedFiles }`.
+- `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath, destMountPointId? }`. Within one store, moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation). With another store's `destMountPointId`, moves file by file through `move-file` (a database → database move keeps each link's identity and hard-link group), then removes the emptied source folders; a failure part-way moves what had moved back.
+- `POST /api/v1/mount-points/[id]?action=copy-folder` — JSON `{ fromPath, toPath, destMountPointId? }`. Copies the folder and everything under it, empty subfolders included, file by file through `copy-file`, into this store or another. Refused onto an existing folder (`409 DEST_EXISTS`) or into itself (`400 INVALID_PATH`); a failure part-way removes the copies made. Returns `{ mountPointId, fromPath, destMountPointId, toPath, files, folders }`.
+
+Every file and folder operation publishes the `mountPoints` realtime topic scoped to each store it touched, so an open browser re-reads its listing.
 
 > **Mount-point files vs. the file library (`/api/v1/files`).** These mount-point endpoints address content by **(mount, relative path)** and are the one surface for Scriptorium file CRUD. `/api/v1/files` is a separate **library** layer that addresses by **file id** and carries domain metadata the mount index has no columns for (category, generation prompt/model, `linkedTo` associations, tags, image dimensions, thumbnails, avatar back-references). Its uploads already persist bytes into mount stores via the storage bridges (which now funnel through `storeMountFile`), and `GET /api/v1/files/[id]` plus `/api/v1/files/proxy/[...key]` remain the stable, persisted read URLs for library assets. Use the mount-point routes for raw file content; use `/api/v1/files` for the library/metadata layer.
 
@@ -5737,13 +5801,13 @@ Cross-mount and folder operations live on the `[id]` action-dispatch route (they
 
 ### Documents (Standalone Document Mode)
 
-Chat-less Document Mode operations for the left rail's standalone document tabs. These reuse the same shared core as the chat-scoped document actions (`lib/documents/operator-doc-actions.ts`) but create **no `chat_documents` rows and post no Librarian announcements** — no conversation is attached, so nothing is notified of edits. All actions resolve paths with the operator override (any enabled store is reachable). The `project` scope is not accepted here (no chat means no project context); project files are reachable through their project's official document store by mount name.
+Chat-less Document Mode operations for the left rail's standalone document tabs. These reuse the same document core (`lib/documents/core/`, through `lib/documents/operator-doc-actions.ts`) as the chat-scoped document actions but create **no `chat_documents` rows and post no Librarian announcements** — no conversation is attached, so nothing is notified of edits. All actions resolve paths with the operator override (any enabled store is reachable). The `project` scope is not accepted here (no chat means no project context); project files are reachable through their project's official document store by mount name.
 
-- `GET /api/v1/documents?action=accessible-stores` — every enabled store (the picker's chat-less "look everywhere"). Returns `{ stores, projectLibrary: null }`; character vaults are labelled by their owning character.
+- `GET /api/v1/documents?action=accessible-stores` — every enabled store (the picker's chat-less "look everywhere"). Returns `{ stores, projectLibrary: null, generalLibrary }`; Quilltap General is held back from `stores` as `generalLibrary`, and character vaults are labelled by their owning character.
 - `POST /api/v1/documents?action=recent-documents` — recently-opened documents across all chats (sourced from `chat_documents` history), deduped by file identity, `project`-scoped rows filtered out. Returns `{ documents }`.
-- `POST /api/v1/documents?action=open-document` — JSON `{ filePath?, title?, scope? ('document_store' | 'general', default 'general'), mountPoint?, targetFolder? }`. Reads an existing file, or (no `filePath`) creates a collision-safe "Untitled Document.md" in `targetFolder`. Returns `{ document: { filePath, scope, mountPoint, displayTitle }, content, mtime, isNew }`. `404` if a named file is missing.
-- `POST /api/v1/documents?action=read-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ content, mtime }`.
-- `POST /api/v1/documents?action=write-document` — JSON `{ filePath, scope?, mountPoint?, content, mtime? }`. Mtime-checked write (`409` on conflict); document-store writes schedule re-index + embedding + stats refresh. Returns `{ success, mtime }`.
+- `POST /api/v1/documents?action=open-document` — JSON `{ filePath?, title?, scope? ('document_store' | 'general', default 'general'), mountPoint?, targetFolder? }`. Reads an existing file, or (no `filePath`) creates a collision-safe "Untitled Document.md" in `targetFolder`. Returns `{ document: { filePath, scope, mountPoint, displayTitle }, content, mtime, isNew, viewer? }` (`viewer` for a read-only store file — see [Chat Documents](#chat-documents-document-mode)). `404` if a named file is missing.
+- `POST /api/v1/documents?action=read-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ content, mtime }`, or `{ content: '', viewer }` for a read-only store file.
+- `POST /api/v1/documents?action=write-document` — JSON `{ filePath, scope?, mountPoint?, content, mtime? }`. Mtime-checked write (`409` on conflict; `400` for a read-only store file); document-store writes schedule re-index + embedding + stats refresh. Returns `{ success, mtime }`.
 - `POST /api/v1/documents?action=rename-document` — JSON `{ filePath, scope?, mountPoint?, newTitle }`. Same basename semantics as the chat route (directory preserved, old extension inherited, separators rejected). `409` if the destination exists. Returns `{ document }`.
 - `POST /api/v1/documents?action=delete-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ success }`.
 
@@ -7063,6 +7127,12 @@ Update project properties.
 }
 ```
 
+Every field is optional. Also accepted (all nullable): `characterRoster` (array of ids), `defaultAgentModeEnabled`,
+`defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultRoleplayTemplateId`,
+`defaultAlertCharactersOfLanternImages`, `answerConfirmationOverride` (`"ON"` / `"OFF"`),
+`brahmaConnectionProfileId` (the engine for `@Brahma` in this project's chats), and `backgroundDisplayMode`
+(`"latest_chat"` / `"theme"`, not nullable). Schema: `app/api/v1/projects/[id]/schemas.ts`.
+
 Returns the same enriched project as `GET` (roster entries are objects, not ids).
 
 #### `DELETE /api/v1/projects/[id]`
@@ -7196,7 +7266,7 @@ When a new chat is created within a project, it inherits these default tool sett
 
 #### `GET /api/v1/projects/[id]/mount-points`
 
-List the mount points (document stores) linked to a project.
+List the mount points (document stores) linked to a project. Returns `{ mountPoints, officialMountPointId }`; `officialMountPointId` names the project's own store (or `null`), which the folder browser opens for the project.
 
 #### `POST /api/v1/projects/[id]/mount-points`
 
@@ -7658,7 +7728,8 @@ closes with `1008`.
 
 - `topic` — a `lib/query/keys.ts` namespace name. Canonical values live in `REALTIME_TOPICS`
   (`lib/schemas/realtime.types.ts`): `jobs`, `autonomousRooms`, `chats`, `projects`, `characters`,
-  `mountPoints`. Clients **must ignore topics they don't recognise** — an older tab meeting a newer
+  `mountPoints`, `memories` (scoped by chat id), `inventory`, `wardrobe`, `storytellerRounds` and
+  `customToolInterventions` (both scoped by chat id). Clients **must ignore topics they don't recognise** — an older tab meeting a newer
   server is the normal case after an upgrade.
 - `id` — present only when the change is row-scoped; absent means the whole namespace.
 - `at` — server ms, for log correlation only. Clients must not order, dedupe, or expire on it.

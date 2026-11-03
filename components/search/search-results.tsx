@@ -336,7 +336,7 @@ function DocumentResultCard({ result, query, onResultClick }: { result: Document
 }
 
 // Highlight matching text
-function HighlightedText({ text, query }: { text: string; query: string }) {
+export function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query || !text) return <>{text}</>
 
   const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
@@ -405,6 +405,7 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
               <button
                 onClick={() => onTypeCountClick(searchType)}
                 className="text-primary hover:underline cursor-pointer"
+                aria-label={`Show all ${totalForType} ${TYPE_LABELS_PLURAL[searchType].toLowerCase()}`}
                 title={`Show all ${totalForType} ${TYPE_LABELS_PLURAL[searchType].toLowerCase()}`}
               >
                 ({displayedCount}/{totalForType})

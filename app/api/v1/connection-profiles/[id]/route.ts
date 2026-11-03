@@ -19,6 +19,8 @@ import { notFound, forbidden, badRequest, serverError, conflict, successResponse
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
+import { parseMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils';
+import { MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -137,6 +139,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         multiCharacterPrefill,
         fallbackProfileId,
         allowTierFallback,
+        maxImagesPerRequest,
       } = body;
 
       // Build update data
@@ -377,6 +380,14 @@ export const PUT = createContextParamsHandler<{ id: string }>(
           return badRequest('supportsImageUpload must be a boolean');
         }
         updateData.supportsImageUpload = supportsImageUpload;
+      }
+
+      if (maxImagesPerRequest !== undefined) {
+        const parsedMaxImages = parseMaxImagesPerRequest(maxImagesPerRequest);
+        if (parsedMaxImages === null) {
+          return badRequest(`maxImagesPerRequest must be a whole number from 1 to ${MAX_IMAGES_PER_REQUEST_CEILING}`);
+        }
+        updateData.maxImagesPerRequest = parsedMaxImages;
       }
 
       // Update the profile

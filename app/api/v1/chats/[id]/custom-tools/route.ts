@@ -11,6 +11,12 @@
  *     and an index-invalidated cache would miss exactly those edits (see the
  *     freshness note atop `lib/pascal/custom-tools.ts`).
  *
+ * GET ?action=presets&tool=<name>&asCharacterId=<id>
+ *   - One tool's run presets as that character sees them: the same
+ *     character → group → project → General walk the roster takes, nearest
+ *     preset of a name winning, plus every store on the walk as a place to
+ *     save one. See `lib/pascal/tool-preset-pool.ts`.
+ *
  * GET ?action=interventions, POST ?action=intervention-preview /
  * intervention-reask / intervention-resolve
  *   - Operator intervention: read and resolve runs held for the operator.
@@ -62,9 +68,10 @@ import {
   type CustomToolRoster,
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
-import { displayTitle } from '@/lib/pascal/custom-tool.types';
+import { IDENTIFIER_PATTERN, displayTitle } from '@/lib/pascal/custom-tool.types';
 import { collectToolVocabulary, type ToolVocabulary } from '@/lib/pascal/tool-vocabulary';
 import { runCustomTool } from '@/lib/pascal/run-service';
+import { resolveToolPresetPool } from '@/lib/pascal/tool-preset-pool';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 import {
   handleInterventionPreview,
@@ -96,9 +103,9 @@ interface CustomToolListing {
   /** Whose perspective produced this variant — POST replays it. */
   asCharacterId: string;
   /**
-   * That character's vault mount, where run presets
-   * (`Tools/{name}.{preset}.settings.json`) are kept. Null for a character
-   * whose vault could not be resolved — the dialog hides its preset controls.
+   * That character's vault mount — the nearest store on the preset walk, and
+   * so the dialog's default place to save one. Null for a character whose
+   * vault could not be resolved; presets still load from the farther tiers.
    */
   vaultMountPointId: string | null;
   definitionPath: string;
@@ -367,6 +374,65 @@ function buildListing(
 }
 
 // ---------------------------------------------------------------------------
+// GET ?action=presets — one tool's run presets, walked like the roster
+// ---------------------------------------------------------------------------
+
+async function handlePresets(
+  req: NextRequest,
+  ctx: RequestContext,
+  { id }: { id: string },
+): Promise<NextResponse> {
+  const url = new URL(req.url);
+  const toolName = url.searchParams.get('tool') ?? '';
+  const asCharacterId = url.searchParams.get('asCharacterId');
+  if (!IDENTIFIER_PATTERN.test(toolName)) {
+    return badRequest('A valid custom tool name is required');
+  }
+
+  const chat = await ctx.repos.chats.findById(id);
+  if (!chat) return notFound('Chat');
+
+  const perspectives = await loadPerspectives(ctx, id, chat.participants);
+  // The same choice POST makes, so the presets listed are the ones the run
+  // they fill in will be made from.
+  const perspective = asCharacterId
+    ? perspectives.find((p) => p.characterId === asCharacterId)
+    : perspectives.length > 0
+      ? preferOperator(
+          perspectives,
+          (p) => p.characterId,
+          operatorCharacterIds(chat.participants, chat.activeTypingParticipantId),
+        ).chosen
+      : undefined;
+  if (!perspective) {
+    return badRequest(
+      asCharacterId
+        ? `No character participant with id ${asCharacterId} is in this chat`
+        : 'This chat has no character whose presets could be read',
+    );
+  }
+
+  const pool = await resolveToolPresetPool({
+    userId: ctx.user.id,
+    characterId: perspective.characterId,
+    characterMountPointId: perspective.characterMountPointId,
+    projectId: chat.projectId ?? null,
+    toolName,
+  });
+
+  logger.debug('Custom-tool presets listed for the operator', {
+    context: HANDLER,
+    chatId: id,
+    tool: toolName,
+    characterId: perspective.characterId,
+    presets: pool.presets.length,
+    stores: pool.stores.length,
+  });
+
+  return successResponse(pool);
+}
+
+// ---------------------------------------------------------------------------
 // POST ?action=run — the deal
 // ---------------------------------------------------------------------------
 
@@ -514,7 +580,7 @@ async function handleRun(
 }
 
 export const GET = createContextParamsHandler<{ id: string }>(
-  withActionDispatch({ interventions: handleListInterventions }, handleList),
+  withActionDispatch({ interventions: handleListInterventions, presets: handlePresets }, handleList),
 );
 
 export const POST = createContextParamsHandler<{ id: string }>(
