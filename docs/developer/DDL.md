@@ -35,15 +35,15 @@ Override with `QUILLTAP_DATA_DIR` env var, `--data-dir` CLI flag, or `SQLITE_PAT
 
 ## Encryption
 
-All three databases are encrypted with **SQLCipher** (AES-256-CBC with HMAC-SHA512). The standard `sqlite3` CLI **cannot** open them.
+All three databases are encrypted with **ChaCha20-Poly1305**, the default cipher of SQLite3 Multiple Ciphers (the `better-sqlite3-multiple-ciphers` driver). They are not SQLCipher-format files: neither the standard `sqlite3` CLI nor `sqlcipher` can open them.
 
 ### How the key works
 
-1. A 32-byte random **pepper** (base64-encoded) is the actual SQLCipher key
+1. A 32-byte random **pepper** (base64-encoded) is the actual database key
 2. The pepper is wrapped with AES-256-GCM + PBKDF2 (600,000 iterations, SHA-256) and stored in the instance's single `data/quilltap.dbkey` file
 3. An optional user passphrase protects the `.dbkey` wrapper; without one, a sentinel value is used
 4. At runtime, the pepper lands in `process.env.ENCRYPTION_MASTER_PEPPER`
-5. SQLCipher receives it as a raw hex key: `PRAGMA key = "x'<hex>'"`
+5. Every connection receives it as a raw hex key, `PRAGMA key = "x'<hex>'"`, through `applySqlcipherKey()`; a raw key skips the driver's own PBKDF2
 
 ### Runtime PRAGMAs
 
@@ -2261,7 +2261,7 @@ Cascade off `doc_mount_files` reaps the blob row (and its bytes) when the last l
 
 | File | Purpose |
 |------|---------|
-| `lib/database/backends/sqlite/client.ts` | Main DB connection, SQLCipher key, PRAGMAs |
+| `lib/database/backends/sqlite/client.ts` | Main DB connection, encryption key, PRAGMAs |
 | `lib/database/backends/sqlite/llm-logs-client.ts` | LLM logs DB connection |
 | `lib/database/backends/sqlite/mount-index-client.ts` | Mount index DB connection |
 | `lib/database/backends/sqlite/backend.ts` | Backend lifecycle, initialization |

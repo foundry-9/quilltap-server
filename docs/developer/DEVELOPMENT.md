@@ -75,7 +75,7 @@ quilltap/
 │   ├── brahma-console/       # Brahma: character-less LLM surface + read-only SQL
 │   ├── characters/           # Character services: vault sync, archive/rehydrate, archive-crypto
 │   ├── chat/                 # Salon: context-manager, turn-manager, tool execution
-│   ├── database/             # SQLite/SQLCipher connection management
+│   ├── database/             # SQLite connection management (encrypted)
 │   ├── doc-edit/             # Document Mode core (open / save / rename / delete)
 │   ├── embedding/            # Embedding providers and helpers
 │   ├── encryption.ts         # Crypto primitives
@@ -151,7 +151,7 @@ quilltap/
 ### Prerequisites
 
 - **Node.js 24+** (LTS)
-- **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
+- **SQLite with ChaCha20-Poly1305 encryption** (automatic with better-sqlite3-multiple-ciphers, from SQLite3 Multiple Ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
 - **File storage**: Local filesystem
 
 ### Running Locally
@@ -279,7 +279,7 @@ needs its own `tsconfig.json` extending that base, plus a `typecheck` script.
 
 ### SQLite Database
 
-All application data is stored in SQLite, encrypted at rest using **SQLCipher** (via the `better-sqlite3-multiple-ciphers` driver, aliased as `better-sqlite3` throughout the codebase). Every database file is encrypted on disk — the standard `sqlite3` command-line tool cannot open these files. Use the built-in CLI subcommand instead:
+All application data is stored in SQLite, encrypted at rest using **ChaCha20-Poly1305**, the default cipher of SQLite3 Multiple Ciphers (via the `better-sqlite3-multiple-ciphers` driver, aliased as `better-sqlite3` throughout the codebase). Every database file is encrypted on disk — neither the standard `sqlite3` command-line tool nor `sqlcipher` can open these files. (Some identifiers, such as `applySqlcipherKey`, still say "SQLCipher" for historical reasons.) Use the built-in CLI subcommand instead:
 
 ```bash
 # List tables
@@ -560,6 +560,6 @@ one of those.
 - [Deployment Guide](../DEPLOYMENT.md) - Production deployment patterns
 - [Backup & Restore Guide](../BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](../../plugins/README.md) - Creating plugins
-- [Database Encryption](DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
+- [Database Encryption](DATABASE_ENCRYPTION.md) - ChaCha20-Poly1305 encryption architecture, .dbkey file management, and passphrase handling
 - [Background Jobs Child Process](BACKGROUND_JOBS_CHILD.md) - Child process architecture, IPC protocol, per-database write partitioning, and handler audit
 - [Roadmap](features/ROADMAP.md) - Planned features

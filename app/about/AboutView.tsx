@@ -147,7 +147,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, embedded tool messages, Inform notes from the wings, the Scenario Builder, and indexed message search</span>
+            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, embedded tool messages, Inform notes from the wings, Deus Ex Machina established facts that every character knows, the Scenario Builder, and indexed message search that looks in the open conversation first</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -167,7 +167,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Pascal the Croupier &ndash; Gaming</strong> &ndash; persistent state across four registers, dice rolls, coin flips, inventories and stats, plus user-authored custom tools with honest server-side rolls, outcome tables, side effects, and a visual workbench to build them</span>
+            <span><strong>Pascal the Croupier &ndash; Gaming</strong> &ndash; persistent state across four registers, dice rolls, coin flips, the Inventory of objects characters carry, stats, plus user-authored custom tools with honest server-side rolls, outcome tables, side effects, and a visual workbench to build them</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -175,7 +175,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Scriptorium &ndash; Document Stores</strong> &ndash; mountable external knowledge sources that characters can read, search, and (in Document Mode) write back to</span>
+            <span><strong>The Scriptorium &ndash; Document Stores</strong> &ndash; mountable external knowledge sources that characters can read, search, and (in Document Mode) write back to, browsed with one folder browser shared with the Wardrobe and the Inventory and read-only viewers for pictures, PDFs and Word files</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -191,7 +191,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Saquel Ytzama &ndash; Keeper of Secrets</strong> &ndash; SQLCipher-encrypted databases, the Pepper Vault for API keys, instance locking, the <code>.dbkey</code> covenant, and the auto-lock idle timer</span>
+            <span><strong>Saquel Ytzama &ndash; Keeper of Secrets</strong> &ndash; ChaCha20-Poly1305-encrypted databases, the Pepper Vault for API keys, instance locking, the <code>.dbkey</code> covenant, and the auto-lock idle timer</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -207,7 +207,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Brahma &ndash; The Console</strong> &ndash; a character-less, memory-free generic-LLM surface for plain model chat and read-only SQL inspection, reachable from any Salon as the <code>@Brahma</code> answerer</span>
+            <span><strong>Brahma &ndash; The Console</strong> &ndash; a character-less, memory-free generic-LLM surface for plain model chat and read-only SQL inspection, with lookup shortcuts for characters, memories and conversations, reachable from any Salon as the <code>@Brahma</code> answerer on an engine of its own choosing</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -250,10 +250,10 @@ export function AboutView() {
             <span className="font-medium">UI:</span> React 19
           </div>
           <div>
-            <span className="font-medium">Language:</span> TypeScript 5.9+
+            <span className="font-medium">Language:</span> TypeScript 6+
           </div>
           <div>
-            <span className="font-medium">Database:</span> SQLite + SQLCipher
+            <span className="font-medium">Database:</span> SQLite + SQLite3 Multiple Ciphers
           </div>
           <div>
             <span className="font-medium">Editor:</span> Lexical
@@ -368,7 +368,7 @@ export function AboutView() {
           <BrandName /> stands on the shoulders of these excellent open source projects, and is grateful for the view.
         </p>
         <div className="qt-text-primary space-y-2 text-sm">
-          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLCipher), Zod, Ajv, @tanstack/react-query</p>
+          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLite3 Multiple Ciphers, ChaCha20-Poly1305), Zod, Ajv, @tanstack/react-query</p>
           <p><span className="font-medium">Editor:</span> Lexical (and the @lexical family &mdash; rich-text, markdown, list, code, table, link, history, selection, clipboard, react)</p>
           <p><span className="font-medium">AI &amp; LLM:</span> OpenAI SDK, Anthropic SDK, Google GenAI SDK, OpenRouter SDK, Model Context Protocol SDK</p>
           <p><span className="font-medium">Markdown &amp; Documents:</span> unified, remark-parse, remark-gfm, remark-math, remark-rehype, rehype-stringify, rehype-highlight, rehype-katex, remark-breaks, remark-smartypants, KaTeX, react-markdown, react-syntax-highlighter, mammoth, PDF.js, yaml, jsonrepair, MessagePack</p>

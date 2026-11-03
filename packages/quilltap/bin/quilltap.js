@@ -803,9 +803,10 @@ Subcommands (high-level shortcuts; auto-pick the right database):
                               Default destination: <dataDir>/backups/<timestamp>/.
                               Each snapshot is re-opened with the same key and
                               verified with PRAGMA quick_check.
-  integrity [target...]       Run PRAGMA cipher_integrity_check and
-                              PRAGMA integrity_check on the encrypted
-                              databases. Read-only; safe alongside a live
+  integrity [target...]       Run PRAGMA integrity_check on the encrypted
+                              databases; every page read is decrypted and
+                              its Poly1305 tag verified, so tampered pages
+                              count as issues. Read-only; safe alongside a live
                               instance. Exit code: 0 ok, 1 issues, 2 open
                               failure.
   Most subcommands also accept --json and --limit N.
@@ -851,7 +852,7 @@ Examples:
   quilltap db optimize llm-logs                        # only the LLM logs DB
   quilltap db backup                                   # snapshot all DBs to <dataDir>/backups/<ts>/
   quilltap db backup main --out /tmp/qtap-snap         # snapshot only the main DB
-  quilltap db integrity                                # cipher_integrity_check + integrity_check
+  quilltap db integrity                                # integrity_check on every DB
   quilltap db --tables
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages

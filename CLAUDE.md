@@ -108,7 +108,7 @@ New defects are **GitHub issues** filed with the Bug issue form
 
 - **Framework / language:** React via Next.js, TypeScript, npm.
 - **Testing:** Jest (native coverage).
-- **Data:** SQLite + SQLCipher encryption at rest via `better-sqlite3-multiple-ciphers`, **aliased as `better-sqlite3`** in the root `package.json`. Runtime and tests `require('better-sqlite3')`, not the native name (which only resolves where a sub-package declares it directly). Tests needing both should fall back `better-sqlite3-multiple-ciphers` → `better-sqlite3`. Models are TS interfaces with Zod schemas.
+- **Data:** SQLite with ChaCha20-Poly1305 encryption at rest (SQLite3 Multiple Ciphers' default cipher — not SQLCipher, despite identifiers like `applySqlcipherKey`) via `better-sqlite3-multiple-ciphers`, **aliased as `better-sqlite3`** in the root `package.json`. Runtime and tests `require('better-sqlite3')`, not the native name (which only resolves where a sub-package declares it directly). Tests needing both should fall back `better-sqlite3-multiple-ciphers` → `better-sqlite3`. Models are TS interfaces with Zod schemas.
 - **File storage:** local filesystem only.
 - **LLM providers:** OpenAI, Anthropic, Grok (xAI), Google, Ollama, OpenRouter, any OpenAI-compatible endpoint.
 - **Design docs:** Storybook. **User docs:** `/help/`, searchable via MessagePack.
@@ -171,7 +171,7 @@ Client server-state runs on **TanStack Query v5** (`@tanstack/react-query`); SWR
 | **Carina** | inline LLM queries (`@Name:` / `@Name?` / `ask_carina`) — see [Carina](#carina-summary) |
 | **Ariel** | terminals — live PTY shell sessions in a Salon chat (Terminal Mode pane); code in `lib/terminal/` |
 | **Suparṇā** | the Post Office — inter-character mail in a character's vault `Mail/` folder, with delivery announcements |
-| **Brahma** | the Console — a character-less, memory-free generic-LLM surface (plain model chat, read-only SQL), also the `@Brahma` answerer; code in `lib/brahma-console/`, API `/api/v1/brahma-console` |
+| **Brahma** | the Console — a character-less, memory-free generic-LLM surface (plain model chat, read-only SQL and the `lookup_*` / `read_messages` shortcuts), also the `@Brahma` answerer (engine via `resolveInlineBrahmaConnectionProfile`: project → global → default); code in `lib/brahma-console/`, API `/api/v1/brahma-console` |
 | **The Almanack** | the system report (formerly "capabilities report") — `/settings?tab=providers&section=capabilities-report`; code in `lib/tools/almanack/`. API actions stay `capabilities-report-*` |
 
 Old UI routes (`/foundry/*`, `/chats`, `/characters`, `/projects`) redirect to their current equivalents.
@@ -220,7 +220,7 @@ An **instance** is a self-contained base directory you point Quilltap at, holdin
 
 ### Background jobs (summary)
 
-All job handlers run in a lazily-forked child process. **The parent (Next.js HTTP) is the only DB writer;** the child reads via a readonly SQLCipher connection, buffers write payloads in an `AsyncLocalStorage`, and ships them over IPC. The parent partitions writes by target DB (main / mount-index / llm-logs) and commits each in its own transaction, so one partition's failure can't roll back others. **In a handler, treat `getRepositories()` as a proxy: reads pass through, writes buffer — never assume read-your-writes within a single job.** Full mechanics (main-primary autonomous turns, folder-conflict id remapping, the two `AsyncLocalStorage` contexts): [BACKGROUND_JOBS_CHILD.md](docs/developer/BACKGROUND_JOBS_CHILD.md).
+All job handlers run in a lazily-forked child process. **The parent (Next.js HTTP) is the only DB writer;** the child reads via a readonly encrypted connection, buffers write payloads in an `AsyncLocalStorage`, and ships them over IPC. The parent partitions writes by target DB (main / mount-index / llm-logs) and commits each in its own transaction, so one partition's failure can't roll back others. **In a handler, treat `getRepositories()` as a proxy: reads pass through, writes buffer — never assume read-your-writes within a single job.** Full mechanics (main-primary autonomous turns, folder-conflict id remapping, the two `AsyncLocalStorage` contexts): [BACKGROUND_JOBS_CHILD.md](docs/developer/BACKGROUND_JOBS_CHILD.md).
 
 ### Carina (summary)
 

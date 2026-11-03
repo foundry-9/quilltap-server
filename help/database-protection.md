@@ -8,7 +8,7 @@ Quilltap automatically protects your databases against corruption and data loss.
 
 ## Encryption at Rest
 
-Your databases are not merely tucked away in a drawer, as one might store a perfectly ordinary biscuit tin — they are *locked inside a vault*, the combination to which only Quilltap itself possesses. Every database file Quilltap creates is encrypted on disk using **SQLCipher**, an industry-standard encryption extension for SQLite that has been scrutinising secrets since before most current programming languages were born.
+Your databases are not merely tucked away in a drawer, as one might store a perfectly ordinary biscuit tin — they are *locked inside a vault*, the combination to which only Quilltap itself possesses. Every database file Quilltap creates is encrypted on disk, page by page, with **ChaCha20-Poly1305** by way of SQLite3 Multiple Ciphers — the same cipher that guards a good share of the world's web traffic. ChaCha20 scrambles each page; Poly1305 seals it with a tag, so a page that has been tampered with, or opened with the wrong key, refuses to be read at all rather than quietly offering up nonsense. (These are not SQLCipher files, whatever older notes may say, and the `sqlcipher` tool cannot open them any more than `sqlite3` can.)
 
 ### What This Means for You
 
@@ -148,7 +148,7 @@ The default destination is `<dataDir>/backups/<ISO-timestamp>/`, so successive r
 
 ### Online Health Checks
 
-Closely related, and equally safe alongside a running instance: `quilltap db integrity` runs SQLite's structural `integrity_check` pragma together with SQLCipher's `cipher_integrity_check` pragma, which together catch both ordinary corruption and any encryption-layer mischief.
+Closely related, and equally safe alongside a running instance: `quilltap db integrity` runs SQLite's structural `integrity_check` pragma across each database. Because every page it reads must first be decrypted and its Poly1305 seal verified, the walk catches encryption-layer mischief in any page it visits as well as ordinary structural corruption.
 
 ```bash
 # Check all three databases

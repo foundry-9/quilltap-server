@@ -242,7 +242,7 @@ cp quilltap-backup-*.db /mnt/nas/quilltap-backups/
 
 ### Encryption & Security
 
-Quilltap databases are encrypted at rest with SQLCipher. Physical backup files (`.db`) are already encrypted — they cannot be opened without the pepper stored in the `.dbkey` files. For additional protection or for logical backup ZIP files:
+Quilltap databases are encrypted at rest with ChaCha20-Poly1305 (SQLite3 Multiple Ciphers). Physical backup files (`.db`) are already encrypted — they cannot be opened without the pepper stored in the `.dbkey` files. For additional protection or for logical backup ZIP files:
 
 ```bash
 # Encrypt a logical backup ZIP with GPG
@@ -335,7 +335,7 @@ cp quilltap-backup-YYYYMMDD.db /path/to/quilltap.db
 
 ### Check Backup Integrity
 
-Since databases are encrypted with SQLCipher, the standard `sqlite3` CLI cannot open them. Use the Quilltap CLI instead:
+Since the databases are encrypted, neither the standard `sqlite3` CLI nor `sqlcipher` can open them. Use the Quilltap CLI instead:
 
 ```bash
 # Verify database file is valid (requires .dbkey file in the data directory)

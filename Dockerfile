@@ -8,7 +8,7 @@ RUN apt-get update \
     && apt-get -y upgrade \
     && rm -rf /var/lib/apt/lists/*
 
-# Install build dependencies for node-pty (no Linux prebuild). The SQLCipher
+# Install build dependencies for node-pty (no Linux prebuild). The SQLite3 Multiple Ciphers
 # driver ships prebuilt Node-API binaries and needs no compiler.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
@@ -143,7 +143,7 @@ RUN apt-get update \
 # Copy production node_modules from the build stage (node-pty already compiled)
 COPY --from=deps-prod /app/node_modules ./node_modules
 
-# Keep only this image's SQLCipher driver prebuild. better-sqlite3-multiple-ciphers
+# Keep only this image's SQLite3 Multiple Ciphers driver prebuild. better-sqlite3-multiple-ciphers
 # ships eight per-platform binaries plus its compile-time sources; the loader
 # only ever reads lib/ and prebuilds/<platform>-<arch>.node. Each arch builds on
 # a native runner, so process.arch is the image's arch. Fails the build if the

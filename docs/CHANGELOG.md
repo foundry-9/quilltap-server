@@ -4,6 +4,26 @@
 
 ### 4.12-dev
 
+#### Fix: `quilltap db integrity` no longer reports a check it never ran
+
+- The command ran `PRAGMA cipher_integrity_check`, a SQLCipher pragma that SQLite3 Multiple Ciphers does not have. Unknown pragmas return no rows, which the CLI printed as `cipher_integrity_check: ok` on every database, every time.
+- It now runs `integrity_check` alone. Every page that check reads is decrypted and its Poly1305 tag verified; a page that fails throws `SQLITE_CORRUPT` instead of returning a row, which used to crash the command and is now reported as an issue (exit 1). The `--json` result drops `cipherIntegrityCheck`.
+- `scripts/audit-mount-blob-sha256.mjs` used the same pragma as its "did the key work" check, which therefore never failed; it now reads `sqlite_master`, which forces page 1 to decrypt.
+- CLI help and `packages/quilltap/README.md` updated. Verified against V4test (all ok) and a copy of its LLM-logs database with one flipped byte (reported, exit 1).
+
+#### Docs: database encryption described correctly
+
+- The databases are encrypted with ChaCha20-Poly1305, the default cipher of SQLite3 Multiple Ciphers 2.4.0 (the `better-sqlite3-multiple-ciphers` driver), with a 64-hex-digit raw key that skips the driver's PBKDF2. No `PRAGMA cipher` is issued. Docs that said SQLCipher, or "AES-256-CBC with HMAC-SHA512", now say this: `DATABASE_ENCRYPTION.md` (which also gains the current `applySqlcipherKey` snippet, the full list of keyed connections, and a note on the historical `sqlcipher` identifiers), `DDL.md`, `DATABASE_ABSTRACTION.md`, `DEVELOPMENT.md`, `CLI.md`, `BACKGROUND_JOBS_CHILD.md`, `BACKUP-RESTORE.md`, `help/database-protection.md`, `help/data-directory.md` (the `.dbkey` file is wrapped with AES-256-GCM, not SQLCipher), `help/mount-points.md`, `README.md`, `packages/quilltap/README.md`, `CLAUDE.md`, the About page, the update-documentation command, and comments in the Dockerfiles and `release.yml`.
+- `help/database-protection.md` no longer claims `quilltap db integrity` runs SQLCipher's `cipher_integrity_check`. SQLite3 Multiple Ciphers has no such pragma; it returns no rows, which the CLI reports as "ok". The real check is `integrity_check`, which must decrypt and verify the Poly1305 tag of each page it reads.
+- Release notes for 4.12.0: dated 2026-11-03 and marked `draft: false`.
+
+#### Docs: release checklist 14 documentation pass
+
+- README: the Salon paragraph covers established facts (Deus Ex Machina) and in-conversation search; the Scriptorium paragraph covers the shared folder browser and read-only viewers.
+- About page: TypeScript 6+; feature blurbs for established facts, conversation-first search, the folder browser, the Inventory and the Brahma lookup shortcuts.
+- API.md: `inlineConnectionProfileId` on the Brahma Console settings, and the full optional field list for `PUT /api/v1/projects/[id]` (including `brahmaConnectionProfileId`).
+- CLAUDE.md: the Brahma glossary row names the lookup tools and the inline engine resolver.
+
 #### Docs: 4.12.0 release notes cover the Brahma lookup shortcuts
 
 - `docs/releases/4.12.0.md` gains a "Brahma Knows Where to Look" section (the four lookup tools, `run_sql` result trimming, the `@Brahma` engine setting and its project override), a mention in the description and intro, and the project's Inline Brahma Engine under "What backups carry".

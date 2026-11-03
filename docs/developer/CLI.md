@@ -10,8 +10,8 @@ there.
 This file keeps only what will never belong in a published package README: repo scripts, module
 maps, and the internals of the completion templates.
 
-> **Reminder for anyone at a shell here:** databases are SQLCipher-encrypted, so the standard
-> `sqlite3` binary **cannot** open them. Use `npx quilltap`, prefer the high-level subcommands over
+> **Reminder for anyone at a shell here:** databases are encrypted (ChaCha20-Poly1305 via SQLite3
+> Multiple Ciphers), so neither the standard `sqlite3` binary nor `sqlcipher` can open them. Use `npx quilltap`, prefer the high-level subcommands over
 > raw SQL, and never reach for `--lock-override`.
 
 ## Docker startup (`scripts/start-quilltap-docker.ts`)
@@ -102,6 +102,6 @@ templates under `packages/quilltap/lib/completion/`.
 
 - [`packages/quilltap/README.md`](../../packages/quilltap/README.md) — the full command reference.
 - [DDL.md](DDL.md) — full database schema and how to query it.
-- [DATABASE_ENCRYPTION.md](DATABASE_ENCRYPTION.md) — SQLCipher key handling.
+- [DATABASE_ENCRYPTION.md](DATABASE_ENCRYPTION.md) — database key handling.
 - [bug 126](bugs/fixed/bug-126-hostname-flap-kills-server.md) — why lock freshness, not a PID check, is the fallback everywhere.
 - [bug 144](bugs/fixed/bug-144-lock-clean-claims-dead-holder-is-alive.md) — why `--lock-clean` talks about heartbeat age rather than liveness.

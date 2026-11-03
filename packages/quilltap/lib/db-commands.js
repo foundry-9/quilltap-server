@@ -1604,7 +1604,7 @@ async function backupOneDb(key, sourcePath, destDir, ctx) {
     return { target: target.label, source: sourcePath, sourceSize, dest: destPath, ok: false, error: err.message };
   }
 
-  // The SQLCipher build in this driver does not expose `sqlcipher_export`
+  // The SQLite3 Multiple Ciphers build in this driver does not expose `sqlcipher_export`
   // and the SQLite online-backup API refuses cross-cipher copies. We
   // instead take a brief exclusive lock, force a WAL checkpoint, and copy
   // the encrypted .db file at the byte level — the pages are already
@@ -1742,44 +1742,30 @@ function integrityOneDb(key, dbPath, ctx) {
     return { target: target.label, ok: false, openable: false, issues: [], reason: err.message };
   }
 
+  // SQLite3 Multiple Ciphers (ChaCha20-Poly1305) has no SQLCipher-style
+  // `cipher_integrity_check` pragma — an unknown pragma returns no rows, so
+  // asking for it reported "ok" without checking anything. The page-level
+  // check is integrity_check itself: every page it reads must decrypt and
+  // pass its Poly1305 tag, and a page that fails throws (SQLITE_CORRUPT /
+  // SQLITE_NOTADB) rather than returning a row, so that is caught as an issue.
   const issues = [];
-  let cipherCheck = null;
   let integrityCheck = null;
   const t0 = Date.now();
   try {
+    let lines;
     try {
-      const rows = db.pragma('cipher_integrity_check');
-      if (rows && rows.length === 0) {
-        cipherCheck = 'ok';
-        console.log('  cipher_integrity_check: ok');
-      } else {
-        const lines = rows.map(r => (r.cipher_integrity_check || Object.values(r)[0] || '')).filter(Boolean);
-        if (lines.length === 1 && lines[0] === 'ok') {
-          cipherCheck = 'ok';
-          console.log('  cipher_integrity_check: ok');
-        } else {
-          cipherCheck = lines.join('; ');
-          for (const line of lines) {
-            console.log(`  cipher_integrity_check: ${line}`);
-            issues.push({ pragma: 'cipher_integrity_check', message: line });
-          }
-        }
-      }
+      const integRows = db.pragma('integrity_check');
+      lines = integRows.map(r => (r.integrity_check || Object.values(r)[0] || '')).filter(Boolean);
     } catch (err) {
-      // Plain SQLite has no cipher_integrity_check; treat as N/A and continue.
-      cipherCheck = `n/a (${err.message})`;
-      console.log(`  cipher_integrity_check: n/a (${err.message})`);
+      lines = [`page read failed (${err.code || 'error'}): ${err.message}`];
     }
-
-    const integRows = db.pragma('integrity_check');
-    const lines = integRows.map(r => (r.integrity_check || Object.values(r)[0] || '')).filter(Boolean);
     if (lines.length === 1 && lines[0] === 'ok') {
       integrityCheck = 'ok';
-      console.log('  integrity_check:        ok');
+      console.log('  integrity_check: ok');
     } else {
       integrityCheck = lines.join('; ');
       for (const line of lines) {
-        console.log(`  integrity_check:        ${line}`);
+        console.log(`  integrity_check: ${line}`);
         issues.push({ pragma: 'integrity_check', message: line });
       }
     }
@@ -1789,13 +1775,10 @@ function integrityOneDb(key, dbPath, ctx) {
   const durationMs = Date.now() - t0;
   console.log(`  duration: ${formatDuration(durationMs)}`);
 
-  const ok = (cipherCheck === 'ok' || cipherCheck === null || (typeof cipherCheck === 'string' && cipherCheck.startsWith('n/a')))
-    && integrityCheck === 'ok';
   return {
     target: target.label,
-    ok,
+    ok: integrityCheck === 'ok',
     openable: true,
-    cipherIntegrityCheck: cipherCheck,
     integrityCheck,
     issues,
     durationMs,

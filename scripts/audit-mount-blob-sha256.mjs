@@ -79,12 +79,14 @@ async function openMountIndexDb(dataDir) {
     db.pragma(`key = "x'${keyHex}'"`);
   }
 
-  // Quick sanity check that decryption succeeded.
+  // Quick sanity check that decryption succeeded: reading sqlite_master
+  // forces page 1 to decrypt and pass its Poly1305 tag. (There is no
+  // cipher_integrity_check pragma in SQLite3 Multiple Ciphers.)
   try {
-    db.pragma('cipher_integrity_check');
+    db.prepare('SELECT count(*) FROM sqlite_master').get();
   } catch (err) {
     console.error(
-      'Failed to open mount-index DB (wrong key or not a SQLCipher database):',
+      'Failed to open mount-index DB (wrong key or not an encrypted Quilltap database):',
       err.message
     );
     db.close();

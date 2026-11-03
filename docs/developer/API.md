@@ -567,26 +567,32 @@ Update the retention window. Merges with the current value and validates (intege
 Read the instance-wide Brahma Console settings (`instance_settings['brahmaConsole']`, not a `chat_settings`
 column — same class as the data-retention knob). Holds the agent-turn budget the streaming orchestrator and
 the one-shot `@Brahma` Carina path both read through `resolveBrahmaMaxAgentTurns`. Defaults to 50; the
-duplicate/stale-query guard still stops a self-repeating loop regardless of this number.
+duplicate/stale-query guard still stops a self-repeating loop regardless of this number. Also holds
+`inlineConnectionProfileId`, the engine for `@Brahma` in the Salon: `resolveInlineBrahmaConnectionProfile`
+tries the chat's project's `brahmaConnectionProfileId`, then this, then the default profile (a stale id
+falls through with a warning). `null` means "use the default."
 
 **Response:**
 
 ```json
 {
-  "maxAgentTurns": 50
+  "maxAgentTurns": 50,
+  "inlineConnectionProfileId": null
 }
 ```
 
 #### `PUT /api/v1/settings/brahma-console`
 
 Update the Console settings. The body is merged over the current value before validation (integer, 5-200
-turns), so a partial body is a partial update rather than a wipe.
+turns), so a partial body is a partial update rather than a wipe — setting the profile leaves the turn
+budget alone and vice versa.
 
 **Request Body:**
 
 ```json
 {
-  "maxAgentTurns": 80
+  "maxAgentTurns": 80,
+  "inlineConnectionProfileId": "uuid-or-null"
 }
 ```
 
@@ -7120,6 +7126,12 @@ Update project properties.
   "icon": "folder"
 }
 ```
+
+Every field is optional. Also accepted (all nullable): `characterRoster` (array of ids), `defaultAgentModeEnabled`,
+`defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultRoleplayTemplateId`,
+`defaultAlertCharactersOfLanternImages`, `answerConfirmationOverride` (`"ON"` / `"OFF"`),
+`brahmaConnectionProfileId` (the engine for `@Brahma` in this project's chats), and `backgroundDisplayMode`
+(`"latest_chat"` / `"theme"`, not nullable). Schema: `app/api/v1/projects/[id]/schemas.ts`.
 
 Returns the same enriched project as `GET` (roster entries are objects, not ids).
 

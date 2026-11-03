@@ -78,7 +78,7 @@ jobs:
       # `.next/node_modules/<pkg>-<contenthash>/` and rewrites requires to point
       # there. build-standalone-tarball.mjs strips natives by name from
       # `<staging>/node_modules/<pkg>` and knows nothing about those hashed
-      # copies, so a Linux SQLCipher driver binary / pty.node rides along
+      # copies, so a Linux SQLite3 Multiple Ciphers driver binary / pty.node rides along
       # inside a tarball that is supposed to be platform-agnostic — and wins
       # resolution over the correct binary the launcher symlinks in.
       #
@@ -168,7 +168,7 @@ jobs:
   # to Docker Hub, one arch per leg.
   #
   # Dockerfile.ci installs production modules for Debian/glibc — on a NATIVE
-  # runner per arch, never QEMU. node-pty compiles there; the SQLCipher driver
+  # runner per arch, never QEMU. node-pty compiles there; the SQLite3 Multiple Ciphers driver
   # and sharp ship prebuilt, and the driver is pruned to the runner's arch.
   # ────────────────────────────────────────────────────────────────────────────
   build-docker:
