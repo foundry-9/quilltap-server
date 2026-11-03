@@ -18,7 +18,7 @@
  */
 
 // ── Subject ─────────────────────────────────────────────────────────────────
-import { handleGrep, handleListFiles, handleReadFile } from '@/lib/tools/handlers/doc-edit/text-handlers';
+import { handleGrep, handleListFiles, handleReadFile, handleStrReplace } from '@/lib/tools/handlers/doc-edit/text-handlers';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
@@ -28,6 +28,7 @@ import {
   listDatabaseBlobTexts,
   readDatabaseBlobForDocument,
   readDatabaseDocument,
+  writeDatabaseDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 
@@ -52,8 +53,21 @@ jest.mock('@/lib/mount-index/database-store', () => {
     readDatabaseBlobText: jest.fn(),
     readDatabaseBlobForDocument: jest.fn(),
     readDatabaseDocument: jest.fn(),
+    writeDatabaseDocument: jest.fn(),
   };
 });
+
+// Writes are what is under test, not their background refresh or announcement.
+jest.mock('@/lib/doc-edit/reindex-file', () => ({
+  reindexSingleFile: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
+  enqueueEmbeddingJobsForMountPoint: jest.fn(),
+}));
+jest.mock('@/lib/services/librarian-notifications/writer', () => ({
+  postLibrarianWriteAnnouncement: jest.fn(),
+  contentHiddenFromCharacters: jest.fn(() => false),
+}));
 
 const ACTING = 'char-friday';
 
@@ -143,6 +157,26 @@ describe('doc_read_file reads an uploaded text blob (bug 260)', () => {
     await expect(
       handleReadFile({ uri: 'qtap://project/MISSING.md' } as never, toolContext),
     ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('doc_str_replace edits an uploaded text blob (#134)', () => {
+  it('reads the upload through the same reader and writes a document over it', async () => {
+    jest.mocked(writeDatabaseDocument).mockResolvedValue({ mtime: 1792771329999 } as never);
+
+    const res = await handleStrReplace(
+      { uri: 'qtap://project/CHANGELOG.md', find: 'drag ordering', replace: 'keyboard ordering' } as never,
+      toolContext,
+    );
+
+    expect(res.success).toBe(true);
+    expect(readDatabaseBlobForDocument).toHaveBeenCalledWith(PROJECT_STORE.id, 'CHANGELOG.md');
+    expect(writeDatabaseDocument).toHaveBeenCalledWith(
+      PROJECT_STORE.id,
+      'CHANGELOG.md',
+      CHANGELOG.replace('drag ordering', 'keyboard ordering'),
+      undefined,
+    );
   });
 });
 

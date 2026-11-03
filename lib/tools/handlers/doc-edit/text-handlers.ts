@@ -12,8 +12,6 @@ import fs from 'fs/promises';
 import { projectRosterAdmits } from '@/lib/projects/roster-access';
 import {
   resolveDocEditPath,
-  readFileWithMtime,
-  writeFileWithMtimeCheck,
   getAccessibleMountPoints,
   resolveMountPointRef,
   isTextFile,
@@ -42,7 +40,8 @@ import type { DocGrepInput, DocGrepOutput, DocGrepMatch } from '../../doc-grep-t
 import type { DocListFilesInput, DocListFilesOutput, DocFileInfo } from '../../doc-list-files-tool';
 import { isAutomaticImagePath, isOsCruftName } from '@/lib/files/folder-utils';
 import { getRepositories } from '@/lib/repositories/factory';
-import { listDatabaseFiles, listDatabaseBlobTexts, readDatabaseBlobText, readDatabaseBlobForDocument } from '@/lib/mount-index/database-store';
+import { listDatabaseFiles, listDatabaseBlobTexts } from '@/lib/mount-index/database-store';
+import { readDocument, writeDocument } from '@/lib/documents/core';
 import { compilePathGlob } from '@/lib/doc-edit/path-glob';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
@@ -56,7 +55,6 @@ import {
   buildDocStoreUriResolver,
   resolveActorOrigin,
   resolveOfficialProjectMount,
-  triggerReindexIfNeeded,
   uriForResolvedPath,
   assertCharacterMayRead,
   assertCharacterMayWrite,
@@ -73,34 +71,6 @@ function getLineNumber(content: string, offset: number): number {
     if (content[i] === '\n') line++;
   }
   return line;
-}
-
-/**
- * Read a text file for `doc_read_file`. In a database store a path with no
- * document may still hold an uploaded blob — every chat upload is stored as
- * one, .md and .txt included — so fall back to the blob through the same
- * reader the editor uses: a native-text upload's own bytes, otherwise its
- * extracted text (bug 260, #134). Read-only: the edit tools keep
- * calling `readFileWithMtime` and still see no document there.
- */
-async function readTextFileOrUploadedBlob(
-  resolved: Awaited<ReturnType<typeof resolveDocEditPath>>
-): Promise<{ content: string; mtime: number; size: number }> {
-  try {
-    return await readFileWithMtime(resolved);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    if (resolved.mountType !== 'database' || !resolved.mountPointId) throw error;
-    const blob = await readDatabaseBlobForDocument(resolved.mountPointId, resolved.relativePath);
-    if (!blob) throw error;
-    logger.debug('doc_read_file: no document at path; reading the uploaded blob\'s text', {
-      mountPointId: resolved.mountPointId,
-      relativePath: resolved.relativePath,
-      size: blob.size,
-      source: blob.source,
-    });
-    return { content: blob.content, mtime: blob.mtime, size: blob.size };
-  }
 }
 
 // --- doc_read_file ---
@@ -126,8 +96,11 @@ export async function handleReadFile(
   // original bytes aren't what they're seeing.
   if (!isTextFile(resolved.relativePath)) {
     if (resolved.mountType === 'database' && resolved.mountPointId) {
-      const blob = await readDatabaseBlobText(resolved.mountPointId, resolved.relativePath);
-      if (blob) {
+      const blob = await readDocument(resolved).catch((error: NodeJS.ErrnoException) => {
+        if (error?.code === 'ENOENT') return null;
+        throw error;
+      });
+      if (blob?.source === 'blob-text') {
         const text = blob.content;
         const lines = text.split('\n');
         const totalLines = lines.length;
@@ -145,7 +118,8 @@ export async function handleReadFile(
         const numberedLines = outputLines
           .map((line, i) => `[L${lineStart + i}] ${line}`)
           .join('\n');
-        const header = `File: ${input.path} (extracted text from ${blob.storedMimeType}, ${totalLines} lines, ${blob.size} original bytes)`;
+        const storedMimeType = blob.storedMimeType ?? 'application/octet-stream';
+        const header = `File: ${input.path} (extracted text from ${storedMimeType}, ${totalLines} lines, ${blob.size} original bytes)`;
         const truncMsg = truncated
           ? `\n[Truncated — showing lines ${lineStart}-${lineStart + outputLines.length - 1} of ${totalLines}]`
           : '';
@@ -153,7 +127,7 @@ export async function handleReadFile(
 
         const result: DocReadFileOutput = {
           content: outputLines.join('\n'),
-          mimeType: blob.storedMimeType,
+          mimeType: storedMimeType,
           path: input.path,
           uri,
           mtime: blob.mtime,
@@ -167,7 +141,10 @@ export async function handleReadFile(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content: rawContent, mtime, size } = await readTextFileOrUploadedBlob(resolved);
+  // A path with no document may hold an upload — every chat upload is a
+  // blob, .md and .txt included; the core reads it as the editor does (bug
+  // 260, #134).
+  const { content: rawContent, mtime, size } = await readDocument(resolved);
   const mime = detectMimeFromExtension(resolved.relativePath);
 
   let content: string | unknown = rawContent;
@@ -304,19 +281,14 @@ export async function handleWriteFile(
   // Best-effort — an unreadable/absent pre-image means this is a creation.
   let previousContent: string | null = null;
   try {
-    const existing = await readFileWithMtime(resolved);
+    const existing = await readDocument(resolved);
     previousContent = existing.content;
   } catch {
     previousContent = null;
   }
 
-  const { mtime } = await writeFileWithMtimeCheck(
-    resolved,
-    contentToWrite,
-    input.expected_mtime
-  );
-
-  await triggerReindexIfNeeded(resolved);
+  // The core writes, then re-indexes whenever the path lands in a store.
+  const { mtime } = await writeDocument(resolved, contentToWrite, input.expected_mtime);
 
   const writtenUri = await uriForResolvedPath(resolved);
 
@@ -404,7 +376,7 @@ export async function handleStrReplace(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved);
+  const { content } = await readDocument(resolved);
 
   const matchResult = findUniqueMatch(content, input.find, {
     caseSensitive: input.case_sensitive !== false,
@@ -450,9 +422,7 @@ export async function handleStrReplace(
     input.replace +
     content.substring(matchResult.index + matchResult.length);
 
-  const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
-
-  await triggerReindexIfNeeded(resolved);
+  const { mtime } = await writeDocument(resolved, newContent);
 
   const lineNumber = getLineNumber(content, matchResult.index);
 
@@ -522,7 +492,7 @@ export async function handleInsertText(
     };
   }
 
-  const { content } = await readFileWithMtime(resolved);
+  const { content } = await readDocument(resolved);
 
   let insertOffset: number;
   let description: string;
@@ -575,9 +545,7 @@ export async function handleInsertText(
     input.content +
     content.substring(insertOffset);
 
-  const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
-
-  await triggerReindexIfNeeded(resolved);
+  const { mtime } = await writeDocument(resolved, newContent);
 
   const lineNumber = getLineNumber(newContent, insertOffset);
 
