@@ -28,7 +28,6 @@
 
 import { logger } from '@/lib/logger';
 import { publishRealtime } from '@/lib/realtime/bus';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
   createInventoryFolderInMount,
   createInventoryInMount,
@@ -43,8 +42,7 @@ import {
   type InventoryMount,
   type InventoryRecordPatch,
 } from '@/lib/database/repositories/vault-overlay/inventory-writes';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
+import { groupMountsFor, groupOriginMap, resolveOwnerStore } from '@/lib/mount-index/reach';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   INVENTORY_FOLDER,
@@ -85,19 +83,6 @@ export interface InventoryLocation extends ItemFolderLocation {
 }
 
 export { locationKey } from '@/lib/mount-index/item-folder-location';
-
-/** Idempotent: ensure a mount's `Inventory/` folder exists; failure is logged, not thrown. */
-async function ensureInventoryFolder(mountPointId: string): Promise<void> {
-  try {
-    await ensureFolderPath(mountPointId, INVENTORY_FOLDER);
-  } catch (error) {
-    logger.warn('[InventoryLocation] Failed to ensure Inventory folder', {
-      mountPointId,
-      context: 'inventory',
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
 
 /** Identity and timestamps are the writer's, never a patch's. */
 function cleanPatch(patch: Partial<InventoryRecord>): Partial<InventoryRecord> {
@@ -218,63 +203,35 @@ async function resolve(
   userId: string,
   ensure: boolean,
 ): Promise<InventoryLocation | null> {
-  if (scope === 'general') {
-    const mountPointId = await getGeneralMountPointId();
-    if (!mountPointId) return null;
-    if (ensure) await ensureInventoryFolder(mountPointId);
-    return inventoryLocationForMount({ mountPointId, scope: 'general', characterId: null }, null, GENERAL_INVENTORY_ORIGIN);
-  }
-
-  if (!id) return null;
-
-  if (scope === 'character') {
-    const character = await repos.characters.findByIdRaw(id);
-    if (!character || character.userId !== userId) return null;
-    const mountPointId = character.characterDocumentMountPointId;
-    if (!mountPointId) return null;
+  const store = await resolveOwnerStore(scope, id, repos, userId, {
+    ensure: ensure ? { folder: INVENTORY_FOLDER, onFolderFailure: 'swallow' } : undefined,
+    archived: 'allow',
+    context: 'inventory',
+  });
+  if (!store) return null;
+  if (store.scope === 'general') {
     return inventoryLocationForMount(
-      { mountPointId, scope: 'character', characterId: character.id },
-      character.id,
-      { scope: 'character', id: character.id, name: character.name },
+      { mountPointId: store.mountPointId, scope: 'general', characterId: null },
+      null,
+      GENERAL_INVENTORY_ORIGIN,
     );
   }
-
-  const owner = scope === 'project' ? await repos.projects.findById(id) : await repos.groups.findById(id);
-  if (!owner) return null;
-  const name = owner.name || (scope === 'project' ? 'Project' : 'Group');
-
-  let mountPointId: string | null = null;
-  if (ensure) {
-    const ensured = await ensureOwnerOfficialStore(scope, owner.id, name);
-    if (!ensured) return null;
-    mountPointId = ensured.mountPointId;
-    await ensureInventoryFolder(mountPointId);
-  } else {
-    mountPointId = owner.officialMountPointId ?? null;
-  }
-  if (!mountPointId) return null;
-
-  return inventoryLocationForMount({ mountPointId, scope, characterId: null }, owner.id, {
-    scope,
-    id: owner.id,
-    name: owner.name,
-  });
+  const ownerId = store.owner.id as string;
+  return inventoryLocationForMount(
+    { mountPointId: store.mountPointId, scope: store.scope, characterId: store.scope === 'character' ? ownerId : null },
+    ownerId,
+    { scope: store.scope, id: ownerId, name: store.owner.name },
+  );
 }
 
 /**
  * Every group store a character can reach, as locations — one per mount,
- * tagged with its group, in the order the group tier shadows (later wins).
+ * tagged with its group, strongest first (membership order; the first group
+ * to claim a shared store keeps it).
  */
 export async function groupLocationsForCharacter(characterId: string): Promise<InventoryLocation[]> {
-  const { resolveGroupMountsForCharacter } = await import('@/lib/mount-index/tiered-mount-pool');
-  const groups = await resolveGroupMountsForCharacter(characterId);
-  return groups.flatMap(({ group, mountPointIds }) =>
-    mountPointIds.map((mountPointId) =>
-      inventoryLocationForMount({ mountPointId, scope: 'group', characterId: null }, group.id, {
-        scope: 'group',
-        id: group.id,
-        name: group.name,
-      }),
-    ),
+  const origins = groupOriginMap(await groupMountsFor(characterId));
+  return Array.from(origins, ([mountPointId, origin]) =>
+    inventoryLocationForMount({ mountPointId, scope: 'group', characterId: null }, origin.id, origin),
   );
 }

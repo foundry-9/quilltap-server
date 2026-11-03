@@ -532,7 +532,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     characterId: character.id ?? null,
     characterMountPointId: character.characterDocumentMountPointId ?? null,
     projectId: chat.projectId ?? null,
-  }))
+  }, { roster: 'open', enabled: 'ignore' }))
 
   const announcedTime = await resolveAnnouncedTime(options, transcript)
 

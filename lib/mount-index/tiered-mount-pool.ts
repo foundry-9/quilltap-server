@@ -10,7 +10,8 @@
  *   3. group — the official + linked stores of every group the RESPONDING
  *      character is a member of (per-character, NOT per-chat — a character never
  *      gains a co-participant's group stores)
- *   4. project — every store linked to the active chat's project
+ *   4. project — the active chat's project's official store, then every store
+ *      linked to it
  *   5. global — the singleton "Quilltap General" mount
  *
  * Knowledge injection (`lib/chat/context/knowledge-injector.ts`), the
@@ -32,6 +33,7 @@
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
+import { rosterGatedProjectId } from '@/lib/projects/roster-access';
 
 const errMsg = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -69,6 +71,20 @@ export interface TierContext {
 }
 
 export interface TierResolveOptions {
+  /**
+   * The project roster (`lib/projects/roster-access.ts`). `gated`: a character
+   * off the project's roster gets no project tier — the character's own reach
+   * (doc tools, the scriptorium search). `open`: the roster does not apply
+   * (the per-turn context build, custom tools and presets). No default: every
+   * caller states which it means.
+   */
+  roster: 'gated' | 'open';
+  /**
+   * Disabled stores. `require`: a store whose mount point is disabled (General
+   * included) drops out of the pool. `ignore`: the pool carries it and the
+   * caller decides. No default: every caller states which it means.
+   */
+  enabled: 'require' | 'ignore';
   /**
    * Gate the character vault on ownership: only admit it when the character's
    * `userId` matches the context `userId`. Used by character tool handlers
@@ -161,23 +177,33 @@ export function dedupeTierTriple(
 }
 
 /**
- * Resolve just the project tier — the document stores linked to a project.
- * A cheap helper for callers (wardrobe equip paths, background jobs) that only
- * need the project tier and not the full character/global pool. Returns `[]`
- * for a missing project id or on lookup failure.
+ * Resolve just the project tier — the project's official store first, then
+ * every other store linked to it, deduped. The one definition of the project
+ * tier: every reach walk (the pools, the transfer probe, the picker, the
+ * knowledge searches) reads it from here. Returns `[]` for a missing project
+ * id; a failed lookup costs only the part that failed.
  */
 export async function resolveProjectMountPointIds(
   projectId: string | null | undefined,
 ): Promise<string[]> {
   if (!projectId) return [];
+  const repos = getRepositories();
+  const ids: string[] = [];
   try {
-    const repos = getRepositories();
+    const project = await repos.projects.findByIdRaw(projectId);
+    if (project?.officialMountPointId) ids.push(project.officialMountPointId);
+  } catch (error) {
+    logger.warn('Project official store lookup failed', { projectId, error: errMsg(error) });
+  }
+  try {
     const links = await repos.projectDocMountLinks.findByProjectId(projectId);
-    return links.map((l) => l.mountPointId);
+    for (const link of links) {
+      if (!ids.includes(link.mountPointId)) ids.push(link.mountPointId);
+    }
   } catch (error) {
     logger.warn('Project mount lookup failed', { projectId, error: errMsg(error) });
-    return [];
   }
+  return ids;
 }
 
 /**
@@ -226,7 +252,8 @@ export interface GroupMounts {
  * character belongs to, in membership order, each carrying that group's
  * official store first and its linked stores after. A store linked to two of
  * the character's groups is credited to the first only, so every mount appears
- * exactly once across the result. Groups left with no stores are dropped.
+ * exactly once across the result. Groups left with no stores are dropped
+ * unless `includeEmpty` (a listing of the character's groups, not a walk).
  *
  * Callers that need to say *which* group a shared item hangs in (the wardrobe
  * dialog's origin chip) use this; everyone else uses the flat
@@ -236,6 +263,7 @@ export interface GroupMounts {
  */
 export async function resolveGroupMountsForCharacter(
   characterId: string | null | undefined,
+  opts: { includeEmpty?: boolean } = {},
 ): Promise<GroupMounts[]> {
   if (!characterId) return [];
   try {
@@ -257,7 +285,7 @@ export async function resolveGroupMountsForCharacter(
       }
       const mountPointIds = stores.mountPointIds.filter((id) => !claimed.has(id));
       for (const id of mountPointIds) claimed.add(id);
-      if (mountPointIds.length === 0) continue;
+      if (mountPointIds.length === 0 && !opts.includeEmpty) continue;
       result.push({ group: { id: membership.groupId, name: stores.name }, mountPointIds });
     }
     return result;
@@ -309,7 +337,7 @@ export async function resolveProjectMountPointIdsForChat(
  */
 export async function resolveTieredMountPool(
   ctx: TierContext,
-  opts: TierResolveOptions = {},
+  opts: TierResolveOptions,
 ): Promise<TieredMountPool> {
   const { requireOwnership = false, includeParticipants = false } = opts;
   const repos = getRepositories();
@@ -345,19 +373,19 @@ export async function resolveTieredMountPool(
     ? await resolveGroupMountPointIdsForCharacter(ctx.characterId)
     : [];
 
-  // 3. Project-linked stores.
-  let projectMountPointIds: string[] = [];
-  if (ctx.projectId) {
-    try {
-      const links = await repos.projectDocMountLinks.findByProjectId(ctx.projectId);
-      projectMountPointIds = links.map((l) => l.mountPointId);
-    } catch (error) {
-      logger.warn('Project mount lookup failed', {
+  // 3. Project stores — official first, then every linked store. Under
+  //    `roster: 'gated'` a character off the project's roster gets none.
+  let projectId = ctx.projectId ?? null;
+  if (projectId && opts.roster === 'gated') {
+    projectId = (await rosterGatedProjectId(projectId, ctx.characterId ?? null)) ?? null;
+    if (!projectId) {
+      logger.debug('Character off project roster — project tier withheld', {
         projectId: ctx.projectId,
-        error: errMsg(error),
+        characterId: ctx.characterId ?? null,
       });
     }
   }
+  const projectMountPointIds = await resolveProjectMountPointIds(projectId);
 
   // 4. Quilltap General singleton (null during the pre-provisioning window).
   let globalMountPointId: string | null = null;
@@ -406,7 +434,44 @@ export async function resolveTieredMountPool(
   }
 
   const pool: TieredMountPool = { ...deduped, participantMountPointIds };
-  return pool;
+  return opts.enabled === 'require' ? dropDisabledMounts(pool) : pool;
+}
+
+/**
+ * The pool without its disabled stores (General included). A mount that
+ * cannot be read is treated as disabled: a store that cannot be looked up
+ * cannot be offered.
+ */
+async function dropDisabledMounts(pool: TieredMountPool): Promise<TieredMountPool> {
+  const repos = getRepositories();
+  const all = new Set<string>([
+    ...(pool.characterMountPointId ? [pool.characterMountPointId] : []),
+    ...pool.participantMountPointIds,
+    ...pool.groupMountPointIds,
+    ...pool.projectMountPointIds,
+    ...(pool.globalMountPointId ? [pool.globalMountPointId] : []),
+  ]);
+  const enabled = new Set<string>();
+  for (const id of all) {
+    try {
+      const mount = await repos.docMountPoints.findById(id);
+      if (mount?.enabled) enabled.add(id);
+    } catch (error) {
+      logger.warn('Mount lookup failed; store left out of the pool', { mountPointId: id, error: errMsg(error) });
+    }
+  }
+  const keep = (id: string | null) => (id && enabled.has(id) ? id : null);
+  const result: TieredMountPool = {
+    characterMountPointId: keep(pool.characterMountPointId),
+    participantMountPointIds: pool.participantMountPointIds.filter((id) => enabled.has(id)),
+    groupMountPointIds: pool.groupMountPointIds.filter((id) => enabled.has(id)),
+    projectMountPointIds: pool.projectMountPointIds.filter((id) => enabled.has(id)),
+    globalMountPointId: keep(pool.globalMountPointId),
+  };
+  if (enabled.size < all.size) {
+    logger.debug('Disabled stores left out of the pool', { dropped: all.size - enabled.size });
+  }
+  return result;
 }
 
 /**

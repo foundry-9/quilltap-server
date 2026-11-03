@@ -56,6 +56,7 @@ import {
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 // The duplicate-call signature is the streaming Brahma console's; one rule for both loops.
 import { normalizeToolCallSignature } from '@/lib/services/brahma-console/orchestrator.service'
+import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 
 const logger = createServiceLogger('OneShotToolLoop')
 
@@ -176,7 +177,9 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
   ]
 
   const controller: StreamController = opts.controller ?? { enqueue: () => {} }
-  const encoder = new TextEncoder()
+  // The Scenario Builder's client (the one live caller) reads the pre-4.12
+  // untagged-bag SSE shape.
+  const encoder = legacyFrameEncoder()
 
   let agentTurnCount = 0
   let fullResponse = ''

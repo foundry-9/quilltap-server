@@ -13,6 +13,8 @@ import path from 'path';
 import packageJson from '@/package.json';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import { groupMountsFor } from '@/lib/mount-index/reach';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { buildSystemPrompt, buildOtherParticipantsInfo, type OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
 import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions';
@@ -152,35 +154,12 @@ interface ResolvedGroup {
  * A group whose store is unavailable (throws) is skipped, not fatal.
  */
 async function resolveMyGroups(characterId: string): Promise<ResolvedGroup[]> {
-  const repos = getRepositories();
-  const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
-  const resolved: ResolvedGroup[] = [];
-
-  for (const membership of memberships) {
-    let group;
-    try {
-      group = await repos.groups.findById(membership.groupId);
-    } catch (err) {
-      logger.debug('self_inventory: skipping group with unavailable store', {
-        context: 'self-inventory-handler',
-        groupId: membership.groupId,
-        error: getErrorMessage(err),
-      });
-      continue;
-    }
-    if (!group) continue;
-
-    const mountPointIds = new Set<string>();
-    if (group.officialMountPointId) mountPointIds.add(group.officialMountPointId);
-    const links = await repos.groupDocMountLinks.findByGroupId(membership.groupId);
-    for (const link of links) mountPointIds.add(link.mountPointId);
-
-    resolved.push({
-      groupId: group.id,
-      groupName: group.name,
-      mountPointIds: [...mountPointIds],
-    });
-  }
+  // The shared group tier (`groupMountsFor`): a store linked to two of the
+  // character's groups is credited to the first only. Groups with no stores
+  // stay listed — this reports membership, not just reach.
+  const resolved: ResolvedGroup[] = (await groupMountsFor(characterId, { includeEmpty: true })).map(
+    ({ group, mountPointIds }) => ({ groupId: group.id, groupName: group.name, mountPointIds }),
+  );
 
   resolved.sort((a, b) => a.groupName.localeCompare(b.groupName));
   return resolved;
@@ -978,16 +957,11 @@ async function buildContextProject(
   const project = await repos.projects.findById(projectId);
   if (!project) return { available: true, present: false };
 
-  const mountPointIds = new Set<string>();
-  if (project.officialMountPointId) mountPointIds.add(project.officialMountPointId);
-  try {
-    const links = await repos.projectDocMountLinks.findByProjectId(projectId);
-    for (const link of links) mountPointIds.add(link.mountPointId);
-  } catch {
-    // Mount index unavailable — report the project with whatever stores we have.
-  }
+  // The project tier as every reach walk sees it: official store first, then
+  // every linked store (fails soft to none when the mount index is down).
+  const mountPointIds = await resolveProjectMountPointIds(projectId);
 
-  const mountPoints = await resolveMountNames([...mountPointIds]);
+  const mountPoints = await resolveMountNames(mountPointIds);
   return { available: true, present: true, id: project.id, name: project.name, mountPoints };
 }
 

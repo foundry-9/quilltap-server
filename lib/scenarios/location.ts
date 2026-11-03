@@ -30,9 +30,7 @@
 
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
+import { classifyMount, resolveOwnerStore } from '@/lib/mount-index/reach';
 import {
   deleteDatabaseDocument,
   moveDatabaseDocument,
@@ -400,23 +398,6 @@ export async function resolveScenarioLocation(
   return location;
 }
 
-/**
- * Heal the `Scenarios/` folder. Runs only for `ensure: true` callers — a
- * writer about to write, or a startup heal — so a failure is theirs to see:
- * it is logged and rethrown rather than swallowed.
- */
-async function ensureScenariosFolder(mountPointId: string): Promise<void> {
-  try {
-    await ensureFolderPath(mountPointId, SCENARIOS_FOLDER);
-  } catch (error) {
-    logger.warn('[ScenarioLocation] Failed to ensure Scenarios folder', {
-      mountPointId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}
-
 async function resolve(
   scope: ScenarioScope,
   id: string | null,
@@ -424,41 +405,23 @@ async function resolve(
   userId: string,
   ensure: boolean,
 ): Promise<ScenarioLocation | null> {
-  if (scope === 'general') {
-    const mountPointId = await getGeneralMountPointId();
-    if (!mountPointId) return null;
-    if (ensure) await ensureScenariosFolder(mountPointId);
-    return storeLocation('general', null, mountPointId, GENERAL_OWNER_NAME, repos);
+  // An `ensure: true` caller is a writer about to write, or a startup heal, so
+  // a folder failure is theirs to see: it is rethrown, not swallowed.
+  const store = await resolveOwnerStore(scope, id, repos, userId, {
+    ensure: ensure ? { folder: SCENARIOS_FOLDER, onFolderFailure: 'throw' } : undefined,
+    archived: 'refuse',
+    context: 'scenarios',
+  });
+  if (!store) return null;
+  if (store.scope === 'character') {
+    const character = store.character as CharacterRow;
+    return characterLocation(character, store.mountPointId, repos);
   }
-
-  if (!id) return null;
-
-  if (scope === 'character') {
-    // Raw read: only the row's mount pointer and name are needed, and a
-    // broken vault should cost a null rather than a throw.
-    const character = usableCharacter(await repos.characters.findByIdRaw(id), userId);
-    if (!character) return null;
-    return characterLocation(character, character.characterDocumentMountPointId, repos);
+  if (store.scope === 'general') {
+    return storeLocation('general', null, store.mountPointId, GENERAL_OWNER_NAME, repos);
   }
-
-  // Raw read: only `name` and `officialMountPointId` are needed.
-  const owner =
-    scope === 'project' ? await repos.projects.findByIdRaw(id) : await repos.groups.findByIdRaw(id);
-  if (!owner) return null;
-  const name = owner.name || (scope === 'project' ? 'Project' : 'Group');
-
-  let mountPointId: string | null;
-  if (ensure) {
-    const ensured = await ensureOwnerOfficialStore(scope, owner.id, name);
-    if (!ensured) return null;
-    mountPointId = ensured.mountPointId;
-    await ensureScenariosFolder(mountPointId);
-  } else {
-    mountPointId = owner.officialMountPointId ?? null;
-  }
-  if (!mountPointId) return null;
-
-  return storeLocation(scope, owner.id, mountPointId, name, repos);
+  const name = store.owner.name || (store.scope === 'project' ? 'Project' : 'Group');
+  return storeLocation(store.scope, store.owner.id, store.mountPointId, name, repos);
 }
 
 /** Which owner a mount belongs to, or null when it is none of the four kinds. */
@@ -471,36 +434,30 @@ export async function classifyScenarioMount(
   return owner ? { scope: owner.scope, id: owner.id } : null;
 }
 
-/** `classifyScenarioMount`, keeping the character row it read so a ref lookup needn't read it again. */
+/**
+ * `classifyScenarioMount`, keeping the character row it read so a ref lookup
+ * needn't read it again. A filter over the shared `classifyMount`: another
+ * user's or an archived character's vault holds no scenarios for this caller.
+ */
 async function classify(
   mountPointId: string,
   repos: RepositoryContainer,
   userId: string,
 ): Promise<{ scope: ScenarioScope; id: string | null; character?: CharacterRow } | null> {
-  if (mountPointId === (await getGeneralMountPointId())) {
-    return { scope: 'general', id: null };
-  }
-
-  const character = await repos.characters.findByDocumentMountPointIdRaw(mountPointId);
-  if (character) {
-    if (character.userId !== userId || character.archivedAt) {
+  const owner = await classifyMount(mountPointId, repos);
+  if (!owner) return null;
+  if (owner.character) {
+    if (owner.character.userId !== userId || owner.archived) {
       logger.debug('[ScenarioLocation] Mount belongs to an unavailable character', {
         mountPointId,
-        characterId: character.id,
-        archived: !!character.archivedAt,
+        characterId: owner.character.id,
+        archived: owner.archived,
       });
       return null;
     }
-    return { scope: 'character', id: character.id, character };
+    return { scope: 'character', id: owner.character.id, character: owner.character };
   }
-
-  const project = await repos.projects.findByOfficialMountPointIdRaw(mountPointId);
-  if (project) return { scope: 'project', id: project.id };
-
-  const group = await repos.groups.findByOfficialMountPointIdRaw(mountPointId);
-  if (group) return { scope: 'group', id: group.id };
-
-  return null;
+  return { scope: owner.scope, id: owner.ownerId };
 }
 
 /** The outcome of looking a ref up, for callers that must tell a refusal from a miss. */

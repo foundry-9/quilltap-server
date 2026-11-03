@@ -25,6 +25,7 @@ import {
   deleteDatabaseDocumentIfExists,
 } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
+import { orderMounts } from '@/lib/mount-index/reach';
 
 export type WardrobeInstructionsTier = 'character' | 'group' | 'project' | 'general';
 
@@ -35,11 +36,6 @@ export interface WardrobeInstructionsResult {
   tier: WardrobeInstructionsTier;
   /** The mount the winning file was read from. */
   mountPointId: string;
-}
-
-/** Deduped, lexicographically sorted copy — upstream resolvers return Set-insertion order. */
-function deterministicMounts(ids: readonly string[]): string[] {
-  return [...new Set(ids)].sort();
 }
 
 /**
@@ -55,23 +51,19 @@ export async function resolveWardrobeInstructions(opts: {
   groupMountPointIds: readonly string[];
   projectMountPointIds: readonly string[];
 }): Promise<WardrobeInstructionsResult | null> {
-  const generalMountPointId = await getGeneralMountPointId();
-  const probes: Array<{ tier: WardrobeInstructionsTier; mountPointId: string }> = [
-    ...(opts.characterMountPointId
-      ? [{ tier: 'character' as const, mountPointId: opts.characterMountPointId }]
-      : []),
-    ...deterministicMounts(opts.groupMountPointIds).map((mountPointId) => ({
-      tier: 'group' as const,
-      mountPointId,
-    })),
-    ...deterministicMounts(opts.projectMountPointIds).map((mountPointId) => ({
-      tier: 'project' as const,
-      mountPointId,
-    })),
-    ...(generalMountPointId
-      ? [{ tier: 'general' as const, mountPointId: generalMountPointId }]
-      : []),
-  ];
+  // Probe in the settled order (`orderMounts`): nearest tier first, and
+  // inside a tier the earlier mount wins — membership order for groups, the
+  // official store first for the project. Never by mount id.
+  const probes = orderMounts({
+    characterMountPointId: opts.characterMountPointId,
+    participantMountPointIds: [],
+    groupMountPointIds: [...opts.groupMountPointIds],
+    projectMountPointIds: [...opts.projectMountPointIds],
+    globalMountPointId: await getGeneralMountPointId(),
+  }).map(({ tier, mountPointId }) => ({
+    tier: (tier === 'global' ? 'general' : tier) as WardrobeInstructionsTier,
+    mountPointId,
+  }));
 
   for (const { tier, mountPointId } of probes) {
     const raw = await readVaultTextFile(mountPointId, WARDROBE_INSTRUCTIONS_PATH);

@@ -36,7 +36,6 @@
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { publishRealtime } from '@/lib/realtime/bus';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
   createFolderInMount,
   createInMount,
@@ -50,9 +49,9 @@ import {
   updateManyInMount,
   type WardrobeMount,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import type { ItemFolderLocation } from '@/lib/mount-index/item-folder-location';
-import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe';
+import { groupMountsFor, groupOriginMap, resolveOwnerStore } from '@/lib/mount-index/reach';
+import { SHARED_WARDROBE_FOLDER } from '@/lib/mount-index/shared-wardrobe';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { resolveWardrobeFolder, type WardrobeFolder } from '@/lib/wardrobe/folders';
@@ -218,69 +217,36 @@ async function resolve(
   userId: string,
   ensure: boolean,
 ): Promise<WardrobeLocation | null> {
-  if (scope === 'general') {
-    const mountPointId = await getGeneralMountPointId();
-    if (!mountPointId) return null;
-    if (ensure) await ensureSharedWardrobeFolder(mountPointId);
+  const store = await resolveOwnerStore(scope, id, repos, userId, {
+    ensure: ensure ? { folder: SHARED_WARDROBE_FOLDER, onFolderFailure: 'swallow' } : undefined,
+    archived: 'allow',
+    context: 'wardrobe',
+  });
+  if (!store) return null;
+  if (store.scope === 'general') {
     return locationForMount(
-      { mountPointId, scope: 'general', characterId: null },
+      { mountPointId: store.mountPointId, scope: 'general', characterId: null },
       null,
       GENERAL_WARDROBE_ORIGIN,
     );
   }
-
-  if (!id) return null;
-
-  if (scope === 'character') {
-    const character = await repos.characters.findByIdRaw(id);
-    if (!character || character.userId !== userId) return null;
-    const mountPointId = character.characterDocumentMountPointId;
-    if (!mountPointId) return null;
-    return locationForMount(
-      { mountPointId, scope: 'character', characterId: character.id },
-      character.id,
-      { scope: 'character', id: character.id, name: character.name },
-    );
-  }
-
-  const owner =
-    scope === 'project' ? await repos.projects.findById(id) : await repos.groups.findById(id);
-  if (!owner) return null;
-  const name = owner.name || (scope === 'project' ? 'Project' : 'Group');
-
-  let mountPointId: string | null = null;
-  if (ensure) {
-    const ensured = await ensureOwnerOfficialStore(scope, owner.id, name);
-    if (!ensured) return null;
-    mountPointId = ensured.mountPointId;
-    await ensureSharedWardrobeFolder(mountPointId);
-  } else {
-    mountPointId = owner.officialMountPointId ?? null;
-  }
-  if (!mountPointId) return null;
-
+  const ownerId = store.owner.id as string;
   return locationForMount(
-    { mountPointId, scope, characterId: null },
-    owner.id,
-    { scope, id: owner.id, name: owner.name },
+    { mountPointId: store.mountPointId, scope: store.scope, characterId: store.scope === 'character' ? ownerId : null },
+    ownerId,
+    { scope: store.scope, id: ownerId, name: store.owner.name },
   );
 }
 
 /**
  * Every group store a character can wear from, as locations — one per mount,
- * each tagged with its group's origin, in the order the group tier shadows
- * (later wins). The read probe the transfer route and the pool both use.
+ * each tagged with its group's origin, strongest first (membership order; the
+ * first group to claim a shared store keeps it). The read probe the transfer
+ * route uses.
  */
 export async function groupLocationsForCharacter(characterId: string): Promise<WardrobeLocation[]> {
-  const { resolveGroupMountsForCharacter } = await import('@/lib/mount-index/tiered-mount-pool');
-  const groups = await resolveGroupMountsForCharacter(characterId);
-  return groups.flatMap(({ group, mountPointIds }) =>
-    mountPointIds.map((mountPointId) =>
-      locationForMount(
-        { mountPointId, scope: 'group', characterId: null },
-        group.id,
-        { scope: 'group', id: group.id, name: group.name },
-      ),
-    ),
+  const origins = groupOriginMap(await groupMountsFor(characterId));
+  return Array.from(origins, ([mountPointId, origin]) =>
+    locationForMount({ mountPointId, scope: 'group', characterId: null }, origin.id, origin),
   );
 }

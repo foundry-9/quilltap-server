@@ -36,9 +36,11 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { normalizeWardrobeFolderPathOrRoot } from '@/lib/wardrobe/folders'
 import { collectContainerComponents } from '@/lib/wardrobe/expand-composites'
 import { createItem } from '@/lib/wardrobe/item-mutations'
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool'
 import {
   WardrobeScopeSchema,
   groupLocationsForCharacter,
+  locationForMount,
   locationKey,
   resolveWardrobeLocation,
   type WardrobeLocation,
@@ -148,8 +150,10 @@ async function findInLocation(
 
 /**
  * Probe the tiers a character wears from, in precedence order — their vault,
- * then their groups' stores, then the project's, then General — for the item.
- * A probe only reads: a project store that doesn't exist yet is skipped, never
+ * then their groups' stores (membership order, the first group to claim a
+ * store keeps it), then every store of the project (official first), then
+ * General — for the item. The same walk and order as the wearable pool. A
+ * probe only reads: a store that doesn't exist yet is skipped, never
  * provisioned (bug 192).
  */
 async function resolveSourceItem(
@@ -166,16 +170,13 @@ async function resolveSourceItem(
 
   // The source character is the one wearing the item, so their memberships
   // are the right scope — matching how the wearable pool resolves the tier.
-  // Later group mounts shadow earlier ones, so probe strongest first.
-  const groups = await groupLocationsForCharacter(sourceCharacterId)
-  for (const group of groups.reverse()) {
+  for (const group of await groupLocationsForCharacter(sourceCharacterId)) {
     const hit = await findInLocation(group, itemId)
     if (hit) return hit
   }
 
   if (sourceProjectId) {
-    const project = await resolveWardrobeLocation('project', sourceProjectId, repos, userId)
-    if (project) {
+    for (const project of await projectLocations(sourceProjectId, repos, userId)) {
       const hit = await findInLocation(project, itemId)
       if (hit) return hit
     }
@@ -183,6 +184,31 @@ async function resolveSourceItem(
 
   const general = await resolveWardrobeLocation('general', null, repos, userId)
   return general ? findInLocation(general, itemId) : null
+}
+
+/**
+ * The project tier as locations: the official store (through the location, so
+ * it carries the project's origin), then every other linked store, tagged
+ * with the project too. Read-only — nothing is provisioned.
+ */
+async function projectLocations(
+  projectId: string,
+  repos: RepositoryContainer,
+  userId: string,
+): Promise<WardrobeLocation[]> {
+  const official = await resolveWardrobeLocation('project', projectId, repos, userId)
+  const mountPointIds = await resolveProjectMountPointIds(projectId)
+  if (!official && mountPointIds.length === 0) return []
+  const origin = official?.origin ?? {
+    scope: 'project' as const,
+    id: projectId,
+    name: (await repos.projects.findByIdRaw(projectId))?.name || 'Project',
+  }
+  return mountPointIds.map((mountPointId) =>
+    official && official.mountPointId === mountPointId
+      ? official
+      : locationForMount({ mountPointId, scope: 'project', characterId: null }, projectId, origin),
+  )
 }
 
 /**

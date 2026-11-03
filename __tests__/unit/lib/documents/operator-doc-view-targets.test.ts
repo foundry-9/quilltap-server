@@ -1,6 +1,6 @@
 /**
  * Document Mode shows a store file that is not text (an image, a PDF, a
- * .docx, any other binary) read-only. `documentViewTargetFor` decides which
+ * .docx, any other binary) read-only. `viewTargetFor` (`lib/documents/core`) decides which
  * those are; opening one returns a view target and no text (its bytes are
  * never read as text), and an editor write to one is refused.
  */
@@ -25,7 +25,7 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   moveDatabaseDocument: jest.fn(),
   deleteDatabaseDocument: jest.fn(),
   readDatabaseDocument: jest.fn(),
-  readDatabaseBlobAsDocument: jest.fn(),
+  readDatabaseBlobForDocument: jest.fn(),
 }))
 const mockFindLink = jest.fn()
 jest.mock('@/lib/repositories/factory', () => ({
@@ -33,9 +33,9 @@ jest.mock('@/lib/repositories/factory', () => ({
 }))
 
 import { readFileWithMtime, resolveDocEditPath, writeFileWithMtimeCheck } from '@/lib/doc-edit'
-import { readDatabaseBlobAsDocument } from '@/lib/mount-index/database-store'
+import { readDatabaseBlobForDocument } from '@/lib/mount-index/database-store'
+import { viewTargetFor } from '@/lib/documents/core'
 import {
-  documentViewTargetFor,
   DocumentReadOnlyError,
   openDocumentFile,
   writeDocumentFile,
@@ -71,28 +71,28 @@ beforeEach(() => {
   mockFindLink.mockResolvedValue(PDF_LINK)
 })
 
-describe('documentViewTargetFor', () => {
+describe('viewTargetFor', () => {
   it('names a store file that is not text, from its index row', async () => {
-    await expect(documentViewTargetFor(resolved('uploads/scan.pdf') as never)).resolves.toEqual({
+    await expect(viewTargetFor(resolved('uploads/scan.pdf') as never)).resolves.toEqual({
       mountPointId: 'mp-1',
       ...PDF_LINK,
     })
   })
 
   it('leaves text files, files outside a store and missing database files to the editor', async () => {
-    await expect(documentViewTargetFor(resolved('notes.md') as never)).resolves.toBeNull()
-    await expect(documentViewTargetFor(resolved('scan.pdf', { mountPointId: undefined, scope: 'project' }) as never)).resolves.toBeNull()
+    await expect(viewTargetFor(resolved('notes.md') as never)).resolves.toBeNull()
+    await expect(viewTargetFor(resolved('scan.pdf', { mountPointId: undefined, scope: 'project' }) as never)).resolves.toBeNull()
     mockFindLink.mockResolvedValue(null)
-    await expect(documentViewTargetFor(resolved('gone.pdf') as never)).resolves.toBeNull()
+    await expect(viewTargetFor(resolved('gone.pdf') as never)).resolves.toBeNull()
   })
 
   it('shows text a database store cannot save read-only, but leaves it to the editor on disk', async () => {
     mockFindLink.mockResolvedValue({ ...PDF_LINK, relativePath: 'notes.yaml', fileName: 'notes.yaml', fileType: 'blob' })
     TEXT.add('.yaml')
     try {
-      await expect(documentViewTargetFor(resolved('notes.yaml') as never)).resolves.toMatchObject({ fileName: 'notes.yaml' })
+      await expect(viewTargetFor(resolved('notes.yaml') as never)).resolves.toMatchObject({ fileName: 'notes.yaml' })
       await expect(
-        documentViewTargetFor(resolved('notes.yaml', { mountType: 'filesystem', absolutePath: '/x/notes.yaml' }) as never),
+        viewTargetFor(resolved('notes.yaml', { mountType: 'filesystem', absolutePath: '/x/notes.yaml' }) as never),
       ).resolves.toBeNull()
     } finally {
       TEXT.delete('.yaml')
@@ -127,7 +127,7 @@ describe('opening and writing a viewed file', () => {
   it('opens a text file uploaded as a blob from its own bytes', async () => {
     ;(resolveDocEditPath as jest.Mock).mockResolvedValue(resolved('uploads/notes.md'))
     ;(readFileWithMtime as jest.Mock).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
-    ;(readDatabaseBlobAsDocument as jest.Mock).mockResolvedValue({ content: '# Uploaded', mtime: 9, size: 10 })
+    ;(readDatabaseBlobForDocument as jest.Mock).mockResolvedValue({ content: '# Uploaded', mtime: 9, size: 10, source: 'blob-bytes' })
     const opened = await openDocumentFile(STANDALONE_ACCESS_CONTEXT, {
       scope: 'document_store',
       filePath: 'uploads/notes.md',
@@ -135,7 +135,7 @@ describe('opening and writing a viewed file', () => {
     })
     expect(opened).toMatchObject({ content: '# Uploaded', mtime: 9, isNew: false })
     expect(opened.viewer).toBeUndefined()
-    expect(readDatabaseBlobAsDocument).toHaveBeenCalledWith('mp-1', 'uploads/notes.md')
+    expect(readDatabaseBlobForDocument).toHaveBeenCalledWith('mp-1', 'uploads/notes.md')
   })
 
   it('refuses an editor write to it', async () => {

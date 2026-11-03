@@ -15,7 +15,7 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
+import { classifyMount } from '@/lib/mount-index/reach';
 import { INVENTORY_FOLDER, isInventoryItemDocumentPath } from '@/lib/inventory/folders';
 import { parseInventoryItemFile } from '@/lib/database/repositories/vault-overlay/inventory-readers';
 import type { InventoryRecord, InventoryScope } from '@/lib/schemas/inventory.types';
@@ -106,28 +106,19 @@ export type MountOwnerResolver = (mountPointId: string) => Promise<MountOwner>;
 
 /**
  * Who owns a mount — a character vault, a group or project store, or General
- * — memoised for one operation. The project and group lists are read once,
- * on first need, however many mounts are asked about.
+ * — memoised for one operation. A filter over the shared `classifyMount`
+ * (`lib/mount-index/reach.ts`); any other store is `unknown`, named for the
+ * mount itself.
  */
 export function mountOwnerResolver(): MountOwnerResolver {
   const repos = getRepositories();
   const owners = new Map<string, Promise<MountOwner>>();
-  let general: Promise<string | null> | null = null;
-  let projects: ReturnType<typeof repos.projects.findAll> | null = null;
-  let groups: ReturnType<typeof repos.groups.findAll> | null = null;
 
   const describe = async (mountPointId: string): Promise<MountOwner> => {
-    if (mountPointId === (await (general ??= getGeneralMountPointId()))) {
-      return { scope: 'general', ownerId: null, ownerName: 'Quilltap General', ownerArchived: false };
+    const owner = await classifyMount(mountPointId, repos);
+    if (owner) {
+      return { scope: owner.scope, ownerId: owner.ownerId, ownerName: owner.ownerName, ownerArchived: owner.archived };
     }
-    const character = await repos.characters.findByDocumentMountPointIdRaw(mountPointId);
-    if (character) {
-      return { scope: 'character', ownerId: character.id, ownerName: character.name, ownerArchived: !!character.archivedAt };
-    }
-    const project = (await (projects ??= repos.projects.findAll())).find((p) => p.officialMountPointId === mountPointId);
-    if (project) return { scope: 'project', ownerId: project.id, ownerName: project.name, ownerArchived: false };
-    const group = (await (groups ??= repos.groups.findAll())).find((g) => g.officialMountPointId === mountPointId);
-    if (group) return { scope: 'group', ownerId: group.id, ownerName: group.name, ownerArchived: false };
     const mount = await repos.docMountPoints.findById(mountPointId);
     return { scope: 'unknown', ownerId: null, ownerName: mount?.name ?? null, ownerArchived: false };
   };

@@ -519,7 +519,7 @@ Create `components/chat/QtapDocLink.tsx`. Behavior:
    active link. Two acceptable strategies — pick the cheaper that fits:
    - *Preferred:* a lightweight existence check via the chat-scoped read path. There's already a
      `read-document` action (`POST /api/v1/chats/{chatId}?action=read-document`,
-     `documentModeApi.readDocumentForChat`) and the server's `resolvedPathExists()` helper in
+     `documentModeApi.readDocumentForChat`) and the server's `resolvedPathExists()` helper (now the document core's `documentExists`, `lib/documents/core/read.ts`) in
      `app/api/v1/chats/[id]/actions/documents.ts` (verified) which handles both database-backed and
      filesystem scopes. Add a tiny `?action=resolve-document` (or `head-document`) that runs
      `resolveDocEditPath` + `resolvedPathExists` and returns `{ exists: boolean }` **without**

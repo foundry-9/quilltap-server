@@ -127,6 +127,8 @@ A character does not draw her wearable garments from a single drawer. Quilltap c
 
 When the same garment appears in more than one tier, the nearer tier prevails: a character's personal item outranks her group's, which outranks a project item, which in turn outranks a household archetype. A group's garments follow the character herself — she carries them from chat to chat, and never borrows a fellow guest's. A project's garments, by contrast, are on offer only while a chat belongs to that project; outside it, they simply aren't shown.
 
+**Within a single tier, precedence goes by seniority.** Should two of her groups both hang a garment of the very same identity, the group she joined *first* prevails --- the club she has belonged to since her salad days outranks the one that elected her last Tuesday. A project, likewise, may keep several stores: its own official store comes first, and every other store linked to the project is consulted after it, so a garment parked in a linked store is wearable rather than marooned. (Before Quilltap 4.12 the *last* group joined carried the day, and only a project's official store was searched when a garment was moved or copied from a character's wardrobe.)
+
 ### Shared Items (Archetypes)
 
 Some garments transcend the boundaries of any single wardrobe. A Roman legionary's tunic, a proper Edwardian morning suit, or a pair of sensible Wellington boots --- these are the sort of items that any character might reasonably don, regardless of their personal collection.
@@ -351,7 +353,7 @@ Write it **to the character, in the second person**, as one would leave instruct
 
 Three points of household protocol:
 
-- **Only the nearest copy is consulted.** When a character dresses themselves, Quilltap looks for instructions in the character's own wardrobe first, then their groups', then the project's, then Quilltap General --- and the *first* page found wins outright. The search stops there; farther tiers are not blended in. A character with their own instructions ignores the household's entirely.
+- **Only the nearest copy is consulted.** When a character dresses themselves, Quilltap looks for instructions in the character's own wardrobe first, then their groups' (in the order she joined them), then the project's (its official store first), then Quilltap General --- and the *first* page found wins outright. The search stops there; farther tiers are not blended in. A character with their own instructions ignores the household's entirely.
 - **It speaks only at curtain-up.** Dressing Instructions are consulted solely when an outfit is being chosen for a character who is dressing themselves --- **Let Character Choose** at the start of a chat, or a character joining one under the same arrangement. They do not follow the character around the conversation, and no other system reads them.
 - **It is entirely optional.** No page, no matter --- the character simply chooses as they always have. Clearing the panel and saving removes the page altogether.
 

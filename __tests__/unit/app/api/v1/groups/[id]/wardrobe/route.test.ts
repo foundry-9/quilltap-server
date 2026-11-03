@@ -3,9 +3,8 @@
  * (before these existed, group items could only be created via a transfer).
  *
  * Pins that:
- *  - GET reads the group's official store and lists it, provisioning nothing
- *    (a read probe, through the shared route factory and
- *    `resolveWardrobeLocation`); POST is what provisions.
+ *  - GET lists the group's official store `Wardrobe/` folder, provisioning nothing (#135)
+ *    (through the shared route factory and `resolveWardrobeLocation`).
  *  - POST creates a shared (characterId: null) item in the group's mount.
  *  - PUT/DELETE on the item route target the group's mount, and DELETE first
  *    scrubs equipped references.
@@ -57,8 +56,8 @@ jest.mock('@/lib/mount-index/ensure-owner-store', () => ({
   ensureOwnerOfficialStore: jest.fn(),
 }))
 
-jest.mock('@/lib/mount-index/shared-wardrobe', () => ({
-  ensureSharedWardrobeFolder: jest.fn(),
+jest.mock('@/lib/mount-index/folder-paths', () => ({
+  ensureFolderPath: jest.fn(),
 }))
 
 jest.mock('@/lib/instance-settings', () => ({ getGeneralMountPointId: jest.fn() }))
@@ -100,7 +99,7 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
 import { GET, POST } from '@/app/api/v1/groups/[id]/wardrobe/route'
 import { GET as GET_ITEM, PUT, DELETE } from '@/app/api/v1/groups/[id]/wardrobe/[itemId]/route'
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store'
-import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe'
+import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
 import {
   readWardrobeInstructionsFile,
   writeWardrobeInstructionsFile,
@@ -159,15 +158,17 @@ beforeEach(() => {
     },
   }
 
+  // The owner resolver reads the group row raw; one mock answers both reads.
+  mockCtx.repos.groups.findByIdRaw = mockCtx.repos.groups.findById
   ;(ensureOwnerOfficialStore as jest.Mock).mockResolvedValue({ mountPointId: MOUNT_ID, created: false })
-  ;(ensureSharedWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
+  ;(ensureFolderPath as jest.Mock).mockResolvedValue('folder-1')
   ;(readMountItems as jest.Mock).mockResolvedValue([storedItem])
   ;(createInMount as jest.Mock).mockImplementation(async (_mount: unknown, item: any) => item)
   ;(updateInMount as jest.Mock).mockResolvedValue({ ...storedItem, title: 'Renamed sash' })
   ;(deleteInMount as jest.Mock).mockResolvedValue(true)
 })
 
-it('GET lists the group mount wardrobe without provisioning a store or folder', async () => {
+it('GET lists the group mount wardrobe without provisioning anything (#135)', async () => {
   const res: any = await GET(
     { url: `http://localhost/api/v1/groups/${GROUP_ID}/wardrobe` } as any,
     routeCtx({ id: GROUP_ID }),
@@ -180,7 +181,7 @@ it('GET lists the group mount wardrobe without provisioning a store or folder', 
   ])
   expect(mockCtx.repos.wardrobeWear.findSummaries).toHaveBeenCalledWith([ITEM_ID])
   expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
-  expect(ensureSharedWardrobeFolder).not.toHaveBeenCalled()
+  expect(ensureFolderPath).not.toHaveBeenCalled()
   expect(readMountItems).toHaveBeenCalledWith(GROUP_MOUNT)
 })
 
@@ -314,7 +315,7 @@ it('POST ?action=instructions writes to the group mount after ensuring the folde
   )
   expect(res.status).toBe(200)
   expect(res.body.instructions).toBe('You favour the regimental colours.')
-  expect(ensureSharedWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
+  expect(ensureFolderPath).toHaveBeenCalledWith(MOUNT_ID, 'Wardrobe')
   expect(writeWardrobeInstructionsFile).toHaveBeenCalledWith(
     MOUNT_ID,
     'You favour the regimental colours.',

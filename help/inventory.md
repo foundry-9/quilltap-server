@@ -29,7 +29,7 @@ An item lives on one of four shelves. Each is an `Inventory/` folder in a docume
 3. **A project's inventory** — in the project's store. Every character in that project's chats can reach it, unless the project keeps a [roster](project-characters.md) that leaves them off — then their own tools find the shelf closed, though you may still hand them its objects.
 4. **Quilltap General** — the household's shelf. Every character in every chat can reach it.
 
-Browsing a character shows everything within their reach, merged: their own shelf first, then their groups', the project's (when you are in a chat that has one), then General. An item that comes from a shared shelf is marked with where it is kept. When two shelves hold items with the same identity, the nearer one wins, exactly as it does for garments.
+Browsing a character shows everything within their reach, merged: their own shelf first, then their groups', the project's (when you are in a chat that has one), then General. An item that comes from a shared shelf is marked with where it is kept. When two shelves hold items with the same identity, the nearer one wins, exactly as it does for garments --- and between two shelves at the same distance, seniority decides: the group the character joined first, or the project's own official store ahead of the stores linked to it.
 
 ## Quilltap General
 

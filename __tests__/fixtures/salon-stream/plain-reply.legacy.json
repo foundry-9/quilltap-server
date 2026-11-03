@@ -1,0 +1,74 @@
+[
+  {
+    "status": {
+      "stage": "building",
+      "message": "Laying the table…",
+      "characterName": "Ada",
+      "characterId": "char-a"
+    }
+  },
+  {
+    "turnStart": true,
+    "participantId": "p-ada",
+    "characterName": "Ada",
+    "chainDepth": 0
+  },
+  {
+    "reasoning": "Hmm."
+  },
+  {
+    "content": "Good evening, "
+  },
+  {
+    "content": "old thing."
+  },
+  {
+    "done": true,
+    "messageId": "m-1",
+    "participantId": "p-ada",
+    "usage": {
+      "promptTokens": 120,
+      "completionTokens": 40,
+      "totalTokens": 160
+    },
+    "cacheUsage": null,
+    "attachmentResults": {
+      "sent": [
+        "f-1"
+      ],
+      "failed": []
+    },
+    "toolsExecuted": false,
+    "provider": "anthropic",
+    "modelName": "model-x",
+    "routeTrail": null,
+    "reasoningContent": "Hmm.",
+    "reasoningSegments": [
+      {
+        "anchorOffset": 0,
+        "content": "Hmm.",
+        "seq": 0
+      }
+    ],
+    "turn": {
+      "nextSpeakerId": null,
+      "reason": "user_turn",
+      "cycleComplete": false,
+      "isUsersTurn": true
+    }
+  },
+  {
+    "confirmationResult": {
+      "messageId": "m-1",
+      "confirmed": true,
+      "revised": false,
+      "notes": null
+    }
+  },
+  {
+    "chainComplete": true,
+    "reason": "user_turn",
+    "nextSpeakerId": null,
+    "chainDepth": 0
+  }
+]

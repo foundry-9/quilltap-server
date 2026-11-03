@@ -28,7 +28,7 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
+import { classifyMount } from '@/lib/mount-index/reach';
 import type { InventoryRecord } from '@/lib/schemas/inventory.types';
 import { parseInventoryItemFile } from '@/lib/database/repositories/vault-overlay/inventory-readers';
 import { InventoryTitleCheckUnavailableError } from '@/lib/inventory/errors';
@@ -45,23 +45,29 @@ export type InventoryDocumentChange =
 
 const NOTHING_TO_WRITE = () => undefined;
 
-/** The location an `Inventory/` folder in this mount belongs to. */
+/**
+ * The location an `Inventory/` folder in this mount belongs to: the owner the
+ * shared `classifyMount` names (a vault, General, a project's or group's
+ * official store), or for any other existing store — one merely linked to a
+ * project — a nameless project-tier location. Either way a shared store's
+ * pool is its own folder plus General.
+ */
 async function locationForMount(mountPointId: string): Promise<InventoryLocation | null> {
   const repos = getRepositories();
-  const character = await repos.characters.findByDocumentMountPointIdRaw(mountPointId);
-  if (character) {
-    return inventoryLocationForMount({ mountPointId, scope: 'character', characterId: character.id }, character.id, {
-      scope: 'character',
-      id: character.id,
-      name: character.name,
-    });
-  }
-  if ((await getGeneralMountPointId()) === mountPointId) {
+  const owner = await classifyMount(mountPointId, repos);
+  if (owner?.scope === 'general') {
     return inventoryLocationForMount({ mountPointId, scope: 'general', characterId: null }, null, GENERAL_INVENTORY_ORIGIN);
+  }
+  if (owner) {
+    const ownerId = owner.ownerId as string;
+    return inventoryLocationForMount(
+      { mountPointId, scope: owner.scope, characterId: owner.scope === 'character' ? ownerId : null },
+      ownerId,
+      { scope: owner.scope, id: ownerId, name: owner.ownerName },
+    );
   }
   const mount = await repos.docMountPoints.findById(mountPointId);
   if (!mount) return null;
-  // A project or group store, or any store linked to a project: its pool is its own folder plus General.
   return inventoryLocationForMount({ mountPointId, scope: 'project', characterId: null }, null, {
     scope: 'project',
     id: null,

@@ -69,12 +69,15 @@ export interface ToolPresetPoolContext {
 export async function resolveToolPresetPool(ctx: ToolPresetPoolContext): Promise<ToolPresetPool> {
   // Same pool, same options as `resolveCustomToolRoster`: no participant tier,
   // since another character's vault is theirs alone.
-  const pool = await resolveTieredMountPool({
-    userId: ctx.userId,
-    characterId: ctx.characterId ?? null,
-    characterMountPointId: ctx.characterMountPointId ?? null,
-    projectId: ctx.projectId ?? null,
-  });
+  const pool = await resolveTieredMountPool(
+    {
+      userId: ctx.userId,
+      characterId: ctx.characterId ?? null,
+      characterMountPointId: ctx.characterMountPointId ?? null,
+      projectId: ctx.projectId ?? null,
+    },
+    { roster: 'open', enabled: 'require' },
+  );
 
   const repos = getRepositories();
   const byName = new Map<string, ToolPreset>();
@@ -83,7 +86,7 @@ export async function resolveToolPresetPool(ctx: ToolPresetPoolContext): Promise
 
   for (const { tier, mountPointId } of orderedMounts(pool)) {
     const mount = await repos.docMountPoints.findById(mountPointId);
-    if (!mount || !mount.enabled) continue;
+    if (!mount) continue;
 
     const store: ToolPresetStore = { tier, mountPointId, mountName: mount.name };
     stores.push(store);
