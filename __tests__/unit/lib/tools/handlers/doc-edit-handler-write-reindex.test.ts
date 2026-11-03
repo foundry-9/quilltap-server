@@ -1,5 +1,6 @@
 /**
- * Regression test for `triggerReindexIfNeeded` in doc-edit-handler.
+ * Regression test for the post-write refresh a `doc_*` write gets — now the
+ * document core's `afterDocumentWrite` (`lib/documents/core/write.ts`).
  *
  * The handler's reindex/embed pass used to gate on
  * `resolved.scope === 'document_store'`. That meant
@@ -158,7 +159,7 @@ const context = {
   characterId: 'char-1',
 };
 
-// `triggerReindexIfNeeded` is fire-and-forget — it does its work after the
+// `afterDocumentWrite` is fire-and-forget — it does its work after the
 // tool response resolves. Drain the microtask queue and a setImmediate tick
 // before asserting on reindex/embed calls.
 async function flushMicrotasks() {
@@ -167,7 +168,7 @@ async function flushMicrotasks() {
   await Promise.resolve();
 }
 
-describe('doc_write_file → triggerReindexIfNeeded', () => {
+describe('doc_write_file → afterDocumentWrite', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // The doc-edit handlers (and the policy gates) read getRepositories from
