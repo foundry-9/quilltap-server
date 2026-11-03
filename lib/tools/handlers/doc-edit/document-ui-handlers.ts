@@ -76,7 +76,11 @@ export async function handleOpenDocument(
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
   const input = applyQtapUriToInput(rawInput);
   const repos = getRepositories();
-  const scope = (input.scope || 'project') as 'document_store' | 'project' | 'general';
+  const requestedScope = (input.scope || 'project') as 'document_store' | 'project' | 'general';
+  // What the chat_documents row, the result and the announcement name: the
+  // scope the file actually lives in. For an existing file that is the one
+  // asked for; a new blank document picks its own (#137).
+  let scope = requestedScope;
   const mode = input.mode || 'split';
   let filePath = input.path;
   let displayTitle = input.title || 'Untitled document';
@@ -96,7 +100,7 @@ export async function handleOpenDocument(
     // Treated as a read so peer vaults are reachable when the chat's
     // cross-character read flag is enabled.
     try {
-      const resolved = await resolveDocEditPath(scope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
+      const resolved = await resolveDocEditPath(requestedScope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
       // character_read:false → not-found for characters (operator unaffected).
       await assertCharacterMayRead(resolved, context);
       hiddenFromCharacters = await documentHiddenFromCharacters(resolved.mountPointId, resolved.relativePath);
@@ -147,6 +151,17 @@ export async function handleOpenDocument(
       }
       mtime = ensured.mtime;
       docUri = await uriForResolvedPath(resolved);
+      // Record where it was made, not where the call asked: the caller's
+      // scope and mount_point play no part in choosing the location (#137).
+      scope = targetScope;
+      storeName = publishedMountPoint(resolved, undefined);
+      logger.debug('doc_open_document: created a blank document', {
+        chatId: context.chatId,
+        filePath,
+        requestedScope,
+        scope,
+        mountPoint: storeName,
+      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { success: false, error: `Failed to create blank document: ${errorMsg}` };

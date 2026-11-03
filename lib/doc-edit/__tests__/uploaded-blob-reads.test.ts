@@ -22,6 +22,10 @@ import { handleGrep, handleListFiles, handleReadFile, handleStrReplace } from '@
 import { handleReadHeading } from '@/lib/tools/handlers/doc-edit/markdown-handlers';
 import { handleOpenDocument } from '@/lib/tools/handlers/doc-edit/document-ui-handlers';
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
@@ -37,6 +41,13 @@ import {
 
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+}));
+
+// The general scope is the on-disk `_general` area; point it at a scratch dir.
+const mockFilesDir = { path: '' };
+jest.mock('@/lib/paths', () => ({
+  ...jest.requireActual('@/lib/paths'),
+  getFilesDir: () => mockFilesDir.path,
 }));
 
 jest.mock('@/lib/instance-settings', () => ({
@@ -227,13 +238,40 @@ describe('doc_open_document (#134)', () => {
     const res = await handleOpenDocument({} as never, toolContext);
 
     expect(res.success).toBe(true);
-    expect(res.result).toMatchObject({ isNew: true, mtime: 1792771330000 });
+    expect(res.result).toMatchObject({ isNew: true, mtime: 1792771330000, scope: 'project' });
     expect(writeDatabaseDocument).toHaveBeenCalledWith(
       PROJECT_STORE.id,
       expect.stringMatching(/^[0-9a-f-]+\.md$/),
       '',
       undefined,
     );
+    expect(mockOpenChatDocument).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      scope: 'project',
+      mountPoint: undefined,
+    }));
+  });
+
+  it('records a blank document made in Quilltap General under general, whatever was asked (#137)', async () => {
+    mockFilesDir.path = fs.mkdtempSync(path.join(os.tmpdir(), 'qt-open-doc-'));
+    fs.mkdirSync(path.join(mockFilesDir.path, '_general'));
+
+    // No project in this chat: the document can only land in Quilltap General.
+    const res = await handleOpenDocument(
+      { scope: 'project' } as never,
+      { ...toolContext, projectId: undefined },
+    );
+
+    expect(res.success).toBe(true);
+    // Created on disk in the general area, through the store writer.
+    const created = fs.readdirSync(path.join(mockFilesDir.path, '_general'));
+    expect(created).toEqual([expect.stringMatching(/^[0-9a-f-]+\.md$/)]);
+    expect(writeDatabaseDocument).not.toHaveBeenCalled();
+    fs.rmSync(mockFilesDir.path, { recursive: true, force: true });
+    expect(res.result).toMatchObject({ isNew: true, scope: 'general', mountPoint: undefined });
+    expect(mockOpenChatDocument).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      scope: 'general',
+      mountPoint: undefined,
+    }));
   });
 });
 
