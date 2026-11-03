@@ -25,7 +25,7 @@ import {
   emitDocumentMoved,
   emitDocumentWritten,
 } from './db-store-events';
-import { detectNativeText, isExtractableBlobPath } from './path-utils';
+import { detectNativeText, isExtractableBlobPath, normaliseRelativePath as normaliseSharedRelativePath } from './path-utils';
 import { reindexAfterDatabaseWrite } from './post-write-reindex';
 import { inventoryWritesAreLinted, isTitleLintFolder, isTitleLintPath } from '@/lib/inventory/lint-scope';
 import type { InventoryDocumentChange } from '@/lib/inventory/title-lint-documents';
@@ -51,20 +51,9 @@ async function lintInventoryChange(change: InventoryDocumentChange): Promise<() 
   return lintInventoryDocumentChange(change);
 }
 
+/** The store root is `''` here; the shared rule otherwise (`path-utils.ts`). */
 function normaliseRelativePath(relativePath: string): string {
-  // Collapse ./ and redundant separators, reject traversal. Path-resolver
-  // already blocks '..' segments before we get here; keep a second guard.
-  // Trailing slashes are stripped so folder paths match the form that
-  // folder-paths.ts writes into doc_mount_folders.path (no trailing slash).
-  const normalised = path
-    .normalize(relativePath)
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
-  if (normalised.split('/').includes('..')) {
-    throw new Error(`Invalid relative path: ${relativePath}`);
-  }
-  return normalised;
+  return normaliseSharedRelativePath(relativePath, { allowRoot: true });
 }
 
 export class DatabaseStoreError extends Error {

@@ -17,32 +17,21 @@
  * @module components/inventory/inventory-control-dialog
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { queryKeys } from '@/lib/query/keys'
-import { BaseModal } from '@/components/ui/BaseModal'
-import { showAlert, showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useInventoryDialog } from '@/components/providers/inventory-dialog-provider'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
-import {
-  GENERAL_INVENTORY_CONTAINER,
-  GENERAL_INVENTORY_NAME,
-  containerOfOrigin,
-  decodeInventoryContainer,
-  encodeInventoryContainer,
-  type InventoryContainer,
-} from '@/lib/inventory/container'
+import { containerOfOrigin, type InventoryContainer } from '@/lib/inventory/container'
 import { InventoryRequestError, useChatInventory } from '@/lib/hooks/use-inventory'
 import { InventoryBrowser } from './InventoryBrowser'
 import { CarryingNowPane } from './CarryingNowPane'
 import { InventoryItemEditor } from './inventory-item-editor'
 import { InventoryTransferDialog } from './InventoryTransferDialog'
-import { useContainerCatalogue } from '@/lib/hooks/use-container-catalogue'
-import { ContainerSelect } from '@/components/item-browser/ContainerSelect'
+import { ItemControlDialogShell, useItemControlState } from '@/components/item-browser/ItemControlDialogShell'
 import { InventoryInstantiateDialog } from './InventoryInstantiateDialog'
-import { InventoryFolderPickerDialog } from './InventoryFolderPickerDialog'
 import { useInventoryListData } from './hooks/useInventoryListData'
 import { describeInventoryRefusal, useInventoryItemActions } from './hooks/useInventoryItemActions'
 
@@ -111,16 +100,9 @@ interface InnerProps {
 }
 
 function InventoryControlDialogInner({ initialContainer, chatId, projectId, onClose, asTab = false, fixedContainer = false }: InnerProps) {
-  const catalogue = useContainerCatalogue()
+  const state = useItemControlState('inventory', initialContainer)
+  const { catalogue, container, containerLabel, requestConfirmation, requestAlert } = state
   const queryClient = useQueryClient()
-  const [chosen, setChosen] = useState<InventoryContainer | null>(initialContainer)
-  const firstCharacterId = catalogue.characters[0]?.id ?? null
-  const container = useMemo<InventoryContainer | null>(
-    () =>
-      chosen ??
-      (catalogue.charactersSettled ? (firstCharacterId ? { scope: 'character', id: firstCharacterId } : GENERAL_INVENTORY_CONTAINER) : null),
-    [chosen, catalogue.charactersSettled, firstCharacterId],
-  )
   const characterId = container?.scope === 'character' ? container.id : null
   const [showArchived, setShowArchived] = useState(false)
   const chat = useChatInventory(chatId)
@@ -128,24 +110,7 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
   const effectiveProjectId = chat.projectId ?? projectId
   const data = useInventoryListData(container, { includeArchived: showArchived, projectId: effectiveProjectId })
 
-  const [confirming, setConfirming] = useState(false)
   const [picking, setPicking] = useState(false)
-  const requestConfirmation = useCallback(async (message: string) => {
-    setConfirming(true)
-    try {
-      return await showConfirmation(message)
-    } finally {
-      setConfirming(false)
-    }
-  }, [])
-  const requestAlert = useCallback(async (message: string, buttons?: string[]) => {
-    setConfirming(true)
-    try {
-      return await showAlert(message, buttons)
-    } finally {
-      setConfirming(false)
-    }
-  }, [])
   const actions = useInventoryItemActions({ container, requestConfirmation, requestAlert })
   useOnTabActivated(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })
@@ -185,20 +150,6 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
     }
   }, [characterId, characterName, chat, requestConfirmation])
 
-  const containerLabel = useMemo(() => {
-    if (!container) return ''
-    switch (container.scope) {
-      case 'character':
-        return `${catalogue.characters.find((c) => c.id === container.id)?.name ?? 'this character'}'s inventory`
-      case 'general':
-        return GENERAL_INVENTORY_NAME
-      case 'project':
-        return catalogue.projects.find((p) => p.id === container.id)?.name ?? 'this project'
-      case 'group':
-        return catalogue.groups.find((g) => g.id === container.id)?.name ?? 'this group'
-    }
-  }, [container, catalogue])
-
   const editorContainer = (item: ResolvedInventoryItem | null) =>
     item && container ? containerOfOrigin(item.origin, container) : container
   const inChat = chatId !== null && characterId !== null
@@ -206,28 +157,6 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
 
   const body = (
     <>
-      {!fixedContainer && (
-        <div className="flex flex-col gap-2 mb-3">
-          <div className="flex items-center gap-2">
-            <label htmlFor="inventory-container-select" className="text-sm qt-text-secondary">Inventory:</label>
-            <ContainerSelect
-              id="inventory-container-select"
-              className="qt-select flex-1 max-w-md"
-              value={container ? encodeInventoryContainer(container) : ''}
-              onChange={(key) => setChosen(decodeInventoryContainer(key))}
-              catalogue={catalogue}
-              generalName={GENERAL_INVENTORY_NAME}
-              placeholder="Select an inventory"
-            />
-          </div>
-          {container && container.scope !== 'character' && (
-            <p className="qt-text-xs qt-text-secondary px-1">
-              A shared inventory — every character who can reach this {container.scope === 'general' ? 'library' : container.scope} can carry
-              what is here, and its archetypes can be instantiated by any of them.
-            </p>
-          )}
-        </div>
-      )}
       <div className={`grid gap-4 ${inChat ? 'md:grid-cols-2' : ''}`}>
         <InventoryBrowser
           container={container}
@@ -280,15 +209,6 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
           onSaved={actions.closeEditor}
         />
       )}
-      {actions.folderPicker && container && (
-        <InventoryFolderPickerDialog
-          container={actions.addressOf(actions.folderPicker.items[0])}
-          items={actions.folderPicker.items}
-          mode={actions.folderPicker.mode}
-          actions={actions}
-          onClose={actions.closeFolderPicker}
-        />
-      )}
       {actions.transfer && container && (
         <InventoryTransferDialog
           item={actions.transfer.item}
@@ -313,33 +233,17 @@ function InventoryControlDialogInner({ initialContainer, chatId, projectId, onCl
     </>
   )
 
-  if (asTab) {
-    return (
-      <div className={fixedContainer ? 'flex flex-col min-h-0' : 'qt-inventory-tab flex flex-col h-full min-h-0 overflow-y-auto p-4'}>
-        {body}
-        {overlays}
-      </div>
-    )
-  }
   return (
-    <>
-      <BaseModal
-        isOpen
-        onClose={onClose}
-        title="Inventory"
-        maxWidth="4xl"
-        showCloseButton
-        closeOnClickOutside={!overlayOpen && !confirming}
-        closeOnEscape={!overlayOpen && !confirming}
-        footer={(
-          <div className="flex items-center justify-end gap-2 w-full">
-            <button type="button" onClick={onClose} className="qt-button-secondary qt-button-sm">Done</button>
-          </div>
-        )}
-      >
-        {body}
-      </BaseModal>
-      {overlays}
-    </>
+    <ItemControlDialogShell
+      kind="inventory"
+      state={state}
+      asTab={asTab}
+      fixedContainer={fixedContainer}
+      onClose={onClose}
+      overlayOpen={overlayOpen}
+      overlays={overlays}
+    >
+      {body}
+    </ItemControlDialogShell>
   )
 }

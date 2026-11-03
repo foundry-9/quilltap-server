@@ -140,6 +140,8 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   // Collection-wide: an Inventory file write is announced as the bare topic
   // (see INVENTORY_PATH_PATTERN below).
   inventory: [],
+  // Collection-wide likewise (see WARDROBE_PATH_PATTERN below).
+  wardrobe: [],
   // Storyteller rounds never run in the job child; the round service
   // publishes them from the parent.
   storytellerRounds: [],
@@ -159,6 +161,24 @@ function writesInventoryFile(write: { method: string; args?: readonly unknown[] 
   if (!write.method.startsWith('docMount')) return false;
   try {
     return INVENTORY_PATH_PATTERN.test(JSON.stringify(write.args ?? []));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A document-store write naming a path under a tier's `Wardrobe/` folder — an
+ * item or folder a job child's `wardrobe_*` call or Pascal effect wrote — or a
+ * buffered `wardrobe.*` repository write (the replayed call writes the store
+ * itself). Either implies the `wardrobe` topic beside `mountPoints`.
+ */
+const WARDROBE_PATH_PATTERN = /(^|[\\/"])Wardrobe\//;
+
+function writesWardrobeFile(write: { method: string; args?: readonly unknown[] }): boolean {
+  if (write.method.startsWith('wardrobe.')) return true;
+  if (!write.method.startsWith('docMount')) return false;
+  try {
+    return WARDROBE_PATH_PATTERN.test(JSON.stringify(write.args ?? []));
   } catch {
     return false;
   }
@@ -208,6 +228,10 @@ export function topicsForWriteBatch(
     if (!seen.has('inventory') && writesInventoryFile(write)) {
       seen.add('inventory');
       hints.push({ topic: 'inventory' });
+    }
+    if (!seen.has('wardrobe') && writesWardrobeFile(write)) {
+      seen.add('wardrobe');
+      hints.push({ topic: 'wardrobe' });
     }
     const namespace = write.method.split('.')[0];
     const topic = REPOSITORY_TOPICS[namespace];

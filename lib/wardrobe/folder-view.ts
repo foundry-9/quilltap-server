@@ -1,7 +1,6 @@
 /**
- * The wardrobe's view of the shared folder-browser rules
- * (`lib/folder-browser/view`): the generic math re-exported, plus the one
- * rule that is the wardrobe's own — which tier a listed garment sits in.
+ * The one folder-browser rule that is the wardrobe's own — which tier a
+ * listed garment sits in. The generic rules are `lib/folder-browser/view`.
  *
  * Client-safe: pure.
  *
@@ -16,14 +15,6 @@ import {
 } from '@/lib/wardrobe/wardrobe-container'
 import { OWN_TIER } from '@/lib/folder-browser/view'
 
-export {
-  OWN_TIER,
-  childFolderRows,
-  tierLabel,
-  tierRows,
-  type FolderRowView,
-  type TierRowView,
-} from '@/lib/folder-browser/view'
 
 type ViewItem = Pick<WardrobeItem, 'id' | 'characterId' | 'archivedAt'> & {
   folder?: string | null

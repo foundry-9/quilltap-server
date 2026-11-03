@@ -11,7 +11,7 @@
  *    column tab is active).
  *  - `[+]` icon that adds the item to a slot. For single-slot items this
  *    targets the item's only slot directly; for multi-slot items it opens
- *    a small popover that lets the user pick.
+ *    the shared `ItemActionMenu` to pick one.
  *  - `⋮` kebab menu with secondary actions: Edit, Generate image, toggle the
  *    default-outfit flag, Duplicate, Archive, Move to folder…, Copy to folder…, Move to another
  *    wardrobe…, Copy to another wardrobe…, and Delete. Which of these appear
@@ -34,9 +34,7 @@
  * …` / `Never worn`); an item read without a `wear` annotation is never worn.
  */
 
-import { useMemo, useRef, useState } from 'react'
-import { useFixedMenu } from '@/hooks/useFixedMenu'
-import { useClickOutside } from '@/hooks/useClickOutside'
+import { useMemo, useState } from 'react'
 import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
 import { WARDROBE_SLOT_META, isComposite as isCompositeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
@@ -152,25 +150,6 @@ export function WardrobeItemRow({
   const originLabel = wardrobeOriginLabel(item.origin)
   const selectMode = selection !== undefined
 
-  const slotPickerRef = useRef<HTMLDivElement>(null)
-  // The slot picker is fixed to the viewport so the dialog's scrolling list
-  // cannot clip it under its footer (the ⋮ menu does the same itself).
-  const {
-    anchorRef: slotPickerAnchorRef,
-    menuStyle: slotPickerStyle,
-    open: slotPickerOpen,
-    setOpen: setSlotPickerOpen,
-    close: closeSlotPicker,
-  } = useFixedMenu(slotPickerRef, 240)
-
-  // The slot picker closes on an outside click or Escape — the Escape
-  // swallowed in the capture phase so the enclosing dialog stays open.
-  useClickOutside(slotPickerRef, closeSlotPicker, {
-    enabled: slotPickerOpen,
-    onEscape: closeSlotPicker,
-    escapeCapture: true,
-  })
-
   const components = useMemo(() => {
     if (!isComposite) return []
     const byId = new Map(allItems.map((i) => [i.id, i]))
@@ -178,15 +157,6 @@ export function WardrobeItemRow({
       .map((id) => byId.get(id))
       .filter((c): c is RowItem => Boolean(c))
   }, [allItems, item.componentItemIds, isComposite])
-
-  const handleAddClick = (): void => {
-    if (!onAddToSlot) return
-    if (item.types.length === 1) {
-      onAddToSlot(item, item.types[0])
-      return
-    }
-    setSlotPickerOpen(!slotPickerOpen)
-  }
 
   const addTooltip =
     item.types.length === 1
@@ -310,50 +280,39 @@ export function WardrobeItemRow({
           )}
 
           {/* Single-icon add button. For single-typed items it adds directly;
-              for multi-typed it opens a slot picker. */}
+              for multi-typed it opens a slot picker — the shared menu, fixed
+              to the viewport so the dialog's scrolling list cannot clip it. */}
           {inChat && onAddToSlot && (
-            <div className="relative">
+            item.types.length === 1 ? (
               <button
-                ref={slotPickerAnchorRef}
                 type="button"
-                onClick={handleAddClick}
+                onClick={() => onAddToSlot(item, item.types[0])}
                 disabled={selectMode}
                 className="qt-button-ghost qt-button-sm"
                 title={addTooltip}
                 aria-label={addTooltip}
-                aria-haspopup={item.types.length > 1 ? 'menu' : undefined}
-                aria-expanded={item.types.length > 1 ? slotPickerOpen : undefined}
               >
                 +
               </button>
-              {slotPickerOpen && item.types.length > 1 && (
-                <div
-                  ref={slotPickerRef}
-                  role="menu"
-                  style={slotPickerStyle ?? undefined}
-                  className="z-30 min-w-[10rem] rounded border qt-border-default qt-bg-popover shadow-md"
-                >
-                  <ul className="divide-y qt-border-default">
-                    {item.types.map((slot) => (
-                      <li key={slot}>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            onAddToSlot(item, slot)
-                            closeSlotPicker()
-                          }}
-                          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
-                        >
-                          <span>{WARDROBE_SLOT_META[slot].label}</span>
-                          <SlotBadge slot={slot} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            ) : (
+              <ItemActionMenu
+                label={addTooltip}
+                trigger={{ content: '+', ariaLabel: addTooltip }}
+                disabled={selectMode}
+                room={240}
+                minWidthClass="min-w-[10rem]"
+                entries={item.types.map((slot) => ({
+                  key: `slot-${slot}`,
+                  label: (
+                    <span className="flex items-center justify-between gap-2">
+                      <span>{WARDROBE_SLOT_META[slot].label}</span>
+                      <SlotBadge slot={slot} />
+                    </span>
+                  ),
+                  onSelect: () => onAddToSlot(item, slot),
+                }))}
+              />
+            )
           )}
 
           {/* Kebab menu — item actions */}

@@ -66,6 +66,17 @@ describe('queryKeysForTopic', () => {
     ]);
   });
 
+  it('refreshes the wardrobe browser\'s lists and folder trees on the wardrobe topic', () => {
+    // Every write through a wardrobe location publishes it, and the folder
+    // hooks leave their own writes' refresh to it while the socket is up.
+    expect(queryKeysForTopic('wardrobe')).toEqual([
+      queryKeys.wardrobe.lists,
+      queryKeys.wardrobe.folderLists,
+    ]);
+    // The prefixes reach every tier's list and folder tree.
+    expect(queryKeys.wardrobe.folders('general:').slice(0, 2)).toEqual([...queryKeys.wardrobe.folderLists]);
+  });
+
   it('refreshes what the cast carries on the chats topic (the Inventory)', () => {
     // An equip posts Pascal's line and publishes `chats`, so the Carrying-now
     // pane stays honest without a poll of its own.

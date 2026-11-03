@@ -3,8 +3,9 @@
  * (before these existed, group items could only be created via a transfer).
  *
  * Pins that:
- *  - GET ensures the group's official store + `Wardrobe/` folder and lists it
- *    (through the shared route factory and `resolveWardrobeLocation`).
+ *  - GET reads the group's official store and lists it, provisioning nothing
+ *    (a read probe, through the shared route factory and
+ *    `resolveWardrobeLocation`); POST is what provisions.
  *  - POST creates a shared (characterId: null) item in the group's mount.
  *  - PUT/DELETE on the item route target the group's mount, and DELETE first
  *    scrubs equipped references.
@@ -166,7 +167,7 @@ beforeEach(() => {
   ;(deleteInMount as jest.Mock).mockResolvedValue(true)
 })
 
-it('GET lists the group mount wardrobe after ensuring store and folder', async () => {
+it('GET lists the group mount wardrobe without provisioning a store or folder', async () => {
   const res: any = await GET(
     { url: `http://localhost/api/v1/groups/${GROUP_ID}/wardrobe` } as any,
     routeCtx({ id: GROUP_ID }),
@@ -178,8 +179,8 @@ it('GET lists the group mount wardrobe after ensuring store and folder', async (
     { ...storedItem, origin: { scope: 'group', id: GROUP_ID, name: 'Main Cast' }, wear: NEVER_WORN },
   ])
   expect(mockCtx.repos.wardrobeWear.findSummaries).toHaveBeenCalledWith([ITEM_ID])
-  expect(ensureOwnerOfficialStore).toHaveBeenCalledWith('group', GROUP_ID, 'Main Cast')
-  expect(ensureSharedWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
+  expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
+  expect(ensureSharedWardrobeFolder).not.toHaveBeenCalled()
   expect(readMountItems).toHaveBeenCalledWith(GROUP_MOUNT)
 })
 

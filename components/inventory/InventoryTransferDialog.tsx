@@ -22,6 +22,7 @@ import {
 } from '@/lib/inventory/container'
 import type { ContainerCatalogue } from '@/lib/hooks/use-container-catalogue'
 import { ContainerSelect } from '@/components/item-browser/ContainerSelect'
+import { ItemTransferFooter } from '@/components/item-browser/ItemTransferFooter'
 import type { InventoryItemActions } from './hooks/useInventoryItemActions'
 import { describeInventoryRefusal } from './hooks/useInventoryItemActions'
 
@@ -68,12 +69,7 @@ export function InventoryTransferDialog({ item, mode, from, catalogue, actions, 
       overlayClassName="z-[70]"
       closeOnClickOutside={!working}
       footer={(
-        <div className="flex justify-end gap-2">
-          <button type="button" className="qt-button-secondary qt-button-sm" onClick={onClose} disabled={working}>Cancel</button>
-          <button type="button" className="qt-button-primary qt-button-sm" onClick={() => void submit()} disabled={!target || working}>
-            {working ? `${verb === 'Move' ? 'Moving' : 'Copying'}…` : verb}
-          </button>
-        </div>
+        <ItemTransferFooter mode={mode} working={working} submitDisabled={!target} onCancel={onClose} onSubmit={() => void submit()} />
       )}
     >
       <p className="qt-text-xs qt-text-secondary mb-2">

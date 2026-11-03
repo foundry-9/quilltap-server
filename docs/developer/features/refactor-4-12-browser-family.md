@@ -1,6 +1,6 @@
 # Refactor 4.12 — The browser family, finished: the remaining Wardrobe / Inventory pairs and the last legacy browser
 
-**Status:** Proposed (2026-11-02). Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](refactor-4-12-tier-walk.md)'s family A and is not repeated here.
+**Status:** Phases 1–3 done (2026-11-03); Phases 4–5 wait on §7's decisions. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](refactor-4-12-tier-walk.md)'s family A and is not repeated here.
 
 ## 1. The problem
 

@@ -16,6 +16,10 @@
  *   - **A character is the requesting user's, or a 404.**
  *   - **An archived character's vault refuses writes with a 409.**
  *   - **An unprovisioned General lists as empty**, not as an error.
+ *   - **No GET provisions a store** — a project or group with no store yet
+ *     lists as empty, and its instructions read as null.
+ *   - **`?action=duplicate` copies through `createItem`**, titled by
+ *     `nextCopyTitle`, in the original's folder.
  */
 
 jest.mock('@/lib/logger', () => {
@@ -304,11 +308,11 @@ beforeEach(() => {
 // ============================================================================
 
 describe('collection GET — listing', () => {
-  it('project: ensures the store and folder, then answers the list with its mount', async () => {
+  it("project: reads the project's store without provisioning, then answers the list with its mount", async () => {
     const res = await collection('project').GET(req('https://x.test/'), ctx(), { id: 'proj-1' });
 
-    expect(mockEnsureStore).toHaveBeenCalledWith('project', 'proj-1', 'The Estate');
-    expect(mockEnsureFolder).toHaveBeenCalledWith('mount-1');
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'mount-1',
@@ -316,10 +320,10 @@ describe('collection GET — listing', () => {
     });
   });
 
-  it('group: ensures the group store and tags items with the group', async () => {
+  it("group: reads the group's store without provisioning and tags items with the group", async () => {
     const res = await collection('group').GET(req('https://x.test/'), ctx(), { id: 'group-1' });
 
-    expect(mockEnsureStore).toHaveBeenCalledWith('group', 'group-1', 'The Drones Club');
+    expect(mockEnsureStore).not.toHaveBeenCalled();
     expect(mockReadItems).toHaveBeenCalledWith({ mountPointId: 'gmount-1', scope: 'group', characterId: null });
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'gmount-1',
@@ -358,7 +362,7 @@ describe('collection GET — listing', () => {
   it('general: lists the General folder with the General origin', async () => {
     const res = await collection('general').GET(req('https://x.test/'), ctx(), { id: '' });
 
-    expect(mockEnsureFolder).toHaveBeenCalledWith('general-mount');
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'general-mount',
       wardrobeItems: [{ ...wardrobeItem(), origin: GENERAL_ORIGIN, wear: NEVER_WORN }],
@@ -371,7 +375,7 @@ describe('collection GET — listing', () => {
     const res = await collection('general').GET(req('https://x.test/'), ctx(), { id: '' });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ wardrobeItems: [] });
+    await expect(res.json()).resolves.toEqual({ mountPointId: null, wardrobeItems: [] });
     expect(mockReadItems).not.toHaveBeenCalled();
   });
 
@@ -415,14 +419,21 @@ describe('collection GET — listing', () => {
     expect(mockEnsureStore).not.toHaveBeenCalled();
   });
 
-  it('404s when the store cannot be ensured', async () => {
-    mockEnsureStore.mockResolvedValue(null as never);
+  it.each(['project', 'group'] as const)(
+    '%s with no store yet: lists as empty and provisions nothing (a read probe)',
+    async (scope) => {
+      findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
+      findGroup.mockResolvedValue({ ...GROUP, officialMountPointId: null });
 
-    const res = await collection().GET(req('https://x.test/'), ctx(), { id: 'proj-1' });
+      const res = await collection(scope).GET(req('https://x.test/'), ctx(), { id: OWNER_ID[scope] });
 
-    expect(res.status).toBe(404);
-    expect(mockReadItems).not.toHaveBeenCalled();
-  });
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ mountPointId: null, wardrobeItems: [] });
+      expect(mockEnsureStore).not.toHaveBeenCalled();
+      expect(mockEnsureFolder).not.toHaveBeenCalled();
+      expect(mockReadItems).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('character collection GET ?scope=group', () => {
@@ -643,6 +654,18 @@ describe('?action=instructions does not fall through to item CRUD', () => {
     );
 
     expect(mockEnsureFolder).toHaveBeenCalledWith('mount-1');
+  });
+
+  it('GET never provisions: a project with no store yet reads null', async () => {
+    findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
+
+    const res = await collection().GET(req('https://x.test/?action=instructions'), ctx(), { id: 'proj-1' });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ instructions: null });
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
+    expect(mockReadInstructions).not.toHaveBeenCalled();
   });
 
   it('404s on a missing owner before reading a file', async () => {
@@ -1325,5 +1348,101 @@ describe('folder actions', () => {
       id: 'proj-1',
     });
     expect((mockCreate.mock.calls.at(-1)?.[1] as { folder: string }).folder).toBe('');
+  });
+});
+
+// ============================================================================
+// POST ?action=duplicate
+// ============================================================================
+
+describe('POST ?action=duplicate', () => {
+  const duplicate = (itemId: string, scope: WardrobeScope = 'project') =>
+    collection(scope).POST(req('https://x.test/?action=duplicate', { itemId }, 'POST'), ctx(), { id: OWNER_ID[scope] });
+
+  it('copies every field into the same folder through createItem, titled by nextCopyTitle', async () => {
+    mockReadItems.mockResolvedValue([
+      wardrobeItem({
+        id: 'a',
+        title: 'Cloak',
+        description: 'Velvet',
+        imagePrompt: 'a velvet cloak',
+        appropriateness: 'evening',
+        isDefault: true,
+        pronounGuidance: ['she'],
+        folder: 'Formal',
+        imageFileId: 'pic-1',
+      }),
+      // An archived sibling still holds its title: the copy steps past it.
+      wardrobeItem({ id: 'b', title: 'Cloak (copy)', archivedAt: '2026-02-02T00:00:00.000Z' }),
+    ] as never);
+    jest.mocked(listFolderPathsInMount).mockResolvedValue(['Formal'] as never);
+
+    const res = await duplicate('a');
+
+    expect(res.status).toBe(201);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    const copy = mockCreate.mock.calls[0][1] as Record<string, unknown>;
+    expect(copy).toMatchObject({
+      title: 'Cloak (copy 2)',
+      description: 'Velvet',
+      imagePrompt: 'a velvet cloak',
+      appropriateness: 'evening',
+      isDefault: true,
+      types: ['top'],
+      componentItemIds: [],
+      replace: false,
+      pronounGuidance: ['she'],
+      folder: 'Formal',
+      archivedAt: null,
+      imageFileId: null,
+    });
+    expect(copy.id).not.toBe('a');
+    const body = await res.json();
+    expect(body.wardrobeItem).toMatchObject({ title: 'Cloak (copy 2)', origin: PROJECT_ORIGIN, wear: NEVER_WORN });
+  });
+
+  it('a composite keeps its component ids verbatim; the members are not cloned', async () => {
+    mockReadItems.mockResolvedValue([
+      wardrobeItem({ id: 'outfit', title: 'Evening', types: ['top', 'bottom'], componentItemIds: ['p1', 'p2'], replace: true }),
+      wardrobeItem({ id: 'p1', types: ['top'] }),
+      wardrobeItem({ id: 'p2', types: ['bottom'] }),
+    ] as never);
+
+    const res = await duplicate('outfit');
+
+    expect(res.status).toBe(201);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate.mock.calls[0][1]).toMatchObject({
+      title: 'Evening (copy)',
+      componentItemIds: ['p1', 'p2'],
+      replace: true,
+    });
+  });
+
+  it('404s an item not in this tier, labelled for the tier, creating nothing', async () => {
+    const res = await duplicate('nope');
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: 'Project wardrobe item not found' });
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('never provisions a store: a project with no store yet is a 404', async () => {
+    findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
+
+    const res = await duplicate('item-1');
+
+    expect(res.status).toBe(404);
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("409s in an archived character's vault", async () => {
+    mockResolveMount.mockRejectedValue(new CharacterArchivedError(CHAR_ID));
+
+    const res = await duplicate('item-1', 'character');
+
+    expect(res.status).toBe(409);
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 });

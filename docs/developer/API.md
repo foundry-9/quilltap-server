@@ -2065,19 +2065,20 @@ Create a new archetype wardrobe item.
 
 **Response**: `201 Created` — `{ wardrobeItem }`, serialized exactly as a `GET` serializes it (with `origin` and `wear`).
 
-All four tiers' item endpoints (General, character, project, group) are one implementation, `lib/wardrobe/routes/wardrobe-route-factory.ts`, and answer alike:
+All four tiers' item endpoints (General, character, project, group) are one implementation, `lib/wardrobe/routes/wardrobe-route-factory.ts`, and answer alike. Its preamble — the route config, per-tier 404 labels, the location resolver, the read probe, `?action=folders`, the folder writes and the error mapping (`withItemErrors`) — is shared with the Inventory's factory in `lib/mount-index/item-folder-routes.ts`:
 
 - `POST` and `PUT` return `{ wardrobeItem }` with `origin` and `wear`, like `GET`. (The project `POST` no longer returns the refreshed `wardrobeItems` list.) Collection `GET`s also return the tier's `mountPointId`.
 - A component cycle is a **400** on create and update, every tier.
 - A `PUT` answers 404 for a missing item before it checks `imageFileId`.
 - A composite's `types` are recomputed server-side from its components (`buildCompositeTypes`): the components' slots plus any designated extras. They widen, never narrow — a `PUT` that changes components without restating `types` keeps every slot the item already claimed.
 - A character's endpoints require the character to belong to the requesting user; a write to an archived character's vault is a **409**.
-- General's collection `GET` answers `{ wardrobeItems: [] }` while Quilltap General is unprovisioned; a write there is a 500.
+- **No `GET` provisions a store.** A project or group with no store yet, and Quilltap General while unprovisioned, list as `{ mountPointId: null, wardrobeItems: [] }`; a write to an unprovisioned General is a 500. Writes (create, duplicate, `create-folder`, `instructions`) are what provision a missing project or group store.
+- Item 404s name the tier: `Wardrobe item`, `Group wardrobe item`, `Project wardrobe item`, `Archetype wardrobe item` (General).
 - Every item carries **`folder`**: its path under the tier's `Wardrobe/` (`''` = top level, e.g. `"Formal/Evening"`). It is derived from the item file's path on read and is never stored in frontmatter. Create and update bodies accept an optional `folder` (create defaults to the top level; update leaves it unchanged when omitted); it is resolved by `resolveWardrobeFolder` (`lib/wardrobe/folders.ts`): a folder the tier already has (in any casing, hand-made Scriptorium spellings included) is used exactly as stored; otherwise the new part is normalised — segments trimmed and sanitised like file names, at most 8 deep, never `.`/`..` or `images` — and anything else is a **400**. An update naming the item's current folder moves nothing. `create-folder` and `move-items` resolve the same way. Folders are filing only; they never affect the wearable pool. Transfers keep an item's folder at the destination.
 
 ##### Wardrobe folders (every tier's collection route)
 
-The same actions (five folder actions plus `instructions`) on `/api/v1/wardrobe`, `/api/v1/characters/[id]/wardrobe`, `/api/v1/projects/[id]/wardrobe` and `/api/v1/groups/[id]/wardrobe`. Clients build the URL with `wardrobeCollectionActionUrl()` (`lib/wardrobe/wardrobe-container.ts`).
+The same actions (five folder actions, `duplicate` and `instructions`) on `/api/v1/wardrobe`, `/api/v1/characters/[id]/wardrobe`, `/api/v1/projects/[id]/wardrobe` and `/api/v1/groups/[id]/wardrobe`. Clients build the URL with `wardrobeCollectionActionUrl()` (`lib/wardrobe/wardrobe-container.ts`).
 
 | Verb | Action | Body | Result |
 |---|---|---|---|
@@ -2087,7 +2088,8 @@ The same actions (five folder actions plus `instructions`) on `/api/v1/wardrobe`
 | `POST` | `?action=delete-folder` | `{ path }` | `{ movedItems, movedFolders }`; items (archived included) and subfolders move up to the parent, merging case-insensitively; only folder rows are deleted; a folder holding non-item files (anything that is not a parseable item `.md`), or a subfolder of its own name, is a **409** before anything moves |
 | `POST` | `?action=move-items` | `{ itemIds, folder, components? }` | `{ items, componentsCarried }` (serialised with `origin` and `wear`); an id not filed in this tier (a borrowed item) is a **400** naming it, before anything moves. `components` (`move` / `copy` / `none`, default `none`) covers composites' same-tier components, nested ones included (borrowed pieces never travel): `move` files them in the same batch (one projection); `copy` creates `(copy)`-titled copies in the folder and rewires the moved outfits to them. Logic: `fileItemsToFolder` (`lib/wardrobe/folder-filing.ts`) |
 | `POST` | `?action=copy-items` | `{ itemIds, folder, components? }` | `{ items, componentsCarried }` — the copies: fresh ids, `(copy)` titles (`nextCopyTitle`), pictures copied under the new id. `components` is `copy` or `none` (default); with `copy` the components are copied too and every copy is rewired to the copied pieces. Copying both an outfit and one of its pieces always rewires the copy to the copied piece. Same borrowed-id **400** |
-| `GET` | `?action=instructions` | — | `{ instructions: string \| null }` — the tier's dressing-instructions file (`null` when absent or the tier has no store yet); a read probe that never provisions (General is the one tier that provisions on read) |
+| `POST` | `?action=duplicate` | `{ itemId }` | `201 { wardrobeItem }` (serialised with `origin` and `wear`) — a copy of one of this tier's items beside the original: same folder, every editable field (description, image prompt, types, appropriateness, `isDefault`, `replace`, pronoun guidance; a composite's `componentItemIds` verbatim, members not cloned), a fresh id, no picture, not archived, titled by `nextCopyTitle` against every title in the tier (archived ones included: `Cloak` → `Cloak (copy)`, then `Cloak (copy 2)`). Written through `createItem`. An item not in this tier is a **404** with the tier's label; the store is never provisioned; an archived character's vault is a **409** |
+| `GET` | `?action=instructions` | — | `{ instructions: string \| null }` — the tier's dressing-instructions file (`null` when absent or the tier has no store yet); a read probe that never provisions, on every tier |
 | `POST` | `?action=instructions` | `{ instructions: string \| null }` | `{ instructions }` — written trimmed; `null` or blank clears the file and answers `{ instructions: null }`. Clearing on an unprovisioned General is a no-op; a write against an archived character is a **409** |
 
 Folder writes against an archived character's vault are a **409**, like every other write.
@@ -2110,7 +2112,7 @@ Every wardrobe item (all tiers) carries an optional **`imageFileId`** — its cu
 
 #### `/api/v1/wardrobe/[itemId]/images`
 
-One route for an item's pictures in every tier; the item's container rides in the query: `?scope=character|project|group|general&id=<containerId>` (`id` omitted for `general`). The item must live in that container (404 otherwise). Writes against an archived character's item answer **409** (the tombstone). Clients build URLs through `wardrobeItemImagesUrl()` in `lib/wardrobe/item-images-client.ts`.
+One route for an item's pictures in every tier; the item's container rides in the query: `?scope=character|project|group|general&id=<containerId>` (`id` omitted for `general`). The item must live in that container (404 otherwise). Writes against an archived character's item answer **409** (the tombstone). Clients build URLs through `wardrobeItemImagesUrl()` in `lib/wardrobe/item-images-client.ts`. The handlers are the shared `createItemImagesRoute` (`lib/mount-index/item-images-route.ts`), which also serves `/api/v1/inventory/[itemId]/images`; the route file is the wardrobe's adapter, and `link-image` is its kind-only action.
 
 | Method | Action | Body | Response |
 |---|---|---|---|
@@ -2292,7 +2294,7 @@ Every GENERATED image file linked to a wardrobe item in the character's wearable
 
 ### Inventory (Pascal the Croupier)
 
-One `.json` file per object under a tier's `Inventory/` folder; four tiers, one route factory (`lib/inventory/routes/inventory-route-factory.ts`). Every object on the wire is **resolved**: an instance carries its archetype's fields where it does not override them, plus `overriddenFields`, `parentMissing`, `parentName` and `origin`. Refusals answer `409` (or `400`) with `details.code`: `ARCHETYPE_IN_USE` (with `dependents` and `holders`), `ARCHIVED_DEPENDENTS` (with `characters`), `NOT_COPYABLE`, `CAP_EXCEEDED` (with `itemId`, `itemName`, `cap`), `INVALID_PARENT`, `KIT_NESTING`, `KIT_STRANDED` (with `itemId`, `kits`: a move that would leave kits naming an object they can no longer reach), `NOT_EQUIPPABLE`, `INVALID_SHAPE` (400), `NOT_A_PARTICIPANT` (400), `INVALID_SVG` (400). A write to an archived character's vault is `409`.
+One `.json` file per object under a tier's `Inventory/` folder; four tiers, one route factory (`lib/inventory/routes/inventory-route-factory.ts`), whose preamble (config, per-tier labels, resolver, read probe, `?action=folders`, folder writes, error mapping) is shared with the wardrobe's in `lib/mount-index/item-folder-routes.ts`. Item 404s name the tier: `Inventory object`, `Group inventory object`, `Project inventory object`, `General inventory object`. Every object on the wire is **resolved**: an instance carries its archetype's fields where it does not override them, plus `overriddenFields`, `parentMissing`, `parentName` and `origin`. Refusals answer `409` (or `400`) with `details.code`: `ARCHETYPE_IN_USE` (with `dependents` and `holders`), `ARCHIVED_DEPENDENTS` (with `characters`), `NOT_COPYABLE`, `CAP_EXCEEDED` (with `itemId`, `itemName`, `cap`), `INVALID_PARENT`, `KIT_NESTING`, `KIT_STRANDED` (with `itemId`, `kits`: a move that would leave kits naming an object they can no longer reach), `NOT_EQUIPPABLE`, `INVALID_SHAPE` (400), `NOT_A_PARTICIPANT` (400), `INVALID_SVG` (400). A write to an archived character's vault is `409`.
 
 #### Collection — `/api/v1/characters/[id]/inventory`, `/api/v1/groups/[id]/inventory`, `/api/v1/projects/[id]/inventory`, `/api/v1/inventory` (Quilltap General)
 
@@ -2319,7 +2321,7 @@ One `.json` file per object under a tier's `Inventory/` folder; four tiers, one 
 
 #### `/api/v1/inventory/[itemId]/images?scope=<scope>&id=<containerId>`
 
-The wardrobe item images route's shape over `Inventory/images/<itemId>/`: `GET` (an instance with none of its own lists its archetype's, `inherited: true`), `POST ?action=generate` (subject `imageDescription ?? description ?? name`; log type `INVENTORY_ITEM_IMAGE`), `upload`, `set-current`, `delete-image`, `GET ?action=save-targets`, `POST ?action=save-to-store`.
+The wardrobe item images route's shape — the same `createItemImagesRoute` (`lib/mount-index/item-images-route.ts`), with the Inventory's adapter — over `Inventory/images/<itemId>/` (no `link-image`; `save-to-store` lets out only what the `GET` lists, an instance's inherited pictures included): `GET` (an instance with none of its own lists its archetype's, `inherited: true`), `POST ?action=generate` (subject `imageDescription ?? description ?? name`; log type `INVENTORY_ITEM_IMAGE`), `upload`, `set-current`, `delete-image`, `GET ?action=save-targets`, `POST ?action=save-to-store`.
 
 #### Chat actions
 
@@ -7698,7 +7700,8 @@ closes with `1008`.
 
 - `topic` — a `lib/query/keys.ts` namespace name. Canonical values live in `REALTIME_TOPICS`
   (`lib/schemas/realtime.types.ts`): `jobs`, `autonomousRooms`, `chats`, `projects`, `characters`,
-  `mountPoints`. Clients **must ignore topics they don't recognise** — an older tab meeting a newer
+  `mountPoints`, `memories` (scoped by chat id), `inventory`, `wardrobe`, `storytellerRounds` and
+  `customToolInterventions` (both scoped by chat id). Clients **must ignore topics they don't recognise** — an older tab meeting a newer
   server is the normal case after an upgrade.
 - `id` — present only when the change is row-scoped; absent means the whole namespace.
 - `at` — server ms, for log correlation only. Clients must not order, dedupe, or expire on it.

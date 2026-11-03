@@ -34,10 +34,14 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types';
 import { wardrobeItemFromCreateBody, type WardrobeCreateBody } from '@/lib/wardrobe/create-body';
-import { isSameFolder, WardrobeItemNotInLocationError } from '@/lib/wardrobe/folders';
+import {
+  isSameFolder,
+  WARDROBE_FOLDER_RULES,
+  WardrobeFolderPathError,
+  WardrobeItemNotInLocationError,
+} from '@/lib/wardrobe/folders';
 import type { WardrobeLocation } from '@/lib/wardrobe/location';
-import { WARDROBE_FOLDER_KIND } from '@/lib/wardrobe/folder-mutations';
-import { moveItemsToFolderIn } from '@/lib/mount-index/item-folder-location';
+import { moveItemsToFolderIn, type ItemFolderKind } from '@/lib/mount-index/item-folder-location';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
 
 /** Every item a composite in this location could name as a component. */
@@ -220,3 +224,14 @@ export function moveItemsToFolder(
 ): Promise<WardrobeItem[]> {
   return moveItemsToFolderIn(WARDROBE_FOLDER_KIND, location, itemIds, folder);
 }
+
+/**
+ * The wardrobe's folder kind — its rules and its path error — as the shared
+ * item-folder mutations (`lib/mount-index/item-folder-location.ts`) take it.
+ * Folder create / rename / delete run through those mutations from the route
+ * factory's `itemFolderActionHandlers`.
+ */
+export const WARDROBE_FOLDER_KIND: ItemFolderKind = {
+  rules: WARDROBE_FOLDER_RULES,
+  pathError: (message) => new WardrobeFolderPathError(message),
+};

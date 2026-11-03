@@ -20,6 +20,10 @@
  * Choosing an entry closes the menu, puts focus back on the button (a dialog
  * the action opens restores focus there when it closes), then runs it.
  *
+ * The button is a ⋮ by default; a `trigger` gives it visible content instead
+ * (the Outfit Builder's "Reset…", a garment row's `+` slot picker), keeping
+ * every menu behaviour above.
+ *
  * @module components/item-browser/ItemActionMenu
  */
 
@@ -39,10 +43,27 @@ export interface MenuEntry {
 
 export type MenuEntryLike = MenuEntry | false | null | undefined
 
+/** A visible menu button in place of the ⋮ glyph. */
+export interface MenuTrigger {
+  /** What the button shows. */
+  content: ReactNode
+  /** The button's tooltip; defaults to the menu's `label`. */
+  title?: string
+  /** The button's class; defaults to the ghost small button. */
+  className?: string
+  /**
+   * The button's accessible name when `content` does not say it (an icon);
+   * omitted, the visible content names the button.
+   */
+  ariaLabel?: string
+}
+
 export interface ItemActionMenuProps {
   entries: readonly MenuEntryLike[]
-  /** The ⋮ button's accessible name. */
+  /** The menu's accessible name (and the ⋮ button's). */
   label?: string
+  /** Show this instead of the ⋮ glyph. */
+  trigger?: MenuTrigger
   /** Disable the ⋮ button (a browser's select mode). */
   disabled?: boolean
   /** Room the menu wants below its button before it opens upward. */
@@ -68,6 +89,7 @@ export function ItemActionMenu({
   disabled = false,
   room,
   minWidthClass = 'min-w-[14rem]',
+  trigger,
 }: ItemActionMenuProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -113,9 +135,9 @@ export function ItemActionMenu({
       <button
         ref={anchorRef}
         type="button"
-        className="qt-button-ghost qt-button-sm"
-        aria-label={label}
-        title={label}
+        className={trigger?.className ?? 'qt-button-ghost qt-button-sm'}
+        aria-label={trigger ? trigger.ariaLabel : label}
+        title={trigger?.title ?? label}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
@@ -127,7 +149,7 @@ export function ItemActionMenu({
           }
         }}
       >
-        ⋮
+        {trigger ? trigger.content : '⋮'}
       </button>
       {open && (
         <div

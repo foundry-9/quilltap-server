@@ -22,21 +22,42 @@ export type NativeTextType = 'markdown' | 'txt' | 'json' | 'jsonl';
 /**
  * Normalise a caller-supplied relative path: collapse `./` and redundant
  * separators, strip leading/trailing slashes, and reject `..` traversal.
- * Throws `FileOpError('INVALID_PATH')` on an empty or traversing path.
+ * Throws `FileOpError('INVALID_PATH')` on a traversing path, and on an empty
+ * one unless `allowRoot` is set — then the store root comes back as `''`.
+ * Trailing slashes are stripped so folder paths match the form that
+ * `folder-paths.ts` writes into `doc_mount_folders.path`.
  */
-export function normaliseRelativePath(input: string): string {
+export function normaliseRelativePath(input: string, opts: { allowRoot?: boolean } = {}): string {
   const normalised = path
-    .normalize(input)
+    .normalize(input || '.')
     .replace(/\\/g, '/')
     .replace(/^\/+/, '')
     .replace(/\/+$/, '');
   if (!normalised || normalised === '.') {
+    if (opts.allowRoot) return '';
     throw new FileOpError(`Invalid relative path: ${input}`, 'INVALID_PATH');
   }
   if (normalised.split('/').includes('..')) {
     throw new FileOpError(`Path traversal not allowed: ${input}`, 'INVALID_PATH');
   }
   return normalised;
+}
+
+/**
+ * True when a normalised relative path is safe to create as a folder or file
+ * name on any backend: no absolute path, no empty / `.` / `..` segment, no
+ * control characters, none of `<>:"|?*\`, and no segment over 200 characters.
+ */
+export function isSafeRelativePath(rel: string): boolean {
+  if (!rel) return false;
+  if (path.isAbsolute(rel)) return false;
+  for (const seg of rel.split('/')) {
+    if (seg === '' || seg === '.' || seg === '..') return false;
+    if (/[\x00-\x1f]/.test(seg)) return false;
+    if (/[<>:"|?*\\]/.test(seg)) return false;
+    if (seg.length > 200) return false;
+  }
+  return true;
 }
 
 /**

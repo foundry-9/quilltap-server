@@ -10,7 +10,10 @@
  * The state is `useFolderBrowserState`'s and the folder writes
  * `useItemFolderHandlers`'; this component only lays them out. Each browser
  * supplies its filters, its row renderer, its select-bar buttons and its
- * footer, plus the wording and test ids that make it its own.
+ * footer, plus the wording and test ids that make it its own. The pieces the
+ * tiered item browsers (the wardrobe's, the Inventory's) share are props:
+ * the *Show archived* / *Show shared* toggles and the select bar's *Move to
+ * folder…* / *Copy to folder…* pair.
  *
  * @module components/item-browser/FolderBrowserShell
  */
@@ -25,6 +28,34 @@ import type { MenuEntryLike } from './ItemActionMenu'
 import type { FolderBrowserState } from './useFolderBrowserState'
 
 type Item = BrowserViewItem & { id: string }
+
+/** A labelled checkbox in the toggles row. */
+export interface BrowserToggle {
+  checked: boolean
+  onChange: (next: boolean) => void
+}
+
+/** The toggles row under the filters. */
+export interface BrowserToggles {
+  /** Before the shared toggles (the Inventory's *Equipped only*). */
+  before?: ReactNode
+  /** *Show archived* — re-reads with archived rows rather than filtering. */
+  archived?: BrowserToggle
+  /**
+   * *Show shared* — a character's merged view only. Turning it off from
+   * inside a borrowed tier goes back to the character's own root.
+   */
+  shared?: BrowserToggle
+  /** After the shared toggles (the wardrobe's *Never worn*, pronoun filter). */
+  after?: ReactNode
+}
+
+/** The select bar's *Move to folder…* / *Copy to folder…* pair. */
+export interface BrowserFolderFiling<T> {
+  open: (items: T[], mode: 'move' | 'copy') => void
+  /** Why the selection cannot be copied, or undefined when it can. */
+  copyBlocked?: (items: T[]) => string | undefined
+}
 
 export interface FolderBrowserShellProps<T extends Item> {
   state: FolderBrowserState<T>
@@ -44,9 +75,13 @@ export interface FolderBrowserShellProps<T extends Item> {
   }
   /** The search box and filters above the folder bar. */
   filters: ReactNode
+  /** The toggles row after the filters. */
+  toggles?: BrowserToggles
   renderItem: (item: T) => ReactNode
-  /** The select bar's filing buttons. */
-  selectActions: ReactNode
+  /** The select bar's folder-filing pair, ahead of `selectActions`. */
+  folderFiling?: BrowserFolderFiling<T>
+  /** The select bar's other filing buttons. */
+  selectActions?: ReactNode
   /** The sticky footer's create buttons. */
   footer: ReactNode
   /** Folder handlers from `useItemFolderHandlers`. */
@@ -77,7 +112,9 @@ export function FolderBrowserShell<T extends Item>({
   countNoun = 'item',
   text,
   filters,
+  toggles,
   renderItem,
+  folderFiling,
   selectActions,
   footer,
   folderHandlers,
@@ -102,13 +139,46 @@ export function FolderBrowserShell<T extends Item>({
     visible,
     folderIsEmpty,
     searching,
+    selectedItems,
   } = state
   const managed = stateManaged && (manageFolders ?? true)
+  const copyBlocked = folderFiling?.copyBlocked?.(selectedItems)
 
   return (
     <section className="flex flex-col min-h-0 relative">
       <div className="flex flex-col gap-2 mb-2">
         {filters}
+        {toggles && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {toggles.before}
+            {toggles.archived && (
+              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={toggles.archived.checked}
+                  onChange={(e) => toggles.archived?.onChange(e.target.checked)}
+                  className="qt-checkbox"
+                />
+                Show archived
+              </label>
+            )}
+            {toggles.shared && (
+              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={toggles.shared.checked}
+                  onChange={(e) => {
+                    toggles.shared?.onChange(e.target.checked)
+                    if (!e.target.checked && !inOwnTier) navigate(OWN_TIER, '')
+                  }}
+                  className="qt-checkbox"
+                />
+                Show shared
+              </label>
+            )}
+            {toggles.after}
+          </div>
+        )}
         {hasContainer && (
           <ItemFolderBar
             rootLabel={rootLabel}
@@ -182,6 +252,27 @@ export function FolderBrowserShell<T extends Item>({
                 testId={`${testIdPrefix}-select-bar`}
                 onCancel={() => setSelectMode(false)}
               >
+                {folderFiling && (
+                  <>
+                    <button
+                      type="button"
+                      className="qt-button-secondary qt-button-sm"
+                      disabled={selectedItems.length === 0}
+                      onClick={() => folderFiling.open(selectedItems, 'move')}
+                    >
+                      Move to folder…
+                    </button>
+                    <button
+                      type="button"
+                      className="qt-button-secondary qt-button-sm"
+                      disabled={selectedItems.length === 0 || copyBlocked !== undefined}
+                      title={copyBlocked}
+                      onClick={() => folderFiling.open(selectedItems, 'copy')}
+                    >
+                      Copy to folder…
+                    </button>
+                  </>
+                )}
                 {selectActions}
               </ItemSelectBar>
             )}

@@ -247,6 +247,11 @@ export const copyWardrobeItemsSchema = z.object({
   components: z.enum(['copy', 'none']).optional(),
 });
 
+/** `POST …/wardrobe?action=duplicate` body: the item to copy beside itself. */
+export const duplicateWardrobeItemSchema = z.object({
+  itemId: z.string().min(1, 'itemId is required'),
+});
+
 // ============================================================================
 // WARDROBE ITEM
 // ============================================================================

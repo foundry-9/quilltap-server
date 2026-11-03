@@ -4,6 +4,24 @@
 
 ### 4.12-dev
 
+#### Refactor: the browser family, finished (Refactor 4.12, spec 6, Phases 1–3)
+
+The remaining Wardrobe / Inventory pairs are one component or one factory with a kind parameter. Phases 4 (server-side wardrobe merge) and 5 (`FileBrowser` retirement) wait on the spec's open decisions.
+
+- Dead code: `createWardrobeFolder` / `renameWardrobeFolder` / `deleteWardrobeFolder` and `lib/wardrobe/folder-mutations.ts` removed (`WARDROBE_FOLDER_KIND` moved to `lib/wardrobe/item-mutations.ts`); `lib/wardrobe/folder-view.ts` no longer re-exports the shared view helpers; `FileBrowser`'s unreachable project branch (project file list, project folders, upload) removed along with its `projectId` / `showUpload` props.
+- `normaliseRelativePath` has one copy (`lib/mount-index/path-utils.ts`, new `allowRoot` option and `isSafeRelativePath`). `database-store.ts` and `POST /api/v1/mount-points/[id]/folders` use it.
+- Client: `ItemControlDialogShell` + `useItemControlState` (container auto-select, confirmation/alert wrappers, container label, select header with the shared note, modal-or-tab shell) under both control dialogs. `FolderBrowserShell` takes `toggles` (Show archived / Show shared) and `folderFiling` (Move / Copy to folder…). One `ItemFolderPickerDialog` replaces `WardrobeFolderPickerDialog` and `InventoryFolderPickerDialog`; the Inventory's picker now lives in its browser and, like the wardrobe's, leaves select mode after filing. `useItemOverlays` holds the editor / folder-picker / transfer state for both actions hooks. `ItemTransferFooter` is the transfer dialogs' footer.
+- Folder hooks: one `useItemFolders(kind, container)` / `useItemFolderMutations(kind)` (`lib/hooks/use-item-folders.ts`); the old wardrobe and Inventory folder hooks are delegates. Both refresh with `refreshUnlessRealtime` (moved to `lib/query/refresh-unless-realtime.ts`). `InventoryRequestError` / `inventoryRequest` moved to `lib/inventory/request.ts` (re-exported from `use-inventory`).
+- New `wardrobe` realtime topic (`REALTIME_TOPICS`, `topic-map.ts` → wardrobe lists and folder lists). Every wardrobe location write publishes it in the parent; `topicsForWriteBatch` infers it for a job child's `Wardrobe/` writes. Test: `__tests__/unit/lib/wardrobe/chokepoints.test.ts`.
+- `ItemImageViewer` (`components/item-browser/`) replaces the two picture viewers. The Inventory's now removes a missing picture through its own `?action=delete-image` instead of the generic `DELETE /api/v1/images/{id}` (the bug 194 pattern).
+- `ItemDialogProvider` (`components/providers/item-dialog-provider.tsx`) under the wardrobe and Inventory dialog providers, which keep their exported names.
+- Menus: `ItemActionMenu` gains a `trigger` prop. The Outfit Builder's "Reset…" menu, the garment row's multi-slot `+` picker and `ScenarioRow`'s narrow-width kebab use it, so all three get arrow-key navigation and focus return; their hand-rolled menu code is gone.
+- Server: `lib/mount-index/item-folder-routes.ts` holds the route-factory preamble (`ItemRouteConfig`, per-tier labels, location resolver, read probe, `GET ?action=folders`, folder write actions) and one `withItemErrors(kind)` error mapping, used by the wardrobe and Inventory factories; the scenario factory adopts the config shape. Inventory 404s are now per tier (`Group inventory object not found`, …).
+- Wardrobe GETs no longer provision stores: a project or group with no store lists `{ mountPointId: null, wardrobeItems: [] }`, and `GET ?action=instructions` on a tier with no store answers `null`. Writes still provision.
+- New `POST …/wardrobe?action=duplicate` (`{ itemId }` → `201 { wardrobeItem }`), through `createItem`; the browser's Duplicate calls it instead of building the copy client-side. The "(copy)" title now avoids every title in the tier, archived ones included.
+- `createItemImagesRoute(kind)` (`lib/mount-index/item-images-route.ts`) is behind both `[itemId]/images` routes; the Inventory's archetype fallthrough and the wardrobe's `link-image` are kind options. Wire responses unchanged.
+- Tests: `item-control-shared.test.tsx`, `item-image-viewer.test.tsx`, `item-dialog-provider.test.tsx`, `use-item-folders.test.tsx`, trigger cases in `item-action-menu.test.tsx`, `item-images-route.test.ts`, and preamble, duplicate and no-provision cases in `item-folder-routes.test.ts` / `wardrobe-route-factory.test.ts`.
+
 #### Build: theme-storybook CSS is generated (Refactor 4.12, spec 1)
 
 `packages/theme-storybook/src/css/qt-components.css` is now build output instead of a hand-written copy of the app's `qt-*` CSS. The copy was missing 334 of 893 classes and carried 7 the app had deleted.
