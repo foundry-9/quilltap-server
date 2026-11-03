@@ -26,6 +26,7 @@ import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { StorytellerBid, StorytellerRound } from '@/lib/schemas/storyteller.types'
 import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { customToolEffectMap } from '@/lib/pascal/tool-effect'
+import { stripTransportTags } from '@/lib/chat/image-transport-budget'
 import {
   isComputedToolEffect,
   isWithinCeiling,
@@ -507,7 +508,8 @@ export async function* streamMessage(
   const llmMessages = messages.map(m => ({
     role: m.role as 'system' | 'user' | 'assistant' | 'tool',
     content: m.content,
-    attachments: m.attachments,
+    // Provenance is for the transport budget alone; a plugin never sees it.
+    attachments: stripTransportTags(m.attachments),
     name: m.name,
     thoughtSignature: m.thoughtSignature,
     reasoningContent: m.reasoningContent,

@@ -10,7 +10,7 @@
 
 import sharp from 'sharp'
 import {
-  LANTERN_IMAGE_BASE64_BUDGET,
+  LLM_TRANSPORT_TOTAL_BASE64,
   LLM_TRANSPORT_MAX_EDGE,
   LLM_TRANSPORT_TARGET_BASE64,
   shrinkImageForLlmTransport,
@@ -114,7 +114,7 @@ describe('shrinkImageForLlmTransport', () => {
     expect(base64Size(result.buffer)).toBeLessThanOrEqual(LLM_TRANSPORT_TARGET_BASE64)
   })
 
-  it('keeps two shrunk avatars inside the per-turn budget that bug 151 blew', async () => {
+  it('keeps two shrunk avatars inside the per-request budget that bug 151 blew', async () => {
     // The reported turn, reproduced: two unseen avatars on one request.
     const a = await shrinkImageForLlmTransport({
       buffer: await makePortrait(),
@@ -128,7 +128,7 @@ describe('shrinkImageForLlmTransport', () => {
     })
 
     const onTheWire = base64Size(a.buffer) + base64Size(b.buffer)
-    expect(onTheWire).toBeLessThanOrEqual(LANTERN_IMAGE_BASE64_BUDGET)
+    expect(onTheWire).toBeLessThanOrEqual(LLM_TRANSPORT_TOTAL_BASE64)
     // 4.52 MB was what NanoGPT answered with 413.
     expect(onTheWire).toBeLessThan(4.52 * 1024 * 1024)
   })

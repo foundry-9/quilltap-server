@@ -21,7 +21,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { takeRaisedHand, waitForEarlierTurns } from '@/lib/chat/turn-control'
-import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
+import { collectAttachmentMimeTypes } from '@/lib/chat/image-transport-budget'
 import { frameEstablishedFact } from '@/lib/chat/established-fact'
 import { postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
