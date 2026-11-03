@@ -192,6 +192,33 @@ describe('doc-edit move handlers sync chat_documents pointers', () => {
     )
   })
 
+  it('doc_move_file sweeps under the resolved store name, never `self` (bug 256)', async () => {
+    const vault = {
+      scope: 'document_store',
+      mountType: 'database',
+      mountPointId: 'mp-vault',
+      mountPointName: 'Friday Character Vault',
+    }
+    mockResolveDocEditPath
+      .mockResolvedValueOnce({ ...vault, relativePath: 'old/name.md' })
+      .mockResolvedValueOnce({ ...vault, relativePath: 'new/title.md' })
+
+    const result = await executeDocEditTool(
+      'doc_move_file',
+      { scope: 'document_store', mount_point: 'self', path: 'old/name.md', new_path: 'new/title.md' },
+      context,
+    )
+
+    expect(result.success).toBe(true)
+    expect(mockRepos.chatDocuments.renameFilePathInStore).toHaveBeenCalledWith(
+      'document_store',
+      'Friday Character Vault',
+      'old/name.md',
+      'new/title.md',
+      'title.md',
+    )
+  })
+
   it('doc_move_folder updates nested chat_documents paths in the same store', async () => {
     mockResolveDocEditPath
       .mockResolvedValueOnce({

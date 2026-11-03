@@ -2,9 +2,10 @@
  * Documents API v1 — Standalone (chat-less) Document Mode
  *
  * The left rail's Document Mode: open, read, write, rename, and delete
- * documents with no chat attached. Drives the same shared core as the
- * chat-scoped document actions (`lib/documents/operator-doc-actions`) through
- * the same HTTP mapping (`lib/documents/operator-doc-http`), but creates no
+ * documents with no chat attached. Drives the same document core
+ * (`lib/documents/core`, through `lib/documents/operator-doc-actions`) and the
+ * same HTTP mapping (`lib/documents/operator-doc-http`) as the chat-scoped
+ * document actions, but creates no
  * chat_documents rows for a chat and posts no Librarian announcements — there
  * is no conversation to notify.
  *
@@ -26,22 +27,24 @@ import { successResponse, serverError, errorResponse } from '@/lib/api/responses
 import type { DocEditScope } from '@/lib/doc-edit';
 import {
   STANDALONE_ACCESS_CONTEXT,
-  openDocumentFile,
   listAllEnabledStores,
   resolveGeneralLibrary,
-  DocumentMissingError,
 } from '@/lib/documents/operator-doc-actions';
+import { sweepChatDocumentsAfterMove } from '@/lib/documents/core';
 import {
   documentTargetFields,
   openDocumentFields,
   writeDocumentFields,
+  resolveDocumentForRoute,
+  openDocumentResponse,
+  openedDocumentPayload,
   readDocumentResponse,
   writeDocumentResponse,
   resolveRenameTarget,
   renameDocumentResponse,
-  sweepRenamedDocumentTracking,
   deleteDocumentResponse,
   dedupeRecentDocuments,
+  recentDocumentsResponse,
   type DocumentHttpLog,
 } from '@/lib/documents/operator-doc-http';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -121,19 +124,7 @@ async function handleRecentDocuments(
       MAX_RECENT_DOCUMENTS,
     );
 
-    return successResponse({
-      documents: ordered.map(doc => ({
-        id: doc.id,
-        chatId: doc.chatId,
-        filePath: doc.filePath,
-        scope: doc.scope,
-        mountPoint: doc.mountPoint,
-        displayTitle: doc.displayTitle,
-        isActive: false,
-        fromCurrentChat: false,
-        updatedAt: doc.updatedAt,
-      })),
-    });
+    return recentDocumentsResponse(ordered, null);
   } catch (error) {
     logger.error('Failed to get recent documents for standalone picker', {
       error: getErrorMessage(error),
@@ -157,59 +148,45 @@ async function handleOpenDocument(
   const body = await req.json();
   const data = openDocumentSchema.parse(body);
 
+  const result = await openDocumentResponse(STANDALONE_ACCESS_CONTEXT, {
+    filePath: data.filePath,
+    title: data.title,
+    scope: data.scope as DocEditScope,
+    mountPoint: data.mountPoint,
+    targetFolder: data.targetFolder,
+  }, STANDALONE_LOG);
+  if (!result.ok) {
+    return result.response;
+  }
+  const { opened } = result;
+
+  // Record the open in recent-documents history. Failing to track must not
+  // sink the open itself, so log and continue if the write throws.
   try {
-    const opened = await openDocumentFile(STANDALONE_ACCESS_CONTEXT, {
-      filePath: data.filePath,
-      title: data.title,
-      scope: data.scope as DocEditScope,
-      mountPoint: data.mountPoint,
-      targetFolder: data.targetFolder,
+    await repos.chatDocuments.openDocument(STANDALONE_CHAT_ID, {
+      filePath: opened.filePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint ?? null,
+      displayTitle: opened.displayTitle,
     });
-
-    // Record the open in recent-documents history. Failing to track must not
-    // sink the open itself, so log and continue if the write throws.
-    try {
-      await repos.chatDocuments.openDocument(STANDALONE_CHAT_ID, {
-        filePath: opened.filePath,
-        scope: data.scope,
-        mountPoint: data.mountPoint ?? null,
-        displayTitle: opened.displayTitle,
-      });
-    } catch (trackError) {
-      logger.warn('Failed to record standalone document in recent history', {
-        filePath: opened.filePath,
-        scope: data.scope,
-        mountPoint: data.mountPoint,
-        error: getErrorMessage(trackError),
-      });
-    }
-
-    return successResponse({
-      document: {
-        filePath: opened.filePath,
-        scope: data.scope,
-        mountPoint: data.mountPoint ?? null,
-        displayTitle: opened.displayTitle,
-      },
-      content: opened.content,
-      mtime: opened.mtime,
-      isNew: opened.isNew,
-      ...(opened.viewer ? { viewer: opened.viewer } : {}),
-    });
-  } catch (error) {
-    if (error instanceof DocumentMissingError) {
-      // 404 (not 400) so the client can surface a friendly "file not found"
-      // toast, matching the chat route's open-document behaviour.
-      return errorResponse(error.message, 404);
-    }
-    logger.error('Failed to open standalone document', {
-      filePath: data.filePath,
+  } catch (trackError) {
+    logger.warn('Failed to record standalone document in recent history', {
+      filePath: opened.filePath,
       scope: data.scope,
       mountPoint: data.mountPoint,
-      error: getErrorMessage(error),
+      error: getErrorMessage(trackError),
     });
-    return serverError(`Failed to open document: ${getErrorMessage(error)}`);
   }
+
+  return successResponse({
+    ...openedDocumentPayload(opened, {
+      filePath: opened.filePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint ?? null,
+      displayTitle: opened.displayTitle,
+    }),
+    isNew: opened.isNew,
+  });
 }
 
 /** Read file content for the standalone editor. */
@@ -230,14 +207,13 @@ async function handleReadDocument(
 /** Write file content from the standalone editor (mtime-checked, no Librarian). */
 async function handleWriteDocument(
   req: NextRequest,
-  { repos }: RequestContext,
+  _ctx: RequestContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = writeDocumentSchema.parse(body);
 
   const written = await writeDocumentResponse(
     STANDALONE_ACCESS_CONTEXT,
-    repos,
     {
       filePath: data.filePath,
       scope: data.scope as DocEditScope,
@@ -266,13 +242,13 @@ async function handleRenameDocument(
   const body = await req.json();
   const data = renameDocumentSchema.parse(body);
 
-  const target = resolveRenameTarget(data.filePath, data.newTitle);
-  if (!target.ok) {
-    return target.response;
+  const renameTarget = resolveRenameTarget(data.filePath, data.newTitle);
+  if (!renameTarget.ok) {
+    return renameTarget.response;
   }
-  const { newFilePath, newDisplayTitle } = target;
+  const { newFilePath, newDisplayTitle } = renameTarget;
 
-  if (target.unchanged) {
+  if (renameTarget.unchanged) {
     return successResponse({
       document: {
         filePath: data.filePath,
@@ -283,15 +259,16 @@ async function handleRenameDocument(
     });
   }
 
+  const target = { scope: data.scope as DocEditScope, mountPoint: data.mountPoint, filePath: data.filePath };
+  const resolution = await resolveDocumentForRoute(STANDALONE_ACCESS_CONTEXT, target, STANDALONE_LOG, 'rename');
+  if (!resolution.ok) {
+    return resolution.response;
+  }
+
   const renamed = await renameDocumentResponse(
     STANDALONE_ACCESS_CONTEXT,
-    repos,
-    {
-      scope: data.scope as DocEditScope,
-      mountPoint: data.mountPoint,
-      oldFilePath: data.filePath,
-      newFilePath,
-    },
+    resolution.resolved,
+    { scope: target.scope, mountPoint: target.mountPoint, oldFilePath: target.filePath, newFilePath },
     STANDALONE_LOG,
   );
   if (!renamed.ok) {
@@ -299,8 +276,7 @@ async function handleRenameDocument(
   }
 
   // Keep the recent-documents history pointing at the new name.
-  await sweepRenamedDocumentTracking(
-    repos,
+  await sweepChatDocumentsAfterMove(
     {
       scope: data.scope,
       mountPoint: data.mountPoint,
@@ -308,7 +284,7 @@ async function handleRenameDocument(
       newFilePath,
       newDisplayTitle,
     },
-    STANDALONE_LOG,
+    { repos },
   );
 
   return successResponse({
@@ -329,11 +305,13 @@ async function handleDeleteDocument(
   const body = await req.json();
   const data = deleteDocumentSchema.parse(body);
 
-  const deleted = await deleteDocumentResponse(
-    STANDALONE_ACCESS_CONTEXT,
-    { scope: data.scope as DocEditScope, mountPoint: data.mountPoint, filePath: data.filePath },
-    STANDALONE_LOG,
-  );
+  const target = { scope: data.scope as DocEditScope, mountPoint: data.mountPoint, filePath: data.filePath };
+  const resolution = await resolveDocumentForRoute(STANDALONE_ACCESS_CONTEXT, target, STANDALONE_LOG, 'delete');
+  if (!resolution.ok) {
+    return resolution.response;
+  }
+
+  const deleted = await deleteDocumentResponse(resolution.resolved, target, STANDALONE_LOG);
   if (!deleted.ok) {
     return deleted.response;
   }

@@ -9,9 +9,9 @@
  * - write-document: Write file content from the document editor
  * - rename-document: Rename the active document's file (filesystem or database-backed)
  *
- * The file mechanics (path resolution, blank-document naming, read/write with
- * mtime checks, rename/delete moves) live in the shared core
- * `lib/documents/operator-doc-actions`, which the chat-less standalone route
+ * The file mechanics live in the document core (`lib/documents/core`), reached
+ * through the operator layer (`lib/documents/operator-doc-actions` and
+ * `operator-doc-http`), which the chat-less standalone route
  * (`/api/v1/documents`) drives too. This module adds what is chat-specific:
  * chat_documents row tracking, the chat's documentMode flag, and Librarian
  * announcements.
@@ -26,28 +26,30 @@ import type { DocEditScope } from '@/lib/doc-edit';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   resolveOperatorDocPath,
-  resolvedPathExists,
   classifyResolvedTarget,
-  openDocumentFile,
   listAllEnabledStores,
   resolveGeneralLibrary,
   documentAccessContextForChat,
-  DocumentMissingError,
+  storeOptionFor,
   type DocumentAccessContext,
   type AccessibleStoreOption,
   type LibraryTarget,
 } from '@/lib/documents/operator-doc-actions';
+import { documentExists, sweepChatDocumentsAfterMove } from '@/lib/documents/core';
 import {
   documentTargetFields,
   openDocumentFields,
   writeDocumentFields,
+  resolveDocumentForRoute,
+  openDocumentResponse,
+  openedDocumentPayload,
   readDocumentResponse,
   writeDocumentResponse,
   resolveRenameTarget,
   renameDocumentResponse,
-  sweepRenamedDocumentTracking,
   deleteDocumentResponse,
   dedupeRecentDocuments,
+  recentDocumentsResponse,
   type DocumentHttpLog,
 } from '@/lib/documents/operator-doc-http';
 import {
@@ -125,6 +127,15 @@ async function getChatContext(
   return documentAccessContextForChat(chat);
 }
 
+/** The document a chat_documents row names, as the operator layer addresses it. */
+function documentTargetOf(doc: ChatDocument): { filePath: string; scope: DocEditScope; mountPoint?: string } {
+  return {
+    filePath: doc.filePath,
+    scope: doc.scope as DocEditScope,
+    mountPoint: doc.mountPoint ?? undefined,
+  };
+}
+
 /** How this route's log lines name the file, and the chat they belong to. */
 function documentLog(chatId: string): DocumentHttpLog {
   return { subject: 'document', fields: { chatId } };
@@ -177,21 +188,7 @@ export async function handleRecentDocuments(
       fromOtherChats: ordered.length - thisChatReturned,
     });
 
-    return successResponse({
-      documents: ordered.map(doc => ({
-        id: doc.id,
-        chatId: doc.chatId,
-        filePath: doc.filePath,
-        scope: doc.scope,
-        mountPoint: doc.mountPoint,
-        displayTitle: doc.displayTitle,
-        // "Continue editing" only makes sense for the doc active in THIS chat;
-        // an other-chat row is offered as a fresh "Reopen" here.
-        isActive: doc.isActive && doc.chatId === chatId,
-        fromCurrentChat: doc.chatId === chatId,
-        updatedAt: doc.updatedAt,
-      })),
-    });
+    return recentDocumentsResponse(ordered, chatId);
   } catch (error) {
     logger.error('Failed to get recent documents', {
       chatId,
@@ -291,15 +288,9 @@ export async function handleAccessibleStores(
         const mp = await repos.docMountPoints.findById(vault.mountPointId);
         if (!mp) continue;
         const character = await repos.characters.findById(participant.characterId);
-        stores.push({
-          mountPointId: mp.id,
-          name: mp.name,
-          label: character?.name ?? mp.name,
-          kind: 'character' as const,
-          mountType: mp.mountType,
-          storeType: mp.storeType,
-          characterId: participant.characterId,
-        });
+        stores.push(storeOptionFor(mp, 'character', {
+          owner: { id: participant.characterId, name: character?.name },
+        }));
         seen.add(mp.id);
       }
 
@@ -310,15 +301,7 @@ export async function handleAccessibleStores(
         if (seen.has(id)) continue;
         const mp = await repos.docMountPoints.findById(id);
         if (!mp || !mp.enabled) continue;
-        stores.push({
-          mountPointId: mp.id,
-          name: mp.name,
-          label: mp.name,
-          kind: 'document-store' as const,
-          mountType: mp.mountType,
-          storeType: mp.storeType,
-          isGroupStore: true,
-        });
+        stores.push(storeOptionFor(mp, 'document-store', { isGroupStore: true }));
         seen.add(mp.id);
       }
 
@@ -329,14 +312,7 @@ export async function handleAccessibleStores(
           if (seen.has(link.mountPointId)) continue;
           const mp = await repos.docMountPoints.findById(link.mountPointId);
           if (!mp) continue;
-          stores.push({
-            mountPointId: mp.id,
-            name: mp.name,
-            label: mp.name,
-            kind: 'document-store' as const,
-            mountType: mp.mountType,
-            storeType: mp.storeType,
-          });
+          stores.push(storeOptionFor(mp, 'document-store'));
           seen.add(mp.id);
         }
       }
@@ -469,26 +445,18 @@ export async function handleOpenDocument(
     ? 'general'
     : requestedScope;
 
-  let opened;
-  try {
-    opened = await openDocumentFile(chatContext, {
-      filePath: data.filePath,
-      title: data.title,
-      scope: effectiveScope,
-      mountPoint: data.mountPoint,
-      targetFolder: data.targetFolder,
-    });
-  } catch (error) {
-    if (error instanceof DocumentMissingError) {
-      // 404 (not 400) so the client can distinguish a genuinely missing file
-      // from a malformed request and surface a friendly toast instead of the
-      // dev error overlay.
-      return errorResponse(error.message, 404);
-    }
-    return serverError(`Failed to create blank document: ${getErrorMessage(error)}`);
+  const result = await openDocumentResponse(chatContext, {
+    filePath: data.filePath,
+    title: data.title,
+    scope: effectiveScope,
+    mountPoint: data.mountPoint,
+    targetFolder: data.targetFolder,
+  }, documentLog(chatId));
+  if (!result.ok) {
+    return result.response;
   }
-
-  const { filePath, displayTitle, content, mtime } = opened;
+  const { opened } = result;
+  const { filePath, displayTitle, content } = opened;
 
   try {
     const doc = await repos.chatDocuments.openDocument(chatId, {
@@ -516,16 +484,13 @@ export async function handleOpenDocument(
     });
 
     return successResponse({
-      document: {
+      ...openedDocumentPayload(opened, {
         id: doc.id,
         filePath: doc.filePath,
         scope: doc.scope,
         mountPoint: doc.mountPoint,
         displayTitle: doc.displayTitle,
-      },
-      content,
-      mtime,
-      ...(opened.viewer ? { viewer: opened.viewer } : {}),
+      }),
       librarianMessage: librarianMessage ?? null,
     });
   } catch (error) {
@@ -636,7 +601,7 @@ export async function handleResolveDocument(
       characterId: selfCharacterId,
     });
 
-    const exists = await resolvedPathExists(resolved);
+    const exists = await documentExists(resolved);
     const kind = exists ? await classifyResolvedTarget(context.repos, resolved) : 'other'
     return successResponse({ exists, kind });
   } catch (error) {
@@ -669,7 +634,6 @@ export async function handleWriteDocument(
 
   const written = await writeDocumentResponse(
     chatContext,
-    context.repos,
     {
       filePath: data.filePath,
       scope: data.scope as DocEditScope,
@@ -723,13 +687,13 @@ export async function handleRenameDocument(
     return badRequest('No active document to rename');
   }
 
-  const target = resolveRenameTarget(doc.filePath, data.newTitle);
-  if (!target.ok) {
-    return target.response;
+  const renameTarget = resolveRenameTarget(doc.filePath, data.newTitle);
+  if (!renameTarget.ok) {
+    return renameTarget.response;
   }
-  const { newFilePath, newDisplayTitle } = target;
+  const { newFilePath, newDisplayTitle } = renameTarget;
 
-  if (target.unchanged) {
+  if (renameTarget.unchanged) {
     return successResponse({
       document: {
         id: doc.id,
@@ -746,25 +710,14 @@ export async function handleRenameDocument(
     return badRequest('Chat not found');
   }
 
+  const target = documentTargetOf(doc);
+  const resolution = await resolveDocumentForRoute(chatContext, target, documentLog(chatId), 'rename');
+  if (!resolution.ok) {
+    return resolution.response;
+  }
+  const resolvedOld = resolution.resolved;
   // Capture the read-policy BEFORE the rename moves the link off the old path,
   // so a character_read:false document isn't announced to characters.
-  let resolvedOld;
-  try {
-    resolvedOld = await resolveOperatorDocPath(chatContext, {
-      scope: doc.scope as DocEditScope,
-      filePath: doc.filePath,
-      mountPoint: doc.mountPoint ?? undefined,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.warn('Failed to resolve document path for rename', {
-      chatId,
-      from: doc.filePath,
-      to: newFilePath,
-      error: message,
-    });
-    return badRequest(`Could not resolve path: ${message}`);
-  }
   const hiddenFromCharacters = await documentHiddenFromCharacters(
     resolvedOld.mountPointId,
     resolvedOld.relativePath,
@@ -772,13 +725,8 @@ export async function handleRenameDocument(
 
   const renamed = await renameDocumentResponse(
     chatContext,
-    repos,
-    {
-      scope: doc.scope as DocEditScope,
-      mountPoint: doc.mountPoint ?? undefined,
-      oldFilePath: doc.filePath,
-      newFilePath,
-    },
+    resolvedOld,
+    { scope: target.scope, mountPoint: target.mountPoint, oldFilePath: target.filePath, newFilePath },
     documentLog(chatId),
   );
   if (!renamed.ok) {
@@ -794,8 +742,7 @@ export async function handleRenameDocument(
   // Sweep any other chats' (or the standalone) recent-document rows still
   // pointing at the old path. The row above is already at newFilePath, so it
   // won't re-match here.
-  await sweepRenamedDocumentTracking(
-    repos,
+  await sweepChatDocumentsAfterMove(
     {
       scope: doc.scope,
       mountPoint: doc.mountPoint,
@@ -803,7 +750,7 @@ export async function handleRenameDocument(
       newFilePath,
       newDisplayTitle,
     },
-    documentLog(chatId),
+    { repos, logFields: { chatId } },
   );
 
   const librarianMessage = await postLibrarianRenameAnnouncement({
@@ -855,22 +802,12 @@ export async function handleDeleteDocument(
     return badRequest('Chat not found');
   }
 
-  let resolved;
-  try {
-    resolved = await resolveOperatorDocPath(chatContext, {
-      scope: doc.scope as DocEditScope,
-      filePath: doc.filePath,
-      mountPoint: doc.mountPoint ?? undefined,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.warn('Failed to resolve document path for delete', {
-      chatId,
-      filePath: doc.filePath,
-      error: message,
-    });
-    return badRequest(`Could not resolve path: ${message}`);
+  const target = documentTargetOf(doc);
+  const resolution = await resolveDocumentForRoute(chatContext, target, documentLog(chatId), 'delete');
+  if (!resolution.ok) {
+    return resolution.response;
   }
+  const { resolved } = resolution;
 
   // Capture the read-policy BEFORE the delete removes the link row, so a
   // character_read:false document isn't announced to characters.
@@ -879,15 +816,7 @@ export async function handleDeleteDocument(
     resolved.relativePath,
   );
 
-  const deleted = await deleteDocumentResponse(
-    chatContext,
-    {
-      scope: doc.scope as DocEditScope,
-      mountPoint: doc.mountPoint ?? undefined,
-      filePath: doc.filePath,
-    },
-    documentLog(chatId),
-  );
+  const deleted = await deleteDocumentResponse(resolved, target, documentLog(chatId));
   if (!deleted.ok) {
     return deleted.response;
   }
