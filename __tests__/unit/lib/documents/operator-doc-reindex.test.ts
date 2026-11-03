@@ -58,8 +58,6 @@ function resolved(fields: Record<string, unknown>) {
   }
 }
 
-const repos = { docMountPoints: { refreshStats: mockRefreshStats } } as never
-
 beforeEach(() => {
   jest.clearAllMocks()
   jest.mocked(writeFileWithMtimeCheck).mockResolvedValue({ mtime: 5 })
@@ -71,7 +69,7 @@ describe('writeDocumentFile re-index gate (#133)', () => {
   it('re-indexes a project-scope save into the project store, link siblings included', async () => {
     jest.mocked(resolveDocEditPath).mockResolvedValue(resolved({ mountPointId: 'mp-project' }) as never)
 
-    await writeDocumentFile({ characterIds: [], projectId: 'p1' }, repos, {
+    await writeDocumentFile({ characterIds: [], projectId: 'p1' }, {
       filePath: 'notes.md',
       scope: 'project',
       content: 'hello',
@@ -87,7 +85,7 @@ describe('writeDocumentFile re-index gate (#133)', () => {
   it('does nothing for a legacy project path outside any store', async () => {
     jest.mocked(resolveDocEditPath).mockResolvedValue(resolved({}) as never)
 
-    await writeDocumentFile({ characterIds: [], projectId: 'p1' }, repos, {
+    await writeDocumentFile({ characterIds: [], projectId: 'p1' }, {
       filePath: 'notes.md',
       scope: 'project',
       content: 'hello',
