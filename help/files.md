@@ -435,6 +435,12 @@ A vigilant filesystem watcher monitors your files directory at all times, rather
 - **Removed files** are quietly de-catalogued from the database
 - **Changed files** have their records updated to match
 
+A file that disappears is not struck from the books at once: the watcher waits a few seconds, in case the very same file turns up elsewhere in the directory. If it does, the record simply follows it to its new address, keeping its tags, links and description.
+
+Should your data directory live in a folder synced by iCloud Drive or OneDrive, the watcher leaves alone any file the cloud has whisked away to make room, rather than summoning it back down merely to take its measurements. It is catalogued properly once it comes home.
+
+On a network share where the usual filesystem events are unreliable, set the environment variable `QUILLTAP_WATCHER_POLLING=1` and the watcher will instead make a polite round of the directory every couple of seconds, comparing what it finds with its previous round. It also falls back to these rounds on its own when a filesystem declines to report changes at all — the same arrangement the [Scriptorium's document stores](/scriptorium) enjoy.
+
 ### Untracked Files
 
 Files found on disk without a corresponding database record are marked as **untracked**. They appear with a subtle amber indicator in both grid and list views. These are perfectly usable files — they simply arrived by some means other than the usual upload button. The AI can access them, you can preview them, and they behave in every respect like proper files, save for a faint air of mystery about their origins.

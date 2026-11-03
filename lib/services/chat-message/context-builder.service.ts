@@ -18,14 +18,12 @@ import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
 import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
-import { LANTERN_IMAGE_BASE64_BUDGET } from '@/lib/files/llm-image-budget'
-import { resolveMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils'
-import { adaptMessagesForProfile } from '@/lib/chat/message-attachment-adapter'
+import { applyImageTransportBudget, tagForTransport } from '@/lib/chat/image-transport-budget'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
   processFileAttachmentFallback,
-  generateImageDescription,
   formatFallbackAsMessagePrefix,
+  isImageFile,
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
 import { resolveTimezone } from '@/lib/chat/timestamp-utils'
@@ -213,13 +211,28 @@ export async function loadAndProcessFiles(
     { provider: connectionProfile.provider }
   )
 
-  // Process file attachment fallbacks if provider doesn't support them
+  // Process file attachment fallbacks if provider doesn't support them.
+  //
+  // Images are not decided here: they are tagged as this turn's uploads and
+  // passed on whole, and `applyImageTransportBudget` decides capability, count
+  // and bytes for them once, on the final array, for whichever profile is
+  // called. Everything else (text inlining, unsupported types) is decided here,
+  // because its text belongs in the user's own message.
   const fallbackResults: FallbackResult[] = []
   let messageContentPrefix = ''
+  const uploadedAt = Date.now()
+  const attachmentsToSend: typeof fileAttachments = []
 
   for (let i = 0; i < fileAttachments.length; i++) {
     const fileAttachment = fileAttachments[i]
-    const fileMetadata = attachedFiles[i]
+    const fileMetadata = attachedFiles.find(f => f.id === fileAttachment.id) ?? attachedFiles[i]
+
+    if (isImageFile(fileAttachment.mimeType)) {
+      attachmentsToSend.push(
+        tagForTransport(fileAttachment, { origin: 'upload', createdAt: uploadedAt, describable: true }),
+      )
+      continue
+    }
 
     const fallbackResult = await processFileAttachmentFallback(
       fileMetadata,
@@ -237,18 +250,16 @@ export async function loadAndProcessFiles(
     if (fallbackPrefix) {
       messageContentPrefix += fallbackPrefix
     }
-  }
 
-  // Keep an attachment only when the provider natively supports it
-  // (processFileAttachmentFallback returns type 'unsupported' with no error
-  // in that case). Text/image_description results replace the attachment
-  // with prefix text; 'unsupported' with an error means fallback was
-  // attempted and failed — sending the raw bytes anyway would just trip the
-  // provider's "no image input" rejection, so drop it.
-  const attachmentsToSend = fileAttachments.filter((_, idx) => {
-    const fallback = fallbackResults[idx]
-    return !fallback || (fallback.type === 'unsupported' && !fallback.error)
-  })
+    // Keep the attachment only when the provider natively supports it
+    // (processFileAttachmentFallback returns type 'unsupported' with no error
+    // in that case). A text result replaces the attachment with prefix text;
+    // 'unsupported' with an error means fallback was attempted and failed —
+    // sending the raw bytes anyway would just trip the provider's rejection.
+    if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
+      attachmentsToSend.push(fileAttachment)
+    }
+  }
 
   return {
     attachedFiles,
@@ -409,6 +420,33 @@ export function collectUnseenUserAttachmentsForCharacter(
 }
 
 /**
+ * Is a description of this image on file, so that describing it past the
+ * request budget costs no vision call? Mirrors the reuse check in
+ * `generateImageDescription`: a generated image's (revised) prompt, or a
+ * stored description. A vault-stored image arrives with a mount-link id that
+ * the `files` table does not hold, so it answers false. Never throws.
+ */
+async function hasPersistedImageDescription(
+  repos: ReturnType<typeof getRepositories>,
+  fileId: string,
+): Promise<boolean> {
+  try {
+    const entry = await repos.files.findById(fileId)
+    return !!(
+      entry?.generationRevisedPrompt?.trim() ||
+      entry?.generationPrompt?.trim() ||
+      entry?.description?.trim()
+    )
+  } catch (err) {
+    logger.debug('Persisted-description probe failed; treating the image as not describable', {
+      fileId,
+      error: getErrorMessage(err),
+    })
+    return false
+  }
+}
+
+/**
  * How far back either attachment walk will look for a user upload the
  * character has not seen. The real bound is the character's own previous turn;
  * this is the safety cap for a very long chat, or a character that has never
@@ -457,12 +495,30 @@ export async function rehydrateUserAttachments(args: {
 
     const repos = args.repos ?? getRepositories()
     let charactersUsed = 0
+    const carriedAt = new Map<string, number>()
+    for (const m of args.messages) {
+      if (m.id && m.createdAt) carriedAt.set(m.id, Date.parse(m.createdAt) || 0)
+    }
 
     for (const { messageId, fileIds } of unseen) {
       const loaded = await loadChatFilesForLLM(fileIds, { provider: args.connectionProfile.provider })
       let prefix = ''
 
       for (const fileAttachment of loaded) {
+        // Images go on whole, tagged; `applyImageTransportBudget` decides
+        // capability, count and bytes for them on the final array (an image
+        // the profile cannot read is described there, at the anchor).
+        if (isImageFile(fileAttachment.mimeType)) {
+          rehydratedAttachmentsToKeep.push(
+            tagForTransport(fileAttachment, {
+              origin: 'rehydrated',
+              createdAt: carriedAt.get(messageId) ?? 0,
+              describable: true,
+            }),
+          )
+          continue
+        }
+
         const fallbackResult = await processFileAttachmentFallback(
           {
             id: fileAttachment.id,
@@ -480,7 +536,7 @@ export async function rehydrateUserAttachments(args: {
 
         // Mirror the `loadAndProcessFiles` filter: keep the raw bytes only
         // when the provider takes them natively. A failed fallback drops the
-        // file rather than tripping the provider's "no image input" refusal.
+        // file rather than tripping the provider's refusal.
         if (fallbackResult.type === 'unsupported') {
           if (!fallbackResult.error) rehydratedAttachmentsToKeep.push(fileAttachment)
           continue
@@ -1047,10 +1103,10 @@ export async function buildMessageContext(
   // pointer. Everyone after the first character to answer therefore saw a bare
   // message where a document had been. Re-deriving from the file here (rather
   // than persisting the expanded body) keeps the file the single source of
-  // truth, survives regenerate, swipe, import and restore, and treats an
-  // uploaded image exactly like an uploaded transcript: the same
-  // `processFileAttachmentFallback` pass either inlines the text, describes
-  // the image, or hands the raw bytes back for a provider that takes them.
+  // truth, and survives regenerate, swipe, import and restore. A text file is
+  // inlined here by `processFileAttachmentFallback`; an image is handed back
+  // whole and tagged, for `applyImageTransportBudget` to send, describe or
+  // omit with every other image on the request.
   //
   // This runs *before* `buildContext` so the tokens are budgeted, compressed
   // and trimmed like any other message content — the Lantern prefix is spliced
@@ -1206,25 +1262,20 @@ export async function buildMessageContext(
   // Additionally surface image attachments from Lantern notifications
   // (story background, avatar regeneration, or the generate_image tool).
   // Without this, vision-capable providers would only see the announcement
-  // text but not the actual image. For non-vision profiles, each loaded
-  // attachment is run through processFileAttachmentFallback so the
-  // description text is prepended to the last user turn and the raw image
-  // is dropped — same machinery loadAndProcessFiles uses for user uploads.
-  // Without that step, non-vision providers (e.g. DeepSeek via OpenRouter)
-  // reject the request because they're being handed images they can't read.
+  // text but not the actual image.
   //
-  // `ASSISTANT_IMAGE_LOOKBACK` bounds how many messages are scanned; it says
-  // nothing about how many *bytes* they carry, and bug 151 is what that costs.
-  // Two avatars, each under the provider's 4 MB per-image ceiling and so
-  // resized by nobody, summed to 4.52 MB of base64 and NanoGPT answered the
-  // turn with `413 Request Entity Too Large`. The token budget could not see
-  // it either — image bytes are not tokens, so the turn was logged at 49,652
-  // estimated tokens against a million-token window with
-  // `compressionNeeded: false`. `LANTERN_IMAGE_BASE64_BUDGET` is the ceiling
-  // the message count cannot express.
+  // The walk only collects candidates. Each is tagged `lantern` with the time
+  // of the message that carried it, and whether describing it is free (a
+  // generated image whose prompt is on file); `applyImageTransportBudget`
+  // below decides — for the profile actually being called — which are sent,
+  // which are described, and which are omitted with a note. That pass spends
+  // one count cap and one byte budget over every image on the request, which
+  // is what bug 151 (4.52 MB of base64 under a `compressionNeeded: false` log
+  // line) needed and a Lantern-only budget could not give.
+  //
+  // `ASSISTANT_IMAGE_LOOKBACK` bounds how many messages are scanned.
   const ASSISTANT_IMAGE_LOOKBACK = 6
   let mergedAttachmentsToSend: unknown[] = [...attachmentsToSend, ...rehydratedAttachmentsToKeep]
-  let lanternImagePrefix = ''
   try {
     const recentAssistantImageFileIds = collectLanternImageFileIdsForCharacter(
       filteredExistingMessages,
@@ -1238,98 +1289,24 @@ export async function buildMessageContext(
         provider: connectionProfile.provider,
       })
       if (extra.length > 0) {
-        const lanternAttachmentsToKeep: typeof extra = []
-        // Spent newest-first, then restored to chronological order below.
-        // Unlike `rehydrateUserAttachments`, which re-sends every unseen
-        // upload whole, this walk can drop: when the budget forces it, the picture
-        // worth keeping is the one just generated, not the portrait it
-        // replaced. The describe-fallback prefix is unbudgeted — it is text,
-        // already bounded by the model's own context budget, and a sentence
-        // about an image is never what overruns a request body.
-        let imageBudgetLeft = LANTERN_IMAGE_BASE64_BUDGET
-        let droppedForBudget = 0
-        // The profile's per-request image cap, less what this turn's uploads
-        // and re-sent uploads already claim. Past it the newest pictures are
-        // still sent and the older ones are described in text, never dropped:
-        // the describer reuses a generated image's own prompt, so it is free.
-        let imageSlotsLeft = Math.max(
-          0,
-          resolveMaxImagesPerRequest(connectionProfile) -
-            mergedAttachmentsToSend.filter(a => (a as { mimeType?: string }).mimeType?.startsWith('image/')).length,
-        )
-        let describedForCap = 0
-        const lanternPrefixesNewestFirst: string[] = []
-        for (const fileAttachment of [...extra].reverse()) {
-          const fileMetadata = {
-            id: fileAttachment.id,
-            filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
-            filename: fileAttachment.filename,
-            mimeType: fileAttachment.mimeType,
-            size: fileAttachment.size,
-          }
-          const fallbackResult = await processFileAttachmentFallback(
-            fileMetadata,
-            fileAttachment,
-            connectionProfile,
-            options.repos,
-            userId,
-            { chatId: chat.id },
-          )
-          const prefix = formatFallbackAsMessagePrefix(fallbackResult)
-          if (prefix) {
-            lanternPrefixesNewestFirst.push(prefix)
-          }
-          // Mirror the loadAndProcessFiles filter: only keep the raw
-          // attachment when the provider natively supports it. If the
-          // fallback failed, dropping the bytes avoids the provider's
-          // "no image input" rejection downstream.
-          if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
-            // `fileAttachment.data` is the base64 this turn will actually put
-            // on the wire — already trimmed by the transport budget in
-            // `loadChatFilesForLLM` — so this measures the true cost, not the
-            // stored file's `size`.
-            const wireBytes = fileAttachment.data?.length ?? 0
-            if (fileAttachment.mimeType.startsWith('image/') && imageSlotsLeft <= 0) {
-              const described = formatFallbackAsMessagePrefix(
-                await generateImageDescription(fileAttachment, options.repos, userId, { chatId: chat.id }),
-              )
-              if (described) lanternPrefixesNewestFirst.push(described)
-              describedForCap++
-              continue
-            }
-            if (wireBytes > imageBudgetLeft) {
-              droppedForBudget++
-              continue
-            }
-            imageBudgetLeft -= wireBytes
-            if (fileAttachment.mimeType.startsWith('image/')) imageSlotsLeft--
-            lanternAttachmentsToKeep.push(fileAttachment)
+        const carriedAt = new Map<string, number>()
+        for (const m of filteredExistingMessages) {
+          if (m.role !== 'ASSISTANT' || !Array.isArray(m.attachments) || !m.createdAt) continue
+          const at = Date.parse(m.createdAt) || 0
+          for (const id of m.attachments) {
+            if (typeof id === 'string') carriedAt.set(id, Math.max(carriedAt.get(id) ?? 0, at))
           }
         }
-        if (describedForCap > 0) {
-          logger.info('Unseen assistant images exceeded the profile\'s per-request image cap; the oldest were described instead', {
-            describedForCap,
-            kept: lanternAttachmentsToKeep.length,
-            maxImagesPerRequest: resolveMaxImagesPerRequest(connectionProfile),
-            characterParticipantId: characterParticipant.id,
-          })
+        const repos = options.repos ?? getRepositories()
+        const tagged = []
+        for (const fileAttachment of extra) {
+          tagged.push(tagForTransport(fileAttachment, {
+            origin: 'lantern',
+            createdAt: carriedAt.get(fileAttachment.id) ?? 0,
+            describable: await hasPersistedImageDescription(repos, fileAttachment.id),
+          }))
         }
-        if (droppedForBudget > 0) {
-          logger.warn('Unseen assistant images exceeded the per-turn byte budget; the oldest were not sent', {
-            droppedForBudget,
-            kept: lanternAttachmentsToKeep.length,
-            budget: LANTERN_IMAGE_BASE64_BUDGET,
-            budgetUsed: LANTERN_IMAGE_BASE64_BUDGET - imageBudgetLeft,
-            characterParticipantId: characterParticipant.id,
-          })
-        }
-        // Back to chronological: the budget is spent newest-first, but the
-        // prefix reads as a narration of what has happened since this
-        // character last spoke, and the attachments anchor in that order too.
-        lanternImagePrefix += lanternPrefixesNewestFirst.reverse().join('')
-        if (lanternAttachmentsToKeep.length > 0) {
-          mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...lanternAttachmentsToKeep.reverse()]
-        }
+        mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...tagged]
       }
     }
   } catch (err) {
@@ -1355,9 +1332,7 @@ export async function buildMessageContext(
   // Prepare final messages for LLM
   const assembledMessages = formattedContextMessages.map((msg, idx) => {
     const isAnchor = idx === attachmentAnchorIndex
-    const content = isAnchor && lanternImagePrefix
-      ? lanternImagePrefix + msg.content
-      : msg.content
+    const content = msg.content
     if (isAnchor && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
@@ -1374,19 +1349,22 @@ export async function buildMessageContext(
     }
   })
 
-  // The profile's per-request image cap. The Lantern walk above already spent
-  // it on its own images; this catches what the walk cannot — more uploads in
-  // one send than the cap allows — and describes the overflow in text. With
-  // nothing over the cap it hands back the same array.
+  // One transport budget for every image on the request: capability, the
+  // profile's per-request image cap and the total byte budget, spent down a
+  // ranked list (uploads, re-hydrated uploads, Lantern images, each newest
+  // first). The failover service runs the same pass for each substitute. With
+  // nothing to change it hands back the same array.
   const formattedMessages = assembledMessages.length > 0 && mergedAttachmentsToSend.length > 0
-    ? await adaptMessagesForProfile(
+    ? (await applyImageTransportBudget(
         assembledMessages,
         connectionProfile,
-        options.repos ?? getRepositories(),
-        userId,
-        { chatId: chat.id, characterParticipantId: characterParticipant.id },
-        { chatId: chat.id },
-      )
+        {
+          repos: options.repos ?? getRepositories(),
+          userId,
+          logContext: { chatId: chat.id, characterParticipantId: characterParticipant.id },
+          describeOptions: { chatId: chat.id },
+        },
+      )).messages
     : assembledMessages
 
   if (isMultiCharacter) {

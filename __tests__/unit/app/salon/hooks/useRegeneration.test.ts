@@ -53,10 +53,10 @@ describe('useRegeneration', () => {
 
   it('streams from the swipe endpoint, refetches, selects the new swipe and clears state', async () => {
     fetchFn().mockResolvedValue(streamRes([
-      frame({ status: { stage: 'streaming', message: 'Writing' } }),
-      frame({ content: 'Hel' }),
-      frame({ content: 'lo' }),
-      frame({ done: true, message: { id: 'new-1', content: 'Hello!' } }),
+      frame({ kind: 'status', status: { stage: 'streaming', message: 'Writing' } }),
+      frame({ kind: 'content', text: 'Hel' }),
+      frame({ kind: 'content', text: 'lo' }),
+      frame({ kind: 'swipeDone', message: { id: 'new-1', content: 'Hello!' } }),
     ]))
     const fetchChat = jest.fn().mockResolvedValue(undefined)
     const select = jest.fn()
@@ -85,7 +85,7 @@ describe('useRegeneration', () => {
     expect(result.current.regenerationStatus).toEqual({ stage: 'regenerating', message: 'Regenerating...' })
     expect(result.current.isRegenerating).toBe(true)
     await act(async () => {
-      release(streamRes([frame({ done: true })]))
+      release(streamRes([frame({ kind: 'swipeDone', message: { id: 'sw-0' } })]))
       await p
     })
     expect(result.current.isRegenerating).toBe(false)
@@ -95,10 +95,10 @@ describe('useRegeneration', () => {
     let release!: () => void
     const gate = new Promise<void>(r => { release = r })
     const chunks = [
-      frame({ status: { stage: 'streaming', message: 'Go' } }),
-      frame({ content: 'ab' }),
-      frame({ content: 'cd' }),
-      frame({ reasoning: 'thinking' }),
+      frame({ kind: 'status', status: { stage: 'streaming', message: 'Go' } }),
+      frame({ kind: 'content', text: 'ab' }),
+      frame({ kind: 'content', text: 'cd' }),
+      frame({ kind: 'reasoning', text: 'thinking' }),
     ]
     let i = 0
     fetchFn().mockResolvedValue({
@@ -135,7 +135,7 @@ describe('useRegeneration', () => {
   })
 
   it('reassembles an SSE frame split across network chunks', async () => {
-    const full = frame({ done: true, message: { id: 'sw', content: 'x' } })
+    const full = frame({ kind: 'swipeDone', message: { id: 'sw', content: 'x' } })
     fetchFn().mockResolvedValue(streamRes([full.slice(0, 10), full.slice(10)]))
     const select = jest.fn()
     const { result } = renderHook(() => useRegeneration())
@@ -150,7 +150,7 @@ describe('useRegeneration', () => {
       ': keepalive\n',
       'data: {not json\n',
       'data: [DONE]\n',
-      frame({ done: true, message: { id: 'ok' } }),
+      frame({ kind: 'swipeDone', message: { id: 'ok' } }),
     ]))
     const select = jest.fn()
     const { result } = renderHook(() => useRegeneration())
@@ -161,8 +161,8 @@ describe('useRegeneration', () => {
     expect(showErrorToast).not.toHaveBeenCalled()
   })
 
-  it('does not select a variant when the done frame carries no message id', async () => {
-    fetchFn().mockResolvedValue(streamRes([frame({ done: true })]))
+  it('does not select a variant when the stream ends without a swipe', async () => {
+    fetchFn().mockResolvedValue(streamRes([frame({ kind: 'content', text: 'a' })]))
     const select = jest.fn()
     const fetchChat = jest.fn().mockResolvedValue(undefined)
     const { result } = renderHook(() => useRegeneration())
@@ -174,7 +174,7 @@ describe('useRegeneration', () => {
   })
 
   it('honours options.url (Try uncensored)', async () => {
-    fetchFn().mockResolvedValue(streamRes([frame({ done: true })]))
+    fetchFn().mockResolvedValue(streamRes([frame({ kind: 'swipeDone', message: { id: 'sw-0' } })]))
     const { result } = renderHook(() => useRegeneration())
     await act(async () => {
       await result.current.regenerate('m1', jest.fn().mockResolvedValue(undefined), undefined, { url: '/custom?x=1' })
@@ -183,7 +183,7 @@ describe('useRegeneration', () => {
   })
 
   it('toasts a stream error (with details), skips refetch and clears state', async () => {
-    fetchFn().mockResolvedValue(streamRes([frame({ error: 'Provider down', details: 'timeout' })]))
+    fetchFn().mockResolvedValue(streamRes([frame({ kind: 'error', message: 'Provider down', errorType: 'regenerate_failed', details: 'timeout' })]))
     const fetchChat = jest.fn()
     const { result } = renderHook(() => useRegeneration())
     await act(async () => {
@@ -196,7 +196,7 @@ describe('useRegeneration', () => {
   })
 
   it('toasts a stream error without details', async () => {
-    fetchFn().mockResolvedValue(streamRes([frame({ error: 'Bad' })]))
+    fetchFn().mockResolvedValue(streamRes([frame({ kind: 'error', message: 'Bad', errorType: 'regenerate_failed', details: '' })]))
     const { result } = renderHook(() => useRegeneration())
     await act(async () => {
       await result.current.regenerate('m1', jest.fn())
@@ -276,10 +276,10 @@ describe('useRegeneration', () => {
     })
     expect(fetchFn()).toHaveBeenCalledTimes(1)
     await act(async () => {
-      release(streamRes([frame({ done: true })]))
+      release(streamRes([frame({ kind: 'swipeDone', message: { id: 'sw-0' } })]))
       await p
     })
-    fetchFn().mockResolvedValue(streamRes([frame({ done: true })]))
+    fetchFn().mockResolvedValue(streamRes([frame({ kind: 'swipeDone', message: { id: 'sw-0' } })]))
     await act(async () => {
       await result.current.regenerate('m2', jest.fn().mockResolvedValue(undefined))
     })
@@ -296,7 +296,7 @@ describe('useRegeneration', () => {
       body: {
         getReader: () => ({
           read: async () => {
-            if (!sent) { sent = true; return { done: false, value: enc.encode(frame({ content: 'a' })) } }
+            if (!sent) { sent = true; return { done: false, value: enc.encode(frame({ kind: 'content', text: 'a' })) } }
             await gate
             return { done: true, value: undefined }
           },

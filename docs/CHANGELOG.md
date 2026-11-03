@@ -17,6 +17,54 @@
 - `doc_open_document` opens through the core: a file Document Mode only views opens by its view target, anything else (an uploaded `.md` included) by `readDocument`, and its `mtime` is the file's own (a database store used to report the current time). A new blank document is created with `ensureDocument` through the store writer instead of raw `fs.mkdir` / `fs.writeFile` on the resolved path, so a database-backed project store gets a document row.
 - `triggerReindexIfNeeded` is gone from `lib/tools/handlers/doc-edit/shared.ts`. New grep-test `__tests__/unit/lib/documents/core-chokepoint.test.ts` fences the `doc_*` handlers, the operator layer and the Document Mode routes off `readFileWithMtime`, `writeFileWithMtimeCheck`, the blob readers, `moveDatabaseDocument`, `deleteDatabaseDocument`, `reindexSingleFile`, `fs.writeFile` and `fs.unlink`. CLAUDE.md gains the chokepoint line; the spec is marked implemented with an "As built" section; `help/document-editing-tools.md` says uploaded text files read as themselves and can be edited.
 
+#### Fix: Storyteller "all at once" replies no longer land as empty bubbles
+
+When a concurrent Storyteller turn finished, the Salon built its reply bubble from text read inside a React state updater, which had not always run yet, so the bubble could show empty until the end-of-round refresh. `useSSEStreaming` now keeps each seat's streamed text in a map local to the stream and reads it from there. The golden-stream test checks the text.
+
+#### Refactor: Salon stream frames, phase 2 (Refactor 4.12, spec 5)
+
+The Salon's SSE stream now sends frames tagged with `kind` (`lib/chat/stream-frames.ts`) instead of the untagged flag bag. Client and server change together; no behavior change intended.
+
+- `useSSEStreaming` reads frames with `parseFrame` and dispatches with an exhaustive `switch (frame.kind)`; seat-tagged (concurrent Storyteller) frames go to their own switch. The hand-ordered `if` chain, the `SSEEvent` type and `parseSSEData` are deleted. The optimistic assistant message is built in one place, `assistantMessageFromDone`.
+- `useRegeneration` switches on frames; a swipe stream ends with `swipeDone` (was `{ done: true, message }`).
+- The raise-hand POST reply no longer lowers the hand on `raised: false`; it lowers a still-raised hand only when the reply says no stream is open.
+- Help chat, the Brahma console, the Scenario Builder and the one-shot tool loop keep the old bag shape via `legacyFrameEncoder()`; their clients are unchanged.
+- Hook tests feed frames. New: `useSSEStreaming-golden.test.tsx` replays the recorded golden streams through the hook. API.md documents the frame kinds; CLAUDE.md gains the chokepoint.
+
+#### Refactor: Salon stream frames, phase 1 (Refactor 4.12, spec 5)
+
+The Salon's SSE frames now have one definition, `lib/chat/stream-frames.ts`: a Zod discriminated union on `kind`, `encodeFrame` (the only producer of `data:` bytes on the turn path), `parseFrame`, and `tagFrame`. The wire shape is unchanged in this phase.
+
+- Every `encodeXxxEvent` in `streaming.service.ts` is a one-line `encodeFrame` call; the inline frames in `tool-execution.service.ts` and `regenerate-swipe-stream.ts` are gone. `encodeFrame` renders through `toLegacyBag` until the client switches.
+- A `done` frame carries one `outcome` (`finished` / `skipped` / `yielded` / `stopped` / `empty`) instead of four boolean flags; the legacy rendering restores the flags.
+- Concurrent Storyteller turns write through `seatedFrameEncoder(participantId)`, which tags each frame before encoding. `tagSseChunk` / `taggingController` (decode, regex, re-encode) are deleted; `sharedStreamController` keeps a finishing turn from closing the shared stream.
+- Golden streams recorded from the old encoders in `__tests__/fixtures/salon-stream/`; tests in `__tests__/unit/lib/chat/stream-frames.test.ts` and a chokepoint grep-test, `stream-frames-chokepoint.test.ts`.
+#### Refactor: one image transport budget (Refactor 4.12, spec 3)
+
+Which images a Salon turn sends to a provider is now decided in one place, `applyImageTransportBudget` (`lib/chat/image-transport-budget.ts`), run on the final message array for the primary and again for each failover substitute.
+
+- One count cap and one byte budget cover every image: this turn's uploads, re-hydrated uploads, and Lantern images. Before, the 2 MB byte budget covered Lantern images only, so uploads plus Lantern images could still exceed bug 151's limit.
+- New `LLM_TRANSPORT_TOTAL_BASE64` (4 MB of base64 per request) replaces `LANTERN_IMAGE_BASE64_BUDGET` (2 MB, Lantern only).
+- Ranking: uploads, then re-hydrated uploads, then Lantern images, each newest first. Previously the Lantern walk and the final cap check used opposite orders.
+- Overflow is described when that is free or the image is an upload; otherwise it is replaced by `[image omitted: over the request budget]`. Previously an image over the byte budget was dropped with no trace. Vault-stored images (mount-link ids) are not described past the budget, since that costs a vision call.
+- Failover substitutes now get the byte budget and the capability check re-applied, not only the count cap.
+- Loaders tag attachments (`transport`: origin, time, describable) and no longer filter images by capability; `streamMessage` strips the tag before plugins and logs see it.
+- `lib/chat/message-attachment-adapter.ts` (`adaptMessagesForProfile`, `findImagesOverCap`) is removed; `collectAttachmentMimeTypes` moved to the new module.
+- Help: `help/connection-profiles.md` ("Most images per request") describes the order and the weight limit.
+
+#### Refactor: one recursive watcher core under both filesystem watchers (Refactor 4.12, spec 7)
+
+The document-store watcher and the `files/` watcher were copies of each other that had drifted. They now share `createRecursiveWatcher` (`lib/files/recursive-watcher.ts`): the native recursive `fs.watch`, the per-path debounce, `lstat` dispatch, symlink skip, cloud-placeholder skip, `'error'` logging, and the polling fallback. Each watcher keeps only its domain handlers.
+
+- `files/` watcher falls back to polling when `fs.watch` refuses a recursive watch, and honours `QUILLTAP_WATCHER_POLLING=1`. It used to log a warning and stay off.
+- `files/` watcher no longer hashes an evicted iCloud / OneDrive placeholder, which made the provider download it. Covered for direct events (core) and for files inside a folder that arrived (`handleFileAdd` / `handleFileChange`).
+- `files/` watcher no longer reads every file record on a plain file delete. The folder sweep runs only after a rename of a path that had no record of its own.
+- Both watchers debounce 750 ms (`WATCH_DEBOUNCE_MS`); the `files/` watcher was 500 ms.
+- `stopMountWatchers` / `stopWatcher` are now called on SIGTERM / SIGINT (`lib/startup/watcher-shutdown.ts`, prepended so it runs before the database close). `stopMountWatchers` is synchronous; `stopWatcher({ flushPendingDeletes: false })` leaves deferred deletes to startup reconciliation.
+- One recursive `readdir` skeleton, `walkTree` (`lib/files/walk.ts`), under `walkDirectory`, `listFilesystemFolders`, `walkDisk` and `scanDirectory`. Filter rules unchanged.
+- Stale chokidar comments in `database-store.ts` and `db-store-events.ts` fixed; `FILE-SYSTEM-IMPLEMENTATION.md`'s watcher section rewritten (it described a class that does not exist).
+- Tests: shared cases moved to `lib/files/__tests__/recursive-watcher.test.ts`; new `lib/files/__tests__/walk.test.ts`; both `watcher-native.test.ts` suites keep only domain cases plus the three new `files/` behaviours.
+
 #### Fix: theme-storybook stories use only real `qt-*` classes
 
 Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.

@@ -12,7 +12,8 @@
  *   2. Keeps the mirror doc_mount_files row in sync so scan/search/
  *      embedding code continues to treat the store uniformly.
  *   3. Emits a db-store-events event so the watcher triggers an
- *      embedding re-index — the equivalent of chokidar 'change'.
+ *      embedding re-index — what a filesystem store's watcher does when a
+ *      file on disk changes.
  */
 
 import path from 'path';

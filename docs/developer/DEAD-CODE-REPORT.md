@@ -64,7 +64,7 @@ Method as on 2026-10-13: every flagged symbol was scored by identifier reference
 
 - **SVAR pair** (`components/files/svar/index.ts`, `SvarFilePicker.tsx`) — in-progress file-manager surface, unchanged. *(Deleted 2026-10-31 with the rest of `components/files/svar/`; see [folder-browser.md](features/complete/folder-browser.md).)*
 - **New `z.infer` aliases with no users** — `InventoryStateValue`, `CustomToolIntervention`, `EffectPinInput`, `InterventionDecisionInput`, `StorytellerBidStatus`, `StorytellerRoundStatus`, `EquippedInventory`, plus the standing schema/tool-input list. Standing schema rule.
-- **`stopMountWatchers`** (`lib/mount-index/watcher.ts`) — lifecycle pair with the live `startMountWatchers`. **`isMemoryMaintenanceSchedulerRunning`** — as 2026-10-13.
+- **`stopMountWatchers`** (`lib/mount-index/watcher.ts`) — lifecycle pair with the live `startMountWatchers`. *(2026-11-03: now live — called with `stopWatcher` from `lib/startup/watcher-shutdown.ts` on SIGTERM / SIGINT, Refactor 4.12 watcher core.)* **`isMemoryMaintenanceSchedulerRunning`** — as 2026-10-13.
 - **Standing keeps** (registries, theme API, barrels, test hooks, used-in-file helpers, 4 `ErrorCode` members, duplicate exports) — unchanged in character.
 
 ### Follow-up this round surfaced (not dead code)
@@ -431,7 +431,7 @@ knip reported **0 unused files** and **0 unused/unlisted dependencies** — the 
 These were flagged by the same reference-count pass but deliberately retained:
 
 - **`ChatProvider`** (`components/providers/chat-context.tsx`) — knip flags it as unused, but the file's sibling export `useChatContext` is consumed by `app/salon/[id]/page.tsx`. The provider/consumer pair is entangled; removing it (initially over-removed by the sweep) broke `tsc` and was reverted.
-- **Lifecycle pairs** — `stopWatcher`, `stopMountWatchers`, `stopAutonomousRoomsScheduler`/`isAutonomousRoomsSchedulerRunning`, `stopHousekeepingScheduler`/`isHousekeepingSchedulerRunning`, `closeReadonlyChildSQLiteClient`, `isReadonlyChildSQLiteConnected`. Their `start*`/`schedule*`/`get*Client` counterparts are wired in `instrumentation.ts`; the stop/status halves belong to the same lifecycle API.
+- **Lifecycle pairs** — `stopWatcher`, `stopMountWatchers` *(both live since 2026-11-03: `lib/startup/watcher-shutdown.ts`)*, `stopAutonomousRoomsScheduler`/`isAutonomousRoomsSchedulerRunning`, `stopHousekeepingScheduler`/`isHousekeepingSchedulerRunning`, `closeReadonlyChildSQLiteClient`, `isReadonlyChildSQLiteConnected`. Their `start*`/`schedule*`/`get*Client` counterparts are wired in `instrumentation.ts`; the stop/status halves belong to the same lifecycle API.
 - **Plugin SDK contracts** — all `lib/plugins/interfaces/*` types (moderation/scoring/provider interfaces), `ImageGenerationModelInfo` (used by the Google/OpenRouter plugins), `createToolLogger`. Plugins implement these structurally; knip cannot see `packages/`/`plugins/` consumers.
 - **Registry accessors** — `lib/plugins/moderation-provider-registry.ts` (8 accessors) and `provider-registry.ts` (3 accessors). The registry modules are live (imported by installer/gatekeeper/plugin-init); their symmetric `get*`/`has*`/`register*` API is retained for plugin self-registration and diagnostics.
 - **Theme crypto / validation** — `signJSON`, `verifyJSONSignature` (`lib/themes/crypto.ts`) and the `validateTheme*`/`safeValidate*`/`createDefaultThemePreference` family (`lib/themes/types.ts`). Security-sensitive Ed25519 signing and the documented public theme-validation API.

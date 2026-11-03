@@ -69,10 +69,10 @@ const mockStat = stat as unknown as jest.Mock
 
 let filesRepo: { findByStorageKey: jest.Mock; update: jest.Mock }
 
-/** Fire a change event and let the module's 500 ms debounce elapse. */
+/** Fire a change event and let the watcher's 750 ms debounce elapse. */
 async function fireChange(relativePath: string): Promise<void> {
   watchListener('change', relativePath)
-  await jest.advanceTimersByTimeAsync(600)
+  await jest.advanceTimersByTimeAsync(800)
   // The handler awaits a dynamic import, the repos, stat and the digest —
   // drain the microtask queue until it has run to completion.
   for (let i = 0; i < 25; i++) await Promise.resolve()

@@ -131,14 +131,14 @@ describe('streaming.service', () => {
       const result = encodeContentChunk(encoder, 'Hello, world!')
       const decoded = new TextDecoder().decode(result)
 
-      expect(decoded).toBe('data: {"content":"Hello, world!"}\n\n')
+      expect(decoded).toBe('data: {"kind":"content","text":"Hello, world!"}\n\n')
     })
 
     it('should handle empty content', () => {
       const result = encodeContentChunk(encoder, '')
       const decoded = new TextDecoder().decode(result)
 
-      expect(decoded).toBe('data: {"content":""}\n\n')
+      expect(decoded).toBe('data: {"kind":"content","text":""}\n\n')
     })
 
     it('should handle content with special characters', () => {
@@ -183,7 +183,8 @@ describe('streaming.service', () => {
       const decoded = new TextDecoder().decode(result)
 
       expect(decoded).toContain('data: ')
-      expect(decoded).toContain('"done":true')
+      expect(decoded).toContain('"kind":"done"')
+      expect(decoded).toContain('"outcome":"finished"')
       expect(decoded).toContain('"messageId":"msg-123"')
       expect(decoded).toMatch(/\n\n$/)
     })
@@ -283,12 +284,12 @@ describe('streaming.service', () => {
         cacheUsage: null,
         attachmentResults: null,
         toolsExecuted: false,
-        emptyResponse: true,
+        outcome: 'empty',
         emptyResponseReason: 'Safety filter triggered',
       })
       const decoded = new TextDecoder().decode(result)
 
-      expect(decoded).toContain('"emptyResponse":true')
+      expect(decoded).toContain('"outcome":"empty"')
       expect(decoded).toContain('Safety filter triggered')
     })
   })
@@ -304,7 +305,8 @@ describe('streaming.service', () => {
       const decoded = new TextDecoder().decode(result)
 
       expect(decoded).toContain('data: ')
-      expect(decoded).toContain('"error":"API request failed"')
+      expect(decoded).toContain('"kind":"error"')
+      expect(decoded).toContain('"message":"API request failed"')
       expect(decoded).toContain('"errorType":"API_ERROR"')
       expect(decoded).toContain('"details":"Rate limit exceeded"')
       expect(decoded).toMatch(/\n\n$/)
@@ -335,7 +337,8 @@ describe('streaming.service', () => {
       const payload = JSON.parse(decoded.replace(/^data: /, '').trim())
 
       expect(payload).toEqual({
-        error: 'Failed to generate response',
+        kind: 'error',
+        message: 'Failed to generate response',
         errorType: 'Error',
         details: 'No API key configured for this connection profile',
         userMessagePersisted: false,
@@ -347,7 +350,7 @@ describe('streaming.service', () => {
       const decoded = new TextDecoder().decode(encodeErrorEvent(encoder, 'E', 'T', 'D'))
       const payload = JSON.parse(decoded.replace(/^data: /, '').trim())
 
-      expect(Object.keys(payload).sort()).toEqual(['details', 'error', 'errorType'])
+      expect(Object.keys(payload).sort()).toEqual(['details', 'errorType', 'kind', 'message'])
     })
   })
 
