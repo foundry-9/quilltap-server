@@ -4,6 +4,19 @@
 
 ### 4.12-dev
 
+#### Refactor: one image transport budget (Refactor 4.12, spec 3)
+
+Which images a Salon turn sends to a provider is now decided in one place, `applyImageTransportBudget` (`lib/chat/image-transport-budget.ts`), run on the final message array for the primary and again for each failover substitute.
+
+- One count cap and one byte budget cover every image: this turn's uploads, re-hydrated uploads, and Lantern images. Before, the 2 MB byte budget covered Lantern images only, so uploads plus Lantern images could still exceed bug 151's limit.
+- New `LLM_TRANSPORT_TOTAL_BASE64` (4 MB of base64 per request) replaces `LANTERN_IMAGE_BASE64_BUDGET` (2 MB, Lantern only).
+- Ranking: uploads, then re-hydrated uploads, then Lantern images, each newest first. Previously the Lantern walk and the final cap check used opposite orders.
+- Overflow is described when that is free or the image is an upload; otherwise it is replaced by `[image omitted: over the request budget]`. Previously an image over the byte budget was dropped with no trace. Vault-stored images (mount-link ids) are not described past the budget, since that costs a vision call.
+- Failover substitutes now get the byte budget and the capability check re-applied, not only the count cap.
+- Loaders tag attachments (`transport`: origin, time, describable) and no longer filter images by capability; `streamMessage` strips the tag before plugins and logs see it.
+- `lib/chat/message-attachment-adapter.ts` (`adaptMessagesForProfile`, `findImagesOverCap`) is removed; `collectAttachmentMimeTypes` moved to the new module.
+- Help: `help/connection-profiles.md` ("Most images per request") describes the order and the weight limit.
+
 #### Fix: theme-storybook stories use only real `qt-*` classes
 
 Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.
