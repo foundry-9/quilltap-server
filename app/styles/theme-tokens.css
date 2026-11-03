@@ -1,0 +1,71 @@
+/**
+ * Tailwind token map — shared by the app and the theme-storybook generator.
+ *
+ * Imported by app/globals.css, and by scripts/generate-storybook-css.mjs when
+ * it compiles app/styles/qt-components/ into
+ * packages/theme-storybook/src/css/qt-components.css. Keeping the map in one
+ * file is what makes `@apply bg-accent` expand to the same declaration in both.
+ *
+ * Holds only Tailwind configuration at-rules (`@variant`, `@theme inline`);
+ * it emits no CSS of its own.
+ */
+
+/* Configure dark mode to use class-based switching instead of prefers-color-scheme */
+@variant dark (&:where(.dark, .dark *));
+
+/*
+ * @theme inline: Makes Tailwind reference the CSS variables at runtime
+ * This enables dynamic theme switching without rebuilding CSS
+ */
+@theme inline {
+  --color-background: var(--theme-background);
+  --color-foreground: var(--theme-foreground);
+  --color-card: var(--theme-card);
+  --color-card-foreground: var(--theme-card-foreground);
+  --color-popover: var(--theme-popover);
+  --color-popover-foreground: var(--theme-popover-foreground);
+  --color-primary: var(--theme-primary);
+  --color-primary-foreground: var(--theme-primary-foreground);
+  --color-secondary: var(--theme-secondary);
+  --color-secondary-foreground: var(--theme-secondary-foreground);
+  --color-muted: var(--theme-muted);
+  --color-muted-foreground: var(--theme-muted-foreground);
+  --color-accent: var(--theme-accent);
+  --color-accent-foreground: var(--theme-accent-foreground);
+  --color-destructive: var(--theme-destructive);
+  --color-destructive-foreground: var(--theme-destructive-foreground);
+  --color-border: var(--theme-border);
+  --color-input: var(--theme-input);
+  --color-ring: var(--theme-ring);
+
+  /* Extended semantic colors */
+  --color-success: var(--theme-success);
+  --color-success-foreground: var(--theme-success-foreground);
+  --color-warning: var(--theme-warning);
+  --color-warning-foreground: var(--theme-warning-foreground);
+  --color-info: var(--theme-info);
+  --color-info-foreground: var(--theme-info-foreground);
+
+  /* Chat-specific colors */
+  --color-chat-user: var(--theme-chat-user);
+  --color-chat-user-foreground: var(--theme-chat-user-foreground);
+
+  /* Sidebar colors */
+  --color-sidebar-background: var(--theme-sidebar-background);
+  --color-sidebar-foreground: var(--theme-sidebar-foreground);
+  --color-sidebar-border: var(--theme-sidebar-border);
+  --color-sidebar-muted: var(--theme-sidebar-muted);
+  --color-sidebar-accent: var(--theme-sidebar-accent);
+  --color-sidebar-accent-foreground: var(--theme-sidebar-accent-foreground);
+
+  --radius-lg: var(--theme-radius-lg);
+  --radius-md: var(--theme-radius-md);
+  --radius-sm: var(--theme-radius-sm);
+
+  /* Typography */
+  --font-sans: var(--theme-font-sans);
+  --font-serif: var(--theme-font-serif);
+  --font-mono: var(--theme-font-mono);
+  --font-brand: var(--theme-font-brand);
+  --font-chat-user: var(--theme-font-chat-user);
+}

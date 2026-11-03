@@ -4,6 +4,17 @@
 
 ### 4.12-dev
 
+#### Build: theme-storybook CSS is generated (Refactor 4.12, spec 1)
+
+`packages/theme-storybook/src/css/qt-components.css` is now build output instead of a hand-written copy of the app's `qt-*` CSS. The copy was missing 334 of 893 classes and carried 7 the app had deleted.
+
+- `npm run generate:storybook-css` (`scripts/generate-storybook-css.mjs`, core in `scripts/lib/storybook-css.mjs`) compiles `app/styles/qt-components/` with Tailwind's `compile` against the app's token map, expands every `@apply`, autoprefixes, and keeps statement-level comments. Output is deterministic.
+- `npm run lint` runs a fifth gate, `scripts/check-storybook-css.mjs`, which fails when the committed file differs from a fresh generation.
+- The `@theme inline` token map and the class-based `dark` variant moved from `app/globals.css` to `app/styles/theme-tokens.css`, imported by both. The app's compiled CSS is byte-identical.
+- theme-storybook 1.0.99: the generated file (hover now inside `@media (hover: hover)`, `--qt-*` defaults on `[data-theme]` as in the app); `ThemeDecorator` always sets `data-theme`, a `light`/`dark` class and `data-color-mode`; the Tabs story no longer uses the deleted `qt-tab-content`; `quilltap-defaults.css` re-declares the `--color-*` aliases on the story container, so dark mode actually applies in Storybook (it never did: the aliases resolved once on `:root`).
+- theme-storybook publishes at release: new `publish-theme-storybook` job in `release.yml`, skipped when the version is already on npm. CLAUDE.md's per-change mirror and publish rule is replaced by "run the generator, bump the patch version".
+- Diff report: `docs/developer/features/refactor-4-12/storybook-css-diff.md`. Test: `__tests__/unit/scripts/generate-storybook-css.test.ts`.
+
 #### Docs: Refactor 4.12 specs
 
 Seven proposed deep-refactor specs for code the 4.12-dev cycle touched, with an index that ranks them and lists what was examined and left alone. No code changes.
