@@ -7,7 +7,9 @@
  * Instance-wide setting (`instance_settings['brahmaConsole']`), not a
  * `chat_settings` column — same class as the data-retention knob. Holds the
  * agent-turn budget the streaming orchestrator and the one-shot `@Brahma` path
- * read via `resolveBrahmaMaxAgentTurns`.
+ * read via `resolveBrahmaMaxAgentTurns`, and the inline `@Brahma` connection
+ * profile (`inlineConnectionProfileId`) read by
+ * `resolveInlineBrahmaConnectionProfile`. PUT merges over the stored value.
  */
 
 import { createInstanceSettingHandlers } from '@/lib/api/instance-setting-handlers';
@@ -22,5 +24,8 @@ export const { GET, PUT } = createInstanceSettingHandlers({
   get: getBrahmaConsoleSettings,
   set: setBrahmaConsoleSettings,
   schema: BrahmaConsoleSettingsSchema,
-  logSummary: (settings) => ({ maxAgentTurns: settings.maxAgentTurns }),
+  logSummary: (settings) => ({
+    maxAgentTurns: settings.maxAgentTurns,
+    inlineConnectionProfileId: settings.inlineConnectionProfileId ?? null,
+  }),
 });

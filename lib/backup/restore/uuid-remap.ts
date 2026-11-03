@@ -86,6 +86,32 @@ const MOUNT_POINT_SETTING_KEYS = new Set([
 ]);
 
 /**
+ * The Brahma Console instance setting is a JSON blob; its
+ * `inlineConnectionProfileId` names a connection profile, which is remapped
+ * like every other profile reference. Unparseable values pass through.
+ */
+const BRAHMA_CONSOLE_SETTING_KEY = 'brahmaConsole';
+
+function remapBrahmaConsoleSetting(value: string, remapper: UuidRemapper): string {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (parsed && typeof parsed.inlineConnectionProfileId === 'string') {
+      const remapped = remapper.remap(parsed.inlineConnectionProfileId);
+      moduleLogger.debug('Remapped inline Brahma connection profile in instance settings', {
+        from: parsed.inlineConnectionProfileId,
+        to: remapped,
+      });
+      return JSON.stringify({ ...parsed, inlineConnectionProfileId: remapped });
+    }
+  } catch (error) {
+    moduleLogger.warn('brahmaConsole instance setting is not valid JSON; leaving it as is', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return value;
+}
+
+/**
  * Old → new wardrobe item id for new-account mode.
  *
  * A wardrobe item is not a row: it is a `Wardrobe/*.md` document whose id
@@ -537,7 +563,7 @@ export function remapBackupData(
     ...remapper.remapArrayFields(
       // officialMountPointId remapped in lockstep with the store's own row, so
       // the restore can bind the project to its archived store (bug 185).
-      remapper.remapFields(project, ['id', 'officialMountPointId', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId']),
+      remapper.remapFields(project, ['id', 'officialMountPointId', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId', 'brahmaConnectionProfileId']),
       ['characterRoster']
     ),
     userId: targetUserId,
@@ -768,6 +794,9 @@ export function remapBackupData(
   const remappedInstanceSettings = (data.instanceSettings || []).map((row) => {
     if (MOUNT_POINT_SETTING_KEYS.has(row.key) && row.value) {
       return { key: row.key, value: remapper.remap(row.value) };
+    }
+    if (row.key === BRAHMA_CONSOLE_SETTING_KEY && row.value) {
+      return { key: row.key, value: remapBrahmaConsoleSetting(row.value, remapper) };
     }
     return row;
   });

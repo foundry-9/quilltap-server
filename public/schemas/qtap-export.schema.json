@@ -1653,6 +1653,7 @@
         "defaultAvatarGenerationEnabled": { "type": ["boolean", "null"] },
         "defaultImageProfileId": { "type": ["string", "null"] },
         "defaultRoleplayTemplateId": { "type": ["string", "null"] },
+        "brahmaConnectionProfileId": { "type": ["string", "null"], "description": "Connection profile the inline Brahma (@Brahma: / @Brahma? in this project's Salon chats) answers with. NULL = inherit the global Brahma Console setting, then the default profile. Remapped through the connection-profile id map on import; a stale id falls through." },
         "defaultAlertCharactersOfLanternImages": { "type": ["boolean", "null"] },
         "state": { "type": "object" },
         "storyBackgroundsEnabled": { "type": ["boolean", "null"] },

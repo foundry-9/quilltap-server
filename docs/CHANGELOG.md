@@ -4,6 +4,23 @@
 
 ### 4.12-dev
 
+#### Feature: Brahma lookup shortcuts and an engine setting for `@Brahma`
+
+A Friday trace of `@Brahma` answering "how old is Laura?" showed 14 tool rounds and ~250 KB of context with no answer: schema `PRAGMA`s, 20–33 KB `run_sql` dumps, and a `qt_text(content) LIKE` scan over every message.
+
+- Four read-only tools for the Brahma Console and `@Brahma`, offered with `run_sql` and executor-gated on `operatorSurface` the same way (`lib/tools/handlers/brahma-lookup-handler.ts`):
+  - `lookup_character` — core fields, physical description, memory count, conversation count with first and most recent (id, title, dates).
+  - `lookup_memories` — `searchMemories` for one holder or every holder with memories (one shared embedding), with `about` and date filters; hits name the source conversation. Writes no access stamp.
+  - `lookup_messages` — FTS5 search through `searchMessagesGlobal`, with conversation title/date and speaker name; `character` and `speaker` filters, date window on the memory calendar.
+  - `read_messages` — a speaker-labelled slice around a message id or by position (negative offsets count from the end); spoken lines only.
+- `searchMessagesGlobal` hits now carry `participantId` (`GlobalMessageSearchHit`).
+- `run_sql` results have a 24,000-character budget: long text cells are cut to 600 characters first, then trailing rows are dropped, with a `note` telling the model to narrow the query (`fitToBudget`).
+- The Brahma SQL prompt now leads with the shortcuts and typical routes, forbids `qt_text(content) LIKE` scans of messages, and explains that `chat_messages.participantId` is a seat, not a character id.
+- Inline Brahma picks its connection profile through `resolveInlineBrahmaConnectionProfile` (`lib/services/brahma-console/inline-profile.ts`): the chat's project's `brahmaConnectionProfileId`, then the global `brahmaConsole.inlineConnectionProfileId`, then the user's default. A stale or foreign id falls through with a warning. The standalone Console's per-chat picker is unchanged.
+- UI: "Engine for `@Brahma` in the Salon" under Settings → Chat → Brahma Console, and "Inline Brahma Engine" on the project Model Behavior card (shared `InlineBrahmaProfileSelect`). The settings PUT merges, so the turn budget and the profile don't overwrite each other.
+- The project field is in `properties.json` (no migration), `qtap-export.schema.json`, backup UUID remap (including the `brahmaConsole` instance setting in new-account mode) and `.qtap` import reconcile. DDL.md lists it, plus the previously missing `answerConfirmationOverride` and the `brahmaConsole` instance-settings key.
+- Tests: `brahma-lookup-handler.test.ts`, `fitToBudget` cases in `run-sql-handler.test.ts`, `inline-profile.test.ts`, merge cases in the brahma-console settings route test, and tool-definition snapshots.
+
 #### Docs: bring the 4.12.0 release notes up to date
 
 - `docs/releases/4.12.0.md` now covers the commits made after the Nov 2 draft: the shared image byte budget, the WCAG 2.2 AA pass and undefined-CSS-variable fixes, the within-tier "earlier mount wins" rule, Wardrobe odds and ends (live refresh, server-side duplicate, no store creation on GET, avatar regeneration), the `files/` watcher changes, and the document and Storyteller repairs (#133–#137).

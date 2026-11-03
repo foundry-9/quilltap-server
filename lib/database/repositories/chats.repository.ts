@@ -42,7 +42,7 @@ import { ChatParticipantsOps } from './chats-participants.ops';
 import { ChatImpersonationOps } from './chats-impersonation.ops';
 import { ChatTokenTrackingOps } from './chats-tokens.ops';
 import { ChatMessagesOps, ChatMessageRowSchema } from './chats-messages.ops';
-import { ChatSearchReplaceOps } from './chats-search.ops';
+import { ChatSearchReplaceOps, type GlobalMessageSearchHit } from './chats-search.ops';
 
 /**
  * The chat's Concierge state columns — patch-only on this table (see
@@ -803,7 +803,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     chatIds: string[],
     searchText: string,
     limit?: number
-  ): Promise<Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }>> {
+  ): Promise<GlobalMessageSearchHit[]> {
     return this.searchOps.searchMessagesGlobal(chatIds, searchText, limit);
   }
 

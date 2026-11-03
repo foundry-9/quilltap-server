@@ -43,8 +43,10 @@ jest.mock('@/lib/brahma-console/system-prompt-builder', () => ({
   buildBrahmaSystemPrompt: jest.fn(() => 'BRAHMA_SYS'),
 }))
 jest.mock('../orchestrator.service', () => ({
-  resolveBrahmaConnectionProfile: jest.fn(),
   normalizeToolCallSignature: jest.fn(() => 'sig'),
+}))
+jest.mock('../inline-profile', () => ({
+  resolveInlineBrahmaConnectionProfile: jest.fn(),
 }))
 jest.mock('../turn-budget', () => ({
   resolveBrahmaMaxAgentTurns: jest.fn().mockResolvedValue(25),
@@ -52,7 +54,7 @@ jest.mock('../turn-budget', () => ({
 
 import { buildTools, streamMessage } from '@/lib/services/chat-message/streaming.service'
 import { processToolCalls, detectToolCallsInResponse } from '@/lib/services/chat-message/tool-execution.service'
-import { resolveBrahmaConnectionProfile } from '../orchestrator.service'
+import { resolveInlineBrahmaConnectionProfile } from '../inline-profile'
 import { resolveBrahmaMaxAgentTurns } from '../turn-budget'
 
 const MOCK_PROFILE = {
@@ -67,7 +69,7 @@ const REPOS = {} as never
 
 beforeEach(() => {
   jest.clearAllMocks()
-  jest.mocked(resolveBrahmaConnectionProfile).mockResolvedValue(MOCK_PROFILE as never)
+  jest.mocked(resolveInlineBrahmaConnectionProfile).mockResolvedValue(MOCK_PROFILE as never)
   jest.mocked(buildTools).mockResolvedValue({
     tools: [{ function: { name: 'run_sql' } }],
     modelSupportsNativeTools: true,
@@ -83,7 +85,7 @@ beforeEach(() => {
 
 describe('runBrahmaQuery', () => {
   it('returns no-profile when there is no resolvable connection profile', async () => {
-    jest.mocked(resolveBrahmaConnectionProfile).mockResolvedValue(null as never)
+    jest.mocked(resolveInlineBrahmaConnectionProfile).mockResolvedValue(null as never)
     const result = await runBrahmaQuery({ repos: REPOS, userId: 'u1', chatId: 'c1', question: 'hi' })
     expect(result).toEqual({ ok: false, detail: 'no-profile' })
     expect(streamMessage).not.toHaveBeenCalled()

@@ -58,6 +58,10 @@ import { rngToolDefinition } from '../rng-tool'
 import { runCustomToolDefinition } from '../run-custom-tool'
 import { editCustomToolToolDefinition } from '../edit-custom-tool-tool'
 import { runSqlToolDefinition } from '../run-sql-tool'
+import { lookupCharacterToolDefinition } from '../lookup-character-tool'
+import { lookupMemoriesToolDefinition } from '../lookup-memories-tool'
+import { lookupMessagesToolDefinition } from '../lookup-messages-tool'
+import { readMessagesToolDefinition } from '../read-messages-tool'
 import {
   searchScriptoriumToolDefinition,
   searchScriptoriumBrahmaToolDefinition,
@@ -148,6 +152,10 @@ const ALL_TOOLS = {
   runCustom: runCustomToolDefinition,
   editCustomTool: editCustomToolToolDefinition,
   runSql: runSqlToolDefinition,
+  lookupCharacter: lookupCharacterToolDefinition,
+  lookupMemories: lookupMemoriesToolDefinition,
+  lookupMessages: lookupMessagesToolDefinition,
+  readMessages: readMessagesToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
   searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,
   searchScriptoriumScenario: searchScriptoriumScenarioToolDefinition,

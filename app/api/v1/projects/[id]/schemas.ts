@@ -20,6 +20,7 @@ export const updateProjectSchema = z.object({
   defaultRoleplayTemplateId: z.string().uuid().nullable().optional(),
   defaultAlertCharactersOfLanternImages: z.boolean().nullable().optional(),
   answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
+  brahmaConnectionProfileId: z.string().uuid().nullable().optional(),
   backgroundDisplayMode: z.enum(['latest_chat', 'theme']).optional(),
 });
 

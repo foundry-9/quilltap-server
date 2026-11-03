@@ -41,6 +41,7 @@ const CREATE_CHAT_MESSAGES = `
     "chatId" TEXT NOT NULL,
     "type" TEXT DEFAULT 'message',
     "role" TEXT,
+    "participantId" TEXT DEFAULT NULL,
     "content" TEXT,
     "systemSender" TEXT DEFAULT NULL,
     "customAnnouncer" TEXT DEFAULT NULL,
@@ -113,7 +114,7 @@ describe('searchMessagesGlobal', () => {
 
     const hits = await ops.searchMessagesGlobal(['chat-1'], 'walk')
     expect(hits.map(h => h.messageId)).toEqual(['m2', 'm1'])
-    expect(hits[0]).toMatchObject({ chatId: 'chat-1', role: 'USER' })
+    expect(hits[0]).toMatchObject({ chatId: 'chat-1', role: 'USER', participantId: null })
   })
 
   it('honours the limit in SQL rather than after the fact', async () => {

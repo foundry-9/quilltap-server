@@ -42,7 +42,7 @@ import {
   runOneShotToolLoop,
 } from '@/lib/services/agent-loop/one-shot-loop'
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
-import { resolveBrahmaConnectionProfile } from './orchestrator.service'
+import { resolveInlineBrahmaConnectionProfile } from './inline-profile'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 
 const logger = createServiceLogger('BrahmaOneShot')
@@ -69,9 +69,9 @@ export type BrahmaQueryResult =
 export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<BrahmaQueryResult> {
   const { repos, userId, chatId, question } = opts
 
-  // Profile (model): the user's default — there is no per-chat console profile
-  // when Brahma is consulted from a Salon.
-  const connectionProfile = await resolveBrahmaConnectionProfile(repos, userId, null)
+  // Profile (model): project override → global inline setting → the user's
+  // default. The standalone Console's per-chat picker does not apply here.
+  const connectionProfile = await resolveInlineBrahmaConnectionProfile(repos, userId, chatId)
   if (!connectionProfile) {
     logger.debug('No connection profile resolvable for Brahma query', { chatId })
     return { ok: false, detail: 'no-profile' }
