@@ -19,6 +19,7 @@
 
 // ── Subject ─────────────────────────────────────────────────────────────────
 import { handleGrep, handleListFiles, handleReadFile, handleStrReplace } from '@/lib/tools/handlers/doc-edit/text-handlers';
+import { handleReadHeading } from '@/lib/tools/handlers/doc-edit/markdown-handlers';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
@@ -177,6 +178,18 @@ describe('doc_str_replace edits an uploaded text blob (#134)', () => {
       CHANGELOG.replace('drag ordering', 'keyboard ordering'),
       undefined,
     );
+  });
+});
+
+describe('the markdown tools read an uploaded text blob (#134)', () => {
+  it('doc_read_heading finds a heading in an upload', async () => {
+    const res = await handleReadHeading(
+      { uri: 'qtap://project/CHANGELOG.md', heading: '4.11-dev' } as never,
+      toolContext,
+    );
+
+    expect(res.success).toBe(true);
+    expect(JSON.stringify(res.result)).toContain('drag ordering');
   });
 });
 
