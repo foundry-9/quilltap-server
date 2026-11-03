@@ -116,7 +116,7 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] one tier walk: reach, location and order settled once ([spec](refactor-4-12-tier-walk.md))
   - [ ] Salon stream frames as a tagged union ([spec](refactor-4-12-salon-stream-frames.md))
   - [ ] the browser family finished, and the `FileBrowser` retirement decisions ([spec](refactor-4-12-browser-family.md))
-  - [ ] one recursive watcher core under both filesystem watchers ([spec](refactor-4-12-native-watcher-core.md))
+  - [x] one recursive watcher core under both filesystem watchers ([spec](refactor-4-12-native-watcher-core.md))
 
 ### Virgil: Setup & Onboarding
 

@@ -917,6 +917,10 @@ export async function register() {
           });
         });
 
+        // Stop both watchers on SIGTERM / SIGINT, ahead of the database close.
+        const { registerWatcherShutdownHandlers } = await import('./lib/startup/watcher-shutdown');
+        registerWatcherShutdownHandlers();
+
         logger.info('Background schedulers and filesystem watchers started', {
           context: 'instrumentation.register',
         });

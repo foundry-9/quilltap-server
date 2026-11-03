@@ -1,9 +1,12 @@
 /**
  * @jest-environment node
  *
- * The files-directory watcher on Node's recursive fs.watch. fs.watch reports
- * only a path and "rename" / "change", so the watcher resolves each event
- * against the disk — these tests pin that resolution.
+ * The files-directory watcher's domain on the shared recursive watcher core.
+ * The core itself (debounce, lstat dispatch, symlinks, polling) is pinned in
+ * lib/files/__tests__/recursive-watcher.test.ts; these tests pin what the
+ * files table does with each event, and what the move onto the core gained:
+ * the polling fallback, the cloud-placeholder guard, and a plain file delete
+ * that no longer reads every record.
  */
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -38,12 +41,13 @@ jest.mock('@/lib/auth/single-user', () => ({
 }))
 
 let watchListener: (eventType: 'rename' | 'change', filename: string | null) => void
+const watchImpl = (_dir: string, _opts: unknown, listener: typeof watchListener) => {
+  watchListener = listener
+  return { on: jest.fn(), close: jest.fn() }
+}
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
-  watch: jest.fn((_dir: string, _opts: unknown, listener: typeof watchListener) => {
-    watchListener = listener
-    return { on: jest.fn(), close: jest.fn() }
-  }),
+  watch: jest.fn(),
 }))
 
 import { startWatcher, stopWatcher } from '@/lib/file-storage/watcher'
@@ -68,13 +72,15 @@ let foldersRepo: Record<string, jest.Mock>
 
 async function fire(eventType: 'rename' | 'change', relativePath: string): Promise<void> {
   watchListener(eventType, relativePath)
-  await jest.advanceTimersByTimeAsync(600)
+  await jest.advanceTimersByTimeAsync(800)
   for (let i = 0; i < 40; i++) await Promise.resolve()
 }
 
 beforeEach(() => {
   jest.useFakeTimers()
   jest.clearAllMocks()
+  delete process.env.QUILLTAP_WATCHER_POLLING
+  mockWatch.mockImplementation(watchImpl)
   filesRepo = {
     findByStorageKey: jest.fn().mockResolvedValue(null),
     findBySha256: jest.fn().mockResolvedValue([]),
@@ -87,6 +93,7 @@ beforeEach(() => {
   mockGetRepositories.mockReturnValue({ files: filesRepo, folders: foldersRepo })
   mockStat.mockResolvedValue({ size: 100 })
   mockSha.mockResolvedValue('digest')
+  mockScan.mockResolvedValue([])
   startWatcher()
 })
 
@@ -95,7 +102,7 @@ afterEach(async () => {
   jest.useRealTimers()
 })
 
-describe('files watcher on native fs.watch', () => {
+describe('files watcher domain', () => {
   it('watches the files directory recursively', () => {
     expect(mockWatch).toHaveBeenCalledWith(
       '/mock/files',
@@ -133,7 +140,9 @@ describe('files watcher on native fs.watch', () => {
 
   it('defer-deletes every record beneath a folder that left', async () => {
     mockLstat.mockRejectedValue(enoent)
-    filesRepo.findByStorageKey.mockImplementation(async (key: string) => ({ id: key, storageKey: key }))
+    // A folder has no file record of its own; what lies beneath it does.
+    filesRepo.findByStorageKey.mockImplementation(async (key: string) =>
+      key === 'proj/Lore' ? null : { id: key, storageKey: key })
     filesRepo.findByUserId.mockResolvedValue([
       { id: 'proj/Lore/a.png', storageKey: 'proj/Lore/a.png' },
       { id: 'proj/Lore/deep/b.png', storageKey: 'proj/Lore/deep/b.png' },
@@ -167,14 +176,6 @@ describe('files watcher on native fs.watch', () => {
     )
   })
 
-  it('does not walk a folder whose only event was a change', async () => {
-    mockLstat.mockResolvedValue(dirStat)
-
-    await fire('change', 'proj/Notes')
-
-    expect(mockScan).not.toHaveBeenCalled()
-  })
-
   it('keeps a moved record that a sha256 match found, even after its old path\'s delete window', async () => {
     // Old path gone: its record goes into the deferred-delete buffer.
     mockLstat.mockRejectedValueOnce(enoent)
@@ -189,6 +190,92 @@ describe('files watcher on native fs.watch', () => {
     await jest.advanceTimersByTimeAsync(3000)
 
     expect(filesRepo.update).toHaveBeenCalledWith('f1', expect.objectContaining({ storageKey: 'proj/b.png' }))
+    expect(filesRepo.delete).not.toHaveBeenCalled()
+  })
+})
+
+describe('what the files watcher gained from the shared core', () => {
+  it('a plain file delete does not read every record', async () => {
+    mockLstat.mockRejectedValue(enoent)
+    filesRepo.findByStorageKey.mockResolvedValue({ id: 'f1', storageKey: 'proj/a.png' })
+
+    await fire('rename', 'proj/a.png')
+
+    expect(filesRepo.findByUserId).not.toHaveBeenCalled()
+  })
+
+  it('falls back to polling when recursive watch is unavailable', async () => {
+    await stopWatcher()
+    mockWatch.mockImplementation(() => {
+      throw Object.assign(new Error('unsupported'), { code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM' })
+    })
+    mockScan.mockResolvedValueOnce([
+      { relativePath: 'proj/a.png', isDirectory: false, size: 10, mtime: new Date(1) },
+    ])
+    startWatcher()
+    await jest.advanceTimersByTimeAsync(0)
+    expect(mockScan).toHaveBeenCalledWith('/mock/files')
+
+    // A file arrives between walks.
+    mockScan.mockResolvedValue([
+      { relativePath: 'proj/a.png', isDirectory: false, size: 10, mtime: new Date(1) },
+      { relativePath: 'proj/b.png', isDirectory: false, size: 10, mtime: new Date(1) },
+    ])
+    mockLstat.mockResolvedValue(fileStat)
+    await jest.advanceTimersByTimeAsync(2000 + 800)
+    for (let i = 0; i < 40; i++) await Promise.resolve()
+
+    expect(filesRepo.create).toHaveBeenCalledWith(expect.objectContaining({ storageKey: 'proj/b.png' }))
+    expect(filesRepo.create).toHaveBeenCalledTimes(1)
+  })
+
+  describe('on a platform with cloud placeholders', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    beforeEach(() => Object.defineProperty(process, 'platform', { value: 'darwin' }))
+    afterEach(() => Object.defineProperty(process, 'platform', platform))
+
+    it('does not hash an evicted placeholder', async () => {
+      mockLstat.mockResolvedValue({ ...fileStat, size: 4096, blocks: 0 })
+      mockStat.mockResolvedValue({ size: 4096, blocks: 0 })
+
+      await fire('change', 'proj/evicted.png')
+
+      expect(mockSha).not.toHaveBeenCalled()
+      expect(filesRepo.create).not.toHaveBeenCalled()
+    })
+
+    it('does not hash an evicted placeholder inside a folder that arrived', async () => {
+      mockLstat.mockResolvedValue(dirStat)
+      mockScan.mockResolvedValue([{ relativePath: 'proj/Imported/evicted.png', isDirectory: false }])
+      mockStat.mockResolvedValue({ size: 4096, blocks: 0 })
+
+      await fire('rename', 'proj/Imported')
+
+      expect(mockSha).not.toHaveBeenCalled()
+      expect(filesRepo.create).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('stopping', () => {
+  it('flushes deferred deletes by default', async () => {
+    mockLstat.mockRejectedValue(enoent)
+    filesRepo.findByStorageKey.mockResolvedValue({ id: 'f1', storageKey: 'proj/a.png' })
+    await fire('rename', 'proj/a.png')
+
+    await stopWatcher()
+
+    expect(filesRepo.delete).toHaveBeenCalledWith('f1')
+  })
+
+  it('leaves deferred deletes to reconciliation when told not to flush', async () => {
+    mockLstat.mockRejectedValue(enoent)
+    filesRepo.findByStorageKey.mockResolvedValue({ id: 'f1', storageKey: 'proj/a.png' })
+    await fire('rename', 'proj/a.png')
+
+    await stopWatcher({ flushPendingDeletes: false })
+    await jest.advanceTimersByTimeAsync(5000)
+
     expect(filesRepo.delete).not.toHaveBeenCalled()
   })
 })
