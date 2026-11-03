@@ -4,6 +4,10 @@
 
 ### 4.12-dev
 
+#### Docs: 4.12.0 release notes cover the Brahma lookup shortcuts
+
+- `docs/releases/4.12.0.md` gains a "Brahma Knows Where to Look" section (the four lookup tools, `run_sql` result trimming, the `@Brahma` engine setting and its project override), a mention in the description and intro, and the project's Inline Brahma Engine under "What backups carry".
+
 #### Feature: Brahma lookup shortcuts and an engine setting for `@Brahma`
 
 A Friday trace of `@Brahma` answering "how old is Laura?" showed 14 tool rounds and ~250 KB of context with no answer: schema `PRAGMA`s, 20–33 KB `run_sql` dumps, and a `qt_text(content) LIKE` scan over every message.
