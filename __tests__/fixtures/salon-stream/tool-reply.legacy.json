@@ -1,0 +1,101 @@
+[
+  {
+    "turnStart": true,
+    "participantId": "p-ada",
+    "characterName": "Ada",
+    "chainDepth": 0
+  },
+  {
+    "content": "Let me look. "
+  },
+  {
+    "toolsDetected": 2,
+    "toolNames": [
+      "doc_read_file",
+      "generate_image"
+    ],
+    "toolArguments": [
+      {
+        "path": "a.md"
+      },
+      {
+        "prompt": "a cat"
+      }
+    ]
+  },
+  {
+    "status": {
+      "stage": "tool_executing",
+      "message": "Running doc_read_file...",
+      "toolName": "doc_read_file",
+      "characterName": "Ada",
+      "characterId": "char-a"
+    }
+  },
+  {
+    "toolResult": {
+      "index": 0,
+      "name": "doc_read_file",
+      "success": true,
+      "result": {
+        "text": "hello"
+      }
+    }
+  },
+  {
+    "toolResult": {
+      "index": 1,
+      "name": "generate_image",
+      "success": false,
+      "result": null,
+      "error": "Error: no image profile"
+    }
+  },
+  {
+    "pascalResult": {
+      "type": "message",
+      "id": "m-pascal",
+      "role": "ASSISTANT",
+      "content": "x",
+      "createdAt": "2026-11-02T00:00:00.000Z",
+      "attachments": [],
+      "systemSender": "pascal"
+    }
+  },
+  {
+    "content": "Found it."
+  },
+  {
+    "done": true,
+    "messageId": "m-2",
+    "participantId": "p-ada",
+    "usage": {
+      "promptTokens": 120,
+      "completionTokens": 40,
+      "totalTokens": 160
+    },
+    "cacheUsage": {
+      "cacheReadInputTokens": 100
+    },
+    "attachmentResults": null,
+    "toolsExecuted": true,
+    "provider": "openai",
+    "modelName": "gpt-x",
+    "routeTrail": [
+      {
+        "profileId": "00000000-0000-4000-8000-000000000001",
+        "profileName": "Main",
+        "provider": "openai",
+        "modelName": "gpt-x",
+        "via": "primary",
+        "outcome": "answered"
+      }
+    ]
+  },
+  {
+    "chainComplete": true,
+    "reason": "user_turn",
+    "nextSpeakerId": null,
+    "chainDepth": 0
+  }
+]

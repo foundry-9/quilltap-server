@@ -29,7 +29,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
-import { parseSSEData, type ResponseStatus } from './useSSEStreaming'
+import type { ResponseStatus } from './useSSEStreaming'
+import { parseFrame } from '@/lib/chat/stream-frames'
 import { describeRetryRefusal } from '../concierge-retry'
 
 /** What the message row needs to render a line that is being re-rolled. */
@@ -157,35 +158,42 @@ export function useRegeneration(): RegenerationController {
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
-          const data = parseSSEData(line.slice(6))
-          if (!data) continue
+          const frame = parseFrame(line.slice(6))
+          if (!frame) continue
 
-          if (data.status) {
-            setRegenerationStatus(data.status)
-          }
-          if (data.content) {
-            fullContent += data.content
-            scheduleContent(fullContent)
-          }
-          if (typeof data.reasoning === 'string') {
-            const reasoning = data.reasoning
-            setRegeneration(prev => (prev ? { ...prev, reasoning } : prev))
-          }
-          if (data.error) {
-            streamError = data.details ? `${data.error}: ${data.details}` : data.error
-          }
-          if (data.done) {
-            // Show the finished line rather than whatever the last frame left,
-            // so the hand-off to the persisted swipe is not a visible twitch.
-            cancelPendingFlush()
-            const posted = (data as { message?: { id?: string; content?: string } }).message
-            newSwipeId = posted?.id ?? null
-            const finalContent = posted?.content
-            setRegeneration(prev =>
-              prev
-                ? { ...prev, stage: 'streaming', content: finalContent ?? fullContent }
-                : prev
-            )
+          switch (frame.kind) {
+            case 'status':
+              setRegenerationStatus(frame.status)
+              break
+            case 'content':
+              if (!frame.text) break
+              fullContent += frame.text
+              scheduleContent(fullContent)
+              break
+            case 'reasoning': {
+              const reasoning = frame.text
+              setRegeneration(prev => (prev ? { ...prev, reasoning } : prev))
+              break
+            }
+            case 'error':
+              streamError = frame.details ? `${frame.message}: ${frame.details}` : frame.message
+              break
+            case 'swipeDone': {
+              // Show the finished line rather than whatever the last frame left,
+              // so the hand-off to the persisted swipe is not a visible twitch.
+              cancelPendingFlush()
+              newSwipeId = frame.message.id
+              const finalContent = frame.message.content
+              setRegeneration(prev =>
+                prev
+                  ? { ...prev, stage: 'streaming', content: finalContent ?? fullContent }
+                  : prev
+              )
+              break
+            }
+            // A swipe stream carries nothing else.
+            default:
+              break
           }
         }
       }

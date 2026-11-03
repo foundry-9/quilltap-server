@@ -1,0 +1,145 @@
+[
+  {
+    "storytellerRound": {
+      "id": "r-1",
+      "chatId": "c-1",
+      "status": "open",
+      "bids": []
+    }
+  },
+  {
+    "storytellerBid": {
+      "roundId": "r-1",
+      "bid": {
+        "participantId": "p-ada",
+        "status": "ready"
+      }
+    }
+  },
+  {
+    "roundOpen": true,
+    "roundId": "r-1"
+  },
+  {
+    "turnStart": true,
+    "participantId": "p-ada",
+    "characterName": "Ada",
+    "chainDepth": 0,
+    "concurrent": true
+  },
+  {
+    "turnStart": true,
+    "participantId": "p-bo",
+    "characterName": "Bo",
+    "chainDepth": 0,
+    "concurrent": true
+  },
+  {
+    "content": "I say",
+    "participantId": "p-ada",
+    "concurrent": true
+  },
+  {
+    "handAsked": true,
+    "participantId": "p-bo",
+    "characterName": "Bo",
+    "concurrent": true
+  },
+  {
+    "content": "Rather",
+    "participantId": "p-bo",
+    "concurrent": true
+  },
+  {
+    "handAnswered": true,
+    "participantId": "p-bo",
+    "characterName": "Bo",
+    "yielded": true,
+    "concurrent": true
+  },
+  {
+    "hostAnnouncement": {
+      "type": "message",
+      "id": "m-host",
+      "role": "ASSISTANT",
+      "content": "x",
+      "createdAt": "2026-11-02T00:00:00.000Z",
+      "attachments": [],
+      "systemSender": "host"
+    },
+    "participantId": "p-bo",
+    "concurrent": true
+  },
+  {
+    "done": true,
+    "messageId": null,
+    "participantId": "p-bo",
+    "usage": null,
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false,
+    "skipped": true,
+    "skippedParticipantId": "p-bo",
+    "yielded": true,
+    "concurrent": true
+  },
+  {
+    "done": true,
+    "messageId": "m-3",
+    "participantId": "p-ada",
+    "usage": {
+      "promptTokens": 120,
+      "completionTokens": 40,
+      "totalTokens": 160
+    },
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false,
+    "provider": "anthropic",
+    "modelName": "model-x",
+    "concurrent": true
+  },
+  {
+    "turnStart": true,
+    "participantId": "p-cy",
+    "characterName": "Cy",
+    "chainDepth": 1
+  },
+  {
+    "content": "Next."
+  },
+  {
+    "done": true,
+    "messageId": "m-4",
+    "participantId": "p-cy",
+    "usage": null,
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false
+  },
+  {
+    "turnComplete": true,
+    "participantId": "p-cy",
+    "messageId": "m-4",
+    "chainDepth": 1
+  },
+  {
+    "carinaAnswer": {
+      "type": "message",
+      "id": "m-carina",
+      "role": "ASSISTANT",
+      "content": "x",
+      "createdAt": "2026-11-02T00:00:00.000Z",
+      "attachments": [],
+      "systemSender": "carina"
+    }
+  },
+  {
+    "chainComplete": true,
+    "reason": "yielded",
+    "nextSpeakerId": null,
+    "chainDepth": 1,
+    "paused": true,
+    "heldUserTurn": false
+  }
+]

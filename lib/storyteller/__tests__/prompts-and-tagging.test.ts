@@ -1,12 +1,11 @@
 /**
- * Storyteller — the bid and plan sections, and the concurrent-stream tagger.
+ * Storyteller — the bid and plan sections, and the shared-stream controllers.
  */
 
 import { buildBidSection, buildPlanSection, describeDisposition } from '../prompts'
-import { tagSseChunk } from '../sse-tag'
+import { sharedStreamController, sinkController } from '../sse-tag'
 import { parseBidReply } from '../bid-parse'
 
-const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 
 describe('buildBidSection', () => {
@@ -61,15 +60,20 @@ describe('buildPlanSection', () => {
   })
 })
 
-describe('tagSseChunk', () => {
-  it('stamps participantId and concurrent on every data frame', () => {
-    const chunk = encoder.encode('data: {"content":"hi"}\n\ndata: {"done":true,"participantId":"keep"}\n\n')
-    const out = decoder.decode(tagSseChunk(chunk, 'p1'))
-    expect(out).toBe('data: {"content":"hi","participantId":"p1","concurrent":true}\n\ndata: {"done":true,"participantId":"keep","concurrent":true}\n\n')
+describe('sharedStreamController', () => {
+  it('forwards what it is given and ignores close', () => {
+    const enqueued: Uint8Array[] = []
+    const inner = { desiredSize: 1, enqueue: (c: Uint8Array) => enqueued.push(c), close: jest.fn(), error: jest.fn() }
+    const shared = sharedStreamController(inner as unknown as ReadableStreamDefaultController<Uint8Array>)
+    const chunk = encoder.encode('data: {}\n\n')
+    shared.enqueue(chunk)
+    shared.close()
+    expect(enqueued).toEqual([chunk])
+    expect(inner.close).not.toHaveBeenCalled()
   })
 
-  it('leaves non-JSON lines alone', () => {
-    const chunk = encoder.encode(': keep-alive\n\ndata: not-json\n\n')
-    expect(decoder.decode(tagSseChunk(chunk, 'p1'))).toBe(': keep-alive\n\ndata: not-json\n\n')
+  it('a sink discards everything', () => {
+    const sink = sinkController()
+    expect(() => { sink.enqueue(encoder.encode('x')); sink.close() }).not.toThrow()
   })
 })

@@ -63,7 +63,8 @@ import { buildBidSection, buildPlanSection } from '@/lib/storyteller/prompts'
 import type { StorytellerBidCallOutcome, StorytellerBidOffer, StorytellerTurnContext } from '@/lib/storyteller/types'
 import type { StorytellerOrder } from '@/lib/schemas/storyteller.types'
 import { runDry } from '@/lib/repositories/dry-scope'
-import { sinkController, taggingController } from '@/lib/storyteller/sse-tag'
+import { sinkController, sharedStreamController } from '@/lib/storyteller/sse-tag'
+import { seatedFrameEncoder } from '@/lib/chat/stream-frames'
 import { finalizeMessageResponse, runStorytellerRoundHousekeeping } from './message-finalizer.service'
 import { dispatchCourierTransport } from './courier-transport.service'
 import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
@@ -342,14 +343,15 @@ export async function handleStorytellerRun(
       turns,
       order: request.order,
       runTurn: async (turn, storyteller) => {
-        const turnController = turn.concurrent ? taggingController(controller, turn.participantId) : controller
+        // A concurrent turn shares the stream: its frames carry its seat, and
+        // its finishing must not close the stream the others still write to.
         const result = await processMessage(
           repos,
           chatId,
           userId,
           { continueMode: true, respondingParticipantId: turn.participantId, storyteller },
-          turnController,
-          encoder,
+          turn.concurrent ? sharedStreamController(controller) : controller,
+          turn.concurrent ? seatedFrameEncoder(turn.participantId) : encoder,
           ledger
         )
         return {

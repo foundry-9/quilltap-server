@@ -47,7 +47,8 @@ describe('openTurnStream', () => {
     }))
     const frame = JSON.parse(text.replace(/^data: /, '').trim())
     expect(frame).toMatchObject({
-      error: 'Failed to generate response',
+      kind: 'error',
+      message: 'Failed to generate response',
       errorType: 'Error',
       details: 'No API key configured for this connection profile',
       userMessagePersisted: true,
@@ -72,14 +73,14 @@ describe('encodeTurnDoneEvent', () => {
       effectiveProfile: { provider: 'ANTHROPIC', modelName: 'claude' },
     } as never
     const frame = JSON.parse(new TextDecoder().decode(
-      encodeTurnDoneEvent(new TextEncoder(), streaming, { messageId: null, participantId: 'p1', toolsExecuted: false, stopped: true })
+      encodeTurnDoneEvent(new TextEncoder(), streaming, { messageId: null, participantId: 'p1', toolsExecuted: false, outcome: 'stopped' })
     ).replace(/^data: /, '').trim())
     expect(frame).toEqual({
-      done: true,
+      kind: 'done',
+      outcome: 'stopped',
       messageId: null,
       participantId: 'p1',
       toolsExecuted: false,
-      stopped: true,
       usage: { totalTokens: 12 },
       cacheUsage: { cacheReadInputTokens: 3 },
       attachmentResults: { sent: ['f1'], failed: [] },

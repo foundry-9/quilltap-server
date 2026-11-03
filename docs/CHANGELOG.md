@@ -4,6 +4,28 @@
 
 ### 4.12-dev
 
+#### Fix: Storyteller "all at once" replies no longer land as empty bubbles
+
+When a concurrent Storyteller turn finished, the Salon built its reply bubble from text read inside a React state updater, which had not always run yet, so the bubble could show empty until the end-of-round refresh. `useSSEStreaming` now keeps each seat's streamed text in a map local to the stream and reads it from there. The golden-stream test checks the text.
+
+#### Refactor: Salon stream frames, phase 2 (Refactor 4.12, spec 5)
+
+The Salon's SSE stream now sends frames tagged with `kind` (`lib/chat/stream-frames.ts`) instead of the untagged flag bag. Client and server change together; no behavior change intended.
+
+- `useSSEStreaming` reads frames with `parseFrame` and dispatches with an exhaustive `switch (frame.kind)`; seat-tagged (concurrent Storyteller) frames go to their own switch. The hand-ordered `if` chain, the `SSEEvent` type and `parseSSEData` are deleted. The optimistic assistant message is built in one place, `assistantMessageFromDone`.
+- `useRegeneration` switches on frames; a swipe stream ends with `swipeDone` (was `{ done: true, message }`).
+- The raise-hand POST reply no longer lowers the hand on `raised: false`; it lowers a still-raised hand only when the reply says no stream is open.
+- Help chat, the Brahma console, the Scenario Builder and the one-shot tool loop keep the old bag shape via `legacyFrameEncoder()`; their clients are unchanged.
+- Hook tests feed frames. New: `useSSEStreaming-golden.test.tsx` replays the recorded golden streams through the hook. API.md documents the frame kinds; CLAUDE.md gains the chokepoint.
+
+#### Refactor: Salon stream frames, phase 1 (Refactor 4.12, spec 5)
+
+The Salon's SSE frames now have one definition, `lib/chat/stream-frames.ts`: a Zod discriminated union on `kind`, `encodeFrame` (the only producer of `data:` bytes on the turn path), `parseFrame`, and `tagFrame`. The wire shape is unchanged in this phase.
+
+- Every `encodeXxxEvent` in `streaming.service.ts` is a one-line `encodeFrame` call; the inline frames in `tool-execution.service.ts` and `regenerate-swipe-stream.ts` are gone. `encodeFrame` renders through `toLegacyBag` until the client switches.
+- A `done` frame carries one `outcome` (`finished` / `skipped` / `yielded` / `stopped` / `empty`) instead of four boolean flags; the legacy rendering restores the flags.
+- Concurrent Storyteller turns write through `seatedFrameEncoder(participantId)`, which tags each frame before encoding. `tagSseChunk` / `taggingController` (decode, regex, re-encode) are deleted; `sharedStreamController` keeps a finishing turn from closing the shared stream.
+- Golden streams recorded from the old encoders in `__tests__/fixtures/salon-stream/`; tests in `__tests__/unit/lib/chat/stream-frames.test.ts` and a chokepoint grep-test, `stream-frames-chokepoint.test.ts`.
 #### Refactor: one image transport budget (Refactor 4.12, spec 3)
 
 Which images a Salon turn sends to a provider is now decided in one place, `applyImageTransportBudget` (`lib/chat/image-transport-budget.ts`), run on the final message array for the primary and again for each failover substitute.

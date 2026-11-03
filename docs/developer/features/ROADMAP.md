@@ -114,7 +114,7 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] one document core for the operator routes and the `doc_*` tools ([spec](refactor-4-12-document-core.md))
   - [X] one image transport budget on the way to a provider ([spec](refactor-4-12-image-transport-budget.md))
   - [ ] one tier walk: reach, location and order settled once ([spec](refactor-4-12-tier-walk.md))
-  - [ ] Salon stream frames as a tagged union ([spec](refactor-4-12-salon-stream-frames.md))
+  - [X] Salon stream frames as a tagged union ([spec](refactor-4-12-salon-stream-frames.md))
   - [ ] the browser family finished, and the `FileBrowser` retirement decisions ([spec](refactor-4-12-browser-family.md))
   - [x] one recursive watcher core under both filesystem watchers ([spec](refactor-4-12-native-watcher-core.md))
 

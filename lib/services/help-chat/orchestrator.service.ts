@@ -59,6 +59,7 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { buildHelpChatSystemPrompt } from '@/lib/help-chat/system-prompt-builder'
 import { resolveAllHelpContentForUrl } from '@/lib/help-chat/context-resolver'
+import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 
 const logger = createServiceLogger('HelpChatOrchestrator')
 
@@ -72,7 +73,8 @@ export async function handleHelpChatMessage(
   userId: string,
   options: HelpChatSendOptions
 ): Promise<ReadableStream<Uint8Array>> {
-  const encoder = new TextEncoder()
+  // This route's client reads the pre-4.12 untagged-bag SSE shape.
+  const encoder = legacyFrameEncoder()
 
   return new ReadableStream({
     async start(controller) {

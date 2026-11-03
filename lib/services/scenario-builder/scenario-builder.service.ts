@@ -41,6 +41,7 @@ import {
   buildScenarioBuilderUserMessage,
   type ScenarioBuilderMode,
 } from '@/lib/scenario-builder/system-prompt'
+import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 
 const logger = createServiceLogger('ScenarioBuilder')
 
@@ -122,7 +123,8 @@ export async function runScenarioBuilder(
   signal?: AbortSignal,
 ): Promise<void> {
   const { repos, userId, connectionProfile, apiKey, input } = opts
-  const encoder = new TextEncoder()
+  // This route's client reads the pre-4.12 untagged-bag SSE shape.
+  const encoder = legacyFrameEncoder()
 
   // Tools need a chat id only for scoping; nothing reads or writes a chat row
   // with a synthetic one (the read-only slate posts no Librarian notices).

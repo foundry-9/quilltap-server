@@ -1,0 +1,65 @@
+[
+  {
+    "status": {
+      "stage": "failing-over",
+      "message": "Trying the understudy"
+    }
+  },
+  {
+    "done": true,
+    "messageId": null,
+    "participantId": "p-ada",
+    "usage": null,
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false,
+    "emptyResponse": true,
+    "emptyResponseReason": "Nothing came back."
+  },
+  {
+    "done": true,
+    "messageId": null,
+    "participantId": "p-ada",
+    "usage": null,
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false,
+    "stopped": true
+  },
+  {
+    "done": true,
+    "messageId": null,
+    "participantId": "p-ada",
+    "usage": null,
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false,
+    "skipped": true,
+    "skippedParticipantId": "p-ada"
+  },
+  {
+    "confirmationResult": {
+      "messageId": "m-1",
+      "confirmed": false,
+      "revised": true,
+      "notes": "fixed",
+      "content": "Better."
+    }
+  },
+  {
+    "fileProcessing": [
+      {
+        "filename": "a.png",
+        "type": "image_description",
+        "usedImageDescriptionLLM": true
+      }
+    ]
+  },
+  {
+    "error": "Failed to send",
+    "errorType": "provider_error",
+    "details": "boom",
+    "userMessagePersisted": true,
+    "pendingToolResultsPersisted": false
+  }
+]
