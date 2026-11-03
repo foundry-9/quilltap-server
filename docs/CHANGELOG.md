@@ -26,6 +26,19 @@ Reads no longer provision a project's or group's official store. Only writers pa
 - Wardrobe collection GET and `?action=instructions` GET (`lib/wardrobe/routes/wardrobe-route-factory.ts`): an owner with no store yet answers `{ mountPointId: null, wardrobeItems: [] }` / `{ instructions: null }`; a missing owner is still 404. Fixes #135.
 - `GET /api/v1/groups/scenarios` and the project/group/General scenario collection GET (`lib/mount-index/scenario-item-route-factory.ts`) read without `ensure`; an owner with no store lists as empty. POST still provisions the store, its `Scenarios/` folder and the group's `Knowledge/` folder. Fixes #136.
 
+#### Refactor: one recursive watcher core under both filesystem watchers (Refactor 4.12, spec 7)
+
+The document-store watcher and the `files/` watcher were copies of each other that had drifted. They now share `createRecursiveWatcher` (`lib/files/recursive-watcher.ts`): the native recursive `fs.watch`, the per-path debounce, `lstat` dispatch, symlink skip, cloud-placeholder skip, `'error'` logging, and the polling fallback. Each watcher keeps only its domain handlers.
+
+- `files/` watcher falls back to polling when `fs.watch` refuses a recursive watch, and honours `QUILLTAP_WATCHER_POLLING=1`. It used to log a warning and stay off.
+- `files/` watcher no longer hashes an evicted iCloud / OneDrive placeholder, which made the provider download it. Covered for direct events (core) and for files inside a folder that arrived (`handleFileAdd` / `handleFileChange`).
+- `files/` watcher no longer reads every file record on a plain file delete. The folder sweep runs only after a rename of a path that had no record of its own.
+- Both watchers debounce 750 ms (`WATCH_DEBOUNCE_MS`); the `files/` watcher was 500 ms.
+- `stopMountWatchers` / `stopWatcher` are now called on SIGTERM / SIGINT (`lib/startup/watcher-shutdown.ts`, prepended so it runs before the database close). `stopMountWatchers` is synchronous; `stopWatcher({ flushPendingDeletes: false })` leaves deferred deletes to startup reconciliation.
+- One recursive `readdir` skeleton, `walkTree` (`lib/files/walk.ts`), under `walkDirectory`, `listFilesystemFolders`, `walkDisk` and `scanDirectory`. Filter rules unchanged.
+- Stale chokidar comments in `database-store.ts` and `db-store-events.ts` fixed; `FILE-SYSTEM-IMPLEMENTATION.md`'s watcher section rewritten (it described a class that does not exist).
+- Tests: shared cases moved to `lib/files/__tests__/recursive-watcher.test.ts`; new `lib/files/__tests__/walk.test.ts`; both `watcher-native.test.ts` suites keep only domain cases plus the three new `files/` behaviours.
+
 #### Fix: theme-storybook stories use only real `qt-*` classes
 
 Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.

@@ -23,6 +23,7 @@ import { DocMountPoint } from '@/lib/schemas/mount-index.types';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 import { assertBasePathAvailable } from './base-path-availability';
 import { isEvictedCloudPlaceholder } from '@/lib/files/cloud-placeholder';
+import { walkTree } from '@/lib/files/walk';
 
 const logger = createServiceLogger('MountIndex:Scanner');
 
@@ -108,7 +109,7 @@ export function matchesPattern(relativePath: string, pattern: string): boolean {
  * @param basePath        - Absolute root path of the mount point
  * @param includePatterns - Glob-like patterns for files to include
  * @param excludePatterns - Glob-like patterns for files/directories to exclude
- * @param currentRelative - Current relative path from basePath (for recursion)
+ * @param currentRelative - Relative folder to start from; default the root
  * @returns Array of { relativePath, absolutePath } for matching files
  */
 export async function walkDirectory(
@@ -118,50 +119,33 @@ export async function walkDirectory(
   currentRelative: string = ''
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
   const results: { relativePath: string; absolutePath: string }[] = [];
-  const currentAbsolute = currentRelative
-    ? path.join(basePath, currentRelative)
-    : basePath;
 
-  let entries;
-  try {
-    entries = await fs.readdir(currentAbsolute, { withFileTypes: true });
-  } catch (err) {
-    logger.warn('Unable to read directory during walk', {
-      path: currentAbsolute,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return results;
-  }
-
-  for (const entry of entries) {
-    const relativePath = currentRelative
-      ? path.join(currentRelative, entry.name)
-      : entry.name;
-
-    // Skip symlinks entirely
-    if (entry.isSymbolicLink()) {
-      continue;
-    }
-
-    // Check exclude patterns against directory/file names
-    if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) {
-      continue;
-    }
-
-    if (entry.isDirectory()) {
-      // Recurse into subdirectories
-      const subResults = await walkDirectory(basePath, includePatterns, excludePatterns, relativePath);
-      results.push(...subResults);
-    } else if (entry.isFile()) {
-      // Check include patterns — file must match at least one
-      if (includePatterns.length === 0 || includePatterns.some(pattern => matchesPattern(relativePath, pattern))) {
-        results.push({
-          relativePath,
-          absolutePath: path.join(basePath, relativePath),
-        });
+  await walkTree(
+    basePath,
+    ({ relativePath, absolutePath, dirent }) => {
+      if (dirent.isSymbolicLink()) return false;
+      // Exclude patterns apply to directory and file names alike
+      if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) return false;
+      if (dirent.isDirectory()) return true;
+      // Include patterns: empty list means "all", otherwise must match one
+      if (
+        dirent.isFile() &&
+        (includePatterns.length === 0 || includePatterns.some(pattern => matchesPattern(relativePath, pattern)))
+      ) {
+        results.push({ relativePath, absolutePath });
       }
-    }
-  }
+      return false;
+    },
+    {
+      from: currentRelative,
+      onReadError: (relativeDir, err) => {
+        logger.warn('Unable to read directory during walk', {
+          path: relativeDir ? path.join(basePath, relativeDir) : basePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      },
+    },
+  );
 
   return results;
 }
@@ -476,7 +460,7 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
  *
  * @param basePath        - Absolute root path of the mount point
  * @param excludePatterns - Patterns to exclude (same syntax as scanner)
- * @param currentRelative - Internal recursion parameter; leave undefined on first call
+ * @param currentRelative - Relative folder to start from; default the root
  * @returns Array of POSIX-style relative directory paths
  */
 export async function listFilesystemFolders(
@@ -485,39 +469,25 @@ export async function listFilesystemFolders(
   currentRelative = ''
 ): Promise<string[]> {
   const results: string[] = [];
-  const currentAbsolute = currentRelative
-    ? path.join(basePath, currentRelative)
-    : basePath;
 
-  let entries;
-  try {
-    entries = await fs.readdir(currentAbsolute, { withFileTypes: true });
-  } catch (err) {
-    logger.warn('Unable to read directory while listing mount folders', {
-      path: currentAbsolute,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return results;
-  }
-
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) continue;
-    if (!entry.isDirectory()) continue;
-
-    const relativeNative = currentRelative
-      ? path.join(currentRelative, entry.name)
-      : entry.name;
-
-    if (excludePatterns.some(pattern => matchesPattern(relativeNative, pattern))) {
-      continue;
-    }
-
-    const relativePosix = relativeNative.split(path.sep).join('/');
-    results.push(relativePosix);
-
-    const sub = await listFilesystemFolders(basePath, excludePatterns, relativeNative);
-    results.push(...sub);
-  }
+  await walkTree(
+    basePath,
+    ({ relativePath, dirent }) => {
+      if (dirent.isSymbolicLink() || !dirent.isDirectory()) return false;
+      if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) return false;
+      results.push(relativePath.split(path.sep).join('/'));
+      return true;
+    },
+    {
+      from: currentRelative,
+      onReadError: (relativeDir, err) => {
+        logger.warn('Unable to read directory while listing mount folders', {
+          path: relativeDir ? path.join(basePath, relativeDir) : basePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      },
+    },
+  );
 
   return results;
 }

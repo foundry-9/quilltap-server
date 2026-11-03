@@ -7,11 +7,11 @@
  * @module file-storage/scanner
  */
 
-import { readdir, stat } from 'fs/promises';
-import { readFile } from 'fs/promises';
+import { readFile, stat } from 'fs/promises';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { join, extname } from 'path';
 import { createLogger } from '@/lib/logging/create-logger';
+import { walkTree } from '@/lib/files/walk';
 
 const logger = createLogger('file-storage:scanner');
 
@@ -126,76 +126,48 @@ export async function scanDirectory(
   relativeTo?: string
 ): Promise<ScannedFile[]> {
   const results: ScannedFile[] = [];
-  const startDir = relativeTo ? join(basePath, relativeTo) : basePath;
-  const prefix = relativeTo || '';
 
-  async function walk(dirPath: string, currentPrefix: string): Promise<void> {
-    let entries;
-    try {
-      entries = await readdir(dirPath, { withFileTypes: true });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return;
-      }
-      logger.warn('Error reading directory during scan', {
-        dir: dirPath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return;
-    }
-
-    for (const entry of entries) {
+  await walkTree(
+    basePath,
+    async ({ name, relativePath, absolutePath, dirent }) => {
       // Skip hidden files and sidecars
-      if (shouldSkipFile(entry.name)) {
-        continue;
-      }
+      if (shouldSkipFile(name)) return false;
 
-      const relativePath = currentPrefix ? `${currentPrefix}/${entry.name}` : entry.name;
-      const fullPath = join(dirPath, entry.name);
-
-      if (entry.isDirectory()) {
+      if (dirent.isDirectory()) {
         // Skip special directories
-        if (SKIP_DIRS.has(entry.name)) {
-          continue;
-        }
-        if (isMigrationArchiveDir(entry.name)) {
-          continue;
-        }
-
+        if (SKIP_DIRS.has(name) || isMigrationArchiveDir(name)) return false;
         try {
-          const stats = await stat(fullPath);
-          results.push({
-            relativePath,
-            name: entry.name,
-            size: 0,
-            mtime: stats.mtime,
-            isDirectory: true,
-          });
+          const stats = await stat(absolutePath);
+          results.push({ relativePath, name, size: 0, mtime: stats.mtime, isDirectory: true });
         } catch {
           // Skip inaccessible directories
-          continue;
+          return false;
         }
+        return true;
+      }
 
-        // Recurse into subdirectory
-        await walk(fullPath, relativePath);
-      } else if (entry.isFile()) {
+      if (dirent.isFile()) {
         try {
-          const stats = await stat(fullPath);
-          results.push({
-            relativePath,
-            name: entry.name,
-            size: stats.size,
-            mtime: stats.mtime,
-            isDirectory: false,
-          });
+          const stats = await stat(absolutePath);
+          results.push({ relativePath, name, size: stats.size, mtime: stats.mtime, isDirectory: false });
         } catch {
           // Skip inaccessible files
         }
       }
-    }
-  }
-
-  await walk(startDir, prefix);
+      return false;
+    },
+    {
+      from: relativeTo,
+      separator: 'posix',
+      onReadError: (relativeDir, error) => {
+        if (error.code === 'ENOENT') return;
+        logger.warn('Error reading directory during scan', {
+          dir: relativeDir ? join(basePath, relativeDir) : basePath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    },
+  );
 
   return results;
 }

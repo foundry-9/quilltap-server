@@ -343,16 +343,15 @@ console.log(report.missing);  // DB entries without files
 
 ## File Watcher
 
-Monitor storage directory for external changes:
+`lib/file-storage/watcher.ts` keeps the `files` table in step with the instance `files/` directory. `instrumentation.ts` starts it with `startWatcher()`; `lib/startup/watcher-shutdown.ts` stops it (and the document-store watchers) on SIGTERM / SIGINT, before the database closes.
 
-```typescript
-import { FileWatcher } from '@/lib/file-storage/watcher';
+It runs on the shared recursive watcher core, `createRecursiveWatcher` (`lib/files/recursive-watcher.ts`), which the document-store watcher (`lib/mount-index/watcher.ts`) also uses. The core owns the native recursive `fs.watch`, the 750 ms per-path debounce, resolving each event with `lstat` (symlinks skipped, evicted iCloud / OneDrive placeholders left unread), and polling — forced by `QUILLTAP_WATCHER_POLLING=1`, or automatic when `fs.watch` refuses a recursive watch. The `files/` watcher supplies only the domain:
 
-const watcher = new FileWatcher('data/files/storage');
-watcher.on('add', (filePath) => console.log('File added:', filePath));
-watcher.on('remove', (filePath) => console.log('File removed:', filePath));
-await watcher.watch();
-```
+- a file that changed or appeared → refresh its record, or create an orphaned one; a SHA-256 match against a pending delete or an existing record is a move
+- a path that vanished → defer-delete its record for 3 s so a move can cancel it; after a rename of a path with no record of its own, every record beneath it too (a folder that left)
+- a folder that arrived by rename → folder records and orphan file records for everything in it
+
+Recursive directory walks in the storage layer (`scanDirectory` here, `walkDirectory` / `listFilesystemFolders` in the mount scanner, the sync engine's `walkDisk`) share one skeleton, `walkTree` (`lib/files/walk.ts`), each with its own filter rules.
 
 ## Integration Points
 
