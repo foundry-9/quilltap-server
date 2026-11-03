@@ -107,7 +107,7 @@ New defects are **GitHub issues** filed with the Bug issue form
 ## Technology Stack
 
 - **Framework / language:** React via Next.js, TypeScript, npm.
-- **Testing:** Jest (native coverage) and Playwright.
+- **Testing:** Jest (native coverage).
 - **Data:** SQLite + SQLCipher encryption at rest via `better-sqlite3-multiple-ciphers`, **aliased as `better-sqlite3`** in the root `package.json`. Runtime and tests `require('better-sqlite3')`, not the native name (which only resolves where a sub-package declares it directly). Tests needing both should fall back `better-sqlite3-multiple-ciphers` → `better-sqlite3`. Models are TS interfaces with Zod schemas.
 - **File storage:** local filesystem only.
 - **LLM providers:** OpenAI, Anthropic, Grok (xAI), Google, Ollama, OpenRouter, any OpenAI-compatible endpoint.

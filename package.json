@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.12.0-dev.55",
+  "version": "4.12.0-dev.56",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -43,9 +43,6 @@
     "test": "cross-env LOG_LEVEL=error npm run test:all",
     "test:all": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js && cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js --config jest.integration.config.ts",
     "test:coverage": "node --no-sparkplug node_modules/jest/bin/jest.js --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed",
-    "test:e2e:ui": "playwright test --ui",
     "test:integration": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js --config jest.integration.config.ts",
     "test:unit": "cross-env NODE_ENV=test LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js",
     "test:watch": "node --no-sparkplug node_modules/jest/bin/jest.js --watch",
@@ -117,7 +114,6 @@
   "devDependencies": {
     "@jest/globals": "^30.3.0",
     "@openrouter/sdk": "^1.5.33",
-    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/eslint-plugin-query": "^5.105.1",
     "@testing-library/jest-dom": "^7.0.1",

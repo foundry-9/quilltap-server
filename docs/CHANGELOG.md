@@ -4,6 +4,11 @@
 
 ### 4.12-dev
 
+#### Cleanup: remove Playwright e2e tests
+
+- Removed the four Playwright specs in `__tests__/integration/` (they predated the current UI and API; character creation and the home-page assertions already failed), `helpers/test-user.ts`, `playwright.config.ts`, the `test:e2e*` scripts and the `@playwright/test` dev dependency. The Jest integration tests under `__tests__/integration/api/` are unchanged.
+- Dropped the Playwright mentions from `README.md`, `CLAUDE.md`, the About page, the testing and development guides, `.gitignore`, `.dockerignore`, `tsconfig.json` and `jest.integration.config.ts`.
+
 #### Cleanup: remove obsolete top-level files and scripts
 
 - Removed `process_qt.sh` (a finished one-off typography codemod), `GEMINI.md` (a stale AI-agent overview that duplicated `CLAUDE.md`), and the `cicd/` directory with its `deploy:dev` script.

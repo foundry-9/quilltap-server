@@ -219,9 +219,6 @@ npm run test:watch
 
 # Run tests with coverage
 npm run test:coverage
-
-# Run E2E tests with Playwright
-npm run test:e2e
 ```
 
 ### Type Checking

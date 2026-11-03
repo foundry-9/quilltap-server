@@ -377,7 +377,7 @@ export function AboutView() {
           <p><span className="font-medium">Terminals &amp; Realtime:</span> xterm.js, node-pty, ws, croner</p>
           <p><span className="font-medium">Filesystem &amp; Archives:</span> tar, yauzl, semver</p>
           <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Docker</p>
-          <p><span className="font-medium">Testing:</span> Jest, Playwright, Storybook, Testing Library</p>
+          <p><span className="font-medium">Testing:</span> Jest, Storybook, Testing Library</p>
         </div>
         <p className="qt-text-muted text-sm mt-4">
           Special thanks to{' '}

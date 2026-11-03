@@ -50,7 +50,6 @@
     ".next",
     "packages",
     "plugins",
-    "playwright.config.ts",
     "__tests__",
     "scripts",
     "out"
