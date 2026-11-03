@@ -16,6 +16,7 @@ const mockSafeEnqueue = jest.fn((controller: { enqueue: (chunk: unknown) => void
 })
 const mockEncodeContentChunk = jest.fn((_encoder: TextEncoder, chunk: string) => chunk)
 const mockProcessFileAttachmentFallback = jest.fn()
+const mockGenerateImageDescription = jest.fn()
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -77,6 +78,7 @@ jest.mock('@/lib/chat/file-attachment-fallback', () => {
   return {
     ...actual,
     processFileAttachmentFallback: (...args: any[]) => mockProcessFileAttachmentFallback(...args),
+    generateImageDescription: (...args: any[]) => mockGenerateImageDescription(...args),
   }
 })
 
@@ -427,6 +429,55 @@ describe('provider-failover.service', () => {
 
       const [rerouteCall] = (mockStreamMessage as jest.Mock).mock.calls[1] as any[]
       expect(rerouteCall.messages[0].attachments).toEqual([imageAttachment])
+      expect(mockProcessFileAttachmentFallback).not.toHaveBeenCalled()
+    })
+
+    it('re-applies the whole transport budget: a substitute with a lower image cap gets fewer images', async () => {
+      const tightUncensored = {
+        ...textOnlyUncensored,
+        id: 'unc-tight',
+        provider: 'ANTHROPIC',
+        modelName: 'claude-opus-5',
+        supportsImageUpload: true,
+        maxImagesPerRequest: 1,
+      }
+      const older = { ...imageAttachment, id: 'file-old', filename: 'older.png', transport: { origin: 'lantern', createdAt: 1, describable: true } }
+      const newer = { ...imageAttachment, id: 'file-new', filename: 'newer.png', transport: { origin: 'lantern', createdAt: 2, describable: true } }
+      mockGenerateImageDescription.mockResolvedValue({
+        type: 'image_description',
+        imageDescription: 'An older portrait.',
+        processingMetadata: { originalFilename: 'older.png' },
+      })
+
+      mockStreamMessage
+        .mockReturnValueOnce(makeStream([{ done: true }]))
+        .mockReturnValueOnce(makeStream([{ content: 'Lovely.' }, { done: true }]))
+      ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: tightUncensored,
+        apiKey: 'sk-unc',
+      })
+
+      await attemptEmptyResponseRecovery({
+        state: freshState(),
+        toolMessagesLength: 0,
+        contentWasFlaggedDangerous: false,
+        conciergePolicy: failoverPolicy('unc-tight'),
+        connectionProfile: visionPrimary,
+        formattedMessages: [{ role: 'user', content: 'Two pictures', attachments: [older, newer] }],
+        modelParams: {},
+        actualTools: [],
+        useNativeWebSearch: false,
+        userId: 'user-1',
+        chatId: 'chat-1',
+        character: { id: 'char-1', name: 'Abigail' } as any,
+        controller,
+        encoder,
+        repos,
+      })
+
+      const [rerouteCall] = (mockStreamMessage as jest.Mock).mock.calls[1] as any[]
+      expect(rerouteCall.messages[0].attachments.map((a: { id: string }) => a.id)).toEqual(['file-new'])
+      expect(rerouteCall.messages[0].content).toContain('An older portrait.')
       expect(mockProcessFileAttachmentFallback).not.toHaveBeenCalled()
     })
   })

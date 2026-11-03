@@ -4,7 +4,6 @@
  * POST /api/v1/mount-points/[id]/folders - Create a folder inside a mount point
  */
 
-import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createContextParamsHandler } from '@/lib/api/middleware';
@@ -13,28 +12,14 @@ import { logger } from '@/lib/logger';
 import { badRequest, errorResponse, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { createDatabaseFolder } from '@/lib/mount-index/database-store';
 import { createFilesystemFolder } from '@/lib/mount-index/scanner';
+import { publishMountChange } from '@/lib/mount-index/realtime';
 import { BasePathUnavailableError } from '@/lib/mount-index/base-path-availability';
+import { FileOpError } from '@/lib/mount-index/file-op-error';
+import { isSafeRelativePath, normaliseRelativePath } from '@/lib/mount-index/path-utils';
 
 const createFolderSchema = z.object({
   path: z.string().min(1).max(1024),
 });
-
-function normaliseRelativePath(input: string): string {
-  return input.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\\/g, '/');
-}
-
-function isPathSafe(rel: string): boolean {
-  if (!rel) return false;
-  if (path.isAbsolute(rel)) return false;
-  const segments = rel.split('/');
-  for (const seg of segments) {
-    if (seg === '' || seg === '.' || seg === '..') return false;
-    if (/[\x00-\x1f]/.test(seg)) return false;
-    if (/[<>:"|?*\\]/.test(seg)) return false;
-    if (seg.length > 200) return false;
-  }
-  return true;
-}
 
 export const POST = createContextParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
@@ -45,8 +30,14 @@ export const POST = createContextParamsHandler<{ id: string }>(
         return badRequest('Folder path is required');
       }
 
-      const rel = normaliseRelativePath(parsed.data.path);
-      if (!isPathSafe(rel)) {
+      let rel: string;
+      try {
+        rel = normaliseRelativePath(parsed.data.path);
+      } catch (err) {
+        if (err instanceof FileOpError) return badRequest('Folder path contains invalid characters or segments');
+        throw err;
+      }
+      if (!isSafeRelativePath(rel)) {
         return badRequest('Folder path contains invalid characters or segments');
       }
 
@@ -65,6 +56,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
           path: result.path,
           userId: user.id,
         });
+        publishMountChange(id);
         return successResponse({ path: result.path });
       }
 
@@ -101,6 +93,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
         userId: user.id,
       });
 
+      publishMountChange(id);
       return successResponse({ path: rel });
     } catch (error) {
       logger.error(

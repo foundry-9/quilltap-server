@@ -19,9 +19,13 @@
  * (`archived` archives), `?action=clear-override`, `?action=detach`;
  * `DELETE` (`?force=true` bakes an archetype's instances first).
  *
- * Every writing handler is wrapped in `withInventoryErrors`, so a refusal
- * answers through `inventoryErrorResponse` (a `409` with its `code`, or a
- * `400`); an archived character's vault answers `409`.
+ * The config shape, the per-tier labels, the resolver, the read probe,
+ * `?action=folders` and the error mapping are the shared item-route preamble
+ * (`lib/mount-index/item-folder-routes.ts`), which the wardrobe's factory
+ * uses too. Every writing handler is wrapped in the preamble's `withErrors`,
+ * so a refusal answers through the Inventory's mapping (a `409` with its
+ * `code`, or a `400`); an archived character's vault answers `409`. No GET
+ * provisions a store.
  *
  * @module lib/inventory/routes/inventory-route-factory
  */
@@ -30,7 +34,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, withActionDispatch } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
-import { created, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { created, notFound, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import {
   clearInventoryOverrideSchema,
@@ -46,42 +50,41 @@ import {
   type ResolvedInventoryItem,
 } from '@/lib/schemas/inventory.types';
 import { findDependents } from '@/lib/inventory/dependents';
+import { itemRoutePreamble, type ItemRouteConfig, type ItemRouteKind } from '@/lib/mount-index/item-folder-routes';
 import { assertInventoryImageChoice } from '@/lib/inventory/item-images';
 import {
   clearOverrides,
   copyInventoryItemsToFolder,
   duplicateInventoryItem,
-  createInventoryFolder,
   createInventoryItem,
-  deleteInventoryFolder,
   deleteInventoryItem,
   detach,
   instantiate,
   moveInventoryItemsToFolder,
-  renameInventoryFolder,
+  INVENTORY_FOLDER_KIND,
   updateInventoryItem,
 } from '@/lib/inventory/item-mutations';
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { loadInventoryPool, loadPoolForLocation, type InventoryPool } from '@/lib/inventory/pool';
-import { withInventoryErrors } from '@/lib/inventory/routes/responses';
+import { INVENTORY_ITEM_ERRORS } from '@/lib/inventory/routes/responses';
 
 type Params = Record<string, string>;
 
-export interface InventoryRouteConfig<P extends Params> {
-  scope: InventoryScope;
-  /** The owner id from the route params; null for General. */
-  paramsToId: (params: P) => string | null;
-  /** Log-message prefix, e.g. `'[Projects v1]'`. */
-  logTag: string;
-  /** Metadata key naming the owner id in log lines, e.g. `'projectId'`. */
-  logIdKey: string;
-}
+/** An Inventory route file's config: the shared item-route shape. */
+export type InventoryRouteConfig<P extends Params> = ItemRouteConfig<P, InventoryScope>;
 
-const LABELS: Record<InventoryScope, string> = {
-  character: 'Character',
-  group: 'Group',
-  project: 'Project',
-  general: 'Quilltap General',
+/** What the shared preamble needs to know about the Inventory. */
+const INVENTORY_ROUTE_KIND: ItemRouteKind<InventoryLocation> = {
+  folderKind: INVENTORY_FOLDER_KIND,
+  itemLabels: {
+    character: 'Inventory object',
+    group: 'Group inventory object',
+    project: 'Project inventory object',
+    general: 'General inventory object',
+  },
+  resolve: resolveInventoryLocation,
+  errors: INVENTORY_ITEM_ERRORS,
+  folderSchemas: { path: inventoryFolderPathBodySchema, rename: renameInventoryFolderSchema },
 };
 
 /** The project context a character's request names, for the project tier. */
@@ -95,46 +98,20 @@ function serialize(pool: InventoryPool, location: InventoryLocation, record: Inv
   return pool.resolve({ ...record, origin: location.origin, mountPointId: location.mountPointId });
 }
 
-function makeResolver<P extends Params>(config: InventoryRouteConfig<P>) {
-  /** The tier's location, or the response to answer. */
-  return async function resolveLocation(
-    ctx: RequestContext,
-    params: P,
-    ensure: boolean,
-  ): Promise<{ ok: true; location: InventoryLocation } | { ok: false; response: NextResponse }> {
-    const location = await resolveInventoryLocation(config.scope, config.paramsToId(params), ctx.repos, ctx.user.id, { ensure });
-    if (location) return { ok: true, location };
-    if (config.scope === 'general') {
-      return { ok: false, response: serverError('Quilltap General store is not provisioned yet') };
-    }
-    return { ok: false, response: notFound(LABELS[config.scope]) };
-  };
-}
-
 // ============================================================================
 // Collection
 // ============================================================================
 
 export function createInventoryCollectionHandlers<P extends Params>(config: InventoryRouteConfig<P>) {
   const { scope, logTag, logIdKey } = config;
-  const resolveLocation = makeResolver(config);
-
-  /** A read probe never provisions a store: a tier with no store has nothing yet. */
-  async function probe(ctx: RequestContext, params: P): Promise<InventoryLocation | null | NextResponse> {
-    const id = config.paramsToId(params);
-    const location = await resolveInventoryLocation(scope, id, ctx.repos, ctx.user.id, { ensure: false });
-    if (location) return location;
-    if (scope === 'general') return null;
-    if (scope !== 'character' && id) {
-      const owner = scope === 'project' ? await ctx.repos.projects.findById(id) : await ctx.repos.groups.findById(id);
-      if (owner) return null;
-    }
-    return notFound(LABELS[scope]);
-  }
+  const preamble = itemRoutePreamble(INVENTORY_ROUTE_KIND, config);
+  // A read probe never provisions a store: a tier with no store has nothing yet.
+  const { labels, resolveLocation, probe, withErrors: withInventoryErrors, folderActions } = preamble;
 
   async function handleList(req: NextRequest, ctx: RequestContext, params: P) {
-    const found = await probe(ctx, params);
-    if (found instanceof NextResponse) return found;
+    const probed = await probe(ctx, params);
+    if (!probed.ok) return probed.response;
+    const found = probed.location;
     if (!found) return successResponse({ mountPointId: null, items: [] });
     const location = found;
     const includeArchived = readIncludeArchived(req);
@@ -159,18 +136,12 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     return successResponse({ mountPointId: location.mountPointId, items });
   }
 
-  async function handleGetFolders(_req: NextRequest, ctx: RequestContext, params: P) {
-    const found = await probe(ctx, params);
-    if (found instanceof NextResponse) return found;
-    if (!found) return successResponse({ folders: [] });
-    const folders = await found.listFolders();
-    logger.debug(`${logTag} Listed inventory folders`, { [logIdKey]: found.id, count: folders.length, context: 'inventory' });
-    return successResponse({ folders });
-  }
+  const handleGetFolders = preamble.getFolders;
 
   async function handleGetArchetypes(req: NextRequest, ctx: RequestContext, params: P) {
-    const found = await probe(ctx, params);
-    if (found instanceof NextResponse) return found;
+    const probed = await probe(ctx, params);
+    if (!probed.ok) return probed.response;
+    const found = probed.location;
     if (!found) return successResponse({ items: [] });
     const pool = await loadPoolForLocation(ctx.repos, found, projectContextOf(req));
     const items = pool.resolved().filter((item) => item.isArchetype);
@@ -221,27 +192,6 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     return created({ item: { ...item, origin: location.origin } });
   }
 
-  async function handleCreateFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = inventoryFolderPathBodySchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, true);
-    if (!resolved.ok) return resolved.response;
-    return successResponse({ folder: await createInventoryFolder(resolved.location, body.path) });
-  }
-
-  async function handleRenameFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = renameInventoryFolderSchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    return successResponse({ folder: await renameInventoryFolder(resolved.location, body.path, body.name) });
-  }
-
-  async function handleDeleteFolder(req: NextRequest, ctx: RequestContext, params: P) {
-    const body = inventoryFolderPathBodySchema.parse(await req.json());
-    const resolved = await resolveLocation(ctx, params, false);
-    if (!resolved.ok) return resolved.response;
-    return successResponse(await deleteInventoryFolder(resolved.location, body.path));
-  }
-
   async function handleFileItems(action: 'move' | 'copy', req: NextRequest, ctx: RequestContext, params: P) {
     const body = fileInventoryItemsSchema.parse(await req.json());
     const resolved = await resolveLocation(ctx, params, false);
@@ -268,7 +218,7 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     if (!resolved.ok) return resolved.response;
     const { location } = resolved;
     const current = await location.findItem(body.itemId);
-    if (!current) return notFound('Inventory object');
+    if (!current) return notFound(labels.item);
     const record = await duplicateInventoryItem(ctx.repos, location, current);
     logger.info(`${logTag} Duplicated inventory object`, { [logIdKey]: location.id, itemId: current.id, copyId: record.id, context: 'inventory' });
     return created({ item: serialize(await loadPoolForLocation(ctx.repos, location), location, record) });
@@ -282,9 +232,7 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
     withActionDispatch<P>(
       {
         instantiate: withInventoryErrors(handleInstantiate),
-        'create-folder': withInventoryErrors(handleCreateFolder),
-        'rename-folder': withInventoryErrors(handleRenameFolder),
-        'delete-folder': withInventoryErrors(handleDeleteFolder),
+        ...folderActions,
         'move-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('move', req, ctx, params)),
         'copy-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('copy', req, ctx, params)),
         duplicate: withInventoryErrors(handleDuplicate),
@@ -302,7 +250,7 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
 
 export function createInventoryItemHandlers<P extends Params & { itemId: string }>(config: InventoryRouteConfig<P>) {
   const { logTag, logIdKey } = config;
-  const resolveLocation = makeResolver(config);
+  const { labels, resolveLocation, withErrors: withInventoryErrors } = itemRoutePreamble(INVENTORY_ROUTE_KIND, config);
 
   async function findRecord(
     ctx: RequestContext,
@@ -311,12 +259,12 @@ export function createInventoryItemHandlers<P extends Params & { itemId: string 
     const resolved = await resolveLocation(ctx, params, false);
     if (!resolved.ok) return resolved;
     const record = await resolved.location.findItem(params.itemId);
-    if (!record) return { ok: false, response: notFound('Inventory object') };
+    if (!record) return { ok: false, response: notFound(labels.item) };
     return { ok: true, location: resolved.location, record };
   }
 
   async function respondWith(ctx: RequestContext, location: InventoryLocation, record: InventoryRecord | null) {
-    if (!record) return notFound('Inventory object');
+    if (!record) return notFound(labels.item);
     const pool = await loadPoolForLocation(ctx.repos, location);
     return successResponse({ item: serialize(pool, location, record) });
   }
@@ -384,7 +332,7 @@ export function createInventoryItemHandlers<P extends Params & { itemId: string 
     if (!found.ok) return found.response;
     const force = new URL(req.url).searchParams.get('force') === 'true';
     const result = await deleteInventoryItem(ctx.repos, found.location, found.record, { force });
-    if (!result.deleted) return notFound('Inventory object');
+    if (!result.deleted) return notFound(labels.item);
     logger.info(`${logTag} Deleted inventory object`, {
       [logIdKey]: found.location.id,
       userId: ctx.user.id,

@@ -67,6 +67,21 @@ describe('resolveTurnOutcome', () => {
       expect(result.yielded).toBe(true)
     })
 
+    it('a gesture-only reply yields by inference and is kept as the reply', () => {
+      const gesture = '*(one hand opening toward Tester — go on, then)*'
+      const result = outcome({ response: gesture, offerYield: true })
+      expect(result.kind).toBe('reply')
+      expect(result.yielded).toBe(true)
+      expect(result.response).toBe(gesture)
+      expect(result.handAnswered).toEqual({ yielded: true, inferred: true })
+    })
+
+    it('a gesture-only reply with no hand offered is an ordinary reply', () => {
+      const result = outcome({ response: '*bows*', offerYield: false })
+      expect(result.yielded).toBe(false)
+      expect(result.handAnswered).toBeUndefined()
+    })
+
     it('carrying on past the hand is answered no', () => {
       const result = outcome({ response: 'I was saying —', offerYield: true })
       expect(result.handAnswered).toEqual({ yielded: false })

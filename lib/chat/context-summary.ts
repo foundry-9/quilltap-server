@@ -6,6 +6,7 @@
  * Uses the cheap LLM system for efficient summarization.
  */
 
+import { countEstablishedFacts, establishedFactKindOf, frameEstablishedFact, isEstablishedFactAnnouncement } from '@/lib/chat/established-fact'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
@@ -266,9 +267,13 @@ export function partitionMessagesIntoTurns(
     if (msg.type !== 'message') continue
     const m = msg as MessageEvent
     if (m.role !== 'USER' && m.role !== 'ASSISTANT') continue
-    if (m.systemSender) continue
+    // A machine-delivered established fact is a Host row, but it is settled
+    // truth the summary must carry — kept, as a turn of its own.
+    const isMachineFact = isEstablishedFactAnnouncement(m)
+    if (m.systemSender && !isMachineFact) continue
 
     const startsNewTurn = m.role === 'USER'
+      || isMachineFact
       || (isAutonomous && m.role === 'ASSISTANT')
 
     if (startsNewTurn) {
@@ -295,19 +300,22 @@ export function partitionMessagesIntoTurns(
  * Render folded turns for the fold prompt. Every line carries a speaker label
  * resolved from the chat's seats — a bare `USER:` / `ASSISTANT:` transcript is
  * what let a model invent a name for the character nobody happened to address
- * (bug 161).
+ * (bug 161). Exported for tests.
  */
-function turnsToChatMessages(
+export function turnsToChatMessages(
   turns: FoldedTurn[],
   names: SpeakerNames,
 ): Array<ChatMessage & { speaker: string; createdAt?: string | null }> {
   const result: Array<ChatMessage & { speaker: string; createdAt?: string | null }> = []
   for (const t of turns) {
     for (const m of t.messages) {
+      // A machine fact rides under the fixed `Established fact` label
+      // (speakerLabel); a seat line keeps its speaker and gets the seat frame.
+      const kind = establishedFactKindOf(m)
       result.push({
         speaker: speakerLabel(m, names),
-        role: m.role.toLowerCase() as 'user' | 'assistant',
-        content: m.content,
+        role: kind === 'announcement' ? 'user' : m.role.toLowerCase() as 'user' | 'assistant',
+        content: kind === 'seat' ? frameEstablishedFact(m.content, { kind, voice: 'plain' }) : m.content,
         // Message dates feed the fold summary's Timeline section.
         createdAt: m.createdAt ?? null,
       })
@@ -412,6 +420,14 @@ export async function generateContextSummary(
       unresolvedParticipantIds,
     })
     const newTurnsContent = turnsToChatMessages(turnsToFold, speakerNames)
+    const foldedFacts = countEstablishedFacts(turnsToFold.flatMap(t => t.messages))
+    if (foldedFacts.seat + foldedFacts.announcement > 0) {
+      logger.debug('[Context Summary] Folding established facts', {
+        chatId,
+        seatLines: foldedFacts.seat,
+        machineFacts: foldedFacts.announcement,
+      })
+    }
 
     if (newTurnsContent.length === 0) {
       return { success: false, error: 'No content in turns to fold', wasGenerated: false }

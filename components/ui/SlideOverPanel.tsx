@@ -81,6 +81,11 @@ export function SlideOverPanel({
         aria-label={ariaLabel || title}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
+        // Closed, the panel stays mounted (parked off-screen so it can slide)
+        // but must be neither focusable nor announced: without `inert` its
+        // controls sat in the Tab order beyond the viewport edge, and the
+        // focus trap held keyboard users there (WCAG 2.1.2, 2.4.3).
+        inert={!isOpen}
       >
         <div className="qt-slide-over-header">
           <h2 className="text-base font-semibold qt-text truncate">{title}</h2>

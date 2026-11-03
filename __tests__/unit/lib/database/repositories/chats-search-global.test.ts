@@ -41,7 +41,10 @@ const CREATE_CHAT_MESSAGES = `
     "chatId" TEXT NOT NULL,
     "type" TEXT DEFAULT 'message',
     "role" TEXT,
+    "participantId" TEXT DEFAULT NULL,
     "content" TEXT,
+    "systemSender" TEXT DEFAULT NULL,
+    "customAnnouncer" TEXT DEFAULT NULL,
     "createdAt" TEXT NOT NULL
   )
 `
@@ -54,11 +57,17 @@ describe('searchMessagesGlobal', () => {
     id: string,
     content: unknown,
     createdAt: string,
-    overrides: { chatId?: string; type?: string; role?: string } = {},
+    overrides: {
+      chatId?: string
+      type?: string
+      role?: string
+      systemSender?: string
+      customAnnouncer?: string
+    } = {},
   ) =>
     db
       .prepare(
-        'INSERT INTO "chat_messages" ("id","chatId","type","role","content","createdAt") VALUES (?,?,?,?,?,?)',
+        'INSERT INTO "chat_messages" ("id","chatId","type","role","content","systemSender","customAnnouncer","createdAt") VALUES (?,?,?,?,?,?,?,?)',
       )
       .run(
         id,
@@ -66,6 +75,8 @@ describe('searchMessagesGlobal', () => {
         overrides.type ?? 'message',
         overrides.role ?? 'USER',
         content,
+        overrides.systemSender ?? null,
+        overrides.customAnnouncer ?? null,
         createdAt,
       )
 
@@ -103,7 +114,7 @@ describe('searchMessagesGlobal', () => {
 
     const hits = await ops.searchMessagesGlobal(['chat-1'], 'walk')
     expect(hits.map(h => h.messageId)).toEqual(['m2', 'm1'])
-    expect(hits[0]).toMatchObject({ chatId: 'chat-1', role: 'USER' })
+    expect(hits[0]).toMatchObject({ chatId: 'chat-1', role: 'USER', participantId: null })
   })
 
   it('honours the limit in SQL rather than after the fact', async () => {
@@ -163,6 +174,47 @@ describe('searchMessagesGlobal', () => {
 
     const hits = await ops.searchMessagesGlobal(['chat-1'], 'estate')
     expect(hits.map(h => h.messageId)).toEqual(['m1'])
+  })
+
+  describe('Staff messages and announcement bubbles (#121)', () => {
+    const seed = (word: string) => {
+      insert('m1', `the character says ${word}`, '2026-01-01T00:00:01.000Z', { role: 'ASSISTANT' })
+      insert('m2', `recall: ${word}`, '2026-01-01T00:00:02.000Z', {
+        role: 'ASSISTANT',
+        systemSender: 'commonplaceBook',
+      })
+      insert('m3', `hear ye, ${word}`, '2026-01-01T00:00:03.000Z', {
+        role: 'ASSISTANT',
+        customAnnouncer: '{"kind":"custom","displayName":"Town Crier"}',
+      })
+    }
+
+    it('are not returned through the index', async () => {
+      seed('tabby')
+      const hits = await ops.searchMessagesGlobal(['chat-1'], 'tabby')
+      expect(hits.map(h => h.messageId)).toEqual(['m1'])
+    })
+
+    it('are not returned through the exact-scan fallback', async () => {
+      seed('C++')
+      const hits = await ops.searchMessagesGlobal(['chat-1'], 'C++')
+      expect(hits.map(h => h.messageId)).toEqual(['m1'])
+    })
+
+    it('are not returned even when an older index still holds them', async () => {
+      seed('tabby')
+      // Index the Staff row by hand, as the pre-#121 trigger did.
+      const ftsId = db
+        .prepare('INSERT INTO "chat_messages_fts_map"("messageId") VALUES (?)')
+        .run('m2').lastInsertRowid
+      db.prepare('INSERT INTO "chat_messages_fts"(rowid, content) VALUES (?, ?)').run(
+        ftsId,
+        'recall: tabby',
+      )
+
+      const hits = await ops.searchMessagesGlobal(['chat-1'], 'tabby')
+      expect(hits.map(h => h.messageId)).toEqual(['m1'])
+    })
   })
 
   it('decodes the message text only AFTER the limit', async () => {

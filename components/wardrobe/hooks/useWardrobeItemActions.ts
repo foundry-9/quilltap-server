@@ -3,7 +3,8 @@
 /**
  * Row actions for a wardrobe list — star, archive, draw a picture, delete,
  * duplicate (into the same folder) — plus the open/closed state of the overlays they summon (the
- * item editor, the move/copy dialog, the move/copy-to-folder picker, the full-screen picture).
+ * item editor, the move/copy dialog and the move/copy-to-folder picker from the shared
+ * `useItemOverlays`; the full-screen picture here).
  *
  * Every item is addressed through `containerForListedItem` when the browsed
  * wardrobe is a character's merged view (so a borrowed group or project item
@@ -16,17 +17,16 @@
  */
 
 import { useCallback, useState } from 'react'
+import { useItemOverlays } from '@/components/item-browser/useItemOverlays'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
-import { draftFromItem, draftToPayload } from '@/lib/wardrobe/item-draft'
 import { generateWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
 import {
   containerForListedItem,
-  wardrobeCollectionUrl,
+  wardrobeCollectionActionUrl,
   wardrobeItemUrl,
   type ListedWardrobeItem,
   type WardrobeContainer,
@@ -42,22 +42,6 @@ export type EditorRequest =
       folder?: string
     }
 
-export interface TransferRequest {
-  item: ListedWardrobeItem
-  mode: 'move' | 'copy'
-}
-
-/**
- * The Move-to-folder picker. It lives here, beside the other overlays, so
- * `overlayOpen` sees it: the dialog's click-outside handler would otherwise
- * treat a click inside the (portalled) picker as a click outside the dialog
- * and close both (bug 229).
- */
-export interface FolderPickerRequest {
-  items: ListedWardrobeItem[]
-  /** File the items themselves, or copies of them. */
-  mode: 'move' | 'copy'
-}
 
 export interface ImageViewRequest {
   item: ListedWardrobeItem
@@ -69,8 +53,6 @@ export interface UseWardrobeItemActionsOptions {
   container: WardrobeContainer | null
   /** Chat context, so a mutation can refresh what its characters wear. */
   chatId: string | null
-  /** The list on display — Duplicate picks a title not already in it. */
-  listItems: readonly WardrobeItem[]
   requestConfirmation: (message: string) => Promise<boolean>
 }
 
@@ -83,16 +65,16 @@ interface ItemRequest {
 export function useWardrobeItemActions({
   container,
   chatId,
-  listItems,
   requestConfirmation,
 }: UseWardrobeItemActionsOptions) {
   const queryClient = useQueryClient()
   const isCharacterScope = container?.scope === 'character'
 
-  const [editor, setEditor] = useState<EditorRequest | null>(null)
-  const [transfer, setTransfer] = useState<TransferRequest | null>(null)
   const [imageView, setImageView] = useState<ImageViewRequest | null>(null)
-  const [folderPicker, setFolderPicker] = useState<FolderPickerRequest | null>(null)
+  // The editor, the folder picker and the transfer dialog; the picture viewer
+  // is the wardrobe's own overlay.
+  const overlays = useItemOverlays<ListedWardrobeItem, EditorRequest>(imageView !== null)
+  const { openEditorWith, openTransfer } = overlays
   const [updatingDefaultId, setUpdatingDefaultId] = useState<string | null>(null)
   // Every item whose picture is being drawn right now. A set, not one id: two
   // rows may each have a commission out.
@@ -198,23 +180,20 @@ export function useWardrobeItemActions({
 
   /**
    * Duplicate is offered only for manageable items, so the copy stays where
-   * the original lives. Composite references are copied verbatim — member
-   * items are not cloned.
+   * the original lives. The server's `?action=duplicate` picks the "(copy)"
+   * title and copies composite references verbatim — member items are not
+   * cloned.
    */
   const duplicate = useCallback(
     async (item: WardrobeItem) => {
       const home = addressOf(item)
       if (!home) return
-      const title = nextCopyTitle(
-        item.title,
-        listItems.map((i) => i.title),
-      )
-      const body = draftToPayload({ ...draftFromItem(item), title })
-      if (await send({ url: wardrobeCollectionUrl(home), method: 'POST', body }, 'Failed to duplicate item')) {
+      const body = { itemId: item.id }
+      if (await send({ url: wardrobeCollectionActionUrl(home, 'duplicate'), method: 'POST', body }, 'Failed to duplicate item')) {
         showSuccessToast(`Duplicated "${item.title}"`)
       }
     },
-    [addressOf, listItems, send],
+    [addressOf, send],
   )
 
   /** Draw a picture with the designated wardrobe profile (no picker — the editor has that). */
@@ -255,30 +234,21 @@ export function useWardrobeItemActions({
     [addressOf],
   )
 
-  const openEditor = useCallback((item: WardrobeItem) => setEditor({ kind: 'edit', item }), [])
+  const openEditor = useCallback((item: WardrobeItem) => openEditorWith({ kind: 'edit', item }), [openEditorWith])
   const openCreate = useCallback(
     (mode: 'single' | 'bundle', componentItemIds: string[] = [], opts?: { folder?: string }) =>
-      setEditor({ kind: 'create', mode, componentItemIds, folder: opts?.folder }),
-    [],
+      openEditorWith({ kind: 'create', mode, componentItemIds, folder: opts?.folder }),
+    [openEditorWith],
   )
-  const closeEditor = useCallback(() => setEditor(null), [])
-  const move = useCallback((item: ListedWardrobeItem) => setTransfer({ item, mode: 'move' }), [])
-  const copy = useCallback((item: ListedWardrobeItem) => setTransfer({ item, mode: 'copy' }), [])
-  const closeTransfer = useCallback(() => setTransfer(null), [])
+  const move = useCallback((item: ListedWardrobeItem) => openTransfer(item, 'move'), [openTransfer])
+  const copy = useCallback((item: ListedWardrobeItem) => openTransfer(item, 'copy'), [openTransfer])
   const closeImage = useCallback(() => setImageView(null), [])
-  const openFolderPicker = useCallback((items: ListedWardrobeItem[], mode: 'move' | 'copy' = 'move') => {
-    if (items.length > 0) setFolderPicker({ items, mode })
-  }, [])
-  const closeFolderPicker = useCallback(() => setFolderPicker(null), [])
 
   return {
-    // overlay state
-    editor,
-    transfer,
+    // overlay state: editor, folderPicker, transfer, overlayOpen and their
+    // open / close handlers
+    ...overlays,
     imageView,
-    folderPicker,
-    /** True while any of this hook's overlays is open. */
-    overlayOpen: editor !== null || transfer !== null || imageView !== null || folderPicker !== null,
     // row state
     updatingDefaultId,
     generatingImageIds,
@@ -291,13 +261,9 @@ export function useWardrobeItemActions({
     openImage,
     openEditor,
     openCreate,
-    closeEditor,
     move,
     copy,
-    closeTransfer,
     closeImage,
-    openFolderPicker,
-    closeFolderPicker,
     addressOf,
     refresh,
     /** Ask the operator to confirm (the folder delete uses it too). */

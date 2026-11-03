@@ -41,7 +41,7 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 6. **Motion and modes.** Animations and transitions respect `prefers-reduced-motion` (2.3.3 is AAA, but honour it — the app already does in places; check new animation does too); auto-moving content (story backgrounds, spinners that never stop) can be paused or is brief (2.2.2). Note behaviour under `forced-colors: active` (Windows High Contrast) — mask-based icons and custom-drawn controls tend to disappear there; flag rather than fix unless trivial.
 7. **Fix what you can, in the right layer.**
    - A token that fails contrast → fix it in that theme's `tokens.json` (both modes as needed), and bump the theme's `version` in its `theme.json`.
-   - A rule in `app/styles/qt-components/*` → fix it there **and mirror it into [theme-storybook](../../packages/theme-storybook/src/css/qt-components.css)**, bump that package's patch version, then **stop and ask the human to `npm publish`** (per CLAUDE.md — the publish gates the commit). Consider [create-quilltap-theme](../../packages/create-quilltap-theme)'s template too, so new themes don't inherit the defect.
+   - A rule in `app/styles/qt-components/*` → fix it there, run `npm run generate:storybook-css` to regenerate [theme-storybook's copy](../../packages/theme-storybook/src/css/qt-components.css) (never edit that file; lint fails if it is stale), and bump that package's patch version — it publishes at release. Consider [create-quilltap-theme](../../packages/create-quilltap-theme)'s template too, so new themes don't inherit the defect.
    - A component problem (missing label, focus trap, colour-only state) → fix the component; new styling goes through a `qt-*` utility, never raw Tailwind. `npm run lint` catches undefined or variant-prefixed `qt-*` classes.
    - Anything large or design-heavy (a palette rework, a new focus-ring treatment across the app) → flag it for the human rather than redesigning a theme on your own.
    - User-visible changes get a `help/*.md` update (likely `help/themes.md` or `help/appearance-settings.md`) and a CHANGELOG entry (plain voice).
@@ -52,6 +52,6 @@ If you have not already done so, read [CLAUDE.md](../../CLAUDE.md) for how to wo
 1. **Contrast table** — per theme × mode, the failing pairs with their ratio and the required ratio, marked **FIXED** (new value) or **FLAGGED**.
 2. **Findings list** — one line each: severity (blocker / serious / minor / polish), WCAG success criterion (or "look-and-feel"), theme/mode if specific, surface, `file:line`, and **FIXED** or **FLAGGED**.
 3. **Look-and-feel notes** per theme — a few sentences on how each one reads overall, with screenshots of anything notable (send them with `SendUserFile`).
-4. Packages or themes whose versions you bumped, and whether a `theme-storybook` publish is waiting on the human.
+4. Packages or themes whose versions you bumped.
 
 Do not commit.

@@ -25,6 +25,8 @@ import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill';
 import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
+import { parseMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils';
+import { DEFAULT_MAX_IMAGES_PER_REQUEST, MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -166,6 +168,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       multiCharacterPrefill,
       fallbackProfileId = null,
       allowTierFallback = false,
+      maxImagesPerRequest,
     } = body;
 
     if (transport !== 'api' && transport !== 'courier') {
@@ -179,6 +182,15 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
 
     if (typeof allowTierFallback !== 'boolean') {
       return badRequest('allowTierFallback must be a boolean');
+    }
+
+    let resolvedMaxImagesPerRequest = DEFAULT_MAX_IMAGES_PER_REQUEST;
+    if (maxImagesPerRequest !== undefined && maxImagesPerRequest !== null) {
+      const parsedMaxImages = parseMaxImagesPerRequest(maxImagesPerRequest);
+      if (parsedMaxImages === null) {
+        return badRequest(`maxImagesPerRequest must be a whole number from 1 to ${MAX_IMAGES_PER_REQUEST_CEILING}`);
+      }
+      resolvedMaxImagesPerRequest = parsedMaxImages;
     }
 
     // The fallback chain's named understudy. A brand-new profile has no id
@@ -324,6 +336,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       modelClass: modelClass || null,
       maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
       supportsImageUpload: isCourier ? false : resolvedSupportsImageUpload,
+      maxImagesPerRequest: resolvedMaxImagesPerRequest,
       tags: [],
       sortIndex: maxSortIndex + 1,
       totalTokens: 0,

@@ -18,11 +18,12 @@ import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
 import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
-import { LANTERN_IMAGE_BASE64_BUDGET } from '@/lib/files/llm-image-budget'
+import { applyImageTransportBudget, tagForTransport } from '@/lib/chat/image-transport-budget'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
+  isImageFile,
   type FallbackResult,
 } from '@/lib/chat/file-attachment-fallback'
 import { resolveTimezone } from '@/lib/chat/timestamp-utils'
@@ -42,6 +43,7 @@ import type {
 } from '@/lib/schemas/types'
 import type { AttachedFile } from './types'
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
+import { countEstablishedFacts, frameEstablishedFacts, isEstablishedFact } from '@/lib/chat/established-fact';
 
 const logger = createServiceLogger('ContextBuilderService')
 
@@ -209,13 +211,28 @@ export async function loadAndProcessFiles(
     { provider: connectionProfile.provider }
   )
 
-  // Process file attachment fallbacks if provider doesn't support them
+  // Process file attachment fallbacks if provider doesn't support them.
+  //
+  // Images are not decided here: they are tagged as this turn's uploads and
+  // passed on whole, and `applyImageTransportBudget` decides capability, count
+  // and bytes for them once, on the final array, for whichever profile is
+  // called. Everything else (text inlining, unsupported types) is decided here,
+  // because its text belongs in the user's own message.
   const fallbackResults: FallbackResult[] = []
   let messageContentPrefix = ''
+  const uploadedAt = Date.now()
+  const attachmentsToSend: typeof fileAttachments = []
 
   for (let i = 0; i < fileAttachments.length; i++) {
     const fileAttachment = fileAttachments[i]
-    const fileMetadata = attachedFiles[i]
+    const fileMetadata = attachedFiles.find(f => f.id === fileAttachment.id) ?? attachedFiles[i]
+
+    if (isImageFile(fileAttachment.mimeType)) {
+      attachmentsToSend.push(
+        tagForTransport(fileAttachment, { origin: 'upload', createdAt: uploadedAt, describable: true }),
+      )
+      continue
+    }
 
     const fallbackResult = await processFileAttachmentFallback(
       fileMetadata,
@@ -233,18 +250,16 @@ export async function loadAndProcessFiles(
     if (fallbackPrefix) {
       messageContentPrefix += fallbackPrefix
     }
-  }
 
-  // Keep an attachment only when the provider natively supports it
-  // (processFileAttachmentFallback returns type 'unsupported' with no error
-  // in that case). Text/image_description results replace the attachment
-  // with prefix text; 'unsupported' with an error means fallback was
-  // attempted and failed — sending the raw bytes anyway would just trip the
-  // provider's "no image input" rejection, so drop it.
-  const attachmentsToSend = fileAttachments.filter((_, idx) => {
-    const fallback = fallbackResults[idx]
-    return !fallback || (fallback.type === 'unsupported' && !fallback.error)
-  })
+    // Keep the attachment only when the provider natively supports it
+    // (processFileAttachmentFallback returns type 'unsupported' with no error
+    // in that case). A text result replaces the attachment with prefix text;
+    // 'unsupported' with an error means fallback was attempted and failed —
+    // sending the raw bytes anyway would just trip the provider's rejection.
+    if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
+      attachmentsToSend.push(fileAttachment)
+    }
+  }
 
   return {
     attachedFiles,
@@ -405,6 +420,33 @@ export function collectUnseenUserAttachmentsForCharacter(
 }
 
 /**
+ * Is a description of this image on file, so that describing it past the
+ * request budget costs no vision call? Mirrors the reuse check in
+ * `generateImageDescription`: a generated image's (revised) prompt, or a
+ * stored description. A vault-stored image arrives with a mount-link id that
+ * the `files` table does not hold, so it answers false. Never throws.
+ */
+async function hasPersistedImageDescription(
+  repos: ReturnType<typeof getRepositories>,
+  fileId: string,
+): Promise<boolean> {
+  try {
+    const entry = await repos.files.findById(fileId)
+    return !!(
+      entry?.generationRevisedPrompt?.trim() ||
+      entry?.generationPrompt?.trim() ||
+      entry?.description?.trim()
+    )
+  } catch (err) {
+    logger.debug('Persisted-description probe failed; treating the image as not describable', {
+      fileId,
+      error: getErrorMessage(err),
+    })
+    return false
+  }
+}
+
+/**
  * How far back either attachment walk will look for a user upload the
  * character has not seen. The real bound is the character's own previous turn;
  * this is the safety cap for a very long chat, or a character that has never
@@ -453,12 +495,30 @@ export async function rehydrateUserAttachments(args: {
 
     const repos = args.repos ?? getRepositories()
     let charactersUsed = 0
+    const carriedAt = new Map<string, number>()
+    for (const m of args.messages) {
+      if (m.id && m.createdAt) carriedAt.set(m.id, Date.parse(m.createdAt) || 0)
+    }
 
     for (const { messageId, fileIds } of unseen) {
       const loaded = await loadChatFilesForLLM(fileIds, { provider: args.connectionProfile.provider })
       let prefix = ''
 
       for (const fileAttachment of loaded) {
+        // Images go on whole, tagged; `applyImageTransportBudget` decides
+        // capability, count and bytes for them on the final array (an image
+        // the profile cannot read is described there, at the anchor).
+        if (isImageFile(fileAttachment.mimeType)) {
+          rehydratedAttachmentsToKeep.push(
+            tagForTransport(fileAttachment, {
+              origin: 'rehydrated',
+              createdAt: carriedAt.get(messageId) ?? 0,
+              describable: true,
+            }),
+          )
+          continue
+        }
+
         const fallbackResult = await processFileAttachmentFallback(
           {
             id: fileAttachment.id,
@@ -476,7 +536,7 @@ export async function rehydrateUserAttachments(args: {
 
         // Mirror the `loadAndProcessFiles` filter: keep the raw bytes only
         // when the provider takes them natively. A failed fallback drops the
-        // file rather than tripping the provider's "no image input" refusal.
+        // file rather than tripping the provider's refusal.
         if (fallbackResult.type === 'unsupported') {
           if (!fallbackResult.error) rehydratedAttachmentsToKeep.push(fileAttachment)
           continue
@@ -757,13 +817,19 @@ export function selectAttachmentAnchorIndex(
  * list. The rules target the *shape* of the chorus rather than specific
  * wording — phrase blocklists alone have proven too weak to hold. Exported for
  * unit testing.
+ *
+ * The chorus is characters echoing *each other*. Answering the user is not a
+ * chorus: an earlier wording banned agreement outright and listed objection
+ * among the first reasons to speak, which fed "the probation" — characters who
+ * would not simply say yes to the user (docs/developer/features/
+ * prompt-trust-the-probation.md §8). Keep warmth and a plain yes as complete turns.
  */
-export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mode of a group scene is the chorus: each character recaps what the others said, agrees with all of it, and adds one small item shaped like everyone else's. Never join a chorus:
+export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mode of a group scene is the chorus: each character recaps what the other characters said, agrees with all of it, and adds one small item shaped like everyone else's. Never join a chorus:
 - Do not open by summarizing or listing what other characters just said. Everyone present heard it. React to at most one specific thing, or simply act.
-- Do not agree-then-add ("X is right — but there's one thing nobody has named"). If all you have is agreement plus a small addendum, give the addendum alone in a sentence or two — or pass the turn if passing is offered.
+- Do not agree-then-add with another character ("X is right — but there's one thing nobody has named"). If all you have is agreement with another character plus a small addendum, give the addendum alone in a sentence or two — or pass the turn if passing is offered. This is about echoing the cast, not about answering the user: a plain yes to the user, doing what the user asked, or a laugh at the user's joke is a complete turn.
 - Never reuse another character's metaphors, images, or coined phrases. A striking phrase someone else used in this scene is spent; repeating it is a defect, not a callback. If several characters have already said much the same thing, saying it again in your own accent adds nothing.
 - Do not restate the plan, the task list, or the group's conclusions. They are already on the record; a speech re-affirming what is decided adds nothing.
-- Speak to change something: new information, a genuine objection or disagreement, a question, an action actually taken, a joke, a refusal. Re-pledging your commitment is not a turn.
+- Speak to change something: new information, an action actually taken, a joke, warmth, a question, a genuine objection, a refusal. Re-pledging your commitment is not a turn.
 - Vary register and length. Most real conversational turns are one to three sentences. A long speech is an event, not a default — and never the second one in a row.`
 
 /**
@@ -868,7 +934,7 @@ export function isRecordOnlyMessage(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null; customAnnouncer?: CustomAnnouncer | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null; customAnnouncer?: CustomAnnouncer | null; isEstablishedFact?: boolean | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -985,10 +1051,29 @@ export async function buildMessageContext(
     isOpaqueAnywhere = character.systemTransparency !== true
   }
 
+  // Established facts: frame each fact row's body for the model while
+  // `systemSender` / `systemKind` / `isEstablishedFact` are still on the rows.
+  // The voice follows the same chat-wide opacity rule as the Staff swap: if
+  // any LLM seat is opaque, everyone reads the plain frame with no Host. See
+  // lib/chat/established-fact.ts — the frame is never stored.
+  const factVoice = isOpaqueAnywhere ? 'plain' : 'host'
+  const factCounts = countEstablishedFacts(messagesAfterWhisperFilter)
+  const messagesFramed = factCounts.seat + factCounts.announcement > 0
+    ? frameEstablishedFacts(messagesAfterWhisperFilter, { voice: factVoice })
+    : messagesAfterWhisperFilter
+  if (factCounts.seat + factCounts.announcement > 0) {
+    logger.debug('[Context] Framed established facts', {
+      chatId: chat.id,
+      seatLines: factCounts.seat,
+      machineFacts: factCounts.announcement,
+      voice: factVoice,
+    })
+  }
+
   // Whisper-role normalization (re-role Staff whispers to USER, preserve
   // attachment-bearing whispers as ASSISTANT, apply opaque body swap). See
   // `normalizeWhisperRoles` for the full rationale.
-  const filteredExistingMessages = normalizeWhisperRoles(messagesAfterWhisperFilter, isOpaqueAnywhere)
+  const filteredExistingMessages = normalizeWhisperRoles(messagesFramed, isOpaqueAnywhere)
 
   // Row ids of the *human's* own turns, captured before normalization erases
   // the distinction. Staff whispers are re-roled to USER above, so after this
@@ -1018,10 +1103,10 @@ export async function buildMessageContext(
   // pointer. Everyone after the first character to answer therefore saw a bare
   // message where a document had been. Re-deriving from the file here (rather
   // than persisting the expanded body) keeps the file the single source of
-  // truth, survives regenerate, swipe, import and restore, and treats an
-  // uploaded image exactly like an uploaded transcript: the same
-  // `processFileAttachmentFallback` pass either inlines the text, describes
-  // the image, or hands the raw bytes back for a provider that takes them.
+  // truth, and survives regenerate, swipe, import and restore. A text file is
+  // inlined here by `processFileAttachmentFallback`; an image is handed back
+  // whole and tagged, for `applyImageTransportBudget` to send, describe or
+  // omit with every other image on the request.
   //
   // This runs *before* `buildContext` so the tokens are budgeted, compressed
   // and trimmed like any other message content — the Lantern prefix is spliced
@@ -1047,10 +1132,20 @@ export async function buildMessageContext(
     : filteredExistingMessages
 
   // Build conversation messages
-  const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
+  const { conversationMessages, messagesWithParticipants: builtWithParticipants } = buildConversationMessages(
     messagesForConversation,
     isMultiCharacter
   )
+  // Mark fact rows on the multi-character sequence: everybody knows an
+  // established fact, so the history-access cut must not hide one from a seat
+  // that joined after it was posted. Ids are taken before normalization erases
+  // the Host row's `systemSender`.
+  const factRowIds = factCounts.seat + factCounts.announcement > 0
+    ? new Set(messagesAfterWhisperFilter.filter(m => m.id && isEstablishedFact(m)).map(m => m.id as string))
+    : null
+  const messagesWithParticipants = factRowIds && builtWithParticipants
+    ? builtWithParticipants.map(m => (m.id && factRowIds.has(m.id) ? { ...m, isEstablishedFact: true } : m))
+    : builtWithParticipants
 
   // Determine if this is the first user message (for timestamp START_ONLY mode)
   const isInitialMessage = conversationMessages.filter(m => m.role === 'user' || m.role === 'USER').length === 0
@@ -1167,25 +1262,20 @@ export async function buildMessageContext(
   // Additionally surface image attachments from Lantern notifications
   // (story background, avatar regeneration, or the generate_image tool).
   // Without this, vision-capable providers would only see the announcement
-  // text but not the actual image. For non-vision profiles, each loaded
-  // attachment is run through processFileAttachmentFallback so the
-  // description text is prepended to the last user turn and the raw image
-  // is dropped — same machinery loadAndProcessFiles uses for user uploads.
-  // Without that step, non-vision providers (e.g. DeepSeek via OpenRouter)
-  // reject the request because they're being handed images they can't read.
+  // text but not the actual image.
   //
-  // `ASSISTANT_IMAGE_LOOKBACK` bounds how many messages are scanned; it says
-  // nothing about how many *bytes* they carry, and bug 151 is what that costs.
-  // Two avatars, each under the provider's 4 MB per-image ceiling and so
-  // resized by nobody, summed to 4.52 MB of base64 and NanoGPT answered the
-  // turn with `413 Request Entity Too Large`. The token budget could not see
-  // it either — image bytes are not tokens, so the turn was logged at 49,652
-  // estimated tokens against a million-token window with
-  // `compressionNeeded: false`. `LANTERN_IMAGE_BASE64_BUDGET` is the ceiling
-  // the message count cannot express.
+  // The walk only collects candidates. Each is tagged `lantern` with the time
+  // of the message that carried it, and whether describing it is free (a
+  // generated image whose prompt is on file); `applyImageTransportBudget`
+  // below decides — for the profile actually being called — which are sent,
+  // which are described, and which are omitted with a note. That pass spends
+  // one count cap and one byte budget over every image on the request, which
+  // is what bug 151 (4.52 MB of base64 under a `compressionNeeded: false` log
+  // line) needed and a Lantern-only budget could not give.
+  //
+  // `ASSISTANT_IMAGE_LOOKBACK` bounds how many messages are scanned.
   const ASSISTANT_IMAGE_LOOKBACK = 6
   let mergedAttachmentsToSend: unknown[] = [...attachmentsToSend, ...rehydratedAttachmentsToKeep]
-  let lanternImagePrefix = ''
   try {
     const recentAssistantImageFileIds = collectLanternImageFileIdsForCharacter(
       filteredExistingMessages,
@@ -1199,71 +1289,24 @@ export async function buildMessageContext(
         provider: connectionProfile.provider,
       })
       if (extra.length > 0) {
-        const lanternAttachmentsToKeep: typeof extra = []
-        // Spent newest-first, then restored to chronological order below.
-        // Unlike `rehydrateUserAttachments`, which re-sends every unseen
-        // upload whole, this walk can drop: when the budget forces it, the picture
-        // worth keeping is the one just generated, not the portrait it
-        // replaced. The describe-fallback prefix is unbudgeted — it is text,
-        // already bounded by the model's own context budget, and a sentence
-        // about an image is never what overruns a request body.
-        let imageBudgetLeft = LANTERN_IMAGE_BASE64_BUDGET
-        let droppedForBudget = 0
-        const lanternPrefixesNewestFirst: string[] = []
-        for (const fileAttachment of [...extra].reverse()) {
-          const fileMetadata = {
-            id: fileAttachment.id,
-            filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
-            filename: fileAttachment.filename,
-            mimeType: fileAttachment.mimeType,
-            size: fileAttachment.size,
-          }
-          const fallbackResult = await processFileAttachmentFallback(
-            fileMetadata,
-            fileAttachment,
-            connectionProfile,
-            options.repos,
-            userId,
-            { chatId: chat.id },
-          )
-          const prefix = formatFallbackAsMessagePrefix(fallbackResult)
-          if (prefix) {
-            lanternPrefixesNewestFirst.push(prefix)
-          }
-          // Mirror the loadAndProcessFiles filter: only keep the raw
-          // attachment when the provider natively supports it. If the
-          // fallback failed, dropping the bytes avoids the provider's
-          // "no image input" rejection downstream.
-          if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
-            // `fileAttachment.data` is the base64 this turn will actually put
-            // on the wire — already trimmed by the transport budget in
-            // `loadChatFilesForLLM` — so this measures the true cost, not the
-            // stored file's `size`.
-            const wireBytes = fileAttachment.data?.length ?? 0
-            if (wireBytes > imageBudgetLeft) {
-              droppedForBudget++
-              continue
-            }
-            imageBudgetLeft -= wireBytes
-            lanternAttachmentsToKeep.push(fileAttachment)
+        const carriedAt = new Map<string, number>()
+        for (const m of filteredExistingMessages) {
+          if (m.role !== 'ASSISTANT' || !Array.isArray(m.attachments) || !m.createdAt) continue
+          const at = Date.parse(m.createdAt) || 0
+          for (const id of m.attachments) {
+            if (typeof id === 'string') carriedAt.set(id, Math.max(carriedAt.get(id) ?? 0, at))
           }
         }
-        if (droppedForBudget > 0) {
-          logger.warn('Unseen assistant images exceeded the per-turn byte budget; the oldest were not sent', {
-            droppedForBudget,
-            kept: lanternAttachmentsToKeep.length,
-            budget: LANTERN_IMAGE_BASE64_BUDGET,
-            budgetUsed: LANTERN_IMAGE_BASE64_BUDGET - imageBudgetLeft,
-            characterParticipantId: characterParticipant.id,
-          })
+        const repos = options.repos ?? getRepositories()
+        const tagged = []
+        for (const fileAttachment of extra) {
+          tagged.push(tagForTransport(fileAttachment, {
+            origin: 'lantern',
+            createdAt: carriedAt.get(fileAttachment.id) ?? 0,
+            describable: await hasPersistedImageDescription(repos, fileAttachment.id),
+          }))
         }
-        // Back to chronological: the budget is spent newest-first, but the
-        // prefix reads as a narration of what has happened since this
-        // character last spoke, and the attachments anchor in that order too.
-        lanternImagePrefix += lanternPrefixesNewestFirst.reverse().join('')
-        if (lanternAttachmentsToKeep.length > 0) {
-          mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...lanternAttachmentsToKeep.reverse()]
-        }
+        mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...tagged]
       }
     }
   } catch (err) {
@@ -1287,11 +1330,9 @@ export async function buildMessageContext(
   }
 
   // Prepare final messages for LLM
-  const formattedMessages = formattedContextMessages.map((msg, idx) => {
+  const assembledMessages = formattedContextMessages.map((msg, idx) => {
     const isAnchor = idx === attachmentAnchorIndex
-    const content = isAnchor && lanternImagePrefix
-      ? lanternImagePrefix + msg.content
-      : msg.content
+    const content = msg.content
     if (isAnchor && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
@@ -1307,6 +1348,24 @@ export async function buildMessageContext(
       name: msg.name,
     }
   })
+
+  // One transport budget for every image on the request: capability, the
+  // profile's per-request image cap and the total byte budget, spent down a
+  // ranked list (uploads, re-hydrated uploads, Lantern images, each newest
+  // first). The failover service runs the same pass for each substitute. With
+  // nothing to change it hands back the same array.
+  const formattedMessages = assembledMessages.length > 0 && mergedAttachmentsToSend.length > 0
+    ? (await applyImageTransportBudget(
+        assembledMessages,
+        connectionProfile,
+        {
+          repos: options.repos ?? getRepositories(),
+          userId,
+          logContext: { chatId: chat.id, characterParticipantId: characterParticipant.id },
+          describeOptions: { chatId: chat.id },
+        },
+      )).messages
+    : assembledMessages
 
   if (isMultiCharacter) {
     applyMultiCharacterTurnAnchor(

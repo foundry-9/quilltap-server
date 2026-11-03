@@ -27,6 +27,7 @@ interface UseProjectDetailReturn {
   handleSaveAnswerConfirmationOverride: (value: 'ON' | 'OFF' | null) => Promise<void>
   handleSaveAvatarGeneration: (enabled: boolean | null) => Promise<void>
   handleSaveDefaultImageProfile: (profileId: string | null) => Promise<void>
+  handleSaveBrahmaConnectionProfile: (profileId: string | null) => Promise<void>
   handleSaveDefaultRoleplayTemplate: (templateId: string | null) => Promise<void>
   handleSaveBackgroundDisplayMode: (mode: BackgroundDisplayMode) => Promise<void>
   handleSaveAlertCharactersOfLanternImages: (enabled: boolean | null) => Promise<void>
@@ -151,6 +152,27 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to update answer confirmation'
       console.error('useProjectDetail: save answer confirmation error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
+  const handleSaveBrahmaConnectionProfile = useCallback(async (profileId: string | null) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brahmaConnectionProfileId: profileId }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update the inline Brahma engine')
+      const data = await res.json()
+      setProject(data.project)
+      showSuccessToast(profileId
+        ? 'Inline Brahma engine set for project'
+        : 'Inline Brahma engine set to inherit from global')
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update the inline Brahma engine'
+      console.error('useProjectDetail: save inline Brahma profile error', errorMsg)
       showErrorToast(errorMsg)
     }
   }, [projectId])
@@ -322,6 +344,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleSaveAnswerConfirmationOverride,
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
+    handleSaveBrahmaConnectionProfile,
     handleSaveDefaultRoleplayTemplate,
     handleSaveBackgroundDisplayMode,
     handleSaveAlertCharactersOfLanternImages,

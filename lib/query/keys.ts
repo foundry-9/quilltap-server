@@ -159,6 +159,8 @@ export const queryKeys = {
     list: (filters?: Filters) => ['projects', 'list', filters ?? {}] as const,
     detail: (id: string) => ['projects', 'detail', id] as const,
     files: (projectId: string) => ['projects', projectId, 'files'] as const,
+    /** The project's linked stores and its own (`/api/v1/projects/{id}/mount-points`). */
+    stores: (projectId: string) => ['projects', projectId, 'stores'] as const,
     background: (id: string) => ['projects', id, 'background'] as const,
     state: (id: string) => ['projects', id, 'state'] as const,
   },
@@ -212,13 +214,14 @@ export const queryKeys = {
      */
     library: () => ['custom-tools', 'library'] as const,
     /**
-     * Run presets for one tool in one character's vault —
-     * `Tools/{toolName}.{preset}.settings.json`, listed by the run dialog.
-     * Invalidated after a save; refetched per dialog open, same doctrine as
-     * `byChat` (the files live in a store the user edits).
+     * Run presets for one tool as one character sees them —
+     * `Tools/{toolName}.{preset}.settings.json` across the character → group →
+     * project → General walk, listed by the run dialog. Invalidated after a
+     * save; refetched per dialog open, same doctrine as `byChat` (the files
+     * live in stores the user edits).
      */
-    presets: (vaultMountPointId: string, toolName: string) =>
-      ['custom-tools', 'presets', vaultMountPointId, toolName] as const,
+    presets: (chatId: string, asCharacterId: string | null, toolName: string) =>
+      ['custom-tools', chatId, 'presets', asCharacterId ?? '', toolName] as const,
     /** The Workbench save-target list, grouped by attachment. */
     destinations: () => ['custom-tools', 'destinations'] as const,
     /**
@@ -269,7 +272,21 @@ export const queryKeys = {
   },
   mountPoints: {
     all: ['mount-points'] as const,
+    /** Prefix of every `list(...)` key — a store's counts appear in the list. */
+    lists: ['mount-points', 'list'] as const,
     list: (filters?: Filters) => ['mount-points', 'list', filters ?? {}] as const,
+    /** Prefix of every read about one store — the `mountPoints` topic's scoped refetch. */
+    store: (id: string) => ['mount-points', 'store', id] as const,
+    /** One store's record (`GET /api/v1/mount-points/[id]`, with capabilities). */
+    detail: (id: string) => ['mount-points', 'store', id, 'detail'] as const,
+    /** One store's browser listing (`GET …/[id]/files`: files and folders). */
+    files: (id: string) => ['mount-points', 'store', id, 'files'] as const,
+    /** Where one file appears (`GET …/[id]/files/<path>?action=links`). */
+    links: (id: string, path: string) => ['mount-points', 'store', id, 'links', path] as const,
+    /** One file's text, for a viewer (`GET …/[id]/files/<path>`). */
+    content: (id: string, path: string) => ['mount-points', 'store', id, 'content', path] as const,
+    /** One `.docx` rendered for viewing (`GET …/[id]/files/<path>?action=render-html`). */
+    rendered: (id: string, path: string) => ['mount-points', 'store', id, 'rendered', path] as const,
   },
   tags: {
     all: ['tags'] as const,

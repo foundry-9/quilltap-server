@@ -91,6 +91,7 @@ export interface Project {
   defaultRoleplayTemplateId?: string | null
   defaultAlertCharactersOfLanternImages?: boolean | null
   answerConfirmationOverride?: 'ON' | 'OFF' | null
+  brahmaConnectionProfileId?: string | null
   color?: string | null
   icon?: string | null
   characterRoster: ProjectCharacter[]

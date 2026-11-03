@@ -51,6 +51,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
     handleSaveDefaultRoleplayTemplate,
+    handleSaveBrahmaConnectionProfile,
     handleSaveBackgroundDisplayMode,
     handleSaveAlertCharactersOfLanternImages,
     handleAddCharacter,
@@ -213,6 +214,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
           onAgentModeChange={handleSaveAgentMode}
           onAnswerConfirmationOverrideChange={handleSaveAnswerConfirmationOverride}
           onDefaultRoleplayTemplateChange={handleSaveDefaultRoleplayTemplate}
+          onBrahmaConnectionProfileChange={handleSaveBrahmaConnectionProfile}
           expanded={cardState.modelBehavior}
           onToggle={() => toggleCard('modelBehavior')}
         />

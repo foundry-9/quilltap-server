@@ -46,6 +46,12 @@ interface UseAutoScrollReturn {
   isAutoScrollEnabled: boolean
   /** Whether the page has settled after initial load */
   isSettled: boolean
+  /**
+   * Whether the initial scroll to the newest message has finished — it keeps
+   * nudging for a few hundred ms after `isSettled`. Anything that scrolls the
+   * view elsewhere on arrival (a `?msg=` reveal) waits for this.
+   */
+  isInitialScrollDone: boolean
   /** Whether the view is currently at (or near) the bottom — drives the jump-to-bottom button. */
   isAtBottom: boolean
   /** Imperatively scroll to the newest message (for the jump-to-bottom button). */
@@ -84,6 +90,7 @@ export function useAutoScroll({
 
   // Track whether page has settled after initial load
   const [isSettled, setIsSettled] = useState(false)
+  const [isInitialScrollDone, setIsInitialScrollDone] = useState(false)
 
   // Track previous message count to detect new messages
   const prevMessageCountRef = useRef(messageCount)
@@ -122,7 +129,7 @@ export function useAutoScroll({
    * 2. Scroll container to max scrollTop
    * 3. Scroll endRef into view
    */
-  const performScrollToBottom = useCallback((behavior: 'auto' | 'smooth' = 'smooth') => {
+  const performScrollToBottom = useCallback((behavior: 'auto' | 'smooth' = 'smooth', onDone?: () => void) => {
     const container = containerRef.current
 
     // Strategy 1: Tell virtualizer to scroll to last message
@@ -159,6 +166,7 @@ export function useAutoScroll({
           })
         }
       }
+      onDone?.()
     }, 300)
   }, [itemCount, virtualizer, endRef, containerRef])
 
@@ -226,6 +234,7 @@ export function useAutoScroll({
         hasInitialScrolledRef.current = false
         return false
       })
+      setIsInitialScrollDone(false)
       return
     }
 
@@ -243,12 +252,13 @@ export function useAutoScroll({
         if (!hasInitialScrolledRef.current) {
           hasInitialScrolledRef.current = true
           // Use 'auto' (instant) scroll on initial load to avoid visual jank
-          performScrollToBottom('auto')
+          performScrollToBottom('auto', () => setIsInitialScrollDone(true))
         }
       }, SETTLE_DELAY_MS)
     } else if (messageCount === 0) {
       // No messages - immediately settled
       setIsSettled(true)
+      setIsInitialScrollDone(true)
     }
 
     return () => {
@@ -330,6 +340,7 @@ export function useAutoScroll({
     scrollOnStreamComplete,
     isAutoScrollEnabled,
     isSettled,
+    isInitialScrollDone,
     isAtBottom: isAutoScrollEnabled,
     scrollToBottom,
   }

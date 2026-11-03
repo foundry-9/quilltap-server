@@ -25,3 +25,8 @@ export function buildMountFileItemUrl(mountPointId: string, relativePath: string
 export function buildMountBlobUrl(mountPointId: string, relativePath: string): string {
   return `/api/v1/mount-points/${encodeURIComponent(mountPointId)}/blobs/${encodeMountBlobPath(relativePath)}`
 }
+
+/** The canonical item route's raw byte stream — any file, in any kind of store (viewers, thumbnails). */
+export function buildMountFileRawUrl(mountPointId: string, relativePath: string): string {
+  return `${buildMountFileItemUrl(mountPointId, relativePath)}?raw=1`
+}

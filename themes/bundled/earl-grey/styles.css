@@ -167,7 +167,7 @@
   --text-100: 0 0% 100%;
   --text-200: 0 0% 70.6%;       /* #b4b4b4 - Secondary */
   --text-300: 0 0% 70.6%;
-  --text-400: 0 0% 59%;         /* Tertiary (lifted for 4.5:1 contrast) */
+  --text-400: 0 0% 61%;         /* Tertiary (lifted for 4.5:1 contrast, incl. on tab/hover fills) */
   --text-500: 0 0% 40%;
 
   /* Scrollbar for dark mode */
@@ -270,7 +270,7 @@
   --text-100: 0 0% 5%;
   --text-200: 0 0% 40%;         /* #676767 - Secondary */
   --text-300: 0 0% 40%;
-  --text-400: 240 5% 45.5%;      /* Placeholder (slight blue tint; 4.5:1 on white) */
+  --text-400: 240 5% 43%;        /* Placeholder (slight blue tint; 4.5:1 on white and on #ECECEC hover/tab fills) */
   --text-500: 0 0% 60%;
 
   /* Scrollbar for light mode */
@@ -611,7 +611,7 @@
      ALERT TOKENS
      ================================================================ */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
-  --qt-alert-success-fg: hsl(142 76% 30%);
+  --qt-alert-success-fg: hsl(142 76% 24%);  /* darkened for 4.5:1 on the alert tint */
   --qt-alert-success-border: hsl(142 76% 36% / 0.3);
 
   --qt-alert-warning-bg: hsl(38 92% 50% / 0.1);
@@ -623,7 +623,7 @@
   --qt-alert-error-border: hsl(0 84% 60% / 0.3);
 
   --qt-alert-info-bg: hsl(199 89% 48% / 0.1);
-  --qt-alert-info-fg: hsl(199 89% 30%);
+  --qt-alert-info-fg: hsl(199 89% 25%);  /* darkened for 4.5:1 on the alert tint */
   --qt-alert-info-border: hsl(199 89% 48% / 0.3);
 
   /* ================================================================
@@ -1269,25 +1269,29 @@
 [data-theme="earl-grey"] .qt-alert-error {
   background: hsl(var(--danger-900) / 0.3);
   border-color: hsl(var(--danger-100) / 0.3);
-  color: hsl(var(--danger-100));
+  /* The per-mode alert token: --danger-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-error-fg);
 }
 
 [data-theme="earl-grey"] .qt-alert-warning {
   background: hsl(var(--warning-900) / 0.3);
   border-color: hsl(var(--warning-100) / 0.3);
-  color: hsl(var(--warning-100));
+  /* The per-mode alert token: --warning-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-warning-fg);
 }
 
 [data-theme="earl-grey"] .qt-alert-success {
   background: hsl(var(--success-900) / 0.3);
   border-color: hsl(var(--success-100) / 0.3);
-  color: hsl(var(--success-100));
+  /* The per-mode alert token: --success-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-success-fg);
 }
 
 [data-theme="earl-grey"] .qt-alert-info {
   background: hsl(var(--accent-main-900) / 0.25);
   border-color: hsl(var(--accent-main-100) / 0.3);
-  color: hsl(var(--accent-secondary-100));
+  /* The per-mode alert token: --accent-secondary-100 is a dark-mode tone (2.4:1 on white). */
+  color: var(--qt-alert-info-fg);
 }
 
 /* Input focus states */

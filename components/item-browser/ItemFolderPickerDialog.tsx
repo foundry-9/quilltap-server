@@ -1,197 +1,142 @@
 'use client'
 
 /**
- * "Move to folder…" / "Copy to folder…" for any folder-of-items tier — pick
- * where in one tier to file one or more items.
+ * "Move to folder…" / "Copy to folder…" for a tiered item browser — the
+ * wardrobe's and the Inventory's: pick where in the items' own tier to file
+ * them (or copies of them), file them, and say where they went.
  *
- * The tier's folder tree as an indented list, top level first; for a move,
- * the folder the items already share is shown but can't be chosen (a copy
- * may land beside its original). **New folder…** opens an input under the
- * highlighted folder and creates it there, then highlights it. The caller
- * supplies the tree, the folder creator and any extra choice (the wardrobe's
- * components fieldset) as `children`; **Move** / **Copy** hands the folder to
- * `onSubmit`.
+ * The picker is the shared `DestinationPickerDialog`; the kind's folders hook
+ * and folder creator come in as a port and the filing call as `file`, so this file
+ * holds what both kinds do the same — the subject line, the folder every item
+ * already shares (disabled for a move), the busy state, the toast — and the
+ * kind supplies its wording. A kind with one more question (the wardrobe's
+ * outfit components) passes it as a `choice`: the picker keeps its value and
+ * hands it to `file` alongside the folder. Filing never changes what anyone
+ * can wear or carry.
  *
  * @module components/item-browser/ItemFolderPickerDialog
  */
 
 import { useState, type ReactNode } from 'react'
-import { BaseModal } from '@/components/ui/BaseModal'
-import { Icon } from '@/components/ui/icon'
-import { folderName, folderSegments, isSameFolder, joinFolder } from '@/lib/mount-index/item-folders'
-import { showErrorToast } from '@/lib/toast'
+import { folderCrumb, isSameFolder } from '@/lib/mount-index/item-folders'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { DestinationPickerDialog } from './DestinationPickerDialog'
+import type { ItemContainer } from './ItemControlDialogShell'
 
-export interface ItemFolderPickerDialogProps {
-  isOpen: boolean
-  mode: 'move' | 'copy'
-  /** What is being moved, for the title. */
-  subject: string
-  /** The tier's folder paths. */
-  folders: ReadonlyArray<{ path: string }>
-  loading: boolean
-  /** The root row's label, e.g. `Wardrobe (top level)`. */
-  rootLabel: string
-  /** Create a folder (full path) and answer its stored path. */
-  onCreateFolder: (path: string) => Promise<{ path: string }>
-  creating: boolean
-  /** The folder every item already sits in (disabled for a move), or null. */
-  currentFolder: string | null
-  working?: boolean
-  /** The explanatory line under the title. */
-  note: string
-  onClose: () => void
-  onSubmit: (folder: string) => void | Promise<void>
-  /** Extra choices shown under the list (the wardrobe's components fieldset). */
-  children?: ReactNode
+/** What the picker needs from a row: enough to name it and find its folder. */
+export interface FileableItem {
+  id: string
+  title?: string | null
+  name?: string | null
+  folder?: string | null
 }
 
-export function ItemFolderPickerDialog({
-  isOpen,
+/** The wording that makes the picker a kind's own. */
+export interface ItemFolderPickerWording {
+  /** The root row, e.g. `Wardrobe (top level)`. */
+  rootLabel: string
+  /** The noun for a count, e.g. `item` → `3 items`. */
+  noun: string
+  /** Where the root is, e.g. `the top of the wardrobe`. */
+  rootPhrase: string
+  /** How a filed thing rests, singular and plural: `hangs` / `hang`. */
+  rests: [string, string]
+  moveNote: string
+  copyNote: string
+  /** The toast for a refusal. */
+  describeError: (error: unknown, fallback: string) => string
+}
+
+/** One more question the kind asks (the wardrobe's outfit components). */
+export interface ItemFolderPickerChoice<C> {
+  initial: C
+  render: (value: C, onChange: (next: C) => void, working: boolean) => ReactNode
+}
+
+/** A kind's folder reads and folder creation, against a tier named per call. */
+export interface ItemFolderPort {
+  /** The kind's folders hook (stable: a module-level hook, never inline). */
+  useFolders: (container: ItemContainer | null) => { folders: ReadonlyArray<{ path: string }>; loading: boolean }
+  createFolder: (container: ItemContainer, path: string) => Promise<{ path: string }>
+  creating: boolean
+}
+
+export interface ItemFolderPickerDialogProps<T extends FileableItem, C> {
+  mode: 'move' | 'copy'
+  items: readonly T[]
+  /** The tier the items live in — the only one whose folders are offered. */
+  container: ItemContainer
+  port: ItemFolderPort
+  /** File the items; answers the filed rows (their folder names the toast). */
+  file: (folder: string, choice: C | undefined) => Promise<ReadonlyArray<{ folder?: string | null }>>
+  wording: ItemFolderPickerWording
+  choice?: ItemFolderPickerChoice<C>
+  onClose: () => void
+  /** After a successful filing, before the picker closes (leave select mode). */
+  onFiled?: () => void
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
+
+export function ItemFolderPickerDialog<T extends FileableItem, C = never>({
   mode,
-  subject,
-  folders,
-  loading,
-  rootLabel,
-  onCreateFolder,
-  creating,
-  currentFolder,
-  working = false,
-  note,
+  items,
+  container,
+  port,
+  file,
+  wording,
+  choice,
   onClose,
-  onSubmit,
-  children,
-}: ItemFolderPickerDialogProps) {
-  const [highlighted, setHighlighted] = useState<string | null>(null)
-  const [newFolderOpen, setNewFolderOpen] = useState(false)
-  const [newFolderName, setNewFolderName] = useState('')
+  onFiled,
+}: ItemFolderPickerDialogProps<T, C>) {
+  const { folders, loading } = port.useFolders(container)
+  const [working, setWorking] = useState(false)
+  const [choiceValue, setChoiceValue] = useState<C | undefined>(choice?.initial)
 
-  const rows = [{ path: '', label: rootLabel, depth: 0 }].concat(
-    folders.map((f) => ({ path: f.path, label: folderName(f.path), depth: folderSegments(f.path).length })),
-  )
+  const first = items[0]?.folder ?? ''
+  const currentFolder = items.every((i) => isSameFolder(i.folder ?? '', first)) ? first : null
+  const one = items.length === 1
+  const subject = one ? `"${items[0].title || items[0].name || ''}"` : plural(items.length, wording.noun)
 
-  // A copy may land in the folder it came from; a move there would do nothing.
-  const isCurrent = (path: string): boolean =>
-    mode === 'move' && currentFolder !== null && isSameFolder(path, currentFolder)
-  const target = highlighted
-  const canSubmit = target !== null && !isCurrent(target) && !working
-  const verb = mode === 'move' ? 'Move' : 'Copy'
-
-  const submitNewFolder = async (): Promise<void> => {
-    const name = newFolderName.trim()
-    if (!name) return
+  const submit = async (folder: string): Promise<void> => {
+    const copying = mode === 'copy'
+    setWorking(true)
     try {
-      const created = await onCreateFolder(joinFolder(highlighted ?? '', name))
-      setHighlighted(created.path)
-      setNewFolderOpen(false)
-      setNewFolderName('')
+      const filed = await file(folder, choice ? choiceValue : undefined)
+      const where = folder ? `"${folderCrumb(filed[0]?.folder || folder)}"` : wording.rootPhrase
+      const rests = wording.rests[one ? 0 : 1]
+      showSuccessToast(
+        copying ? `${one ? 'A copy' : 'Copies'} of ${subject} now ${rests} in ${where}` : `${subject} now ${rests} in ${where}`,
+      )
+      onFiled?.()
+      onClose()
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'The folder would not be made')
+      const noun = `${wording.noun}s`
+      showErrorToast(wording.describeError(error, `The ${noun} would not be ${copying ? 'copied' : 'moved'}`))
+    } finally {
+      setWorking(false)
     }
   }
 
-  const newFolderInput = (
-    <div className="flex items-center gap-2 px-2 py-1" style={{ paddingLeft: `${((highlighted ? folderSegments(highlighted).length : 0) + 1) * 16 + 8}px` }}>
-      <input
-        type="text"
-        autoFocus
-        value={newFolderName}
-        onChange={(e) => setNewFolderName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            void submitNewFolder()
-          } else if (e.key === 'Escape') {
-            e.stopPropagation()
-            setNewFolderOpen(false)
-            setNewFolderName('')
-          }
-        }}
-        placeholder="Folder name"
-        aria-label="New folder name"
-        className="qt-input qt-input-sm flex-1"
-      />
-      <button
-        type="button"
-        className="qt-button-secondary qt-button-sm"
-        disabled={creating || !newFolderName.trim()}
-        onClick={() => void submitNewFolder()}
-      >
-        Create
-      </button>
-    </div>
-  )
-
   return (
-    <BaseModal
-      isOpen={isOpen}
+    <DestinationPickerDialog
+      isOpen
+      mode={mode}
+      subject={subject}
+      folders={folders}
+      loading={loading}
+      rootLabel={wording.rootLabel}
+      onCreateFolder={(path) => port.createFolder(container, path)}
+      creating={port.creating}
+      currentFolder={currentFolder}
+      working={working}
+      note={mode === 'copy' ? wording.copyNote : wording.moveNote}
       onClose={onClose}
-      title={`${verb} ${subject} to a folder`}
-      maxWidth="md"
-      closeOnClickOutside={!working}
-      closeOnEscape={!working}
-      footer={(
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            className="qt-button-ghost qt-button-sm"
-            onClick={() => setNewFolderOpen(true)}
-            disabled={newFolderOpen}
-          >
-            New folder…
-          </button>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="qt-button-secondary qt-button-sm" disabled={working}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="qt-button-primary qt-button-sm"
-              disabled={!canSubmit}
-              onClick={() => target !== null && void onSubmit(target)}
-            >
-              {working ? (mode === 'move' ? 'Moving…' : 'Copying…') : verb}
-            </button>
-          </div>
-        </div>
-      )}
+      onSubmit={submit}
     >
-      <p className="qt-text-xs qt-text-secondary mb-2">{note}</p>
-      {loading ? (
-        <div className="text-sm qt-text-secondary px-2 py-3">Loading folders…</div>
-      ) : (
-        <ul role="listbox" aria-label="Folders" className="space-y-0.5 max-h-[50vh] overflow-y-auto">
-          {rows.map((row) => {
-            const current = isCurrent(row.path)
-            const selected = highlighted !== null && isSameFolder(highlighted, row.path)
-            return (
-              <li key={row.path || '(root)'}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  aria-disabled={current}
-                  disabled={current}
-                  onClick={() => setHighlighted(row.path)}
-                  className={`w-full text-left px-2 py-1 rounded text-sm ${
-                    selected ? 'qt-bg-muted text-foreground' : 'qt-text-secondary'
-                  } disabled:opacity-50`}
-                  style={{ paddingLeft: `${row.depth * 16 + 8}px` }}
-                  title={current ? 'Already here' : undefined}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    {row.path && <Icon name="folder" className="w-3.5 h-3.5" />}
-                    {row.label}
-                  </span>
-                  {current && <span className="qt-text-xs ml-2">(here now)</span>}
-                </button>
-                {newFolderOpen && selected && newFolderInput}
-              </li>
-            )
-          })}
-          {newFolderOpen && highlighted === null && newFolderInput}
-        </ul>
+      {choice && choiceValue !== undefined && (
+        <div className="mt-3">{choice.render(choiceValue, setChoiceValue, working)}</div>
       )}
-      {children}
-    </BaseModal>
+    </DestinationPickerDialog>
   )
 }

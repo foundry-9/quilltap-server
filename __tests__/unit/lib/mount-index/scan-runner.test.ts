@@ -24,6 +24,24 @@ jest.mock('fs/promises', () => ({
 
 jest.mock('@/lib/mount-index/scanner', () => ({
   scanMountPoint: jest.fn(),
+  emptyScanResult: (mountPointId: string, errors: string[] = []) => ({
+    mountPointId,
+    filesScanned: 0,
+    filesNew: 0,
+    filesModified: 0,
+    filesDeleted: 0,
+    filesInCloud: 0,
+    chunksCreated: 0,
+    errors,
+  }),
+}))
+
+jest.mock('@/lib/startup/progress', () => ({
+  startupProgress: {
+    setCurrent: jest.fn(),
+    setSubProgress: jest.fn(),
+    publish: jest.fn(),
+  },
 }))
 
 jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
@@ -35,6 +53,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { scanMountPoint } from '@/lib/mount-index/scanner'
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler'
 import * as fsPromises from 'fs/promises'
+import { startupProgress } from '@/lib/startup/progress'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 const mockScanMountPoint = scanMountPoint as jest.MockedFunction<typeof scanMountPoint>
@@ -45,11 +64,16 @@ const mockFsAccess = fsPromises.access as jest.MockedFunction<typeof fsPromises.
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeMountPoint(id: string, basePath = '/archive') {
+function makeMountPoint(
+  id: string,
+  basePath = '/archive',
+  mountType: 'filesystem' | 'database' = 'filesystem',
+) {
   return {
     id,
     name: `Mount ${id}`,
     basePath,
+    mountType,
     enabled: true,
   }
 }
@@ -61,6 +85,7 @@ function makeOkScanResult(mountPointId: string, chunksCreated = 0) {
     filesNew: 1,
     filesModified: 0,
     filesDeleted: 0,
+    filesInCloud: 0,
     chunksCreated,
     errors: [],
   }
@@ -188,7 +213,7 @@ describe('scanAllMountPoints', () => {
   })
 
   it('skips basePath accessibility check for database-backed mount points', async () => {
-    const mps = [{ ...makeMountPoint('mp-db', ''), mountType: 'database' as const }]
+    const mps = [makeMountPoint('mp-db', '', 'database')]
     const repos = makeRepos(mps)
     mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
     mockFsAccess.mockRejectedValue(new Error('ENOENT'))
@@ -204,6 +229,63 @@ describe('scanAllMountPoints', () => {
       'error',
       expect.any(String)
     )
+  })
+
+  describe('only', () => {
+    const mixed = () => [
+      makeMountPoint('fs-1', '/Users/me/Documents'),
+      makeMountPoint('db-1', '', 'database'),
+      makeMountPoint('fs-2', '/srv/notes'),
+      makeMountPoint('db-2', '', 'database'),
+    ]
+
+    beforeEach(() => {
+      mockScanMountPoint.mockImplementation(mp => Promise.resolve(makeOkScanResult(mp.id)))
+    })
+
+    it("scans only database-backed stores with only: 'database'", async () => {
+      mockGetRepositories.mockReturnValue(makeRepos(mixed()) as ReturnType<typeof getRepositories>)
+
+      const results = await scanAllMountPoints({ only: 'database' })
+
+      expect(results.map(r => r.mountPointId)).toEqual(['db-1', 'db-2'])
+      expect(mockFsAccess).not.toHaveBeenCalled()
+    })
+
+    it("scans only folders on disk with only: 'filesystem'", async () => {
+      mockGetRepositories.mockReturnValue(makeRepos(mixed()) as ReturnType<typeof getRepositories>)
+
+      const results = await scanAllMountPoints({ only: 'filesystem' })
+
+      expect(results.map(r => r.mountPointId)).toEqual(['fs-1', 'fs-2'])
+    })
+
+    it('scans everything when only is omitted', async () => {
+      mockGetRepositories.mockReturnValue(makeRepos(mixed()) as ReturnType<typeof getRepositories>)
+
+      const results = await scanAllMountPoints()
+
+      expect(results).toHaveLength(4)
+    })
+  })
+
+  it('reports to the startup screen by default', async () => {
+    mockGetRepositories.mockReturnValue(makeRepos([makeMountPoint('mp-1')]) as ReturnType<typeof getRepositories>)
+
+    await scanAllMountPoints()
+
+    expect(startupProgress.setCurrent).toHaveBeenCalledWith('subsystem:mount-index:start', expect.anything())
+    expect(startupProgress.publish).toHaveBeenCalled()
+  })
+
+  it('stays off the startup screen with reportStartupProgress: false', async () => {
+    mockGetRepositories.mockReturnValue(makeRepos([makeMountPoint('mp-1')]) as ReturnType<typeof getRepositories>)
+
+    await scanAllMountPoints({ reportStartupProgress: false })
+
+    expect(startupProgress.setCurrent).not.toHaveBeenCalled()
+    expect(startupProgress.setSubProgress).not.toHaveBeenCalled()
+    expect(startupProgress.publish).not.toHaveBeenCalled()
   })
 
   it('gracefully handles embedding enqueue failures without propagating error', async () => {

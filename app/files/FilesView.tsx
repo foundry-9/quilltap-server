@@ -29,7 +29,6 @@ function FilesPageContent({ bgStyle }: { bgStyle: ReturnType<typeof useSubsystem
 
       <div className="mt-6">
         <FileBrowser
-          projectId={null}
           title="General Files"
           className="min-h-[400px]"
         />

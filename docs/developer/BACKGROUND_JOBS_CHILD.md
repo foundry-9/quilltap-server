@@ -12,7 +12,7 @@ Moving the processor into a child process means the HTTP event loop is free rega
 
 ```
 ┌─ main (HTTP + Next.js) ──────────────────────┐         ┌─ child (jobs) ───────────────────┐
-│ - SQLCipher RW connection (sole writer)      │         │ - SQLCipher READONLY connection  │
+│ - Encrypted RW connection (sole writer)      │         │ - Encrypted READONLY connection  │
 │ - instance lock holder                       │         │ - vectorStoreManager (warm)      │
 │ - vectorStoreManager (warm, for chat reads)  │  ◄IPC►  │ - mount-chunk cache (warm)       │
 │ - mount-chunk cache (warm, for chat reads)   │         │ - all 18 handlers                │
@@ -21,7 +21,7 @@ Moving the processor into a child process means the HTTP event loop is free rega
 └──────────────────────────────────────────────┘         └──────────────────────────────────┘
 ```
 
-The parent owns the only RW SQLite connection, the instance lock at `<dataDir>/data/quilltap.lock`, and the only file logger. The child opens its own readonly SQLCipher connection using the same `ENCRYPTION_MASTER_PEPPER` from inherited environment.
+The parent owns the only RW SQLite connection, the instance lock at `<dataDir>/data/quilltap.lock`, and the only file logger. The child opens its own readonly encrypted connection using the same `ENCRYPTION_MASTER_PEPPER` from inherited environment.
 
 ## IPC protocol
 

@@ -29,6 +29,17 @@ describe('queryKeysForTopic', () => {
     expect(keys).toContainEqual(queryKeys.system.tasksQueue);
   });
 
+  it('scopes a document store change to that store, plus the store lists', () => {
+    expect(queryKeysForTopic('mountPoints', 'mp-1')).toEqual([
+      queryKeys.mountPoints.store('mp-1'),
+      queryKeys.mountPoints.lists,
+    ]);
+    expect(queryKeysForTopic('mountPoints')).toEqual([queryKeys.mountPoints.all]);
+    // The store prefix reaches its listing and link lookups.
+    expect(queryKeys.mountPoints.files('mp-1').slice(0, 3)).toEqual([...queryKeys.mountPoints.store('mp-1')]);
+    expect(queryKeys.mountPoints.links('mp-1', 'a.md').slice(0, 3)).toEqual([...queryKeys.mountPoints.store('mp-1')]);
+  });
+
   it('narrows to one row when the event carries an id', () => {
     expect(queryKeysForTopic('chats', 'chat-1')).toEqual([
       queryKeys.chats.detail('chat-1'),
@@ -53,6 +64,17 @@ describe('queryKeysForTopic', () => {
       queryKeys.inventory.archetypeLists,
       queryKeys.inventory.equippedLists,
     ]);
+  });
+
+  it('refreshes the wardrobe browser\'s lists and folder trees on the wardrobe topic', () => {
+    // Every write through a wardrobe location publishes it, and the folder
+    // hooks leave their own writes' refresh to it while the socket is up.
+    expect(queryKeysForTopic('wardrobe')).toEqual([
+      queryKeys.wardrobe.lists,
+      queryKeys.wardrobe.folderLists,
+    ]);
+    // The prefixes reach every tier's list and folder tree.
+    expect(queryKeys.wardrobe.folders('general:').slice(0, 2)).toEqual([...queryKeys.wardrobe.folderLists]);
   });
 
   it('refreshes what the cast carries on the chats topic (the Inventory)', () => {

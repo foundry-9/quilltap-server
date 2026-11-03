@@ -48,7 +48,7 @@ A **new top-level workspace surface**, not a settings panel — it is an editor 
 
 1. **Settings → Chat → Custom tools** (`CustomToolsSettings.tsx`): under the existing enable toggle, add a link/button "Open Pascal's Workbench" that opens the `custom-tools` tab. Visible even when the toggle is off (authoring while disabled is legitimate).
 2. **Composer popup** (`components/chat/CustomToolsDropdown.tsx`): a footer row "New contrivance…" opening the builder in create mode, and a small edit affordance per listed tool. The roster payload already carries `definitionPath` and the popup knows the mount — verify the GET response includes `mountPointId` (the parent spec says `definitionPath` + `mountName`; if `mountPointId` is absent from the payload, add it — it is not odds information). Error badges in the popup likewise link to the builder, which is exactly where you fix a broken file.
-3. **Scriptorium file table** (`app/scriptorium/[id]/components/FileTable.tsx`): rows whose path matches root-level `Tools/*.tool.json` get an "Open in Pascal's Workbench" action.
+3. **Scriptorium file table** (`app/scriptorium/[id]/components/FileTable.tsx`): rows whose path matches root-level `Tools/*.tool.json` get an "Open in Pascal's Workbench" action. *(Since 2026-10-31 the file table is gone: the action is an entry in the Scriptorium folder browser's ⋮ menu, gated by `isCustomToolDefinition` in `lib/folder-browser/document-actions.ts`.)*
 4. **Left rail / navigation**: wherever top-level surfaces are registered (home dashboard tiles, rail), add the entry following how `scenarios`/`photos` surfaces are registered. Follow the existing pattern; do not invent a new nav mechanism.
 
 ---

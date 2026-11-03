@@ -12,7 +12,8 @@
  *   2. Keeps the mirror doc_mount_files row in sync so scan/search/
  *      embedding code continues to treat the store uniformly.
  *   3. Emits a db-store-events event so the watcher triggers an
- *      embedding re-index — the equivalent of chokidar 'change'.
+ *      embedding re-index — what a filesystem store's watcher does when a
+ *      file on disk changes.
  */
 
 import path from 'path';
@@ -25,7 +26,7 @@ import {
   emitDocumentMoved,
   emitDocumentWritten,
 } from './db-store-events';
-import { detectNativeText, isExtractableBlobPath } from './path-utils';
+import { detectNativeText, isExtractableBlobPath, normaliseRelativePath as normaliseSharedRelativePath } from './path-utils';
 import { reindexAfterDatabaseWrite } from './post-write-reindex';
 import { inventoryWritesAreLinted, isTitleLintFolder, isTitleLintPath } from '@/lib/inventory/lint-scope';
 import type { InventoryDocumentChange } from '@/lib/inventory/title-lint-documents';
@@ -51,20 +52,9 @@ async function lintInventoryChange(change: InventoryDocumentChange): Promise<() 
   return lintInventoryDocumentChange(change);
 }
 
+/** The store root is `''` here; the shared rule otherwise (`path-utils.ts`). */
 function normaliseRelativePath(relativePath: string): string {
-  // Collapse ./ and redundant separators, reject traversal. Path-resolver
-  // already blocks '..' segments before we get here; keep a second guard.
-  // Trailing slashes are stripped so folder paths match the form that
-  // folder-paths.ts writes into doc_mount_folders.path (no trailing slash).
-  const normalised = path
-    .normalize(relativePath)
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
-  if (normalised.split('/').includes('..')) {
-    throw new Error(`Invalid relative path: ${relativePath}`);
-  }
-  return normalised;
+  return normaliseSharedRelativePath(relativePath, { allowRoot: true });
 }
 
 export class DatabaseStoreError extends Error {
@@ -116,6 +106,67 @@ export async function readDatabaseBlobText(
     mtime: new Date(blob.updatedAt).getTime(),
     size: blob.sizeBytes,
     storedMimeType: blob.storedMimeType,
+  };
+}
+
+/**
+ * A native-text file (.md, .txt, .json, .jsonl) that was uploaded, and so is
+ * stored as a blob rather than a document, read as the editor reads a
+ * document: its own bytes as UTF-8. Null for any other kind of file, or when
+ * no blob is there. Saving it writes a document at the same path, which
+ * repoints the link and collects the blob (`linkDocumentContent`).
+ */
+export async function readDatabaseBlobAsDocument(
+  mountPointId: string,
+  relativePath: string
+): Promise<{ content: string; mtime: number; size: number } | null> {
+  const rel = normaliseRelativePath(relativePath);
+  if (!detectNativeText(rel)) return null;
+  const repos = getRepositories();
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, rel);
+  if (!blob) return null;
+  const data = await repos.docMountBlobs.readData(blob.id);
+  if (!data) return null;
+  logger.debug('readDatabaseBlobAsDocument: reading an uploaded text blob as a document', {
+    mountPointId,
+    relativePath: rel,
+    size: data.length,
+  });
+  return {
+    content: data.toString('utf-8'),
+    mtime: new Date(blob.lastModified).getTime(),
+    size: data.length,
+  };
+}
+
+/**
+ * The one way to read an uploaded blob where a document was expected (#134):
+ * a native-text upload (.md, .txt, .json, .jsonl) is read as its own bytes —
+ * what the editor saves back — and any other kind falls back to its converted
+ * `extractedText` (a PDF's or DOCX's derived text). Null when neither is
+ * there. `source` says which it was, so a caller can tell derived text from
+ * the file itself.
+ */
+export async function readDatabaseBlobForDocument(
+  mountPointId: string,
+  relativePath: string
+): Promise<{
+  content: string;
+  mtime: number;
+  size: number;
+  source: 'blob-bytes' | 'blob-text';
+  storedMimeType?: string;
+} | null> {
+  const bytes = await readDatabaseBlobAsDocument(mountPointId, relativePath);
+  if (bytes) return { ...bytes, source: 'blob-bytes' };
+  const text = await readDatabaseBlobText(mountPointId, relativePath);
+  if (!text) return null;
+  return {
+    content: text.content,
+    mtime: text.mtime,
+    size: text.size,
+    source: 'blob-text',
+    storedMimeType: text.storedMimeType,
   };
 }
 

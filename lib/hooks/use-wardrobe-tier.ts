@@ -12,9 +12,10 @@
  * attached; nothing is merged here — the merging hooks
  * (`useCharacterWardrobeItems`, `useWardrobeContainerItems`) compose tiers.
  *
- * There is no realtime topic for wardrobe changes yet, so these lists refresh
- * on invalidation (after this client's own mutations) and on remount; they do
- * not poll.
+ * No polling: every write through a wardrobe location publishes the
+ * `wardrobe` realtime topic, which refreshes these lists
+ * (`lib/realtime/topic-map.ts`); they also refresh on invalidation after this
+ * client's own mutations and on remount.
  *
  * @module lib/hooks/use-wardrobe-tier
  */

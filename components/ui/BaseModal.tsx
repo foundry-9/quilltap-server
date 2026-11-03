@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, ReactNode } from 'react'
+import { useCallback, useId, useRef, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -82,6 +82,23 @@ const maxWidthClasses: Record<ModalSize, string> = {
  *   </div>
  * </BaseModal>
  */
+/** The dialog (or alert) an element belongs to, if any. */
+function dialogOf(node: EventTarget | null): Element | null {
+  return node instanceof Element ? node.closest('[role="dialog"],[role="alertdialog"]') : null
+}
+
+/**
+ * Whether an event belongs to another dialog layered over `modal`: its target
+ * is inside one, or focus is (a topmost dialog holds focus, so this also
+ * covers a click on that dialog's own backdrop), or a confirmation
+ * (`alertdialog`, always on top) is open, whether or not it took focus.
+ */
+function anotherDialogOwns(modal: HTMLElement | null, target: EventTarget | null): boolean {
+  if (typeof document === 'undefined') return false
+  const others = [dialogOf(target), dialogOf(document.activeElement), ...document.querySelectorAll('[role="alertdialog"]')]
+  return others.some((dialog) => dialog !== null && dialog !== modal && !modal?.contains(dialog))
+}
+
 export function BaseModal({
   isOpen,
   onClose,
@@ -99,9 +116,20 @@ export function BaseModal({
   const titleId = useId()
   const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
 
-  useClickOutside(modalRef, onClose, {
+  // Only the dialog on top answers an outside click or Escape. A dialog opened
+  // over this one (a picker's Move to…, a confirmation) is portaled outside
+  // it, so its clicks would otherwise read as "outside" here and its Escape
+  // would close both.
+  const closeIfOnTop = useCallback(
+    (event?: Event) => {
+      if (anotherDialogOwns(modalRef.current, event?.target ?? null)) return
+      onClose()
+    },
+    [onClose],
+  )
+  useClickOutside(modalRef, closeIfOnTop, {
     enabled: isOpen && closeOnClickOutside,
-    onEscape: closeOnEscape ? onClose : undefined,
+    onEscape: closeOnEscape ? closeIfOnTop : undefined,
   })
 
   if (!isOpen || typeof document === 'undefined') return null

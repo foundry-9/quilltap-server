@@ -74,7 +74,7 @@ jest.mock('@/lib/database/backends/sqlite/mount-index-client', () => ({
 }));
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
-import { executeRunSqlTool } from '../run-sql-handler';
+import { executeRunSqlTool, fitToBudget } from '../run-sql-handler';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -300,5 +300,30 @@ describe('executeRunSqlTool — input validation', () => {
     const result = await executeRunSqlTool({ sql: 'SELECT * FROM no_such_table' }, CTX);
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/SQL error/i);
+  });
+});
+
+describe('fitToBudget — result size budget', () => {
+  it('leaves a small result untouched', () => {
+    const rows = [{ a: 'short' }];
+    expect(fitToBudget(rows)).toEqual({ rows, clippedCells: 0, droppedRows: 0 });
+  });
+
+  it('shortens long text cells before dropping any rows', () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ({ id: i, content: 'x'.repeat(5000) }));
+    const fitted = fitToBudget(rows);
+    expect(fitted.droppedRows).toBe(0);
+    expect(fitted.clippedCells).toBe(10);
+    expect(String(fitted.rows[0].content)).toMatch(/\[5000 chars; select substr\(content/);
+    expect(fitted.note).toMatch(/shortened/);
+  });
+
+  it('drops trailing rows when shortening is not enough, and says so', () => {
+    const rows = Array.from({ length: 400 }, (_, i) => ({ id: i, a: 'y'.repeat(500), b: 'z'.repeat(500) }));
+    const fitted = fitToBudget(rows);
+    expect(fitted.droppedRows).toBeGreaterThan(0);
+    expect(JSON.stringify(fitted.rows).length).toBeLessThanOrEqual(24_000);
+    expect(fitted.rows[0].id).toBe(0);
+    expect(fitted.note).toMatch(/only the first \d+ of 400 rows fit/);
   });
 });

@@ -49,8 +49,11 @@ jest.mock('@/lib/database/repositories/characters.repository', () => ({
 
 jest.mock('@/lib/instance-settings', () => ({ getGeneralMountPointId: jest.fn() }))
 jest.mock('@/lib/mount-index/ensure-owner-store', () => ({ ensureOwnerOfficialStore: jest.fn() }))
-jest.mock('@/lib/mount-index/shared-wardrobe', () => ({ ensureSharedWardrobeFolder: jest.fn() }))
-jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({ resolveGroupMountsForCharacter: jest.fn() }))
+jest.mock('@/lib/mount-index/folder-paths', () => ({ ensureFolderPath: jest.fn() }))
+jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
+  resolveGroupMountsForCharacter: jest.fn(),
+  resolveProjectMountPointIds: jest.fn(),
+}))
 jest.mock('@/lib/wardrobe/pool', () => ({ loadWearablePool: jest.fn() }))
 
 // Spy on the location resolver (the real one runs) so a test can see which
@@ -69,7 +72,7 @@ jest.mock('@/lib/wardrobe/item-images', () => ({
 }))
 
 import { randomUUID } from 'crypto'
-import { GET, POST } from '@/app/api/v1/wardrobe/transfers/route'
+import { POST } from '@/app/api/v1/wardrobe/transfers/route'
 import {
   createInMount,
   deleteInMount,
@@ -79,8 +82,8 @@ import {
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 import { getGeneralMountPointId } from '@/lib/instance-settings'
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store'
-import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe'
-import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
+import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
+import { resolveGroupMountsForCharacter, resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool'
 import { resolveWardrobeLocation } from '@/lib/wardrobe/location'
 import { carryItemImages, commitMovedImages } from '@/lib/wardrobe/item-images'
 
@@ -164,10 +167,12 @@ describe('wardrobe transfer route', () => {
         projects: {
           findAll: jest.fn().mockResolvedValue([]),
           findById: jest.fn(async (id: string) => projects[id] ?? null),
+          findByIdRaw: jest.fn(async (id: string) => projects[id] ?? null),
         },
         groups: {
           findAll: jest.fn().mockResolvedValue([]),
           findById: jest.fn(async (id: string) => groups[id] ?? null),
+          findByIdRaw: jest.fn(async (id: string) => groups[id] ?? null),
         },
         characters: {
           findByUserId: jest.fn().mockResolvedValue([]),
@@ -188,8 +193,14 @@ describe('wardrobe transfer route', () => {
     ;(ensureOwnerOfficialStore as jest.Mock).mockImplementation(async (kind: string, id: string) => ({
       mountPointId: `${kind}-mount-${id}`,
     }))
-    ;(ensureSharedWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
+    ;(ensureFolderPath as jest.Mock).mockResolvedValue('folder-1')
     ;(resolveGroupMountsForCharacter as jest.Mock).mockResolvedValue([])
+    // The project tier: official store first, then any linked stores.
+    ;(resolveProjectMountPointIds as jest.Mock).mockImplementation(async (id: string) => {
+      const project = projects[id]
+      if (!project) return []
+      return [...(project.officialMountPointId ? [project.officialMountPointId] : []), ...(project.linked ?? [])]
+    })
     ;(resolveWardrobeMount as jest.Mock).mockImplementation(async (characterId: string) => {
       const character = characters[characterId]
       if (character?.archivedAt) throw new CharacterArchivedError(characterId)
@@ -225,35 +236,6 @@ describe('wardrobe transfer route', () => {
       json: async () => body,
     }
   }
-
-  it('GET returns destination buckets for General, projects, groups, and users', async () => {
-    mockCtx.repos.projects.findAll.mockResolvedValue([
-      { id: 'project-2', name: 'Beta Project' },
-      { id: 'project-1', name: 'Alpha Project' },
-    ])
-    mockCtx.repos.groups.findAll.mockResolvedValue([
-      { id: 'group-1', name: 'Main Cast' },
-    ])
-    mockCtx.repos.characters.findByUserId.mockResolvedValue([
-      { id: 'char-2', name: 'Zara' },
-      { id: 'char-1', name: 'Ada' },
-    ])
-
-    const res = await GET({ method: 'GET', url: 'http://localhost:3000/api/v1/wardrobe/transfers' } as any)
-    const body = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(body.destinations.general).toEqual({ available: true, label: 'Quilltap General' })
-    expect(body.destinations.projects).toEqual([
-      { id: 'project-1', name: 'Alpha Project' },
-      { id: 'project-2', name: 'Beta Project' },
-    ])
-    expect(body.destinations.groups).toEqual([{ id: 'group-1', name: 'Main Cast' }])
-    expect(body.destinations.users).toEqual([
-      { id: 'char-1', name: 'Ada' },
-      { id: 'char-2', name: 'Zara' },
-    ])
-  })
 
   it('POST copy regenerates UUID for destination item', async () => {
     seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Evening coat', description: 'black wool coat' })])
@@ -412,7 +394,7 @@ describe('wardrobe transfer route', () => {
     expect(res.status).toBe(200)
     expect(body.action).toBe('copy')
     expect(ensureOwnerOfficialStore).toHaveBeenCalledWith('project', 'project-1', 'Campaign')
-    expect(ensureSharedWardrobeFolder).toHaveBeenCalledWith('project-mount-project-1')
+    expect(ensureFolderPath).toHaveBeenCalledWith('project-mount-project-1', 'Wardrobe')
     expect(created('project-mount-project-1')).toEqual([
       expect.objectContaining({ id: 'copy-uuid-1', characterId: null }),
     ])
@@ -530,15 +512,31 @@ describe('wardrobe transfer route', () => {
       expect(deletes()).toEqual([['group-mount-1', 'item-1']])
     })
 
-    it('the later group shadows the earlier one, so it is probed first', async () => {
+    it('the first group in membership order wins a collision, so it is probed first (was: the later group)', async () => {
       wireGroups()
       seed('group-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'First group' })])
       seed('group-mount-2', [makeItem({ id: 'item-1', characterId: null, title: 'Second group' })])
 
       const body = await (await probe()).json()
 
-      expect(body.wardrobeItem.title).toBe('Second group')
-      expect(deletes()).toEqual([['group-mount-2', 'item-1']])
+      expect(body.wardrobeItem.title).toBe('First group')
+      expect(deletes()).toEqual([['group-mount-1', 'item-1']])
+    })
+
+    it("reaches a store linked to the project, not only its official store (was: official only)", async () => {
+      projects['project-1'] = {
+        id: 'project-1',
+        name: 'Campaign',
+        officialMountPointId: 'project-mount-1',
+        linked: ['linked-mount-1'],
+      }
+      seed('linked-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'Linked copy' })])
+      seed(GENERAL_MOUNT, [makeItem({ id: 'item-1', characterId: null, title: 'General copy' })])
+
+      const body = await (await probe({ sourceProjectId: 'project-1' })).json()
+
+      expect(body.wardrobeItem.title).toBe('Linked copy')
+      expect(deletes()).toEqual([['linked-mount-1', 'item-1']])
     })
 
     it('the project wins over General', async () => {
@@ -575,7 +573,7 @@ describe('wardrobe transfer route', () => {
       // The destination is a character vault, which provisions nothing — so
       // any provisioning call would have come from the source probe.
       expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
-      expect(ensureSharedWardrobeFolder).not.toHaveBeenCalled()
+      expect(ensureFolderPath).not.toHaveBeenCalled()
 
       const calls = (resolveWardrobeLocation as jest.Mock).mock.calls
       const probes = calls.filter(([scope, id]: [string, string]) => !(scope === 'character' && id === 'char-dst'))
@@ -599,7 +597,7 @@ describe('wardrobe transfer route', () => {
 
       expect(res.status).toBe(404)
       expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
-      expect(ensureSharedWardrobeFolder).not.toHaveBeenCalled()
+      expect(ensureFolderPath).not.toHaveBeenCalled()
     })
   })
 

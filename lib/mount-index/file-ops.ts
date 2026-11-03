@@ -26,6 +26,7 @@ import {
   emitDocumentWritten,
 } from './db-store-events';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
+import { publishMountChange } from './realtime';
 import { FileOpError } from './file-op-error';
 import { normaliseRelativePath, detectNativeText, mimeForExtension } from './path-utils';
 import { reindexAfterDatabaseWrite } from './post-write-reindex';
@@ -285,7 +286,7 @@ async function computeDestSha256(
 // Public API: copyFile / moveFile
 // ============================================================================
 
-export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
+async function copyFileUnpublished(opts: CopyOpts): Promise<FileOpResult> {
   const sourceMount = await loadMount(opts.sourceMountPointId);
   const destMount = await loadMount(opts.destMountPointId);
   const sourceRel = normaliseRelativePath(opts.sourcePath);
@@ -419,7 +420,7 @@ export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
   };
 }
 
-export async function moveFile(opts: MoveOpts): Promise<FileOpResult> {
+async function moveFileUnpublished(opts: MoveOpts): Promise<FileOpResult> {
   const sourceMount = await loadMount(opts.sourceMountPointId);
   const destMount = await loadMount(opts.destMountPointId);
   const sourceRel = normaliseRelativePath(opts.sourcePath);
@@ -548,7 +549,7 @@ export async function moveFile(opts: MoveOpts): Promise<FileOpResult> {
  * than silently degrading to a byte copy — that distinction is the whole point
  * of `link` versus `copy`. Never overwrites an existing destination.
  */
-export async function linkFile(opts: MoveOpts): Promise<FileOpResult> {
+async function linkFileUnpublished(opts: MoveOpts): Promise<FileOpResult> {
   const sourceMount = await loadMount(opts.sourceMountPointId);
   const destMount = await loadMount(opts.destMountPointId);
   const sourceRel = normaliseRelativePath(opts.sourcePath);
@@ -887,7 +888,7 @@ export interface WriteResult {
   mountPointId: string;
 }
 
-export async function writeFile(opts: WriteOpts): Promise<WriteResult> {
+async function writeFileUnpublished(opts: WriteOpts): Promise<WriteResult> {
   const mp = await loadMount(opts.mountPointId);
   const rel = normaliseRelativePath(opts.relativePath);
 
@@ -923,7 +924,7 @@ export interface DeleteResult {
   path: string;
 }
 
-export async function deleteFile(input: {
+async function deleteFileUnpublished(input: {
   mountPointId: string;
   relativePath: string;
 }): Promise<DeleteResult> {
@@ -947,3 +948,43 @@ export async function deleteFile(input: {
 // ============================================================================
 // Public helpers used by the write / delete / mkdir endpoints
 // ============================================================================
+
+// ============================================================================
+// Published entry points — every file op tells open browsers which stores
+// changed (`publishMountChange`, a realtime hint carrying no data).
+// ============================================================================
+
+function publishBoth(result: { sourceMountPointId: string; destMountPointId: string }): void {
+  publishMountChange(result.destMountPointId);
+  if (result.sourceMountPointId !== result.destMountPointId) publishMountChange(result.sourceMountPointId);
+}
+
+export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
+  const result = await copyFileUnpublished(opts);
+  publishMountChange(result.destMountPointId);
+  return result;
+}
+
+export async function moveFile(opts: MoveOpts): Promise<FileOpResult> {
+  const result = await moveFileUnpublished(opts);
+  publishBoth(result);
+  return result;
+}
+
+export async function linkFile(opts: MoveOpts): Promise<FileOpResult> {
+  const result = await linkFileUnpublished(opts);
+  publishBoth(result);
+  return result;
+}
+
+export async function writeFile(opts: WriteOpts): Promise<WriteResult> {
+  const result = await writeFileUnpublished(opts);
+  publishMountChange(opts.mountPointId);
+  return result;
+}
+
+export async function deleteFile(input: { mountPointId: string; relativePath: string }): Promise<DeleteResult> {
+  const result = await deleteFileUnpublished(input);
+  if (result.deleted) publishMountChange(result.mountPointId);
+  return result;
+}

@@ -8,7 +8,7 @@
  * @module components/workspace/TabStrip
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { Icon, type IconName } from '@/components/ui/icon'
 import type { PaneId, PaneState, WorkspaceTab } from '@/lib/workspace/types'
 
@@ -41,6 +41,31 @@ export function TabStrip({
   // Overflow: keep the active tab visible when the strip scrolls horizontally
   // (many tabs in a narrow pane). `block: 'nearest'` avoids vertical page jumps.
   const activeTabRef = useRef<HTMLDivElement | null>(null)
+  const stripRef = useRef<HTMLDivElement | null>(null)
+
+  // Roving focus across the strip's tabs (WAI-ARIA tabs pattern): only the
+  // active tab is a Tab stop; arrows / Home / End move focus and select.
+  const handleTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, id: string) => {
+    const order = paneState.order.filter((tid) => tabs[tid])
+    const index = order.indexOf(id)
+    if (index < 0) return
+    let next: number | null = null
+    if (e.key === 'ArrowRight') next = (index + 1) % order.length
+    else if (e.key === 'ArrowLeft') next = (index - 1 + order.length) % order.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = order.length - 1
+    else if (e.key === 'Delete') {
+      e.preventDefault()
+      onClose(order[index])
+      return
+    }
+    if (next === null) return
+    e.preventDefault()
+    onSelect(order[next])
+    const buttons = stripRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    buttons?.[next]?.focus()
+  }
+
   useEffect(() => {
     // jsdom has no scrollIntoView; guard so tests (and any non-DOM host) are safe.
     if (typeof activeTabRef.current?.scrollIntoView === 'function') {
@@ -50,6 +75,7 @@ export function TabStrip({
 
   return (
     <div
+      ref={stripRef}
       className="qt-tab-strip"
       data-pane={pane}
       role="tablist"
@@ -72,8 +98,7 @@ export function TabStrip({
           <div
             key={id}
             ref={isActive ? activeTabRef : undefined}
-            role="tab"
-            aria-selected={isActive}
+            role="presentation"
             draggable
             className={
               'qt-tab' +
@@ -101,19 +126,36 @@ export function TabStrip({
               onDragEndTab()
             }}
           >
-            {tab.icon && <Icon name={tab.icon as IconName} className="qt-tab-icon" />}
-            <span className="qt-tab-label">{tab.title}</span>
+            {/* The tab itself is a real button, so it is reachable and operable
+                by keyboard; the close button sits beside it rather than inside
+                it (an interactive control may not nest another). A tablist may
+                own only tabs, so the close cross is a pointer convenience:
+                hidden from assistive tech and out of the Tab order, with Delete
+                on the focused tab as its keyboard equivalent. */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
+              aria-keyshortcuts="Delete"
+              className="qt-tab-select"
+              onKeyDown={(e) => handleTabKeyDown(e, id)}
+            >
+              {tab.icon && <Icon name={tab.icon as IconName} className="qt-tab-icon" />}
+              <span className="qt-tab-label">{tab.title}</span>
+            </button>
             <button
               type="button"
               className="qt-tab-close"
-              aria-label={`Close ${tab.title}`}
+              tabIndex={-1}
+              aria-hidden="true"
               onClick={(e) => {
                 e.stopPropagation()
                 onClose(id)
               }}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <Icon name="close" className="qt-tab-close-icon" title={`Close ${tab.title}`} />
+              <Icon name="close" className="qt-tab-close-icon" />
             </button>
           </div>
         )

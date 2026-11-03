@@ -5,11 +5,12 @@
  *
  * Expandable/scrollable card displaying project files.
  * Files are clickable to open in a new tab.
- * Includes a "Browse All" button to open the full file browser.
+ * Includes a "Browse All" button that opens the project's own store in the
+ * Scriptorium's folder browser.
  */
 
 import { useState } from 'react'
-import FileBrowser from '@/components/files/FileBrowser'
+import { ProjectStoreBrowser } from '@/components/document-browser/ProjectStoreBrowser'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import FileThumbnail from '@/components/files/FileThumbnail'
 import { FilePreviewModal } from '@/components/files/FilePreview'
@@ -82,6 +83,7 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
         {/* Header - always visible */}
         <button
           onClick={onToggle}
+          aria-expanded={expanded}
           className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
         >
           <div className="flex items-center gap-3">
@@ -163,26 +165,22 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
         )}
       </div>
 
-      {/* File Browser Modal */}
-      {/* closeOnClickOutside=false prevents the modal from closing when
-          showConfirmation or FileDeleteConfirmation dialogs appear,
-          since those render outside this modal's DOM tree */}
+      {/* File Browser Modal. The card's own list is refreshed on close,
+          since the browser re-reads only its own listing. */}
       {projectId && (
         <BaseModal
           isOpen={showBrowser}
-          onClose={() => setShowBrowser(false)}
+          onClose={() => {
+            setShowBrowser(false)
+            onFilesChange?.()
+          }}
           title="Project Files"
           maxWidth="3xl"
           closeOnClickOutside={false}
           showCloseButton={true}
         >
-          <div className="min-h-[400px]">
-            <FileBrowser
-              projectId={projectId}
-              title="Project Files"
-              showUpload={true}
-              onFilesChange={onFilesChange}
-            />
+          <div className="min-h-[400px] p-2">
+            <ProjectStoreBrowser projectId={projectId} scrollList />
           </div>
         </BaseModal>
       )}

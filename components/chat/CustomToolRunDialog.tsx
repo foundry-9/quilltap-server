@@ -39,7 +39,6 @@ import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
 import {
   PRESET_NAME_PATTERN,
-  parsePresetFromPath,
   presetSettingsPath,
   sanitizePresetNameInput,
 } from '@/lib/pascal/tool-presets'
@@ -126,9 +125,9 @@ export interface CustomTool {
   /** Disambiguates a character-labeled variant on the run call. */
   asCharacterId?: string
   /**
-   * The running character's vault mount, where presets live. Null when the
-   * vault could not be resolved; absent on a roster from an older server.
-   * Either way the preset controls stay hidden.
+   * The running character's vault mount — the presets section's default save
+   * destination. Null when the vault could not be resolved, in which case the
+   * nearest shared store is offered first instead.
    */
   vaultMountPointId?: string | null
   definitionPath: string
@@ -370,6 +369,7 @@ export function CustomToolRunDialog({
     >
       {selectedTool ? (
         <ToolRunForm
+          chatId={chatId}
           tool={selectedTool}
           values={formValues[selectedFormKey] ?? initialParamValues(selectedTool.parameters)}
           onValueChange={(param, value) =>
@@ -559,6 +559,7 @@ function ToolPicker({
 // ---------------------------------------------------------------------------
 
 interface ToolRunFormProps {
+  chatId: string
   tool: CustomTool
   values: ParameterFormValues
   onValueChange: (param: string, value: string | boolean) => void
@@ -571,6 +572,7 @@ interface ToolRunFormProps {
 }
 
 function ToolRunForm({
+  chatId,
   tool,
   values,
   onValueChange,
@@ -630,11 +632,13 @@ function ToolRunForm({
       </section>
 
       {/* Presets only make sense where there is something to preserve: a tool
-          with parameters, run as a character whose vault can hold the file. */}
-      {parameterNames.length > 0 && tool.vaultMountPointId && (
+          with parameters. A roster from an older server names nobody to walk
+          the stores as, so it gets none. */}
+      {parameterNames.length > 0 && tool.asCharacterId && (
         <ToolPresetsSection
+          chatId={chatId}
           tool={tool}
-          vaultMountPointId={tool.vaultMountPointId}
+          asCharacterId={tool.asCharacterId}
           values={values}
           onValuesReplace={onValuesReplace}
           disabled={disabled}
@@ -669,26 +673,45 @@ function ToolRunForm({
 }
 
 // ---------------------------------------------------------------------------
-// Presets — parameter values set aside in the character's vault
+// Presets — parameter values set aside in the stores the tool is found in
 // ---------------------------------------------------------------------------
 
-/** What `GET /api/v1/mount-points/{id}/files` answers with, as far as we read it. */
-interface MountFilesListing {
-  files: Array<{ relativePath: string }>
+/** A store on the preset walk. Mirrors `ToolPresetStore` (`lib/pascal/tool-preset-pool.ts`). */
+interface PresetStore {
+  tier: string
+  mountPointId: string
+  mountName: string
+}
+
+/** What `GET …/custom-tools?action=presets` answers with. */
+interface ToolPresetPoolResponse {
+  /** The nearest preset of each name, sorted by name. */
+  presets: Array<PresetStore & { name: string; path: string; shadows: PresetStore[] }>
+  /** Every store on the walk, nearest first — where a preset may be filed. */
+  stores: PresetStore[]
+  unread: Array<PresetStore & { reason: string }>
 }
 
 interface ToolPresetsSectionProps {
+  chatId: string
   tool: CustomTool
-  vaultMountPointId: string
+  asCharacterId: string
   values: ParameterFormValues
   onValuesReplace: (next: ParameterFormValues) => void
   disabled: boolean
 }
 
 /**
- * Save the form's current values as `Tools/{name}.{preset}.settings.json` in
- * the running character's vault, list what is already there, and deal a chosen
- * one back into the form.
+ * Save the form's current values as `Tools/{name}.{preset}.settings.json`,
+ * list what is already set aside, and deal a chosen one back into the form.
+ *
+ * Presets are found where the tool itself is found: the character's vault,
+ * their groups' stores, the project's, Quilltap General — nearest first, a
+ * nearer preset of a name shadowing a farther one. The server walks it
+ * (`?action=presets`); this only shows the result. Saving files into whichever
+ * store on that walk is chosen, the character's own vault by default, so a
+ * personal preset shadows a shared one of the same name rather than
+ * overwriting it.
  *
  * Loading is deliberately loose: a preset key lands only where the tool still
  * declares a parameter of that name and the value is a plain primitive;
@@ -700,46 +723,62 @@ interface ToolPresetsSectionProps {
  * character that cannot appear in the filename cannot be entered at all.
  */
 function ToolPresetsSection({
+  chatId,
   tool,
-  vaultMountPointId,
+  asCharacterId,
   values,
   onValuesReplace,
   disabled,
 }: Readonly<ToolPresetsSectionProps>) {
   const queryClient = useQueryClient()
   const [presetName, setPresetName] = useState('')
+  /** The chosen save destination; null until the operator picks one. */
+  const [pickedStoreId, setPickedStoreId] = useState<string | null>(null)
+
+  const presetsKey = queryKeys.customTools.presets(chatId, asCharacterId, tool.name)
 
   // Fresh per mount of the form, same doctrine as the roster: the files live
-  // in a store the user edits, so a stale list is worse than a round-trip.
+  // in stores the user edits, so a stale list is worse than a round-trip.
   const presetsQuery = useQuery({
-    queryKey: queryKeys.customTools.presets(vaultMountPointId, tool.name),
-    queryFn: async ({ signal }) => {
-      const listing = await apiFetch<MountFilesListing>(
-        `/api/v1/mount-points/${encodeURIComponent(vaultMountPointId)}/files`,
+    queryKey: presetsKey,
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({ action: 'presets', tool: tool.name, asCharacterId })
+      return apiFetch<ToolPresetPoolResponse>(
+        `/api/v1/chats/${encodeURIComponent(chatId)}/custom-tools?${params.toString()}`,
         { signal },
       )
-      return listing.files
-        .map((file) => parsePresetFromPath(tool.name, file.relativePath))
-        .filter((preset): preset is string => preset !== null)
-        .sort((a, b) => a.localeCompare(b))
     },
   })
-  const presets = presetsQuery.data ?? []
+  const presets = presetsQuery.data?.presets ?? []
+  const stores = presetsQuery.data?.stores ?? []
+  const unread = presetsQuery.data?.unread ?? []
+
+  // The character's own vault unless the operator chose otherwise; the
+  // nearest store on the walk when there is no vault to default to.
+  const saveStore =
+    stores.find((store) => store.mountPointId === pickedStoreId) ??
+    stores.find((store) => store.mountPointId === tool.vaultMountPointId) ??
+    stores[0] ??
+    null
 
   const loadMutation = useMutation({
-    mutationFn: async (preset: string) => {
+    mutationFn: async (preset: ToolPresetPoolResponse['presets'][number]) => {
       const file = await apiFetch<{ content: string }>(
-        buildMountFileItemUrl(vaultMountPointId, presetSettingsPath(tool.name, preset)),
+        buildMountFileItemUrl(preset.mountPointId, preset.path),
       )
       try {
         return JSON.parse(file.content) as unknown
       } catch {
-        throw new Error(`Preset “${preset}” would not read as JSON. It stays as written in the vault.`)
+        throw new Error(
+          `Preset “${preset.name}” would not read as JSON. It stays as written in ${preset.mountName}.`,
+        )
       }
     },
     onSuccess: (parsed, preset) => {
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        showErrorToast(`Preset “${preset}” is not a settings object. It stays as written in the vault.`)
+        showErrorToast(
+          `Preset “${preset.name}” is not a settings object. It stays as written in ${preset.mountName}.`,
+        )
         return
       }
       const record = parsed as Record<string, unknown>
@@ -751,40 +790,42 @@ function ToolPresetsSection({
         next[name] = param.type === 'boolean' ? Boolean(v) : String(v)
       }
       onValuesReplace(next)
-      // So saving again, values adjusted, updates the hand just taken up.
-      setPresetName(preset)
+      // So saving again, values adjusted, files the hand just taken up under
+      // the same name — into the chosen store, which a load does not move.
+      setPresetName(preset.name)
     },
     onError: (err) => showErrorToast(apiErrorMessage(err, 'The preset could not be read.')),
   })
 
   const saveMutation = useMutation({
-    mutationFn: (preset: string) =>
-      apiFetch(buildMountFileItemUrl(vaultMountPointId, presetSettingsPath(tool.name, preset)), {
+    mutationFn: ({ preset, store }: { preset: string; store: PresetStore }) =>
+      apiFetch(buildMountFileItemUrl(store.mountPointId, presetSettingsPath(tool.name, preset)), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: JSON.stringify(coerceParamValues(tool.parameters, values), null, 2),
         }),
       }),
-    onSuccess: (_data, preset) => {
-      showSuccessToast(`Preset “${preset}” filed in the character's vault.`)
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.customTools.presets(vaultMountPointId, tool.name),
-      })
+    onSuccess: (_data, { preset, store }) => {
+      showSuccessToast(`Preset “${preset}” filed in ${store.mountName}.`)
+      queryClient.invalidateQueries({ queryKey: presetsKey })
     },
     onError: (err) => showErrorToast(apiErrorMessage(err, 'The preset could not be saved.')),
   })
 
   const busy = disabled || loadMutation.isPending || saveMutation.isPending
-  const canSave = !busy && PRESET_NAME_PATTERN.test(presetName)
+  const canSave = !busy && saveStore !== null && PRESET_NAME_PATTERN.test(presetName)
+  const storeSelectId = `custom-tool-${toolKey(tool)}-preset-store`
 
   return (
     <section className="rounded-lg qt-border p-5 space-y-4">
       <div>
         <h4 className="text-sm font-medium qt-text">Presets</h4>
         <p className="text-xs qt-text-secondary mt-1">
-          A hand you set aside earlier — kept in the character&rsquo;s vault, dealt back on
-          request. Saving under an existing name replaces it.
+          A hand you set aside earlier, dealt back on request. They are kept wherever the tool
+          itself might be: the character&rsquo;s vault, their groups&rsquo; stores, the
+          project&rsquo;s, or Quilltap General &mdash; and the nearest one of a name wins. Saving
+          under an existing name in the same store replaces it.
         </p>
       </div>
 
@@ -792,7 +833,8 @@ function ToolPresetsSection({
         <select
           value=""
           onChange={(e) => {
-            if (e.target.value) loadMutation.mutate(e.target.value)
+            const chosen = presets.find((preset) => preset.name === e.target.value)
+            if (chosen) loadMutation.mutate(chosen)
           }}
           disabled={busy || presets.length === 0}
           className="qt-input text-sm"
@@ -800,7 +842,7 @@ function ToolPresetsSection({
         >
           <option value="">
             {presetsQuery.isLoading
-              ? 'Consulting the vault…'
+              ? 'Consulting the stores…'
               : presets.length === 0
                 ? 'No presets yet'
                 : loadMutation.isPending
@@ -808,8 +850,16 @@ function ToolPresetsSection({
                   : 'Load a preset…'}
           </option>
           {presets.map((preset) => (
-            <option key={preset} value={preset}>
-              {preset}
+            <option
+              key={preset.name}
+              value={preset.name}
+              title={
+                preset.shadows.length > 0
+                  ? `Also in ${preset.shadows.map((store) => store.mountName).join(', ')}, which this one outranks`
+                  : undefined
+              }
+            >
+              {preset.name} — {preset.mountName}
             </option>
           ))}
         </select>
@@ -825,7 +875,9 @@ function ToolPresetsSection({
         />
         <button
           type="button"
-          onClick={() => saveMutation.mutate(presetName)}
+          onClick={() => {
+            if (saveStore) saveMutation.mutate({ preset: presetName, store: saveStore })
+          }}
           disabled={!canSave}
           className="qt-button qt-button-secondary"
         >
@@ -841,9 +893,36 @@ function ToolPresetsSection({
         </button>
       </div>
 
+      {stores.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor={storeSelectId} className="text-xs qt-text-secondary">
+            Save into
+          </label>
+          <select
+            id={storeSelectId}
+            value={saveStore?.mountPointId ?? ''}
+            onChange={(e) => setPickedStoreId(e.target.value)}
+            disabled={busy}
+            className="qt-input text-sm"
+          >
+            {stores.map((store) => (
+              <option key={store.mountPointId} value={store.mountPointId}>
+                {store.mountName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {presetsQuery.isError && (
         <p className="text-xs qt-text-destructive">
-          {apiErrorMessage(presetsQuery.error, 'The vault would not list its presets.')}
+          {apiErrorMessage(presetsQuery.error, 'The stores would not list their presets.')}
+        </p>
+      )}
+      {unread.length > 0 && (
+        <p className="text-xs qt-text-secondary">
+          Could not look in {unread.map((store) => store.mountName).join(', ')}
+          {' '}&mdash; any presets kept there are missing from this list.
         </p>
       )}
     </section>

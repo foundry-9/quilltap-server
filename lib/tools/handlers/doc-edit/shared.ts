@@ -11,7 +11,6 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import {
-  reindexSingleFile,
   PathResolutionError,
   type ResolvedPath,
 } from '@/lib/doc-edit';
@@ -29,7 +28,6 @@ export {
   buildDocStoreUriResolver,
 } from '@/lib/doc-edit/uri-producers';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
-import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import type { LibrarianActorOrigin } from '@/lib/services/librarian-notifications/writer';
 import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 
@@ -493,41 +491,5 @@ export async function resolveOfficialProjectMount(
       error: err instanceof Error ? err.message : String(err),
     });
     return null;
-  }
-}
-
-/**
- * Trigger re-indexing and embedding for any write that lands in a mount
- * point. The gate is `mountPointId`, not `scope`: a `scope: 'project'`
- * write into a project's `officialMountPointId` mount needs the same
- * chunk/embed pass as a `scope: 'document_store'` write, otherwise the
- * file is invisible to search until the next periodic mount scan. Legacy
- * filesystem-only projects (no `officialMountPointId`) return without a
- * `mountPointId` and silently no-op here, as before.
- */
-
-export async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<void> {
-  if (resolved.mountPointId) {
-    const mountPointId = resolved.mountPointId;
-    const repos = getRepositories();
-    // Fire-and-forget: don't block the tool response on re-indexing
-    reindexSingleFile(mountPointId, resolved.relativePath, resolved.absolutePath)
-      // Hard-linked siblings share these bytes and need their own chunk sets
-      // rebuilt; on filesystem mounts the inode is already shared, so this is
-      // purely the index catching up with what the OS did.
-      .then(async () => {
-        const { reindexLinkGroupSiblings } = await import('@/lib/mount-index/link-groups');
-        await reindexLinkGroupSiblings(mountPointId, resolved.relativePath);
-      })
-      .then(() => Promise.all([
-        enqueueEmbeddingJobsForMountPoint(mountPointId),
-        repos.docMountPoints.refreshStats(mountPointId),
-      ]))
-      .catch(err => {
-        logger.warn('Background re-index, embedding, or stats refresh failed', {
-          path: resolved.relativePath,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
   }
 }

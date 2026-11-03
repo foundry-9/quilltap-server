@@ -7,6 +7,7 @@ import {
   YIELD_SENTINEL,
   TURN_YIELD_SYSTEM_KIND,
   detectYieldSentinel,
+  isGestureOnlyReply,
   buildTurnYieldInstruction,
 } from '@/lib/chat/turn-manager'
 
@@ -45,10 +46,38 @@ describe('detectYieldSentinel', () => {
     expect(detectYieldSentinel('Yield to no one, she said, and meant it.')).toEqual({ yielded: false })
   })
 
+  it('reads a gesture-only reply as an inferred yield, keeping the gesture', () => {
+    const gesture = '*(a tilt of the head, one hand opening toward Tester — go on, then)*'
+    expect(detectYieldSentinel(gesture, 'Riya')).toEqual({ yielded: true, cleaned: gesture, inferred: true })
+    expect(detectYieldSentinel('Riya: *steps back and sweeps a hand toward you*', 'Riya'))
+      .toEqual({ yielded: true, cleaned: '*steps back and sweeps a hand toward you*', inferred: true })
+  })
+
+  it('reads a reply with spoken words or a long beat as carrying on', () => {
+    expect(detectYieldSentinel('*nods* "Go on, then."')).toEqual({ yielded: false })
+    expect(detectYieldSentinel('*nods* Go on, then. *smiles*')).toEqual({ yielded: false })
+    expect(detectYieldSentinel(`*${'she works the knot loose and frowns at the water '.repeat(8)}*`)).toEqual({ yielded: false })
+    expect(detectYieldSentinel('*She looks up.*\n\n*She looks down again.*')).toEqual({ yielded: false })
+  })
+
   it('reads an ordinary reply, or nothing, as no yield', () => {
     expect(detectYieldSentinel('The tea is getting cold.')).toEqual({ yielded: false })
     expect(detectYieldSentinel('')).toEqual({ yielded: false })
     expect(detectYieldSentinel('   \n  ')).toEqual({ yielded: false })
+  })
+})
+
+describe('isGestureOnlyReply', () => {
+  it('accepts a single wrapped stage direction in any of the usual wrappers', () => {
+    for (const form of ['*bows*', '_bows_', '(bows)', '**bows**', '*(bows to Tester)*', "*It's yours, the gesture says.*"]) {
+      expect(isGestureOnlyReply(form)).toBe(true)
+    }
+  })
+
+  it('refuses bare prose, quoted speech, empty wrappers and prose between directions', () => {
+    for (const form of ['bows', '"After you."', '*bows* "After you."', '**', '*…*', '*nods* Fine. *smiles*', '']) {
+      expect(isGestureOnlyReply(form)).toBe(false)
+    }
   })
 })
 
@@ -58,6 +87,7 @@ describe('buildTurnYieldInstruction', () => {
     expect(note).toContain('Charlie has raised a hand')
     expect(note).toContain(YIELD_SENTINEL)
     expect(note).toMatch(/^\[Turn note from the Salon/)
+    expect(note).toContain('only a gesture')
   })
 })
 

@@ -347,7 +347,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Ensure native modules are compiled for the current Node.js version
+  // Ensure native modules load under the current Node.js version
   ensureNativeModules();
 
   // Symlink native modules into standalone dir so standard resolution finds them
@@ -803,9 +803,10 @@ Subcommands (high-level shortcuts; auto-pick the right database):
                               Default destination: <dataDir>/backups/<timestamp>/.
                               Each snapshot is re-opened with the same key and
                               verified with PRAGMA quick_check.
-  integrity [target...]       Run PRAGMA cipher_integrity_check and
-                              PRAGMA integrity_check on the encrypted
-                              databases. Read-only; safe alongside a live
+  integrity [target...]       Run PRAGMA integrity_check on the encrypted
+                              databases; every page read is decrypted and
+                              its Poly1305 tag verified, so tampered pages
+                              count as issues. Read-only; safe alongside a live
                               instance. Exit code: 0 ok, 1 issues, 2 open
                               failure.
   Most subcommands also accept --json and --limit N.
@@ -851,7 +852,7 @@ Examples:
   quilltap db optimize llm-logs                        # only the LLM logs DB
   quilltap db backup                                   # snapshot all DBs to <dataDir>/backups/<ts>/
   quilltap db backup main --out /tmp/qtap-snap         # snapshot only the main DB
-  quilltap db integrity                                # cipher_integrity_check + integrity_check
+  quilltap db integrity                                # integrity_check on every DB
   quilltap db --tables
   quilltap db "SELECT count(*) FROM characters"
   quilltap db --count messages
@@ -1199,9 +1200,9 @@ const subName = subIdx >= 0 ? cliArgs[subIdx] : '';
 const subArgs = subIdx >= 0 ? [...cliArgs.slice(0, subIdx), ...cliArgs.slice(subIdx + 1)] : [];
 
 // Subcommands load the SQLCipher binding directly and never reach main()'s
-// native-module heal, so self-heal the database ABI here first. Cheap no-op when
-// healthy; rebuilds (with a friendly notice, not an error) only on a real
-// Node-ABI mismatch — e.g. after the user upgrades Node under a cached install.
+// native-module check, so check the driver here first. Silent when healthy;
+// when the prebuilt binary won't load (unsupported platform, old glibc) it
+// explains why with a warning rather than an error.
 // `file-verify` is excluded: it's a pure-fs recovery tool that never opens the
 // database, so it must work even when the native binding is broken.
 if (subName && subName !== 'file-verify') {

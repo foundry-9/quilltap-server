@@ -305,6 +305,50 @@ describe('planConsolidationWrites — contradictions and cross-cluster links', (
   })
 })
 
+describe('planConsolidationWrites — resolved grievances (probation §9.6)', () => {
+  const hurt = mem('h1', { content: 'Charlie acted on Brad without asking Jackie', keywords: ['brad', 'past', 'scope: wide', 'relationships'] })
+  const apology = mem('h2', { content: 'Charlie apologized to Jackie' })
+  const forgiveness = mem('h3', { content: 'Jackie forgave Charlie' })
+  const aside = mem('h4', { content: 'Charlie skipped breakfast', keywords: ['resolved', 'present', 'scope: wide', 'trivia'] })
+
+  const plan = planConsolidationWrites({
+    characterId: HOLDER,
+    clusters: [
+      outcome({
+        members: [hurt, apology, forgiveness, aside],
+        digests: [digestOut(['h2', 'h3'])],
+        keepStandalone: ['h1', 'h4'],
+        // h4 already carries the tag; 'nope' is not a member; 'new-1' would be the digest itself.
+        resolvedIds: ['h1', 'h4', 'nope', 'new-1'],
+        embeddings: [new Float32Array([1, 0])],
+      }),
+    ],
+    rowIndex: index([hurt, apology, forgiveness, aside]),
+    nowIso: NOW,
+    newId: ids(),
+  })
+
+  it('marks a settled hurt, keeping its keywords and adding the tag once', () => {
+    expect(plan.resolvedMarks).toEqual([{ id: 'h1', keywords: ['brad', 'past', 'scope: wide', 'relationships', 'resolved'] }])
+  })
+
+  it('never deletes or sends the marked row cold on its own account', () => {
+    expect(plan.considered).toContain('h1')
+    expect(plan.supersededBy.has('h1')).toBe(false)
+  })
+
+  it('emits no marks when the cluster names none', () => {
+    const quiet = planConsolidationWrites({
+      characterId: HOLDER,
+      clusters: [outcome({ members: [apology], keepStandalone: ['h2'] })],
+      rowIndex: index([apology]),
+      nowIso: NOW,
+      newId: ids(),
+    })
+    expect(quiet.resolvedMarks).toEqual([])
+  })
+})
+
 describe('field helpers', () => {
   it('sharedValue needs every value to agree and be non-empty', () => {
     expect(sharedValue(['a', 'a'])).toBe('a')

@@ -29,7 +29,7 @@ An item lives on one of four shelves. Each is an `Inventory/` folder in a docume
 3. **A project's inventory** — in the project's store. Every character in that project's chats can reach it, unless the project keeps a [roster](project-characters.md) that leaves them off — then their own tools find the shelf closed, though you may still hand them its objects.
 4. **Quilltap General** — the household's shelf. Every character in every chat can reach it.
 
-Browsing a character shows everything within their reach, merged: their own shelf first, then their groups', the project's (when you are in a chat that has one), then General. An item that comes from a shared shelf is marked with where it is kept. When two shelves hold items with the same identity, the nearer one wins, exactly as it does for garments.
+Browsing a character shows everything within their reach, merged: their own shelf first, then their groups', the project's (when you are in a chat that has one), then General. An item that comes from a shared shelf is marked with where it is kept. When two shelves hold items with the same identity, the nearer one wins, exactly as it does for garments --- and between two shelves at the same distance, seniority decides: the group the character joined first, or the project's own official store ahead of the stores linked to it.
 
 ## Quilltap General
 
@@ -105,6 +105,8 @@ What a character carries is **per chat**, just as their outfit is. Opening the I
 
 Each row in the list beside it has an **Equip** button too. Archetypes and archived items cannot be carried.
 
+Whatever a character carries is also worn on their sleeve, so to speak: a row of glyphs sits under their name and title beside each of their messages in the Salon — the item's SVG, else its emoji, else a two-letter monogram — and hovering one reveals its full name and description.
+
 Every equip or unequip posts a short line from Pascal in the chat — *"Vivienne takes up Excalibur and a signet ring."* — and, if the character's avatar is drawn per chat, redraws it with the new burden in hand.
 
 ### Equipped by default
@@ -136,9 +138,12 @@ Pictures are for *choosing*, not for decoration: they appear where you pick from
 
 ## Folders
 
-An inventory is a folder tree, under exactly the rules the Wardrobe follows: up to eight levels deep, `images` reserved, sibling names unique regardless of case. **New folder**, rename and delete are on the folder bar; deleting a folder moves what it held up a level, never away. Select several items to **Move to folder…** together. Since every folder is a real folder in the document store, rearranging things in the Scriptorium rearranges them here as well.
+An inventory is a folder tree, under exactly the rules the Wardrobe follows: up to eight levels deep, `images` reserved, sibling names unique regardless of case. **New folder**, rename and delete are on the folder bar; deleting a folder moves what it held up a level, never away. Each item's `⋮` menu offers **Move to folder…**, and **Copy to folder…** for an item that may be copied (the copy is a new item, carried by nobody until it is equipped); select several items to move or copy them together (the tickboxes withdraw once they are filed). In the item editor, **Folder** is a list of the shelf's folders, with **New folder…** at the foot for filing it somewhere that does not exist yet. Since every folder is a real folder in the document store, rearranging things in the Scriptorium rearranges them here as well.
 
 ## Moving and copying between shelves
+
+Every `⋮` menu on the shelf, an item's or a folder's, answers to the keyboard as well as the mouse: the arrow keys walk its entries, **Home** and **End** leap to either end, and **Escape** shuts it again without closing anything else.
+
 
 From an item's `⋮` menu, **Move to another inventory…** and **Copy to another inventory…** send it to any other shelf, keeping its folder path. Moving keeps the item's identity, so every chat that carries it still does; copying makes a new item, and is refused when the item cannot be copied. An instance moved elsewhere still follows its archetype.
 

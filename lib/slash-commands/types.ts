@@ -26,6 +26,8 @@ export type ComposerAction =
   | 'announce'
   | 'mail'
   | 'inform'
+  /** Arm the composer: the next line is posted as established fact (Deus Ex Machina). */
+  | 'deus'
   /** The Run Tool dialog, no pre-selection. */
   | 'tool'
   /** The custom-tool dialog, no pre-selection. */

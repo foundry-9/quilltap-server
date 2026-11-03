@@ -35,7 +35,8 @@ const TRAILING_SECTION_SEPARATOR = '\n\n---\n\n'
  * whisper), what it remembers (recall), what arrived for it (mail), what it is
  * carrying (progressions, then the Inventory), what the operator says is so
  * (the inform block — after recall, so a memory that contradicts it comes
- * first), who the conversation is about (the referent ledger), the line being
+ * first — then the established facts posted since the seat last spoke, so
+ * the operator's vouched words travel together), who the conversation is about (the referent ledger), the line being
  * answered (the closing echo), and the turn notes last. Empty-is-absent: an
  * empty section adds nothing, not even a separator.
  */
@@ -46,6 +47,8 @@ export interface TrailingSections {
   progressions: string
   inventory: string
   inform: string | null
+  /** Established facts since this seat last spoke (`established-fact-reminder.ts`); '' when none. */
+  establishedFacts?: string
   referentLedger: string
   closingEcho: string
   turnSkip: string
@@ -61,6 +64,7 @@ function orderedSections(s: TrailingSections): string[] {
     s.progressions,
     s.inventory,
     s.inform,
+    s.establishedFacts,
     s.referentLedger,
     s.closingEcho,
     s.turnSkip,

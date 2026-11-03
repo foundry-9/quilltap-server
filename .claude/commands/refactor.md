@@ -17,7 +17,7 @@ Refactor the code in this repository to conform better to the following standard
   - UI or front-end
 - Specific areas to target in addition to the above
   - API conformance to standard above
-  - Instead of using Tailwind classes, use `qt-*` theme utility classes, and update theme-storybook and distributed themes as appropriate
+  - Instead of using Tailwind classes, use `qt-*` theme utility classes, and regenerate theme-storybook's CSS (`npm run generate:storybook-css`) and update distributed themes as appropriate
   - Find and destroy dead code
   - Security
   - For some reason the development process tends to leave stubs lying around: find TODO and other stubs and implement them properly

@@ -23,10 +23,8 @@
 
 import { logger } from '@/lib/logger';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
-import {
-  resolveGroupMountsForCharacter,
-  resolveProjectMountPointIds,
-} from '@/lib/mount-index/tiered-mount-pool';
+import { groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { rosterGatedProjectId } from '@/lib/projects/roster-access';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
@@ -89,14 +87,20 @@ export interface LoadWearablePoolOptions {
   ownItems?: readonly WardrobeItem[];
 }
 
-/** Read a list of shared mounts weakest-first, tagging each item via `originOf`. */
+/**
+ * Read one tier's shared mounts, tagging each item via `originOf`. The mounts
+ * come strongest-first, in the settled within-tier order (`orderMounts`:
+ * membership order for groups, the official store first for the project), so
+ * an earlier mount's item wins a same-id collision. The repository shadows
+ * later-over-earlier, hence the reverse.
+ */
 async function readTier(
   repos: Pick<RepositoryContainer, 'wardrobe'>,
   mountPointIds: readonly string[],
   originOf: (mountPointId: string) => WardrobeOrigin,
 ): Promise<WardrobeItemWithOrigin[]> {
   if (mountPointIds.length === 0) return [];
-  return repos.wardrobe.readSharedTiers(mountPointIds, true, originOf);
+  return repos.wardrobe.readSharedTiers([...mountPointIds].reverse(), true, originOf);
 }
 
 /** Read Quilltap General and the given project stores, archived included. */
@@ -266,7 +270,7 @@ export async function loadWearablePool(
       : await resolveProjectTierForChat(repos, opts.chatId, characterId, { operator: opts.operator });
 
   const [groups, shared, own] = await Promise.all([
-    resolveGroupMountsForCharacter(characterId),
+    groupMountsFor(characterId),
     opts.sharedTiers ?? createSharedTierLoader(repos, projectIds)(),
     opts.ownItems
       ? Promise.resolve(Array.from(opts.ownItems))
@@ -280,12 +284,7 @@ export async function loadWearablePool(
         }),
   ]);
 
-  const groupOriginByMount = new Map<string, WardrobeOrigin>();
-  for (const { group, mountPointIds } of groups) {
-    for (const mountPointId of mountPointIds) {
-      groupOriginByMount.set(mountPointId, { scope: 'group', id: group.id, name: group.name });
-    }
-  }
+  const groupOriginByMount: Map<string, WardrobeOrigin> = groupOriginMap(groups);
   const groupMountPointIds = Array.from(groupOriginByMount.keys());
   const group = await readTier(repos, groupMountPointIds, (mp) => groupOriginByMount.get(mp)!).catch(
     (error) => {

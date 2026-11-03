@@ -95,6 +95,18 @@ describe('applyMultiCharacterTurnAnchor — prose route', () => {
     )
   })
 
+  it('scopes the anti-chorus rule to the cast and keeps a plain yes to the user a complete turn', () => {
+    // An earlier wording banned agreement outright and listed objection second
+    // among the reasons to speak, which fed "the probation"
+    // (docs/developer/features/prompt-trust-the-probation.md §8).
+    expect(GROUP_SCENE_DISCIPLINE).toMatch(/agree-then-add with another character/)
+    expect(GROUP_SCENE_DISCIPLINE).toMatch(/a plain yes to the user/)
+    const speakLine = GROUP_SCENE_DISCIPLINE.split('\n').find(l => l.startsWith('- Speak to change something'))
+    expect(speakLine).toBeDefined()
+    expect(speakLine).toMatch(/warmth/)
+    expect(speakLine!.indexOf('an action actually taken')).toBeLessThan(speakLine!.indexOf('objection'))
+  })
+
   it('keeps the discipline block free of anything a weaker model could parrot as a speaker tag', () => {
     expect(GROUP_SCENE_DISCIPLINE).not.toMatch(/\[[A-Z][a-z]+\]/)
   })

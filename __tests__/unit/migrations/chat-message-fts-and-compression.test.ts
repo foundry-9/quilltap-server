@@ -114,6 +114,8 @@ beforeEach(() => {
       "opaqueContent" TEXT,
       "description" TEXT,
       "context" TEXT,
+      "systemSender" TEXT DEFAULT NULL,
+      "customAnnouncer" TEXT DEFAULT NULL,
       "createdAt" TEXT NOT NULL
     );
   `);

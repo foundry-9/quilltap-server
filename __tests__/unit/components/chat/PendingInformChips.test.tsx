@@ -4,7 +4,7 @@
  * Verifies:
  *  - nothing renders when no batch is pending;
  *  - one chip per batch, naming the pending seats, with the passage's first
- *    line as its hover title;
+ *    line as its tooltip;
  *  - a batch whose seats have all left the chat is skipped rather than shown
  *    nameless;
  *  - the × posts `?action=cancel-inform` with the batch id;
@@ -96,7 +96,8 @@ describe('PendingInformChips', () => {
     renderChips()
 
     const chip = await screen.findByText('Informing Alice, Bob before their next turn')
-    expect(chip.parentElement?.getAttribute('title')).toBe(
+    fireEvent.pointerEnter(chip)
+    expect((await screen.findByRole('tooltip', { hidden: true })).textContent).toBe(
       'You see that Alice slipped the letter into her sleeve.',
     )
   })
@@ -106,7 +107,8 @@ describe('PendingInformChips', () => {
     renderChips()
 
     const chip = await screen.findByText('Informing Alice, Bob on every turn in this chat')
-    expect(chip.parentElement?.getAttribute('title')).toBe(
+    fireEvent.pointerEnter(chip)
+    expect((await screen.findByRole('tooltip', { hidden: true })).textContent).toBe(
       'Standing in this chat until withdrawn — You see that Alice slipped the letter into her sleeve.',
     )
   })

@@ -285,6 +285,31 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
     expect(equippedFor(setEquippedOutfit)?.top).toEqual(['general-coat'])
   })
 
+  it('puts a multi-slot pick into every slot it covers, even when the LLM named only one', async () => {
+    mockChooseLLMOutfit.mockResolvedValue({
+      success: true,
+      result: {
+        slots: { top: ['general-dress'], bottom: [], footwear: [], accessories: [], hair: [] },
+        deliberatelyUnclothed: false,
+      },
+    } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
+
+    const { repos, setEquippedOutfit } = makeRepos({
+      own: [],
+      mounts: { [GENERAL_MP]: [item('general-dress', ['top', 'bottom'])] },
+    })
+
+    await applyOutfitSelections(
+      'chat-1',
+      [{ characterId: CHAR_ID, mode: 'llm_choose' }],
+      repos as never,
+      { userId: 'u1', projectMountPointIds: [] },
+    )
+
+    expect(equippedFor(setEquippedOutfit)?.top).toEqual(['general-dress'])
+    expect(equippedFor(setEquippedOutfit)?.bottom).toEqual(['general-dress'])
+  })
+
   it('falls back to defaults when the LLM picks nothing usable', async () => {
     mockChooseLLMOutfit.mockResolvedValue({
       success: true,
@@ -414,7 +439,9 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       { userId: 'u1', projectMountPointIds: ['mp-a', 'mp-b'], progress: progress as never },
     )
 
-    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-a', 'mp-b']]))
+    // Read weakest-first (the repository shadows later over earlier), so the
+    // first project store, which wins, is read last.
+    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-b', 'mp-a']]))
     expect(mockResolve).toHaveBeenCalledTimes(1)
     const [pool, slots] = mockResolve.mock.calls[0]
     expect(pool.characterId).toBe(CHAR_ID)

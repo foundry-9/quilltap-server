@@ -56,6 +56,12 @@ export interface AvatarProps {
   className?: string
   /** Click handler */
   onClick?: () => void
+  /**
+   * Click handler for the picture alone (not the name and title beneath it),
+   * e.g. to open it full size. Ignored when there is no picture to show, and
+   * when `onClick` already makes the whole avatar a button.
+   */
+  onImageClick?: (src: string) => void
 }
 
 // Size configurations in pixels
@@ -106,6 +112,7 @@ export function Avatar({
   showTitle = false,
   className = '',
   onClick,
+  onImageClick,
 }: AvatarProps) {
   const { style: globalStyle } = useAvatarDisplay()
   const imagesHidden = useImagesHidden()
@@ -165,6 +172,17 @@ export function Avatar({
     </div>
   )
 
+  const pictureElement = avatarSrc && onImageClick && !onClick ? (
+    <button
+      type="button"
+      onClick={() => onImageClick(avatarSrc)}
+      className="block cursor-zoom-in"
+      aria-label={`View ${name}'s picture full size`}
+    >
+      {avatarElement}
+    </button>
+  ) : avatarElement
+
   // Queue position badge
   const badgeElement = queuePosition && queuePosition > 0 ? (
     <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full qt-bg-info/20 qt-text-info qt-text-xs font-bold flex items-center justify-center qt-shadow-md z-10">
@@ -206,7 +224,7 @@ export function Avatar({
   return (
     <div className={wrapperClasses}>
       {badgeElement}
-      {avatarElement}
+      {pictureElement}
       {nameElement}
     </div>
   )

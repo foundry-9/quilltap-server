@@ -81,6 +81,10 @@ import { requestFullContextToolEffect } from './request-full-context-tool';
 import { rngToolEffect } from './rng-tool';
 import { runCustomToolEffect } from './run-custom-tool';
 import { runSqlToolEffect } from './run-sql-tool';
+import { lookupCharacterToolEffect } from './lookup-character-tool';
+import { lookupMemoriesToolEffect } from './lookup-memories-tool';
+import { lookupMessagesToolEffect } from './lookup-messages-tool';
+import { readMessagesToolEffect } from './read-messages-tool';
 import { searchScriptoriumToolEffect } from './search-scriptorium-tool';
 import { selfInventoryToolEffect } from './self-inventory-tool';
 import { sendMailToolEffect } from './send-mail-tool';
@@ -160,6 +164,10 @@ export const BUILT_IN_TOOL_EFFECTS: Readonly<Record<string, ToolEffectSpec>> = {
   rng: rngToolEffect,
   run_custom: runCustomToolEffect,
   run_sql: runSqlToolEffect,
+  lookup_character: lookupCharacterToolEffect,
+  lookup_memories: lookupMemoriesToolEffect,
+  lookup_messages: lookupMessagesToolEffect,
+  read_messages: readMessagesToolEffect,
   search: searchScriptoriumToolEffect,
   self_inventory: selfInventoryToolEffect,
   send_mail: sendMailToolEffect,

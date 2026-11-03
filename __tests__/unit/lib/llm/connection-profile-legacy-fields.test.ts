@@ -98,6 +98,18 @@ describe('seedLegacyConnectionProfileFields', () => {
     })
   })
 
+  describe('maxImagesPerRequest (4.12+, DEFAULT 4)', () => {
+    it('seeds the default cap for an archive that predates the column', () => {
+      expect(seedLegacyConnectionProfileFields({ provider: 'OPENAI' }).maxImagesPerRequest).toBe(4)
+    })
+
+    it('never overrides a stored cap', () => {
+      expect(
+        seedLegacyConnectionProfileFields({ provider: 'OPENAI', maxImagesPerRequest: 10 }).maxImagesPerRequest
+      ).toBe(10)
+    })
+  })
+
   it('returns a copy and leaves the archive record untouched', () => {
     const archived = { provider: 'OPENAI', name: 'A Profile' }
     const seeded = seedLegacyConnectionProfileFields(archived)

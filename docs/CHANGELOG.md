@@ -2,987 +2,616 @@
 
 ## Recent Changes
 
-### 4.11.0
-
-#### Fix: chat settings with an invalid stored value minted a new row on every load, and saves never stuck (#120)
+### 4.12.0
 
-- `ChatSettingsRepository.findByUserId` was an un-ordered `LIMIT 1` that validated the row it got. A row holding a value `ChatSettingsSchema` refuses (a legacy or imported `cheapLLMSettings`, an unknown `impersonationVoiceMode`, a malformed `wardrobeImageSettings`) read as null, so `GET /api/v1/settings/chat` and `updateForUser` inserted a fresh row on every load and every save, and the next read found the refused row again and showed defaults.
-- The lookup now reads the user's rows newest first and returns the first that validates. If none does, the newest row is repaired in memory: each refused top-level field is read as its default (null for a nullable field without one), with a warning naming the fields. `findById` does the same, so `updateForUser` updates the existing row and writes the repair back instead of inserting a second one. A row refused on `id`, `userId` or a timestamp still reads as absent.
-- The defaults for a new user's row moved to `defaultChatSettings` in the same file; the repair uses the same values.
-- Rows already duplicated by this bug are left in place; the newest valid one now wins.
+#### Fix: `quilltap db integrity` no longer reports a check it never ran
 
-#### Fix: Core whisper settings never saved; two settings cards left the UI stale
+- The command ran `PRAGMA cipher_integrity_check`, a SQLCipher pragma that SQLite3 Multiple Ciphers does not have. Unknown pragmas return no rows, which the CLI printed as `cipher_integrity_check: ok` on every database, every time.
+- It now runs `integrity_check` alone. Every page that check reads is decrypted and its Poly1305 tag verified; a page that fails throws `SQLITE_CORRUPT` instead of returning a row, which used to crash the command and is now reported as an issue (exit 1). The `--json` result drops `cipherIntegrityCheck`.
+- `scripts/audit-mount-blob-sha256.mjs` used the same pragma as its "did the key work" check, which therefore never failed; it now reads `sqlite_master`, which forces page 1 to decrypt.
+- CLI help and `packages/quilltap/README.md` updated. Verified against V4test (all ok) and a copy of its LLM-logs database with one flipped byte (reported, exit 1).
 
-- `PUT /api/v1/settings/chat` destructured a fixed list of keys and ignored the rest. `coreWhisper` was never on it, so every change on the Core whisper card (including the master switch) came back 200 with the old value and the control snapped back. The route now validates and writes `coreWhisper` through `CoreWhisperSettingsSchema`, and refuses any key it does not write with a 400 instead of dropping it.
-- The default roleplay template picker and the auto-lock card saved correctly but never wrote the response into the shared `settings.chat` query, so the picker snapped back and a remounted auto-lock card showed the pre-save value until the next refetch. Both now write the PUT response into the cache.
+#### Docs: database encryption described correctly
 
-#### Fix: Docker recreate lockout, deconvert into the container layer, in-container CLI, folder picker, local image build
+- The databases are encrypted with ChaCha20-Poly1305, the default cipher of SQLite3 Multiple Ciphers 2.4.0 (the `better-sqlite3-multiple-ciphers` driver), with a 64-hex-digit raw key that skips the driver's PBKDF2. No `PRAGMA cipher` is issued. Docs that said SQLCipher, or "AES-256-CBC with HMAC-SHA512", now say this: `DATABASE_ENCRYPTION.md` (which also gains the current `applySqlcipherKey` snippet, the full list of keyed connections, and a note on the historical `sqlcipher` identifiers), `DDL.md`, `DATABASE_ABSTRACTION.md`, `DEVELOPMENT.md`, `CLI.md`, `BACKGROUND_JOBS_CHILD.md`, `BACKUP-RESTORE.md`, `help/database-protection.md`, `help/data-directory.md` (the `.dbkey` file is wrapped with AES-256-GCM, not SQLCipher), `help/mount-points.md`, `README.md`, `packages/quilltap/README.md`, `CLAUDE.md`, the About page, the update-documentation command, and comments in the Dockerfiles and `release.yml`.
+- `help/database-protection.md` no longer claims `quilltap db integrity` runs SQLCipher's `cipher_integrity_check`. SQLite3 Multiple Ciphers has no such pragma; it returns no rows, which the CLI reports as "ok". The real check is `integrity_check`, which must decrypt and verify the Poly1305 tag of each page it reads.
+- Release notes for 4.12.0: dated 2026-11-03 and marked `draft: false`.
 
-Found by the Docker test plan (`docs/developer/docker-test-plan.md`) against V4test.
+#### Docs: release checklist 14 documentation pass
 
-- `npm run start:docker -- --recreate` ran `docker rm -f`, a SIGKILL, so the old server never released its instance lock. The new container has a new hostname, can judge the lock only by its heartbeat, and crash-looped under `--restart unless-stopped` for about 4.5 minutes until the heartbeat went stale. The script now runs `docker stop -t 30` before `docker rm -f`.
-- Deconvert and sync to a path outside any bind mount (for example `/tmp/x`) succeeded inside a container and wrote the files into the container's writable layer. Deconvert then deleted the database copy, so the next recreate destroyed the store. New `lib/mount-index/persistent-target.ts` reads `/proc/self/mountinfo`, resolves the target through its nearest existing ancestor, and refuses a target on the container root overlay or a tmpfs. `validateDeconvertTarget` asserts it, and the sync refuses with `TARGET_NOT_PERSISTENT`, dry runs included. No-op outside Docker; fails open if the mount table can't be read.
-- The CLI bundled in the image defaulted to `~/.quilltap`, a home directory the image never creates, so `docker exec quilltap quilltap db --lock-status` reported no lock while the server held one and `db --tables` found no database. New `packages/quilltap/lib/platform-paths.js` (`getDefaultBaseDir`, `isDockerContainer`) returns `/app/quilltap` under Docker and is now the one platform default for `db-helpers`, `theme-commands` and `lock-helpers`.
-- `GET /api/v1/system/browse-directory` with no `path` returned 400 "Path does not exist: /home/nextjs" in Docker. It now starts at the instance root there.
-- `docker build --target production .` (also what `scripts/build-push-docker.ts` runs) failed in `next build`'s type check: colocated tests import helpers from the root `__tests__/`, which `.dockerignore` excludes. `next build` now type-checks against new `tsconfig.build.json`, which extends `tsconfig.json` and excludes tests (`**/__tests__/**`, `**/__mocks__/**`, `*.test.*`, `*.spec.*`). `npx tsc` still checks tests.
+- README: the Salon paragraph covers established facts (Deus Ex Machina) and in-conversation search; the Scriptorium paragraph covers the shared folder browser and read-only viewers.
+- About page: TypeScript 6+; feature blurbs for established facts, conversation-first search, the folder browser, the Inventory and the Brahma lookup shortcuts.
+- API.md: `inlineConnectionProfileId` on the Brahma Console settings, and the full optional field list for `PUT /api/v1/projects/[id]` (including `brahmaConnectionProfileId`).
+- CLAUDE.md: the Brahma glossary row names the lookup tools and the inline engine resolver.
 
-#### Fix: document-chunk embeddings lost to a job-child startup race
-
-- The job child connected its database backend lazily, and only that connect opens the mount-index database. Mount-index repositories never open it themselves, so a job whose first database read was a mount-index lookup (an `EMBEDDING_GENERATE` for a document chunk, queued by the boot-time store rescan) found "Mount index database not initialized". On the Ignite instance's 4.11 upgrade boot, 14 chunks were hit about 200 ms before the connection opened.
-- The child now connects the database backend before loading plugins, inside the existing startup gate (`lib/background-jobs/child/child-startup.ts`), so no job runs before the mount index is open.
-- The mount-chunk embedding handler calls `requireMountIndexDb()` before its lookup. `findById` returns null on a read failure as well as on absence, so an unopened or degraded mount index used to mark a live chunk FAILED, and no reconcile retries a FAILED chunk. The job now throws and is retried instead.
-
-#### Docs: release checklist 14 documentation pass for 4.11.0
-
-- README: new "Published JSON Schemas" table linking all six schemas in `public/schemas/`, with what each describes and when to use it; storyteller mode, diagrams, Stop / raise-hand and the WCAG AA theme check added to the tour.
-- API.md: documented 17 undocumented actions — `characters` `ai-wizard-stream` / `reset-builtins`; `projects/[id]` `list-characters` / `list-files` / `add-file` / `remove-file`; `connection-profiles/[id]` `auto-configure`; `embedding-profiles/[id]` `refit` / `reapply` / `reindex`; `system/tools` `export` / `export-preview` / `import-preview` / `import-execute` / `ai-import-stream` and the five `capabilities-report-*` actions.
-- DEVELOPMENT.md: Contributing links GitHub issues and pull requests; new "Reporting bugs" section (Bug issue form, `#N`, catalogue frozen at Bug 269); plugin build typecheck documented.
-- CLAUDE.md: tool-effect declaration rule (`lib/tools/effects.ts`, executor `effectCeiling`) and accessibility conventions (`BaseModal` / `useDialogFocus`, `activateOnKey`, accessible names, contrast floors).
-- About page: removed `pdf-parse`; credited Mermaid, Graphviz, svg2roughjs, DOMPurify, xterm.js, node-pty, ws, croner, jsonrepair, remark-breaks and remark-smartypants.
-- 4.11.0 release notes: the October 28 accessibility pass, theme-storybook 1.0.90 and create-quilltap-theme 2.0.21; dated October 28, 2026.
-
-#### Docs: release-notes procedure in release checklist 14
-
-- `.claude/commands/release-checklist-14-docs.md` gains a "Drafting release notes" section for minor and major releases: where to gather the change surface (`rel/X.(Y-1).0..main`, the dev CHANGELOG section, completed specs, help changes, closed bugs, new migrations), the structure and house voice used by previous minor releases, and accuracy rules.
-- An existing `docs/releases/X.Y.0.md` draft is revised in place from its last commit forward, never regenerated, and the changes are reported by section.
-- `tag-for-release.md` points to that procedure instead of `docs/releases/4.0.0.md`.
-
-#### Fix: remaining WCAG items from release checklist 13
-
-- Skip link: a "Skip to content" link (`.qt-skip-link`) is the first Tab stop in the app shell and jumps to `<main id="main-content">`.
-- Salon headings and announcements: the Salon renders a visually hidden `<h1>` with the chat title. New `ReplyAnnouncer` is a polite live region that reads out each character reply as it lands (the virtualized message list cannot be a `role="log"` without re-announcing rows as they mount). Document Mode announces each completed save and "AI editing", not the Unsaved/Saving flicker.
-- Colour-only states: overheard whispers say "(overheard)" in their label; a participant card in an Unmoderated chat carries hidden "Unmoderated chat." text alongside the danger tint.
-- Pointer targets: workspace tab-close buttons are 24x24 (was 18x18, footprint kept with negative margins); the inline copy-conversation-ID button is at least 24x24.
-- Terminal keyboard trap: xterm keeps Tab for the shell, so focus could not leave the terminal. F6 / Shift+F6 now move focus to the next / previous control outside it.
-- Earl Grey focus ring: `:focus-visible` used a 30%-alpha border grey; it now uses the theme's ring token. Theme 1.3.10.
-- Great Estate light: h1-h3 were gold-dark (3.2:1 on cream), failing for small card-title headings; light mode now uses the bronze already used for links and tabs (5.0:1). Theme 1.0.10.
-- Rains dark: `mutedForeground` lifted from 59.2% to 62% lightness so muted text on raised surfaces (slide-over headers) clears 4.5:1. Theme 1.3.14.
-- Forced colors (Windows High Contrast): mask-drawn icons painted with `background-color: currentColor` were forced to Canvas and vanished. `[data-icon]` now opts out with `forced-color-adjust: none` (in `scripts/generate-icon-css.ts`).
-- 320px reflow: below 640px the page toolbar wraps and the queue badges take their own row instead of sliding under the search button. The footer pads clear of the floating Brahma Console launcher at phone width.
-- theme-storybook 1.0.90: mirrors `.qt-skip-link`, the tab-close size, and ports the `.qt-page-toolbar` family (with the new phone-width rule).
-
-#### Fix: accessible names for every form control (release checklist 13, continued)
-
-- About 220 `<input>` / `<select>` / `<textarea>` controls across roughly 90 files in `app/` and `components/` had no accessible name. Most sat beside a `<label>` with no `htmlFor`, or under a heading or `<span>` caption. Visible labels are now wired with `useId()` + `htmlFor`/`id`. Captions that are headings are wired with `aria-labelledby`. Placeholder-only and label-less controls (search boxes, inline row editors, the composer's source-mode textarea, the message edit box) get an `aria-label`. No styling or visible text changed.
-- Toggle switches: the Prospero "Allow Any Character" switch gains `role="switch"`, `aria-checked` and a name. Plugin enable switches are named per plugin. The theme-selector and context-compression switches, and the Salon sidebar's All Whispers / Shared Vaults / Turn Skipping switches, are named after their visible labels.
-- `ModelSelector`: new optional `id` prop so a caller's `<label htmlFor>` names it (the connection-profile modal passes `modelName`). Without one, the placeholder is its `aria-label`. The dropdown chevron is named and reports `aria-expanded`.
-- Document picker's ".." button named "Up one folder".
-- Browser spot-check follow-ups: the Salon composer's rich-text input had no name; it is now "Message". `MarkdownLexicalEditor` put its `ariaLabel` prop on the outer frame (a plain div, ignored by screen readers) and hard-coded "Markdown editor" on the editable area, so every character field read the same. The editable area now takes `ariaLabel`, and the frame is `role="group"`.
-
-#### Fix: dialog semantics and keyboard access for every modal and clickable card (release checklist 13, continued)
-
-- Hand-built modals in 54 files (41 that hand-roll a `qt-dialog-overlay`, 13 built on raw `fixed inset-0` overlays) now carry `role="dialog"` (`alertdialog` for destructive confirmations), `aria-modal` and `aria-labelledby`/`aria-label`, use `useDialogFocus` (focus in, Tab trap, focus restored), and close on Escape where they did not before (busy-state gating kept). Markup otherwise unchanged; none were moved onto `BaseModal`, since doing so would have changed their layout.
-- `useDialogFocus`: the opener is now recorded during render. Before, an `autoFocus` field had already taken focus by the time the effect ran, so focus was never restored for those dialogs (BaseModal included).
-- `FloatingDialog` (Help, Brahma Console, compose dialogs): `role="dialog"`, `aria-modal="false"` (the page behind stays usable, so no Tab trap), `aria-labelledby`, focus in on open and back on close. Escape now closes it from anywhere unless a modal dialog is open; inside a topmost one it still swallows the key.
-- New `activateOnKey` (`components/ui/activate-on-key.ts`): Enter/Space clicks a `role="button"` element. Used where a `<button>` would not do (table rows; Art Deco and Great Estate uppercase every bare `button`): Scriptorium store-card titles, `FileTable` file names (`aria-expanded`), `FileBrowserList` folder and ".." rows, LLM log rows, image-gallery tiles (`aria-pressed`) and the Document Mode title.
-- Aurora character cards: the name is now a link to the character, so a card can be opened from the keyboard.
-- Alias remove "×" in the character editor has an `aria-label`; quick-hide tag toggles have `aria-pressed`.
-
-#### Fix: WCAG AA contrast, focus and reduced-motion pass across all themes (release checklist 13)
-
-- Status colours: every theme × mode now meets 4.5:1 for `success` / `warning` / `info` / `destructive` as text on background, card and popover, and for each `XForeground` on its fill. Light modes darken the status colours (warning foreground becomes white); dark modes lighten `destructive` and put dark text on success/info/destructive fills. Default theme changed in `lib/themes/default-tokens.ts` and `app/globals.css`. Hue and saturation are unchanged; only lightness moved.
-- Also fixed: `mutedForeground` (Art Deco, Old School, default dark), `accent` and `chatUser` fills (Earl Grey, Rains, Old School), `ring` (Art Deco light 1.37:1 → bronze, Great Estate light, Rains light), Rains dark `primary` on card, and the default `sidebarMuted`.
-- Earl Grey and Rains: status `--theme-*` lines in `styles.css` repointed (palette variables untouched); `--text-400` / `--text-300` lifted to 4.5:1 (placeholders, auth hints, chat-sidebar labels); Earl Grey links per mode.
-- Art Deco and Great Estate light: links and the active tab used gold on cream (1.85:1 and 3.2:1). New `--deco-bronze` / `--estate-bronze`. Great Estate dark active tab uses `--estate-gold`.
-- Header queue badges (`Mem` / `Sum` / `Dgr` …): fills darkened to 4.5:1 against their text in core and five themes.
-- Reduced motion: the global `prefers-reduced-motion` rule was scoped to `[data-theme="default"]`, so no bundled theme honoured it. It now applies everywhere.
-- Toasts: container was `role="toast-container"` (invalid) with no live region and used raw Tailwind white-on-green/yellow. Now `role="status"` + `aria-live="polite"` (errors `role="alert"`), coloured with theme status tokens via new `qt-text-{success,warning,info,destructive}-foreground` utilities.
-- `BaseModal`: now `role="dialog"`, `aria-modal`, `aria-labelledby` the title; moves focus in on open, traps Tab, restores focus on close. Focus logic extracted from `SlideOverPanel` into `hooks/useDialogFocus.ts`, which both now use.
-- 16 icon-only close/dismiss buttons gained `aria-label`.
-- Theme versions: Art Deco 1.0.13, Earl Grey 1.3.9, Great Estate 1.0.9, Madman's Box 1.1.9, Old School 1.0.14, Rains 1.3.13. theme-storybook 1.0.89 (defaults, queue badges, new utilities, reduced motion); create-quilltap-theme 2.0.21 (starter tokens pass AA).
-- Removed the unused root `create-quilltap-theme` dependency (and its knip ignore). Nothing imports it; `quilltap themes create` calls it through `npx`, which now always fetches the published version instead of a stale local copy.
+#### Docs: 4.12.0 release notes cover the Brahma lookup shortcuts
 
-#### Docs: new release checklist item 13 (UI, look-and-feel, WCAG); docs check becomes item 14
+- `docs/releases/4.12.0.md` gains a "Brahma Knows Where to Look" section (the four lookup tools, `run_sql` result trimming, the `@Brahma` engine setting and its project override), a mention in the description and intro, and the project's Inline Brahma Engine under "What backups carry".
 
-- New `/release-checklist-13-ui` command: a whole-UI review under every bundled theme in light and dark mode. Covers token contrast measured from each theme's `tokens.json`, a live design pass on the V4test instance, and WCAG 2.2 AA checks (keyboard and focus, accessible names, labels and landmarks, live regions, color-only cues, reflow at 320px, 200% zoom, target size, reduced motion). States which layer each fix belongs in.
-- `/release-checklist-13-docs` renamed to `/release-checklist-14-docs`. It now also asks that the README explain how to use the repo, install, run and develop Quilltap and link the public JSON schemas; that DEVELOPMENT.md cover contributing with links to PRs and Issues; that the About page keep version numbers and dependency credits current; and that every public schema be documented.
-- Every checklist command now says "of 14". DEVELOPMENT.md's release checklist gains the new item 13.
+#### Feature: Brahma lookup shortcuts and an engine setting for `@Brahma`
 
-#### Docs: feature-spec cleanup
+A Friday trace of `@Brahma` answering "how old is Laura?" showed 14 tool rounds and ~250 KB of context with no answer: schema `PRAGMA`s, 20–33 KB `run_sql` dumps, and a `qt_text(content) LIKE` scan over every message.
 
-- Removed three stale proposals and every link to them: the ComfyUI image plugin, block-scoped roleplay narration (superseded by the Novel template and prose mode), and provider usage/balance tracking.
-- `composer-typeahead.md` moved to `features/complete/` with a status line recording what shipped. Its unbuilt Phase 3 (`#` document references) is now a separate proposal, `composer-document-references.md`, revised for the current code (`qtap://` addresses, a trailing context section, a `?action=search-files` collection action, its own `composerDocReferences` toggle).
-- `svar-bridge-spike-findings.md` moved to `features/complete/`; the SVAR implementation plan's status line now records what shipped and what remains.
-- ROADMAP: dropped the stale 3.3.0 release checklist (including the website recommendations-file item), added the `#` references item, fixed the CHANGELOG_V2 link.
+- Four read-only tools for the Brahma Console and `@Brahma`, offered with `run_sql` and executor-gated on `operatorSurface` the same way (`lib/tools/handlers/brahma-lookup-handler.ts`):
+  - `lookup_character` — core fields, physical description, memory count, conversation count with first and most recent (id, title, dates).
+  - `lookup_memories` — `searchMemories` for one holder or every holder with memories (one shared embedding), with `about` and date filters; hits name the source conversation. Writes no access stamp.
+  - `lookup_messages` — FTS5 search through `searchMessagesGlobal`, with conversation title/date and speaker name; `character` and `speaker` filters, date window on the memory calendar.
+  - `read_messages` — a speaker-labelled slice around a message id or by position (negative offsets count from the end); spoken lines only.
+- `searchMessagesGlobal` hits now carry `participantId` (`GlobalMessageSearchHit`).
+- `run_sql` results have a 24,000-character budget: long text cells are cut to 600 characters first, then trailing rows are dropped, with a `note` telling the model to narrow the query (`fitToBudget`).
+- The Brahma SQL prompt now leads with the shortcuts and typical routes, forbids `qt_text(content) LIKE` scans of messages, and explains that `chat_messages.participantId` is a seat, not a character id.
+- Inline Brahma picks its connection profile through `resolveInlineBrahmaConnectionProfile` (`lib/services/brahma-console/inline-profile.ts`): the chat's project's `brahmaConnectionProfileId`, then the global `brahmaConsole.inlineConnectionProfileId`, then the user's default. A stale or foreign id falls through with a warning. The standalone Console's per-chat picker is unchanged.
+- UI: "Engine for `@Brahma` in the Salon" under Settings → Chat → Brahma Console, and "Inline Brahma Engine" on the project Model Behavior card (shared `InlineBrahmaProfileSelect`). The settings PUT merges, so the turn budget and the profile don't overwrite each other.
+- The project field is in `properties.json` (no migration), `qtap-export.schema.json`, backup UUID remap (including the `brahmaConsole` instance setting in new-account mode) and `.qtap` import reconcile. DDL.md lists it, plus the previously missing `answerConfirmationOverride` and the `brahmaConsole` instance-settings key.
+- Tests: `brahma-lookup-handler.test.ts`, `fitToBudget` cases in `run-sql-handler.test.ts`, `inline-profile.test.ts`, merge cases in the brahma-console settings route test, and tool-definition snapshots.
 
-#### Fix: legible dialogue in user messages; Rains user text; Great Estate light sidebar
+#### Docs: bring the 4.12.0 release notes up to date
 
-- Core: quoted dialogue (`.qt-chat-dialogue`) inside a user message now takes `--qt-chat-user-fg` (theme hook `--qt-rp-user-dialogue-color`). `--qt-rp-dialogue-color` defaults to the page foreground, so on a dark user bubble in a light theme it was dark on dark: Art Deco light 1.2:1, Great Estate light, and the default theme's blue bubble.
-- Rains 1.3.12: `--qt-chat-user-fg` was a fixed near-white on a bubble that is white in light mode. It now uses `--text-000`.
-- Great Estate 1.0.8: the left sidebar is estate brown in both modes, but in light mode its icons and labels used the dark-brown page foreground. They now use cream, with muted items and the active item in lighter gold.
-- Mirrored to theme-storybook 1.0.88, which also gains the dialogue/narration/inner-monologue/OOC chip family.
+- `docs/releases/4.12.0.md` now covers the commits made after the Nov 2 draft: the shared image byte budget, the WCAG 2.2 AA pass and undefined-CSS-variable fixes, the within-tier "earlier mount wins" rule, Wardrobe odds and ends (live refresh, server-side duplicate, no store creation on GET, avatar regeneration), the `files/` watcher changes, and the document and Storyteller repairs (#133–#137).
+- Upgrading gains the 4 MB request weight limit and the same-named-item precedence change; the theme-author section covers the generated theme-storybook CSS, new bundled theme versions and token guidance.
+- Version numbers corrected: Anthropic plugin 1.0.65, default-system-prompts 1.1.31, theme-storybook 1.0.101, plugin-utils 2.7.4.
 
-#### Docs: bugs move to GitHub Issues; in-repo catalogue frozen at Bug 269
+#### Chore: update npm dependencies
 
-- New `.github/ISSUE_TEMPLATE/bug.yml` issue form carries the catalogue's metadata: severity, who it bites, provenance (Original to v4 / Pinned / Faithful / Inert), how it was found, v5 status, symptom, root cause, why it survived, fix site, how to verify. Applies the `bug` label.
-- `docs/developer/bugs.md` and `docs/developer/bugs/` take no new entries. Bugs 1–269 keep their numbers and files, so existing "bug N" references still resolve there. New bugs are cited as `#N` and closed with `Fixes #N`.
-- CLAUDE.md "Filing bugs" and the documentation index updated to match.
+- Ran `npm update -S` across the root project, `packages/`, and all plugins in `plugins/dist/`.
+- Package bumps: `@quilltap/plugin-utils` 2.7.4 (now on `@quilltap/plugin-types` ^2.10.0 and `openai` ^7.47.0; published), `theme-storybook` 1.0.101 (regenerated `qt-components.css` for Tailwind 4.3.4), and the `quilltap` CLI (`@napi-rs/canvas` ^1.1.0).
+- All 15 plugins patch-bumped (`package.json` and `manifest.json`) and rebuilt.
 
-#### Fix: legibility pass over the `qt-*` surfaces added since 4.9, in all six bundled themes
+#### Cleanup: remove Playwright e2e tests
 
-- Measured every class added since 4.9.0 (storyteller board and mode control, Pascal intervention dialog and hand toggles, regeneration plate, composer Stop/raise-hand, Concierge badge and mark, diagrams, name chips, gallery captions, prose-mode highlights, Brahma launcher) in each bundled theme, light and dark, against WCAG AA. The failures and their fixes are listed below.
-- Core: small warning/danger text now reads the text-safe alert tokens instead of fill colors. `.qt-intervention-note` uses `--qt-alert-warning-fg` (was `--color-warning`, 2.0–2.8:1 on light themes); `.qt-storyteller-warning` and the `.qt-concierge-mark` glyph use `--qt-alert-error-fg`; `.qt-danger-badge` takes its text from a new `--qt-concierge-badge-fg` (alert error ink; body ink for the Locked variant), with tint and border still from `--qt-concierge-badge-color`.
-- Core: `.qt-chat-regenerating-plate-text` sets its words in `--qt-chat-assistant-fg` (new hook `--qt-chat-regenerating-plate-fg`). The streaming green stays on the border and the quill. Was 1.6:1 on Art Deco light.
-- Core: `.qt-intervene-toggle--off` draws a diagonal slash through the hand instead of using 50% opacity, which left the icon at about 2:1 everywhere. On and off no longer differ by color alone.
-- Core: default light `--qt-response-status-streaming-fg` deepened from `hsl(152 55% 38%)` to `29%`.
-- Earl Grey 1.3.8: light-mode `--qt-status-warning/danger/success-fg` and streaming green deepened (raise-hand button, Paused segment and warning badges were 2.4:1); dark-mode `--qt-status-danger-fg` uses `--danger-000`.
-- Rains 1.3.11: light-mode orange accent `28 75% 50%` → `24 80% 40%`, primary `hsl(10 53% 53%)` → `hsl(11 55% 45%)`, muted foreground → `hsl(30 4% 40%)`, status ink and streaming green deepened. In dark mode, white on the orange was 2.4–3.1:1, so buttons, primary badges, active filter chips and `primaryForeground` now use warm charcoal ink (`--oncolor-brand`). The orange itself is unchanged and still works as text and accent.
-- Great Estate 1.0.7: muted foreground deepened in light (`45%` → `39%`) and lifted in dark (`52%` → `60%`); light destructive `48%` → `43%`; streaming green deepened. Dark mode now defines `--qt-alert-error-fg` and `--qt-alert-info-fg`; without them the light values applied in dark mode, leaving dark red at 1.9:1.
-- Old School 1.0.13: light destructive `hsl(0 72% 51%)` → `hsl(0 70% 44%)` (white on the Stop button was 4.07:1); streaming green deepened.
-- Art Deco 1.0.12: light alert ink deepened to suit its darker parchment cards; streaming green deepened. `.qt-intervention-row` is exempt from the theme's uppercase button rule, since Pascal outcomes are sentences. Great Estate gets the same exemption.
-- Madman's Box 1.1.8: diagrams use the console's near-black pane (`--qt-terminal-bg`), a dim phosphor-cyan rim and a faint inner glow. Mermaid still takes its node colors from the theme palette.
-- Mirrored to theme-storybook 1.0.87.
-- Help: `help/pascals-workbench.md` describes the struck-through hand.
+- Removed the four Playwright specs in `__tests__/integration/` (they predated the current UI and API; character creation and the home-page assertions already failed), `helpers/test-user.ts`, `playwright.config.ts`, the `test:e2e*` scripts and the `@playwright/test` dev dependency. The Jest integration tests under `__tests__/integration/api/` are unchanged.
+- Dropped the Playwright mentions from `README.md`, `CLAUDE.md`, the About page, the testing and development guides, `.gitignore`, `.dockerignore`, `tsconfig.json` and `jest.integration.config.ts`.
 
-#### Feature: composer prose mode — narration/OOC preview and a no-dialogue warning
+#### Cleanup: remove obsolete top-level files and scripts
 
-- For a template whose narration is unmarked and whose dialogue is in `"` (Novel), the Salon composer now paints narration (`::highlight(qt-composer-narration)`) and `((…))` asides (`::highlight(qt-composer-ooc)`, using the template's `--qt-rp-ooc-*` colors). Highlights only; the text is not changed. The preview is independent of the punctuation-warnings toggle.
-- New `no-dialogue` lint rule under `proseMode`: when the draft has narration but no dialogue opener anywhere (quotes inside `((…))` don't count), every narrated run is painted with `::highlight(qt-punctuation-no-dialogue)` (dotted underline, lighter tint). No caret exemption. Governed by `punctuationWarnings`.
-- Engine (`lib/punctuation-lint/engine.ts`): `proseMode` option, `classifyProse(blocks)` returning narration/OOC spans, and dialogue spans recorded by the quote pass. New `lib/punctuation-lint/prose-mode.ts` (`isProseTemplate`) decides the gate: `narrationDelimiters === null` and a wrap delimiter of `"`. `SalonView` computes it from the chat's template and passes `proseMode` through `ChatComposer` → `LexicalComposerWrapper` → `PunctuationLintPlugin`.
-- `PunctuationLintPlugin` now publishes four highlight names with priorities (warning > no-dialogue > OOC > narration); hover explains warnings before the no-dialogue tint.
-- New tokens `--qt-punctuation-no-dialogue-bg` / `-underline`, `--qt-composer-narration-fg` / `-bg`, `--qt-composer-ooc-fg` / `-bg`, mirrored to theme-storybook (1.0.86).
-- Help: `help/chat-settings-composer.md`, `help/roleplay-templates.md`.
-- Tests: `lib/punctuation-lint/fixtures/prose-vectors.json` (v5 contract corpus) driven from `engine.test.ts`; `__tests__/unit/lib/punctuation-lint/prose-mode.test.ts`; prose-mode cases in `PunctuationLintPlugin.test.tsx`.
+- Removed `process_qt.sh` (a finished one-off typography codemod), `GEMINI.md` (a stale AI-agent overview that duplicated `CLAUDE.md`), and the `cicd/` directory with its `deploy:dev` script.
+- Removed the `certs/` directory and the `devssl` script (HTTPS dev server). `npm run dev` is plain HTTP only.
+- Updated `docs/developer/DEVELOPMENT.md` and `migrations/README.md` to match. Gitignored build output (`coverage/`, `playwright-report/`, `tsbuildinfo` files, `debug-storybook.log`) and `.DS_Store` files were deleted from the working tree; none were tracked.
 
-#### Fix: NanoGPT image sizes are fitted to each model; Qwen Image 3 avatars no longer 400 (bug 269)
+#### Fix: avatar regeneration no longer absorbs changes made mid-job
 
-- The NanoGPT plugin sent the provider-wide portrait/landscape sizes (`832x1248` / `1248x832`) to every model. Models with their own size list rejected them; `qwen-image-3-uncensored` answered every avatar with `400 "supports 1K and 2K output"`.
-- New `fitImageShape` (`plugins/dist/qtap-plugin-nanogpt/image-sizes.ts`) fits the request to the model's entry in the detailed catalog: the nearest listed size by aspect ratio, in the model's own spelling (`WxH` or `W*H`), or for tier models (`1k`, `2k`) the nearest tier plus the nearest listed `aspect_ratio`, sent as a flat body key. `generateImage` fetches the catalog when the cache is cold (always, in the job child); if the fetch fails, the size is sent as asked.
-- A non-square request refused on its shape (a 400 naming size/resolution/aspect/dimension/output, or a 503) is retried once as a square. On 2026-10-27, NanoGPT returned an uncharged 503 for every non-square ratio on Qwen Image 3 while `1:1` worked, so portraits on that model currently come back square.
-- `qtap-plugin-nanogpt` 1.2.10 → 1.2.11.
-- Help: `help/image-generation-profiles.md` NanoGPT size note.
-- Test: `__tests__/unit/plugins/nanogpt-image-sizes.test.ts`.
+- An outfit or Inventory change made while a character avatar job was already processing was collapsed onto that job, so the new portrait missed the change (the job had built its prompt before the change). `enqueueCharacterAvatarGeneration` (`lib/background-jobs/queue-service.ts`) now reuses only a PENDING job, matching the wardrobe item-image path.
+- Tests: reuse of a pending job and a fresh job for a processing one, in `__tests__/unit/background-jobs/queue-service.test.ts`.
 
-#### Fix: terminal Kill ignored by bash; deleted chats left their shells running (bug 268)
+#### Fix: document moves follow every open copy; edits over uploads drop stale text
 
-- The `?action=kill` and `DELETE` routes in `app/api/v1/terminals/[id]/route.ts` sent `SIGTERM`, which an interactive bash ignores, so Kill did nothing. They now call the new `ptyManager.terminate(id)`: `SIGHUP`, then `SIGKILL` if the process is still running after 3 s. `?action=signal` is unchanged.
-- `PtyManager.kickAllForChat` had no callers. It is replaced by `disposeChatSessions(chatId)`, which terminates the chat's sessions and drops them from the map, and `ChatsRepository.delete` calls it after the row is deleted. This covers every chat delete path, including replace-mode restore. No closing announcement is posted for a deleted chat; its transcripts go to the bug 267 orphan sweep.
-- Help: `help/ariel.md` no longer says leaving a chat closes its terminal; it says deleting the chat does.
-- Tests: `lib/terminal/__tests__/pty-termination.test.ts`, `__tests__/unit/lib/database/repositories/chats-delete-terminals.test.ts`.
+Found in the 4.12 refactor's live V4test pass.
 
-#### Fix: deleted chats left their terminal transcripts behind (bug 267)
+- A move or rename now repoints every `chat_documents` row that reaches the moved file's store, whatever address the row was recorded under. Before, the sweep matched `(scope, mountPoint)` literally, so a `doc_move_file` made as `project` left another chat that had the same file open by store name on the old path (and the reverse). A `project` row is resolved through its chat's project's official store, a `document_store` row by store name, and `general` still matches literally. This also stops a `project`-scope move from repointing a same-named file open in a chat from a different project.
+- The rule lives in `sweepChatDocumentsAfterMove` / the new `sweepChatDocumentsAfterFolderMove` (`lib/documents/core/move.ts`), which take the resolved `mountPointId`. Callers: `doc_move_file`, `doc_move_folder` (which also now records the resolved store name instead of a raw `self`), and both Document Mode rename routes. `ChatDocumentsRepository.renameFilePathInStore` / `renameFolderPathInStore` are replaced by `findByFilePath` / `findUnderFolder`.
+- Writing a document over an uploaded text blob at the same path (`doc_str_replace`, a Document Mode save) cleared nothing on the link, so the blob's `extractedText` kept describing the old revision and `quilltap docs grep` matched it. `linkDocumentContent` now clears `extractedText`, `extractedTextSha256` and `extractionError` and sets `extractionStatus = 'none'` on every document write; the description is kept.
+- Tests: store-matching and folder cases in `core.test.ts`, the `project`-move regression in `doc-edit-handler-chat-doc-sync.test.ts`, and the blob-to-document case in `doc-mount-write-metadata.integration.test.ts`.
 
-- Deleting a chat (or a replace-mode restore, or an import overwrite) cascades its `terminal_sessions` rows away, but the transcripts in `logs/terminals/<id>.log` stayed. The only code that removed them, `cleanupClosedSessions`, works from rows, so they were orphaned for good. `DELETE /api/v1/terminals/[id]` had the same gap.
-- The daily maintenance tick now runs `TerminalSessionsRepository.sweepOrphanedTranscripts` after the closed-session reaper. It removes `.log` files no row names, and spares a session still live in the PTY manager and any file written in the last hour (`ORPHAN_TERMINAL_TRANSCRIPT_GRACE_MS`; the transcript is opened before the row is inserted). Shell-init files are left alone. The maintenance summary reports it as `orphanedTranscriptsSwept`.
-- Test: `__tests__/unit/database/terminal-transcript-orphan-sweep.test.ts`.
-#### Docs: terminal sessions are excluded from backups
+#### Refactor: the browser family, finished (Refactor 4.12, spec 6, Phases 1–3)
 
-- `terminal_sessions` rows and their transcripts under `logs/terminals/` have never been in backups. This is now a stated decision rather than a gap: sessions cannot be resumed, `cwd` is a path on the source machine, closed sessions are reaped after `CLOSED_TERMINAL_RETENTION_DAYS` (30), and transcripts are raw shell output that can contain secrets. Ariel's dispatches are chat messages and are already backed up.
-- Listed under "Not Included in Backups" in `help/system-backup-restore.md` and as a sanctioned exclusion in release checklist 10.
-- `__tests__/unit/lib/backup/terminal-sessions-excluded.test.ts`: `createBackup` never reads the terminal-sessions repository, stages no terminal file or `.log`, and reports no terminal count in the manifest.
-- `lib/backup/restore/__tests__/delete-service-annotations.test.ts`: mock `logEntries.deleteAll`, which `clearFormat3Entities` now calls; both cases threw on main without it.
+The remaining Wardrobe / Inventory pairs are one component or one factory with a kind parameter. Phases 4 (server-side wardrobe merge) and 5 (`FileBrowser` retirement, decided in the spec's §4.4) are not done here.
 
-#### Security: pdfjs-dist 6.4; pdf-parse replaced by a direct reader
+- Dead code: `createWardrobeFolder` / `renameWardrobeFolder` / `deleteWardrobeFolder` and `lib/wardrobe/folder-mutations.ts` removed (`WARDROBE_FOLDER_KIND` moved to `lib/wardrobe/item-mutations.ts`); `lib/wardrobe/folder-view.ts` no longer re-exports the shared view helpers; `FileBrowser`'s unreachable project branch (project file list, project folders, upload) removed along with its `projectId` / `showUpload` props.
+- `normaliseRelativePath` has one copy (`lib/mount-index/path-utils.ts`, new `allowRoot` option and `isSafeRelativePath`). `database-store.ts` and `POST /api/v1/mount-points/[id]/folders` use it.
+- Client: `ItemControlDialogShell` + `useItemControlState` (container auto-select, confirmation/alert wrappers, container label, select header with the shared note, modal-or-tab shell) under both control dialogs. `FolderBrowserShell` takes `toggles` (Show archived / Show shared) and `folderFiling` (Move / Copy to folder…). One `ItemFolderPickerDialog` replaces `WardrobeFolderPickerDialog` and `InventoryFolderPickerDialog`; the Inventory's picker now lives in its browser and, like the wardrobe's, leaves select mode after filing. `useItemOverlays` holds the editor / folder-picker / transfer state for both actions hooks. `ItemTransferFooter` is the transfer dialogs' footer.
+- Folder hooks: one `useItemFolders(kind, container)` / `useItemFolderMutations(kind)` (`lib/hooks/use-item-folders.ts`); the old wardrobe and Inventory folder hooks are delegates. Both refresh with `refreshUnlessRealtime` (moved to `lib/query/refresh-unless-realtime.ts`). `InventoryRequestError` / `inventoryRequest` moved to `lib/inventory/request.ts` (re-exported from `use-inventory`).
+- New `wardrobe` realtime topic (`REALTIME_TOPICS`, `topic-map.ts` → wardrobe lists and folder lists). Every wardrobe location write publishes it in the parent; `topicsForWriteBatch` infers it for a job child's `Wardrobe/` writes. Test: `__tests__/unit/lib/wardrobe/chokepoints.test.ts`.
+- `ItemImageViewer` (`components/item-browser/`) replaces the two picture viewers. The Inventory's now removes a missing picture through its own `?action=delete-image` instead of the generic `DELETE /api/v1/images/{id}` (the bug 194 pattern).
+- `ItemDialogProvider` (`components/providers/item-dialog-provider.tsx`) under the wardrobe and Inventory dialog providers, which keep their exported names.
+- Menus: `ItemActionMenu` gains a `trigger` prop. The Outfit Builder's "Reset…" menu, the garment row's multi-slot `+` picker and `ScenarioRow`'s narrow-width kebab use it, so all three get arrow-key navigation and focus return; their hand-rolled menu code is gone.
+- Server: `lib/mount-index/item-folder-routes.ts` holds the route-factory preamble (`ItemRouteConfig`, per-tier labels, location resolver, read probe, `GET ?action=folders`, folder write actions) and one `withItemErrors(kind)` error mapping, used by the wardrobe and Inventory factories; the scenario factory adopts the config shape. Inventory 404s are now per tier (`Group inventory object not found`, …).
+- The no-provisioning rule for Wardrobe GETs (#135) now lives in the shared preamble's read probe, so the wardrobe and Inventory factories answer an owner with no store the same way: an empty list, `null` instructions, no folders.
+- New `POST …/wardrobe?action=duplicate` (`{ itemId }` → `201 { wardrobeItem }`), through `createItem`; the browser's Duplicate calls it instead of building the copy client-side. The "(copy)" title now avoids every title in the tier, archived ones included.
+- `createItemImagesRoute(kind)` (`lib/mount-index/item-images-route.ts`) is behind both `[itemId]/images` routes; the Inventory's archetype fallthrough and the wardrobe's `link-image` are kind options. Wire responses unchanged.
+- Tests: `item-control-shared.test.tsx`, `item-image-viewer.test.tsx`, `item-dialog-provider.test.tsx`, `use-item-folders.test.tsx`, trigger cases in `item-action-menu.test.tsx`, `item-images-route.test.ts`, and preamble, duplicate and no-provision cases in `item-folder-routes.test.ts` / `wardrobe-route-factory.test.ts`.
+#### Refactor: one tier walk (Refactor 4.12, spec 4)
 
-- `pdfjs-dist` 5.7.284 → 6.4.299 for GHSA-hq66-cqwq-w95j (high: script execution when a malicious PDF is opened with scripting enabled; affects 5.6.83 to before 6.2.108, no 5.x fix). The Salon's PDF preview only renders pages to a canvas and the server only extracts text, so the advisory's path was probably unreachable, but there was no patched 5.x to stay on.
-- `pdf-parse` 2.4.5 (unmaintained since October 2025, pinned to `pdfjs-dist` 5.4.296) is removed. Our `overrides` had forced it onto the root pdfjs, and pdfjs 6 removed the `PDFDocumentProxy.destroy()` its cleanup calls, so every extraction would have leaked a document and its worker without an error. `convertPdfBufferToText` (`lib/mount-index/converters/pdf-converter.ts`) now reads with `pdfjs-dist/legacy/build/pdf.mjs` directly, reproduces pdf-parse's default line, tab and `-- N of T --` page-marker assembly, disables XFA, and always destroys the loading task. The regex fallback in `file-content-extractor.ts` is unchanged. Compared against pdf-parse on four real PDFs: the three text documents are byte-identical; a sheet-music score loses a space between bar numbers and note glyphs in 52 lines, which comes from pdfjs 6's whitespace items, not the assembly.
-- Bug 178's fix moves with it: `pdfjs-dist` replaces `pdf-parse` in `serverExternalPackages` and the standalone tracing includes, and the job-child esbuild bundle now marks `pdfjs-dist` external, so it loads from `node_modules` and finds `@napi-rs/canvas` through its own `import.meta.url`.
-- `@napi-rs/canvas` 0.1.100 → 1.0.13 (pdfjs 6's optional dependency; same platform-package layout) in the root and `packages/quilltap`. The `pdfjs-dist` and `@napi-rs/canvas` entries in root `overrides` existed only for pdf-parse's nested copies and are removed. `public/pdf.worker.mjs` is re-synced to 6.4.299.
+New `lib/mount-index/reach.ts` settles what a character or a cast can reach. Behaviour changes are marked.
 
-#### Fix: PDF preview showed a blank first page on dark themes (bug 266)
+- `resolveOwnerStore`: one owner → official-store resolver under `resolveWardrobeLocation`, `resolveInventoryLocation` and `resolveScenarioLocation` (folder to heal, swallow/rethrow on folder failure, archived allow/refuse as options). Project/group rows are read raw.
+- `groupMountsFor` / `groupOriginMap`: the group tier and its origin map, used by both pools, both `groupLocationsForCharacter`, the wardrobe `?scope=group` read, `core-whisper` and `self_inventory` (which gains cross-group dedupe). `groupMountsFor` takes `includeEmpty`.
+- `resolveCastPool` / `castGroupMounts`: a cast's reach. `resolveScenarioBuilderMountPool` wraps it; the document picker (`?action=accessible-stores`), `?action=group-stores` and `GET /api/v1/groups/scenarios` use it. The picker no longer lists an archived participant's vault.
+- `orderMounts` / `bucketMounts`: a pool as a probe list or as knowledge tiers with boosts. Used by custom tools, tool presets, dressing instructions, the scriptorium search and the knowledge injector (which no longer re-dedupes the pool).
+- `classifyMount`: mount → owner. `classifyScenarioMount`, the inventory `mountOwnerResolver` and the title lint's mount lookup filter over it. The title lint now tags a group's official store as `group` (was `project`, no id).
+- **Behaviour:** inside a tier the earlier mount wins. Groups: the first group in membership order (was: the last, for wardrobe and inventory; the smallest mount id, for custom tools, presets and dressing instructions). Project: the official store first.
+- **Behaviour:** the project tier is the official store plus every linked store everywhere (`resolveProjectMountPointIds`). The wardrobe transfer source probe now searches linked project stores (was: official only).
+- `resolveTieredMountPool` requires `roster: 'gated' | 'open'` and `enabled: 'require' | 'ignore'`. The path resolver and scriptorium search pass `gated` instead of gating around the call; the preset pool passes `require`.
+- Tests: `reach.test.ts`, `reach-chokepoint.test.ts` (no hand group loops; project-link reads only at listed display sites), `inventory/pool-order.test.ts`, and old/new-winner cases in the wardrobe pool, transfer, dressing-instruction and custom-tool suites.
+- Docs: `help/wardrobe.md`, `help/custom-tools.md`, `help/inventory.md` explain the within-tier rule; CLAUDE.md names `reach.ts`.
 
-- `FilePreviewPdf.tsx` started a new `page.render()` on every scale change without cancelling the one in flight. The fit-to-width scale lands right after the first render starts, so the second run resized (cleared) the canvas under the first and pdf.js refused it ("Cannot use the same canvas during multiple render() operations"); the first then drew black text on a transparent canvas. The effect now cancels and awaits the in-flight `RenderTask` before redrawing, cancels on cleanup, and ignores `RenderingCancelledException`. Not caused by the pdfjs upgrade; found while checking it.
+#### Fix: wardrobe and scenario GETs no longer create stores (#135, #136)
 
-#### Chore: minor and patch dependency updates
-
-- `npm update -S` in the root: `next` / `eslint-config-next` 16.4.3, `openai` 7.45.0, `@openrouter/sdk` 1.5.9, TanStack Query 5.105.0, `@tanstack/react-virtual` 3.14.23, `react` / `react-dom` 19.3.1, `zod` 4.6.7, `sharp` 0.35.5, `ws` 8.22.0, `mammoth` 1.13.0, `katex` 0.19.1, `postcss` 8.5.32, `autoprefixer` 10.6.2, `dotenv` 18.0.9, `@playwright/test` 1.64.1, and smaller type/test packages. Major-version updates (`typescript` 7, `eslint` 10, `better-sqlite3-multiple-ciphers` 13, `chokidar` 6, `croner` 11, `emojibase-data` 18, `jest-fetch-mock` 4, `@types/node` 26) are not included.
+Reads no longer provision a project's or group's official store. Only writers pass `ensure`.
 
-#### Fix: backups now carry the Log
+- Wardrobe collection GET and `?action=instructions` GET (`lib/wardrobe/routes/wardrobe-route-factory.ts`): an owner with no store yet answers `{ mountPointId: null, wardrobeItems: [] }` / `{ instructions: null }`; a missing owner is still 404. Fixes #135.
+- `GET /api/v1/groups/scenarios` and the project/group/General scenario collection GET (`lib/mount-index/scenario-item-route-factory.ts`) read without `ensure`; an owner with no store lists as empty. POST still provisions the store, its `Scenarios/` folder and the group's `Knowledge/` folder. Fixes #136.
 
-- `log_entries` (the Log, in the LLM logs database) was left out of logical backups. It is ordinary user content, not secret, so a restore lost every line. Found in release checklist 10 (backup/restore completeness). This reverses the earlier "Not included in ... logical backups" note under *Feature: the Log*; `.qtap` exports still leave it out, as they do the LLM logs.
-- Backup writes `data/log-entries.json` (manifest count `logEntries`), read through the new `LogEntriesRepository.findAllEntries()` (oldest first, empty while the logs DB is degraded). Restore re-creates each line under its own id and timestamps, after the chats, and skips the lot with a warning while the logs DB is degraded. New-account mode remaps `id`, `chatId` and `characterId` (a null character stays null). Older archives have no file and restore none.
-- Replace-mode restore and "delete all my data" now clear the table through the new `LogEntriesRepository.deleteAll()`. Before, the per-user deletes never reached it, so a replace restore would have collided on preserved ids and a data wipe left every line behind.
-- Help: `help/system-backup-restore.md` lists the Log under *Logs & History* and open Storyteller rounds under *Not Included*; `help/the-log.md` no longer says the Log, or the LLM logs, stay out of backups.
-- Tests: a 4.11 block in `restore-field-fidelity.test.ts` pins this cycle's additions through restore (`chats.turnMode` / `storytellerInviteFilter` / `equippedInventory`, `chat_messages.storytellerBid`, `pascalMeta` trigger and intervention keys, `memories.keystone`, the three new `chat_settings` columns and `smartTypographySettings.punctuationWarnings`, `roleplay_templates.unmarkedStyle` / `markdownAsterisks`, `llm_logs.storytellerRoundId`, and the Log). Also new: a Log remap case in `uuid-remapper.test.ts`, a replace-mode clear in `delete-service.test.ts`, and whole-table read, round-trip and wipe cases in `log-entries-repository.test.ts`.
-
-#### Docs: CLI README lists `memories keystone` among server-backed verbs
-
-- `packages/quilltap/README.md` still said only `maintain` and `validate --repair --write` ask the running server to write, and omitted `keystone --write` from the verbs that take `--port`. Both lines now include it.
-
-#### Fix: `quilltap db --count` printed ANSI color codes under `FORCE_COLOR`
-
-- `--count` passed the bare number to `console.log`, which colors numbers when `FORCE_COLOR` is set. Jest workers set it when run from a TTY, so `db-raw-sql-qt-text.integration.test.js` received `\x1b[33m2\x1b[39m` and failed with "Expected: "2", Received: "2"". The count is now stringified before printing, so the output is plain text regardless of color settings.
-
-#### Fix: two distributed plugins required `@quilltap/plugin-types` at runtime
-
-- `qtap-plugin-default-system-prompts` (1.1.27) and `qtap-plugin-openai-compatible` (1.0.50) marked `@quilltap/plugin-types` external on the belief that its imports were type-only. The bundled `@quilltap/plugin-utils` imports it at runtime, so each `index.js` carried a bare `require("@quilltap/plugin-types")` that resolved only by walking up to a host `node_modules`. The standalone tarball kept both plugins' whole `node_modules` trees to satisfy it. Both now bundle it like the other distributed plugins; the built output differs only by that removed `require`.
-
-#### Test: release-checklist regression gaps
-
-- `__tests__/unit/lib/toast-stacking.test.ts`: the toast container's z-index must exceed every `z-[N]` / `z-index` declared under `components/` and `app/` (below 9999) and stay under the startup gates. Fails on the old value of 50.
-- `lib/storyteller/__tests__/plan-run-order.test.ts`: `planStorytellerRun` sorts by rotation without `keepOrder`, keeps the operator's order with it (rotation never consulted), and orders an all-at-once round's Act tail by that order.
-
-#### Fix: Automation settings checkbox uses `qt-checkbox`
-
-- The per-row checkbox in `components/settings/chat-settings/AutomationSettings.tsx` used raw Tailwind (`h-4 w-4 rounded border-input text-primary focus:ring-primary`); it now uses `qt-checkbox`, so themes can restyle it. Found in release checklist 7 (`qt-*` classes). No other changes needed.
-
-#### Chore: prune diagram trace logging
-
-- Removed four per-event `console.debug` traces from the diagram components (render, Copy PNG start, lightbox open and close). Failure, fallback and summary logs stay.
-
-#### Chore: dead code sweep
-
-- Removed the unused `components/inventory/index.ts` barrel, `resolveMemoryMaintenance`, `isComputedTool` and `ProjectFileInfo`. Details in `docs/developer/DEAD-CODE-REPORT.md`.
-
-#### Feature: diagram lightbox and Copy PNG
-
-- Clicking a Salon diagram (or its new **Enlarge** toolbar button, or Enter/Space on the focused drawing) opens it full-window. Wheel, Chromium trackpad pinch (ctrl-wheel), Safari gesture events and two-finger touch zoom about the pointer; drag pans. **Fit** (the opening view; re-fits on window resize while active) and **100%** (natural size) buttons, zoom in/out buttons, `+` / `-` / `0` keys, double-click toggles Fit/100%. The drawing is scaled by resizing it, not by a CSS transform, so it stays sharp. Zoom range 10%–800%.
-- **Copy PNG** writes a PNG at 2× natural size to the clipboard, on the diagram card colour (`--qt-diagram-bg`) or transparent when **Transparent** is ticked (remembered for the page's life; the sheet shows a checkerboard while ticked). The scale backs off for drawings past 16,384 px a side or 16.7 megapixels (Safari's canvas ceiling), with a toast.
-- `components/chat/diagrams/export-png.ts` prepares a standalone copy of the live SVG before rasterizing it. Mermaid's `htmlLabels: false` does not reach every diagram type: Venn, event-model and architecture diagrams, math labels and `textPlacement: 'fo'` paths still emit `<foreignObject>`, which taints the canvas in some browsers and paints empty boxes in others. Each one is dropped when it sits in a `<switch>` with an SVG-text fallback, and otherwise replaced by centred `<text>`/`<tspan>` lines in the label's computed font, size and colour. Web fonts the drawing uses are found in the page's `@font-face` rules, fetched and embedded as data URLs (cached per URL; a failed fetch falls back to system fonts). The root gets the live computed `color`, `font-family` and `font-size`, so Graphviz's `currentColor` ink and unstyled text survive. The image loads from a `data:` URL (the CSP's `img-src` has no `blob:`). Verified in Chromium: an SVG with HTML labels serialized as-is came out with black serif text and black strokes on the dark card; through the pipeline it matches the screen.
-- `copyPngBlobToClipboard` (`lib/clipboard-utils.ts`) hands `ClipboardItem` a promise so the write is claimed inside the click (Safari), with the existing Electron bridge as fallback.
-- Escape closes the lightbox from a capture-phase listener with `stopImmediatePropagation`, so Document Mode's and Terminal Mode's Escape handlers don't also leave focus mode. Closing restores the transcript position: `scroll-anchor.ts` records the diagram's offset in its scroll container and restores it (or the plain `scrollTop` if the virtualizer unmounted the row), then returns focus with `preventScroll`.
-- The lightbox mounts in its own React root on `<body>` (`diagram-lightbox-host.tsx`), not a portal from the row, so it survives the virtualized row unmounting while open. One lightbox at a time.
-- The lightbox sets a `viewBox` on a drawing that lacks one (svg2roughjs's hand-drawn Graphviz output has only `width`/`height`); without it, resizing grew the canvas instead of the drawing.
-- New `qt-diagram-lightbox*` classes, a zoom-in cursor and focus ring on `.qt-diagram-canvas[role="button"]`, and `--qt-diagram-lightbox-*` variables (defaulting to the `--qt-overlay-*` tokens), mirrored to theme-storybook 1.0.85.
-- The diagram canvas is now `role="button"` (was `role="img"`), labelled "Diagram — open to zoom and copy" / "Drawing — …".
-- `help/diagrams.md` gains "The Viewing Room". Tests: lightbox geometry, PNG preparation (sizing, `foreignObject` replacement and `<switch>` fallback, `currentColor`, font embedding and fetch failure, canvas ceiling), the lightbox (Fit/100%, wheel, Escape not reaching document listeners, Copy PNG with and without transparency, missing `viewBox`), the scroll anchor, and `DiagramBlock` opening and closing it.
-
-#### Fix: diagram dependencies restored after merge
-
-- The merge of origin/main into the diagrams feature (`5e18ede6a`) took origin's `package.json` and `package-lock.json`, dropping `mermaid`, `@hpcc-js/wasm-graphviz`, `dompurify` and `svg2roughjs`. The release build failed with `Module not found` in `components/chat/diagrams/`. Both files are restored from the feature commit; no other changes.
-
-#### Feature: diagrams in the Salon
-
-- A closed ` ```mermaid `, ` ```dot ` / ` ```graphviz ` or ` ```svg ` fence in a Salon message renders as an inline SVG instead of a code block. The message keeps the source text; nothing new is stored. Other surfaces (help, Document Mode, file previews, the Brahma console, the help chat) still show these fences as code.
-- `lib/markdown/diagrams.ts` is the one list of diagram fence languages (`DIAGRAM_LANGUAGES`, `diagramEngineFor`) and of diagram styles (`DIAGRAM_STYLES`, `diagramStyleOrDefault`). `hasDiagramFence` detects a closed diagram fence (unterminated fences, fences quoted inside another fence and inline code don't count).
-- New `components/chat/diagrams/`: `DiagramBlock` (dispatch, placeholder, error fallback, toolbar with View source / Copy source / Copy SVG / Download SVG, a 64-entry render cache keyed by engine, style, theme and source so a virtualized row that remounts shows its drawing at once), `render-mermaid.ts` (Mermaid 12, `securityLevel: 'strict'`, `htmlLabels: false`, `theme: 'base'` with `themeVariables` read from the active theme's CSS variables), `render-graphviz.ts` (`@hpcc-js/wasm-graphviz`; black/white defaults re-pointed at `currentColor`; hand-drawn style re-sketched with svg2roughjs), `render-svg.ts` (raw SVG, root must be `<svg>`, sized to fit), `render-queue.ts` (serializes renders; source-hash seed for hand-drawn output), `sanitize-svg.ts` (the one DOMPurify call site: strips script, event handlers, `foreignObject`, `style`, `image`, every non-`#fragment` href and every external `url(...)`; allows `<use>` with fragment hrefs), and `diagram-theme.ts`.
-- `MessageContent` takes an optional `diagrams` prop (`{ style, streaming? }`); without it, fences render as code as before. `LazyMessageContent` passes it and skips the pre-rendered HTML fast path when `hasDiagramFence` is true. The streaming message and an in-progress regeneration pass `streaming: true`, so a fence shows as code until the message settles.
-- `CodeBlockWithCopy` moved out of `MessageContent.tsx` into `components/chat/CodeBlockWithCopy.tsx` (no change in behavior).
-- Two new keys in the character vault's `properties.json`: `canDrawDiagrams` (boolean, absent = `false`) and `diagramStyle` (`'handDrawn'` | `'clean'`, absent or unrecognized = `'handDrawn'`). Both are vault-managed fields (added to `MANAGED_FIELDS`, the read overlay, the full and patch writers, and the scaffold). No DB column, no migration. Character PUT accepts both; the character list GET returns both. v5: this is a v4 data-shape change the v5 vault reader must follow.
-- The system prompt adds `DIAGRAM_FORMATTING_INSTRUCTION` (`[FORMATTING: DIAGRAMS]`) directly after the math note, only when `character.canDrawDiagrams` is true. It is not part of the identity stack; `IDENTITY_STACK_BUILDER_VERSION` and the goldens are unchanged, and a prompt without the flag is byte-identical to before.
-- Diagram style follows the message's author: a character's line uses that character's `diagramStyle`; the operator speaking as no one and Staff senders use `clean` (`resolveMessageDiagramStyle`, `app/salon/[id]/components/message-row/helpers.ts`). The chat participant enrichment (`getCharacterDetail`, `getEnrichedCharacter`) and `useParticipants` carry `diagramStyle`.
-- Aurora: new `CanDrawDiagramsToggle` (`components/characters/`) on the Details tab of both the character view and edit pages, with a Hand-drawn / Clean choice that is disabled (not hidden) while the toggle is off. Saves are immediate PUTs (`app/aurora/shared/save-diagram-settings.ts`) with an optimistic update and a refetch on failure.
-- "Salon Images" quick-hide does not hide diagrams (they are inline SVG, never `<img>`).
-- New `qt-diagram*` component classes and `--qt-diagram-*` variables (including `--qt-diagram-hand-font`), mirrored to theme-storybook (1.0.84).
-- New dependencies: `mermaid` 12, `@hpcc-js/wasm-graphviz`, `dompurify`, `svg2roughjs`. All client-only and loaded on first use.
-- `.qtap` export schema documents both new keys.
-- New help page `help/diagrams.md`; `help/character-editing.md` and `help/quick-hide.md` mention the toggle and the quick-hide exemption.
-- Tests: `lib/markdown/diagrams`, the SVG sanitizer against a hostile corpus, the raw-SVG renderer, `DiagramBlock` (routing, streaming, fallback, toolbar, cache, quick-hide), the `LazyMessageContent` fast-path bypass, the per-author style resolver, the prompt note's gating and placement, and the `properties.json` defaults, lenient style read and single-key patches.
-
-#### Refactor: context manager
-
-- `buildContext` (`lib/chat/context-manager.ts`) is now a sequence of phase calls; the file is 900 lines, down from 2,360, most of what remains being the option and result types. New modules under `lib/chat/context/`:
-  - `turn-system-prompt.ts`: `buildTurnSystemPrompt` (compiled identity stack, fallback subprompts, Taboo phrases and standing instructions, read in parallel; truncation to budget).
-  - `turn-compression.ts`: `resolveTurnBudgetInfo` (the autonomous per-turn cap), `compressTurnHistory` (budget gate, cached or synchronous summary, the verbatim window), `compressTurnMemories` (one helper instead of two copies of the compress-and-warn block), `effectiveWindowSize`, `verbatimWindowStart`.
-  - `turn-scene-state.ts`: `buildTurnSceneState` — the stored scene, live-wardrobe clothing overrides, and the per-recipient emission cache, written by a `commit` once the whisper is posted.
-  - `turn-recall.ts`: `assembleTurnRecall`, `retrieveTurnKnowledge`, `buildRecentWindowQuery`, `collectStandingConversationIds`.
-  - `turn-whispers.ts`: `postTurnTimestamp`, `offerCoreWhisper`, `postCommonplaceWhispers`, `announceTurnMail`.
-  - `turn-trailing.ts`: `composeTrailingMessage` (the one place the trailing sections are ordered and delivered, on the user message or on their own), `buildTurnNotes`, `buildReferentSections`.
-  - `turn-history.ts`: `turnHistoryRows` (single- and multi-character history, compression window, summary anchors), `packTurnHistory`, `buildLeadingSystemBlocks` (system blocks 1–3, built once so the blocks measured are the blocks sent) and `historyContextMessages` (the summary cache breakpoint).
-  - `turn-transcript.ts`: `createTurnTranscript` — one memoised read of the chat's events per build, shared by the timestamp gate, the conversation-list dedup, the Core and progressions cadences and the referent ledger. A failed read is retried by the next reader rather than kept. The whisper sweeps still read the chat fresh after posting, so a whisper from an overlapping build is swept too.
-- `sweepPriorWhispers` (`lib/chat/whisper-sweep.ts`) replaces three copies of the snapshot-whisper sweep (Commonplace Book, Core whisper, fold-posted relevant conversations). `isInWhisperScope` (`lib/schemas/chat.types.ts`) replaces three copies of the whisper-target test. It treats an empty `targetParticipantIds` array as untargeted, as `hasWhisperTargets` and `filterWhisperMessages` already do (the old copies matched only `null`), so the untargeted sweeps and the standing-conversation dedup now include such rows. No writer creates one.
-- `parseStoredSceneState` (`lib/schemas/chat.types.ts`) parses a chat's `sceneState` column; the context build and the story-background job use it.
-- `toVisibleConversationMessage` (`lib/memory/cheap-llm-tasks/chat-tasks.ts`) is the per-row rule `extractVisibleConversation` now loops over.
-- `buildTurnSkipInstruction` moved to `lib/chat/turn-manager/skip-signal.ts`, beside its sentinel, and uses `NOTHING_TO_ADD_SENTINEL`.
-- `lazyAsync` (`lib/utils/lazy-async.ts`) memoises an async read and drops a failed one so the next call retries; the turn transcript, the mount pool and the standing conversation ids use it.
-- The Host's timestamp line and the scene-state time line read one clock value; they could differ across a minute boundary.
-- Recall and knowledge retrieval run in parallel, as do the progressions, Inventory, referent-ledger and inform-block reads.
-- `selectRecentMessages`' keep-the-last-message fallback keeps the row's `id`, which the attachment anchor needs (bug 95).
-- Fixed bug 263: the history budget did not count the trailing sections (scene state, knowledge, Core whisper, mail, progressions, Inventory, referent ledger, turn notes), system block 2, the timestamp line or the new user message, so a full context went out over `safeInputLimit` and tripped the pre-send warning. Every part of the request is now built and measured before history is packed, by the one per-message rule the pre-send check uses (`countMessageTokens` / `countMessagesTokens`; `selectRecentMessages` now uses it too); the chained-turn scene note's room is measured over the same filtered rows history is packed from. `tokenUsage.total` counts everything in `messages`.
-- Fixed bug 264: in a multi-character chat, compression summarised the early history but the turns it covered were still sent verbatim. The compression window now applies on both paths.
-- Fixed bug 265: the compression window counted tool-only and empty assistant rows the summary never saw, so each one dropped a real message from both the summary and the history.
-- Dead code removed: `willExceedContextLimit`, `formatSummaryForContext`, `shouldApplyCompression`, the `lib/chat/context/index.ts` barrel, the backwards-compatibility re-exports from `context-manager.ts`, the unused `statusChangeNotifications` / `outfitChangeNotifications` options, `ContextBudget.summaryBudget`, and `BuiltContext.includedSummary` / `tokenUsage.summary` (always false / zero since the summary became a Librarian whisper).
-- Tests: new `turn-compression`, `turn-history`, `turn-trailing` and `whisper-sweep` suites; a `buildContext` regression for bug 263; tests for the removed functions removed.
-- Help: `chat-settings-ai-services.md` (compression in group chats) and `connection-profiles.md` (the budget weighs the trailing sections).
-- `docs/developer/SYSTEM_FLOWCHARTS.md` has a new Context Build section; `PROMPT_ARCHITECTURE.md` lists the phase modules.
-
-#### Refactor: Salon turn pipeline
-
-- `processMessage` (`lib/services/chat-message/orchestrator.service.ts`) is now a sequence of phase calls; the file is 1,170 lines, down from 2,840. New modules under `lib/services/chat-message/`:
-  - `turn-stream.ts`: `openTurnStream` (turn control, keep-alives, the error frame) shared by the send path and the storyteller run; `SubmissionLedger` and `handleStreamError` moved here.
-  - `turn-holds.service.ts`: `resolveTurnHold` (paused / storyteller, pure), `qualifiesForFairRotationCheck` (pure), `maybePauseForUserSeatTurn`, and `finishHeldPost`, which replaces `finishHeldUserTurn` and the inline storyteller hold.
-  - `operator-post.service.ts`: `recordOperatorPost`, the one function that records an operator's post: staged tool results, auto-detected dice, the USER row, attachment links, the Librarian upload note, danger flags, Pascal trigger phrases and Carina. Attachment links now fail soft with a warning instead of failing the turn.
-  - `turn-preparation.service.ts`: `resolveTurnApiKey`, `resolveContextCompressionSettings` (defaults come from `ContextCompressionSettingsSchema` instead of a copied literal), `spendFullContextRequest`, `selectTurnCheapLLM`, `resolveTurnSkipOffer`, `reinjectProsperoContext`.
-  - `turn-tools.service.ts`: `resolveTurnToolSlate` (tool build, effect ceiling, tool mode, tool instructions, stop sequences, the `forceToolsOnNextMessage` flag), `resolveTurnEffectCeiling`, `buildTurnToolContext`, and `runTurnTextToolPasses`, which replaces three near-identical `runTextToolPass` calls.
-  - `turn-outcome.service.ts`: `resolveTurnOutcome` (pure: bare yield, pass, reply, tools-only, stopped, empty) and `settleTurn`, which carries it out; `handleTurnSkip` / `handleTurnYield` / `announceTurnYield` moved here.
-- `turn-extras.ts`: `spliceTurnExtras` places the tool-change notice and agent-mode instructions.
-- `buildTools` (`streaming.service.ts`) takes one options object (`BuildToolsOptions`) instead of 21 positional arguments; `BuildToolsExtras` is merged into it. All six callers updated. The legacy "`disabledTools` undefined means no tools" bail is removed (no caller used it). The orchestrator now passes the turn's effect ceiling to `buildTools` instead of filtering the list afterwards; `applyEffectCeilingToTools` is private.
-- `encodeTurnDoneEvent` fills a done frame's usage, cache usage, attachment results and model from the turn's `StreamingState`; `createTurnStatusEmitter` binds status lines to a turn's character. Done frames on the turn path use `safeEnqueue` throughout (some used `controller.enqueue`, which throws once the client has gone).
-- `triggerAfterTurnsHousekeeping` (`memory-trigger.service.ts`) runs scene tracking and the Scriptorium render after a stream's turns, for both the send path and the storyteller run.
-- `findAttachedFiles` (`context-builder.service.ts`) is the one lookup of a send's uploads among the chat's files.
-- The autonomous-room effect ceiling reads the chat settings already loaded for the turn instead of reading them again.
-- Dead code removed: `MessageServiceContext`.
-- Removed the `debugLLMRequest` SSE frame. Every Salon turn except a storyteller bid sent it at stream start, carrying the full system prompt, context summary, recalled memories and every tool schema, and no client read it. Removed with it: `encodeDebugInfo`, `StreamDebugInfo`, the `debugLLMRequest` field on the stream event type, the tool slate's `enabledToolOptions` field (only the frame used it), and the frame's tests. The LLM log viewer still shows each request as sent.
-- Fixed bug 262: in a room where the operator drives two seats, a post that handed the floor to the other seat was recorded by the fair-rotation pause's own write, which dropped staged tool results and skipped the dice, Pascal trigger phrases and the Librarian upload note. It now goes through `recordOperatorPost`.
-- A post held by a paused chat or a storyteller round is recorded even when the responder's profile has no API key; the key check runs only for a turn that will call the provider (`resolveTurnApiKey`'s `held` option).
-- `resolveTurnHold` and `qualifiesForFairRotationCheck` use `isOperatorWhisperSend` instead of a second copy of the whisper rule. The tool slate reads the project's store links and the Carina answerer probe in parallel.
-- `help/chat-turn-manager.md` says a post that hands the floor to your other seat is filed in full.
-- Tests: new `turn-outcome`, `turn-holds`, `operator-post`, `turn-preparation`, `turn-tools` and `turn-stream` suites; `turn-extras` covers the splice; the Brahma one-shot and Scenario Builder tests read `buildTools` options by name.
-- `docs/developer/SYSTEM_FLOWCHARTS.md` has a new Salon Turn Pipeline section.
-
-#### Refactor: Inventory chokepoints
-
-- Inventory writes parse a tier's `Inventory/` folder once per write instead of up to three times. `scanInventoryFolder` (`vault-overlay/inventory-readers.ts`) returns the records, the duplicate-id paths and the owned paths together; the projection sweeps only the owned paths. Folder operations hand the scan they read back to the write that follows it (`ItemFolderTree.refile` takes the list `read` returned), so delete-folder no longer parses the folder twice. `readDuplicateInventoryPaths` is gone.
-- Every write through an `InventoryLocation` that changes something publishes the `inventory` realtime topic (a batch that matched nothing publishes nothing), so an open Inventory dialog refreshes after operator changes in another window too. The per-handler `publishRealtime('inventory')` calls in the tool handlers and `pickUpItems` are removed. The topic now also invalidates `queryKeys.inventory.archetypeLists` and `equippedLists` (a Carrying-now pane shows objects resolved, so an edit to a carried object changes it).
-- `useInventoryMutations` and `useChatInventory` refresh after their own writes only while the realtime socket is down (`refreshUnlessRealtime` in `lib/hooks/use-inventory.ts`); while it is up the server's `inventory` / `chats` publish does it, so a write no longer fetches its lists twice.
-- Carried-set writes in `equip.ts` and `apply-defaults.ts` go through `writeCarriedSet`, which publishes the chat topic. `dropCarriedEverywhere` now publishes every chat it changed (it used to rely on the caller, which published only the current chat).
-- `equip.ts`: one cap check (`fitToCaps`) for equip and pick-up; refusals logged through one `refuse` helper; `loadEquipChat` replaces the copies in the chat actions, tool handlers, Pascal's effects and arrival, and `seatedCharacterIds` the seated-cast filters in the chat actions, `assertParticipant` and `inventory_give`; `equipItems` / `unequipItems` / `pickUpItems` are `async`, so a not-a-participant refusal rejects instead of throwing synchronously. `InventoryNotAParticipantError` moved to `errors.ts`.
-- Arrival defaults pass the pool they already loaded into equip instead of reading it twice.
-- `inventoryChangeContext` (`equip-effects.ts`) is the one builder for an `InventoryChangeContext`; the chat actions, tool handlers, Pascal's effects, arrival and the turn flush use it.
-- `pickForGesture(…, 'unequip')` falls back to a kit match itself; the unequip tool and Pascal's effects no longer add that fallback by hand. `INVENTORY_STATES` (`refs.ts`) is the one list of states; `INVENTORY_STATE_VALUES` and `InventoryStateValueSchema` derive from it.
-- `item-mutations.ts`: a `lintedWrite` helper replaces seven copies of lint → write → log rows; `detachAll` writes through locations instead of raw mounts, resolving every mount before writing any and skipping a vault that is no longer linked.
-- `dependents.ts`: `mountOwnerResolver` memoises mount-owner lookups per operation and reads the project and group lists once, instead of once per mount.
-- The pool no longer tags out-of-pool archetypes with a made-up `project` origin and reads tiers by mount id.
-- Routes: `withInventoryErrors` (`lib/inventory/routes/responses.ts`) replaces the repeated try/catch in the route factory, the images route, the transfers route and the chat equip action. `?action=duplicate` validates its body with `duplicateInventorySchema` (a missing `itemId` is now a 400, not a 404). The images route reads its scope with `InventoryScopeSchema`.
-- `loadEquippedSet` (`equipped-set.ts`) is the one "load the pool only if something is stored" reader, and the only place that shortcut is decided, for the prompt section and the image phrase.
-- Tool handlers share `loadOwnRecord` and call `loadEquipChat` directly (the `loadToolChat` alias is gone); `inventory_update` resolves the written record against the pool it already holds instead of reloading the whole context.
-- Client: `isInContainer` (`lib/inventory/container.ts`) is the one tier-membership test for the browser and the Workbench vantage.
-- Removed dead code: `kinOf`, `normalizeInventoryFolderPath`, `inventoryFolderStorePath`, `describeEquippedInventoryForImages`, `useInventoryDependents` and the unused `queryKeys.inventory.item` / `dependents` / `dependentLists` keys.
-
-#### Docs: 4.11.0 release notes corrections
-
-- Keystones: notes now say keystones are recalled for the character and for everyone present or in her inner circle, not "every turn they are relevant."
-- Upgrading: removed the "same as Self-Dressing" comparison for *Can manage inventory*; fixed unbalanced bold markup on *Let me take a hand* **on**.
-
-#### Feature: punctuation warnings in the Salon composer
-
-- New pure engine `lib/punctuation-lint/engine.ts` (`lintPunctuation`, no imports; same ESLint import ban as `lib/smart-typography/`) with a v5 contract corpus in `fixtures/punctuation-vectors.json`. Rules: a double quote opened inside open dialogue (and its partner), a closer with nothing to close, a quote with spaces on both sides or glued between words, a backwards curly quote, dialogue left unclosed when the next paragraph doesn't open with a quote, an unpaired `*`/`**` run, an unpaired `((`/`))`. Paragraphs split on blank lines; `6"` inch marks, `2 * 3`, `* * *` scene breaks and code are exempt. A caret position suppresses flags on a mark still being typed.
-- New `PunctuationLintPlugin` (`components/chat/lexical/plugins/`) mounted in the Salon composer. Paints with the CSS Custom Highlight API (`::highlight(qt-punctuation-warning)`), so it adds no nodes and never edits text; the editable root's `title` explains a hovered mark. No-op where the API is missing.
-- New `smartTypographySettings.punctuationWarnings` (default `true`) with a toggle on the Smart Typography card. No migration; the Zod default fills it in for existing rows.
-- New `--qt-punctuation-warning-bg` / `--qt-punctuation-warning-underline` tokens and the `::highlight` rule, mirrored to theme-storybook (1.0.83).
-
-#### Feature: non-humanoid characters
-
-- `physical-prompts.json` gains an optional `humanoid` boolean (absent = `true`), hydrated onto `PhysicalDescription.humanoid`. The Aurora Descriptions tab has a **Humanoid** checkbox for it. A physical write that omits the flag (AI Wizard, optimizer, head-and-shoulders backfill) keeps the vault's value; new vaults are scaffolded with `humanoid: true`.
-- `isHumanoid` and `NON_HUMANOID_IMAGE_DIRECTION` (`lib/characters/physical-description.ts`) are the one reader and the one instruction. For `humanoid: false`, `pickPhysicalDescription(..., 'head-and-shoulders')` skips the head-and-shoulders prompt and leads with medium.
-- Avatar prompt: no head-and-shoulders crop, no pronoun-derived "man"/"woman" (subject is "non-humanoid entity"), the non-humanoid direction, whole form in frame, equipped items listed without slot cropping or nudity fallback.
-- Wardrobe worn picture, Lantern scene descriptions (`sceneDescriptionParts`, story-background fallbacks), image-tool expansion (`nonHumanoid` placeholder flag, no gender hint) and the scene-state baseline all carry the direction and drop the gender anchor.
-- The character's own Physical Appearance section adds a "no humanoid body" line (only when the flag is false, so existing identity stacks are byte-identical); the line is sent even when no description text exists yet.
-- The vault parser reads `humanoid` leniently (`"false"`/`"true"` strings count; `null` or anything else reads as absent), so a hand-edited flag can't fail validation and drop every prompt tier.
-- Changing the flag through the character PUT recompiles that character's cached identity stack in every chat (`recompileCharacterSeats`, `lib/services/system-prompt-compiler/character-fanout.ts`); the subprompt fan-out now runs on the same helper.
-- Image-side gender anchors go through `figureGender` / `figureGenderNoun` / `figureGenderPrefix` (`lib/characters/pronoun-gender.ts`), which take the physical description and return no gender for a non-humanoid character. Story-background enumerations render through `sceneDescriptionParts`, which also strips a trailing period before the non-humanoid direction.
-- The scene-state tracker and the appearance resolver LLM are told a character is non-humanoid on a separate line; the direction is no longer baked into the scene-state appearance text.
-- A non-humanoid avatar with no prompt text and nothing equipped still gets a prompt.
-- The optimizer's appearance pass is told not to suggest a head-and-shoulders prompt. The head-and-shoulders backfill skips non-humanoid characters.
-
-#### Feature: name chips for absent characters replace the Host's introduction cards
-
-- The Host no longer posts a card when an absent workspace character is named. Instead the Salon puts a chip on the name at its first mention in the chat; hovering (or focusing) it shows the card in the shared `Tooltip` (pinnable, scrollable): name, aliases, pronouns, identity/description. The model still gets the same card from the referent ledger.
-- New `GET /api/v1/chats/[id]?action=absent-mentions` (`lib/chat/absent-mentions.ts`): for each absent character, the first spoken message naming them, the name as written, and `offSceneCardFields` (new; `renderOffSceneCard` now formats from it). Query key `queryKeys.chats.absentMentions`, on the `chats` realtime topic; hook `useAbsentMentions`.
-- `presenceOf` and `spokenText` (same module) are the one rule for who is in the room and what counts as a spoken line; the context builder's ledger uses both.
-- New shared matcher `lib/chat/name-mentions.ts` (case-sensitive, letter-bounded, longest token first), used by the ledger and the chips.
-- Rendering: `rehypeMentionMarkers` (`lib/chat/mention-markers.ts`) wraps the first eligible occurrence (direct text of p/h1–h6/li/blockquote; not code, links, emphasis or math) in private-use markers, so the roleplay tokenizer still styles the surrounding line; `MessageContent` turns marked runs into `MentionChip`s. A message with chips skips the pre-rendered HTML fast path. Prose split around tool calls gives each chip to the first run that names it (`assignMentionsToRuns`).
-- Old "spoken of" cards stay in the transcript but are hidden from the Salon feed.
-- Removed: the per-turn off-scene scan and posting in `buildContext`, `findIntroducedOffSceneCharacterIds`, and `lib/chat/context/mentioned-characters.ts` (with its test). The writer's `'mentioned'` wording has no caller now; Continue Elsewhere's left-behind notice is unchanged.
-- New `qt-mention-chip` class (`_chat.css`), mirrored to theme-storybook (1.0.82).
-- Docs: API.md, PROMPT_ARCHITECTURE.md §2; help `help/salon-host-introductions.md` (now "Absent Acquaintances").
-
-#### Change: absent-character cards move from the history to the referent ledger
-
-- The Host's "spoken of" introduction (the card posted the first time an absent workspace character is named) no longer reaches the model. It is record-only: `isRecordOnlyMessage` (`buildMessageContext`) and `extractVisibleConversation` (cheap-LLM tasks, including compression) strip it, and the context builder no longer pushes the new card into the turn. It is still posted to the Salon for the operator.
-- The referent ledger now carries the card of each listed person not in the room, rendered by the Host's `renderOffSceneCard` (now exported), after the entry list. Cards with nothing under the heading are skipped. Cost: absent people named in the last 6 lines are re-sent each turn on the uncached tail; anyone named earlier than that is not sent.
-- An unseated persona counts as in the room wherever the operator speaks without a seat (`operatorSpeaksWithoutSeat`), so it gets no card and is not called absent; in an autonomous room it is absent, as in bug 172.
-- Left-behind notices (Continue Elsewhere) now post with their own `systemKind`, `off-scene-left-behind`, and stay in the history. Older left-behind rows keep `off-scene-characters` and are told apart by their opening (`LEFT_BEHIND_INTRO_PREFIX`). `findIntroducedOffSceneCharacterIds` reads both kinds. Kinds and the predicate live in `lib/services/host-notifications/off-scene-kinds.ts`.
-- The Courier transport is unchanged: it builds its own transcript, has no ledger, and still passes the cards.
-- Docs: `PROMPT_ARCHITECTURE.md` §2 and §9; help `help/salon-host-introductions.md`.
-
-#### Feature: referent ledger and closing echo in the trailing context
-
-- Characters lost track of who a pronoun meant. On `Friday` (chat `c277aef9…`, glm-5.3-flash) Friday ended a turn with "…Abigail will absolutely make that a formal finding. You've seen how she documents." Charlie replied "When she's not scolding Vergil for his bedside manner." Friday answered as if "she" were herself. In the request, a Host card for Greg sat between the two lines, and Charlie's 50-character line was followed by about 21 KB of scene state and recall.
-- New `lib/chat/context/referent-ledger.ts`, two trailing sections added after the inform block and before the turn notes:
-  - `buildReferentLedger` ("Who is being spoken of"): everyone named (name or alias, case-sensitive, letter-bounded) in the last 6 spoken lines (no Staff messages), most recently named first, at most 8. Each entry has pronouns, in the room or not, who last named them and the sentence they were named in (plus the next sentence when it fits in 220 characters). Leaves out the responder and the author of the latest line. Empty when nobody is named.
-  - `buildClosingEcho` ("The line you are answering"): the new user message repeated last. Over 1,500 characters, only the closing paragraphs. Empty on chained / continue turns.
-- Wired in `buildContext` (`lib/chat/context-manager.ts`). Reuses the character list and message read from the off-scene introduction scan. Speaker names come from `resolveSpeakerNames` / `speakerLabel`. Warn-and-skip on error. Not in the cached prefix, not persisted; no builder version bump.
-- Help: `help/salon-host-introductions.md` ("Keeping Track of Who Is Meant").
-
-#### Fix: Pascal hold dialog can re-ask a hidden consult
-
-- A held run's consult prompt can quote things the operator changes in the dialog (the winning row's `brief`, a parameter). When a tool hid both `llmPrompt` and `llmAnswer`, the dialog showed no Consult section, so there was no out-of-date marker and no Re-ask; the run dealt with an answer written for the old outcome. Seen on `Friday` with `read_timestream`: moving the value across 0 changed the outcome from the `bad-result` brief to the `expected-outcome` brief, and the message kept the old text.
-- `?action=intervention-reask` now works for any tool with an `llm` block. It poses the prompt the run currently renders. An `llmPrompt` override on a hidden prompt is still refused (400).
-- `CustomToolInterventionDialog` shows a small "The oracle" section when the consult is hidden: a Re-ask button and a note saying whether the answer still fits the question (`staleAnswer`).
-- Help: `help/custom-tools.md` ("Taking a Hand in the Deal").
-
-#### Feature: self_inventory core-file checklist and holdings counts
-
-- New `vault.coreFiles` sub-section of `self_inventory`: the nine core files of the character's vault (`SINGLE_FILE_OVERLAY_PATHS`, in overlay order), each with its path as found (matched case-insensitively), whether it exists, its size, its named `qtap://` URI, and a one-line summary of what belongs in it. Bare `vault` now includes it. Summaries live in `CORE_VAULT_FILE_SUMMARIES` (`lib/services/character-field-semantics.ts`), keyed by the overlay path type so a new core file fails to compile until it is described.
-- New top-level `holdings` section, with `holdings.wardrobe`, `holdings.inventory` and `holdings.customTools`. Counts what the character can reach, read through the same loaders the tools use: wearable garments and outfits (composites) via `loadWearablePool`; objects, kits, archetypes and objects carried in this chat via `loadInventoryContext` (roster-gated, archived skipped); runnable custom tools with their names via `resolveCustomToolRoster` (unavailable when custom tools are off). Each count is split by tier (own vault, groups, project, Quilltap General). Each part fails soft on its own. Code in `lib/tools/handlers/self-inventory/holdings.ts`.
-- `SelfInventoryVaultIncludedParts` gained `coreFiles`; `vaultAccess` now uses its own `SelfInventoryVaultAccessIncludedParts`. Tool description updated (snapshot regenerated).
-- Help: `help/character-system-transparency.md`, `help/inventory.md`; `docs/FEATURES.md` self_inventory summary brought up to date.
-
-#### Fix: doc tools can read, grep and search chat uploads (bugs 260, 261)
-
-- Bug 260: chat uploads land in the project store (or Quilltap Uploads) as blobs, and the upload bridges had text extraction off, so `doc_read_file`, `doc_grep` and search could not see an uploaded `.md`, `.txt`, `.json`, PDF or DOCX. On `Friday` a character sent to find an uploaded `CHANGELOG.md` at the project root got ENOENT and said it did not exist.
-  - New `extractBlobText` in `lib/mount-index/store-file.ts`: the one place blob text is derived. PDF/DOCX through the converter, native text as its own bytes. `storeMountFile` uses it for every extractable blob (`isExtractableBlobPath` / `EXTRACTABLE_BLOB_EXTENSIONS` in `path-utils.ts`), so the REST blob route also extracts native text now.
-  - `project-store-bridge` and `user-uploads-bridge` pass `extractText: true`, `enqueueEmbedding: true`. Uploads are still blobs; `files.storageKey` is unchanged.
-  - `doc_read_file` falls back to a blob's extracted text when a database store has no document at a text path (read-only; edit tools are unchanged). `doc_grep` also searches blob text. Both via new `readDatabaseBlobText` / `listDatabaseBlobTexts` in `database-store.ts`.
-  - New startup pass `backfillUploadBlobText` (`lib/startup/backfill-upload-blob-text.ts`), chained after the document-store scan: extracts, chunks and queues embeddings for blob links in database stores still at `extractionStatus = 'none'` with an extractable extension (`docMountBlobs.listUnextractedByExtensions`). Idempotent by status, no flag. 87 files on `Friday`.
-- Bug 261: `doc_list_files`' `pattern` matched only `*.ext` or an exact name, so `**/CHANGELOG.md` found nothing. New `compilePathGlob` (`lib/doc-edit/path-glob.ts`): `**`, `*`, `?`, `{a,b}`, `[…]`; a pattern with no `/` matches file names in any folder; `**/` matches zero or more folders; case-insensitive. Tool description updated (snapshot regenerated).
-- Help: `help/file-uploads.md` ("A word on manuscripts") and `help/document-editing-tools.md`.
-
-#### Fix: every character gets every attachment in multi-character chats (bug 259)
-
-- Characters after the first to answer get a user's attachments re-loaded from history (bug 121). That path had an 80,000-character cap per turn and skipped any file that would not fit, with only a server-log warning, while the first responder got every file with no cap. On `Friday` a 108 KB `CHANGELOG.md` reached Amy (first) and not Friday (second), and Friday's prompt gave no sign it was missing.
-- Removed the cap (`REHYDRATED_ATTACHMENT_CHAR_BUDGET`) from `rehydrateUserAttachments` (`lib/services/chat-message/context-builder.service.ts`). Each character now gets every unseen upload whole on its first turn after the upload, the same as the first responder; `buildContext` trims it like any other message. Exported `rehydrateUserAttachments` for a regression test.
-- Documented in `help/chat-multi-character.md` ("Everyone Reads What You Hand Round").
-
-#### Docs: draft 4.11.0 release notes
-
-- Added `docs/releases/4.11.0.md` (`draft: true`): overview of the 4.11 cycle and an Upgrading section covering vault-scoped custom tools, inventory self-management on by default, and the newly destructive-gated `doc_delete_blob` / `delete_annotation` in autonomous rooms.
-
-#### Fix: wardrobe and inventory tools ask for a picture cue
-
-- `wardrobe_create` / `wardrobe_update` (`image_prompt`, `description`) and `inventory_create` / `inventory_update` (`image_description`) now tell the model plainly that image pipelines never read the description, and ask for a literal visual cue of 200 characters or fewer with every new garment or visible object. Without one, avatars and story backgrounds got only the item's title. Wording is shared from `lib/tools/image-cue-guidance.ts`. The 200 characters is guidance only, not enforced.
-- Text-block (non-native tool) instructions for `CREATE_WARDROBE_ITEM` and `CREATE_INVENTORY_ITEM` carry the same instruction and show `cue=` / `looks=` in their examples.
-- Fixed: the body of a text-block `CREATE_WARDROBE_ITEM` was passed as `content`, which `wardrobe_create` does not accept, so its description was silently dropped. It now maps to `description`.
-
-#### Feature: always-on floating Brahma Console
-
-- New `BrahmaConsoleLauncher` button, pinned bottom-left just right of the left rail on every authenticated page. Never disabled; toggles the floating Brahma Console dialog. With no connection profile the console opens to its "wants for an engine" note.
-- The floating console now works with the workspace enabled (before, the sidebar mark opened only the workspace tab there). The sidebar mark is unchanged: workspace tab inside the workspace, floating dialog elsewhere.
-- `FloatingDialog` takes `topmost`: the dialog sits in a new floating layer (`--qt-floating-layer-z: 1000`, above every portal modal, below the startup gates), carries `data-qt-floating-layer`, and closes on Escape only when the key is pressed inside it (the key is swallowed). `useClickOutside` ignores mousedowns and Escapes inside that layer (`isInFloatingLayer`, `components/ui/floating-layer.ts`), so using the console never dismisses the modal beneath it.
-- Refactor: the console body is `BrahmaConsolePanel` (render-prop: `headerActions` + `body`), shared by the workspace tab (`BrahmaConsoleView`) and the floating dialog (`BrahmaConsoleDialog`). Which conversation a surface is on is per surface (`useBrahmaConsoleSession`, own localStorage key each), so the tab and the dialog no longer share a current chat. The provider keeps only open/close/toggle and the profile list.
-- The floating console stays mounted while hidden, so a streaming reply keeps arriving and reopening returns to the same conversation (it used to reset to the launcher on every open).
-- Console header: the model picker shows on the launcher too (default profile until one is picked; the pick is used for the next new conversation), plus a "Past conversations" button beside "New conversation". A remembered conversation that 404s falls back to the launcher.
-- New `qt-floating-dialog-topmost`, `qt-brahma-launcher`, `qt-brahma-launcher-active`, `qt-brahma-launcher-icon` and `--qt-brahma-launcher-*` tokens; the `qt-floating-dialog` family is now mirrored in theme-storybook (1.0.81).
-
-#### Feature: min/max ranges in the Pascal intervention dialog
-
-- `executeCustomTool` reports `rollSpan` and `valueSpan` (`RunSpan` in `lib/pascal/custom-tools.ts`): what the raw draw and the value after modifiers could have been under the run's resolved parameters. Range form: `[min, max)` carried through multiply, offset and round (a negative multiplier swaps the ends; rounding makes both ends reachable values). Dice: all ones to all sides, modifier included. Spans ignore pins.
-- The hold dialog shows them under the roll and the value (dice also show the per-die range) and they refresh with each preview. The phrasing is `describeSpan` in the new client-safe `lib/pascal/intervention/spans.ts`.
-- Recompute adds a non-blocking warning when a pinned draw or value lies outside its span.
-- Spans are on the intervention view only; they do not reach `pascalMeta` or any model.
-
-#### Feature: wardrobe pronoun guidance
-
-- Wardrobe items take an optional `pronounGuidance` list (frontmatter key `pronounGuidance`): the standard pronoun sets the item is meant for, named by subject (`he`, `she`, `they`, `it`). The values are the Aurora pronoun picker's presets, now shared from `lib/characters/pronoun-presets.ts`. Empty or absent means the item is offered to everyone. Unknown values are dropped on read.
-- One rule, `fitsPronounGuidance` / `filterByPronounGuidance` (`lib/wardrobe/pronoun-guidance.ts`): an item with guidance is offered only to characters whose pronouns are one of its sets. A character with unset or custom pronouns is offered everything. Guidance never blocks wearing an item by id or title.
-- `wardrobe_list` is pronoun-aware by default. New `pronoun_aware` parameter (default `true`); currently equipped items are always listed. The result reports `hidden_by_pronoun_guidance` and each item's `pronoun_guidance`, and the formatted text says how many were held back. `wardrobe_read` reports `pronoun_guidance`. `wardrobe_create` and `wardrobe_update` take `pronoun_guidance`.
-- The "Let character choose" outfit pass only offers the cheap LLM items that fit the character's pronouns.
-- Wardrobe UI: a Pronoun Guidance field in the item editor; a "Pronoun-aware" checkbox (default on, shows the hidden count) in a character's Wardrobe list, which also narrows the Live / Outfit Builder pickers; the same checkbox in the chat-start composer. Rows show their guidance. New `usePronounGuidanceFilter` hook and `PronounAwareToggle` component; `OutfitComposer` / `EquippedSlotRow` take an optional `pickableItems`.
-- Export schema documents the new `WardrobeItem.pronounGuidance` field. No migration: the field lives in vault frontmatter.
-
-#### Feature: Novel roleplay template
-
-- New built-in roleplay template **Novel** (`lib/chat/novel-template.ts`): narration is unmarked prose shown in italics, dialogue goes in straight or curly double quotes, `*emphasis*` (single asterisks, hidden) is shown bold and italic, `**` means nothing and is dropped from display, and `((OOC))` uses the OOC style. Its system prompt ends with a correctly formatted example passage. Its rendering patterns come from `generateTemplateRenderingPatterns`, the same generator user templates use.
-- Template capabilities, all available in the template editor:
-  - `narrationDelimiters: null` means narration is unmarked prose (editor: "None — plain prose").
-  - `unmarkedStyle` (`{ style, addOns? }`) styles text that no delimiter claims. New editor style option `qt-roleplay-plain` (a theme hook with no CSS of its own).
-  - `markdownAsterisks: false` escapes single `*` before Markdown parsing, so a `*` delimiter can claim it. It also strips `**` runs. Scene-break lines, list bullets, inline code, math and fences are left alone. The composer hides its Bold button for such templates.
-  - Wrap delimiters accept `matchCurlyQuotes` (straight quotes also match `“”`/`‘’`) and `closeOptional` (an unclosed span runs to the end of the text run, for speech carried over several paragraphs).
-- `RenderingPattern.scope` gains `unmarked`, `literal` and `strip`; `className` may be empty for the last two. `tokenizeInline` takes `{ unmarkedClassName }` and runs the other inline rules inside each matched span (up to three levels deep), so emphasis inside dialogue is styled. `Segment` gains `children`. The client (`MessageContent`) and server (`markdown-postprocess`) adapters apply the unmarked class only to text directly inside an unclaimed block. A line-claimed block drops it.
-- `isQuoteSensitiveRoleplayConfig` no longer turns off smart quotes for a wrap pattern that names each straight quote's curly forms.
-- The formatting-hint generator describes unmarked narration, curly-tolerant and unclosed wraps, and the `**` rule.
-- Migration `add-roleplay-template-unmarked-fields-v1` adds `roleplay_templates.unmarkedStyle` (TEXT) and `markdownAsterisks` (INTEGER, default 1). The export schema and DDL.md include the new fields.
-
-#### Fix: roleplay template narration pairs read back as strings
-
-- `narrationDelimiters` is a string-or-tuple union, so the schema classifier did not treat it as a JSON column. A pair such as Quilltap RP's `["[","]"]` was stored as JSON text and read back as a single string, and a `null` read back as `'*'`. The roleplay-templates repository now writes the field as JSON text and decodes it on every read (`roleplay-template-narration-codec.ts`). Legacy raw values still decode.
-
-#### Feature: drag storyteller bids into running order
-
-- The storyteller board's cards are sortable (`@dnd-kit`, mouse drag, long-press on touch, keyboard). Only cards with a live bid can be picked up. Once rearranged, chosen cards show their place in the run, and a "Reset order" button returns the board to the round's own order.
-- `POST /api/v1/chats/[id]?action=storyteller-run` takes `keepOrder`. When `true`, `planStorytellerRun` runs `participantIds` in the order given instead of sorting by `resolveCycleOrder`; this also orders an all-at-once round's Act / Destroy tail. Without it, behavior is unchanged.
-- New `qt-storyteller-board-tools`, `qt-storyteller-card-draggable`, `qt-storyteller-card-dragging` and `qt-storyteller-card-order` classes, mirrored to theme-storybook 1.0.80.
-
-#### Feature: operator intervention in Pascal custom tools
-
-- A custom tool can be marked intervenable: top-level `intervention: { enabled, fields? }` and per-member `intervene` flags on parameters and effects, in the Zod schema, the published JSON Schema and the Workbench draft. Workbench gains a "Let me take a hand in each roll" toggle, per-field hand toggles, and a library marker.
-- `runCustomTool` takes `mayHold`. `run_custom` and trigger phrases pass `true`; the popup passes `false`. An intervenable run is held after the deal and before effects and the post, but only in the parent process, outside autonomous rooms, and with `chatSettings.customToolIntervention` on (new column, default on, migration `add-custom-tool-intervention-field-v1`, Settings → Chat → Automation).
-- New `lib/pascal/intervention/`: a `processSingleton` hold registry (first resolve wins, no timeout, Stop vetoes, keep-alive pings through the turn's new `keepAlive` hook in `turn-control.ts`), the overrides schema and hidden-field check, a pure recompute, and the veto wording.
-- `executeCustomTool` returns the random draw it used (the unit draw for ranges, the faces for dice) and accepts `draw`, `consult` and `pins`, so a held run is recomputed by the same engine without rerolling or calling the model.
-- New actions on `/api/v1/chats/[id]/custom-tools`: `GET ?action=interventions`, `POST ?action=intervention-preview|intervention-reask|intervention-resolve`. An override naming a hidden field is a 400; a second resolve is a 409.
-- New realtime topic `customToolInterventions` and query key `customTools.interventions(chatId)`. The Salon mounts `CustomToolInterventionDialog`, which reopens after a reload or in a second tab and queues several holds.
-- A veto posts nothing and applies nothing. `run_custom` gets "The tool did not run." for a plain character and the "table is closed" wording for a `systemTransparency` character or a user-controlled seat.
-- A changed deal records `pascalMeta.intervention` (what was dealt, which fields changed, Re-ask count, stale-answer flag). An as-rolled decision, or a deal that changed nothing, records nothing. The Pascal chip shows a hand badge with a dealt → final tooltip. No model-facing path reads `pascalMeta`.
-- New `qt-intervention*` / `qt-intervene-toggle*` classes in `_intervention.css`, mirrored to theme-storybook 1.0.79.
-
-#### Fix: every Salon LLM call reaches the LLM Inspector
-
-- `streamMessage` (`lib/services/chat-message/streaming.service.ts`) writes one log row per call however it ends. A call that throws is logged with its error and partial content; one its consumer abandons is logged with a note. Before, only calls that reached a terminal chunk were logged, so a refused or stalled primary never appeared beside the failover that replaced it.
-- Swipe regeneration (`regenerate-swipe.service.ts`) now streams through `streamMessage` instead of calling the provider directly, so it is logged (with cache usage) against the chat and the new swipe's id. It also picks up the versioned character cache key the ordinary turn uses.
-- Request-limit recovery (`recovery.service.ts`) passes `userId`, `chatId`, `characterId` and a pre-minted `messageId`; it was never logged.
-- Image description (`sendVisionRequest`) takes a `chatId`, threaded from `file-attachment-fallback.ts` through every describe attempt, and records `connectionProfileId` and cache usage. Its rows used to carry no chat link.
-- Cheap-LLM tasks (`core-execution.ts`) log failed attempts with their error and record `finishReason` and `cacheUsage`. The danger classifier does the same.
-- The opening greeting records `cacheUsage`, `rawProviderUsage`, `finishReason` and `connectionProfileId`.
-- `POST /api/v1/images?action=generate` logs each image attempt as `IMAGE_GENERATION` with the chat that asked.
-- Inspector: badge colours and labels are typed `Record<LLMLogType, …>`, so a new log type will not compile until it has both. Scene tracking joins System Ops; image generation and wardrobe/inventory pictures join Image; "Other" is derived as every type no named filter claims.
-
-#### Docs: spec for operator intervention in Pascal custom tools
-
-- New spec `docs/developer/features/pascal-operator-intervention.md`. Not implemented.
-- A custom tool can be marked intervenable, with a per-field flag for what the operator may change. When a model's `run_custom` call or a trigger phrase runs one, the run is held in the parent process. The operator can edit the parameters, roll, value, consult prompt and answer, outcome, message, state, effects, visibility, announcer, title and chip label for that run only, run it as rolled, or veto it. Edits recompute the later fields without rerolling.
-- The model is never told. A veto returns "The tool did not run." to a plain character; only a `systemTransparency` character or a user-controlled seat hears that "the table is closed." Changes are recorded in `pascalMeta.intervention`, which no model reads.
-
-#### Feature: Storyteller mode and declared tool effects
-
-Spec: `docs/developer/features/complete/storyteller-mode.md` (implemented; moved to `complete/`).
-
-- Tool effects (Part 1):
-  - Every tool declares an effect: `none`, `read`, `write` or `destroy`. Undeclared counts as `write`.
-  - Built-in tools declare it beside their definitions (`xxxToolEffect`); `lib/tools/effects.ts` collects them (`BUILT_IN_TOOL_EFFECTS`) and resolves any call with `effectOfToolCall` / `maxEffectOfTool`. `state`, `edit_custom_tool`, `doc_open_document` and `run_custom` compute theirs from the validated input.
-  - The tool-definitions snapshot test fails on an undeclared tool, records each effect, and checks every computed effect's branches.
-  - `ToolExecutionContext.effectCeiling`: `executeToolCallWithContext` refuses a call above the turn's ceiling with a tool result saying why. `buildTools()` (`BuildToolsExtras.effectCeiling`, `applyEffectCeilingToTools`) drops tools whose static effect is above it and adds a one-line note to computed ones.
-  - `DESTRUCTIVE_TOOL_NAMES` (`lib/tools/destructive-tools.ts`) is deleted. The autonomous-room gate now sets a `write` ceiling when destructive tools are not permitted, so `destroy` tools are filtered and refused at execution. `doc_delete_blob` and `delete_annotation` are now `destroy` and newly gated there.
-  - Pascal: `customToolEffect` (`lib/pascal/tool-effect.ts`) is `write` for a definition with any effect, else `read`. The Workbench library shows it as a badge. Trigger phrases in a storyteller turn skip a tool above the turn's ceiling.
-  - Plugins: `@quilltap/plugin-types` 2.9.0 adds `ToolEffect` and `ToolPlugin.getToolEffects?(config)` (sync or async). The host reads it through `toolRegistry.getToolEffects`. MCP plugin 1.1.45: each server's config takes an `effect` (default `write`) inherited by its tools. curl plugin 1.0.32 declares `curl` a `write`.
-- Storyteller mode (Part 2):
-  - `chats.turnMode` (`'rotation'` NULL / `'storyteller'`, patch-only, `ChatsRepository.setTurnMode`) and `chats.storytellerInviteFilter`. Set through `PUT /api/v1/chats/[id]` with a top-level `turnMode`. Leaving storyteller mode closes the open round.
-  - An operator post in a storyteller chat is recorded, then opens a round instead of drawing a reply. Every present LLM character seat is asked for a bid in parallel; bids stream to the send as `storytellerRound` / `storytellerBid` frames, then `roundOpen` and `chainComplete` reason `round_open`. Board timeout 45 s; late bids reach the board through the new `storytellerRounds` realtime topic.
-  - A bid is a full in-character call built by the ordinary turn path (`runStorytellerBid`) with `purpose: 'bid'`, run inside a dry scope (`lib/repositories/dry-scope.ts`) that discards every repository write except the LLM log. The bid section is the last trailing section. The call sends the turn's tools with the new `toolChoice: 'none'` stream option and is logged as `STORYTELLER_BID`.
-  - Bid replies are parsed forgivingly (`lib/storyteller/bid-parse.ts`). The server computes the tier (Simple / Lookup / Act / Destroy) from the stated tier and the named tools (`tiers.ts`) and notes when the tools raised it.
-  - New actions: `?action=storyteller-run` (SSE; `sequential` or `simultaneous`), `?action=storyteller-ask` (Ask anyway), `?action=storyteller-lie` (Let it lie), `GET ?action=storyteller-round`.
-  - Speaking turns run under the tier's ceiling, carry a trailing "your plan" section, may pass with `[NOTHING TO ADD]`, and store the bid on the reply (`chat_messages.storytellerBid`). A swipe re-rolls under the same plan and copies the bid. Memory extraction, the summary fold, danger classification, scene tracking and the Scriptorium render run once after the round (`runStorytellerRoundHousekeeping`).
-  - Sequential order follows `resolveCycleOrder`. "All at once" runs Simple and Lookup turns concurrently (at most 4 per connection profile), then Act and Destroy turns in order. Concurrent frames are tagged with `participantId` and `concurrent: true`; only the group's first turn posts the cadence's public Prospero announcement.
-  - A nudge in storyteller mode runs one turn with no ceiling and no chain. A whisper and an `@Name:` query open no round.
-  - New table `storyteller_rounds` (bids cleared on close; not exported or backed up; truncated by replace-mode restore). New `llm_logs.storytellerRoundId`, stamped through `lib/storyteller/round-context.ts`. Migrations `add-storyteller-mode-v1` and `add-llm-logs-storyteller-round-id-column-v1`.
-- Client: the sidebar's Pause button is a three-way Normal / Paused / Storyteller control, with an "Invite by talkativeness" toggle. The board (`components/chat/StorytellerBoard.tsx`) sits above the composer. `useSSEStreaming` gains `runStorytellerSelection` and one streaming bubble per concurrent speaker. The LLM inspector has a "Storyteller Rounds" filter and a round chip.
-- Repository method classification (read/write prefixes, `METHOD_OVERRIDES`, synthetic write results) moved from the job child's proxy to `lib/repositories/method-classification.ts`, shared with the dry scope.
-- New `qt-storyteller-*` classes (`app/styles/qt-components/_storyteller.css`), mirrored into theme-storybook 1.0.78.
-- Docs: new `help/storyteller-mode.md`; updates to `chat-multi-character.md`, `chat-participants.md`, `pascals-workbench.md`, `custom-tools.md`, `autonomous-rooms.md`, `tools-settings.md`; DDL.md, API.md, FEATURES.md, `BACKGROUND_JOBS_CHILD.md`, the plugin-types README, and the export schema (`turnMode`, `storytellerInviteFilter`, `storytellerBid`).
-
-#### Fix: a whisper no longer starts a turn chain of its own (bug 258)
-
-- A whisper from the Whisper dialog now gets one reply from its target and no chain afterward. The floor goes back to the operator.
-- A whisper sent while another Salon stream is running in the chat waits for that stream to finish (`waitForEarlierTurns` in `lib/chat/turn-control.ts`) instead of running beside it.
-- Before: the whisper ran a full chain in a stream the Salon never displayed, concurrently with any chain already running, both drawing on the same turn queue and rotation.
-- `isOperatorWhisperSend` (`lib/services/chat-message/whisper-send.ts`) decides which sends get this treatment. Docs: `help/chat-multi-character.md` ("Who Answers a Whisper").
-- Docs: new spec `docs/developer/features/storyteller-mode.md` for a third Salon turn mode, in which characters bid to answer and the operator picks who speaks. It also covers declared tool effects (`none` / `read` / `write` / `destroy`). Not implemented.
-
-#### Feature: keystone memories
-
-- New `memories.keystone` column (migration `add-memory-keystone-v1`, with a partial `(characterId, aboutCharacterId)` index). It marks a memory as an operator-set standing fact.
-- In the frozen archive, keystones come before digests for each present character, for the holder, and for each inner-circle member.
-  - A present character's keystones move into `## Those Closest to You`.
-  - Self keystones stay in the anchors.
-  - Any keystone renders as full text, including in the anchors and the head.
-  - When the circle cap or token budget binds, every digest is cut before any keystone.
-- Maintenance never touches a keystone.
-  - The near-duplicate fold, consolidation (as member or seed) and demotion skip keystones, and they don't count against the cap.
-  - `foldInto` adds no `[+]` footnotes and no anchor fields to a keystone.
-  - Chat wipes spare keystones (`policyProtectionOf` returns `'keystone'`).
-  - A keystone digest survives when its last member retires.
-- Limits:
-  - At most 5 hot keystones per holder and subject (`KEYSTONES_PER_SUBJECT_MAX`). Self counts the holder's own id and NULL together.
-  - Cold rows can't be marked.
-  - Both rules are enforced in `updateMemory`. Manual create checks the limit before admission, then marks the row through `updateMemory`.
-- Fixed: raw-query memory reads now convert the stored 0/1 to a boolean before schema validation.
-- New repository methods `findKeystones` (ordered by creation) and `countKeystones`.
-- UI: a "Keystone — always remembered" checkbox in the memory editor, a Keystone badge on cards, and a "Keystones only" list filter (`?keystone=true`).
-- CLI:
-  - `memories ls --keystone` (◆ marks keystones in tables).
-  - `memories show` prints a Keystone line.
-  - New `memories keystone <id> [--off] [--write]` PUTs through the running server and is a dry run without `--write`.
-  - Shell completions updated.
-- Export schema, DDL.md, help (`memory-recall-relevance.md`, `memory-maintenance.md`, `cli-memories.md`) and the CLI README are updated.
-- The inner-circle-recall spec moved to `features/complete/` with as-built notes, and the roadmap now lists it.
-
-#### Feature: group members get reserved full-text slots in recall
-
-- The frozen archive now has an inner-circle step, after present characters and self digests and before the importance fill. Every character who shares a group with the speaker, except anyone present and archived characters, gets hot digests by the tier of the smallest shared group: 3 for the tightest group, 2 for the next, 1 for the rest.
-- The step is capped at one third of the archive. When the cap or the token budget binds, the loosest tier loses rows first, and each member's later digests go before anyone's first.
-- Circle rows render in full text under a new `## Those Closest to You` section ahead of `## Memory Anchors`, with no age tags, in a fixed order (tier, group name, member name), so the section stays byte-stable within a compaction generation. They count as archive rows for dedup and delivery.
-- The archive cache now also checks the circle's signature, re-read from group membership each turn. Membership changes, renames that reorder the circle, and archived members take effect on the next turn without explicit invalidation.
-- `recall-replay --tuning` accepts `innerCircleShare` and `innerCircleAllowance`.
-- `findNamesByIds` takes an `excludeArchived` option.
-- The recall-replay result now includes the assembly's `warnings`, so a pool that failed is reported instead of showing up empty with no trace entry.
-- Spec: `docs/developer/features/complete/inner-circle-recall.md` (Phase 2).
-
-#### Fix: memory importance scale no longer rates work commitments with family facts
-
-- The SELF and OTHER extraction prompts, the episode prompt and the consolidation prompt share one recalibrated scale. 0.95 is for facts that redefine a life or bond (marriage, vows, pregnancy, birth, death, a change of body, joining or leaving the family); 0.85 for revelations and spoken personal commitments about a relationship; work commitments to build, file, fix or rule on something sit at 0.60–0.65; work decisions in passing at 0.45. The old 0.90 "spoken commitment" anchor put every "agreed to build X" beside pregnancies, and with newest-first tie-breaking the frozen archive's importance fill became the latest build-session rows.
-- New `WORK_IMPORTANCE_CEILING` (0.65) and `IMPORTANCE_WORK_CEILING_NOTE` in `lib/memory/extraction/prompts/shared.ts`, stated verbatim in all four prompts. The prompts' worked examples were rescored to match, and each gained a 0.95 family-fact example.
-- All four prompts also carry `IMPORTANCE_FACT_NOT_TELLING_NOTE`: a pregnancy, marriage, birth, death, change of body, or someone joining or leaving the family scores 0.95 however it arrives; the 0.85 band is for revelations whose content is not itself such a fact. Without it, a dry run over a breakfast pregnancy announcement scored most pregnancy memories 0.85 as "revealed …".
-- Existing rows are not rescored. The hourly rate limit's importance floor (default 0.7) now drops work notes first under pressure.
-- Tests: `lib/memory/extraction/__tests__/importance-rubric.test.ts`. Help: `help/memory-recall-relevance.md` ("How the Book Rates a New Note"). Phase 1 of `docs/developer/features/complete/inner-circle-recall.md`.
-
-#### Fix: a custom tool's LLM consult can narrate a verdict the table already reached (bug 257)
-
-- An outcome row can carry a `brief` (the conclusion it means). When no row tests `llm`, the table is dealt before the consult and the prompt can quote `{{outcome.brief}}`, `{{outcome.state}}` and `{{outcome.index}}`, so the model is told the verdict instead of asked to compare numbers. The same placeholders work in messages, the chip label and effects. Tables that test `llm` keep the old order.
-- Load-time rules: `{{outcome.*}}` in a prompt whose table tests `llm` is rejected; a `brief` needs an `llm` block and cannot quote `{{llm}}` or `{{outcome.*}}`.
-- Workbench: a brief field per outcome, a warning on prompts that compare numbers, a warning on rows without a brief when the prompt reads one, and an audit flag on reachable rows without a brief.
-- Docs: `help/custom-tools.md` ("When the table, not the oracle, decides") and `help/pascals-workbench.md`. Schema mirror updated in `public/schemas/qtap-custom-tool.schema.json`.
-
-#### Docs: blank Inventory drawing descriptions are invisible
-
-- The Inventory editor's "How it should be drawn" hint and `help/inventory.md` now say an empty or whitespace-only `imageDescription` keeps the object out of avatars, story backgrounds and the image tool; the object's own picture falls back to description, title, then name. Behavior was already this way (`renderCarryingPhrase` trims and skips). Added `__tests__/unit/lib/inventory/image-description.test.ts` to pin it.
-
-#### Fix: composer action buttons stack vertically
-
-- Send, raise-hand and Stop now sit in a column beside the editor at every width, at 2.5rem each, instead of a row of three 3rem buttons that took width from the editor. `.qt-chat-composer-actions` in `_chat.css`, mirrored in theme-storybook 1.0.77.
-
-#### Feature: custom-tool gates and `when` tests gain OR and an `inventoryAggregate` subject
-
-- `availableWhen` / `withheldWhen`, outcome `when` and effect `when` accept an array of their existing objects; the array holds when any element holds (AND inside an element, one level, at most 8). Readers go through new `gateGroups` / `whenGroups` / `effectWhenGroups` helpers in `lib/pascal/custom-tool.types.ts`; a grep-test in `custom-tool-definition.test.ts` blocks raw reads. Load-time issue paths include the group index.
-- New `inventoryAggregate` subject (gates, outcome and effect `when`), keyed `<scope>.<field>`: scopes `equipped`, `owned`, `reachable` (cumulative); fields `count`, `names`, `titles`, `metadata.<key>` (a list) and `metadata.<key>.min` / `.max` / `.sum` / `.count`. New module `lib/pascal/inventory-aggregate.ts`; `InventoryContext.scopeObjects` on the real and mock contexts. Archetypes, archived objects and kits are excluded. A null inventory context declines every aggregate test.
-- `metadataComparatorHolds` now compares an array of primitives entry by entry (`eq` any, `neq` none, `contains` any, `ncontains` none; ordering declines). This also applies to a character-sheet `metadata` key holding a list, which previously never matched. Arrays holding objects, arrays or null still decline.
-- `evaluateToolGate` reports `heldGroup` for an array clause. The roster's withheld log line adds `groups` and `heldGroup`. Run-time inventory now loads when a tool uses only aggregates.
-- `describeWhen` renders any-of groups and aggregate tests for the model; the roster description adds a `Takes stock of:` line. `ToolVocabulary.inventoryAggregates` is new and shown in the run dialog. The gate-key census walks every group and ignores aggregate keys.
-- `formatDefinitionIssues` drops a union branch that only says "expected array", and surfaces the nested reason under "Invalid key in record" (aggregate and progress keys now report why they were rejected).
-- Workbench: AND/OR toggle between chips in the gate and outcome table (OR starts a new line); `inventory aggregate` subject with an Insert-key helper; duplicate-slot checks per line; validation errors for ordering a list or searching a number, warning for a metadata key ending in a fold word. Proving Bench mock rows take a `metadata` JSON object (invalid JSON blocks rolling) and the gate verdict names the line that held.
-- JSON Schema mirror and `CUSTOM_TOOL_SPEC.json` updated (one any-of row with `inventoryAggregate` tests). Help: `custom-tools.md` (OR, list matching, new `inventoryAggregate` section, gates), `pascals-workbench.md`. Spec moved to `features/complete/pascal-gate-broadening.md` with an As-built section.
-
-#### Feature: `edit_custom_tool` can return the definition format
-
-- New input `action: "schema"` on `edit_custom_tool`. It reads and writes no store and returns `schema` (the published `public/schemas/qtap-custom-tool.schema.json`, self-contained with its `$defs`) and `examples` (`docs/developer/CUSTOM_TOOL_SPEC.json` and `CUSTOM_TOOL_SPEC_DICE.json`), so a model can write a definition from scratch. Any other fields passed with it are ignored.
-- `mount_point` and `file` are now optional in the input schema, with a refine requiring both unless `action` is `"schema"`. Save and validate behave as before.
-- Tests: handler cases for the schema action (specimens pass `validateToolDefinitionText`, no store touched) and the still-required fields; tool-definition snapshot updated. `help/custom-tools.md` describes the action.
-
-#### Docs: spec for broader custom-tool gates
-
-- New design `docs/developer/features/pascal-gate-broadening.md`: an `inventoryAggregate` subject for gates and `when` tests (names, titles and `metadata` folded over the equipped, owned or reachable objects, keyed `<scope>.<field>`, with `.min` / `.max` / `.sum` / `.count` numeric folds), per-entry comparison of list values in the one comparison table (which also lets a character-sheet `metadata` key holding a list match), and OR as a one-level any-of array of the existing AND-groups in gates, outcome `when` and effect `when`. Approved, not yet built. Listed in `ROADMAP.md`.
-
-#### Feature: raise a hand or stop from the composer
-
-- The Salon composer has three buttons where it had one: **Send**, an amber **raise your hand** (soft interrupt), and a red **Stop** octagon (hard interrupt). The interrupt buttons are enabled only while a character is generating; Send is disabled then. The sidebar participant card's Stop button is removed (`ParticipantCard` / `ChatSidebar` lose `onStopStreaming`; `ChatComposer` loses `hideStopButton`).
-- New server registry `lib/chat/turn-control.ts` (a `processSingleton`, since the actions and the SSE stream run in different route bundles). `handleSendMessage` runs each stream under `runWithTurnControl`, which registers a handle and makes it the ambient `AsyncLocalStorage` store, so `streamMessage`, the tool loops and the finalizer ask about their own stream without a chatId lookup. A stop aimed at a stream that is still winding down does not touch a new send.
-- New actions `POST /api/v1/chats/[id]?action=stop-turn` and `?action=raise-hand` (`{ raised }`), in `app/api/v1/chats/[id]/actions/interrupt.ts`.
-- Hard stop: the action pauses a multi-character room first (as the old Stop did), then aborts the stream and waits up to 15 s for it to settle. `withStallWatchdog` takes an `abortSignal`; when it fires, the provider stream ends quietly (no error, so no fallback or failover) and the source is unwound without awaiting. `streamMessage` passes `currentTurnStopSignal()`, which covers every chat-message call site. After a stop: the native and text tool loops run no further tool call, `attemptEmptyResponseRecovery` returns at once, reasoning is dropped, no sentinel is read, and the finalizer skips answer confirmation, dice auto-detect, reply trigger phrases and Carina markup. Whatever prose had streamed is saved as an ordinary message (not the error path's OOC-marked partial), along with any tool results. A stop before any prose saves nothing and sends `done` with `stopped: true`. `executeTurnChain` closes with `chainComplete` reason `stopped`, `paused: true`.
-- Raised hand: the first LLM turn built after the hand goes up consumes it (`takeRaisedHand`) and gets a trailing Turn note (`buildTurnYieldInstruction`, `lib/chat/turn-manager/yield-signal.ts`) inviting `[YIELD]`. `detectYieldSentinel` accepts the sentinel on the first or last line, or bracketed at the start of a line; surrounding prose is kept as the reply. A yield posts a Host `turn-yield` message (`postHostTurnYieldAnnouncement`), sends a `handAnswered` SSE event, and the chain closes with reason `yielded`, `paused: false`. The rotation is not advanced and informs stay pending on a bare yield. A decline sends `handAnswered` with `yielded: false`, and the Salon shows a notice. `matchesSentinelLine` is now shared by the skip and yield sentinels.
-- New icons `stop-sign` and `hand-raised` (registry, defaults, `_icons.css`, Madman's Box overrides, `ICON_INVENTORY.md`, the Madman's Box preview list). New CSS `.qt-chat-interrupt-button` / `.qt-chat-interrupt-button-raised`. `.qt-chat-stop-button` now uses the danger colours: it used to lose to `.qt-chat-composer-send`, which sat later in the file. The three buttons stack vertically below 640 px. `.qt-participant-stop-button` is removed. The theme-storybook (1.0.76) gets the composer action-button family and the new icons.
-- Help: new `help/interrupting.md`; `chat-turn-manager.md`, `chats.md` and `chat-participants.md` updated.
-- Tests: `yield-signal`, `turn-control`, watchdog abort cases, and chain `yielded` / `stopped` cases in `turn-orchestrator`. The `ParticipantCard` Stop tests are replaced.
-
-#### Fix: toasts raised from inside a dialog were hidden behind it
-
-- The toast container (`lib/toast.tsx`) sat at `z-index: 50`, below every dialog overlay (`qt-dialog-overlay` is `z-[60]`, nested dialogs up to `z-[101]`). An error toast from a save inside a modal — e.g. the Inventory object editor refusing a title as a kind-name shadow — appeared behind the dialog where it could not be read. It now sits at `z-index: 1000`, above all dialogs and below the full-screen startup gates (`z-[9999]`).
-
-#### Change: the Inventory gets its own icon
-
-- New icon `inventory` (an open box with flaps) in `ICON_REGISTRY`, with the default at `public/images/icons/inventory.svg` and its rule in `_icons.css`. The sidebar Inventory button, the participant card's inventory button and the Prospero Inventory card and the Inventory workspace tab (`lib/workspace/tab-meta.ts`) use it instead of `dice`, which stays with the RNG dropdown and Pascal's Workbench.
-- Madman's Box ships a matching override (`themes/bundled/madmans-box/icons/inventory.svg`). Other bundled themes fall back to the default.
-- `docs/developer/ICON_INVENTORY.md` lists the new name, and `help/inventory.md` describes the button as the open box rather than the dice.
-- `themes/tools/madmans-box-icon-preview.html` lists `inventory`, plus `mail`, `thinking` and `brahma-console`, which it was already missing; `check-madmans-box-icons.mjs` passes again.
-- New guard test `__tests__/unit/components/icons/inventory-icon.test.ts` (registry entry, generated CSS rule, Madman's Box override, workspace tab).
-
-#### Fix: the Log's date bounds and regex errors
-
-- `log_read`: a bare-date `to` (e.g. `"2026-10-19"`) now means the last millisecond of that UTC day, not its first, so `from` and `to` naming the same date read that whole day. Before, that query returned nothing. The from-not-after-to check uses the same rule. One helper, `logReadBoundInstant` (`lib/tools/log-read-tool.ts`), serves the check and the handler.
-- `log_grep` and the `regexp()` SQL function no longer say "Invalid regular expression: Invalid regular expression: …". `compileSqlRegexp` strips V8's own prefix from the reason.
-- Help (`help/the-log.md`): a line written by the operator through run-tool is stamped with the character it was run as (the first active one by default), not with no character; and bare dates are explained.
-
-#### Feature: the Log
-
-- New table `log_entries` in the LLM logs database (`id`, `message` 1-4000 chars written once, `chatId`, `characterId` nullable, `createdAt`, `updatedAt`), created from the Zod schema in `lib/schemas/log-entry.types.ts` by `LogEntriesRepository` (no migration). Indexes on `createdAt`, `(chatId, createdAt)` and `(characterId, createdAt)`. Repo key `logEntries` joins `LLM_LOGS_REPO_KEYS`; in the job child its writes are buffered, so a `log_create_entry` then `log_grep` in the same autonomous turn does not see the entry.
-- New SQL function `regexp(pattern, value[, flags])` (`lib/database/backends/sqlite/regexp-function.ts`, JavaScript `RegExp`, flags `i m s u`) registered on the LLM logs connection, so `REGEXP` works there.
-- Three built-in tools, on by default in the Salon and switchable in chat/project tool settings under a new group "The Log"; not on the Brahma Console. `log_create_entry({ message })` stamps the current chat and calling character. `log_grep({ pattern, ignore_case?, limit? })` runs a JavaScript regex over every entry, newest first (default limit 50, max 200). `log_read({ conversationId?, character?, from?, to?, limit? })` filters by chat (`"current"` allowed), character (name or id) and inclusive ISO-8601 range. Both readers return `{ entries, count, limit }` over the whole instance.
-- Pascal custom tools gain a fourth effect kind, `{ "log": "<template>" }` (optional `when`; max 1000 chars; applied after all other effects; empty renders skipped). The run_custom description says "writes to the log". `qtap-custom-tool.schema.json` updated. Pascal's Workbench offers it as "Enter a log line", with the same placeholder checks as an outcome message.
-- Retention: `LLM_LOG_CLEANUP` also prunes `log_entries` older than the LLM logging retention days, even when LLM logging is off. Not included in `.qtap` exports or logical backups.
-- The Brahma SQL tool and prompt, and `quilltap db` (`logs` group), know the new table.
-- Docs: `DDL.md`, `BACKGROUND_JOBS_CHILD.md`, `API.md` tools table. Help: new `help/the-log.md`; `help/custom-tools.md`, `help/pascals-workbench.md`, `help/tools-settings.md`, `help/system-llm-logs.md`.
-
-#### Change: custom tools in a character's vault are that character's only
-
-- A character's vault `Tools/` folder is no longer read for other characters in the same chat. Before, the roster had a `participant` tier: every co-participant's vault tools were dealt to every character, and a `disabled` definition in one character's vault suppressed that name for everyone else in the room.
-- `resolveCustomToolRoster` (`lib/pascal/custom-tools.ts`) resolves the pool without `includeParticipants`; the tiers are character → group → project → global. `characterIds` is removed from `RosterContext`, `RunCustomToolContext` and `RunTriggeredCustomToolsParams`, and from the callers that fed it (orchestrator, tool executor, trigger-phrase sites, `GET/POST /api/v1/chats/[id]/custom-tools`). Other users of the tiered pool (document access) are unchanged.
-- The Salon popup still lists a vault tool and runs it as its owner; the row is tagged with the owner's name unless the operator is playing that character.
-- Help: `help/custom-tools.md` (tiers), `help/pascals-workbench.md` (precedence note). Tests: `custom-tools-discovery`, `trigger-runner`, `trigger-phrase-sites`.
-- Test fix: `memory-maintenance-card.test.tsx` waits for the loaded settings before reading or editing a field (the card renders defaults first, so the test was flaky under a full-suite run).
-
-#### Change: `/photos` leaves out character vaults and gains an album selector
-
-- `/photos` ("My Photos") no longer includes character vaults. Its default view covers every enabled non-character store: Quilltap Uploads, Quilltap General, project stores and other document stores. Previously, promoting an Avatar Roll to a portrait copied it into the character's `photos/` folder, and that copy also showed up in My Photos. The rule is `isUserGalleryMount` in `lib/photos/user-gallery-service.ts`.
-- New album selector on `/photos`: My Photos, or any one store's album (characters, projects, document stores, Quilltap General). It is backed by `GET /api/v1/photos?action=albums` (`listAllPhotoAlbumOptions`, which leaves out archived vaults) and `GET /api/v1/photos?album=<mountPointId>` (`listUserGallery({ mountPointId })`). Search, dedupe and paging work the same in both views. An unknown or disabled album returns 404.
-- Removing a photo from a character's album on `/photos` goes through `DELETE /api/v1/characters/[id]/photos/[linkId]`, as Aurora does. `removeFromUserGallery` and `getUserGalleryEntry` now refuse character-vault links.
-- New query key `queryKeys.photos.albums()`. Help: `help/photo-gallery.md`. Tests: `__tests__/unit/lib/photos/user-gallery-service.test.ts`.
-
-#### Feature: `edit_custom_tool`
-
-- New LLM tool `edit_custom_tool` (`lib/tools/edit-custom-tool-tool.ts`, handler `lib/tools/handlers/edit-custom-tool-handler.ts`). It saves or validates one custom-tool definition. Input: `mount_point` (`self` allowed), `file` (`unlock`, `unlock.tool.json` or `Tools/unlock.tool.json`), optional `content` (JSON string or object).
-- Only `Tools/<name>.tool.json` at the top level of a store. Any other folder or a nested path is refused (`toolDefinitionPathFor` in `lib/pascal/custom-tools.ts`).
-- With `content`, the definition must pass `validateToolDefinitionText` (JSON parse + `QtapCustomToolSchema`, split out of `loadToolsFromMount` so the editor and discovery use one check) and must not reuse a `name` another file in the same store defines. Only then is it written, through `doc_write_file`'s handler, so store access, `character_write`, the Librarian announcement and the reindex are a document write's. An object is written pretty-printed; a string is written verbatim.
-- Without `content` (or with `null`), nothing is written: the file is read under the read policy and judged the same way.
-- Offered whenever the chat's Custom Tools setting is on (`editCustomTool` build option, keyed on `customToolContext`), including when the roster is empty.
-- Tool settings: new built-in category `pascal` ("Pascal's Custom Tools"). `run_custom` moved there from `utility`; built-in tools are disabled by id, so existing settings are unaffected.
-- `CustomToolLoadError` carries `name` on a `duplicate` error.
-- Help: new section in `help/custom-tools.md`. Test: `__tests__/unit/lib/tools/handlers/edit-custom-tool-handler.test.ts`.
-
-#### Change: Image prompts are cleaned only for a Moderated chat bound for a moderated painter
-
-- New `isUncensoredImageProfile` (`lib/services/dangerous-content/understudy.ts`): an image profile ticked Uncensored-compatible, or the one named on the Concierge desk.
-- `sanitizeAppearancesIfNeeded` takes `imageTargetUncensored` (the profile that will actually generate the image is uncensored) in place of `isDangerousChat` + `routesDangerousToUncensored`. It returns unchanged, with no classifier call, when the target is uncensored, in any chat state. Otherwise it sanitizes only under the pre-screen (Moderated, on duty). An Unmoderated chat bound for a moderated provider is no longer sanitized; a refusal is left to the post-hoc failover.
-- `generate_image` passes the profile it ended up on after the pre-flight reroute, so a Moderated chat rerouted to the desk by the pre-screen is no longer sanitized on its way there.
-- Story backgrounds craft candidly (`uncensoredImageTarget`) when the chat's own image profile is uncensored or the chat is Unmoderated (on or off duty, desk named or not), as well as for "Try uncensored". Concealment remains for Moderated and Locked chats on a moderated painter. The up-front route to the desk is unchanged (Unmoderated, on duty, desk named) and is skipped when the chat's own profile is already uncensored.
-- `resolveImageProviderForDangerousContent` no longer reroutes from a profile that is already uncensored (it used to swap it for the desk's or another compatible one). Applies to the tool, story backgrounds, character avatars and wardrobe item images. The post-hoc failover is unchanged.
-- Help: new "What Gets Cleaned Up" section in `help/the-concierge.md`; story-background conditions, the Locked note and `help/image-generation-profiles.md` updated to match.
-
-#### Fix: published vault addresses name the vault (bug 256)
-
-- No address Quilltap hands out depends on who reads it. `qtap://self/…` means the vault of whoever follows it, and the URI producers handed a character's own-vault documents out in that form in tool results, Librarian announcements and `self_inventory`, which every character in a chat reads. A second character following one opened their own file of the same name (a request for Abigail's `metadata.json` returned Friday's), with no error.
-- `docStoreUriFor`, `uriForResolvedPath` and `buildDocStoreUriResolver` (`lib/doc-edit/uri-producers.ts`) always name the store (UUID when the name is ambiguous) and no longer take a character argument.
-- The doc handlers pass the resolved store's name to every Librarian announcement and to Document Mode's `chat_documents` row (`publishedMountPoint` in `lib/tools/handlers/doc-edit/shared.ts`). `librarianUri` prints a bare path for a leftover `self` (an old `chat_documents` row).
-- `self_inventory` names the vault in each listed file's `uri`; a context-file row stored as `self` gets no URI and an explanation; the footer says `self` is the reader's own vault.
-- The path resolver's `NOT_FOUND` names the store asked for; `MISSING_CONTEXT` says a path alone names no store.
-- A character's own `self` reads are unchanged. Prospero's vault whisper and the knowledge injector, which only the owner reads, still use `self`.
-- Test: `__tests__/unit/lib/doc-edit/vault-addresses-reader-independent.test.ts`.
-
-#### Feature: Inventory title lint
-
-- Every Inventory write runs `lintInventoryTitle` (new `lib/inventory/title-lint.ts`) with the object before and after the write. `resolveInventoryRef` stops at the first of id → title → name that matches, so a title equal to a string something means by name silently takes its place.
-- The lint judges the change to the set of reachable titled objects, not a field. A title enters on a create, a rename, a restore from the archive, a cleared title override, a copy, or a move into `Inventory/`, and on a name change under a standing title. It leaves on a rename, an archive, a delete or a move out. Other edits (description, folder) are neither.
-- An entering title is refused (`TITLE_SHADOW`, `InventoryTitleShadowError`) when, after `normalizeTitle` (the resolver's `trim` + `toLowerCase`, then whitespace collapsed and diacritics stripped), it equals the resolved name of any object the location's pool reaches, its own included (`kind-name shadow`), or a literal `inventory` / `inventoryCount` key in any custom tool's `availableWhen` / `withheldWhen` that resolves, with the object left out, to some other object (`live gate shadow`). The message names the title, each collision and the tool. A key that resolves to nothing else passes as `gate key naming` (one `info` row).
-- An entering title fails closed (`TITLE_CHECK_UNAVAILABLE`, `InventoryTitleCheckUnavailableError`), naming what could not be read: a pool tier whose read failed, a consulted store that does not exist, a failed `Tools/` listing, a tool file listed but missing on open, or a tool file whose bytes or JSON cannot be read.
-- A leaving title is never refused. When a gate keys on it, a row is logged at once with `gate dark`, `gate redirected: <owner>`, `gate unverifiable: <what could not be read>` (all alerts) or `gate key moved`.
-- Every lint call writes one `debug` census line (`[InventoryTitleLint] Census`) naming the pools and tool stores read and their sizes.
-- The document-write layer lints too. `writeDatabaseDocument`, `deleteDatabaseDocument`, `moveDatabaseDocument` and `moveDatabaseFolder` (`lib/mount-index/database-store.ts`) call `lintInventoryDocumentChange` (new `lib/inventory/title-lint-documents.ts`) for `Inventory/*.json` and `Tools/*.tool.json` paths, so an edit made with `doc_*` tools or the Scriptorium is linted from the file's prior state. A prior state that cannot be read refuses a titled write. A `Tools/` edit writes the census line only. The Inventory mutations' own projection runs inside `withInventoryWritesLinted` (new `lib/inventory/lint-scope.ts`) and is not linted twice.
-- Not linted: a transfer between tiers (`preserve`), an instance with no title of its own, filesystem-backed stores (they hold no Inventory).
-- New `lib/pascal/tool-gate-keys.ts` (`collectToolGateKeys`) takes the instance-wide census of gate keys. `loadToolsFromMount` / `listAllCustomTools` now return `unread` (failed listings and files listed but missing on open, which the roster still skips) and `storesConsulted`; `CustomToolLoadError` gains `stage`. `InventoryPool` gains `consultedMounts` and `unreadMounts`.
-- The Inventory editor's toast (`describeInventoryRefusal`) shows the two new refusals' lines joined with "; "; the API, tool results and logs keep one line per collision.
-- Tests: `__tests__/unit/lib/inventory/title-lint.test.ts`, `__tests__/unit/lib/inventory/title-lint-documents.test.ts`, `__tests__/unit/lib/mount-index/database-store-title-lint.test.ts`, `__tests__/unit/lib/pascal/tool-gate-keys.test.ts`; the shared Inventory test store gains a fake census (`toolGateKeysModule`, `putGateKey`), `missingMounts` and `docMountDocuments.findByMountPointAndPath`.
-
-#### Test: unit suite ignores an inherited environment
-
-- `npm run test:unit` sets `NODE_ENV=test`, and `jest.setup.ts` clears `QUILLTAP_TIMEZONE`. A shell opened from Quilltap exports `NODE_ENV=production` (React tests then load the production build and fail on `React.act`) and `QUILLTAP_TIMEZONE` (the memory day-reference suites, which compute expectations in the process's own zone, then fail).
-
-#### Fix: Ariel reads full-screen programs (bug 255)
-
-- `terminal_read` and Ariel's periodic summaries now render terminal output through a server-side terminal emulator (`@xterm/headless`, new `lib/terminal/screen.ts`) instead of stripping escape codes. Full-screen programs (Claude Code, vim, less) draw with cursor addressing on the alternate screen, and stripping reduced them to fragments: 422 KB of Claude Code output read back as 526 characters.
-- Each live PTY session keeps an emulator sized at spawn and resized with the pane. `terminal_read` returns its lines: a shell's scrollback (soft-wrapped rows joined), or a full-screen program's current screen, flagged with the new `buffer: 'alternate'` output field. `raw: true` now returns the last 64 KB of the raw stream.
-- An exited session's transcript (last 4 MB) is replayed through an emulator at the session's stored size. Migration `add-terminal-session-geometry-v1` adds `terminal_sessions.cols` / `rows`, set at spawn and on exit; older sessions replay at 80×24.
-- Ariel's summaries post a snapshot of the screen ("Screen of session …") while a full-screen program has the terminal, skipping an unchanged screen, and otherwise the shell lines written since the last summary. Flushes are chained per session, so the session-closed announcement lands after the final output.
-
-#### Test: Inventory-gated custom tool end to end
-
-- New `__tests__/unit/lib/pascal/custom-tools-measure-twice.test.ts` runs a real inventory-gated tool ("Measure Twice") over the shared Inventory test store: a title-keyed `availableWhen` gate opens for the character carrying the titled instance, stays closed for a character carrying another instance of the same archetype, and stays closed with no inventory context (`eq: "equipped"` and `inventoryCount` `lt: 1`). It also checks that `{{inventory.<ref>.title}}` and `.metadata.<key>` render a title containing an apostrophe. Test only; no runtime change.
-
-#### Fix: Scenario lists sort by title
-
-- Every list of scenarios now sorts by title (frontmatter `name`, or the parser's fallback), then filename, case-insensitively, ignoring a leading "The" (also "the-" / "the_" in filenames). New `lib/scenarios/sort.ts` (`compareScenarios`, `sortScenarios`, `scenarioSortKey`).
-- `buildScenarioList` (every store-tier location's `list`, the instance-wide scenario browser) returns title order. Default-conflict resolution still walks path order, so the alphabetically-first filename still wins.
-- A character vault's scenario array is built by the new `parseScenarioFilesSorted` (`vault-overlay/parsers.ts`) in both the read overlay and `readCharacterVaultScenarios`, in the same order. The implicit scenario for a chat that names none (`firstActiveScenarioContent`) is now the first by title rather than by path.
-- `ScenarioSelect` sorts each optgroup too, so an entry a surface appends locally after a save shows in place.
-
-#### Fix: Inventory dogfood fixes
-
-- The project roster now gates the project's Inventory shelf as it does the project wardrobe. For a character the roster does not admit, `loadInventoryContext` (every `inventory_*` tool and every Pascal read, gate and effect) hides project-tier objects they are not carrying, and `equipItems` / `pickUpItems` refuse a `character` or `pascal` gesture that would take from the shelf with the new `OFF_ROSTER` refusal (`InventoryOffRosterError`). Objects already carried stay visible and can be set down. `inventory_pick_up`, `inventory_equip` and `inventory_read` answer a reference to a hidden shelf object with the roster refusal rather than "not found" (`closedShelfMessage`; `LoadedInventoryContext.closedShelf` keeps the hidden objects for this alone). Operator gestures, arrival defaults, the prompt section and the image pipelines are not gated. New `lib/inventory/roster-gate.ts`; the shared inventory test store gains a roster (`putOffRoster`).
-- The character progressions report is now built on every turn as well. It had the same continue-mode guard, so chained, nudged and autonomous-room turns never reported a progression (bug 254). The Core whisper keeps its deliberate continue-mode skip; `isContinueMode`'s doc comment and PROMPT_ARCHITECTURE.md now say what continue mode is.
-- The `## Carried and equipped` section is now built on every turn. It was skipped in continue mode, which covers every chained speaker, Nudge and autonomous-room turn, so characters knew what they carried only on turns answering a user message (bug 253).
-- Pascal's netted Inventory line for a turn is now posted after the turn is saved (a `finally` around the orchestrator's terminal branches) instead of before the tool messages and reply it summarizes.
-- Pascal's line uses "some" for plural-looking names ("takes up some lockpicks", not "a lockpicks") and "a" before `uni`/`eu`/`one` spellings.
-- A character's project tier is labelled with the project's name ("Project: Scenario Builder Test") instead of "Project: Project". `loadInventoryPool` reads the name through an optional `projects` repository and falls back to "Project".
-- The Inventory browser's shared-tier rows count only objects matching the Items / Kits / Archetypes filter.
-- The row `⋮` menu is positioned `fixed` beside its button, opening upward when there is no room below, so the list's scroll box no longer clips it. It closes on scroll or resize.
-- The Take up… picker has a close button and Cancel. Its open state lives in the dialog, so Escape or a click inside the picker no longer also closes the Inventory dialog.
-- The Carrying now pane and Take up… picker show titled objects as "Excalibur (sword)", like the list.
-- A copy refused because an object cannot be copied now says so in words instead of listing ids.
-- The kit editor's placeholders are a kit's ("burglar's kit", "Loadouts"), not a sword's.
-- Workbench: the side-effects vantage select says "inventory" (or "wardrobe and inventory") when the tool has inventory effects, and the Inventory picker's header says "inventory".
-- Help: `help/inventory.md` names the buttons as they appear (**+ New Item**, **+ New Kit**, **+ New Archetype**, **+ From archetype**).
-
-#### Feature: Inventory tools and Pascal inventory support
-
-- Review fixes:
-  - `inventory_give` moves the file first and clears the giver's carried sets only after the move succeeds. A refused transfer no longer leaves the giver unequipped everywhere.
-  - `ChatsRepository.removeEquippedInventoryId` now takes `(chatId, characterId, itemId)` and rewrites one chat. New `findChatIdsCarryingInventoryId` and `dropCarriedEverywhere` (`lib/inventory/equip.ts`) clear an id from every chat, each under `withChatInventoryLock`.
-  - `inventory_archive` clears the archived object from the character's carried set in every chat, so a restore does not re-equip it.
-  - Pending Inventory announcements: an unequip also removes the object from `pickedUp`, a give strikes its object from the giver's pending entry, and each entry records `provenances`, which the flush logs instead of a hard-coded `character`.
-  - Job child: `docMountDocuments.findManyByMountPointsInFolder` answers through a per-job overlay of buffered `linkDocumentContent` writes and `deleteWithGC` deletes, so later gestures in one job see instances it created.
-  - Text-block parser: `inventory_*` tools convert only `max_equipped` to a number and `archived` / `equip` to booleans; names, titles and descriptions stay strings.
-  - `refs.ts` builds a pool's id map once; `inventory_give` resolves a receiver id without loading the cast and loads names in parallel.
-- New `lib/inventory/refs.ts`: `resolveInventoryRef` (id → title → name, case-insensitive, own tier first), `stateOf` (`equipped` > `carried` > `reachable` > `absent`), `equippedKinCount`, `pickForGesture`, and the `InventoryContext` every reader shares. `lib/inventory/context.ts` loads one per tool call or run.
-- New character flag `canManageInventory` (migration `add-character-inventory-flag-v1`, null = on), with an Aurora toggle beside Self-Dressing, the export schema, DDL.md, the Almanack ledger and the tools API.
-- Nine new tools gated by it: `inventory_list`, `inventory_read`, `inventory_equip`, `inventory_unequip`, `inventory_pick_up`, `inventory_create`, `inventory_update`, `inventory_archive`, `inventory_give` (`lib/tools/inventory-*-tool.ts`, handlers and `inventory-tool-table.ts`). Registered in the plugin tool builder (nine per-tool flags via `lib/tools/inventory-tool-flags.ts`), the executor, the simple-JSON and text-block prompts and parsers, `/api/v1/tools`, and the Salon tool bubble. Off on the Brahma Console, the Scenario Builder, Carina and help chats.
-- `buildTools` and `determineTextBlockToolOptions` take a new positional `canManageInventory` after `canCreateOutfits`.
-- `lib/inventory/equip.ts`: `pickUpItems` instantiates archetypes into the character's vault root and equips them, checking the cap before any instance is written; `equipItems` takes `known` for objects written in the same call.
-- `lib/inventory/transfers.ts`: `transferInventoryItem`, extracted from the transfers route, which now calls it. Same-location and duplicate-id refusals now answer 400 with code `INVALID_SHAPE`.
-- `InventoryChangeContext.provenance` is `operator` / `character` / `pascal`. Inside a turn, `notifyInventoryChanged` records into a new `pendingInventoryAnnouncements` map (created by `newWardrobeTurnContainers()`) and `flushPendingInventoryAnnouncements` posts one netted Pascal line per character at turn end. Gives post their own line. `describeInventoryChange` gains "picks up" and "hands … to …".
-- Job child: `chats.findById` / `getEquippedInventory` answer through a per-job overlay of buffered `setEquippedInventory` and `removeEquippedInventoryId` writes.
-- Pascal: new `inventory` (state, `eq`/`neq`) and `inventoryCount` (numeric) subjects in outcome and effect `when`s and in gates; gate keys must be literal. A null context declines every inventory comparator. New `{{inventory.<ref>.title|name|description|state|metadata.<key>}}` placeholders. New `$inventory` operand (`<ref>.metadata.<key>` + fallback) wherever `$state` is allowed, and as a whole roll with a dice fallback. Loaded lazily at roster time and once per run.
-- New `inventory` effect (`equip` / `unequip` / `pick_up`, `equip` on pick_up), applied by `lib/pascal/inventory-effects.ts` after wardrobe gestures, fail-soft per gesture. Audit targets `inventory.equip`, `inventory.unequip`, `inventory.pick_up`.
-- Roster description, vocabulary (`inventoryReads`, `equips`, `unequips`, `picksUp`) and the run dialog's reference panel name inventory reads and gestures.
-- Published schema `qtap-custom-tool.schema.json`, `CUSTOM_TOOL_SPEC.json` and the agreement corpus updated.
-- Workbench: "Change the inventory" effect kind with reference chips and an Inventory picker over the shared vantage; Inventory state / count condition and gate chips; a "From an object" roll form; the Proving Bench's Mock inventory (`lib/pascal/bench-inventory.ts`, sent as `inventory` on preview and audit).
-- Realtime: new `inventory` topic (lists and folders), published after object writes in the parent and inferred from job-child `Inventory/` file writes.
-- Tests: refs, handlers over the fake store, the Pascal read side, the applier, the partition order, the child overlay, the draft model and Workbench components.
-
-#### Feature: the Inventory
-
-- Review fixes:
-  - A second file claiming an object's id is skipped on read and is no longer swept on the next write. The file at the object's own name wins, and the copy's name is reserved from the projection (`readDuplicateInventoryPaths`).
-  - The Concierge's appearance screen now classifies and sanitizes the carrying phrase along with the rest of the appearance. A sanitized appearance drops `carryingDescription`, so it is not appended again.
-  - Editing a character's kit checks its members against the same project shelf it was created with. The editor and `PUT` pass `?projectId=`, and `updateInventoryItem` takes the context.
-  - The greeting's Inventory section rides the greeting's user turn as a trailing section (`trailingContextSections` on `generateGreetingMessage`), including on the uncensored desk. It is no longer in the system prompt.
-  - Restored the `setConciergeMode` compare-and-set tests beside the `setEquippedInventory` ones.
-  - Reset to defaults and each character's arrival run under the chat's carried-set lock (`withChatInventoryLock`, `equipItemsHoldingLock`), so a concurrent equip is never rewound.
-  - The pool's archetype fallback queries only the `Inventory/` files that mention the wanted ids (`DocMountDocumentsRepository.findManyInFolderContaining`), instead of reading every object in the instance on each turn.
-  - Transfers keep kits whole. A kit must reach its members from the destination (`INVALID_SHAPE`), and a move that would leave kits naming an unreachable object is refused with the new `KIT_STRANDED` (409).
-  - A malformed JSON body on `?action=generate` for object pictures is a 400, not a 500.
-  - The dialog detects a cap refusal by `code === 'CAP_EXCEEDED'`, not by message text.
-- `chats.equippedInventory` joins `CHARACTER_KEYED_CHAT_FIELDS` (`lib/chat/character-keyed-fields.ts`), so new-account restore and `.qtap` import re-key it in the same pass as the outfit (bug 252). The Inventory's own remap helper is removed.
-- Shared folder rules: the pure folder-path helpers moved from `lib/wardrobe/folders.ts` into `lib/mount-index/item-folders.ts`, parameterised by `ItemFolderRules` (root, reserved segments, depth cap, noun). `lib/wardrobe/folders.ts` and the new `lib/inventory/folders.ts` are delegates; `isWardrobeItemDocumentPath` delegates to `isItemDocumentPath`. Wardrobe behaviour and messages are unchanged.
-- The wardrobe's folder operations (list, create, rename, delete-and-send-up) are now one implementation in `vault-overlay/item-folder-ops.ts` over an `ItemFolderTree` descriptor, with the per-folder write chain (`runSerialized`) and `resolveVaultFolderMount` (the tombstone-aware mount resolver; `resolveWardrobeMount` and `resolveInventoryMount` delegate to it).
-- `projectArrayIntoVaultFolder` takes an `ext` option (default `.md`, so existing callers are byte-identical).
-- New `lib/schemas/inventory.types.ts`: `InventoryItemSchema` (strict), the sparse `InventoryItemFileSchema` (no defaults, via `patchSchemaOf`), `inventoryShapeIssues` (archetype / kit / item / instance rules), request bodies, `EquippedInventorySchema`.
-- New `vault-overlay/inventory-readers.ts` / `inventory-writes.ts`: one `.json` file per object under `Inventory/` at any depth, identity from the `id` inside the file; `parseInventoryItemFile` (unknown keys dropped with a warn, bad files skipped with a warn), the predicate pair `isInventoryItemDocumentPath` / `isInventoryItemDocument` (a file that does not parse is never swept), JSON projection serialised per folder.
-- New `lib/inventory/svg.ts`: allowlist SVG sanitiser for object glyphs (drops scripts, `foreignObject`, styles, event attributes, external refs; 16 KB cap).
-- New column `chats.equippedInventory` (migration `add-chat-equipped-inventory-v1`), patch-only, written only by `ChatsRepository.setEquippedInventory` (deduplicated, sorted, buffered in the job child). Export schema and DDL.md updated.
-- Archiving a character keeps `Inventory/` in the pruned vault, beside `Wardrobe/`.
-- Tests: `inventory-files.test.ts`, `svg.test.ts`, `add-chat-equipped-inventory.test.ts`, patch-only and archive-prune cases.
-- `lib/inventory/location.ts` (`resolveInventoryLocation`, the four tiers as one surface), `pool.ts` (`loadInventoryPool`: character > group > project > general, archived dropped per tier before shadowing; an archetype outside the pool's tiers is fetched instance-wide so an instance always resolves), `resolve.ts` (sparse overrides over the archetype, `metadata` merged key by key, picture falls through; `parentMissing` only when the archetype exists nowhere), `equipped-set.ts`, `dependents.ts` (`findDependents` across every mount).
-- `lib/inventory/item-mutations.ts`: create, instantiate, update (an instance stores only what it overrides), `clearOverrides`, archive, detach / `detachAll` (bake resolved values), delete (archetype in use refused without `force`; forced deletes bake every instance first; refused while an archived character holds one), duplicate / copy-items (refused when `canCopy` is false), move-items. A deleted kit member is dropped from its tier's kits. Refusals carry codes (`lib/inventory/errors.ts`).
-- `lib/inventory/item-images.ts`: object pictures under `Inventory/images/<itemId>/`, reusing the wardrobe's picture steps; the wardrobe image bridge and its generic steps take an optional images folder (wardrobe default unchanged).
-- Tests: `resolve.test.ts`, `item-mutations.test.ts` over an in-memory store (`__tests__/helpers/inventory-fake-store.ts`).
-- `lib/inventory/equip.ts`: `equipItems` / `unequipItems`, serialised per chat. Plan, then write: kits expand (an archetype member becomes an instance in the character's vault, reusing an uncarried instance they already own), archetypes and archived objects named directly are refused (`NOT_EQUIPPABLE`), and the kin cap (`count(equipped kin) + planned + 1 ≤ maxEquipped`) is checked over the whole plan before anything is written (`CAP_EXCEEDED`). One `setEquippedInventory` per gesture; unresolvable ids are pruned on that write. Unequipping a kit sets down its members and keeps the instances.
-- `lib/inventory/equip-effects.ts`: `notifyInventoryChanged` posts one Pascal line per gesture (`systemKind: 'inventory-change'`, no `pascalMeta`; `postPascalInventoryChange` in `lib/services/pascal/writer.ts`) and refreshes the per-chat avatar. `refreshAvatarForOutfit` is now `refreshAvatarForAppearance` (old name kept as an alias). The Salon labels the kind "inventory".
-- `lib/inventory/apply-defaults.ts`: `applyInventoryDefaults` runs beside `applyOutfitSelections` at chat creation, participant add and merge. A continuation or merge copies the source chat's list; otherwise a character with no entry yet gets every reachable `equippedByDefault` object, silently, with a cap breach dropped (warn) rather than failing the arrival. `resetInventoryToDefaults` clears and re-applies.
-- Tests: `equip.test.ts`; `apply-chat-merge.test.ts` asserts the merge applies inventory.
-- `lib/inventory/prompt-section.ts`: `buildInventorySection` renders `## Carried and equipped` from the carried objects' `description`s (title first, name in parentheses; kits never appear). A trailing per-turn section after the progressions report and before the inform block in `buildContext`; also on Carina's user message and on the opening greeting's prompt (added in `autoGenerateFirstMessage`, after arrival defaults, since `buildChatContext` runs before the chat exists). Null when nothing carried has a description, so a turn is byte-identical. Never in system block 1; no builder version bump.
-- `lib/inventory/image-description.ts`: the carried objects' `imageDescription`s as one phrase ("carrying a longsword with a jewelled pommel, ..."). `resolveCharacterAppearances` adds it as `carryingDescription` on every path; the Lantern renders it after "Wearing:" (new `sceneDescriptionParts`), the image tool's expansion context lists it as a "Carried" entry, and the avatar job passes it to `buildCharacterAvatarPrompt` (new `carrying` option). The avatar cache keys on the prompt, so a new carried object is a new configuration.
-- Tests: `delivery.test.ts`, `appearance-carrying.test.ts`, `context-management.test.ts` (order and byte identity).
-- Routes: `lib/inventory/routes/inventory-route-factory.ts` behind `/api/v1/characters/[id]/inventory`, `/groups/[id]/inventory`, `/projects/[id]/inventory` and `/inventory` (General), each with `/[itemId]`. Collection: list (resolved; the character tier's `?shared=true` lists the whole reachable pool), `?action=folders`, `?action=archetypes`; create, `instantiate`, the folder trio, `move-items`, `copy-items`. Item: get, `?action=dependents`; update, `clear-override`, `detach`; delete with `?force=true`. New `POST /api/v1/inventory/transfers` and `/api/v1/inventory/[itemId]/images` (generate / upload / set-current / delete-image / save-targets / save-to-store; an instance with no pictures shows its archetype's). Chat actions `GET ?action=inventory`, `POST ?action=inventory-equip`, `inventory-unequip`, `inventory-reset-defaults`. Refusals answer 409 (or 400) with `details.code` through `inventoryErrorResponse`. Documented in `API.md`.
-- Object pictures generate through `generateImageWithConciergeFailover` with an object still-life prompt (`lib/inventory/item-image-generation.ts`); new log type `INVENTORY_ITEM_IMAGE`, counted as image spend.
-- Tests: `routes.test.ts`; dispatch and image-spend tests updated for the new action and log type.
-- UI: new `components/inventory/` — `InventoryControlDialog` (container select over the four tiers; opened from a chat, rows gain Equip / Unequip and a *Carrying now* pane per cast member shows carried objects, kit states, *Take up…* and *Reset to defaults*), `InventoryView` (workspace `'inventory'` tab) and `InventoryPanel` (the new Prospero `InventoryCard`). `InventoryBrowser` (search, Items / Kits / Archetypes, Equipped only, Show archived, Show shared, folders, tier rows, select mode), `inventory-item-row` (glyph SVG → emoji → default, never the picture; chips for Archetype, Instance of X, Kit · state, Equipped, Default, borrowed tier; ⋮ menu), `inventory-item-editor` (both descriptions, an *Inherit* toggle per field for instances, a kit member picker with pictures, SVG preview with size counter, metadata, pictures), `InventoryTransferDialog`, `InventoryInstantiateDialog`, `InventoryFolderPickerDialog`, `inventory-image-viewer`. Warnings for Detach, an archetype in use (*Detach all and delete*, blocked by name for archived holders) and a cap breach.
-- Entry points: the left rail's Inventory button (a tab in the workspace, the chat-scoped dialog from a Salon chat), an Inventory button on each Salon participant card beside the wardrobe's, and the Prospero project card. `InventoryDialogProvider` mounts beside the wardrobe's in `app-layout.tsx`.
-- Shared browser pieces lifted from the wardrobe into `components/item-browser/` (`ItemFolderRow`, `ItemFolderBar`, `NewFolderInput`, `ItemSelectBar`, `ItemTierRow`, `ItemFolderPickerDialog`); `WardrobeBrowser` and `WardrobeFolderPickerDialog` now use them with unchanged markup. No new `qt-*` classes (existing badge and card classes cover the chips and glyph tile).
-- Query keys `queryKeys.inventory.*`; the `chats` realtime topic now refetches `inventory.equipped(chatId)`. `?action=inventory` also returns the chat's `projectId`. New collection action `?action=duplicate`. `SaveImageDialog` gains an `inventory` door.
-- Tests: `components/inventory/inventory-ui.test.tsx`, `topic-map.test.ts`.
-- Backup and restore: a new-account restore re-keys each chat's `equippedInventory` to the remapped character ids and keeps the object ids (they live in the files and travel verbatim, as do `parentId` and kit `itemIds`); picture `files` rows keep their `linkedTo` / `tags` link to the object; `planInventoryImagePointerFixes` repoints each object's `imageFileId` at its picture's new file id after the vaults land (step 22f-quater, one batch per mount, tombstoned vaults skipped).
-- Tests: `__tests__/unit/lib/backup/inventory-backup.test.ts` (archetype, instance, kit and a carrying chat round-trip through the remap).
-- Docs: new `help/inventory.md` (`url: /salon`) and `help/project-inventory.md` (`url: /prospero/:id`); cross-links from the wardrobe, project wardrobe, projects and Pascal's Workbench pages; README and FEATURES.md mention the Inventory; CLAUDE.md glossary, `pascal` sender duties and a chokepoint bullet; the spec moved to `features/complete/inventory.md` with an As-built section; ROADMAP row checked.
-
-#### Fix: restore and import keep chat outfits (bug 252)
-
-- New `lib/chat/character-keyed-fields.ts`: `remapCharacterKeyedChatFields` re-keys every chat column keyed by character id (`equippedOutfit`, `characterAvatars`, `courierCheckpoints`, `pendingOutfitNotifications`) and moves the ids inside them: outfit slot item ids through the wardrobe item remap, outfit-avatar `imageId` through the file remap, Courier `lastResolvedMessageId` through the message remap. Outfits come back as full five-slot bags, matching the outfit-history remap. A column stored as a JSON string is parsed; an unreadable one is left alone and logged at `warn`.
-- New-account restore (`remapBackupData`) and `.qtap` import (`reconcileRelationships`, which now takes the imported wardrobe item map) both call it. Restore drops an entry for a character the backup does not carry instead of minting an id for it. Before this, those columns kept the old character ids, so no character was wearing anything in a restored chat, outfit avatars were gone, and Courier checkpoints were lost.
-- Tests: `__tests__/unit/lib/chat/character-keyed-fields.test.ts`, `__tests__/unit/lib/backup/uuid-remapper.test.ts`, `__tests__/unit/lib/import/quilltap-import/reconcile-character-keyed-fields.test.ts`.
-
-#### Docs: Inventory design specs
-
-- New `docs/developer/features/inventory.md`: the design of record for the Inventory (per-tier `Inventory/` JSON objects with archetypes, instances, kits, two descriptions and per-chat equipped state). Pascal the Croupier owns it. Decisions settled; nothing built yet. Roadmap row added.
-- New `docs/developer/features/inventory-tools-and-pascal.md`: the follow-up design for the `inventory_*` tool family (gated by a new `canManageInventory` flag), the `inventory` / `inventoryCount` `when` and gate subjects, `{{inventory.*}}` placeholders, the `$inventory` operand and the `inventory` effect, plus the Workbench and Proving Bench changes. Depends on the Inventory spec; nothing built yet.
-
-#### Feature: wardrobe pictures in the Aurora gallery
-
-- The character gallery tab has a third, collapsible section, **Wardrobe Pictures**, below Avatar Rolls: every GENERATED image of every wardrobe item in the character's wearable pool (own vault, group stores, Quilltap General; no project tier, since there is no chat). Archived items included. Each tile carries a caption overlay with the item title and its tier ("Own wardrobe", "Group · X", "Shared · Quilltap General"). Read-only: download on hover, detail modal on click.
-- New `GET /api/v1/characters/[id]/wardrobe-images`, backed by `listWardrobeGalleryImages` (`lib/wardrobe/gallery-images.ts`), which loads the pool through `loadWearablePool` and reads the items' files in one `FilesRepository.findByLinkedToAny` lookup (new). Archived characters return an empty list. Query key `characters.wardrobeImages(id)`.
-- `GalleryGrid` / `GalleryImage`: `onSetAvatar` and `onDeleteImage` are optional (buttons hidden when omitted); new `captionFor` / `caption` prop renders the overlay and moves hover actions to the top corner. New `qt-gallery-caption`, `qt-gallery-caption-title`, `qt-gallery-caption-detail` classes, mirrored into theme-storybook (1.0.74).
-- Tests: `lib/wardrobe/__tests__/gallery-images.test.ts`. Docs: `help/character-gallery.md`, `API.md`.
-
-#### Feature: wardrobe outfit history
-
-- New table `chat_wardrobe_history`: per (chat, character) a numbered timeline of outfits from 0 (what they arrived in), with an `isCurrent` cursor. Two unique indexes keep indices unique per timeline and allow one current row. DDL lives only in `lib/database/backends/sqlite/chat-wardrobe-history-ddl.ts`; types in `lib/schemas/chat-wardrobe-history.types.ts`.
-- New `ChatWardrobeHistoryRepository` (`repos.wardrobeHistory`). `settle(chatId, characterId, intent)` is the only runtime writer: an `append` intent reads the chat's live slots and adds entry `max + 1` unless they hash equal to the current entry; a `cursor` intent moves the cursor without appending. A first touch with no rows records the arrival outfit as 0, or, for a seat that predates the history, an empty seeded 0 before the change. `settle` never throws. `upsertRows` is for restore and import; `deleteByCharacter` runs from character delete.
-- `wardrobeHistory.settle` is a buffered write in the job child (`METHOD_OVERRIDES`), replayed in the parent after the turn's `commitEquippedOutfit`.
-- Migrations `add-chat-wardrobe-history-table-v1` (the table) and `seed-chat-wardrobe-history-v1` (one current entry 0 per character in each chat's `equippedOutfit`, dated by the chat's `updatedAt`).
-- Tests: `chat-wardrobe-history.repository.test.ts`, `migrations/chat-wardrobe-history.test.ts`, `outfit-history-fence.test.ts`, `child-proxy-wardrobe-wear.test.ts`, `cascade-delete.test.ts`.
-- Recording: `OutfitChangeContext` gains a required `provenance` (`operator`, `character` with the calling character, `pascal` with the rolling character) and an optional `historyIntent` (rollback's cursor move). `notifyWardrobeChanged` settles the history beside each announcement: at once outside a model turn, or into the turn's new `pendingWardrobeHistory` map (last intent per character wins), drained with the announcement set by `flushPendingWardrobeAnnouncements`. So one tool call, dialog Done, Pascal run or model turn records one entry.
-- New `lib/wardrobe/turn-containers.ts`: `newWardrobeTurnContainers()` creates the announcement set and history map together; `turnContainersOf()` threads them. `createToolContext` and both Brahma surfaces use the factory; a grep-test forbids a hand-made set. `WardrobeToolContext` is now `OutfitChangeContext` minus `historyIntent`.
-- `applyOutfitSelections` settles each character after a successful commit with its `chat-start` / `participant-added` / `merge` source, so arrivals record entry 0 (or `max + 1` for a returning seat).
-- New `rollbackWardrobe` (`lib/wardrobe/history/rollback.ts`), the one rollback: resolves the target (default: one before the cursor; refuses `no_history`, `at_first`, `out_of_range`, `already_current`), leaves off items that are archived or gone unless an archived one is already worn in that slot, commits once through `commitEquippedOutfit` with no bundles, then fires `notifyWardrobeChanged` with a cursor intent so Aurora announces and the history cursor moves without appending.
-- New tools `wardrobe_rollback` (optional `index`) and `wardrobe_history` (optional `limit`, default 20, max 100; the current entry is kept when it falls before the window). Both are gated by `canDressThemselves` and registered everywhere `wardrobe_take_off` is: tool index, plugin tool builder, executor name list and table (nine tools now), tools API, simple-JSON prompt and parser (aliases `rollback_outfit`, `undo_outfit`, `outfit_history`), legacy text-block prompt and parser (`[[ROLLBACK_OUTFIT]]`, `[[OUTFIT_HISTORY]]`), pseudo-tool and streaming options, and the Salon tool bubble ("Returned to outfit N."). Brahma and the Scenario Builder set both off. Shared rendering in `lib/wardrobe/history/describe-entry.ts`.
-- Tests: `lib/wardrobe/__tests__/rollback.test.ts`, `wardrobe-history-rollback-handlers.test.ts`, `wardrobe-tool-table.test.ts`, tool-definition snapshots.
-- API: `GET /api/v1/chats/[id]?action=wardrobe-history&characterId=…` (entries with resolved slots, stale ids marked `archived` / `missing`, a `changedBy` label) and `POST ?action=wardrobe-rollback` (`{ characterId, index }`; an operator change through `rollbackWardrobe`; refusals are 400). Documented in `API.md`.
-- Query keys `wardrobe.histories(chatId)` / `wardrobe.history(chatId, characterId)`; the `chats` realtime topic now refetches `wardrobe.histories(id)`, so no polling.
-- Wardrobe dialog: a **History** tab beside Live outfit and Outfit Builder (chat only; `components/wardrobe/outfit-history-tab.tsx`). Newest first, with index, relative time, who changed it, a summary and per-slot badges (archived or gone items shown with a secondary badge); the current entry is marked "Wearing now". **Wear again** posts the rollback and toasts the result, naming any garments left off; the button's tooltip warns ahead of time. If the Live tab holds staged edits for that character, the operator confirms, the staging is discarded first, and the Live tab re-seeds after the refetch, so Done cannot flush it over the rollback. `useStagedLiveOutfits` gains `isDirty` and `discard`.
-- Tests: `wardrobe-history.test.ts` (route), `outfit-history-tab.test.tsx`, `use-staged-live-outfits-discard.test.tsx`, `outfit.test.ts` (operator provenance).
-- Export: chat exports stream each chat's history as `wardrobe_history` records (count `wardrobeHistory`, `data.wardrobeHistory`; `QtapWardrobeHistoryRecord`; `WardrobeHistory` in `qtap-export.schema.json`). Import (`lib/import/quilltap-import/import-wardrobe-history.ts`, step 7f) mints new ids, remaps `chatId`, `characterId`, `actorCharacterId` and slot item ids that imported with new ids, keeps indices, cursor and dates, and never merges into a timeline already live on the instance. An older bundle's chats seed entry 0 on the first change.
-- Backup: `data/wardrobe-history.json` (whole table, manifest count `wardrobeHistory`); restore writes it back through `upsertRows` after the chats (step 22n-ter), with the same id and item remaps as the wear ledger in new-account mode. Replace mode clears `chat_wardrobe_history` first.
-- Tests: `export/wardrobe-history-roundtrip.test.ts` (five-entry timeline, cursor at 2), `backup/wardrobe-wear-backup.test.ts`, `backup/uuid-remapper.test.ts`.
-- The History tab's and `wardrobe_history`'s one-line summary is plain text now (`describeOutfit`'s Markdown list flattened); it showed raw `**` and `- ` in the dialog. Test: `lib/wardrobe/history/__tests__/describe-entry.test.ts`.
-- Docs: `help/wardrobe.md` gains "Looking Back --- the Outfit Record" and lists the two tools (nine `wardrobe_*` tools); `BACKGROUND_JOBS_CHILD.md` notes the `settle` write override; CLAUDE.md gains a chokepoint bullet. The spec moved to `docs/developer/features/complete/wardrobe-outfit-history.md` with an As-built section; ROADMAP ticked.
-- Outfit history records who dressed the character. Operator changes (`?action=equip`, `?action=wardrobe-rollback`) store the user's current Speaking As character (impersonation included) in `actorCharacterId`, via the new `operatorWardrobeProvenance` (`lib/wardrobe/history/operator-provenance.ts`). Custom-tool changes store the tool's name in a new nullable column `actorToolName` (written only for `source = 'pascal'`). Migration `add-chat-wardrobe-history-tool-name-v1` adds the column; the seed migration now depends on it. `changedByLabel` reads "the operator, as Bertie" and "Pascal's dress_for_dinner (rolled by Jeeves)"; the history GET returns `actorToolName`. Export schema, DDL.md, help and the spec updated. Tests: repository, migration, `describe-entry`, `outfit.test.ts`, `pascal/wardrobe-effects.test.ts`.
-- Verified live: both migrations on a copy of V4test seeded 32 current entry-0 rows for 32 (chat, character) pairs; on V4test a `wardrobe_wear` call appended entry 1, `wardrobe_history` listed it, `wardrobe_rollback` returned to 0 with Aurora announcing, and the History tab's Wear again moved the cursor back to 1.
-
-#### Spec: wardrobe outfit history and rollback
-
-- New design doc `docs/developer/features/wardrobe-outfit-history.md`: a per-character, per-chat record of every outfit change (one entry per Aurora announcement), `wardrobe_rollback` and `wardrobe_history` tools, a cursor that moves back and forward without renumbering, and a History tab with "Wear again" in the Wardrobe dialog. Spec only; no code yet. Indexed in `ROADMAP.md` and `update-documentation.md`.
-
-#### Feature: `{{character}}` placeholder and character-announced custom tools
-
-- New `{{character}}` placeholder: the rolling character's name. It works in outcome messages, the chip label, the consult prompt, effect expressions and wardrobe item references. A run with no character leaves it as written. `classifyPlaceholder` gains a `character` kind; `executeCustomTool` takes `character` in its overrides. `runCustomTool` takes an optional `characterName` (the trigger runner supplies it) and otherwise reads it with `characters.findByIdRaw`. The proving bench renders it when a character is seated.
-- New custom-tool field `announceAsCharacter` (boolean, default false). When true and the run has a rolling character, `postPascalResult` sets `customAnnouncer: { kind: 'character', characterId }` on the outcome message. The message keeps `systemSender: 'pascal'` and `pascalMeta`. The Salon, the LLM context's speaker tag, the Courier transcript and the Markdown export already honor `customAnnouncer`. A run with no character is still announced by Pascal.
-- Salon: the Staff bar and collapsed chip name a `customAnnouncer` in place of the Staff member (`getAnnouncementSenderName` in `system-message-labels.ts`, fed a character-id name map threaded from `SalonView` as `announcerNames`). Without it a character-announced outcome showed the character's avatar under a "Pascal" bar.
-- Workbench: "The character announces it" checkbox in the builder; "Character name" in the outcome message's Insert value menu; the run dialog's reference panel lists `{{character}}`; the tool vocabulary reports it.
-- JSON Schema (`public/schemas/qtap-custom-tool.schema.json`) documents both. Help: `help/custom-tools.md`, `help/pascals-workbench.md`.
-- Tests: `custom-tools-execution.test.ts`, `run-service.test.ts`, `tool-vocabulary.test.ts`, `tool-draft.test.ts`, `services/pascal/writer.test.ts`, `system-message-labels.test.ts`.
-
-#### Feature: wardrobe picker in Pascal's Workbench
-
-- A *Change the outfit* side effect's items now have a **Choose…** picker (`components/wardrobe/wardrobe-reference-picker.tsx`): outfits and garments by slot, with thumbnail, slot badges, origin chip, a reach note (`wardrobeReachLabel` in `lib/wardrobe/wardrobe-container.ts`), search, a slot filter and an archived filter (on by default for `take_off`, off for `wear`). It fills the reference by title, or by id on request.
-- A filled reference renders as a chip with the same particulars and a title/id toggle. A templated reference keeps its text box ("chosen at run time"). A reference the vantage cannot find shows an advisory, not a draft error. With `add_to_slot` or a slot-restricted `take_off`, slots none of the chosen items cover are marked "(not covered)", with a one-line advisory per mismatching item.
-- The Workbench browses from a `WardrobeVantage` (`lib/pascal/tool-draft.ts`): a character or a shared wardrobe, defaulted from the file's store by `defaultWardrobeVantage`, chosen with `WardrobeVantageSelect`, shared with the proving bench's *Pick a character* mode. Editor state only; never serialized. Reads go through `useWardrobeVantageItems` over the existing wardrobe hooks; no new route or query key.
-- New `lib/wardrobe/wearable-ref.ts` holds the reference lookup rule (`resolveWearableRef`, `matchWearableTitle`, `isTemplatedWearableRef`). `WearablePool.findByTitle` now delegates to `matchWearableTitle`, so the server and the Workbench resolve titles the same way.
-- `POST /api/v1/custom-tools?action=preview` returns `wardrobeResolution` when the fact sheet names a character: per wardrobe gesture, each item found (id, title, types, origin, image) or skipped with `resolveWearable`'s reason. A read through `loadWearablePool` / `findInPool` / `resolveWearable` (`lib/pascal/bench-wardrobe.ts`); nothing is worn. The bench's dry-run line now says "would apply" or "would skip" per item when a character is seated.
-- Tests: `wearable-ref.test.ts`, `wearable-ref-delegation.test.ts`, `wardrobe-vantage.test.ts`, `wardrobe-container.test.ts` (reach label), `route-preview-wardrobe.test.ts`, `wardrobe-reference-picker.test.tsx`. Help: `help/pascals-workbench.md`, `help/custom-tools.md`, `help/wardrobe.md`.
-
-#### Fix: a composer typeahead menu could be left open at the top-left (bug 250)
-
-- Undo that brought back a `@`, `:` or `/` trigger, followed at once by clearing the composer, could leave the menu rendered at the window's top-left until the next keystroke. Lexical 0.52's `LexicalTypeaheadMenuPlugin` opens its menu in a React transition, and its `closeTypeahead` skips the close while the captured resolution is still null, so a clear that lands before the open commits is lost.
-- New `GuardedTypeaheadMenuPlugin` (`components/chat/lexical/typeahead/GuardedTypeaheadMenuPlugin.tsx`) wraps the plugin. After each open commits it re-runs the consumer's `triggerFn` against the live editor and, when the trigger is gone, calls `onClose` and remounts the plugin. `MentionTypeaheadPlugin`, `CharTypeaheadPlugin` and `SlashCommandPlugin` now render through it.
-- New test in `__tests__/unit/components/chat/lexical/plugins/MentionTypeaheadPlugin.test.tsx` reproduces the race by seeding and clearing inside one `act()`.
-
-#### Fix: a `when` phrase naming "constructor" as its month failed the extraction job (bug 247)
-
-- `MONTH_NAMES`, `WORD_NUMBERS` and `UNIT_DAYS` in `lib/memory/time/clock.ts` are now read through `lookupWord`, which answers own keys only. `constructor 5` and similar phrases resolve to no event time instead of throwing `RangeError: Invalid time value`.
-- `resolveEpisodicAnchors` (`lib/memory/time/anchors.ts`) now catches a parser error and keeps the fallback `occurredAt`, so one bad `when` costs that draft its event time and never fails the job.
-- New test rows in `lib/memory/time/__tests__/rule-table.test.ts` and `anchors.test.ts`. The v5 harness pin `PROTOTYPE_KEY_MONTH_THROWS` can be retired.
-
-#### Fix: Enter on a code block's blank trailing line sent the message (bug 251)
-
-- In the Salon composer, Shift+Enter then Enter at the end of a code block was meant to leave the block. In chat mode it sent the message; in composition mode it added another line. After Shift+Enter, Lexical leaves the caret as an element point on the `CodeNode`, and `KeyboardPlugin`'s check only looked for a caret inside the block's last child. Present on Lexical 0.43 as well.
-- New `$codeBlockToEscape` (`components/chat/lexical/plugins/KeyboardPlugin.tsx`) accepts both caret shapes. The exit now removes only the trailing blank line instead of rebuilding the block as one highlight node.
-- New test `__tests__/unit/components/chat/lexical/plugins/KeyboardPlugin.test.tsx` (real editor; the plugin had none). Help: code-block paragraph in `help/chats.md`. Filed and fixed as bug 251.
-
-#### Chore: Lexical 0.52
-
-- `lexical` and the eight `@lexical/*` packages moved from 0.43.0 to 0.52.0 in lockstep; one copy installed. This ends the 0.43 pin.
-- `TABLE_TRANSFORMER` (`components/chat/lexical/transformers/table-transformer.ts`) now has a bare, non-optional `regExpEnd`, which keeps it out of `@lexical/markdown`'s live shortcut runner. Tables are still built on import and paste through `handleImportAfterStartMatch`; typing a `|…|` line stays a paragraph. New test `__tests__/unit/components/chat/lexical/transformers/table-transformer.test.tsx` covers both paths.
-- Lexical is ESM-only from 0.51. `jest.config.ts` now exempts `lexical`, `@lexical/*` and `@preact/signals-core` from the transform ignore list, including in the node_modules pattern `next/jest` prepends. `next.config.js` is unchanged.
-- Type fixes for 0.52's stricter command typing: `KEY_DOWN_COMMAND` handlers in `CharTypeaheadPlugin` and `MentionTypeaheadPlugin` take a non-null `KeyboardEvent`; `ImagePastePlugin` accepts the full `PasteCommandType` and reads `clipboardData` only when present.
-- `list-indentation.ts` stays. The 0.52 importer resolves nesting by column, but export still writes four-space indents, so the document's own indent unit still has to be restored on export.
-- Known issue, filed as bug 250 (`docs/developer/bugs/bug-250-typeahead-menu-orphaned.md`): a composer typeahead menu reopened by undo and then cleared immediately stays open at the top-left until the next keystroke. Upstream `LexicalTypeaheadMenuPlugin` race, new in 0.52.
-- Spec moved to `docs/developer/features/complete/lexical-0.52-upgrade.md` with an As-built section.
-
-#### Chore: dependency safe batch
-
-- In-range updates: `next` / `eslint-config-next` 16.4.2, `react` / `react-dom` 19.3.1, `@tanstack/react-query` / `-devtools` / `eslint-plugin-query` 5.104.3, `@tanstack/react-virtual` 3.14.20, `@playwright/test` 1.64.1, `@testing-library/user-event` 14.6.8, `openai` 7.34.0, `zod` 4.6.7, `postcss` 8.5.30, `react-syntax-highlighter` 16.1.2, `@types/node` 24.19.2.
-- Range bumps: `katex` ^0.19.0, `@types/better-sqlite3` ^9.6.0, `@types/yauzl` ^3.4.0, `@testing-library/jest-dom` ^7.0.1, `dotenv` ^18.0.8. The rendered KaTeX HTML still comes from the 0.16 copy nested under `rehype-katex`; only the CSS and symbol table moved to 0.19.
-- Removed the unused `@vitest/mocker` dev dependency and its `knip.json` ignore.
-- Rebuilt the eight plugins that bundle the `openai` SDK and bumped their patch versions: anthropic 1.0.62, curl 1.0.31, default-system-prompts 1.1.26, google 1.1.56, mcp 1.1.44, ollama 1.0.53, openrouter 1.0.67, search-serper 1.0.26.
-- Held (reasons in `docs/developer/features/complete/dependency-upgrade-safe-batch.md`): TypeScript 7, ESLint 10, `@types/node` 26, `pdfjs-dist` 6, `jest-fetch-mock` 4, `better-sqlite3-multiple-ciphers` 13, and Lexical 0.52 (own spec).
-
-#### Docs: dependency upgrade specs
-
-- Added `docs/developer/features/dependency-upgrade-safe-batch.md` (in-range updates, KaTeX 0.19, `@types/*` bumps, `@vitest/mocker` removal, and the recorded holds on TypeScript 7, ESLint 10, `pdfjs-dist` 6 and `better-sqlite3-multiple-ciphers` 13) and `docs/developer/features/lexical-0.52-upgrade.md` (lockstep bump, table-transformer `regExpEnd` fix, Jest ESM exemption, behaviour-change checklist, manual smoke test). No code changes.
-
-#### Feature: slash commands in the Salon composer
-
-- Typing `/` at the start of a word in the Salon composer opens a command menu: composer actions (`/attach`, `/library`, `/image`, `/announce`, `/mail`, `/inform`, `/tool`, `/pascal`, `/roll`, `/d6`, `/d20`, `/coin`, `/bottle`), every available user-invocable built-in tool under its id, and every Pascal custom tool in the chat under its name. Unavailable built-ins are left out. Matching is exact, then command prefix, then word prefix of the command, label or keywords (`_` and `-` split words); never mid-word.
-- A tool that declares no parameters runs at once (public, or the custom tool's default visibility) with a toast; one with any parameter opens its existing dialog on its form. Picking a command removes the typed `/query` as one undo step. `/d6` and friends produce the same pending-result chip as the dice button.
-- The trigger uses `findTrigger`'s opener rule plus a letter-first query, so `and/or`, `10/15`, `http://`, paths and code never open it. No arguments; a space closes the menu. Not mounted in Document Mode.
-- New pure tier `lib/slash-commands/` (trigger, ranking, registry), under the same ESLint import restriction as `lib/char-insert/`. Adapter `SlashCommandPlugin`; immediate runs in `useSlashCommandRunner`; tool and custom-tool lists fetched only while the menu is open (`queryKeys.tools.byChat` added).
-- `RunToolModal` and `CustomToolRunDialog` take an `initialTool` pre-selection (re-applied per nonce). `CustomToolRunDialog` moved from `CustomToolsButton` into `ChatModals` so the gutter wand and the slash menu share one instance; `CustomToolsButton` is now a plain button. `useModalState.openRunTool(toolId?)` and new `openCustomTool(initial?)`.
-- The dice button's request moved to `components/chat/rng-request.ts`, shared with the slash quick rolls.
-- New chat setting `composerSlashCommands` (Settings → Chat → Slash Commands), default on; gutter buttons and the sidebar are not gated. Migration `add-composer-slash-commands-field-v1` adds the `chat_settings` column.
-- Help: `chat-settings-composer.md` (new Slash Commands section; page URL now `section=composer-slash-commands`), `run-tool.md`, `custom-tools.md`, `rng-tool.md`. Spec moved to `docs/developer/features/complete/composer-slash-commands.md` with an As-built section; Phase 4 of `composer-typeahead.md` marked superseded.
-
-#### Fix: one-character chat chained the character to the depth cap (bug 249)
-
-- In a Salon chat with one LLM character and no persona seat, every operator message made the character reply about 20 times in a row, until the chain hit `maxChainDepth`. Since `83f4368a8` the turn selector returns a lone character unconditionally, and `shouldChainNext` treated that as a reason to continue; the all-LLM pause did not apply because the operator was present.
-- `shouldChainNext` (`lib/services/chat-message/turn-orchestrator.service.ts`) now returns `user_turn` when the selector picks the only character, that character spoke last, and a human is present. Genuinely all-LLM chats and autonomous rooms keep the monologue; a queued or nudged turn still runs. The selector is unchanged.
-- Filed and fixed as bug 249 (`docs/developer/bugs/fixed/bug-249-lone-character-chain-runaway.md`).
-
-#### Feature: Pascal wardrobe effects
-
-- A custom-tool effect may now be a wardrobe gesture instead of a write: `{ "wardrobe": { "action": "wear" | "take_off" | "clear_slot", "items"?, "mode"?, "slot"? } }`. An effect is either `target` + `value` or `wardrobe`, never both. Per-action rules are checked at load (`wardrobeGestureProblems` in `lib/pascal/custom-tool.types.ts`); the published JSON Schema checks shapes only and states the per-action rules in prose.
-- Item references are templates (rendered with the outcome message's placeholders, then trimmed) resolved by id, then case-insensitive title, in the rolling character's wearable pool. Up to 8 items per gesture, 200 characters each. A gesture whose items all render empty is skipped.
-- New applier `lib/pascal/wardrobe-effects.ts`: runs after the value writes commit, one gesture at a time through `wearItem` / `takeOffWearable` / `applyDisplacement` with source `'tool'`, then calls `notifyWardrobeChanged` once if anything changed. Unresolvable, archived (for wear) or slot-mismatched items are skipped per item; a run with no rolling character changes nothing. Each change is recorded in `pascalMeta.effects` with target `wardrobe.wear`, `wardrobe.take_off` or `wardrobe.clear_slot`; no schema or migration change.
-- `applyCustomToolEffects` takes `userId` and an optional `pendingWardrobeAnnouncements`; `run_custom` passes the turn's set so a tool's wardrobe change and the model's own wardrobe calls produce one Aurora announcement.
-- Fix: `wardrobe_take_off` `remove` on a composite outfit removed nothing, because worn composites are stored as their leaves. It now removes every equipped leaf of the composite (`takeOffWearable` in `lib/wardrobe/wear-ops.ts`), shared with the Pascal applier.
-- `run_custom` description: the preamble mentions outfits, and the per-tool `Side effects:` line lists `wears …`, `takes off …`, `clears <slot>`. Tool vocabulary gains `wears`, `takesOff`, `clearsSlots`, shown in the run dialog's reference panel.
-- Pascal's Workbench: each side-effect row has a Kind select (write a value / change the outfit) with action, items, mode and slot fields; draft round-trip, validation and parameter rename cover wardrobe items. The Proving Bench lists gestures as "would attempt".
-- Help: `custom-tools.md` (new "Dressing and undressing" section), `wardrobe.md`, `pascals-workbench.md`. Specimen `CUSTOM_TOOL_SPEC.json` gains a `take_off` effect. Spec moved to `docs/developer/features/complete/pascal-wardrobe-effects.md`.
-
-#### Feature: Pascal trigger phrases
-
-- Custom tools may declare `triggers`: up to 8 phrases (3–80 characters, no leading/trailing whitespace, unique ignoring case). Matching is a case-insensitive substring test with no word boundaries.
-- New chat setting `customToolTriggers` (Settings → Chat → Automation, "Auto-Run Custom Tools on Trigger Phrases"), default off and ignored while `customTools` is off. Migration `add-custom-tool-triggers-field-v1` adds the `chat_settings` column.
-- With the setting on, the operator's message (after it is saved) and each character's reply (after it is saved) are scanned; each matching tool runs once with every parameter at its default, from the speaker's perspective (their roster, fact sheet and groups; the bare operator rolls as nobody). Carina query lines are not scanned, nor are Pascal, Carina or staff messages, and swipes fire nothing. At most 4 tools fire per message; the rest are logged. A private (whisper-default) tool whispers to the speaker. Failures post the Prospero error bubble.
-- `pascalMeta.invokedBy` gains `'trigger'`, with the phrase in `pascalMeta.triggerPhrase`. Export schema updated. An export containing a triggered run fails `pascalMeta` validation on builds older than 4.11 for that message.
-- Extracted `runCustomTool` (`lib/pascal/run-service.ts`): the cascade → execute → effects → post sequence the `run_custom` handler and the manual run route each carried a copy of. Both entrances and the trigger runner now call it. A manual run request that omits `private` now follows the tool's `defaultVisibility` (the run dialog always sends it, so dialog runs are unchanged).
-- Pascal's Workbench: a trigger-phrase chip input in the builder form, draft round-trip and validation, a warning when an outcome message, chip label or oracle prompt quotes one of the tool's own phrases, and a "✦ N phrases" badge in the library.
-- Migration registry test now fails on a dependency cycle (including a migration that names itself in `dependsOn`), which would otherwise stop the server at boot.
-- The Almanack and the `help_settings` tool report the new setting. Help: `custom-tools.md`, `chat-settings.md`, `rng-tool.md`, `pascals-workbench.md`. Spec moved to `docs/developer/features/complete/pascal-trigger-phrases.md`.
-
-#### Docs: three Pascal and composer feature specs
-
-- Added `docs/developer/features/pascal-wardrobe-effects.md`: a `wardrobe` side effect on custom tools (wear, take off, clear a slot) applied to the rolling character through the existing wardrobe chokepoints.
-- Added `docs/developer/features/pascal-trigger-phrases.md`: a `triggers` key on custom tools plus an off-by-default chat setting that runs the tool when anyone in the chat says one of its phrases; includes the extraction of one shared run service out of the two existing entrances.
-- Added `docs/developer/features/composer-slash-commands.md`: `/` commands in the Salon composer for composer actions, built-in tools, and Pascal's tools, running at once when there is nothing to fill in and opening the existing dialog otherwise. Supersedes Phase 4 of `composer-typeahead.md`.
-- Catalogued all three in `.claude/commands/update-documentation.md`. No code changes.
-
-#### Fix: styled hair slot read as contradicting the physical description
-
-- `describeOutfit` now appends a note to the hair line (`HAIR_STYLING_PRECEDENCE_NOTE` in `lib/wardrobe/slot-guidance.ts`) saying the hairdo is the current styling and overrides the natural hair's texture and style in the physical description.
-- Image prompts put the physical description ("perfectly straight hair") before the outfit list ("hair: Voluminous Emerald Curls") with nothing saying which applied. A kept photo's catalogue entry quotes that prompt, so a character reading it described the natural hair instead of the hairdo in the picture. The note reaches every caller of `describeOutfit`: avatar and Lantern prompts, wardrobe tool output, and Aurora announcements.
+#### Refactor: one document core for Document Mode and the `doc_*` tools (Refactor 4.12, spec 2)
 
+- Fix (#137): `doc_open_document` with no `path` records the new blank document under the scope it was created in. In a chat with no project, or one whose roster refused the character, the file was made in Quilltap General but the `chat_documents` row, the tool result and the Librarian announcement said `scope: 'project'` (the default), so Document Mode could not open it. The recorded store name is now the resolved one too, not the caller's `mount_point`.
+- Fix (#133): a Document Mode save or rename into a store now re-indexes whenever the path lands in a store (`mountPointId`), not only in `document_store` scope. A `project`-scope save into a project's official store used to skip the chunk/embed pass until the next periodic scan. Operator saves now also re-index hard-link siblings, as tool writes do.
+- Fix (#134): Document Mode and `doc_read_file` read an uploaded blob through one reader, `readDatabaseBlobForDocument` (`lib/mount-index/database-store.ts`): a native-text upload (.md, .txt, .json, .jsonl) is read as its own bytes, any other kind as its converted extracted text. `doc_read_file` used to return the extracted text for an uploaded `.md` while the editor showed the bytes.
+- New `lib/documents/core/`: `readDocument` (the one blob fallback), `writeDocument` / `afterDocumentWrite` (the one refresh, gated on `mountPointId`, link siblings included), `ensureDocument` (creates through the writer), `renameDocument` + `computeRenameTarget`, `sweepChatDocumentsAfterMove`, `deleteDocument`, `statDocument` / `documentExists`, `viewTargetFor`, and the three document errors. `operator-doc-actions.ts` keeps access contexts, operator path resolution, blank-document naming, the open and editor-write compositions, qtap target classification and store listing (668 → 388 lines).
+- `operator-doc-http.ts` gains `resolveDocumentForRoute`, `openDocumentResponse` / `openedDocumentPayload` and `recentDocumentsResponse`; `operator-doc-actions.ts` gains `storeOptionFor`, which the chat route's `accessible-stores` default branch now uses. Rename and delete take the path the route already resolved instead of resolving it twice. Response shapes are unchanged, except that a Document Mode rename of a file that is no longer there is now a 404 (was a 500), and the editor allows a case-only rename on disk.
+- `doc_read_file`, `doc_write_file`, `doc_str_replace` and `doc_insert_text` read and write through the core. `readTextFileOrUploadedBlob` is gone; `doc_str_replace` and `doc_insert_text` can now edit an uploaded text file (the edit writes a document over the blob, as an editor save does), and `doc_write_file` diffs against an upload's text instead of announcing a creation.
+- `doc_read_frontmatter`, `doc_update_frontmatter`, `doc_read_heading` and `doc_update_heading` read and write through the core, and so also reach uploaded text files.
+- `doc_move_file`, `doc_copy_file` and `doc_delete_file` go through the core (`renameDocument`, `readDocument` / `writeDocument`, `deleteDocument`, `statDocument`). `syncChatDocumentsAfterFileMove` is gone; the one sweep is `sweepChatDocumentsAfterMove`, and `doc_move_file` now sweeps under the resolved store name, so a move addressed through `self` repoints rows recorded under the vault's name (bug 256). A filesystem move now re-indexes by `mountPointId` (it was gated on `document_store` scope, the #133 pattern) and re-indexes link siblings. `doc_copy_file` can copy an uploaded text file. A folder passed to `doc_move_file` or `doc_delete_file` on disk now gets the same "is a folder" message as in a database store.
+- `doc_open_document` opens through the core: a file Document Mode only views opens by its view target, anything else (an uploaded `.md` included) by `readDocument`, and its `mtime` is the file's own (a database store used to report the current time). A new blank document is created with `ensureDocument` through the store writer instead of raw `fs.mkdir` / `fs.writeFile` on the resolved path, so a database-backed project store gets a document row.
+- `triggerReindexIfNeeded` is gone from `lib/tools/handlers/doc-edit/shared.ts`. New grep-test `__tests__/unit/lib/documents/core-chokepoint.test.ts` fences the `doc_*` handlers, the operator layer and the Document Mode routes off `readFileWithMtime`, `writeFileWithMtimeCheck`, the blob readers, `moveDatabaseDocument`, `deleteDatabaseDocument`, `reindexSingleFile`, `fs.writeFile` and `fs.unlink`. CLAUDE.md gains the chokepoint line; the spec is marked implemented with an "As built" section; `help/document-editing-tools.md` says uploaded text files read as themselves and can be edited.
+
+#### Fix: Storyteller "all at once" replies no longer land as empty bubbles
+
+When a concurrent Storyteller turn finished, the Salon built its reply bubble from text read inside a React state updater, which had not always run yet, so the bubble could show empty until the end-of-round refresh. `useSSEStreaming` now keeps each seat's streamed text in a map local to the stream and reads it from there. The golden-stream test checks the text.
+
+#### Refactor: Salon stream frames, phase 2 (Refactor 4.12, spec 5)
+
+The Salon's SSE stream now sends frames tagged with `kind` (`lib/chat/stream-frames.ts`) instead of the untagged flag bag. Client and server change together; no behavior change intended.
+
+- `useSSEStreaming` reads frames with `parseFrame` and dispatches with an exhaustive `switch (frame.kind)`; seat-tagged (concurrent Storyteller) frames go to their own switch. The hand-ordered `if` chain, the `SSEEvent` type and `parseSSEData` are deleted. The optimistic assistant message is built in one place, `assistantMessageFromDone`.
+- `useRegeneration` switches on frames; a swipe stream ends with `swipeDone` (was `{ done: true, message }`).
+- The raise-hand POST reply no longer lowers the hand on `raised: false`; it lowers a still-raised hand only when the reply says no stream is open.
+- Help chat, the Brahma console, the Scenario Builder and the one-shot tool loop keep the old bag shape via `legacyFrameEncoder()`; their clients are unchanged.
+- Hook tests feed frames. New: `useSSEStreaming-golden.test.tsx` replays the recorded golden streams through the hook. API.md documents the frame kinds; CLAUDE.md gains the chokepoint.
+
+#### Refactor: Salon stream frames, phase 1 (Refactor 4.12, spec 5)
+
+The Salon's SSE frames now have one definition, `lib/chat/stream-frames.ts`: a Zod discriminated union on `kind`, `encodeFrame` (the only producer of `data:` bytes on the turn path), `parseFrame`, and `tagFrame`. The wire shape is unchanged in this phase.
+
+- Every `encodeXxxEvent` in `streaming.service.ts` is a one-line `encodeFrame` call; the inline frames in `tool-execution.service.ts` and `regenerate-swipe-stream.ts` are gone. `encodeFrame` renders through `toLegacyBag` until the client switches.
+- A `done` frame carries one `outcome` (`finished` / `skipped` / `yielded` / `stopped` / `empty`) instead of four boolean flags; the legacy rendering restores the flags.
+- Concurrent Storyteller turns write through `seatedFrameEncoder(participantId)`, which tags each frame before encoding. `tagSseChunk` / `taggingController` (decode, regex, re-encode) are deleted; `sharedStreamController` keeps a finishing turn from closing the shared stream.
+- Golden streams recorded from the old encoders in `__tests__/fixtures/salon-stream/`; tests in `__tests__/unit/lib/chat/stream-frames.test.ts` and a chokepoint grep-test, `stream-frames-chokepoint.test.ts`.
+#### Refactor: one image transport budget (Refactor 4.12, spec 3)
+
+Which images a Salon turn sends to a provider is now decided in one place, `applyImageTransportBudget` (`lib/chat/image-transport-budget.ts`), run on the final message array for the primary and again for each failover substitute.
+
+- One count cap and one byte budget cover every image: this turn's uploads, re-hydrated uploads, and Lantern images. Before, the 2 MB byte budget covered Lantern images only, so uploads plus Lantern images could still exceed bug 151's limit.
+- New `LLM_TRANSPORT_TOTAL_BASE64` (4 MB of base64 per request) replaces `LANTERN_IMAGE_BASE64_BUDGET` (2 MB, Lantern only).
+- Ranking: uploads, then re-hydrated uploads, then Lantern images, each newest first. Previously the Lantern walk and the final cap check used opposite orders.
+- Overflow is described when that is free or the image is an upload; otherwise it is replaced by `[image omitted: over the request budget]`. Previously an image over the byte budget was dropped with no trace. Vault-stored images (mount-link ids) are not described past the budget, since that costs a vision call.
+- Failover substitutes now get the byte budget and the capability check re-applied, not only the count cap.
+- Loaders tag attachments (`transport`: origin, time, describable) and no longer filter images by capability; `streamMessage` strips the tag before plugins and logs see it.
+- `lib/chat/message-attachment-adapter.ts` (`adaptMessagesForProfile`, `findImagesOverCap`) is removed; `collectAttachmentMimeTypes` moved to the new module.
+- Help: `help/connection-profiles.md` ("Most images per request") describes the order and the weight limit.
+
+#### Refactor: one recursive watcher core under both filesystem watchers (Refactor 4.12, spec 7)
+
+The document-store watcher and the `files/` watcher were copies of each other that had drifted. They now share `createRecursiveWatcher` (`lib/files/recursive-watcher.ts`): the native recursive `fs.watch`, the per-path debounce, `lstat` dispatch, symlink skip, cloud-placeholder skip, `'error'` logging, and the polling fallback. Each watcher keeps only its domain handlers.
+
+- `files/` watcher falls back to polling when `fs.watch` refuses a recursive watch, and honours `QUILLTAP_WATCHER_POLLING=1`. It used to log a warning and stay off.
+- `files/` watcher no longer hashes an evicted iCloud / OneDrive placeholder, which made the provider download it. Covered for direct events (core) and for files inside a folder that arrived (`handleFileAdd` / `handleFileChange`).
+- `files/` watcher no longer reads every file record on a plain file delete. The folder sweep runs only after a rename of a path that had no record of its own.
+- Both watchers debounce 750 ms (`WATCH_DEBOUNCE_MS`); the `files/` watcher was 500 ms.
+- `stopMountWatchers` / `stopWatcher` are now called on SIGTERM / SIGINT (`lib/startup/watcher-shutdown.ts`, prepended so it runs before the database close). `stopMountWatchers` is synchronous; `stopWatcher({ flushPendingDeletes: false })` leaves deferred deletes to startup reconciliation.
+- One recursive `readdir` skeleton, `walkTree` (`lib/files/walk.ts`), under `walkDirectory`, `listFilesystemFolders`, `walkDisk` and `scanDirectory`. Filter rules unchanged.
+- Stale chokidar comments in `database-store.ts` and `db-store-events.ts` fixed; `FILE-SYSTEM-IMPLEMENTATION.md`'s watcher section rewritten (it described a class that does not exist).
+- Tests: shared cases moved to `lib/files/__tests__/recursive-watcher.test.ts`; new `lib/files/__tests__/walk.test.ts`; both `watcher-native.test.ts` suites keep only domain cases plus the three new `files/` behaviours.
+
+#### Fix: theme-storybook stories use only real `qt-*` classes
+
+Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.
+
+- Badges / ThemeComparison: dropped `qt-badge-default`, `qt-badge-outline-{primary,success,warning,destructive}`, `qt-badge-provider-{anthropic,google}`; added `qt-badge-info`; provider badges are the five embedding providers, standing alone as in `ProviderBadge`.
+- Chat: announcement-bar chevrons are SVG glyphs as in `AnnouncementChip`; `qt-typing-indicator` is replaced by the `qt-thinking-indicator` quill from `QuillAnimation` / `StreamingMessage`; confirmation badges match `ConfirmationBadge`. `qt-chat-system-bar-chevron-down` and `qt-confirmation-badge-label` stay, because the app uses them as unstyled hooks.
+- Tabs: the Navigation Bar demo uses `qt-navbar` > `qt-navbar-container` > `qt-navbar-section` with `qt-navbar-toggle` buttons, plus a scoped base-layer reset standing in for Tailwind preflight. Links no longer underline and the action buttons no longer wrap below the links.
+- theme-storybook 1.0.100. The "Pre-existing gaps" note in `docs/developer/features/refactor-4-12/storybook-css-diff.md` is marked resolved.
+
+#### Build: theme-storybook CSS is generated (Refactor 4.12, spec 1)
+
+`packages/theme-storybook/src/css/qt-components.css` is now build output instead of a hand-written copy of the app's `qt-*` CSS. The copy was missing 334 of 893 classes and carried 7 the app had deleted.
+
+- `npm run generate:storybook-css` (`scripts/generate-storybook-css.mjs`, core in `scripts/lib/storybook-css.mjs`) compiles `app/styles/qt-components/` with Tailwind's `compile` against the app's token map, expands every `@apply`, autoprefixes, and keeps statement-level comments. Output is deterministic.
+- `npm run lint` runs a fifth gate, `scripts/check-storybook-css.mjs`, which fails when the committed file differs from a fresh generation.
+- The `@theme inline` token map and the class-based `dark` variant moved from `app/globals.css` to `app/styles/theme-tokens.css`, imported by both. The app's compiled CSS is byte-identical.
+- theme-storybook 1.0.99: the generated file (hover now inside `@media (hover: hover)`, `--qt-*` defaults on `[data-theme]` as in the app); `ThemeDecorator` always sets `data-theme`, a `light`/`dark` class and `data-color-mode`; the Tabs story no longer uses the deleted `qt-tab-content`; `quilltap-defaults.css` re-declares the `--color-*` aliases on the story container, so dark mode actually applies in Storybook (it never did: the aliases resolved once on `:root`).
+- theme-storybook publishes at release: new `publish-theme-storybook` job in `release.yml`, skipped when the version is already on npm. CLAUDE.md's per-change mirror and publish rule is replaced by "run the generator, bump the patch version".
+- Diff report: `docs/developer/features/refactor-4-12/storybook-css-diff.md`. Test: `__tests__/unit/scripts/generate-storybook-css.test.ts`.
+
+#### Docs: Refactor 4.12 specs
+
+Seven proposed deep-refactor specs for code the 4.12-dev cycle touched, with an index that ranks them and lists what was examined and left alone. No code changes.
+
+- `docs/developer/features/refactor-4-12.md` (index) and one spec each for: generating the theme-storybook `qt-components.css` from the app CSS instead of mirroring it by hand; one document core behind the operator's Document Mode routes and the `doc_*` tools; one image transport budget on the way to a provider; one tier walk with the reach rules settled; the Salon's SSE protocol as a tagged union; the remaining Wardrobe / Inventory browser pairs and the `FileBrowser` retirement decisions; one recursive watcher core under both filesystem watchers.
+- Each spec names the bugs it would file first and the decisions it needs. `ROADMAP.md` gains a "Refactor programmes" section; the documentation index lists the new files.
+
+#### UI: WCAG 2.2 AA pass (release checklist 13)
+
+Contrast table, axe sweep of every bundled theme in light and dark, and a component audit of this cycle's UI changes.
+
+- Accent hovers: `.qt-settings-toggle-row`, `.qt-storyteller-mode-option`, `.qt-floating-dialog-close` and `.qt-intervene-toggle` now set `--color-accent-foreground` on hover. They kept the resting text colour on the accent fill, which dropped to about 1.4:1 on Art Deco dark, Great Estate dark and Madman's Box.
+- Ten raw `hover:bg-accent/50` call sites (memory cascade dialog, prompt/subprompt/progression cards, library file picker, connection-profile drag handle) now use `hover:qt-bg-surface-hover`.
+- Alerts: `qt-text-small` / `-muted` / `-secondary` / `-xs` inside a `qt-alert*` inherit the alert foreground; links inside alerts inherit it too and are underlined (1.4.1). `qt-link`'s muted grey was 3.6-4.1:1 on the warning tint.
+- `.qt-footer-path` and `.qt-chat-system-bar-time` no longer use opacity (2.9:1 and 3.0:1).
+- Settings-page tabs over a story background: inactive tint 85/15 to 90/10 (muted label was 4.3:1).
+- Earl Grey `--text-400` 45.5% to 43% (light) and 59% to 61% (dark); Rains dark `--text-400` 59% to 61%.
+- Art Deco light: `--qt-brand-fg` gold to `--deco-bronze` (the brand word was 1.1:1 on parchment), link and footer hover to the primary navy; dark keeps the gold. Great Estate light: brand and the same hovers to `hsl(43 70% 28%)` (was 1.7:1); dark keeps the gold.
+- Earl Grey and Rains: the `.qt-alert-*` overrides coloured text with `--X-100` in both modes (warning was 2.4:1 on white); they now use the per-mode `--qt-alert-*-fg` tokens.
+- Light-mode alert text darkened to clear 4.5:1 on the alert tint: success in Art Deco, Earl Grey, Great Estate, Old School and Rains (were 3.9-4.5:1); Earl Grey info; Great Estate warning.
+- Theme versions: Art Deco 1.0.14, Earl Grey 1.3.11, Great Estate 1.0.11, Old School 1.0.15, Rains 1.3.15.
+- `SlideOverPanel` is `inert` while closed. It stays mounted off-screen for the slide, and its controls (the LLM Inspector's filter, refresh, close and log rows) were in the Tab order beyond the viewport edge, where the focus trap held keyboard users. Test: `__tests__/unit/components/ui/SlideOverPanel-inert.test.tsx`.
+- `.qt-chat-system-bar`, `.qt-chat-announcement-chip` and `.qt-mention-chip` get a 2px ring on `:focus-visible`; focus was shown only by a faint tint.
+- Workspace tab strip (`components/workspace/TabStrip.tsx`): tabs were `div role="tab"` with no tabindex, so they could not be reached by keyboard, and nested the close button. Each tab is now a `button role="tab"` with roving tabindex; arrows / Home / End move and select, Delete closes. The close cross is `aria-hidden`, `tabIndex={-1}`. New `.qt-tab-select`; focus ring drawn on the tab. Close cross opacity 0.55 to 0.8. Test: `__tests__/unit/components/workspace/tab-strip-keyboard.test.tsx`.
+- Names and states: Markdown toolbar buttons get `aria-label` (were named "B", "I", "H1"; the glyph is kept where the words lack it, e.g. "Heading 4 (H4)"); code-block button `aria-pressed`; `aria-pressed` on search type chips, wardrobe slot filters, wardrobe dialog view switch, announcement character picker, setup role picker, and the Aurora favorite / Carina / user-control toggles; `aria-expanded` on the RNG custom-roll and Prospero files card toggles; emoji-only file-browser buttons get labels with the glyph `aria-hidden`; search "(3/10)" button gets a label.
+- Staff announcement bars dropped an `aria-label` that replaced their visible text (2.5.3); collapsed-sidebar avatar label includes the visible queue number.
+- Aurora favorite star: 24px minimum target (was 14x17).
+- theme-storybook 1.0.98: mirrors the above and ports the alert, footer, settings-shell and settings-background families.
+
+#### UI: undefined CSS custom properties repointed at real tokens
+
+Release-checklist item 13. About 105 declarations in `app/styles/qt-components/` read custom properties the app never defines (`--primary`, `--muted`, `--border`, `--foreground`, `--card`, `--accent`, `--destructive`, `--background`, `--input`, `--qt-primary`, `--qt-border`, `--qt-text-primary`, `--qt-text-secondary`, `--qt-text-muted`). Each such declaration was invalid at computed-value time, so the rule fell back to inherited or initial values on every theme.
+
+- Affected: the help dialog (composer, nav buttons, suggested links, entity picker, guide search/topics/reader, welcome card), Document Mode chrome (dividers, header, title input, toolbar, status bar, URI bar), Lexical checkboxes and links, links in Salon messages, emoji picker and typeahead secondary text, the chat sidebar resizer, the memory-source highlight, and the formatting-button and NanoGPT badge hovers.
+- `hsl(var(--X))` → `var(--color-X)`; `hsl(var(--X) / N)` → `color-mix(in srgb, var(--color-X) N%, transparent)`; `--qt-primary` → `--color-primary`; `--qt-border` → `--color-border`; `--qt-text-primary` → `--color-foreground`; `--qt-text-secondary` / `--qt-text-muted` → `--color-muted-foreground`. Per-theme hook variables are kept as the first `var()` argument; only fallbacks changed. Hooks with no default (`--qt-content-bg-hover`, `--qt-badge-primary-border`) now fall back to `--color-muted` / `--color-primary`; `--qt-primary-fg` falls back to `--color-primary-foreground` instead of `#fff`.
+- The Document Mode title input and the help entity-picker filter regain a visible focus indicator (WCAG 2.4.7).
+- New lint gate `scripts/check-css-vars.mjs` (in `npm run lint`): fails on any `var()` in `app/**/*.css` whose property is not declared in app or bundled-theme CSS or set from TypeScript, unless it has a fallback that itself resolves. Fallbacks are checked even when the property is defined. Also rejects `hsl()` around `--color-*` / `--theme-*`. Escape hatch: `css-var-exception` on the line.
+- `@quilltap/theme-storybook` mirrors the fixes and gains the help dialog, Document Mode, sidebar resizer, memory-highlight and message-link families it was missing.
+
+#### Docs: draft 4.12.0 release notes
+
+- New `docs/releases/4.12.0.md` (`draft: true`), covering the cycle since 4.11.0.
+
+#### CLI: README native-module note corrected
+
+Release-checklist item 12. No CLI commands, flags or completions changed since 4.11.0; the completion coverage tests pass.
+
+- `packages/quilltap/README.md` said no native module is ever compiled. Corrected: the SQLCipher driver and `sharp` are prebuilt and the driver is never rebuilt; `node-pty` compiles on Linux, and `sharp` / `node-pty` are rebuilt automatically after a Node.js upgrade.
+
+#### Tests: backup/restore coverage for 4.12 columns
+
+Release-checklist item 10. Both new 4.12 columns (`chat_messages.isEstablishedFact`, `connection_profiles.maxImagesPerRequest`) were already in backup, restore, `.qtap` export/import, the export schema and DDL. `maxImagesPerRequest` had no restore test.
+
+- `__tests__/unit/lib/backup/restore-field-fidelity.test.ts`: a stored cap restores unchanged, and an archive older than the column restores with the default of 4.
+
+#### Tests: release-checklist coverage pass
+
+Release-checklist item 2. Tests for 4.12 modules that had none; committed in 4310d435f with the file-provider change.
+
+- `__tests__/unit/migrations/reindex-chat-message-fts-character-only.test.ts`: rebuilds a pre-#121 index (old insert trigger, Staff rows indexed), confirms search returns them, then checks the migration replaces the trigger and drops Staff and announcement rows.
+- `__tests__/unit/migrations/add-profile-max-images-per-request.test.ts`: column added, existing profiles backfilled to 4, user-set caps kept on rerun.
+- `__tests__/unit/lib/mount-index/item-folder-routes.test.ts`: only create-folder provisions a store; unresolved locations and refusals answer through the caller's responses.
+- `__tests__/unit/hooks/useFixedMenu.test.ts`: up/down placement; closes on resize and on scroll outside its container.
+- `__tests__/unit/lib/hooks/use-container-catalogue.test.tsx`: sorting, unnamed-row placeholders, characters read settles on failure.
+- `__tests__/unit/components/item-browser/useFolderBrowserState.test.tsx`: per-container and per-view state reset, folder create/rename/delete handlers.
+
+#### Document Mode: no direct filesystem access in the operator actions
+
+Release-checklist file-provider audit. `lib/documents/operator-doc-actions.ts` imported `fs/promises` directly; it no longer does.
+
+- New `statResolvedFile`, `moveResolvedFile` and `deleteResolvedFile` (`lib/doc-edit/path-resolver.ts`, exported from `lib/doc-edit`) sit beside `readFileWithMtime` / `writeFileWithMtimeCheck`. `documentViewTargetFor`, `renameDocumentFile`, `deleteDocumentFile` and `resolvedPathExists` use them.
+- `statResolvedFile` returns null only for a missing path (ENOENT / ENOTDIR); other errors such as permission failures now throw. Previously delete reported any stat error as not-found, and rename treated any access error as a free destination.
+- Test: `lib/doc-edit/__tests__/resolved-file-ops.test.ts`.
+
+#### Salon avatars: full-size view and carried items
+
+- Clicking the picture in a message row's desktop avatar opens it in the Salon image viewer (`ImageModal`), the same one Aurora's announcement thumbnails use. `Avatar` takes a new `onImageClick` prop that wraps only the picture, not the name/title.
+- Below the name and title, above the provider/route badge, the avatar now lists every inventory item the character has equipped in the chat, by glyph (SVG, else emoji, else a two-letter abbreviation), each with a `Tooltip` showing the full name and description.
+- New `useChatCarriedItems(chatId, characterId)` (`lib/hooks/use-inventory.ts`) shares the `?action=inventory` query and cache entry with `useChatInventory`, so the column costs one request per chat and refetches on the `chats` realtime topic.
+- `InventoryGlyph` takes `fallback: 'abbreviation'` (`inventoryAbbreviation`); the emoji glyph no longer sets a native `title`.
+- `getMessageAvatar` (`SalonView.tsx`) now returns `characterId`; `MessageRow`'s memo compares it.
+
+#### Green Room: multi-slot picks fill every slot they cover
+
+When a character dressed themselves at chat start (`llm_choose`), the cheap LLM often listed a multi-slot garment (a dress covering top and bottom) under only one slot. The parser kept it only there, so the other slot stayed empty. Composites were already spread by `dissolveCompositesInSlots`; plain multi-slot items were not.
+
+- New `spreadAcrossCoveredSlots` (`lib/wardrobe/slot-ops.ts`): puts every item in a snapshot into every slot its `types` declare, appended as the outermost layer.
+- `applyOutfitSelections` runs it on the LLM's pick after dissolving composites.
+- The outfit-selection prompt now says a multi-slot item is worn in all the slots it covers.
+- The wardrobe dialog's single-slot `add_to_slot` is unchanged.
+- Help: `help/wardrobe.md`.
+
+#### Connection profiles: most images per request
+
+Some vision models reject a request that carries more than four images. A Salon turn could send more than that (this turn's uploads, uploads the character had not seen, and every Lantern image since the character last spoke), and the whole turn failed.
+
+- New `connection_profiles.maxImagesPerRequest` (INTEGER, default 4; migration `add-profile-max-images-per-request-v1`). Read only through `resolveMaxImagesPerRequest()` in `lib/llm/connection-profile-utils.ts`; request bodies validate through `parseMaxImagesPerRequest()` (1–50).
+- `adaptMessagesForProfile` (`lib/chat/message-attachment-adapter.ts`) enforces the cap: images past it are replaced by their descriptions. The newest messages' images are kept first. `findImagesOverCap` picks the overflow.
+- Salon context build (`context-builder.service.ts`): the Lantern walk spends the cap newest-first after uploads and re-sent uploads, and describes older images instead of sending them. The adapter then runs on the final array to catch uploads over the cap.
+- Fallback chain (`provider-failover.service.ts`): each understudy gets the array re-adapted for its own cap.
+- Profile editor: "Most images per request" field under the vision checkbox. Create/update routes accept the field.
+- Restore and `.qtap` import seed the default for older archives (`seedLegacyConnectionProfileFields`). Export schema and DDL updated.
+- Help: `help/connection-profiles.md`.
+
+#### Prompt trust, part two: "the probation"
+
+Long-running companion characters kept the user's persona on probation. They tallied the persona's slips, attached terms to their own yes, corrected small things, told the user what they "really" meant, and never finished forgiving. Design: `docs/developer/features/prompt-trust-the-probation.md`.
+
+- Generators (`lib/services/character-field-semantics.ts`):
+  - `COMPANION_TRUST_DISPOSITION` no longer says the character "remembers the times {{user}} was right as readily as the times they slipped." Models read that as an instruction to keep a ledger.
+  - It now adds: no ledger, and forgiveness given is finished; ordinary requests get a yes; wants are stated without conditions; compliments and stories stand; disagreement is for things that matter.
+  - `TRUST_SAFEGUARDS_DIRECTION` has a sixth universal rule: never tell {{user}} what they really meant or felt; ask.
+  - `EXAMPLE_DIALOGUE_COVERAGE` asks for a plain yes.
+  - `COMMITTEE_DRIFT_GUARDRAIL` treats probation behavior as drift, and forbids codifying agreement or warmth as a drift risk.
+- Sample prompts (`qtap-plugin-default-system-prompts` 1.1.30):
+  - The ledger line is replaced in the 18 prompts that had it.
+  - All 21 carry the no-mind-reading rule.
+  - Every relationship prompt has an "ordinary time" default yes. MODERN_PLATONIC gets a softer version; MODERN_GENERAL gets none.
+  - Each pushback or "saint" line gets a counterweight about frequency.
+- `GROUP_SCENE_DISCIPLINE` now aims the anti-chorus rules at characters echoing each other. A plain yes to the user, doing what was asked, or a laugh counts as a complete turn, and "warmth" is listed as a reason to speak. Multi-character chats take one prompt-cache miss on their next turn.
+- Memory extraction:
+  - New `REPAIRS_INSTRUCTION_BLOCK` in SELF and OTHER. An accepted apology, forgiveness or amends is recorded as a resolution that names what it resolves, scored no lower than the offense, and only on the forgiving party's own words.
+  - The importance anchors list repairs at the 0.85 tier.
+  - OTHER records kept promises and "turned out to be right" at 0.40–0.55 instead of skipping them as generic warmth.
+  - The episode pass notes a repair that ended an episode.
+- Consolidation:
+  - The binder folds an offense and its later repair into one digest that leads with the resolution.
+  - The binder returns `resolvedIds`. The plan's new `resolvedMarks` add the free keyword `resolved` to those rows. The rows are kept and nothing is re-embedded.
+  - Recall ranks `resolved` rows at ×0.6 (`RECALL_MULTIPLIERS.resolved`, `resolvedMultiplier`). Retention is unchanged.
+- Existing characters and users' prompt copies are not changed. The Character Optimizer's refine pass picks up the new drift guardrail.
+- Help: `help/character-optimizer.md`, `help/prompts.md`, `help/memory-playing-a-character.md`, `help/memory-maintenance.md`.
+- Tests:
+  - `character-field-semantics-probation.test.ts` (new)
+  - `multi-character-turn-anchor.test.ts`
+  - `default-system-prompts-content.test.ts`
+  - `repairs-prompt.test.ts` (new)
+  - `consolidation-tasks.test.ts`
+  - `consolidation-plan.test.ts`
+  - `recall-tags.test.ts`
+
+#### Folder-browser follow-ups: picker libraries, uploaded text, outside edits
+
+- `FileBrowser` no longer has a mount mode. Every place that browsed a store with it now uses the Scriptorium's folder browser:
+  - The project page's Files card ("Browse All Files") uses the new `ProjectStoreBrowser` (`components/document-browser/ProjectStoreBrowser.tsx`), which opens the project's own store. `GET /api/v1/projects/[id]/mount-points` now returns `officialMountPointId` for it.
+  - The attachment picker's project and document-store steps use the folder browser in pick mode. Its General source still uses `FileBrowser` over the `files` table.
+  - `useMountPointBlobUpload` had no callers left and was deleted.
+- Document Mode's picker no longer uses `FileBrowser`:
+  - "Project library" opens the project's own store, and is hidden when the project has none (the old fallback to the legacy `project` scope is gone).
+  - Fixed: "General library" listed the legacy general files, then opened a pick from `files/_general/`. That folder no longer exists, so every pick failed. The button now opens Quilltap General.
+  - `accessible-stores` on the chat and standalone routes returns Quilltap General as `generalLibrary` and holds it out of `stores`. The new `resolveGeneralLibrary` and `LibraryTarget` live in `lib/documents/operator-doc-actions.ts`.
+- Fixed: a Markdown, text or JSON file uploaded into a database store (stored as a blob, as chat uploads are) could not be opened in Document Mode's editor.
+  - `open-document` and `read-document` now read it through `readEditableDocument`, which falls back to the new `readDatabaseBlobAsDocument` (`lib/mount-index/database-store.ts`).
+  - The first save writes a document at the same path and the blob is collected.
+  - The `doc_*` tools are unchanged.
+- Changed: in a database store, only text the store can save (`.md`, `.txt`, `.json`, `.jsonl`) opens in the editor. Other text kinds there (`.yaml`, `.html`, …) open read-only instead of failing on save. Filesystem stores are unchanged.
+- Fixed: a change made to a filesystem store outside Quilltap did not refresh an open browser. The mount watcher now publishes `publishMountChange` (debounced 250 ms per store) when it indexes or drops a file, or when a folder arrives or leaves.
+- Help: `help/scriptorium.md` and `help/mount-points.md`. Docs: `API.md` and the folder-browser spec.
+- Tests:
+  - `operator-doc-view-targets.test.ts`: the blob fallback and read-only `.yaml` in a database store.
+  - `watcher-native.test.ts`: the realtime hint.
+  - `documents/route.test.ts`: `generalLibrary`.
+
+#### Folder-browser docs close-out (folder-browser Phase 6)
+
+- `docs/developer/features/folder-browser.md` is complete and moved to `features/complete/`, with a "Phase 6 as built" section listing what was left for later.
+- The SVAR implementation plan and adapter contract moved to `features/complete/`, marked superseded.
+- `API.md` documents the Document Mode `viewer` target and the read-only `write-document` refusal on both routes.
+- Fixed stale references:
+  - README: the SVAR credit.
+  - FEATURES.md: claimed drag-and-drop, which does not exist; it now describes the folder browser and viewers.
+  - The dead-code report's kept SVAR pair.
+  - The custom-tool spec's FileTable pointer.
+- The documentation index (`.claude/commands/update-documentation.md`) is updated.
+
+#### Document Mode: folder browser in the picker, read-only viewers (folder-browser Phase 5)
+
+- The Open Document picker browses a store with `DocumentStoreBrowser` in pick mode, replacing its own tree, breadcrumb and new-folder form. Opening a file opens it in Document Mode, and the ⋮ menus stay. "New document here" moved into the browser's footer through the new `footerActions` prop. "Go there" switches to another store when the chat can reach it.
+- Store files that are not text (images, PDFs, `.docx`, other binaries) now open in Document Mode read-only:
+  - `documentViewTargetFor` (`lib/documents/operator-doc-actions.ts`) decides which files those are: any store file that is not a text file. `open-document` and `read-document`, on both the chat route and the standalone route, return a `viewer` target and empty content for them, and never read their bytes as text. `write-document` refuses them with a 400 (`DocumentReadOnlyError`).
+  - New `DocumentViewerPane` shows them with the Scriptorium's `DocumentViewer`, under a read-only ribbon with Download and Close. `DocumentPaneBinding` and `StandaloneDocumentView` pick it when the document has a `viewer`. The post-turn refetch skips these documents.
+  - The Librarian's open announcement is unchanged and carries no file contents.
+- Fixed: a `BaseModal` beneath another dialog closed with it. A click inside a dialog layered over it, Escape pressed there, or Escape with a confirmation open now reach only the dialog on top. `useClickOutside` now passes the event to its callbacks.
+- Help: `help/scriptorium.md` describes the picker's browser and the read-only viewers.
+- Tests: `operator-doc-view-targets.test.ts`, `BaseModal-layered.test.tsx`, and a pick-mode case in `document-store-browser.test.tsx`.
+
+#### Scriptorium folder browser (folder-browser Phase 4)
+
+- A store's detail page now browses its files with the shared folder browser: breadcrumb, folder rows (empty ones included), file rows, search across the whole store, select mode, and a ⋮ menu on every file and folder. It replaces `FileTable`.
+- New `components/document-browser/`:
+  - `useDocumentStoreSource`: the store's record and listing as TanStack queries under `mountPoints.store(id)`, so realtime events refresh it. Each write calls an existing mount-point verb and then invalidates every store it touched.
+  - `DocumentStoreBrowser` and `DocumentRow`. File menu: Open, Rename (in place), Move to…, Copy to…, Hard link to…, Where else this appears…, Unlink, Edit description…, Open in Pascal's Workbench, Download, Delete. Folder menu: Rename, Move to…, Copy to…, Delete (recursive, with a confirmation that says so). Batch Move, Copy and Delete in select mode. Upload goes into the current folder, on any writable store.
+  - `DocumentDestinationDialog`: a store select over the shared folder picker. Hard links are offered only where `linkFile` can succeed: database ↔ database, or within one filesystem store.
+  - `DocumentViewer` / `DocumentViewerModal`: read-only image, PDF, Markdown, text and `.docx` viewers. The new `FilePreviewDocx` sanitises the server's HTML with DOMPurify. The PDF and Markdown viewers load on demand.
+- Shared pieces:
+  - `lib/folder-browser/preview-kind.ts`: `previewKindOf` (`image | pdf | docx | markdown | text | unsupported`) and `mimeTypeForName`. `getPreviewType` now calls it.
+  - `lib/folder-browser/document-actions.ts`: the `BrowserAction` vocabulary, `documentFileActions` / `documentFolderActions` (gated by the store's capabilities), and `canLinkBetween`.
+  - `ItemFolderPickerDialog` is now `DestinationPickerDialog`. It adds a `link` mode and an optional container chooser; the Wardrobe and Inventory pickers use it unchanged.
+  - `FolderBrowserShell` takes `manageFolders`, so a read-only store hides its folder controls.
+  - New `buildMountFileRawUrl`, and query keys `mountPoints.content` and `mountPoints.rendered`.
+- `useDocumentStoreDetail` now reads the store through the shared TanStack query. The page's counts follow live updates, and the file list moved into the browser.
+- Fixed: `ItemActionMenu` focuses its entries with `preventScroll`. Focusing the first entry could scroll an enclosing workspace pane, and that scroll closed the menu as soon as it opened.
+- Fixed: on a filesystem store, moving a folder now moves its `doc_mount_folders` rows with it, and deleting a folder removes its row. Before, the old path stayed in the store's listing.
+- Removed the SVAR file-manager beta: `components/files/svar/`, its tests, the `@svar-ui/react-filemanager` dependency and its About-page credits. Also removed the unused `DocumentStoreFile` and `DocumentStoreBlob` types.
+- Help: `help/mount-points.md` gains "Browsing a Store", and its upload and hard-link text is updated.
+- Tests: `document-actions.test.ts`, `document-store-browser.test.tsx`, `folder-ops-fs-move.test.ts`.
+
+#### Document-store API for the folder browser (folder-browser Phase 3)
+
+- `GET /api/v1/mount-points/[id]/files` now returns `DocMountBrowserEntry` rows from the new `DocMountFileLinksRepository.listForBrowser`. `extractedText` is dropped (no UI read it from the listing). Each row gains `linkGroupId` and `linkCount` (links in any store sharing its content row).
+- Per-file `GET …/files/<path>` gains two `dispatchAction` verbs:
+  - `?action=links`: every place the file's content appears, with hard-link group members marked.
+  - `?action=render-html`: a `.docx` rendered to HTML with mammoth (`lib/mount-index/converters/docx-html.ts`). Link targets other than http(s), mailto and in-page anchors are replaced with `#`.
+- New `POST …?action=unlink-file`, backed by `DocMountFileLinksRepository.clearLinkGroup`: takes a file out of its hard-link group. It keeps its content and forks on its next write; a group of one dissolves.
+- Folder operations (`lib/mount-index/folder-ops.ts`):
+  - New `copy-folder`.
+  - `move-folder` takes an optional `destMountPointId` to move into another store.
+  - `delete-folder` takes `recursive: true`.
+  - All three walk the folder and use the existing per-file `copyFile` / `moveFile` / `deleteFile`. A copy or cross-store move that fails partway is undone. Recursive delete refuses a filesystem folder that holds files the store doesn't index.
+- Live updates for document stores:
+  - New `publishMountChange` (`lib/mount-index/realtime.ts`), called from the database-store change events, every `file-ops` entry point, the folder operations and folder create.
+  - `mountPoints` events are now scoped by store id.
+  - New query keys `mountPoints.store(id)`, `detail`, `files`, `links` and `lists`. `topic-map.ts` invalidates the store's keys plus the store lists.
+- No schema changes. API.md updated. Tests: `folder-ops-walks.test.ts`, `docx-html.test.ts`, browser listing and `clearLinkGroup` cases in `doc-mount-link-groups.integration.test.ts`, and a scoped-topic case in `topic-map.test.ts`.
+
+#### Shared server folder layer for the Wardrobe and the Inventory (folder-browser Phase 2)
+
+- New `lib/mount-index/item-folder-location.ts`:
+  - `ItemFolderLocation` is the folder half of a tier location; `WardrobeLocation` and `InventoryLocation` now extend it.
+  - `locationKey` is defined once here and re-exported by both location modules.
+  - Generic `createItemFolder`, `renameItemFolder`, `deleteItemFolder` and `moveItemsToFolderIn` take an `ItemFolderKind` (the kind's rules plus its path error). `lib/wardrobe/folder-mutations.ts`, `moveItemsToFolder` and the Inventory's folder and move functions are now one-line delegates (`WARDROBE_FOLDER_KIND`, `INVENTORY_FOLDER_KIND`).
+- New `lib/mount-index/item-folder-routes.ts`: `itemFolderActionHandlers` supplies `create-folder`, `rename-folder` and `delete-folder` to both route factories, each mapping errors through its own handler. Inventory folder actions now log at info level, as the Wardrobe's already did. `copy-items` stays per kind, and so does `move-items`, since the Wardrobe's moves can carry an outfit's components.
+- `createWardrobeFolderSchema` and `deleteWardrobeFolderSchema` merged into `wardrobeFolderPathSchema`.
+- The Wardrobe's cross-tier transfer logic moved out of `app/api/v1/wardrobe/transfers/route.ts` into `transferWardrobeItem` (`lib/wardrobe/transfers.ts`), with typed refusals (`WardrobeTransferSourceNotFoundError` → 404, `WardrobeTransferRefusedError` → 400). The route only parses the request and maps errors. Same rules and same responses.
+- Removed `GET /api/v1/wardrobe/transfers` (destination options); it had no callers after Phase 1. API.md updated.
+- Tests: `__tests__/unit/lib/mount-index/item-folder-location.test.ts`. The transfer route's GET test was removed.
+
+#### Shared folder browser for the Wardrobe and the Inventory (folder-browser Phase 1)
+
+- First phase of `docs/developer/features/folder-browser.md`, which replaces the SVAR plan: one folder-and-item browser library that the Wardrobe, the Inventory and (in later phases) the Scriptorium and Document Mode share.
+- `lib/folder-browser/view.ts`: the pure view rules (`childFolderRows`, `tierRows`, `tierLabel`, `OWN_TIER`), moved out of `lib/wardrobe/folder-view.ts`, which now re-exports them and keeps only `viewTierOf`.
+- `components/item-browser/`:
+  - `useFolderBrowserState` (where the browser is, select mode and selection, the new-folder draft, and the derived rows) and `useItemFolderHandlers` (New folder / Rename / Delete over an `ItemFolderOps` port, with caller wording). These replace about 150 near-identical lines in each browser.
+  - `FolderBrowserShell`: the shared layout. `WardrobeBrowser` and `InventoryBrowser` now supply only their filters, rows, select-bar buttons, footer and wording.
+  - `ItemActionMenu`: one ⋮ menu for item and folder rows, declared as `MenuEntry[]` (falsy entries dropped). It is a WAI-ARIA menu button: focus moves into the menu on open; arrow keys, Home and End move between entries; Escape returns focus to the button and does not close an enclosing dialog; Tab or an outside click closes it. Folder rows used to close their menu only on mouse-leave. A row with no actions now shows no ⋮ instead of an empty menu.
+  - `ContainerSelect` and `lib/hooks/use-container-catalogue.ts` replace four hand-written container `<select>`s (Wardrobe and Inventory control dialogs, both transfer dialogs) and two copies of the catalogue hook.
+  - `ItemFolderField`: the editor's folder picker, shared by both editors.
+- Inventory gains **Copy to folder…** (row menu, for copyable objects, and the select bar); the server already supported `copy-items`. Its item editor's Folder field is now a folder picker instead of a text box.
+- `WardrobeTransferDialog` reads destinations from the shared catalogue and posts through a TanStack mutation instead of raw `fetch`. The destination group "Users" is now "Characters". `GET /api/v1/wardrobe/transfers` no longer has a UI caller.
+- Inventory tier-row counts now count every item in the tier, as the Wardrobe's did, not just the ones passing the current filters.
+- Tests: `__tests__/unit/components/item-browser/item-action-menu.test.tsx`, `__tests__/unit/lib/folder-browser/view.test.ts`, and a Copy to folder case in `inventory-ui.test.tsx`. `help/wardrobe.md` and `help/inventory.md` updated.
+
+#### Raised-hand status chip above the Salon composer
+
+- Raising a hand (soft interrupt) gave no feedback beyond the button's pulse, and a decline was reported only by a short toast. A new `RaisedHandChip` (`app/salon/[id]/components/RaisedHandChip.tsx`) sits in the composer's chip row beside the pending Informs and shows each step: raised, being weighed by a named speaker, then yielded / carried on / nobody asked (the stream ended with the hand still up). The outcome stays until dismissed or the operator sends or nudges. Announced via `aria-live="polite"`.
+- New SSE event `handAsked` (`encodeHandAskedEvent`, `streaming.service.ts`), sent by `processMessage` when `takeRaisedHand()` hands the question to a speaker.
+- `useSSEStreaming` replaces the `handRaised` boolean with `handStatus: RaisedHandStatus | null` (`handRaised` is now derived) and adds `dismissHandStatus`. Hand events are handled before the Storyteller concurrent branch, which used to swallow `handAnswered` for concurrent turns. The raise-hand POST reply no longer overwrites a `handAsked` that arrived first. The decline toast is gone; the chip says it.
+- `help/interrupting.md` updated.
+
+#### Fix: a gesture-only answer to a raised hand counted as carrying on
+
+- Models asked to yield often hand over the floor with a stage direction (`*(a tilt of the head — go on, then)*`) and leave out `[YIELD]`. `detectYieldSentinel` read that as a decline: no Host announcement, and the Salon reported "carried on".
+- New `isGestureOnlyReply` (`lib/chat/turn-manager/yield-signal.ts`): a reply of at most 280 characters that is one stage direction wrapped whole in `*…*`, `_…_` or `(…)` (layering allowed), on a single paragraph, with no quotation marks. When a yield was offered and no sentinel is found, such a reply is a yield (`inferred: true`), and the gesture is kept as the reply. Only applies when the hand was offered; nothing changes for ordinary turns.
+- The Turn note now tells the model that a gesture-only reply counts as yielding. `[TurnYield]` logs carry `inferredFromGesture`.
+- Tests in `yield-signal.test.ts` and `turn-outcome.test.ts`; `help/interrupting.md` updated.
+
+#### Custom-tool presets follow the tool walk
+
+- Run presets (`Tools/{tool}.{preset}.settings.json`) were read from and saved to the running character's vault only. They are now found where definitions are: character vault, group stores, project stores, Quilltap General, nearest first. A nearer preset of a name shadows a farther one.
+- New `resolveToolPresetPool` (`lib/pascal/tool-preset-pool.ts`) and `GET /api/v1/chats/[id]/custom-tools?action=presets&tool=…&asCharacterId=…`. It returns the winning presets (with the stores each one shadows), every enabled store on the walk as a save destination, and any store whose `Tools/` folder would not list.
+- `lib/pascal/custom-tools.ts`: the `Tools/` folder listing is now one exported helper, `listToolsFolderFiles`, shared by definition discovery and the preset walk. `orderedMounts` is exported so both walks use the same precedence.
+- Run dialog: the preset dropdown labels each preset with its store and names shadowed copies on hover. A new **Save into** selector picks the destination store, defaulting to the character's vault (or the nearest store when there is no vault). Loading a preset reads it from its own store and does not change the destination. The section now shows for any row that names a character, vault or not.
+- `queryKeys.customTools.presets` is now keyed by `(chatId, asCharacterId, toolName)`.
+- Docs: `help/custom-tools.md`, API.md, and `features/complete/custom-tool-presets.md` updated. New unit tests in `__tests__/unit/lib/pascal/tool-preset-pool.test.ts`.
+
+#### Deus Ex Machina toggle on the composer portrait; composer tooltips
+
+- New `deus-ex-machina` icon in the icon registry: a game-master's screen by default, an eye in a triangle in the Madman's Box override (bundle 1.1.10). It replaces `zap` on the `/deus` menu entry and on the armed chip.
+- `SpeakingAsAvatar` takes an optional `establishedFact` prop (`{ armed, onToggle, disabled }`) and renders a small toggle in the portrait's bottom-left corner that arms and disarms Deus Ex Machina through the same `toggleEstablishedFact` handler `/deus` uses. The toggle sits outside the dimmed portrait layer, so it stays usable while a reply streams, reports its state with `aria-pressed`, and keeps editor focus on click. The armed chip and the tinted editor frame are unchanged. New class `qt-chat-established-fact-toggle` (armed state reuses the composer frame's ring and info tint); mirrored in `@quilltap/theme-storybook` 1.0.96.
+- Every native `title` tooltip in the composer is now a Quilltap `Tooltip`: the composer's toolbar, Send / raise-hand / Stop, attachment and tool-result chips and their remove buttons, the speaking-as portrait, the gutter tools (`ComposerGutterTools`, `CustomToolsButton`, `RngDropdown`), `PendingInformChips` and `FormattingToolbar`. Native tooltips did not fire reliably under the Electron shell. Icon-only buttons that relied on `title` for a name now carry `aria-label`.
+
+#### Deus Ex Machina: established facts in the Salon
+
+- The operator can post something as **established fact**: true in the story, known to everyone, needing no verification. Two kinds. A **seat line**: the operator's own USER row with the new `chat_messages.isEstablishedFact` flag (migration `add-established-fact-field-v1`). A **machine fact**: a public, persona-free Host row with `systemKind: 'established-fact'` and no participant. "Deus Ex Machina" is the UI name only; no model-facing text contains it, and a test enforces that.
+- One module, `lib/chat/established-fact.ts`, holds the predicate, the frames, the reminder header and the transcript rule. Frames are applied at read time and never stored. A seat line gets a seat frame. A machine fact gets "The Host makes it known…" on a fully transparent roster and a plain, speakerless frame when any LLM seat is opaque (same rule as the Staff body swap).
+- Delivery to models: `buildMessageContext` frames fact rows (`frameEstablishedFacts`) before `normalizeWhisperRoles`. Fact rows bypass the history-access cut (`filterMessagesByHistoryAccess`) and the presence-window filter, so absent seats and late joiners know them. The in-scene rehearsal keeps them. `extractVisibleConversation`, the summary fold, the memory-extraction transcripts and the Courier delta frame them in the plain voice. The fold keeps a machine fact as its own turn labelled `Established fact`; the fold prompt and the SELF/OTHER/episode extraction prompts gained a rule to carry facts forward as settled truth.
+- New trailing section `establishedFacts` (`buildEstablishedFactReminder`, `lib/chat/context/established-fact-reminder.ts`), right after the inform block: every fact posted since the seat last spoke, oldest first, seat lines name-prefixed, capped at 8,000 characters (oldest dropped). Reads only; a swipe measures "last spoke" on the history the original saw. Empty when there are no facts, so turns without facts are byte-identical. A failed chat read drops the section instead of failing the turn. Carina does not get it.
+- Send path: `sendMessageSchema` accepts `isEstablishedFact`; it is a 400 with whisper targets or empty content. It flows through `buildSendMessageOptions` → `SendMessageOptions` → both `recordOperatorPost` callers (the orchestrator and the fair-rotation pause). The new user message is framed for the current turn.
+- `?action=announcement` accepts `sender: { kind: 'fact' }`, written by `postEstablishedFact` (`lib/services/announcer/writer.ts`); a fact sender with `targetParticipantIds` is a 400. The post enqueues the new `ESTABLISHED_FACT_MEMORIES` job, which admits the fact verbatim as a MANUAL memory (`pass: 'established-fact'`, importance 0.8, present / wide / information) for every non-removed LLM seat, absent and silent included. One seat's failure does not stop the others; an enqueue failure does not undo the post. Completion publishes the `memories` topic.
+- Composer: `/deus` (new `deus` composer action, `zap` icon) arms the composer for one line: a chip above the composer (`aria-live="polite"`, × to disarm), a tinted editor frame (`qt-chat-composer-established-fact`) and a Send button labelled "Send as established fact". It disarms after a send, on chat switch and on reload, and cannot be armed with only attachments. ⌘/Ctrl + Shift + Enter sends one line as fact without arming, in chat and composition mode. An established line skips the In Their Own Words rehearsal (`shouldRehearseImpersonatedLine`).
+- Insert Announcement dialog: a fourth tab, **Deus Ex Machina**, hides the speaker, profile and audience pickers and posts with an **Establish** button.
+- Salon rendering: a seat line shows a "Deus Ex Machina" ribbon (`qt-chat-message-established-fact`, in the bubble's own text colour so it holds contrast on every theme's bubble). A machine fact renders as a full-width band with no avatar (`qt-chat-established-fact-row` / `-band`), is never packed into a chip run nor drawn as a collapsed chip by the message list, has the chip label "Deus Ex Machina", a high-importance dot, and the `qt-chat-established-fact` bar accent (`getAnnouncementAccentClasses` is now per-kind). `@quilltap/theme-storybook` 1.0.95 mirrors the new classes.
+- Export schema, DDL.md, API.md, PROMPT_ARCHITECTURE.md and SYSTEM_FLOWCHARTS.md §9 updated. `.qtap` import and backup restore carry the flag and the Host row unchanged (round-trip tests added).
+- Docs: new `help/deus-ex-machina.md`; cross-links in `help/insert-announcement.md` and `help/inform.md`. `help/character-system-transparency.md` corrected: Staff messages are not stripped for opaque characters (they get the persona-free body, chat-wide), and there is no chat/project setting that disables Staff messages. Stale comments about a per-character presence-window summary removed from `lib/schemas/chat.types.ts` and `lib/services/librarian-notifications/writer.ts`.
+
+#### Fix: mail deliveries and Pascal roll outcomes drew as collapsed chips in the Salon
+
+- `buildRenderItems` kept Suparṇā mail deliveries and Pascal `custom-tool-result` rows out of chip groups, but `VirtualizedMessageList` computed `isSystemMessageCollapsed` with its own check that exempted only Carina and established facts. `MessageRow` then drew its collapsed-chip fallback for those rows anyway.
+- The rule now lives in one exported predicate, `isAlwaysExpandedAnnouncement` (`app/salon/[id]/announcement-render-items.ts`), used by `isCollapsedAnnouncement` (now exported). The message list passes `isCollapsedAnnouncement(...)` to `MessageRow`, so the grouping and the row flag cannot disagree. Tests cover all four always-expanded kinds.
+
+#### Fix: global search returned Staff messages (#121)
+
+- The message search index decided eligibility by role only. Staff messages (Commonplace Book recall whispers, Host/Prospero/Librarian announcements, other `systemSender` rows) are written with role `ASSISTANT`, so they were indexed and returned as character lines, including whispers addressed to other participants. Announcement bubbles (`customAnnouncer`) had the same problem.
+- `chatMessageFtsEligibilitySql` (`lib/database/backends/sqlite/chat-message-fts.ts`) now also requires `systemSender IS NULL AND customAnnouncer IS NULL`, matching `isCharacterAuthoredMessage`. The insert trigger is built from the same fragment. The FTS query path re-applies the filter to the joined row, and the non-SQLite path uses `isCharacterAuthoredMessage`.
+- `ensureChatMessageFtsSchema` now replaces any trigger whose stored SQL differs from the module's DDL (`staleChatMessageFtsTriggers`); `IF NOT EXISTS` alone never updated one.
+- New migration `reindex-chat-message-fts-character-only-v1` replaces the old insert trigger and rebuilds the index. `create-chat-message-fts-v1` now depends on `add-system-sender-field-v1` and `add-custom-announcer-field-v1`, since its trigger reads those columns.
+
+#### Search bar searches the open Salon chat first
+
+- With a Salon chat focused, the header search bar shows a "This conversation" group above the global results (now headed "Everywhere"). It lists messages and announcements in the visible transcript that contain the query, newest first, with speaker, time, excerpt and occurrence count. The full search dialog has a "This conversation" chip for the same group (up to 50 matches; the inline dropdown shows 5).
+- Matching is done client-side on the messages the Salon already has (whisper filtering and the current swipe applied, TOOL rows skipped), case-insensitive substring on markdown-stripped text. Matcher: `findConversationMatches` (`lib/chat/conversation-search.ts`).
+- Choosing a match scrolls the virtualized list so the top of the message is at the top of the transcript and flashes it. A match in a collapsed announcement chip expands it first. This uses the virtualizer, so off-screen messages work.
+- While the query is in the search bar, every occurrence in the rendered transcript is highlighted with the CSS Custom Highlight API (`useSearchHighlight`, `::highlight(quilltap-conversation-search)` in `app/globals.css`). No markup is added to message DOM; a MutationObserver repaints as rows mount or stream.
+- The query stays after choosing a match. Escape closes the dropdown, a second Escape clears the query and highlight; the input also has a clear button.
+- The Salon publishes a `ConversationSearchSource` through the page toolbar context (`conversationSearch` / `setConversationSearch`). In the workspace it is a per-tab slot that `WorkspaceToolbarBridge` forwards for the focused tab, like the left/right toolbar content. Not published while quick-hide covers the chat.
+- Fix: a Message result in global search (`/salon/<id>?msg=<messageId>`) now opens the chat scrolled to that message and flashes it. Nothing used to read `msg`. Every way into such a link goes through `requestMessageReveal(chatId, messageId)` (`lib/chat/message-navigation.ts`): the workspace link interceptor and `useWorkspaceNavigate` (via `revealRequestFromSalonHref`), `WorkspaceIntent` for the old-route redirect (which now forwards `msg`), and the legacy route's new `revealMessageId` prop on `SalonView`. The request is stored in sessionStorage under the chat id and announced with a `quilltap:reveal-message` window event, so a Salon that is still mounting takes it once loaded and a kept-alive tab takes it at once; only the named chat takes it.
+- The Salon reveals only after the initial scroll to the newest message has finished (new `isInitialScrollDone` from `useAutoScroll`; that scroll keeps nudging for 300 ms after `isSettled`). A tab still hidden when the request arrives waits until it is shown.
+- If the target isn't shown in this view (a whisper to another participant, another variant of a reply), the Salon shows a toast saying so instead of doing nothing. Before #121 was fixed, most global Message hits in V4test were Commonplace Book whispers addressed to characters, which the Salon hides by default.
+- Removed the unscoped `navigateToMessage` / `getPendingMessageNavigation` handoff (no remaining callers; any Salon would take its request).
+
+#### Salon header compacts a crowded cast
+
+- The Salon's toolbar breadcrumb (project, characters, story background, Concierge badge, title) is now `ChatHeaderBreadcrumb` (`components/chat/ChatHeaderBreadcrumb.tsx`). When the row doesn't fit, the project and character links step down from full name to an abbreviation (`abbreviateName`: first three letters of one word, initials of several) to avatar only. Compact links get a Quilltap tooltip with the full name and "Click to open character" / "Click to open project". The density is chosen by measuring invisible copies of each density, so it doesn't depend on the row's own width.
+- The story-background thumbnail and the title always show. The thumbnail's tooltip reads "Click to display background"; the title has a minimum width and truncates, and the cast clips before it does.
+- `.qt-page-toolbar-left` now takes the space the search bar and right section leave (`flex: 1 1 0%`; `flex: 0 1 auto` when empty, so pages without left content lay out as before). `.qt-page-toolbar-center` has a fixed `32rem` basis and `.qt-page-toolbar-right` no longer shrinks, so a long breadcrumb can't squeeze either. `@quilltap/theme-storybook` 1.0.94 mirrors the change.
+
+#### Fix: see-through dropdowns and menus that let clicks fall through
+
+- The header search dropdown, the search dialog, the Generate Image and entity-search pickers, the Brahma model picker and the wardrobe, inventory and folder menus used page-background colors (`bg-background`, `qt-bg-default`, `qt-bg-surface`). Art Deco, Great Estate and Madman's Box set `.bg-background` to transparent so their backdrop shows, which made those panels see-through. They now use a new `qt-bg-popover` utility (`--qt-popover-bg`). The two roleplay-template editor dialogs and the task-details dialog use `qt-dialog` for the same reason.
+- `qt-card-interactive:hover` lifts the card with `translate`, which makes the card a stacking context. An open ⋮ menu was trapped inside its row, so later rows' buttons drew on top of it and took its clicks. A `qt-card` or `qt-card-interactive` that contains an open popup (`[aria-haspopup][aria-expanded="true"]`) now gets `position: relative; z-index: 20; translate: none`. Only `translate` is cleared: the CSS build merges `transform: none` with it into `translate3d(0,0,0)`, which would trap fixed menus.
+- Menus inside scrolling lists were clipped by the list and drawn under the wardrobe dialog's footer. The inventory row's viewport-fixed placement (opens upward when there's no room below, closes on outside scroll or resize) is now the shared `useFixedMenu` hook (`hooks/useFixedMenu.ts`), used by the inventory and wardrobe item rows (⋮ menu and slot picker), the item-browser folder row and the scenario row.
+- The wardrobe slot picker's button now has `aria-haspopup` / `aria-expanded`, and the picker has `role="menu"` / `menuitem`.
+- `@quilltap/theme-storybook` 1.0.93 mirrors `qt-bg-popover` and the open-popup card rule.
+
+#### Anthropic: move to API version 2026-10-21; drop temperature and top_p
+
+- The Anthropic plugin (1.0.64) no longer pins `anthropic-version: 2023-06-01`. It now uses the SDK's default, `2026-10-21`.
+- That version returns 400 for `temperature`, `top_p` or `top_k` on every model, so the plugin no longer sends them on any request. It used to send them to pre-4.7 models and default `temperature` to 1.0. Those models now sample at the API defaults.
+- That version also returns 400 for a `document` block placed directly in an assistant message. `formatMessagesWithAttachments` now moves an assistant turn's documents (PDF, text) into a user turn just before it. Images stay in place. An assistant turn left with no content after the move is dropped.
+- Thinking is unchanged: adaptive on Sonnet 5 / Opus 4.7+ / Fable / Mythos, fixed `budget_tokens` on older models. The model-prefix list is renamed `BUDGET_THINKING_REJECTED_MODELS`, since sampling no longer depends on it.
+- New provider capability `samplingParameters?: boolean` in `@quilltap/plugin-types` 2.10.0 (omitted means `true`). The Anthropic plugin declares `false`.
+- Connection-profile editor: for a provider declaring `samplingParameters: false`, the Temperature and Top P sliders are hidden and not sent on save or test-message. The profile card shows only Max Tokens for those profiles.
+- `ConnectionProfilesRepository.create` / `update` strip `temperature`, `top_p`, `topP`, `top_k` and `topK` from `parameters` when the profile's provider declares `samplingParameters: false`. This covers the editor, auto-configure, import and restore. It also re-checks the stored blob when only `provider` changes. Helpers: `withoutSamplingParameters` (`lib/llm/sampling-params.ts`) and `acceptsSamplingParameters` (`lib/plugins/provider-validation.ts`). An unknown provider is treated as accepting them, so nothing is stripped before the registry loads.
+- Migration `strip-anthropic-sampling-parameters-v1` removes the same keys from existing `ANTHROPIC` profiles. `max_tokens` and provider options are kept. The provider list is a frozen copy, like `retire-prefill-on-thinking-profiles-v1`.
+
+#### Deps: Packages and plugins brought up to the root's dependency levels
+
+- `npm update -S` in the root, every `packages/*` and every `plugins/dist/*`. Main movements: `@quilltap/plugin-types` ^2.9.1 and `@quilltap/plugin-utils` ^2.7.2 everywhere (root included), `openai` ^7.45.1, `@openrouter/sdk` ^1.5.21, `@modelcontextprotocol/sdk` ^1.32.2, `sharp` ^0.35.5 in `packages/quilltap`, Storybook ^10.6.5 and `react` ^19.3.1 in `theme-storybook`, `@types/node` ^24.19.2 in `create-quilltap-theme` and `plugin-types`.
+- Major bumps:
+  - `@google/genai` 1.52 → 2.32 (google plugin). 2.0's breaking changes are confined to the Interactions API, which the plugin doesn't use. Two default changes do reach it. The SDK no longer applies Undici's 300 s timeouts when `httpOptions.timeout` is unset, so a call with no `requestTimeoutMs` now runs until the server's limit (10 min unary, 20 min streaming). Automatic continuation is on, so a long decode that checkpoints is resumed by the SDK within one call, and summed `usageMetadata` can then count the prompt more than once.
+  - `zod` ^3.25.76 → ^4.6.7 (mcp plugin). The plugin doesn't import zod. It's external in the bundle, so the plugin already ran against the app's zod 4 at runtime, and `@modelcontextprotocol/sdk` accepts `^3.25 || ^4.0`.
+  - `html-to-text` 9 → 10 (curl plugin). A maintenance release (htmlparser2 10, selderee 0.12, Node ≥ 20.19); the plugin's options are unchanged and produce the same output. `@types/html-to-text` stays at 9.0.4, the latest.
+  - `@anthropic-ai/sdk` 0.115 → 1.3 (anthropic plugin). SDK 1.0 defaults to `anthropic-version: 2026-10-21`, which returns 400 for any request carrying `temperature`, `top_p` or `top_k`, or a `document` block in an assistant message. The plugin sends sampling parameters on every non-thinking request to models that still accept them. It now pins `anthropic-version: 2023-06-01` through `defaultHeaders` on all four clients (`clientHeaders()` in `provider.ts`), which overrides the SDK's value, so requests go out as before. One visible difference: the SDK now sends the API key as `Authorization: Bearer` instead of `X-Api-Key`. The API accepts either, but a proxy that reads `X-Api-Key` would need changing.
+- TypeScript 7, `@types/node` 26 and `emojibase-data` 18 remain held back, as in the root.
+- Removed `fsevents@2.3.2` from the root `allowScripts`. That version is no longer installed; `fsevents@2.3.3` stays.
+- Patch bumps: `@quilltap/plugin-types` 2.9.2, `@quilltap/plugin-utils` 2.7.3, `@quilltap/theme-storybook` 1.0.92, `create-quilltap-theme` 2.0.23, and every plugin in `plugins/dist/`.
+
+#### Deps: TypeScript 6
+
+- `typescript` 5.9.3 → 6.0.3 in the root project, `packages/plugin-utils`, `packages/plugin-types`, `packages/theme-storybook`, `packages/create-quilltap-theme` and `qtap-plugin-default-system-prompts`. The root project and all plugins type-check under 6 with no source or tsconfig changes, and `npm run lint` and the unit suite are unchanged.
+- TypeScript 7 (the native Go compiler) also type-checks the root project cleanly, but it can't be adopted yet: `typescript-eslint` 8.x caps its `typescript` peer at `<6.1.0` and needs the JavaScript compiler API, which `typescript@7` no longer ships. Next 16.4 already handles 7. Revisit once `typescript-eslint` supports 7.
+- `tsup` 8.5.1 → 9.0.0 in `plugin-utils`, `plugin-types` and `theme-storybook`. tsup 8 forces `baseUrl` into its declaration build, and TypeScript 6 rejects that with TS5101 (deprecated, removed in 7). tsup 9 no longer does. Published `dist/` contents are the same apart from hashed chunk filenames.
+- `theme-storybook`: TypeScript 6 turns on `noUncheckedSideEffectImports` by default, so `src/preview.tsx`'s side-effect `.css` imports failed type-checking. Added `src/css-modules.d.ts` declaring `*.css` modules.
+- Patch bumps: `@quilltap/plugin-utils` 2.7.2, `@quilltap/plugin-types` 2.9.1, `@quilltap/theme-storybook` 1.0.91, `create-quilltap-theme` 2.0.22, `qtap-plugin-default-system-prompts` 1.1.28.
+
+#### Deps: ESLint 10
+
+- `eslint` 9.39.5 → 10.13.0. `eslint.config.mjs` was already flat config and needs no changes. `npm run lint` reports the same results as on 9 (zero findings across 4,290 files), and a probe file with deliberate violations tripped the same rules under both versions.
+- `eslint-plugin-react` 7.37.5, `eslint-plugin-jsx-a11y` 6.10.2 and `eslint-plugin-import` 2.32.0 (all pulled in by `eslint-config-next`) still cap their `eslint` peer range at `^9`, and none has released since ESLint 10 shipped. `package.json` `overrides` now point their `eslint` peer at the root version (`$eslint`). Remove those overrides once the plugins publish `^10` ranges. Until then `npm install` will not flag an incompatibility; a breakage would show up as a crash in `npm run lint`.
+
+#### Deps: Lexical 0.53
+
+- `lexical` and all `@lexical/*` packages 0.52.0 → 0.53.0. No code changes. 0.53's breaking changes (removed `*ImportExtension`s, removed unchecked type arguments on `getParent<T>()` / `$getNodeByKey<T>()` and similar, `@lexical/mdast` table alignment) touch no Quilltap code; `npx tsc` is clean and the composer and Lexical test suites pass.
+- Fixes relevant to the Salon composer: IME and dead-key composition into a `TextNode` subclass keeps its type; Chromium keeps spellcheck underlines when a text node is rewritten; Markdown export escapes literal brackets, `<` and `&`; links opened in a new tab no longer get `window.opener`; a read-only `ContentEditable` no longer renders an unnamed `role="textbox"`.
+
+#### Deps: croner 11, jest-fetch-mock 4.2
+
+- `croner` 10.0.1 → 11.0.0. Quilltap only calls `new Cron(expr).nextRun(date)` (autonomous-room schedules and the room card's next-run preview), so none of 11's `startAt` / `dayOffset` / `previousRun()` changes apply. DST behavior changed: a fixed-time schedule that falls in a spring-forward gap now runs at the first valid time after the gap (3:00, not 3:30), and interval schedules run through both copies of the repeated fall-back hour. 11 also fixes `?` behaving like `*` in day fields and stack overflows on patterns that never match.
+- `jest-fetch-mock` 3.2.0 → 4.2.0. All 3.x APIs are unchanged; `jest.setup.ts` still calls `enableMocks()`. Under jsdom it still fills missing fetch globals from cross-fetch. Under `@jest-environment node` mocked responses are now native `Response` objects.
+- `jest-fetch-mock` and `@types/yauzl` moved from `dependencies` to `devDependencies`. Neither is used at runtime; production installs (`npm ci --omit=dev` in the Docker images) no longer pull them or `cross-fetch`.
+- `emojibase-data` stays at 17: version 18 changes the emoji characters themselves, which requires a new `emoji-index.v2.json` under the dataset's versioning contract.
+
+#### Deps: chokidar removed; the files-directory watcher uses `fs.watch`
+
+- `lib/file-storage/watcher.ts` (the instance `files/` watcher) now uses Node's recursive `fs.watch`, like the mount watcher. `handleNativeEvent` resolves each debounced event against the disk: an existing file goes through `handleFileChange` (which adds a record when there is none), a missing path is defer-deleted, a folder that leaves by rename defer-deletes every record beneath it, and a folder that arrives by rename is recorded with its contents (`scanDirectory`). Symlinks are skipped, matching the startup scan. Event paths are normalized to `/`-separated storage keys.
+- If `fs.watch` cannot start (missing directory, no recursive notifications), the watcher logs a warning and stays off; startup reconciliation and Sync Now still work.
+- A file move matched through `findBySha256` now cancels any deferred delete still pending for the same record. Before, the old path's delete could fire after the move and remove the moved record.
+- The mount watcher's `QUILLTAP_WATCHER_POLLING=1` mode (and its fallback when `fs.watch` refuses a recursive watch) no longer uses chokidar. It walks the store every 2 seconds, stats each indexable file, and diffs mtime and size against the previous walk. The first walk is the baseline. No descriptors are held between walks.
+- `chokidar` is removed from `package.json`. New `__tests__/unit/lib/file-storage/watcher-native.test.ts`; the bug 69 digest test and the mount watcher polling tests now drive `fs.watch` and the walker instead of a chokidar mock.
+
+#### Fix: Filesystem store watcher held one file descriptor per watched file
+
+- The mount watcher ran chokidar 5, which has no FSEvents backend and opens a kqueue descriptor for every file and folder it watches on macOS. A store on a 24,000-file `~/Documents` reached 15,770 open descriptors; Next.js then failed every request that needed a compile with `spawn EBADF`.
+- Filesystem stores now watch with Node's recursive `fs.watch` (FSEvents on macOS, ReadDirectoryChangesW on Windows, inotify on Linux). A 20,000-file test store added no descriptors. `handleNativeEvent` resolves each debounced event against the disk: an existing file is indexed, a missing path is dropped, a folder that arrives by rename has its files indexed (`walkDirectory`, now exported from `scanner.ts`), and a folder that leaves by rename has everything indexed beneath it removed. Symlinks are skipped, as before. An event with no filename (Linux queue overflow) is logged and left to the next startup scan.
+- `QUILLTAP_WATCHER_POLLING=1` still polls, and the watcher falls back to polling when `fs.watch` refuses a recursive watch. Polling ignores files the scanner would never index.
+- New `watcher-native.test.ts` covers event resolution, the polling path and the fallback.
+
+#### Fix: Filesystem store scans no longer fault in iCloud files or hold the startup screen
+
+- The document-store scanner hashed every file under a filesystem store's base path, which made iCloud Drive download each evicted placeholder. A V4test store pointed at an iCloud-synced `~/Documents` (23,615 of 24,153 files evicted) indexed about 90 files every five minutes, and the startup screen sat on "At your service" until its five-minute settle cap released it.
+- `processMountFile` now stats the file before hashing it and returns `in-cloud` for a fully evicted placeholder (`size > 0`, `blocks === 0`, macOS and Windows only). The scan counts these as `filesInCloud`, keeps their existing index rows, and logs one summary line per store. The watcher ignores the change event an eviction fires; the download that brings a file back fires another and indexes it.
+- The detection rules live in new `lib/files/cloud-placeholder.ts`. `isNotFullyMaterialized` (moved from `materialize-cloud-files.ts`, unchanged) is the broad rule for faulting database files in at boot. `isEvictedCloudPlaceholder` is the narrow rule for skipping: it ignores partially downloaded files and never fires on Linux, where compressing filesystems (ZFS, btrfs) report fewer blocks than bytes.
+- The boot scan runs in two passes. `scanAllMountPoints({ only: 'database' })` stays inside the startup gate's `backgroundSettled` wait. Filesystem stores scan afterwards with `{ only: 'filesystem', reportStartupProgress: false }`, outside the gate. `ScanResult` gains `filesInCloud`, and `emptyScanResult()` builds the zeroed result the runner used to spell out by hand.
+
+#### Deps: SQLCipher driver to better-sqlite3-multiple-ciphers 13
+
+- `better-sqlite3-multiple-ciphers` 12.11.1 → 13.0.3, in the root `better-sqlite3` alias and in `packages/quilltap`. v13 is a Node-API addon with one prebuilt binary per platform in the npm package (darwin, linux, linuxmusl, win32 × x64, arm64). Nothing compiles on install, and one binary serves every Node ≥ 22 and Electron ≥ 35. SQLite 3.53.4, SQLite3MultipleCiphers 2.4.0. `prebuild-install` and `bindings` left the tree.
+- No data migration. Databases written by either version open in the other. A 4.2.x Electron shell, which injects its own v12 build, keeps working; there is no shell/server compatibility gate. Server code must not call v13-only driver API (`db.explain()`, `Statement.prototype.toString()`) until the shell ships v13.
+- The CLI no longer rebuilds the driver. `ensureDatabaseNativeModule()` loads the prebuild the driver would pick and, when it won't load, prints why (no prebuild for this platform, glibc older than 2.35, or the loader's error) and what to do. `readCompiledAbi`, `betterSqlite3NeedsRebuild`, `findBinFor` and `rebuildNativePackage` are gone, as is the matching heal in `jest.global-setup.js` and its test; new `native-driver-check.test.js` covers the load check.
+- Linux hosts running `npx quilltap` now need glibc 2.35 or newer (Ubuntu 22.04, Debian 12, RHEL 9). Older hosts should use the Docker image.
+- The Docker production image keeps only its own architecture's driver prebuild and drops the driver's compile-time sources (`deps/`, `src/`, `binding.gyp`); the build fails if the prebuild is missing. Build tools stay in the build stages for node-pty. `scripts/build-push-docker.ts` no longer runs `npm rebuild better-sqlite3` afterwards.
+- The server logs the driver and SQLite versions at info level when it opens the main database (`SQLCipher driver loaded`), so a support thread can tell which binary the shell injected.
+- `@types/better-sqlite3` stays: v13's `exports` map has no `types` entry, so TypeScript cannot see the package's own `index.d.ts`.
+- `allowScripts` denies `better-sqlite3-multiple-ciphers` (version-less). The package still ships `binding.gyp`, so npm treats it as having a `node-gyp rebuild` install script; the deny stops a pointless node-gyp run in Docker's `npm rebuild`.

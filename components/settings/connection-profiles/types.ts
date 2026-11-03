@@ -3,6 +3,7 @@
  */
 
 import type { ProviderOptionsSchema, ThinkingTurnRule } from '@quilltap/plugin-types'
+import { DEFAULT_MAX_IMAGES_PER_REQUEST } from '@/lib/schemas/profile.types'
 
 export type { ProviderOptionsSchema, ThinkingTurnRule }
 
@@ -55,6 +56,8 @@ export interface ProviderConfig {
     embeddings: boolean
     webSearch: boolean
     toolUse?: boolean
+    /** Whether the provider accepts temperature / top_p (omitted means true) */
+    samplingParameters?: boolean
   }
   /**
    * Provider-specific connection-profile options schema emitted by the
@@ -99,6 +102,8 @@ export interface ConnectionProfile {
    */
   multiCharacterPrefill?: boolean | null
   supportsImageUpload?: boolean
+  /** The most images sent in one request; resolve through `resolveMaxImagesPerRequest`. */
+  maxImagesPerRequest?: number | null
   modelClass?: string | null
   /** The understudy: another profile to try when this one's provider fails. */
   fallbackProfileId?: string | null
@@ -152,6 +157,8 @@ export interface ProfileFormData {
    */
   multiCharacterPrefill: boolean
   supportsImageUpload: boolean
+  /** The most images sent in one request, as typed (validated on save). */
+  maxImagesPerRequest: string
   allowWebSearch: boolean
   useNativeWebSearch: boolean
   modelClass: string
@@ -192,6 +199,7 @@ export const initialFormState: ProfileFormData = {
   pseudoToolMode: 'auto',
   multiCharacterPrefill: true,
   supportsImageUpload: false,
+  maxImagesPerRequest: String(DEFAULT_MAX_IMAGES_PER_REQUEST),
   allowWebSearch: false,
   useNativeWebSearch: false,
   modelClass: '',

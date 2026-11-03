@@ -100,6 +100,7 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
     logger.info('SQLite database connection established', {
       path: config.path,
     });
+    logDriverVersions(db);
 
     return db;
   } catch (error) {
@@ -108,6 +109,26 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
+  }
+}
+
+/**
+ * Log which SQLCipher driver and SQLite actually ran. The Electron shell may
+ * inject a driver other than the one package.json declares, so this line is
+ * how a support thread learns which binary was loaded. Parent process only.
+ */
+function logDriverVersions(db: DatabaseType): void {
+  try {
+    const driverVersion = (require('better-sqlite3/package.json') as { version?: string }).version;
+    const row = db.prepare('select sqlite_version() as v').get() as { v?: string } | undefined;
+    logger.info('SQLCipher driver loaded', {
+      driverVersion: driverVersion ?? 'unknown',
+      sqliteVersion: row?.v ?? 'unknown',
+    });
+  } catch (error) {
+    logger.debug('Could not read SQLCipher driver versions', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

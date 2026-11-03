@@ -43,23 +43,6 @@ export interface DeconvertResult {
   errors: Array<{ relativePath: string; error: string }>
 }
 
-export interface DocumentStoreFile {
-  id: string
-  mountPointId: string
-  relativePath: string
-  fileName: string
-  fileType: 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | 'blob'
-  sha256: string
-  fileSizeBytes: number
-  lastModified: string
-  conversionStatus: 'pending' | 'converted' | 'failed' | 'skipped'
-  conversionError: string | null
-  plainTextLength: number | null
-  chunkCount: number
-  createdAt: string
-  updatedAt: string
-}
-
 export interface ScanResult {
   filesScanned: number
   filesNew: number
@@ -104,21 +87,3 @@ export interface UpdateDocumentStoreData {
   enabled?: boolean
 }
 
-export interface DocumentStoreBlob {
-  id: string
-  mountPointId: string
-  relativePath: string
-  originalFileName: string
-  originalMimeType: string
-  storedMimeType: string
-  sizeBytes: number
-  sha256: string
-  description: string
-  descriptionUpdatedAt: string | null
-  extractedText: string | null
-  extractedTextSha256: string | null
-  extractionStatus: 'none' | 'pending' | 'converted' | 'failed' | 'skipped'
-  extractionError: string | null
-  createdAt: string
-  updatedAt: string
-}

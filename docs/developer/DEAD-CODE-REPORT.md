@@ -1,6 +1,6 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-11-02
 **Tool Used**: knip
 **Codebase**: Quilltap v4.11-dev
 
@@ -12,12 +12,36 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | 2 remaining as of 2026-10-26 (SVAR pair, kept-with-reason); 2026-10-26 deleted the importer-less `components/inventory/index.ts` barrel. 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Files | 0 as of 2026-11-02 (knip clean). 0 remaining as of 2026-10-31: the kept-with-reason SVAR pair went with the whole SVAR file manager (`components/files/svar/`), retired in folder-browser Phase 4. 2 remaining as of 2026-10-26 (SVAR pair, kept-with-reason); 2026-10-26 deleted the importer-less `components/inventory/index.ts` barrel. 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
 | Unused Dependencies | None flagged as of 2026-10-13 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1338 (2026-10-26, before removals; new Inventory/Pascal/Scenario surface). 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Exports | 1359 (2026-11-02; 1363 before the sweep). 1338 (2026-10-26, before removals; new Inventory/Pascal/Scenario surface). 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 859 (2026-11-02; 860 before the sweep). 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 4 in ErrorCode (preserved for future use; `UNAUTHORIZED` joined the list on 2026-09-04 when its only consumer, `requireAuth`, was removed) |
-| Duplicate Exports | 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+| Duplicate Exports | 78 (2026-11-02, unchanged). 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+
+---
+
+## 2026-11-02 — v4.11 release sweep, second pass (knip)
+
+knip flagged **0 unused files**, **1363 unused exports**, **860 unused exported types**, 4 unused enum members and 78 duplicate exports; no unused or unlisted dependencies. Run with `node_modules` present (`npm ci --ignore-scripts`); without it knip reports ~1,270 spurious unused files.
+
+Method as on 2026-10-26: every flagged symbol was scored by identifier references outside its defining file across all tracked source, and those with none were read by hand. Also listed: exports referenced only by tests and not used in-file (only test-helper fixtures under `__tests__/`, kept).
+
+Verified with `npx tsc` (exit 0), `eslint` on the changed files (clean) and the full `npm run test:unit` suite: **1,269 suites passed / 18,047 tests / 90 snapshots**, 1 suite and 3 tests skipped (pre-existing). Re-running knip: exports 1363 → 1359, types 860 → 859.
+
+### Removed
+
+| File | Removed | Why |
+|------|---------|-----|
+| `lib/inventory/item-mutations.ts` | `createInventoryFolder`, `renameInventoryFolder`, `deleteInventoryFolder` (+ their three `lib/mount-index/item-folder-location` imports and the `InventoryFolder` type import) | No callers. The Inventory folder routes go through `INVENTORY_FOLDER_KIND` and the shared `item-folder-routes.ts`. `INVENTORY_FOLDER_KIND` stays. |
+| `lib/inventory/folders.ts` | `normalizeInventoryFolderName` (+ unused `normalizeItemFolderName` import) | No callers; renames normalise the name inside `renameItemFolder`. |
+| `lib/services/announcer/writer.ts` | `AnnouncementRouteSender` | Unused type alias. |
+
+### Kept — with reason
+
+- **`ChatProvider`** (`components/providers/chat-context.tsx`) — still has no caller; the 2026-10-26 follow-up (decide whether to mount it or delete it along with `useChatContext`) remains open.
+- **Theme API** (`signJSON`, `verifyJSONSignature`, `validateTheme*`, `createDefaultThemePreference`, `ThemeCompatibility`, `RegistryPreviewColors`), **`stopMountWatchers`**, **`isMemoryMaintenanceSchedulerRunning`**, the `z.infer` / tool-input type aliases and the `__tests__/helpers` / fixtures exports — standing keeps, unchanged in character.
+- **4 `ErrorCode` enum members and 78 duplicate exports** — unchanged.
 
 ---
 
@@ -38,9 +62,9 @@ Method as on 2026-10-13: every flagged symbol was scored by identifier reference
 
 ### Kept — with reason
 
-- **SVAR pair** (`components/files/svar/index.ts`, `SvarFilePicker.tsx`) — in-progress file-manager surface, unchanged.
+- **SVAR pair** (`components/files/svar/index.ts`, `SvarFilePicker.tsx`) — in-progress file-manager surface, unchanged. *(Deleted 2026-10-31 with the rest of `components/files/svar/`; see [folder-browser.md](features/complete/folder-browser.md).)*
 - **New `z.infer` aliases with no users** — `InventoryStateValue`, `CustomToolIntervention`, `EffectPinInput`, `InterventionDecisionInput`, `StorytellerBidStatus`, `StorytellerRoundStatus`, `EquippedInventory`, plus the standing schema/tool-input list. Standing schema rule.
-- **`stopMountWatchers`** (`lib/mount-index/watcher.ts`) — lifecycle pair with the live `startMountWatchers`. **`isMemoryMaintenanceSchedulerRunning`** — as 2026-10-13.
+- **`stopMountWatchers`** (`lib/mount-index/watcher.ts`) — lifecycle pair with the live `startMountWatchers`. *(2026-11-03: now live — called with `stopWatcher` from `lib/startup/watcher-shutdown.ts` on SIGTERM / SIGINT, Refactor 4.12 watcher core.)* **`isMemoryMaintenanceSchedulerRunning`** — as 2026-10-13.
 - **Standing keeps** (registries, theme API, barrels, test hooks, used-in-file helpers, 4 `ErrorCode` members, duplicate exports) — unchanged in character.
 
 ### Follow-up this round surfaced (not dead code)
@@ -241,7 +265,7 @@ All 753 flagged types and the remaining flagged exports fall under standing keep
 - **`parseComponentItemsField`** (`lib/database/repositories/vault-overlay/parsers.ts`) — flagged as an unused export, but called in-file at line 333. The "exported helper used only inside its own module" category; un-exporting is pure churn.
 - **`clearCompressionCache` / `getCompressionCacheStats`** (`lib/services/chat-message/compression-cache.service.ts`) — referenced only by their own test suite. Kept under the lifecycle-pair rule: they are the invalidation and introspection halves of a live cache, and unlike the `_clearHousekeepingOutcomesForTest` removed on 2026-06-03, a test does exercise them.
 - **`resetFrozenArchiveCacheForTests`** (`lib/memory/recall/archive.ts`, formerly `frozen-archive-cache.ts`) — an explicit test helper that its own suite uses. Kept for the same reason. Note the standing follow-up on its neighbour `invalidateFrozenArchive` from 2026-07-30 still applies.
-- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from 2026-07-20 and 2026-07-30. Still the in-progress SVAR file-manager surface (`docs/developer/features/svar-file-manager-implementation-plan.md`): the barrel is the documented runtime-free public API, `SvarFilePicker` is the Phase 4 costume awaiting page wiring, and the Phase 3 `SvarFileManager` sibling **is** wired behind the "New file manager (beta)" toggle.
+- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from 2026-07-20 and 2026-07-30. Still the in-progress SVAR file-manager surface (`docs/developer/features/complete/svar-file-manager-implementation-plan.md`): the barrel is the documented runtime-free public API, `SvarFilePicker` is the Phase 4 costume awaiting page wiring, and the Phase 3 `SvarFileManager` sibling **is** wired behind the "New file manager (beta)" toggle.
 - **The 3 `ErrorCode` enum members and 62 duplicate exports** — unchanged in character from prior rounds; the duplicates are the named + default export pattern, still low priority.
 
 ---
@@ -287,7 +311,7 @@ Notes:
 
 Beyond the standing categories from prior rounds (Zod `z.infer` schema surface, `*ToolInputSchema` types, plugin SDK contracts, registry accessors, theme validation API, lifecycle `start`/`stop` pairs, barrel re-exports), this round specifically cleared:
 
-- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from 2026-07-20. Still the in-progress SVAR file-manager surface (`docs/developer/features/svar-file-manager-implementation-plan.md`): the barrel is the documented runtime-free public API, and `SvarFilePicker` is the Phase 4 light costume awaiting page wiring. The Phase 3 `SvarFileManager` sibling **is** wired, dynamic-imported by `app/scriptorium/[id]/DocumentStoreDetailView.tsx` behind the "New file manager (beta)" toggle. `SvarAction` (`svar-types.ts`) is kept with them as part of the same quarantined type surface.
+- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from 2026-07-20. Still the in-progress SVAR file-manager surface (`docs/developer/features/complete/svar-file-manager-implementation-plan.md`): the barrel is the documented runtime-free public API, and `SvarFilePicker` is the Phase 4 light costume awaiting page wiring. The Phase 3 `SvarFileManager` sibling **is** wired, dynamic-imported by `app/scriptorium/[id]/DocumentStoreDetailView.tsx` behind the "New file manager (beta)" toggle. `SvarAction` (`svar-types.ts`) is kept with them as part of the same quarantined type surface.
 - **`navigateToMessage`** (`lib/chat/message-navigation.ts`) — the only writer of the `scrollToMessageId` / `highlightMessageId` sessionStorage keys, whose reader is live in `SalonView`. Kept as the write half of a wired pair, same rule as the `start*`/`stop*` lifecycle pairs; note the memory-provenance feature currently has no UI entry point calling it.
 - **`invalidateFrozenArchive`** (`lib/memory/recall/archive.ts`, formerly `frozen-archive-cache.ts`) — the cache-invalidation half of a live cache (`getOrComputeFrozenArchive`). **Worth a follow-up:** nothing in production calls it, so the cache only refreshes when a character's compaction generation changes. The out-of-band edits its doc comment names (manual deletion, housekeeping sweep, import) leave a stale frozen archive in place until the next compaction. That is a behavior gap, not dead code — removing the function would only make it harder to fix.
 - **`findExclusiveChatsForCharacter` / `findExclusiveImagesForChats`** (`lib/cascade-delete.ts`), **`loadParticipantMemories` / `loadProjectContext`** (`lib/chat/first-message-context.ts`), and **`buildRecoverySystemPrompt` / `buildRecoveryUserMessage` / `buildStaticFallbackMessage`** (`lib/services/chat-message/recovery.service.ts`) — flagged as referenced only by tests, but each is called in-file by the module's live entry point (`getCascadeDeletePreview`, `buildFirstMessageContext`, and the recovery flow respectively). Exported for direct unit testing.
@@ -320,7 +344,7 @@ knip flagged **3 unused files**, **1 unlisted dependency**, and **3 unlisted bin
 
 ### Investigated but KEPT — in-progress SVAR file-manager surface
 
-Both remaining flagged files belong to the actively-in-development SVAR file-manager migration (`docs/developer/features/svar-file-manager-implementation-plan.md`). They are pre-built ahead of the phase that wires them, not dead:
+Both remaining flagged files belong to the actively-in-development SVAR file-manager migration (`docs/developer/features/complete/svar-file-manager-implementation-plan.md`). They are pre-built ahead of the phase that wires them, not dead:
 
 - **`components/files/svar/SvarFilePicker.tsx`** — the Phase 4 "light costume" attach-a-file picker (replaces `FolderPicker.tsx` / `DocumentPickerModal.tsx`). Its support function `wirePickerSelection` is already exercised by `createSvarAdapter.test.ts`; only the page wiring (Phase 4) is outstanding. The Phase 3 `SvarFileManager` sibling **is** already wired (dynamic-imported by `app/scriptorium/[id]/DocumentStoreDetailView.tsx`).
 - **`components/files/svar/index.ts`** — the documented runtime-free public surface (barrel) of the SVAR adapter. Consumers and tests currently import the submodules directly, so nothing imports the barrel yet, but it is intentional API for the feature.
@@ -407,7 +431,7 @@ knip reported **0 unused files** and **0 unused/unlisted dependencies** — the 
 These were flagged by the same reference-count pass but deliberately retained:
 
 - **`ChatProvider`** (`components/providers/chat-context.tsx`) — knip flags it as unused, but the file's sibling export `useChatContext` is consumed by `app/salon/[id]/page.tsx`. The provider/consumer pair is entangled; removing it (initially over-removed by the sweep) broke `tsc` and was reverted.
-- **Lifecycle pairs** — `stopWatcher`, `stopMountWatchers`, `stopAutonomousRoomsScheduler`/`isAutonomousRoomsSchedulerRunning`, `stopHousekeepingScheduler`/`isHousekeepingSchedulerRunning`, `closeReadonlyChildSQLiteClient`, `isReadonlyChildSQLiteConnected`. Their `start*`/`schedule*`/`get*Client` counterparts are wired in `instrumentation.ts`; the stop/status halves belong to the same lifecycle API.
+- **Lifecycle pairs** — `stopWatcher`, `stopMountWatchers` *(both live since 2026-11-03: `lib/startup/watcher-shutdown.ts`)*, `stopAutonomousRoomsScheduler`/`isAutonomousRoomsSchedulerRunning`, `stopHousekeepingScheduler`/`isHousekeepingSchedulerRunning`, `closeReadonlyChildSQLiteClient`, `isReadonlyChildSQLiteConnected`. Their `start*`/`schedule*`/`get*Client` counterparts are wired in `instrumentation.ts`; the stop/status halves belong to the same lifecycle API.
 - **Plugin SDK contracts** — all `lib/plugins/interfaces/*` types (moderation/scoring/provider interfaces), `ImageGenerationModelInfo` (used by the Google/OpenRouter plugins), `createToolLogger`. Plugins implement these structurally; knip cannot see `packages/`/`plugins/` consumers.
 - **Registry accessors** — `lib/plugins/moderation-provider-registry.ts` (8 accessors) and `provider-registry.ts` (3 accessors). The registry modules are live (imported by installer/gatekeeper/plugin-init); their symmetric `get*`/`has*`/`register*` API is retained for plugin self-registration and diagnostics.
 - **Theme crypto / validation** — `signJSON`, `verifyJSONSignature` (`lib/themes/crypto.ts`) and the `validateTheme*`/`safeValidate*`/`createDefaultThemePreference` family (`lib/themes/types.ts`). Security-sensitive Ed25519 signing and the documented public theme-validation API.

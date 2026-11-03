@@ -52,6 +52,10 @@ import {
   searchScriptoriumScenarioToolDefinition,
 } from '@/lib/tools/search-scriptorium-tool';
 import { runSqlToolDefinition } from '@/lib/tools/run-sql-tool';
+import { lookupCharacterToolDefinition } from '@/lib/tools/lookup-character-tool';
+import { lookupMemoriesToolDefinition } from '@/lib/tools/lookup-memories-tool';
+import { lookupMessagesToolDefinition } from '@/lib/tools/lookup-messages-tool';
+import { readMessagesToolDefinition } from '@/lib/tools/read-messages-tool';
 import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
@@ -526,6 +530,14 @@ export async function buildToolsForProvider(
   // on `operatorSurface` in the tool executor, so a leaked tool name can never
   // run from a character surface.
   if (options.sqlAccess) {
+    // The lookup shortcuts ride on the same switch: they are the operator's
+    // inspection tools, answering the common questions (who is X, what does X
+    // remember, where was Y said) in one call each before the console falls
+    // back to hand-written SQL. Executor-gated on `operatorSurface` likewise.
+    universalTools.push(lookupCharacterToolDefinition as UniversalTool);
+    universalTools.push(lookupMemoriesToolDefinition as UniversalTool);
+    universalTools.push(lookupMessagesToolDefinition as UniversalTool);
+    universalTools.push(readMessagesToolDefinition as UniversalTool);
     universalTools.push(runSqlToolDefinition as UniversalTool);
   }
 

@@ -1,9 +1,13 @@
 /**
  * Filesystem Watcher
  *
- * Uses chokidar to watch the files directory for real-time changes.
- * When files are added, changed, or removed on disk, the watcher
- * synchronizes the database accordingly.
+ * Watches the files directory for real-time changes through the shared
+ * {@link createRecursiveWatcher} (`lib/files/recursive-watcher.ts`), which
+ * owns the native recursive `fs.watch`, the per-path debounce, resolving each
+ * event against the disk, the cloud-placeholder guard and the polling
+ * fallback (`QUILLTAP_WATCHER_POLLING=1`, or a filesystem that refuses a
+ * recursive watch). This module keeps only the `files/` domain: when files
+ * are added, changed, or removed on disk, it synchronizes the database.
  *
  * - Added files without DB records are created as 'orphaned' status
  * - Changed files get their sha256/size/mtime updated
@@ -15,13 +19,18 @@
  * @module file-storage/watcher
  */
 
-import chokidar from 'chokidar';
-import { relative, join, extname, basename, dirname } from 'path';
+import { join, basename, normalize, sep } from 'path';
 import { createLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
-import { computeSha256, detectMimeType } from './scanner';
+import { computeSha256, detectMimeType, scanDirectory } from './scanner';
 import { preservesContentDigest } from './digest-policy';
 import { deriveFolderPathFromStorageKey } from '@/lib/files/folder-utils';
+import { isEvictedCloudPlaceholder } from '@/lib/files/cloud-placeholder';
+import {
+  createRecursiveWatcher,
+  type PolledFile,
+  type RecursiveWatcher,
+} from '@/lib/files/recursive-watcher';
 import { stat } from 'fs/promises';
 
 const logger = createLogger('file-storage:watcher');
@@ -30,11 +39,7 @@ const logger = createLogger('file-storage:watcher');
 // STATE
 // ============================================================================
 
-let watcher: ReturnType<typeof chokidar.watch> | null = null;
-
-/** Debounce timer map for events keyed by relative path */
-const debounceTimers = new Map<string, NodeJS.Timeout>();
-const DEBOUNCE_MS = 500;
+let watcher: RecursiveWatcher | null = null;
 
 /** Buffer for pending unlink events to detect file moves (unlink + add pair) */
 interface PendingUnlink {
@@ -71,6 +76,17 @@ function shouldIgnore(relativePath: string): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * An evicted cloud placeholder (iCloud, OneDrive) is left unread: hashing it
+ * would make the provider download it. The core watcher already drops a
+ * direct event for one; this catches the files of a folder that arrived.
+ */
+function isCloudEvicted(relativePath: string, stats: { size: number; blocks: number }): boolean {
+  if (!isEvictedCloudPlaceholder(stats)) return false;
+  logger.debug('Filesystem watcher left a cloud-evicted file unread', { relativePath });
+  return true;
 }
 
 /**
@@ -112,6 +128,7 @@ async function handleFileAdd(filesDir: string, relativePath: string): Promise<vo
 
     // Compute metadata
     const stats = await stat(absolutePath);
+    if (isCloudEvicted(relativePath, stats)) return;
     const sha256 = await computeSha256(absolutePath);
     const mimeType = detectMimeType(relativePath);
     const userId = await getSingleUserId();
@@ -150,6 +167,14 @@ async function handleFileAdd(filesDir: string, relativePath: string): Promise<vo
     const sha256Matches = await repos.files.findBySha256(sha256);
     const movedRecord = sha256Matches?.find((f: any) => f.storageKey !== relativePath);
     if (movedRecord) {
+      // The record's old path may still be waiting out its deferred delete;
+      // it has moved, so the delete must not land.
+      for (const [oldKey, pending] of pendingUnlinks.entries()) {
+        if (pending.record.id === movedRecord.id) {
+          clearTimeout(pending.timer);
+          pendingUnlinks.delete(oldKey);
+        }
+      }
       // Update existing record with new storageKey (file was moved on disk)
       await repos.files.update(movedRecord.id, {
         storageKey: relativePath,
@@ -213,6 +238,7 @@ async function handleFileChange(filesDir: string, relativePath: string): Promise
 
     // Recompute sha256 and size
     const stats = await stat(absolutePath);
+    if (isCloudEvicted(relativePath, stats)) return;
     const sha256 = await computeSha256(absolutePath);
 
     // Bug 69: an archived character's bundle records the PLAINTEXT digest
@@ -245,20 +271,22 @@ async function handleFileChange(filesDir: string, relativePath: string): Promise
 /**
  * Handle file removal — defer deletion to allow move detection.
  *
- * When a file is moved on disk, chokidar fires `unlink` then `add`.
+ * When a file is moved on disk, the old path disappears and the new one appears.
  * Instead of deleting immediately, we stash the record in pendingUnlinks
  * for a short window. If a matching `add` arrives (same SHA-256),
  * we treat it as a move and preserve all metadata.
+ *
+ * @returns whether a record existed at this exact key
  */
-async function handleFileUnlink(relativePath: string): Promise<void> {
-  if (shouldIgnore(relativePath)) return;
+async function handleFileUnlink(relativePath: string): Promise<boolean> {
+  if (shouldIgnore(relativePath)) return false;
 
   try {
     const repos = await getRepos();
 
     const existing = await repos.files.findByStorageKey(relativePath);
     if (!existing) {
-      return;
+      return false;
     }
 
     // Defer the deletion — stash in pending buffer
@@ -280,11 +308,13 @@ async function handleFileUnlink(relativePath: string): Promise<void> {
     }, PENDING_UNLINK_MS);
 
     pendingUnlinks.set(relativePath, { record: existing, timer });
+    return true;
   } catch (error) {
     logger.warn('Error handling file unlink event', {
       relativePath,
       error: error instanceof Error ? error.message : String(error),
     });
+    return false;
   }
 }
 
@@ -311,8 +341,8 @@ async function handleDirAdd(relativePath: string): Promise<void> {
     const folderName = parts[parts.length - 1];
     const folderPath = '/' + parts.slice(1).join('/') + '/';
 
-    // Find-or-create through the repository chokepoint. chokidar can fire
-    // `addDir` for the same directory more than once, and a job may be creating
+    // Find-or-create through the repository chokepoint. The watcher can see
+    // the same directory arrive more than once, and a job may be creating
     // the very same folder row concurrently (bug 114).
     await repos.folders.ensureByPath({
       userId,
@@ -335,31 +365,82 @@ async function handleDirAdd(relativePath: string): Promise<void> {
 }
 
 /**
- * Debounced event handler
+ * A folder left the files directory (deleted, or moved out). The native watch
+ * reports the folder alone, so every record beneath it goes through the
+ * deferred unlink — which still lets a move within the directory match up.
  */
-function debouncedHandler(
-  relativePath: string,
-  handler: () => Promise<void>
-): void {
-  const existing = debounceTimers.get(relativePath);
-  if (existing) {
-    clearTimeout(existing);
-  }
+async function handleDirUnlink(relativePath: string): Promise<void> {
+  try {
+    const repos = await getRepos();
+    const userId = await getSingleUserId();
+    const prefix = relativePath + '/';
+    const doomed = (await repos.files.findByUserId(userId))
+      .map((f) => f.storageKey)
+      .filter((key): key is string => typeof key === 'string' && key.startsWith(prefix));
+    if (doomed.length === 0) return;
 
-  debounceTimers.set(
+    logger.debug('Folder left the files directory', {
+      relativePath,
+      files: doomed.length,
+    });
+    for (const storageKey of doomed) {
+      await handleFileUnlink(storageKey);
+    }
+  } catch (error) {
+    logger.warn('Error handling directory removal', {
+      relativePath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * A folder arrived by rename (created, or moved in). The native watch reports
+ * the folder alone, so record it and everything beneath it.
+ */
+async function handleDirArrival(filesDir: string, relativePath: string): Promise<void> {
+  await handleDirAdd(relativePath);
+  const entries = await scanDirectory(filesDir, relativePath);
+  logger.debug('Folder arrived in the files directory', {
     relativePath,
-    setTimeout(async () => {
-      debounceTimers.delete(relativePath);
-      try {
-        await handler();
-      } catch (error) {
-        logger.warn('Error in debounced watcher handler', {
-          relativePath,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }, DEBOUNCE_MS)
-  );
+    entries: entries.length,
+  });
+  for (const entry of entries) {
+    if (entry.isDirectory) {
+      await handleDirAdd(entry.relativePath);
+    } else {
+      await handleFileAdd(filesDir, entry.relativePath);
+    }
+  }
+}
+
+/**
+ * A path the watcher found gone: defer-delete its record. After a rename of a
+ * path that had no record of its own, also every record beneath it, in case
+ * it was a folder — the native watch reports a folder that left by itself. A
+ * plain file delete (its record found) never reads the whole table.
+ */
+async function handleGone(relativePath: string, sawRename: boolean): Promise<void> {
+  const hadRecord = await handleFileUnlink(relativePath);
+  if (sawRename && !hadRecord) await handleDirUnlink(relativePath);
+}
+
+/** A native event's filename as a storage key: relative, '/'-separated. */
+function toStorageKey(filename: string): string {
+  return normalize(filename).split(sep).join('/');
+}
+
+/**
+ * The polling snapshot: every file the startup scan would see, keyed by
+ * storage key.
+ */
+async function snapshotFiles(filesDir: string): Promise<Map<string, PolledFile>> {
+  const snapshot = new Map<string, PolledFile>();
+  for (const entry of await scanDirectory(filesDir)) {
+    if (entry.isDirectory) continue;
+    snapshot.set(entry.relativePath, { mtimeMs: entry.mtime.getTime(), size: entry.size });
+  }
+  return snapshot;
 }
 
 // ============================================================================
@@ -381,76 +462,65 @@ export function startWatcher(): void {
 
   logger.info('Starting filesystem watcher', { filesDir });
 
-  watcher = chokidar.watch(filesDir, {
-    persistent: true,
-    ignoreInitial: true, // Don't fire events for existing files on startup
-    depth: 10,
-    awaitWriteFinish: {
-      stabilityThreshold: 500,
-      pollInterval: 100,
-    },
-    ignored: [
-      // Ignore _thumbnails directory
-      (filePath: string) => {
-        const rel = relative(filesDir, filePath);
-        return rel.startsWith('_thumbnails');
+  try {
+    watcher = createRecursiveWatcher({
+      root: filesDir,
+      normalize: toStorageKey,
+      ignore: shouldIgnore,
+      polling: { snapshot: () => snapshotFiles(filesDir) },
+      on: {
+        file: (rel) => handleFileChange(filesDir, rel),
+        gone: handleGone,
+        dirArrived: (rel) => handleDirArrival(filesDir, rel),
       },
-    ],
-  });
-
-  watcher
-    .on('add', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      debouncedHandler(rel, () => handleFileAdd(filesDir, rel));
-    })
-    .on('change', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      debouncedHandler(rel, () => handleFileChange(filesDir, rel));
-    })
-    .on('unlink', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      debouncedHandler(rel, () => handleFileUnlink(rel));
-    })
-    .on('addDir', (filePath: string) => {
-      const rel = relative(filesDir, filePath);
-      if (rel && rel !== '.') {
-        debouncedHandler(rel, () => handleDirAdd(rel));
-      }
-    })
-    .on('error', (error: unknown) => {
-      logger.error('Filesystem watcher error', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      log: logger,
     });
+  } catch (error) {
+    // Startup reconciliation and Sync Now still work without a watcher.
+    logger.warn('Filesystem watcher could not start', {
+      filesDir,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
 
-  logger.info('Filesystem watcher started successfully', { filesDir });
+  logger.info('Filesystem watcher started successfully', {
+    filesDir,
+    polling: watcher.mode === 'polling',
+  });
 }
 
 /**
- * Stop the filesystem watcher
+ * Stop the filesystem watcher.
+ *
+ * The watch closes and every timer clears before anything awaits, so the
+ * shutdown hook in `instrumentation.ts` has stopped all disk reactions before
+ * the database handlers close their connections. Pending deferred deletes are
+ * flushed unless `flushPendingDeletes` is false — at process shutdown the
+ * database is closing under us, and the next startup reconciliation removes a
+ * record whose file is gone anyway.
  */
-export async function stopWatcher(): Promise<void> {
+export async function stopWatcher(
+  options: { flushPendingDeletes?: boolean } = {}
+): Promise<void> {
   if (!watcher) {
     return;
   }
 
   logger.info('Stopping filesystem watcher');
 
-  // Clear all debounce timers
-  for (const timer of debounceTimers.values()) {
-    clearTimeout(timer);
-  }
-  debounceTimers.clear();
+  watcher.close();
+  watcher = null;
 
-  // Flush all pending unlinks — execute deletions immediately
-  if (pendingUnlinks.size > 0) {
-    const { getRepositories } = await import('@/lib/database/repositories');
-    const repos = getRepositories();
+  const pending = Array.from(pendingUnlinks.entries());
+  for (const [, entry] of pending) clearTimeout(entry.timer);
+  pendingUnlinks.clear();
 
-    for (const [storageKey, pending] of pendingUnlinks.entries()) {
-      clearTimeout(pending.timer);
+  if (options.flushPendingDeletes !== false && pending.length > 0) {
+    const repos = await getRepos();
+    for (const [storageKey, entry] of pending) {
       try {
-        await repos.files.delete(pending.record.id);
+        await repos.files.delete(entry.record.id);
       } catch (err) {
         logger.warn('Error flushing pending unlink deletion', {
           storageKey,
@@ -458,11 +528,9 @@ export async function stopWatcher(): Promise<void> {
         });
       }
     }
-    pendingUnlinks.clear();
+  } else if (pending.length > 0) {
+    logger.debug('Left pending deletes to startup reconciliation', { count: pending.length });
   }
-
-  await watcher.close();
-  watcher = null;
 
   logger.info('Filesystem watcher stopped');
 }

@@ -60,9 +60,9 @@ interface StartupStateData {
   isReady: boolean;
   /**
    * True once the fire-and-forget post-startup backfills (character vault
-   * backfill chain + mount-index scan) have settled. These finish well after
-   * the server is `isReady` and serving, so server-rendered pages — the home
-   * dashboard especially — can read empty/partial data mid-settle and look
+   * backfill chain + the database-backed store scan) have settled. These
+   * finish well after the server is `isReady` and serving, so server-rendered
+   * pages — the home dashboard especially — can read empty/partial data mid-settle and look
    * like total data loss. This is a UI-only signal: the startup gate holds the
    * progress screen until it flips, then refreshes server-rendered content. It
    * deliberately does NOT gate request handling (that's `isReady`'s job), so a
@@ -242,7 +242,7 @@ export const startupState = {
 
   /**
    * Mark the post-startup background backfills (character vault backfill +
-   * mount-index scan) as settled. Idempotent. UI-only — see the field doc on
+   * database-backed store scan) as settled. Idempotent. UI-only — see the field doc on
    * `backgroundSettled`; this never affects request gating.
    */
   markBackgroundSettled(): void {

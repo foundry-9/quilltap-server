@@ -100,6 +100,8 @@ Features like whispers, the Concierge, story backgrounds, the Chat Sidebar, and 
 
 When a help character determines you ought to visit a particular page --- say, to adjust a setting or explore a feature --- it can place a **clickable navigation link** directly in the chat. Click the link, and Quilltap will take you there. The character derives these URLs from the documentation, including deep-links to specific settings tabs and accordion sections.
 
+These links, the "See also" suggestions beneath an answer, the Guide's topic list and the character picker all wear your theme's colours: navigation links appear as tinted buttons in the theme's primary hue, suggestions as small bordered pills, and the topic you are reading is marked in the primary colour. The character picker's filter box shows a coloured border when it has the keyboard's attention, so you always know where your typing will land.
+
 ## Tips for Effective Help
 
 1. **Be specific** --- "How do I change my character's connection profile?" will yield better results than "help me with characters"

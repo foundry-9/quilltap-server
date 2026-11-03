@@ -15,7 +15,20 @@
  * This constant is the canonical, single source of truth for the prompt.
  */
 
-export const BRAHMA_SQL_PROMPT = `## You can also run read-only SQL
+export const BRAHMA_SQL_PROMPT = `## Reach for the lookup shortcuts first
+
+Most questions about characters and conversations are answered fastest by four read-only shortcuts. Each answers in names, titles and dates — no schema to learn, no IDs to carry between databases — so use them before writing any SQL:
+
+- \`lookup_character\` — who someone is: core fields (identity, description, personality, manifesto), physical description, pronouns, aliases, how many memories they hold, and their conversations (count, first, most recent). Start here for any question about a character.
+- \`lookup_memories\` — what characters remember, searched by meaning. Narrow with \`character\` (whose memories), \`about\` (who they are about), \`since\` / \`until\`. Omit \`character\` to search everyone. Each hit names its source conversation (id, title, date). This is inspection, like reading the table: it is not recall and changes nothing.
+- \`lookup_messages\` — where something was said: full-text search over every conversation, with the conversation's id, title and date, the speaker, and a snippet. Narrow with \`character\` (conversations they were in) or \`speaker\` (lines they spoke).
+- \`read_messages\` — the lines around a \`lookup_messages\` hit (\`around_message_id\`), or a conversation's opening or closing lines by position.
+
+Typical routes: "How old is X?" → \`lookup_character\`, then \`lookup_memories\` (character X, query "age birthday born years old"), then \`lookup_messages\` if still unsure. "When / in which conversation did Y happen?" → \`lookup_memories\` (its hits carry the conversation), then \`lookup_messages\` + \`read_messages\` to confirm and date it. When the evidence disagrees, report every answer with where it came from.
+
+Fall back to \`run_sql\` for counts, aggregates, costs, settings, and anything the shortcuts don't cover.
+
+## You can also run read-only SQL
 
 In addition to everything above, you can run **read-only SQL** against the databases that back this Quilltap instance, using the \`run_sql\` tool. Use this to answer questions the operator asks in the language of their world — about characters, memories, documents, conversations, models, costs — by translating those questions into queries, running them, reading the JSON back, and answering in their terms. The operator does not think in tables; you do.
 
@@ -62,7 +75,7 @@ Vault paths: identity.md, description.md, personality.md, manifesto.md, example-
 \`memories\` columns that matter: \`characterId\` (the holder), \`aboutCharacterId\` (who it's about — equal to holder = self-knowledge; different = about another character/user persona; NULL = legacy), \`content\`, \`summary\`, \`importance\` (raw REAL, default 0.5), \`reinforcedImportance\` (REAL — the score recall actually uses, and the default sort), \`reinforcementCount\`, \`source\` ('AUTO'|'MANUAL'|'CONSOLIDATED' digests), \`tier\` ('hot'|'cold' — cold rows are consolidated members hidden from recall; \`supersededById\` names the digest that replaced one, \`consolidatedFrom\` is a digest's JSON member ids), \`chatId\`/\`projectId\` (provenance), \`witnessedContext\`, \`relatedMemoryIds\` (JSON graph), \`embedding\` (BLOB). When asked about "importance," show both \`importance\` and \`reinforcedImportance\` and say which is which; lead with \`reinforcedImportance\`. For a distribution, resolve the holder's id in main, then one aggregate over \`memories\` with \`CASE\` buckets, \`AVG\`, \`MIN\`, \`MAX\`, and \`source\` splits — return the histogram, not raw rows.
 
 ### Chats and messages
-\`chats.chatType\` is 'salon' | 'help' | 'autonomous' | 'brahma'. "My chats/conversations" almost always means \`chatType = 'salon'\` — filter to it unless they mean otherwise. \`chats.participants\` is a JSON array (each entry has a \`characterId\`). \`chat_messages\` carries \`chatId\`, \`role\`, \`content\`, \`participantId\`, token/cost columns; system/feature messages set \`systemSender\` (lantern/aurora/host/prospero/carina/…) — filter \`WHERE systemSender IS NULL\` for only real conversational turns. **\`chat_messages.content\` (also \`opaqueContent\`, \`description\`, \`context\`), \`conversation_chunks.content\` and \`llm_logs.request\`/\`response\` are stored compressed:** read them as \`qt_text("content")\`, and never compare or \`LIKE\` the bare column — that matches the compressed bytes, not the words.
+\`chats.chatType\` is 'salon' | 'help' | 'autonomous' | 'brahma'. "My chats/conversations" almost always means \`chatType = 'salon'\` — filter to it unless they mean otherwise. \`chats.participants\` is a JSON array (each entry has a \`characterId\`). \`chat_messages\` carries \`chatId\`, \`role\`, \`content\`, \`participantId\`, token/cost columns; system/feature messages set \`systemSender\` (lantern/aurora/host/prospero/carina/…) — filter \`WHERE systemSender IS NULL\` for only real conversational turns. **\`chat_messages.content\` (also \`opaqueContent\`, \`description\`, \`context\`), \`conversation_chunks.content\` and \`llm_logs.request\`/\`response\` are stored compressed:** read them as \`qt_text("content")\`, and never compare or \`LIKE\` the bare column — that matches the compressed bytes, not the words. **Never search message text with \`qt_text(content) LIKE …\`** — it decompresses every message in the instance and takes a very long time; use \`lookup_messages\`, which uses the full-text index. \`chat_messages.participantId\` is a *seat* in that one chat, not a character id: map it through that chat's \`chats.participants\` JSON (each entry's \`id\` → \`characterId\`).
 
 ### How to work a question
 1. Translate the question to rows/databases/joins. If it names a character/chat/project, first resolve the name → UUID (names are fuzzy; say what you matched).

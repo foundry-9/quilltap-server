@@ -98,6 +98,16 @@ export const ProjectPropertiesSchema = z.object({
    */
   answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
 
+  /**
+   * Connection profile the inline Brahma (`@Brahma:` / `@Brahma?` in a Salon
+   * chat of this project) answers with. null/undefined = inherit the global
+   * `brahmaConsole.inlineConnectionProfileId`, then the user's default
+   * profile. A stale id falls through. Resolved only by
+   * `resolveInlineBrahmaConnectionProfile`
+   * (`lib/services/brahma-console/inline-profile.ts`).
+   */
+  brahmaConnectionProfileId: UUIDSchema.nullable().optional(),
+
   // Story backgrounds
   /** Whether story backgrounds are enabled for this project (null = inherit from global, true/false = override) */
   storyBackgroundsEnabled: z.boolean().nullable().optional(),
@@ -192,6 +202,7 @@ export const PROJECT_STORE_MANAGED_FIELDS: ReadonlySet<keyof Project> = new Set<
   'defaultRoleplayTemplateId',
   'defaultAlertCharactersOfLanternImages',
   'answerConfirmationOverride',
+  'brahmaConnectionProfileId',
   'storyBackgroundsEnabled',
   'staticBackgroundImageId',
   'storyBackgroundImageId',

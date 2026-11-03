@@ -230,7 +230,7 @@ The roster for a chat is resolved through the existing five-tier pool (`characte
 
 - **Nearest tier wins** on a `name` collision — a character-tier `unlock` shadows the project-tier `unlock`.
 - `"disabled": true` at a nearer tier suppresses the inherited tool of that name entirely.
-- A collision **within the same tier** (two mounts at the same tier both defining `unlock`) resolves deterministically by mount-point id (lexicographic), with a warning logged and an info badge in the UI popup.
+- A collision **within the same tier** (two mounts at the same tier both defining `unlock`) resolves by the tier's own order — membership order for groups, the project's official store before its linked stores (`orderMounts`, `lib/mount-index/reach.ts`; until 4.12 it was lexicographic by mount-point id) — with a warning logged and an info badge in the UI popup.
 - **Perspective:** resolution is computed per invoker. When character X calls `run_custom`, X's character-tier mounts are the "character" tier. For the human user's composer popup, the roster is the union across all participants' perspectives: tools identical for everyone appear once; a tool whose definition differs per character (character-tier shadowing) appears once per variant, labeled with the character's name, and running it executes that character's variant.
 ### Availability gates — `availableWhen` / `withheldWhen` (4.8)
 

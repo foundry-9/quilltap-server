@@ -458,6 +458,13 @@ import { addStorytellerModeMigration } from './add-storyteller-mode-v1';
 import { addLLMLogsStorytellerRoundIdColumnMigration } from './add-llm-logs-storyteller-round-id-column';
 // Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
 import { addRoleplayTemplateUnmarkedFieldsMigration } from './add-roleplay-template-unmarked-fields-v1';
+import { stripAnthropicSamplingParametersMigration } from './strip-anthropic-sampling-parameters-v1';
+// Global search: drop Staff messages and announcement bubbles from the message index (#121)
+import { reindexChatMessageFtsCharacterOnlyMigration } from './reindex-chat-message-fts-character-only';
+// Deus Ex Machina: chat_messages.isEstablishedFact (operator lines posted as established fact)
+import { addEstablishedFactFieldMigration } from './add-established-fact-field-v1';
+// Vision input cap: connection_profiles.maxImagesPerRequest
+import { addProfileMaxImagesPerRequestMigration } from './add-profile-max-images-per-request-v1';
 
 /**
  * All available migrations.
@@ -943,6 +950,14 @@ export const migrations: Migration[] = [
   addLLMLogsStorytellerRoundIdColumnMigration,
   // Novel template: roleplay_templates.unmarkedStyle / markdownAsterisks
   addRoleplayTemplateUnmarkedFieldsMigration,
+  // Anthropic API 2026-10-21: drop temperature/top_p/top_k from Anthropic profiles
+  stripAnthropicSamplingParametersMigration,
+  // Global search: drop Staff messages and announcement bubbles from the message index (#121)
+  reindexChatMessageFtsCharacterOnlyMigration,
+  // Deus Ex Machina: chat_messages.isEstablishedFact (operator lines posted as established fact)
+  addEstablishedFactFieldMigration,
+  // Vision input cap: connection_profiles.maxImagesPerRequest (most images sent in one request)
+  addProfileMaxImagesPerRequestMigration,
 ];
 
 export {
@@ -1404,5 +1419,9 @@ export {
   // Storyteller mode: llm_logs.storytellerRoundId (groups a round in the inspector)
   addLLMLogsStorytellerRoundIdColumnMigration,
   addRoleplayTemplateUnmarkedFieldsMigration,
+  stripAnthropicSamplingParametersMigration,
+  reindexChatMessageFtsCharacterOnlyMigration,
+  addEstablishedFactFieldMigration,
+  addProfileMaxImagesPerRequestMigration,
 };
 

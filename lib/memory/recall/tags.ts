@@ -217,7 +217,22 @@ export const RECALL_MULTIPLIERS = {
    */
   freshEvent24h: 1.3,
   freshEvent48h: 1.15,
+  /**
+   * The memory records a hurt that a later repair settled — consolidation
+   * marked it {@link RESOLVED_KEYWORD}. Still remembered and still reachable
+   * by a turn about it, just no longer first in line; the repair itself
+   * carries the thread (prompt-trust-the-probation.md §9.6).
+   */
+  resolved: 0.6,
 } as const
+
+/**
+ * Free keyword consolidation adds to a memory whose hurt a repair settled.
+ * Not a targeting tag: `parseTargetingTags` ignores it, and only
+ * {@link resolvedMultiplier} reads it. Written only by the consolidation plan's
+ * `resolvedMarks` (`lib/memory/consolidation-plan.ts`).
+ */
+export const RESOLVED_KEYWORD = 'resolved'
 
 /** Milliseconds in the two fresh-event bands. */
 const HOUR_MS = 60 * 60 * 1000
@@ -569,6 +584,18 @@ export function participantMultiplier(
  * multiplier, never a hard exclude: a still-best match keeps winning, just not
  * trivially. No recent-whisper set, or memory not in it → pass through.
  */
+/** A hurt a repair settled ranks below the repair; never an exclude. */
+export function resolvedMultiplier(
+  memory: MemoryTagView,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
+): RecallMultiplier {
+  const keywords = memory.keywords
+  if (keywords && keywords.some(k => typeof k === 'string' && k.trim().toLowerCase() === RESOLVED_KEYWORD)) {
+    return { multiplier: multipliers.resolved, fired: ['resolved↓'] }
+  }
+  return { multiplier: 1, fired: [] }
+}
+
 export function recentlyWhisperedMultiplier(
   memory: MemoryTagView,
   recentlyWhisperedIds: ReadonlySet<string> | null | undefined,
@@ -642,8 +669,9 @@ export function combineRecallMultipliers(
   const recent = recentlyWhisperedMultiplier(memory, ctx.recentlyWhisperedIds, retrospective, multipliers)
   const window = occurredWithinMultiplier(memory, ctx.occurredWithin, multipliers)
   const fresh = freshEventMultiplier(memory, ctx.nowMs, ctx.currentChatId, multipliers)
+  const resolved = resolvedMultiplier(memory, multipliers)
 
-  const parts = [scope, temporal, context, participant, recent, window, fresh]
+  const parts = [scope, temporal, context, participant, recent, window, fresh, resolved]
   const fired = parts.flatMap(p => p.fired)
   const product =
     scope.multiplier *
@@ -652,7 +680,8 @@ export function combineRecallMultipliers(
     participant.multiplier *
     recent.multiplier *
     window.multiplier *
-    fresh.multiplier
+    fresh.multiplier *
+    resolved.multiplier
 
   let boost = 1
   let penalty = 1

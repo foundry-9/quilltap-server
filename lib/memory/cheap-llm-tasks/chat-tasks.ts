@@ -3,6 +3,7 @@
  */
 
 import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
+import { ESTABLISHED_FACT_TRANSCRIPT_RULE, framedEstablishedFactBody } from '@/lib/chat/established-fact'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from './core-execution'
@@ -260,6 +261,7 @@ export type VisibleConversationCandidate = {
   content?: string
   systemKind?: string | null
   systemSender?: string | null
+  isEstablishedFact?: boolean | null
 }
 
 /**
@@ -280,6 +282,12 @@ export function toVisibleConversationMessage(m: VisibleConversationCandidate): C
 
   // Skip entries without content (e.g., context-summary events)
   if (!m.content) return null
+
+  // Established facts, framed in the plain voice — always, because this
+  // output can return into an opaque character's prompt as system block 3.
+  // A machine fact is an input to the scene, so it becomes a user line.
+  const framedFact = framedEstablishedFactBody(m, 'plain')
+  if (framedFact !== null) return { role: 'user', content: framedFact }
 
   // Only include USER and ASSISTANT roles
   const role = (m.role || '').toUpperCase()
@@ -614,7 +622,7 @@ The summary tracks five sections:
 - Open questions: unanswered things in the air. Drop any the new turns answered. Carry forward the rest. Add new ones.
 - Timeline: dated one-liners of specific things that HAPPENED — visits, outings, arrivals, purchases, incidents. Format each line as "- YYYY-MM-DD (narrative: 'in-story time', only if the story runs on its own timeline): what happened, naming place and participants". Dates come from the timestamps on the new turns. APPEND-ONLY: carry forward every prior Timeline line unchanged and add new lines at the bottom. Cap at ~30 lines — when over, merge the OLDEST lines into coarser one-liners (never drop the dates). Standing facts, moods, and decisions do not belong here — only events.
 
-Rewrite the five sections in plain prose (the Timeline as its dated list). Be concise. Don't transcribe — synthesize. Refer to each speaker by the name on their turns. If a turn is labelled only by a role, keep that label; never invent a name for anyone. Output only the five sections under their labels; no preamble, no closing remarks.`
+Rewrite the five sections in plain prose (the Timeline as its dated list). Be concise. Don't transcribe — synthesize. Refer to each speaker by the name on their turns. If a turn is labelled only by a role, keep that label; never invent a name for anyone. ${ESTABLISHED_FACT_TRANSCRIPT_RULE} Output only the five sections under their labels; no preamble, no closing remarks.`
 
 export interface FoldSummaryInput {
   /** The previous running summary, or null when this is the first fold. */

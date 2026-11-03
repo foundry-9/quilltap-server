@@ -78,7 +78,7 @@ jobs:
       # `.next/node_modules/<pkg>-<contenthash>/` and rewrites requires to point
       # there. build-standalone-tarball.mjs strips natives by name from
       # `<staging>/node_modules/<pkg>` and knows nothing about those hashed
-      # copies, so a Linux-built better_sqlite3.node / pty.node rides along
+      # copies, so a Linux SQLite3 Multiple Ciphers driver binary / pty.node rides along
       # inside a tarball that is supposed to be platform-agnostic — and wins
       # resolution over the correct binary the launcher symlinks in.
       #
@@ -167,8 +167,9 @@ jobs:
   # Docker — builds the image from pre-built JS via Dockerfile.ci and pushes it
   # to Docker Hub, one arch per leg.
   #
-  # Native modules (better-sqlite3, sharp, node-pty) are compiled inside
-  # Dockerfile.ci for Debian/glibc — on a NATIVE runner per arch, never QEMU.
+  # Dockerfile.ci installs production modules for Debian/glibc — on a NATIVE
+  # runner per arch, never QEMU. node-pty compiles there; the SQLite3 Multiple Ciphers driver
+  # and sharp ship prebuilt, and the driver is pruned to the runner's arch.
   # ────────────────────────────────────────────────────────────────────────────
   build-docker:
     name: Docker (${{ matrix.arch }})
@@ -211,8 +212,8 @@ jobs:
 
       # GitHub Actions layer cache, scoped per arch so the two legs never
       # clobber each other. What it buys is the expensive layer: Dockerfile.ci's
-      # `npm ci --omit=dev && npm rebuild`, which compiles every native module
-      # from source. NOTE: the GHA cache is ~10 GB repo-wide and evicts LRU, so
+      # `npm ci --omit=dev && npm rebuild`, which compiles node-pty from
+      # source. NOTE: the GHA cache is ~10 GB repo-wide and evicts LRU, so
       # if these images ever crowd out other caches, drop cache-to here first.
       - name: Build and push to primary registry
         uses: docker/build-push-action@v7
@@ -446,6 +447,49 @@ jobs:
       - name: Publish to npm
         working-directory: packages/quilltap
         run: npm publish --tag ${{ steps.dist-tag.outputs.tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # @quilltap/theme-storybook carries its own semver (bumped per change) and
+  # ships a qt-components.css generated from app/styles/qt-components/, so it
+  # publishes here, at release, rather than by hand per change. A version
+  # already on the registry is skipped; the job stands apart from publish-npm
+  # so a storybook failure never holds back the CLI.
+  publish-theme-storybook:
+    name: Publish theme-storybook to npm
+    runs-on: ubuntu-latest
+    needs: create-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup
+        with:
+          install: 'false'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Check whether this version is already published
+        id: check
+        working-directory: packages/theme-storybook
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@quilltap/theme-storybook@${VERSION}" version >/dev/null 2>&1; then
+            echo "@quilltap/theme-storybook@${VERSION} is already published; skipping."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install package dependencies
+        if: steps.check.outputs.publish == 'true'
+        working-directory: packages/theme-storybook
+        run: npm ci
+
+      - name: Publish to npm
+        if: steps.check.outputs.publish == 'true'
+        working-directory: packages/theme-storybook
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

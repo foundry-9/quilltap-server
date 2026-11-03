@@ -75,7 +75,7 @@ quilltap/
 │   ├── brahma-console/       # Brahma: character-less LLM surface + read-only SQL
 │   ├── characters/           # Character services: vault sync, archive/rehydrate, archive-crypto
 │   ├── chat/                 # Salon: context-manager, turn-manager, tool execution
-│   ├── database/             # SQLite/SQLCipher connection management
+│   ├── database/             # SQLite connection management (encrypted)
 │   ├── doc-edit/             # Document Mode core (open / save / rename / delete)
 │   ├── embedding/            # Embedding providers and helpers
 │   ├── encryption.ts         # Crypto primitives
@@ -126,11 +126,9 @@ quilltap/
 │   └── developer/features/   # Feature roadmap (with completed/ subdir)
 ├── docker/                   # Docker configuration (entrypoint script)
 ├── first-startup/            # First-startup helper assets
-├── cicd/                     # CI/CD scripts and deploy helpers
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
 ├── public/                   # Static assets (icons, manifest, schemas)
 ├── website/                  # Website assets (images, splash graphics)
-├── certs/                    # Development TLS certificates
 ├── logs/                     # Application log files (when LOG_OUTPUT includes file)
 ├── Dockerfile                # Production Docker build
 ├── Dockerfile.ci             # CI Docker build
@@ -153,7 +151,7 @@ quilltap/
 ### Prerequisites
 
 - **Node.js 24+** (LTS)
-- **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
+- **SQLite with ChaCha20-Poly1305 encryption** (automatic with better-sqlite3-multiple-ciphers, from SQLite3 Multiple Ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
 - **File storage**: Local filesystem
 
 ### Running Locally
@@ -165,15 +163,12 @@ npm install
 # Build plugins (required before first run)
 npm run build:plugins
 
-# Start the development server with HTTPS
-npm run devssl
-
-# Or plain HTTP
+# Start the development server
 npm run dev
 
 ```
 
-The application will be available at [https://localhost:3000](https://localhost:3000)
+The application will be available at [http://localhost:3000](http://localhost:3000)
 
 ### Running with Docker
 
@@ -224,9 +219,6 @@ npm run test:watch
 
 # Run tests with coverage
 npm run test:coverage
-
-# Run E2E tests with Playwright
-npm run test:e2e
 ```
 
 ### Type Checking
@@ -287,7 +279,7 @@ needs its own `tsconfig.json` extending that base, plus a `typecheck` script.
 
 ### SQLite Database
 
-All application data is stored in SQLite, encrypted at rest using **SQLCipher** (via the `better-sqlite3-multiple-ciphers` driver, aliased as `better-sqlite3` throughout the codebase). Every database file is encrypted on disk — the standard `sqlite3` command-line tool cannot open these files. Use the built-in CLI subcommand instead:
+All application data is stored in SQLite, encrypted at rest using **ChaCha20-Poly1305**, the default cipher of SQLite3 Multiple Ciphers (via the `better-sqlite3-multiple-ciphers` driver, aliased as `better-sqlite3` throughout the codebase). Every database file is encrypted on disk — neither the standard `sqlite3` command-line tool nor `sqlcipher` can open these files. (Some identifiers, such as `applySqlcipherKey`, still say "SQLCipher" for historical reasons.) Use the built-in CLI subcommand instead:
 
 ```bash
 # List tables
@@ -568,6 +560,6 @@ one of those.
 - [Deployment Guide](../DEPLOYMENT.md) - Production deployment patterns
 - [Backup & Restore Guide](../BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](../../plugins/README.md) - Creating plugins
-- [Database Encryption](DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
+- [Database Encryption](DATABASE_ENCRYPTION.md) - ChaCha20-Poly1305 encryption architecture, .dbkey file management, and passphrase handling
 - [Background Jobs Child Process](BACKGROUND_JOBS_CHILD.md) - Child process architecture, IPC protocol, per-database write partitioning, and handler audit
 - [Roadmap](features/ROADMAP.md) - Planned features

@@ -22,6 +22,8 @@ import { chunkDocument } from './chunker';
 import { DocMountPoint } from '@/lib/schemas/mount-index.types';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 import { assertBasePathAvailable } from './base-path-availability';
+import { isEvictedCloudPlaceholder } from '@/lib/files/cloud-placeholder';
+import { walkTree } from '@/lib/files/walk';
 
 const logger = createServiceLogger('MountIndex:Scanner');
 
@@ -31,14 +33,35 @@ export interface ScanResult {
   filesNew: number;
   filesModified: number;
   filesDeleted: number;
+  /**
+   * Files left alone because a cloud-sync provider has evicted them to a
+   * placeholder. Reading one would download it; the index keeps whatever it
+   * had and the watcher catches the file when it comes back.
+   */
+  filesInCloud: number;
   chunksCreated: number;
   errors: string[];
+}
+
+/** A ScanResult with every count at zero, for callers that build one by hand. */
+export function emptyScanResult(mountPointId: string, errors: string[] = []): ScanResult {
+  return {
+    mountPointId,
+    filesScanned: 0,
+    filesNew: 0,
+    filesModified: 0,
+    filesDeleted: 0,
+    filesInCloud: 0,
+    chunksCreated: 0,
+    errors,
+  };
 }
 
 export type ProcessFileOutcome =
   | { status: 'unchanged' }
   | { status: 'unsupported' }
   | { status: 'empty' }
+  | { status: 'in-cloud' }
   | { status: 'new'; chunksCreated: number }
   | { status: 'modified'; chunksCreated: number };
 
@@ -86,60 +109,43 @@ export function matchesPattern(relativePath: string, pattern: string): boolean {
  * @param basePath        - Absolute root path of the mount point
  * @param includePatterns - Glob-like patterns for files to include
  * @param excludePatterns - Glob-like patterns for files/directories to exclude
- * @param currentRelative - Current relative path from basePath (for recursion)
+ * @param currentRelative - Relative folder to start from; default the root
  * @returns Array of { relativePath, absolutePath } for matching files
  */
-async function walkDirectory(
+export async function walkDirectory(
   basePath: string,
   includePatterns: string[],
   excludePatterns: string[],
   currentRelative: string = ''
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
   const results: { relativePath: string; absolutePath: string }[] = [];
-  const currentAbsolute = currentRelative
-    ? path.join(basePath, currentRelative)
-    : basePath;
 
-  let entries;
-  try {
-    entries = await fs.readdir(currentAbsolute, { withFileTypes: true });
-  } catch (err) {
-    logger.warn('Unable to read directory during walk', {
-      path: currentAbsolute,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return results;
-  }
-
-  for (const entry of entries) {
-    const relativePath = currentRelative
-      ? path.join(currentRelative, entry.name)
-      : entry.name;
-
-    // Skip symlinks entirely
-    if (entry.isSymbolicLink()) {
-      continue;
-    }
-
-    // Check exclude patterns against directory/file names
-    if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) {
-      continue;
-    }
-
-    if (entry.isDirectory()) {
-      // Recurse into subdirectories
-      const subResults = await walkDirectory(basePath, includePatterns, excludePatterns, relativePath);
-      results.push(...subResults);
-    } else if (entry.isFile()) {
-      // Check include patterns — file must match at least one
-      if (includePatterns.length === 0 || includePatterns.some(pattern => matchesPattern(relativePath, pattern))) {
-        results.push({
-          relativePath,
-          absolutePath: path.join(basePath, relativePath),
-        });
+  await walkTree(
+    basePath,
+    ({ relativePath, absolutePath, dirent }) => {
+      if (dirent.isSymbolicLink()) return false;
+      // Exclude patterns apply to directory and file names alike
+      if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) return false;
+      if (dirent.isDirectory()) return true;
+      // Include patterns: empty list means "all", otherwise must match one
+      if (
+        dirent.isFile() &&
+        (includePatterns.length === 0 || includePatterns.some(pattern => matchesPattern(relativePath, pattern)))
+      ) {
+        results.push({ relativePath, absolutePath });
       }
-    }
-  }
+      return false;
+    },
+    {
+      from: currentRelative,
+      onReadError: (relativeDir, err) => {
+        logger.warn('Unable to read directory during walk', {
+          path: relativeDir ? path.join(basePath, relativeDir) : basePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      },
+    },
+  );
 
   return results;
 }
@@ -151,6 +157,10 @@ async function walkDirectory(
  *
  * Idempotent: if the on-disk sha256 matches the stored record, returns
  * { status: 'unchanged' } without touching the database.
+ *
+ * A file evicted to a cloud placeholder returns { status: 'in-cloud' } before
+ * anything reads it — hashing it would make iCloud or OneDrive download it.
+ * Its index entry, if any, is left as it was.
  *
  * @param mountPoint   - The mount point this file belongs to
  * @param absolutePath - Full path to the file on disk
@@ -166,6 +176,14 @@ export async function processMountFile(
   const fileType = detectFileType(relativePath);
   if (!fileType) return { status: 'unsupported' };
 
+  const stat = await fs.stat(absolutePath);
+  // No per-file log here: a scan of an iCloud-synced folder meets thousands
+  // of these and rolled the log over several times. scanMountPoint logs one
+  // summary line; the watcher logs its single file.
+  if (isEvictedCloudPlaceholder(stat)) {
+    return { status: 'in-cloud' };
+  }
+
   const sha256 = await computeSha256(absolutePath);
   const existing = await repos.docMountFileLinks.findByMountPointAndPath(
     mountPoint.id,
@@ -175,8 +193,6 @@ export async function processMountFile(
   if (existing && existing.sha256 === sha256) {
     return { status: 'unchanged' };
   }
-
-  const stat = await fs.stat(absolutePath);
 
   const plainText = await convertToPlainText(absolutePath, fileType);
   if (!plainText || plainText.trim().length === 0) {
@@ -289,15 +305,7 @@ export async function updateMountPointTotals(mountPointId: string): Promise<void
  */
 export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanResult> {
   const repos = getRepositories();
-  const result: ScanResult = {
-    mountPointId: mountPoint.id,
-    filesScanned: 0,
-    filesNew: 0,
-    filesModified: 0,
-    filesDeleted: 0,
-    chunksCreated: 0,
-    errors: [],
-  };
+  const result = emptyScanResult(mountPoint.id);
 
   // Database-backed stores have no filesystem to walk. Delegate to
   // rescanDatabaseMountPoint, which re-emits write events so the embedding
@@ -348,7 +356,8 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
     const existingFiles = await repos.docMountFiles.findByMountPointId(mountPoint.id);
     const existingByPath = new Map(existingFiles.map(f => [f.relativePath, f]));
 
-    // 4. Track which paths we see on disk (for stale detection)
+    // 4. Track which paths we see on disk (for stale detection). A cloud
+    //    placeholder counts as seen, so its index entry survives the sweep.
     const seenPaths = new Set<string>();
 
     // 5. Process each file on disk
@@ -363,6 +372,9 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
           case 'unchanged':
             continue;
           case 'empty':
+            continue;
+          case 'in-cloud':
+            result.filesInCloud++;
             continue;
           case 'new':
             result.filesNew++;
@@ -410,9 +422,18 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
       filesNew: result.filesNew,
       filesModified: result.filesModified,
       filesDeleted: result.filesDeleted,
+      filesInCloud: result.filesInCloud,
       chunksCreated: result.chunksCreated,
       errorCount: result.errors.length,
     });
+
+    if (result.filesInCloud > 0) {
+      logger.info('Left cloud-evicted files unread; they are indexed once downloaded', {
+        mountPointId: mountPoint.id,
+        name: mountPoint.name,
+        filesInCloud: result.filesInCloud,
+      });
+    }
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -439,7 +460,7 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
  *
  * @param basePath        - Absolute root path of the mount point
  * @param excludePatterns - Patterns to exclude (same syntax as scanner)
- * @param currentRelative - Internal recursion parameter; leave undefined on first call
+ * @param currentRelative - Relative folder to start from; default the root
  * @returns Array of POSIX-style relative directory paths
  */
 export async function listFilesystemFolders(
@@ -448,39 +469,25 @@ export async function listFilesystemFolders(
   currentRelative = ''
 ): Promise<string[]> {
   const results: string[] = [];
-  const currentAbsolute = currentRelative
-    ? path.join(basePath, currentRelative)
-    : basePath;
 
-  let entries;
-  try {
-    entries = await fs.readdir(currentAbsolute, { withFileTypes: true });
-  } catch (err) {
-    logger.warn('Unable to read directory while listing mount folders', {
-      path: currentAbsolute,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return results;
-  }
-
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) continue;
-    if (!entry.isDirectory()) continue;
-
-    const relativeNative = currentRelative
-      ? path.join(currentRelative, entry.name)
-      : entry.name;
-
-    if (excludePatterns.some(pattern => matchesPattern(relativeNative, pattern))) {
-      continue;
-    }
-
-    const relativePosix = relativeNative.split(path.sep).join('/');
-    results.push(relativePosix);
-
-    const sub = await listFilesystemFolders(basePath, excludePatterns, relativeNative);
-    results.push(...sub);
-  }
+  await walkTree(
+    basePath,
+    ({ relativePath, dirent }) => {
+      if (dirent.isSymbolicLink() || !dirent.isDirectory()) return false;
+      if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) return false;
+      results.push(relativePath.split(path.sep).join('/'));
+      return true;
+    },
+    {
+      from: currentRelative,
+      onReadError: (relativeDir, err) => {
+        logger.warn('Unable to read directory while listing mount folders', {
+          path: relativeDir ? path.join(basePath, relativeDir) : basePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      },
+    },
+  );
 
   return results;
 }

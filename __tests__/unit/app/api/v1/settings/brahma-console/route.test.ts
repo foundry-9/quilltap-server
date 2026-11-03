@@ -88,6 +88,27 @@ describe('PUT', () => {
     expect(setSettings).toHaveBeenCalledWith({ maxAgentTurns: 120 });
   });
 
+  it('saving the inline profile keeps the turn budget, and vice versa', async () => {
+    const PROFILE = '11111111-1111-4111-8111-111111111111';
+    getSettings.mockResolvedValue({ maxAgentTurns: 120 });
+    await PUT(req({ inlineConnectionProfileId: PROFILE }));
+    expect(setSettings).toHaveBeenLastCalledWith({ maxAgentTurns: 120, inlineConnectionProfileId: PROFILE });
+
+    getSettings.mockResolvedValue({ maxAgentTurns: 120, inlineConnectionProfileId: PROFILE });
+    await PUT(req({ maxAgentTurns: 90 }));
+    expect(setSettings).toHaveBeenLastCalledWith({ maxAgentTurns: 90, inlineConnectionProfileId: PROFILE });
+
+    await PUT(req({ inlineConnectionProfileId: null }));
+    expect(setSettings).toHaveBeenLastCalledWith({ maxAgentTurns: 120, inlineConnectionProfileId: null });
+  });
+
+  it('rejects an inline profile id that is not a UUID', async () => {
+    const res = await PUT(req({ inlineConnectionProfileId: 'not-a-uuid' }));
+
+    expect(res.status).toBe(400);
+    expect(setSettings).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['below the minimum', 4],
     ['above the maximum', 201],

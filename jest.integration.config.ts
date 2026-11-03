@@ -38,7 +38,6 @@ const config: Config = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
-    String.raw`\.spec\.ts$`, // Exclude Playwright spec files
   ],
   modulePathIgnorePatterns: [
     '/.next/',

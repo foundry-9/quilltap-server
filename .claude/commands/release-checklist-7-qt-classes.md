@@ -18,7 +18,7 @@ git diff --name-only "${LAST_TAG}"..HEAD -- 'app/**/*.tsx' 'components/**/*.tsx'
    git diff "${LAST_TAG}"..HEAD -- '*.tsx' | grep -nE '^\+.*className=' | grep -vE 'qt-'
    ```
 2. For each, either apply an existing `qt-*` utility or, if none fits, add a new `qt-*` utility and use it.
-3. **Propagate significant `qt-*` changes** (per CLAUDE.md): the stylebook, [theme-storybook](../../packages/theme-storybook), possibly [create-quilltap-theme](../../packages/create-quilltap-theme), and the bundled themes in `themes/bundled/`.
+3. **Propagate significant `qt-*` changes** (per CLAUDE.md): the stylebook, [theme-storybook](../../packages/theme-storybook) (its `qt-components.css` is generated — `npm run generate:storybook-css`, then bump its patch version), possibly [create-quilltap-theme](../../packages/create-quilltap-theme), and the bundled themes in `themes/bundled/`.
 4. Remember the deliberate exception: don't swap `<img>` for Next.js `<Image>` — that's intentional where sources come from APIs Next can't pre-resolve.
 5. Verify: `npx tsc` and a quick visual check via the dev server preview if layout/theming changed.
 

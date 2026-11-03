@@ -101,6 +101,36 @@ describe('validateConsolidationOutput', () => {
     expect(validateConsolidationOutput(null, handles).ok).toBe(false)
   })
 
+  it('keeps resolvedIds that name inputs, whether bound or standalone, and defaults them empty', () => {
+    const result = validateConsolidationOutput(
+      { digests: [digest(['m1', 'm2'])], keepStandalone: ['m3'], resolvedIds: ['m1', 'm3', 'm1'] },
+      handles,
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.resolvedIds).toEqual(['m1', 'm3'])
+
+    const none = validateConsolidationOutput({ digests: [digest(['m1'])] }, handles)
+    expect(none.ok && none.value.resolvedIds).toEqual([])
+  })
+
+  it('drops resolvedIds that name unknown handles without failing the cluster', () => {
+    const result = validateConsolidationOutput(
+      { digests: [digest(['m1', 'm2'])], resolvedIds: ['m2', 'm9'] },
+      handles,
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.resolvedIds).toEqual(['m2'])
+  })
+
+  it('the binder is told to bind an offense with its repair and never imply one', () => {
+    expect(CONSOLIDATION_SYSTEM_PROMPT).toMatch(/An offense and its later repair are one thread/)
+    expect(CONSOLIDATION_SYSTEM_PROMPT).toMatch(/leads with the resolution/)
+    expect(CONSOLIDATION_SYSTEM_PROMPT).toMatch(/If no repair appears\s+in the notes, do not imply one/)
+    expect(CONSOLIDATION_SYSTEM_PROMPT).toMatch(/"resolvedIds"/)
+  })
+
   it('drops contradictions that name unknown handles', () => {
     const result = validateConsolidationOutput(
       {

@@ -15,6 +15,13 @@
  * its `Wardrobe/` folder when missing, and is for callers about to write. A
  * read probe passes `false` and gets null for a store that doesn't exist yet.
  *
+ * Every write through a location that changes something publishes the
+ * `wardrobe` realtime topic once it lands, so an open wardrobe browser
+ * re-reads whoever made the change (the operator in another window, a
+ * character's `wardrobe_*` tool, Pascal). In the job child the publish is a
+ * no-op and the commit hook names the topic instead
+ * (`lib/realtime/job-topics.ts`).
+ *
  * The archived-character tombstone stays where it lives
  * (`resolveWardrobeMount` throws `CharacterArchivedError`): an archived
  * character's location still reads, but every write through it — and
@@ -28,7 +35,7 @@
 
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
+import { publishRealtime } from '@/lib/realtime/bus';
 import {
   createFolderInMount,
   createInMount,
@@ -42,8 +49,9 @@ import {
   updateManyInMount,
   type WardrobeMount,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
-import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe';
+import type { ItemFolderLocation } from '@/lib/mount-index/item-folder-location';
+import { groupMountsFor, groupOriginMap, resolveOwnerStore } from '@/lib/mount-index/reach';
+import { SHARED_WARDROBE_FOLDER } from '@/lib/mount-index/shared-wardrobe';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { resolveWardrobeFolder, type WardrobeFolder } from '@/lib/wardrobe/folders';
@@ -56,14 +64,12 @@ import {
 export const WardrobeScopeSchema = z.enum(['character', 'group', 'project', 'general']);
 export type WardrobeScope = z.infer<typeof WardrobeScopeSchema>;
 
-export interface WardrobeLocation {
+/**
+ * One wardrobe tier's `Wardrobe/` folder: the shared folder half
+ * (`ItemFolderLocation`) plus the wardrobe's item reads and writes.
+ */
+export interface WardrobeLocation extends ItemFolderLocation {
   scope: WardrobeScope;
-  /** Owner id; null for General. */
-  id: string | null;
-  /** The mount holding the `Wardrobe/` folder — always set, every tier. */
-  mountPointId: string;
-  /** The owning character — `character` scope only. */
-  characterId: string | null;
   /** What a collection read tags this tier's items with. */
   origin: WardrobeOrigin;
   /** Every item in the folder; archived ones only when asked. */
@@ -82,26 +88,7 @@ export interface WardrobeLocation {
     opts?: { requireAll?: boolean },
   ): Promise<WardrobeItem[]>;
   delete(id: string): Promise<boolean>;
-  /** Every folder under `Wardrobe/` (empty ones included), with direct item counts. */
   listFolders(): Promise<WardrobeFolder[]>;
-  /**
-   * Resolve an operator's requested folder against this wardrobe's folders
-   * (`resolveWardrobeFolder`): an existing folder as stored, else the new
-   * part normalised. Throws `WardrobeFolderPathError`.
-   */
-  resolveFolder(requested: string): Promise<string>;
-  /** Create a folder (normalised path); an existing one in any casing is answered. */
-  createFolder(path: string): Promise<WardrobeFolder>;
-  /** Rename a folder in place to `newName` (one normalised segment). */
-  renameFolder(path: string, newName: string): Promise<WardrobeFolder>;
-  /** Delete a folder, sending its items and subfolders up to its parent. */
-  deleteFolder(path: string): Promise<{ movedItems: number; movedFolders: number; parent: string }>;
-  /**
-   * The mount, checked for writing: throws `CharacterArchivedError` for an
-   * archived character. For writers that reach the folder without going
-   * through create/update/delete (dressing instructions, item pictures).
-   */
-  writableMountPointId(): Promise<string>;
 }
 
 export interface ResolveWardrobeLocationOptions {
@@ -109,10 +96,7 @@ export interface ResolveWardrobeLocationOptions {
   ensure?: boolean;
 }
 
-/** A key that names one folder, for "same source and destination?" checks. */
-export function locationKey(loc: Pick<WardrobeLocation, 'scope' | 'mountPointId'>): string {
-  return `${loc.scope}:${loc.mountPointId}`;
-}
+export { locationKey } from '@/lib/mount-index/item-folder-location';
 
 /**
  * Build a location over a folder. Writes re-resolve a character's mount at
@@ -130,8 +114,31 @@ export function locationForMount(
     return current;
   };
 
+  /**
+   * Run a write against the current writable mount, then tell the open
+   * browsers — only when something landed (`landed`, default always; a batch
+   * or delete that matched nothing changed nothing).
+   */
+  const write = async <T>(
+    op: string,
+    fn: (target: WardrobeMount) => Promise<T>,
+    landed: (result: T) => boolean = () => true,
+  ): Promise<T> => {
+    const result = await fn(await writableMount());
+    const changed = landed(result);
+    if (changed) publishRealtime('wardrobe');
+    logger.debug('[WardrobeLocation] Location write', {
+      op,
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      published: changed,
+      context: 'wardrobe',
+    });
+    return result;
+  };
+
   // Identity and timestamps are the writer's, never a patch's.
-  const updateMany: WardrobeLocation['updateMany'] = async (patches, opts) => {
+  const updateMany: WardrobeLocation['updateMany'] = (patches, opts) => {
     const cleaned = patches.map(({ id: itemId, patch }) => {
       const rest = { ...patch };
       delete rest.id;
@@ -139,7 +146,7 @@ export function locationForMount(
       delete rest.updatedAt;
       return { id: itemId, patch: rest };
     });
-    return updateManyInMount(await writableMount(), cleaned, opts);
+    return write('updateMany', (target) => updateManyInMount(target, cleaned, opts), (updated) => updated.length > 0);
   };
 
   return {
@@ -155,17 +162,13 @@ export function locationForMount(
     async findItem(itemId) {
       return (await readMountItems(mount)).find((item) => item.id === itemId) ?? null;
     },
-    async create(item) {
-      return createInMount(await writableMount(), item);
-    },
+    create: (item) => write('create', (target) => createInMount(target, item)),
     async update(itemId, patch) {
       const [updated] = await updateMany([{ id: itemId, patch }]);
       return updated ?? null;
     },
     updateMany,
-    async delete(itemId) {
-      return deleteInMount(await writableMount(), itemId);
-    },
+    delete: (itemId) => write('delete', (target) => deleteInMount(target, itemId), (deleted) => deleted),
     async listFolders() {
       return listFoldersInMount(mount);
     },
@@ -173,15 +176,9 @@ export function locationForMount(
       if (!requested || !requested.trim()) return '';
       return resolveWardrobeFolder(await listFolderPathsInMount(mount), requested);
     },
-    async createFolder(path) {
-      return createFolderInMount(await writableMount(), path);
-    },
-    async renameFolder(path, newName) {
-      return renameFolderInMount(await writableMount(), path, newName);
-    },
-    async deleteFolder(path) {
-      return deleteFolderInMount(await writableMount(), path);
-    },
+    createFolder: (path) => write('createFolder', (target) => createFolderInMount(target, path)),
+    renameFolder: (path, newName) => write('renameFolder', (target) => renameFolderInMount(target, path, newName)),
+    deleteFolder: (path) => write('deleteFolder', (target) => deleteFolderInMount(target, path)),
     async writableMountPointId() {
       return (await writableMount()).mountPointId;
     },
@@ -220,69 +217,36 @@ async function resolve(
   userId: string,
   ensure: boolean,
 ): Promise<WardrobeLocation | null> {
-  if (scope === 'general') {
-    const mountPointId = await getGeneralMountPointId();
-    if (!mountPointId) return null;
-    if (ensure) await ensureSharedWardrobeFolder(mountPointId);
+  const store = await resolveOwnerStore(scope, id, repos, userId, {
+    ensure: ensure ? { folder: SHARED_WARDROBE_FOLDER, onFolderFailure: 'swallow' } : undefined,
+    archived: 'allow',
+    context: 'wardrobe',
+  });
+  if (!store) return null;
+  if (store.scope === 'general') {
     return locationForMount(
-      { mountPointId, scope: 'general', characterId: null },
+      { mountPointId: store.mountPointId, scope: 'general', characterId: null },
       null,
       GENERAL_WARDROBE_ORIGIN,
     );
   }
-
-  if (!id) return null;
-
-  if (scope === 'character') {
-    const character = await repos.characters.findByIdRaw(id);
-    if (!character || character.userId !== userId) return null;
-    const mountPointId = character.characterDocumentMountPointId;
-    if (!mountPointId) return null;
-    return locationForMount(
-      { mountPointId, scope: 'character', characterId: character.id },
-      character.id,
-      { scope: 'character', id: character.id, name: character.name },
-    );
-  }
-
-  const owner =
-    scope === 'project' ? await repos.projects.findById(id) : await repos.groups.findById(id);
-  if (!owner) return null;
-  const name = owner.name || (scope === 'project' ? 'Project' : 'Group');
-
-  let mountPointId: string | null = null;
-  if (ensure) {
-    const ensured = await ensureOwnerOfficialStore(scope, owner.id, name);
-    if (!ensured) return null;
-    mountPointId = ensured.mountPointId;
-    await ensureSharedWardrobeFolder(mountPointId);
-  } else {
-    mountPointId = owner.officialMountPointId ?? null;
-  }
-  if (!mountPointId) return null;
-
+  const ownerId = store.owner.id as string;
   return locationForMount(
-    { mountPointId, scope, characterId: null },
-    owner.id,
-    { scope, id: owner.id, name: owner.name },
+    { mountPointId: store.mountPointId, scope: store.scope, characterId: store.scope === 'character' ? ownerId : null },
+    ownerId,
+    { scope: store.scope, id: ownerId, name: store.owner.name },
   );
 }
 
 /**
  * Every group store a character can wear from, as locations — one per mount,
- * each tagged with its group's origin, in the order the group tier shadows
- * (later wins). The read probe the transfer route and the pool both use.
+ * each tagged with its group's origin, strongest first (membership order; the
+ * first group to claim a shared store keeps it). The read probe the transfer
+ * route uses.
  */
 export async function groupLocationsForCharacter(characterId: string): Promise<WardrobeLocation[]> {
-  const { resolveGroupMountsForCharacter } = await import('@/lib/mount-index/tiered-mount-pool');
-  const groups = await resolveGroupMountsForCharacter(characterId);
-  return groups.flatMap(({ group, mountPointIds }) =>
-    mountPointIds.map((mountPointId) =>
-      locationForMount(
-        { mountPointId, scope: 'group', characterId: null },
-        group.id,
-        { scope: 'group', id: group.id, name: group.name },
-      ),
-    ),
+  const origins = groupOriginMap(await groupMountsFor(characterId));
+  return Array.from(origins, ([mountPointId, origin]) =>
+    locationForMount({ mountPointId, scope: 'group', characterId: null }, origin.id, origin),
   );
 }

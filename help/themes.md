@@ -207,6 +207,18 @@ Themes provide colors for both modes:
 
 When you switch your color mode, the same theme's colors for that mode apply automatically.
 
+### Legibility under every lamp
+
+Every bundled theme is held to the same standard of legibility (WCAG 2.2 AA) in
+each of its modes: ordinary text stands at least 4.5 times brighter (or darker)
+than whatever it sits upon, and a focus ring at least three times. Where a theme
+paints a row in its **Accent** colour on hover — a settings toggle, a storyteller
+mode, a dialog's close cross — the words upon it change to the accent's own
+partner colour, so a gilded Art Deco or Great Estate highlight never swallows
+the label it is meant to flatter. Secondary text inside a notice (a warning, an
+error, a bit of good news) takes the notice's own colour, and any link within it
+is underlined rather than left to be told apart by hue alone.
+
 ### Typography
 
 Themes specify:

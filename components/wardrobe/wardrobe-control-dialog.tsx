@@ -24,26 +24,13 @@
  * @module components/wardrobe/wardrobe-control-dialog
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/query/keys'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useCallback, useMemo, useState } from 'react'
 import { useWardrobeDialog } from '@/components/providers/wardrobe-dialog-provider'
-import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast } from '@/lib/toast'
-import { showConfirmation } from '@/lib/alert'
-import { useClickOutside } from '@/hooks/useClickOutside'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { useChatOutfit } from '@/lib/hooks/use-outfit'
 import { addToSlotGesture, wearGesture } from '@/lib/wardrobe/staged-live-outfits'
 import { wearRefusal } from '@/lib/wardrobe/wearable'
-import {
-  GENERAL_CONTAINER,
-  GENERAL_WARDROBE_NAME,
-  decodeWardrobeContainer,
-  encodeWardrobeContainer,
-  type WardrobeContainer,
-} from '@/lib/wardrobe/wardrobe-container'
 import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { OutfitComposer } from './outfit-composer'
@@ -57,65 +44,10 @@ import { OutfitHistoryTab } from './outfit-history-tab'
 import { useFittingRoom } from './hooks/useFittingRoom'
 import { useComposerHandlers } from './hooks/useComposerHandlers'
 import { usePronounGuidanceFilter } from '@/lib/hooks/use-pronoun-guidance-filter'
-
-interface CharacterSummary {
-  id: string
-  name: string
-  avatarUrl?: string | null
-}
-
-/** A project or group offered as a browsable shared wardrobe container. */
-interface ContainerSummary {
-  id: string
-  name: string
-}
+import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
+import { ItemControlDialogShell, useItemControlState } from '@/components/item-browser/ItemControlDialogShell'
 
 type RightTab = 'live' | 'builder' | 'history'
-
-const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name)
-
-/**
- * Every place a wardrobe item can live, for the container selector: the
- * characters, projects and groups lists, read through their shared keys.
- */
-function useWardrobeCatalogue() {
-  const characters = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters?: CharacterSummary[] }>('/api/v1/characters', { signal }),
-  })
-  const projects = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ projects?: ContainerSummary[] }>('/api/v1/projects', { signal }),
-  })
-  const groups = useQuery({
-    queryKey: queryKeys.groups.list(),
-    queryFn: ({ signal }) => apiFetch<{ groups?: ContainerSummary[] }>('/api/v1/groups', { signal }),
-  })
-  return {
-    characters: useMemo(
-      () => [...(characters.data?.characters ?? [])].sort(byName),
-      [characters.data],
-    ),
-    /** Settled (successfully or not) — the auto-selection waits for this. */
-    charactersSettled: characters.isFetched,
-    projects: useMemo(
-      () =>
-        (projects.data?.projects ?? [])
-          .map((p) => ({ id: p.id, name: p.name || 'Untitled project' }))
-          .sort(byName),
-      [projects.data],
-    ),
-    groups: useMemo(
-      () =>
-        (groups.data?.groups ?? [])
-          .map((g) => ({ id: g.id, name: g.name || 'Untitled group' }))
-          .sort(byName),
-      [groups.data],
-    ),
-  }
-}
 
 /**
  * Wrapper component used by the layout. Reads context from the provider and
@@ -158,48 +90,6 @@ interface InnerProps {
   asTab?: boolean
 }
 
-/**
- * Renders the wardrobe body inside the floating `BaseModal` (dialog) or bare in
- * a scrollable container (workspace tab). Keeps the wardrobe logic in one place.
- */
-function WardrobeShell({
-  asTab,
-  onClose,
-  footer,
-  closeOnClickOutside,
-  closeOnEscape,
-  children,
-}: {
-  asTab?: boolean
-  onClose: () => void
-  footer: React.ReactNode
-  closeOnClickOutside: boolean
-  closeOnEscape: boolean
-  children: React.ReactNode
-}) {
-  if (asTab) {
-    return (
-      <div className="qt-wardrobe-tab flex flex-col h-full min-h-0 overflow-y-auto p-4">
-        {children}
-      </div>
-    )
-  }
-  return (
-    <BaseModal
-      isOpen
-      onClose={onClose}
-      title="Wardrobe"
-      maxWidth="4xl"
-      showCloseButton
-      closeOnClickOutside={closeOnClickOutside}
-      closeOnEscape={closeOnEscape}
-      footer={footer}
-    >
-      {children}
-    </BaseModal>
-  )
-}
-
 function WardrobeControlDialogInner({
   initialCharacterId,
   chatId,
@@ -207,26 +97,13 @@ function WardrobeControlDialogInner({
   asTab = false,
 }: InnerProps) {
   const isInChat = chatId !== null
-  const catalogue = useWardrobeCatalogue()
-
   // Which wardrobe is being browsed: a character's merged view, or one shared
-  // container (Quilltap General, a project, a group) edited in place. With
-  // nothing chosen, the first character — or General on a characterless
-  // instance — once the character list has settled.
-  const [chosenContainer, setChosenContainer] = useState<WardrobeContainer | null>(
+  // container (Quilltap General, a project, a group) edited in place.
+  const state = useItemControlState(
+    'wardrobe',
     initialCharacterId ? { scope: 'character', id: initialCharacterId } : null,
   )
-  const firstCharacterId = catalogue.characters[0]?.id ?? null
-  const selectedContainer = useMemo<WardrobeContainer | null>(
-    () =>
-      chosenContainer ??
-      (catalogue.charactersSettled
-        ? firstCharacterId
-          ? { scope: 'character', id: firstCharacterId }
-          : GENERAL_CONTAINER
-        : null),
-    [chosenContainer, catalogue.charactersSettled, firstCharacterId],
-  )
+  const { catalogue, container: selectedContainer, containerLabel: selectedContainerLabel, requestConfirmation } = state
   const isCharacterScope = selectedContainer?.scope === 'character'
   const selectedCharacterId = isCharacterScope ? selectedContainer.id : null
 
@@ -244,24 +121,9 @@ function WardrobeControlDialogInner({
   const pronounFilter = usePronounGuidanceFilter(selectedCharacterId)
   const pickableItems = useMemo(() => pronounFilter.offer(items), [pronounFilter, items])
 
-  // True while an imperative confirmation dialog is up. That dialog renders
-  // into document.body (outside this modal), so a click on its buttons would
-  // otherwise read as a click outside the wardrobe and close it the instant
-  // you confirm. Every confirmation goes through `requestConfirmation`.
-  const [confirming, setConfirming] = useState(false)
-  const requestConfirmation = useCallback(async (message: string): Promise<boolean> => {
-    setConfirming(true)
-    try {
-      return await showConfirmation(message)
-    } finally {
-      setConfirming(false)
-    }
-  }, [])
-
   const actions = useWardrobeItemActions({
     container: selectedContainer,
     chatId,
-    listItems: data.listItems,
     requestConfirmation,
   })
 
@@ -315,14 +177,6 @@ function WardrobeControlDialogInner({
   })
 
   const [rightTab, setRightTab] = useState<RightTab>(isInChat ? 'live' : 'builder')
-  const [resetMenuOpen, setResetMenuOpen] = useState(false)
-  const resetMenuRef = useRef<HTMLDivElement>(null)
-  const closeResetMenu = useCallback(() => setResetMenuOpen(false), [])
-  useClickOutside(resetMenuRef, closeResetMenu, {
-    enabled: resetMenuOpen,
-    onEscape: closeResetMenu,
-    escapeCapture: true,
-  })
   const [importFromImageOpen, setImportFromImageOpen] = useState(false)
 
   /**
@@ -377,106 +231,48 @@ function WardrobeControlDialogInner({
     [catalogue.characters, selectedCharacterId],
   )
 
-  /** Display name of the browsed container, for the editor's pinned note. */
-  const selectedContainerLabel = useMemo(() => {
-    if (!selectedContainer) return ''
-    switch (selectedContainer.scope) {
-      case 'character':
-        return selectedCharacter?.name ?? ''
-      case 'general':
-        return GENERAL_WARDROBE_NAME
-      case 'project':
-        return catalogue.projects.find((p) => p.id === selectedContainer.id)?.name ?? 'This project'
-      case 'group':
-        return catalogue.groups.find((g) => g.id === selectedContainer.id)?.name ?? 'This group'
-    }
-  }, [selectedContainer, selectedCharacter, catalogue.projects, catalogue.groups])
-
   // While an overlay is up, a click inside it (rendered as a sibling) must not
   // close the outer dialog via BaseModal's click-outside handler.
   const overlayOpen = actions.overlayOpen || importFromImageOpen
 
   return (
-    <>
-      <WardrobeShell
-        asTab={asTab}
-        onClose={requestClose}
-        closeOnClickOutside={!overlayOpen && !confirming}
-        closeOnEscape={!overlayOpen && !confirming}
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <button type="button" onClick={requestClose} className="qt-button-secondary qt-button-sm">
-              Done
-            </button>
-          </div>
-        }
-      >
-        {/* Container selector — every place a wardrobe item can live gets an
-            entry: characters, Quilltap General, projects, and groups. */}
-        <div className="flex flex-col gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <label htmlFor="wardrobe-container-select" className="text-sm qt-text-secondary">
-              Wardrobe:
-            </label>
-            {selectedCharacter?.avatarUrl && (
-              <img
-                src={selectedCharacter.avatarUrl}
-                alt=""
-                className="w-6 h-6 rounded-full object-cover qt-bg-muted border qt-border-default flex-shrink-0"
-              />
-            )}
-            <select
-              id="wardrobe-container-select"
-              className="qt-select flex-1 max-w-md"
-              value={selectedContainer ? encodeWardrobeContainer(selectedContainer) : ''}
-              onChange={(e) => setChosenContainer(decodeWardrobeContainer(e.target.value))}
-            >
-              {!selectedContainer && (
-                <option value="" disabled>
-                  Select a wardrobe
-                </option>
-              )}
-              {catalogue.characters.length > 0 && (
-                <optgroup label="Characters">
-                  {catalogue.characters.map((c) => (
-                    <option key={c.id} value={encodeWardrobeContainer({ scope: 'character', id: c.id })}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              <optgroup label="General">
-                <option value={encodeWardrobeContainer(GENERAL_CONTAINER)}>{GENERAL_WARDROBE_NAME}</option>
-              </optgroup>
-              {catalogue.projects.length > 0 && (
-                <optgroup label="Projects">
-                  {catalogue.projects.map((p) => (
-                    <option key={p.id} value={encodeWardrobeContainer({ scope: 'project', id: p.id })}>
-                      {p.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {catalogue.groups.length > 0 && (
-                <optgroup label="Groups">
-                  {catalogue.groups.map((g) => (
-                    <option key={g.id} value={encodeWardrobeContainer({ scope: 'group', id: g.id })}>
-                      {g.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </div>
-          {!isCharacterScope && selectedContainer && (
-            <p className="qt-text-xs qt-text-secondary px-1">
-              Browsing a shared wardrobe — items here can be worn by every character who can
-              reach this {selectedContainer.scope === 'general' ? 'library' : selectedContainer.scope}.
-              Edit, duplicate, or delete them freely; pick a character above to dress someone.
-            </p>
+    <ItemControlDialogShell
+      kind="wardrobe"
+      state={state}
+      asTab={asTab}
+      onClose={requestClose}
+      overlayOpen={overlayOpen}
+      selectAdornment={
+        selectedCharacter?.avatarUrl && (
+          <img
+            src={selectedCharacter.avatarUrl}
+            alt=""
+            className="w-6 h-6 rounded-full object-cover qt-bg-muted border qt-border-default flex-shrink-0"
+          />
+        )
+      }
+      overlays={
+        <>
+          {/* Import-from-image modal — stacked on top of the dialog */}
+          {importFromImageOpen && selectedCharacterId && (
+            <ImportFromImageModal
+              characterId={selectedCharacterId}
+              onClose={() => setImportFromImageOpen(false)}
+              onImported={() => {
+                void actions.refresh()
+              }}
+            />
           )}
-        </div>
 
+          <WardrobeItemOverlays
+            container={selectedContainer}
+            containerLabel={selectedContainerLabel}
+            data={data}
+            actions={actions}
+          />
+        </>
+      }
+    >
         {/* Optional dressing instructions for this container — consulted when
             a character chooses their own opening outfit; nearest tier wins. */}
         <WardrobeInstructionsSection container={selectedContainer} />
@@ -513,6 +309,7 @@ function WardrobeControlDialogInner({
                   <button
                     type="button"
                     onClick={() => setRightTab('live')}
+                  aria-pressed={rightTab === 'live'}
                     className={`qt-tab ${rightTab === 'live' ? 'qt-tab-active' : ''}`}
                   >
                     Live outfit
@@ -526,6 +323,7 @@ function WardrobeControlDialogInner({
                 <button
                   type="button"
                   onClick={() => setRightTab('builder')}
+                  aria-pressed={rightTab === 'builder'}
                   className={`qt-tab ${rightTab === 'builder' ? 'qt-tab-active' : ''}`}
                 >
                   Outfit Builder
@@ -534,6 +332,7 @@ function WardrobeControlDialogInner({
                   <button
                     type="button"
                     onClick={() => setRightTab('history')}
+                  aria-pressed={rightTab === 'history'}
                     className={`qt-tab ${rightTab === 'history' ? 'qt-tab-active' : ''}`}
                   >
                     History
@@ -587,68 +386,15 @@ function WardrobeControlDialogInner({
                         Try on
                       </button>
                     )}
-                    <div className="relative" ref={resetMenuRef}>
-                      <button
-                        type="button"
-                        onClick={() => setResetMenuOpen((v) => !v)}
-                        className="qt-button-ghost qt-button-sm"
-                        aria-haspopup="menu"
-                        aria-expanded={resetMenuOpen}
-                        title="Reset the staged composition"
-                      >
-                        Reset…
-                      </button>
-                      {resetMenuOpen && (
-                        <div
-                          role="menu"
-                          className="absolute left-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
-                        >
-                          <ul className="divide-y qt-border-default">
-                            {isInChat && (
-                              <li>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setResetMenuOpen(false)
-                                    void fitting.resetToWorn()
-                                  }}
-                                  className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                                >
-                                  Reset to worn
-                                </button>
-                              </li>
-                            )}
-                            <li>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setResetMenuOpen(false)
-                                  void fitting.resetToDefaults()
-                                }}
-                                className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
-                              >
-                                Reset to defaults
-                              </button>
-                            </li>
-                            <li>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setResetMenuOpen(false)
-                                  void fitting.clearAll()
-                                }}
-                                className="block w-full text-left px-3 py-2 text-sm qt-text-secondary hover:qt-bg-muted"
-                              >
-                                Clear all
-                              </button>
-                            </li>
-                          </ul>
-                        </div>
-                      )}
-                    </div>
+                    <ItemActionMenu
+                      label="Reset the staged composition"
+                      trigger={{ content: 'Reset…' }}
+                      entries={[
+                        isInChat && { key: 'reset-worn', label: 'Reset to worn', onSelect: () => void fitting.resetToWorn() },
+                        { key: 'reset-defaults', label: 'Reset to defaults', onSelect: () => void fitting.resetToDefaults() },
+                        { key: 'clear-all', label: 'Clear all', onSelect: () => void fitting.clearAll() },
+                      ]}
+                    />
                   </div>
                   <OutfitComposer
                     items={items}
@@ -670,25 +416,6 @@ function WardrobeControlDialogInner({
             </section>
           )}
         </div>
-      </WardrobeShell>
-
-      {/* Import-from-image modal — stacked on top of the dialog */}
-      {importFromImageOpen && selectedCharacterId && (
-        <ImportFromImageModal
-          characterId={selectedCharacterId}
-          onClose={() => setImportFromImageOpen(false)}
-          onImported={() => {
-            void actions.refresh()
-          }}
-        />
-      )}
-
-      <WardrobeItemOverlays
-        container={selectedContainer}
-        containerLabel={selectedContainerLabel}
-        data={data}
-        actions={actions}
-      />
-    </>
+    </ItemControlDialogShell>
   )
 }

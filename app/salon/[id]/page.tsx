@@ -11,8 +11,17 @@
 import { SalonView } from './SalonView'
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
-export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ChatPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ msg?: string | string[] }>
+}) {
   const { id } = await params
-  redirectToWorkspaceTab('salon', { chatId: id })
-  return <SalonView chatId={id} />
+  // `?msg=<messageId>` — a Message search result: open scrolled to that message.
+  const { msg } = await searchParams
+  const revealMessageId = typeof msg === 'string' && msg ? msg : undefined
+  redirectToWorkspaceTab('salon', { chatId: id, msg: revealMessageId })
+  return <SalonView chatId={id} revealMessageId={revealMessageId} />
 }

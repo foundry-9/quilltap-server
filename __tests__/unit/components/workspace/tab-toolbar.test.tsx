@@ -21,12 +21,22 @@ import {
   WorkspaceToolbarBridge,
 } from '@/components/workspace/tab-toolbar'
 
-/** A surface that injects left toolbar content, like SalonView does. */
+/** A surface that injects left toolbar content (and a conversation search
+ *  source named after it), like SalonView does. */
 function LeftInjector({ text }: { text: string }) {
-  const { setLeftContent } = usePageToolbar()
+  const { setLeftContent, setConversationSearch } = usePageToolbar()
   useEffect(() => {
     setLeftContent(<span>{text}</span>)
   }, [text, setLeftContent])
+  useEffect(() => {
+    setConversationSearch({
+      chatId: text,
+      search: () => ({ matches: [], total: 0 }),
+      reveal: () => {},
+      setHighlight: () => {},
+    })
+    return () => setConversationSearch(null)
+  }, [text, setConversationSearch])
   return null
 }
 
@@ -47,8 +57,13 @@ function MiniHost() {
 
 /** Mimics the single global PageToolbar reading the global context. */
 function GlobalHeader() {
-  const { leftContent } = usePageToolbar()
-  return <div data-testid="global-header">{leftContent}</div>
+  const { leftContent, conversationSearch } = usePageToolbar()
+  return (
+    <>
+      <div data-testid="global-header">{leftContent}</div>
+      <div data-testid="global-search-source">{conversationSearch?.chatId ?? ''}</div>
+    </>
+  )
 }
 
 function Controls() {
@@ -135,5 +150,20 @@ describe('focus-driven toolbar bridge', () => {
     // ...and focusing back onto the Aurora pane restores it.
     fireEvent.click(screen.getByText('focus-right'))
     expect(header().getByText('hdr:Characters')).toBeInTheDocument()
+  })
+
+  it('hands the search bar the focused tab\'s conversation search source', () => {
+    renderBridge()
+    const source = () => screen.getByTestId('global-search-source')
+
+    fireEvent.click(screen.getByText('open-aurora'))
+    expect(source()).toHaveTextContent('hdr:Characters')
+
+    fireEvent.click(screen.getByText('open-prospero'))
+    expect(source()).toHaveTextContent('hdr:Projects')
+
+    // A tab that offers no source leaves the search bar with none.
+    fireEvent.click(screen.getByText('activate-home'))
+    expect(source()).toBeEmptyDOMElement()
   })
 })

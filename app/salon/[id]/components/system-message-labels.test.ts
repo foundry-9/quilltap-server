@@ -92,6 +92,14 @@ describe('getAnnouncementImportance', () => {
     expect(getAnnouncementImportance(ann('host', 'timestamp'))).toBe('low')
   })
 
+  it('labels a machine-delivered established fact Deus Ex Machina, rates it high, and accents it', () => {
+    const fact = ann('host', 'established-fact')
+    expect(getAnnouncementImportance(fact)).toBe('high')
+    expect(getSystemKindDisplayLabel(fact as never)).toBe('Deus Ex Machina')
+    expect(getAnnouncementAccentClasses(fact as never)).toBe('qt-chat-established-fact')
+    expect(getAnnouncementAccentClasses(ann('host', 'announcement') as never)).toBe('')
+  })
+
   it('rates Concierge danger high', () => {
     expect(getAnnouncementImportance(ann('concierge', 'danger'))).toBe('high')
   })

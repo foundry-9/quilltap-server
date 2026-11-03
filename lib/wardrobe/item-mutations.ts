@@ -34,8 +34,14 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types';
 import { wardrobeItemFromCreateBody, type WardrobeCreateBody } from '@/lib/wardrobe/create-body';
-import { isSameFolder, WardrobeItemNotInLocationError } from '@/lib/wardrobe/folders';
+import {
+  isSameFolder,
+  WARDROBE_FOLDER_RULES,
+  WardrobeFolderPathError,
+  WardrobeItemNotInLocationError,
+} from '@/lib/wardrobe/folders';
 import type { WardrobeLocation } from '@/lib/wardrobe/location';
+import { moveItemsToFolderIn, type ItemFolderKind } from '@/lib/mount-index/item-folder-location';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
 
 /** Every item a composite in this location could name as a component. */
@@ -211,24 +217,21 @@ export { WardrobeItemNotInLocationError };
  * (one shown in a character's view from a shared tier) refuses the batch,
  * naming it, before anything moves. Returns the moved items as written.
  */
-export async function moveItemsToFolder(
+export function moveItemsToFolder(
   location: WardrobeLocation,
   itemIds: readonly string[],
   folder: string,
 ): Promise<WardrobeItem[]> {
-  const target = await location.resolveFolder(folder);
-  const uniqueIds = Array.from(new Set(itemIds));
-  const moved = await location.updateMany(
-    uniqueIds.map((id) => ({ id, patch: { folder: target } })),
-    { requireAll: true },
-  );
-  logger.debug('[ItemMutations] Moved wardrobe items to folder', {
-    scope: location.scope,
-    mountPointId: location.mountPointId,
-    folder: target,
-    requested: uniqueIds.length,
-    moved: moved.length,
-    context: 'wardrobe',
-  });
-  return moved;
+  return moveItemsToFolderIn(WARDROBE_FOLDER_KIND, location, itemIds, folder);
 }
+
+/**
+ * The wardrobe's folder kind — its rules and its path error — as the shared
+ * item-folder mutations (`lib/mount-index/item-folder-location.ts`) take it.
+ * Folder create / rename / delete run through those mutations from the route
+ * factory's `itemFolderActionHandlers`.
+ */
+export const WARDROBE_FOLDER_KIND: ItemFolderKind = {
+  rules: WARDROBE_FOLDER_RULES,
+  pathError: (message) => new WardrobeFolderPathError(message),
+};

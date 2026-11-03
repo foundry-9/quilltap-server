@@ -319,3 +319,49 @@ describe('blob groups share bytes but keep per-link metadata', () => {
     expect(bDesc.description).toBe('Friday’s keepsake');
   });
 });
+
+describe('the browser listing (listForBrowser)', () => {
+  it('omits extracted text and counts every link sharing the content row', async () => {
+    const a = await writeDoc('mp-1', 'a.md', V1);
+    await writeDoc('mp-2', 'b.md', V1);
+    await writeDoc('mp-1', 'c.md', V2);
+    await links.bindLinkGroup(a.id, (await writeDoc('mp-3', 'g.md', V1)).id);
+
+    const rows = await links.listForBrowser('mp-1');
+    const byPath = new Map(rows.map((r) => [r.relativePath, r]));
+    expect(byPath.get('a.md')?.linkCount).toBe(3);
+    expect(byPath.get('a.md')?.linkGroupId).toBeTruthy();
+    expect(byPath.get('c.md')?.linkCount).toBe(1);
+    expect(byPath.get('c.md')?.linkGroupId).toBeNull();
+    expect(rows.every((r) => !('extractedText' in r))).toBe(true);
+  });
+});
+
+describe('taking a link out of its group (clearLinkGroup)', () => {
+  it('leaves the link on its content, and a later write forks it', async () => {
+    const a = await writeDoc('mp-1', 'a.md', V1);
+    const b = await writeDoc('mp-2', 'b.md', V1);
+    const c = await writeDoc('mp-3', 'c.md', V1);
+    const groupId = await links.bindLinkGroup(a.id, b.id);
+    await links.bindLinkGroup(a.id, c.id);
+
+    const result = await links.clearLinkGroup(b.id);
+    expect(result).toEqual({ groupId, dissolved: false });
+    expect(linkRow(b.id).linkGroupId).toBeNull();
+    expect(linkRow(b.id).fileId).toBe(linkRow(a.id).fileId);
+
+    await writeDoc('mp-1', 'a.md', V2);
+    expect(contentOf(c.id)).toBe(V2);
+    expect(contentOf(b.id)).toBe(V1);
+  });
+
+  it('dissolves a group left with one member, and is a no-op on an ungrouped link', async () => {
+    const a = await writeDoc('mp-1', 'a.md', V1);
+    const b = await writeDoc('mp-2', 'b.md', V1);
+    await links.bindLinkGroup(a.id, b.id);
+
+    expect((await links.clearLinkGroup(a.id)).dissolved).toBe(true);
+    expect(linkRow(b.id).linkGroupId).toBeNull();
+    expect(await links.clearLinkGroup(a.id)).toEqual({ groupId: null, dissolved: false });
+  });
+});

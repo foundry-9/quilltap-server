@@ -47,6 +47,15 @@ export type RunSqlResult =
 const MAX_ROWS_HARD_CAP = 1000;
 /** Default rows when the model omits max_rows. */
 const DEFAULT_MAX_ROWS = 200;
+/**
+ * Size budget for one result, in characters of JSON. Row caps alone let a
+ * handful of wide rows (whole memories, message bodies, vault files) put 30 KB
+ * into the context per call; past this budget long text cells are shortened,
+ * and if that is not enough, trailing rows are dropped.
+ */
+const RESULT_CHAR_BUDGET = 24_000;
+/** What a long text cell is shortened to when the budget is exceeded. */
+const LONG_CELL_CHARS = 600;
 /** How much of the SQL to echo into debug logs (never log full result rows). */
 const SQL_LOG_PREVIEW_CHARS = 200;
 
@@ -221,6 +230,54 @@ function sanitizeRow(row: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+/**
+ * Keep a result inside {@link RESULT_CHAR_BUDGET}: shorten long string cells
+ * first (the usual culprit), then drop trailing rows. Returns a note for the
+ * model whenever anything was cut, so it knows to narrow the query.
+ */
+export function fitToBudget(rows: Array<Record<string, unknown>>): {
+  rows: Array<Record<string, unknown>>;
+  clippedCells: number;
+  droppedRows: number;
+  note?: string;
+} {
+  if (JSON.stringify(rows).length <= RESULT_CHAR_BUDGET) {
+    return { rows, clippedCells: 0, droppedRows: 0 };
+  }
+
+  let clippedCells = 0;
+  const clipped = rows.map((row) => {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (typeof value === 'string' && value.length > LONG_CELL_CHARS) {
+        out[key] = `${value.slice(0, LONG_CELL_CHARS)}… [${value.length} chars; select substr(${key}, …) to read more]`;
+        clippedCells++;
+      } else {
+        out[key] = value;
+      }
+    }
+    return out;
+  });
+
+  let kept = clipped;
+  let size = JSON.stringify(kept).length;
+  while (kept.length > 1 && size > RESULT_CHAR_BUDGET) {
+    kept = kept.slice(0, Math.max(1, Math.floor(kept.length * 0.75)));
+    size = JSON.stringify(kept).length;
+  }
+  const droppedRows = rows.length - kept.length;
+
+  const parts: string[] = [];
+  if (clippedCells > 0) parts.push(`${clippedCells} long text value(s) were shortened`);
+  if (droppedRows > 0) parts.push(`only the first ${kept.length} of ${rows.length} rows fit`);
+  return {
+    rows: kept,
+    clippedCells,
+    droppedRows,
+    note: `Result exceeded the size budget: ${parts.join('; ')}. Select fewer or narrower columns, aggregate, or add a LIMIT.`,
+  };
+}
+
 /** Column names for an (often empty) reader statement, best-effort. */
 function safeColumnNames(stmt: import('better-sqlite3').Statement): string[] {
   try {
@@ -317,10 +374,20 @@ export async function executeRunSqlTool(
     return { success: false, error: `SQL error: ${message}` };
   }
 
-  const truncated = rawRows.length > maxRows;
   const sliced = rawRows.slice(0, maxRows);
-  const rows = sliced.map(sanitizeRow);
-  const columns = rows.length > 0 ? Object.keys(rows[0]) : safeColumnNames(stmt);
+  const columns = sliced.length > 0 ? Object.keys(sliced[0]) : safeColumnNames(stmt);
+  const fitted = fitToBudget(sliced.map(sanitizeRow));
+  const rows = fitted.rows;
+  const truncated = rawRows.length > maxRows || fitted.droppedRows > 0;
+
+  if (fitted.note) {
+    sqlLogger.debug('run_sql result shortened to fit the size budget', {
+      userId: context.userId,
+      database,
+      clippedCells: fitted.clippedCells,
+      droppedRows: fitted.droppedRows,
+    });
+  }
 
   return {
     success: true,
@@ -329,5 +396,6 @@ export async function executeRunSqlTool(
     rows,
     rowCount: rows.length,
     truncated,
+    ...(fitted.note ? { note: fitted.note } : {}),
   };
 }

@@ -19,6 +19,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
@@ -105,26 +106,31 @@ export function PendingInformChips({ chatId, participantNames }: Readonly<Pendin
           <div
             key={batch.batchId}
             className="qt-chat-tool-result-chip"
-            // The label truncates in a narrow composer, so a standing chip says
-            // what it is in the hover title too.
-            title={
-              batch.permanent
-                ? `Standing in this chat until withdrawn — ${firstLine(batch.contentMarkdown)}`
-                : firstLine(batch.contentMarkdown)
-            }
           >
-            <Icon name="info" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
-            <span className="text-foreground max-w-[280px] truncate">{label}</span>
-            <button
-              type="button"
-              onClick={() => cancel.mutate(batch.batchId)}
-              disabled={cancel.isPending}
-              className="qt-chat-attachment-chip-remove"
-              title={batch.permanent ? 'Withdraw this standing inform' : 'Withdraw this inform'}
-              aria-label={`Withdraw the inform for ${names.join(', ')}`}
+            {/* The label truncates in a narrow composer, so the chip says what
+                it is in its tooltip too. */}
+            <Tooltip
+              content={
+                batch.permanent
+                  ? `Standing in this chat until withdrawn — ${firstLine(batch.contentMarkdown)}`
+                  : firstLine(batch.contentMarkdown)
+              }
+              anchorClassName="gap-2 min-w-0"
             >
-              <Icon name="close" className="w-4 h-4" />
-            </button>
+              <Icon name="info" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
+              <span className="text-foreground max-w-[280px] truncate">{label}</span>
+            </Tooltip>
+            <Tooltip content={batch.permanent ? 'Withdraw this standing inform' : 'Withdraw this inform'}>
+              <button
+                type="button"
+                onClick={() => cancel.mutate(batch.batchId)}
+                disabled={cancel.isPending}
+                className="qt-chat-attachment-chip-remove"
+                aria-label={`Withdraw the inform for ${names.join(', ')}`}
+              >
+                <Icon name="close" className="w-4 h-4" />
+              </button>
+            </Tooltip>
           </div>
         )
       })}

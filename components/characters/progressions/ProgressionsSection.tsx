@@ -162,7 +162,7 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
             const derived = deriveProgression(id, progression, nowMs)
             const badge = STATE_BADGE[derived.state]
             return (
-              <div key={id} className="qt-card hover:bg-accent/50 transition">
+              <div key={id} className="qt-card hover:qt-bg-surface-hover transition">
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">

@@ -6,9 +6,10 @@
  * for distribution via GitHub Releases. The `quilltap` npm package
  * downloads this tarball on first run.
  *
- * The output is platform-agnostic (pure JavaScript). Native modules
- * (better-sqlite3, sharp) are stripped — they're installed as npm
- * dependencies on the user's machine.
+ * The output is platform-agnostic (pure JavaScript). Platform-specific
+ * native modules (better-sqlite3, sharp's binaries) are stripped — they're
+ * re-supplied by the `quilltap` npm package's install on the user's machine,
+ * or injected by the Electron shell.
  *
  * Plain .mjs on purpose: the release workflow runs this in a job that never
  * `npm ci`s (it only consumes pre-built artifacts), so anything needing tsx
@@ -242,7 +243,8 @@ if (existsSync(standaloneNodeModules)) {
   // NOTE: sharp's JS wrapper and its pure-JS dependency @img/colour are kept in the
   // tarball. Only the platform-specific native binaries (@img/sharp-*, @img/sharp-libvips-*)
   // and the platform-specific native module better-sqlite3 are stripped.
-  // They're reinstalled on the user's machine via npm install, which compiles them for the target platform.
+  // They're re-supplied on the user's machine by the quilltap npm package's install (which
+  // carries the platform's prebuilt binaries) or by the Electron shell's injection.
   //
   // node-pty is intentionally NOT stripped: it ships cross-platform prebuilds
   // (darwin-arm64, darwin-x64, win32-arm64, win32-x64) inside the package, so

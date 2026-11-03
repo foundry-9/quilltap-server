@@ -12,10 +12,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import {
   resolveDocEditPath,
-  readFileWithMtime,
-  writeFileWithMtimeCheck,
   isTextFile,
-  reindexSingleFile,
   parseQtapUri,
   type DocEditScope,
   type ResolvedPath,
@@ -29,9 +26,6 @@ import type { DocMoveFolderInput, DocMoveFolderOutput } from '../../doc-move-fol
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   databaseDocumentExists,
-  databaseFolderExists,
-  moveDatabaseDocument,
-  deleteDatabaseDocument,
   createDatabaseFolder,
   deleteDatabaseFolder,
   moveDatabaseFolder,
@@ -45,99 +39,27 @@ import {
   documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import {
+  readDocument,
+  writeDocument,
+  statDocument,
+  renameDocument,
+  deleteDocument,
+  sweepChatDocumentsAfterMove,
+  sweepChatDocumentsAfterFolderMove,
+} from '@/lib/documents/core';
+import {
   logger,
   type DocEditToolContext,
   applyQtapUriToInput,
   buildReadResolutionContext,
   buildWriteResolutionContext,
   resolveActorOrigin,
-  triggerReindexIfNeeded,
   uriForResolvedPath,
   assertCharacterMayRead,
   assertCharacterMayWrite,
   assertFolderHasNoWriteProtectedDescendants,
   publishedMountPoint,
 } from './shared';
-
-/**
- * Keep any chat's Document Mode pointer in sync when an LLM moves the file
- * underneath it. Without this, the next `reloadFromServer` on the salon page
- * would refetch the (now-stale) chat_documents row and 404 reading the old
- * path. Errors are logged but never thrown — a sync failure must not block
- * the move tool result. Best-effort by design.
- */
-async function syncChatDocumentsAfterFileMove(
-  scope: DocEditScope,
-  mountPoint: string | undefined,
-  oldPath: string,
-  newPath: string,
-): Promise<void> {
-  try {
-    const newDisplayTitle = path.basename(newPath);
-    const updated = await getRepositories().chatDocuments.renameFilePathInStore(
-      scope,
-      mountPoint ?? null,
-      oldPath,
-      newPath,
-      newDisplayTitle,
-    );
-    if (updated > 0) {
-      logger.info('Synced chat_documents after file move', {
-        scope,
-        mountPoint,
-        from: oldPath,
-        to: newPath,
-        rowsUpdated: updated,
-      });
-    }
-  } catch (error) {
-    logger.warn('Failed to sync chat_documents after file move', {
-      scope,
-      mountPoint,
-      from: oldPath,
-      to: newPath,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
- * Folder-level counterpart to `syncChatDocumentsAfterFileMove`. Rewrites the
- * `oldFolderPath/` prefix on any chat_documents row in the same store so a
- * file open under that folder follows the rename instead of going stale.
- */
-async function syncChatDocumentsAfterFolderMove(
-  scope: DocEditScope,
-  mountPoint: string | undefined,
-  oldFolderPath: string,
-  newFolderPath: string,
-): Promise<void> {
-  try {
-    const updated = await getRepositories().chatDocuments.renameFolderPathInStore(
-      scope,
-      mountPoint ?? null,
-      oldFolderPath,
-      newFolderPath,
-    );
-    if (updated > 0) {
-      logger.info('Synced chat_documents after folder move', {
-        scope,
-        mountPoint,
-        from: oldFolderPath,
-        to: newFolderPath,
-        rowsUpdated: updated,
-      });
-    }
-  } catch (error) {
-    logger.warn('Failed to sync chat_documents after folder move', {
-      scope,
-      mountPoint,
-      from: oldFolderPath,
-      to: newFolderPath,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
 
 // --- doc_move_file ---
 
@@ -169,102 +91,36 @@ export async function handleMoveFile(
     resolvedSource.relativePath,
   );
 
-  // Database-backed mount: route move through the database-store module.
-  if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
-    if (!await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
-      if (await databaseFolderExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
+  // The core checks the source and the destination, moves the link row or
+  // the file, and refreshes a moved file on disk.
+  const moved = await renameDocument(resolvedSource, resolvedDest);
+  if (!moved.ok) {
+    switch (moved.reason) {
+      case 'source-missing':
+        return { success: false, error: `Source file not found: ${input.path}` };
+      case 'source-not-a-file':
         return { success: false, error: `Path is a folder, not a file: ${input.path}. Use doc_move_folder to rename or move folders.` };
-      }
-      return { success: false, error: `Source file not found: ${input.path}` };
-    }
-    // Case-only rename is legal: the case-insensitive existence check would
-    // find the source itself and report a bogus conflict.
-    const caseOnlyRename =
-      resolvedSource.relativePath !== resolvedDest.relativePath &&
-      resolvedSource.relativePath.toLowerCase() === resolvedDest.relativePath.toLowerCase();
-    if (!caseOnlyRename && await databaseDocumentExists(resolvedSource.mountPointId, resolvedDest.relativePath)) {
-      return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
-    }
-    await moveDatabaseDocument(
-      resolvedSource.mountPointId,
-      resolvedSource.relativePath,
-      resolvedDest.relativePath
-    );
-    await syncChatDocumentsAfterFileMove(scope, input.mount_point, input.path, input.new_path);
-    logger.info('Moved database document', {
-      from: input.path,
-      to: input.new_path,
-      scope,
-    });
-    const movedUri = await uriForResolvedPath(resolvedDest);
-    await postLibrarianMoveAnnouncement({
-      chatId: context.chatId,
-      oldDisplayTitle: path.basename(input.path),
-      newDisplayTitle: path.basename(input.new_path),
-      oldUri: await uriForResolvedPath(resolvedSource),
-      newUri: movedUri,
-      scope: scope as 'project' | 'document_store' | 'general',
-      mountPoint: publishedMountPoint(resolvedSource, input.mount_point),
-      origin: await resolveActorOrigin(context),
-      isFolder: false,
-      hiddenFromCharacters,
-    });
-    return {
-      success: true,
-      result: { success: true, old_path: input.path, new_path: input.new_path, uri: movedUri },
-      formattedText: `Moved: ${input.path} → ${input.new_path}`,
-    };
-  }
-
-  // Verify source exists and is a file
-  try {
-    const stat = await fs.stat(resolvedSource.absolutePath);
-    if (!stat.isFile()) {
-      return { success: false, error: `Source path is not a file: ${input.path}` };
-    }
-  } catch {
-    return { success: false, error: `Source file not found: ${input.path}` };
-  }
-
-  // Check destination doesn't already exist. Skip for a case-only rename —
-  // on a case-insensitive filesystem the probe would find the source itself.
-  const fsCaseOnlyRename =
-    resolvedSource.absolutePath !== resolvedDest.absolutePath &&
-    resolvedSource.absolutePath.toLowerCase() === resolvedDest.absolutePath.toLowerCase();
-  if (!fsCaseOnlyRename) {
-    try {
-      await fs.access(resolvedDest.absolutePath);
-      return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
-    } catch {
-      // Good — destination doesn't exist
+      case 'destination-taken':
+        return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
     }
   }
 
-  // Ensure parent directory of destination exists
-  const destParent = path.dirname(resolvedDest.absolutePath);
-  await fs.mkdir(destParent, { recursive: true });
+  // Keep any chat's Document Mode pointer on the file, under the store name
+  // the rows were recorded with (never a caller's `self`, bug 256).
+  await sweepChatDocumentsAfterMove({
+    scope,
+    mountPoint: publishedMountPoint(resolvedSource, input.mount_point),
+    mountPointId: resolvedSource.mountPointId,
+    oldFilePath: input.path,
+    newFilePath: input.new_path,
+  }, { logFields: { chatId: context.chatId } });
 
-  // Perform the move
-  await fs.rename(resolvedSource.absolutePath, resolvedDest.absolutePath);
-
-  await syncChatDocumentsAfterFileMove(scope, input.mount_point, input.path, input.new_path);
-
-  logger.info('Moved file', {
+  logger.info('Moved document', {
     from: input.path,
     to: input.new_path,
     scope,
+    mountType: resolvedSource.mountType,
   });
-
-  // Trigger re-indexing for the new path if in document_store
-  if (resolvedSource.scope === 'document_store' && resolvedSource.mountPointId) {
-    reindexSingleFile(resolvedSource.mountPointId, resolvedDest.relativePath, resolvedDest.absolutePath)
-      .catch(err => {
-        logger.warn('Background re-index failed for moved file', {
-          path: resolvedDest.relativePath,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-  }
 
   const movedUri = await uriForResolvedPath(resolvedDest);
   await postLibrarianMoveAnnouncement({
@@ -315,22 +171,7 @@ async function resolveCopyDestination(
   }
 
   // Detect directory at the resolved destination.
-  let destIsDirectory = false;
-  if (resolvedDest.mountType === 'database' && resolvedDest.mountPointId) {
-    destIsDirectory = await databaseFolderExists(
-      resolvedDest.mountPointId,
-      resolvedDest.relativePath
-    );
-  } else if (resolvedDest.absolutePath) {
-    try {
-      const stat = await fs.stat(resolvedDest.absolutePath);
-      destIsDirectory = stat.isDirectory();
-    } catch {
-      destIsDirectory = false;
-    }
-  }
-
-  if (destIsDirectory) {
+  if ((await statDocument(resolvedDest)) === 'folder') {
     // Use posix join so the stored relative path stays forward-slash style,
     // matching the rest of the doc-edit layer.
     const joined = path.posix.join(resolvedDest.relativePath.split(path.sep).join('/'), sourceBasename);
@@ -424,63 +265,39 @@ export async function handleCopyFile(
   // Gate the destination by character_write (no-op when it doesn't exist yet).
   await assertCharacterMayWrite(resolvedDest, context);
 
-  // Verify source exists and is a file (not a folder).
-  if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
-    if (!(await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath))) {
-      if (await databaseFolderExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
-        return { success: false, error: `Source path is a folder, not a file: ${sourcePath}.` };
-      }
-      return { success: false, error: `Source file not found: ${sourcePath}` };
-    }
-  } else {
-    try {
-      const stat = await fs.stat(resolvedSource.absolutePath);
-      if (!stat.isFile()) {
-        return { success: false, error: `Source path is not a file: ${sourcePath}` };
-      }
-    } catch {
-      return { success: false, error: `Source file not found: ${sourcePath}` };
-    }
+  // The source must be a file (an upload counts — readDocument reads it).
+  if ((await statDocument(resolvedSource)) === 'folder') {
+    return { success: false, error: `Source path is a folder, not a file: ${sourcePath}.` };
   }
 
   // Refuse to overwrite — match doc_move_file semantics.
-  if (resolvedDest.mountType === 'database' && resolvedDest.mountPointId) {
-    if (await databaseDocumentExists(resolvedDest.mountPointId, resolvedDest.relativePath)) {
-      return {
-        success: false,
-        error: `Destination already exists: ${finalDestRel}. Copy will not overwrite existing files; delete it first if you want to replace it.`,
-      };
-    }
-    if (await databaseFolderExists(resolvedDest.mountPointId, resolvedDest.relativePath)) {
-      return {
-        success: false,
-        error: `Destination path ${finalDestRel} resolves to a folder, not a file location.`,
-      };
-    }
-  } else if (resolvedDest.absolutePath) {
-    try {
-      const stat = await fs.stat(resolvedDest.absolutePath);
-      if (stat.isDirectory()) {
-        return {
-          success: false,
-          error: `Destination path ${finalDestRel} resolves to a folder, not a file location.`,
-        };
-      }
-      return {
-        success: false,
-        error: `Destination already exists: ${finalDestRel}. Copy will not overwrite existing files; delete it first if you want to replace it.`,
-      };
-    } catch {
-      // Good — destination does not exist.
-    }
+  const destination = await statDocument(resolvedDest);
+  if (destination === 'folder') {
+    return {
+      success: false,
+      error: `Destination path ${finalDestRel} resolves to a folder, not a file location.`,
+    };
+  }
+  if (destination === 'file') {
+    return {
+      success: false,
+      error: `Destination already exists: ${finalDestRel}. Copy will not overwrite existing files; delete it first if you want to replace it.`,
+    };
   }
 
-  // Read the source content (both filesystem + database sources handled inside).
-  const { content } = await readFileWithMtime(resolvedSource);
+  let content: string;
+  try {
+    ({ content } = await readDocument(resolvedSource));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { success: false, error: `Source file not found: ${sourcePath}` };
+    }
+    throw error;
+  }
 
-  // Write to the destination. writeFileWithMtimeCheck creates parent folders
-  // on filesystem mounts and ensures folder rows on database mounts.
-  const { mtime } = await writeFileWithMtimeCheck(resolvedDest, content);
+  // The core creates parent folders (disk) or folder rows (database), then
+  // refreshes the destination store.
+  const { mtime } = await writeDocument(resolvedDest, content);
 
   logger.info('Copied document', {
     source_mount_point: resolvedSource.mountPointName,
@@ -489,8 +306,6 @@ export async function handleCopyFile(
     dest_path: finalDestRel,
     bytes: content.length,
   });
-
-  await triggerReindexIfNeeded(resolvedDest);
 
   const copiedUri = await uriForResolvedPath(resolvedDest);
   await postLibrarianCopyAnnouncement({
@@ -548,50 +363,15 @@ export async function handleDeleteFile(
     resolved.relativePath,
   );
 
-  // Database-backed mount: route delete through the database-store module.
-  if (resolved.mountType === 'database' && resolved.mountPointId) {
-    const deleted = await deleteDatabaseDocument(resolved.mountPointId, resolved.relativePath);
-    if (!deleted) {
-      if (await databaseFolderExists(resolved.mountPointId, resolved.relativePath)) {
-        return { success: false, error: `Path is a folder, not a file: ${input.path}. Use doc_delete_folder to remove folders.` };
-      }
-      return { success: false, error: `File not found: ${input.path}` };
-    }
-    logger.info('Deleted database document', { path: input.path, scope });
-    const deletedUri = await uriForResolvedPath(resolved);
-    await postLibrarianDeleteAnnouncement({
-      chatId: context.chatId,
-      displayTitle: path.basename(input.path),
-      filePath: input.path,
-      scope: scope as 'project' | 'document_store' | 'general',
-      mountPoint: publishedMountPoint(resolved, input.mount_point),
-      origin: await resolveActorOrigin(context),
-      hiddenFromCharacters,
-    });
-    return {
-      success: true,
-      result: { success: true, path: input.path, uri: deletedUri },
-      formattedText: `Deleted file: ${input.path}`,
-    };
-  }
-
-  // Verify the file exists and is a file
-  try {
-    const stat = await fs.stat(resolved.absolutePath);
-    if (!stat.isFile()) {
-      return { success: false, error: `Path is not a file: ${input.path}` };
-    }
-  } catch {
+  const outcome = await deleteDocument(resolved);
+  if (outcome === 'not-found') {
     return { success: false, error: `File not found: ${input.path}` };
   }
+  if (outcome === 'not-a-file') {
+    return { success: false, error: `Path is a folder, not a file: ${input.path}. Use doc_delete_folder to remove folders.` };
+  }
 
-  // Delete the file
-  await fs.unlink(resolved.absolutePath);
-
-  logger.info('Deleted file', {
-    path: input.path,
-    scope,
-  });
+  logger.info('Deleted document', { path: input.path, scope, mountType: resolved.mountType });
 
   await postLibrarianDeleteAnnouncement({
     chatId: context.chatId,
@@ -809,7 +589,13 @@ export async function handleMoveFolder(
         resolvedSource.relativePath,
         resolvedDest.relativePath
       );
-      await syncChatDocumentsAfterFolderMove(scope, input.mount_point, input.path, input.new_path);
+      await sweepChatDocumentsAfterFolderMove({
+        scope,
+        mountPoint: publishedMountPoint(resolvedSource, input.mount_point),
+        mountPointId: resolvedSource.mountPointId,
+        oldFolderPath: input.path,
+        newFolderPath: input.new_path,
+      }, { logFields: { chatId: context.chatId } });
       logger.info('Moved database folder', {
         from: input.path,
         to: input.new_path,
@@ -874,7 +660,13 @@ export async function handleMoveFolder(
   // Perform the move
   await fs.rename(resolvedSource.absolutePath, resolvedDest.absolutePath);
 
-  await syncChatDocumentsAfterFolderMove(scope, input.mount_point, input.path, input.new_path);
+  await sweepChatDocumentsAfterFolderMove({
+    scope,
+    mountPoint: publishedMountPoint(resolvedSource, input.mount_point),
+    mountPointId: resolvedSource.mountPointId,
+    oldFolderPath: input.path,
+    newFolderPath: input.new_path,
+  }, { logFields: { chatId: context.chatId } });
 
   logger.info('Moved folder', {
     from: input.path,

@@ -82,3 +82,45 @@ describe('default-system-prompts shipped text', () => {
     expect(read(file)).toContain(phrase)
   })
 })
+
+/**
+ * The probation (docs/developer/features/prompt-trust-the-probation.md §7):
+ * the "right as readily as they slipped" ledger is gone everywhere, every
+ * prompt forbids asserting {{user}}'s interior, and every relationship prompt
+ * gives ordinary time a plain yes — the friendship prompt in its softer form.
+ */
+describe('default-system-prompts shipped text — the probation', () => {
+  describe.each(files)('%s', file => {
+    const text = read(file)
+
+    it('carries no slips ledger', () => {
+      expect(text).not.toMatch(/slipped/i)
+    })
+
+    it('forbids telling {{user}} what they really meant', () => {
+      expect(text).toMatch(/what they really meant|what \{\{user\}\} really meant/)
+    })
+
+    it('gives ordinary time a yes unless it is the relationship-neutral MODERN_GENERAL', () => {
+      if (file === 'MODERN_GENERAL.md') {
+        expect(text).not.toMatch(/ordinary time/i)
+      } else if (file.startsWith('OLLAMA_')) {
+        expect(text).toContain('Say yes to ordinary asks')
+      } else {
+        expect(text).toMatch(/Ordinary time/)
+      }
+    })
+  })
+
+  it('gives the friendship prompt the softer default yes', () => {
+    const platonic = read('MODERN_PLATONIC.md')
+    expect(platonic).toContain('usually says yes')
+    expect(platonic).toContain('plainly and kindly, without terms')
+  })
+
+  it('counterweights pushback with how often, not just how', () => {
+    expect(read('MODERN_GENERAL.md')).toContain('the no is for things that matter')
+    expect(read('MODERN_ROMANTIC.md')).toContain('most of the time, love sounds like yes')
+    expect(read('GPT5_COMPANION.md')).not.toContain('Agreeing quickly to be agreeable is a failure')
+  })
+})

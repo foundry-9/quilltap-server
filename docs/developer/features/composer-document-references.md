@@ -55,7 +55,7 @@ An inline, non-editable, selectable `DecoratorNode` (backspace deletes the whole
 }
 ```
 
-It renders `<span class="qt-doc-ref-chip">` with a document icon and the path. Clicking it opens the document in Document Mode when the composer is in a Salon chat. A reference whose document no longer resolves renders with a "Missing document" mark. New `qt-*` classes are mirrored into `packages/theme-storybook` in the same change (see CLAUDE.md, Themes).
+It renders `<span class="qt-doc-ref-chip">` with a document icon and the path. Clicking it opens the document in Document Mode when the composer is in a Salon chat. A reference whose document no longer resolves renders with a "Missing document" mark. New `qt-*` classes reach `packages/theme-storybook` by regenerating its CSS (`npm run generate:storybook-css`; see CLAUDE.md, Themes).
 
 ### Markdown transformer
 

@@ -242,7 +242,7 @@ This is the security-critical part. Enforce in the **two resolution-context buil
 
 ### 5.7 Make policy changes take effect when frontmatter is edited
 
-If a character (or the operator) edits frontmatter via `doc_update_frontmatter`, or a file changes on disk, the link row's flags must update. The reindex path (§5.3) already re-parses on every edit/change, so this is automatic **provided** `triggerReindexIfNeeded` runs for frontmatter updates (it does, per the architecture map) and the reindex persists the freshly parsed policy. Add an explicit test for "edit frontmatter `embed:true→false` ⇒ embeddings erased on next reindex+schedule" (§5.8).
+If a character (or the operator) edits frontmatter via `doc_update_frontmatter`, or a file changes on disk, the link row's flags must update. The reindex path (§5.3) already re-parses on every edit/change, so this is automatic **provided** the post-write refresh runs for frontmatter updates (it does: `afterDocumentWrite` in `lib/documents/core/write.ts`, formerly `triggerReindexIfNeeded`) and the reindex persists the freshly parsed policy. Add an explicit test for "edit frontmatter `embed:true→false` ⇒ embeddings erased on next reindex+schedule" (§5.8).
 
 > Operator note: a character is normally blocked from writing the protected file, so in practice only the operator (or an on-disk edit in Obsidian) changes these flags. That's the intended control surface.
 

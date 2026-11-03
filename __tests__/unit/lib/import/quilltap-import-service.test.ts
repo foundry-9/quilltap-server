@@ -841,6 +841,29 @@ describe('quilltap-import-service', () => {
       expect(mockUserRepos.chats.addMessage).toHaveBeenCalledTimes(2);
     });
 
+    it('carries both kinds of established fact (Deus Ex Machina) on the imported rows', async () => {
+      const messages = [
+        createMockMessage({ role: 'USER', content: 'The bridge is gone.', isEstablishedFact: true } as never),
+        createMockMessage({
+          role: 'ASSISTANT', content: 'The river has risen.', opaqueContent: 'The river has risen.',
+          systemSender: 'host', systemKind: 'established-fact', participantId: null,
+        } as never),
+      ];
+      const chat = createMockExportedChat({ title: 'Facts', messages });
+      const exportData = createMockChatsExport({ chats: [chat] });
+      mockUserRepos.chats.create.mockImplementation(async (data) => ({ ...data, id: chat.id }) as any);
+
+      await executeImport(testUserId, exportData, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      const rows = mockUserRepos.chats.addMessage.mock.calls.map((call: unknown[]) => call[1] as Record<string, unknown>);
+      expect(rows[0]).toMatchObject({ isEstablishedFact: true });
+      expect(rows[1]).toMatchObject({ systemSender: 'host', systemKind: 'established-fact' });
+    });
+
     it('should handle message import errors gracefully', async () => {
       const chat = createMockExportedChat({
         messages: [createMockMessage()],

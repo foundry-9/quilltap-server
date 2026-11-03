@@ -35,7 +35,7 @@
 import type { Memory } from '@/lib/schemas/types'
 import type { MemoryCreateInput } from '@/lib/database/repositories/memories.repository'
 import { calculateReinforcedImportance } from './scoring'
-import { parseTargetingTags } from './recall/tags'
+import { parseTargetingTags, RESOLVED_KEYWORD } from './recall/tags'
 import type { ConsolidationContradiction, ConsolidationDigestOutput } from './cheap-llm-tasks/consolidation-tasks'
 import { DEFAULT_TARGETING, normaliseTargeting, splitTargetingKeywords, targetingKeywords } from './candidate'
 
@@ -64,6 +64,11 @@ export interface ResolvedClusterOutcome {
   keepStandalone: string[]
   /** Contradictions in id space. */
   contradictions: ConsolidationContradiction[]
+  /**
+   * Member ids recording a hurt that a repair in this cluster settles
+   * (prompt-trust-the-probation.md §9.6). Absent means none.
+   */
+  resolvedIds?: string[]
   /** One embedding per digest, same order; null entries in a dry run. */
   embeddings: Array<Float32Array | null>
 }
@@ -108,6 +113,11 @@ export interface ConsolidationWritePlan {
   considered: string[]
   /** Surviving rows whose links are re-aimed at digests. */
   linkRewrites: Array<{ id: string; relatedMemoryIds: string[] }>
+  /**
+   * Rows whose hurt a repair settles, with their keywords gaining
+   * {@link RESOLVED_KEYWORD}; recall ranks them down (recall/tags.ts).
+   */
+  resolvedMarks: Array<{ id: string; keywords: string[] }>
   /** Every superseded row → the row that supersedes it. */
   supersededBy: Map<string, string>
   /** Planned digests per input cluster, in cluster order (for the report). */
@@ -442,12 +452,29 @@ export function planConsolidationWrites(input: PlanInput): ConsolidationWritePla
     linkRewrites.push({ id: row.id, relatedMemoryIds: rewired })
   }
 
+  // Resolved grievances: keep the row (history stays), mark it so recall ranks
+  // it below the repair. Only this cluster's own members, never a digest.
+  const resolvedMarks: Array<{ id: string; keywords: string[] }> = []
+  const marked = new Set<string>()
+  for (const cluster of clusters) {
+    const membersById = new Map(cluster.members.map((m) => [m.id, m]))
+    for (const id of cluster.resolvedIds ?? []) {
+      const member = membersById.get(id)
+      if (!member || marked.has(id) || plannedDigestIds.has(id)) continue
+      marked.add(id)
+      const keywords = member.keywords ?? []
+      if (keywords.includes(RESOLVED_KEYWORD)) continue
+      resolvedMarks.push({ id, keywords: [...keywords, RESOLVED_KEYWORD] })
+    }
+  }
+
   return {
     creates,
     updates,
     tierMoves,
     considered,
     linkRewrites,
+    resolvedMarks,
     supersededBy,
     digestsByCluster,
   }

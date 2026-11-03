@@ -14,7 +14,8 @@
  * through the provider, so a streaming read to nowhere is all it takes.
  *
  * Design notes:
- * - DETECTION is the only platform-specific seam (see {@link isNotFullyMaterialized}).
+ * - DETECTION is the only platform-specific seam (`isNotFullyMaterialized` in
+ *   `lib/files/cloud-placeholder.ts`, shared with the document-store scanner).
  *   On macOS, an evicted or still-downloading file allocates fewer 512-byte
  *   blocks than its `size` demands — a fully-dataless placeholder reports
  *   `blocks === 0`, and a PARTIALLY-materialized file reports `blocks > 0` but
@@ -45,6 +46,7 @@ import fs from 'fs';
 import path from 'path';
 import { logger as migrationLogger } from '../../migrations/lib/logger';
 import { getDataDir, getPlatform } from '@/lib/paths';
+import { isNotFullyMaterialized } from '@/lib/files/cloud-placeholder';
 
 /** No bytes for this long during a read = treat the download as stalled. */
 const DEFAULT_STALL_MS = 30_000;
@@ -61,28 +63,6 @@ export interface MaterializeSummary {
   failed: number;
   /** Names of the files that failed, for the caller to log/surface. */
   failedNames: string[];
-}
-
-/** Block size that `fs.Stats.blocks` is denominated in (POSIX `st_blocks`). */
-const STAT_BLOCK_BYTES = 512;
-
-/**
- * macOS not-fully-materialized heuristic: a real file (`size > 0`) whose
- * locally-allocated blocks hold fewer bytes than its `size` has not finished
- * downloading. This covers two cloud states with one test:
- *   - fully-evicted placeholder → `blocks === 0` (mirrors the SF_DATALESS flag)
- *   - partially-materialized     → `blocks > 0` but `blocks * 512 < size`
- *
- * The partial case is the one that bit a cold boot on iCloud: the header pages
- * were resident so detection-by-`blocks === 0` passed it over, but the tail was
- * still in the æther, so SQLite opened it and got "file is not a database".
- *
- * A fully-resident file always reports `blocks * 512 >= size` (allocation
- * rounds UP to the block/cluster size), so this never flags a healthy file.
- * Zero-byte files are never flagged — there is nothing to download.
- */
-function isNotFullyMaterialized(stat: fs.Stats): boolean {
-  return stat.size > 0 && stat.blocks * STAT_BLOCK_BYTES < stat.size;
 }
 
 /**

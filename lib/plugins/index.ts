@@ -127,6 +127,7 @@ export {
   requiresBaseUrl,
   requiresApiKey,
   acceptsApiKey,
+  acceptsSamplingParameters,
   getDefaultBaseUrl,
   testProviderConnection,
   getEmbeddingProviders,

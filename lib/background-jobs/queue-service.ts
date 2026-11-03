@@ -145,6 +145,18 @@ export interface CarinaMemoryExtractionPayload {
 }
 
 /**
+ * Payload for an established-fact memory job. A machine-delivered established
+ * fact (a Host row, `systemKind: 'established-fact'`) has no speaker for LLM
+ * extraction to interpret, so the handler admits it verbatim as one MANUAL
+ * memory per non-removed LLM seat — absent and silent seats included.
+ */
+export interface EstablishedFactMemoriesPayload {
+  chatId: string;
+  /** The posted Host fact row. Its `content` is the fact. */
+  messageId: string;
+}
+
+/**
  * Payload for context summary job
  */
 export interface ContextSummaryPayload {
@@ -630,6 +642,37 @@ export async function enqueueCarinaMemoryExtraction(
   }
 
   return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue the memory job for a machine-delivered established fact. Runs once
+ * per post: dedupe is keyed on the posted message id.
+ */
+export async function enqueueEstablishedFactMemories(
+  userId: string,
+  payload: EstablishedFactMemoriesPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'ESTABLISHED_FACT_MEMORIES') return false;
+      return (j.payload as unknown as EstablishedFactMemoriesPayload).messageId === payload.messageId;
+    });
+    if (existing) {
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[EstablishedFactMemories] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
+  return enqueueJob(userId, 'ESTABLISHED_FACT_MEMORIES', payload as unknown as Record<string, unknown>, options);
 }
 
 /** Union two phase lists; `undefined` (every phase) absorbs anything. */
@@ -1424,10 +1467,14 @@ export async function enqueueCharacterAvatarGeneration(
 ): Promise<{ jobId: string; isNew: boolean }> {
   const repos = getRepositories();
 
-  // Dedup: skip if there's already a pending/processing avatar job for this chat+character
+  // Dedup: collapse onto a still-PENDING avatar job for this chat+character. The
+  // handler reads the outfit and the carried objects when it runs, so one queued
+  // job covers any later change. A PROCESSING job has already built its prompt,
+  // so a change made after that point needs a fresh job.
   const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
   const existingJob = pendingJobs.find(
     job => job.type === 'CHARACTER_AVATAR_GENERATION'
+      && job.status === 'PENDING'
       && (job.payload as unknown as CharacterAvatarGenerationPayload).characterId === payload.characterId
   );
 

@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { rawQuery } from '../manager';
 import { chatMessageFtsEligibilitySql } from '../backends/sqlite/chat-message-fts';
 import { buildFtsMatchExpression } from './fts-query';
+import { isCharacterAuthoredMessage } from '@/lib/chat/chat-activity';
 import { escapeLikeLiteral } from './like-escape';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatMessagesOps } from './chats-messages.ops';
@@ -24,8 +25,20 @@ interface GlobalSearchRow {
   id: string;
   chatId: string;
   role: string;
+  participantId: string | null;
   createdAt: string;
   content: string | null;
+}
+
+/** One hit of {@link ChatSearchReplaceOps.searchMessagesGlobal}. */
+export interface GlobalMessageSearchHit {
+  messageId: string;
+  content: string;
+  chatId: string;
+  role: string;
+  /** The seat that spoke the line (resolve with `resolveSpeakerNames`). */
+  participantId: string | null;
+  createdAt: string;
 }
 
 /**
@@ -44,6 +57,7 @@ interface GlobalSearchRow {
 function deferTextDecode(matchingIdsSql: string): string {
   return `
     SELECT m."id" AS id, m."chatId" AS chatId, m."role" AS role,
+           m."participantId" AS participantId,
            s."ca" AS createdAt, qt_text(m."content") AS content
       FROM (${matchingIdsSql}) s
       JOIN "chat_messages" m ON m."id" = s."mid"
@@ -54,6 +68,10 @@ function deferTextDecode(matchingIdsSql: string): string {
 /**
  * The indexed path: probe the FTS5 index, then join back for the columns the
  * caller wants.
+ *
+ * The eligibility filter is repeated against the joined row so that an index
+ * built under an older, looser rule (#121: Staff whispers were indexed) can
+ * never surface a row the current rule excludes, even before it is rebuilt.
  *
  * The `chatId IN (…)` list is kept for PARITY with the pre-index query rather
  * than being replaced with a join on `chats.userId`. It binds the same
@@ -68,6 +86,7 @@ function buildFtsSearchSql(chatIdCount: number): string {
         JOIN "chat_messages_fts_map" x ON x."ftsId" = f.rowid
         JOIN "chat_messages" mm        ON mm."id" = x."messageId"
        WHERE "chat_messages_fts" MATCH ?
+         AND ${chatMessageFtsEligibilitySql('mm')}
          AND mm."chatId" IN (${placeholders})
        ORDER BY mm."createdAt" DESC
        LIMIT ?
@@ -179,7 +198,7 @@ export class ChatSearchReplaceOps {
     chatIds: string[],
     searchText: string,
     limit = 100
-  ): Promise<Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }>> {
+  ): Promise<GlobalMessageSearchHit[]> {
     return safeQuery(async () => {
       if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
         logger.warn('Global search text exceeds maximum length', {
@@ -237,11 +256,12 @@ export class ChatSearchReplaceOps {
           content: row.content ?? '',
           chatId: row.chatId,
           role: row.role,
+          participantId: row.participantId ?? null,
           createdAt: row.createdAt,
         }));
       } else {
         // Legacy data compatibility: iterate through each chat's embedded messages
-        const results: Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }> = [];
+        const results: GlobalMessageSearchHit[] = [];
 
         for (const chatId of chatIds) {
           if (results.length >= limit) break;
@@ -251,8 +271,7 @@ export class ChatSearchReplaceOps {
           for (const msg of messages) {
             if (results.length >= limit) break;
             if (
-              msg.type === 'message' &&
-              (msg.role === 'USER' || msg.role === 'ASSISTANT') &&
+              isCharacterAuthoredMessage(msg) &&
               msg.content.toLowerCase().includes(lowerSearch)
             ) {
               results.push({
@@ -260,6 +279,7 @@ export class ChatSearchReplaceOps {
                 content: msg.content,
                 chatId,
                 role: msg.role,
+                participantId: msg.participantId ?? null,
                 createdAt: msg.createdAt || '',
               });
             }

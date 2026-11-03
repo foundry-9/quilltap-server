@@ -518,6 +518,14 @@ async function executePlan(
   for (const rewrite of plan.linkRewrites) {
     await repos.memories.updateForCharacter(characterId, rewrite.id, { relatedMemoryIds: rewrite.relatedMemoryIds })
   }
+
+  // Keywords are not embedded (embeddingTextFor), so this is a plain field write.
+  for (const mark of plan.resolvedMarks) {
+    await repos.memories.updateForCharacter(characterId, mark.id, { keywords: mark.keywords })
+  }
+  if (plan.resolvedMarks.length > 0) {
+    log.debug('Resolved grievances marked', { characterId, count: plan.resolvedMarks.length })
+  }
 }
 
 /**
@@ -794,6 +802,7 @@ export async function consolidate(
       digests: validated.digests.map((d) => ({ ...d, memberIds: d.memberIds.map(toId) })),
       keepStandalone: validated.keepStandalone.map(toId),
       contradictions: validated.contradictions.map((c) => ({ ...c, olderId: toId(c.olderId), newerId: toId(c.newerId) })),
+      resolvedIds: validated.resolvedIds.map(toId),
       embeddings: validated.digests.map(() => null),
     }
     report.keepStandalone = outcome.keepStandalone
@@ -811,6 +820,7 @@ export async function consolidate(
       standalone: outcome.keepStandalone.length,
       unlisted: validated.unlisted.length,
       contradictions: outcome.contradictions.length,
+      resolved: outcome.resolvedIds?.length ?? 0,
       policyChatId: routed.policyChatId,
     })
   }

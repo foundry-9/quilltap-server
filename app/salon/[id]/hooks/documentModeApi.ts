@@ -3,6 +3,7 @@
 import { patchChat } from '@/lib/chat/patch-chat'
 import type { Message } from '../types'
 import type { ActiveDocument, DocumentMode } from './useDocumentMode'
+import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions'
 
 type DocumentScope = ActiveDocument['scope']
 
@@ -21,6 +22,8 @@ interface OpenDocumentsResponse {
 interface ReadDocumentResponse {
   content?: string
   mtime?: number
+  /** Present for a file shown read-only; `content` is then empty. */
+  viewer?: DocumentViewTarget
 }
 
 interface ResolveDocumentResponse {
@@ -32,6 +35,8 @@ interface OpenDocumentResponse {
   document: ActiveDocumentRecord
   content?: string
   mtime?: number
+  /** Present for a file shown read-only; `content` is then empty. */
+  viewer?: DocumentViewTarget
   /** Librarian announcement message posted alongside the open (null if chat not found) */
   librarianMessage?: Message | null
 }
@@ -66,8 +71,10 @@ export function toActiveDocument(
   document: ActiveDocumentRecord,
   content = '',
   mtime?: number,
+  viewer?: DocumentViewTarget,
 ): ActiveDocument {
   return {
+    ...(viewer ? { viewer } : {}),
     id: document.id,
     filePath: document.filePath,
     scope: document.scope,

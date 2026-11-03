@@ -7,11 +7,23 @@ import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import { findActiveUserParticipant, isAllLLMChat } from '@/lib/chat/turn-manager'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
-import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { useToolExecutionStatus } from './useToolExecutionStatus'
 import { splitSseBuffer } from '@/components/agent-stream/parse-agent-stream'
 import type { StorytellerBid, StorytellerOrder, StorytellerRound } from '@/lib/schemas/storyteller.types'
+import {
+  assertNever,
+  doneLeavesNoReply,
+  parseFrame,
+  type ConfirmationResultFrame,
+  type DoneFrame,
+  type FrameOf,
+  type PostedFrame,
+  type ResponseStatus,
+  type StreamFrame,
+  type ToolResultFrame,
+  type ToolsDetectedFrame,
+} from '@/lib/chat/stream-frames'
 
 /** Storyteller frames the Salon's board reads off a send's stream. */
 export type StorytellerStreamEvent =
@@ -48,134 +60,7 @@ export interface StreamingToolBatch {
 // because this hook's consumers import the type from it.
 export type { ToolExecutionStatus } from './useToolExecutionStatus'
 
-export interface ResponseStatus {
-  stage: string
-  message: string
-  toolName?: string
-  characterName?: string
-  characterId?: string
-}
-
-/** Result of parsing a single SSE data line */
-interface SSEEvent {
-  content?: string
-  /** Live cumulative reasoning ("thinking") text. DISPLAY ONLY — the client
-   *  replaces (not appends) its buffer with each value. */
-  reasoning?: string
-  /** Full reasoning text on the done event (for the optimistic assistant push). */
-  reasoningContent?: string | null
-  /** Positioned reasoning blocks on the done event. DISPLAY ONLY. */
-  reasoningSegments?: Array<{ anchorOffset: number; content: string; seq: number }> | null
-  status?: ResponseStatus
-  error?: string
-  details?: string
-  /**
-   * Error frame only: whether the user's message row was saved before the
-   * failure. Absent from older servers, in which case the client treats the
-   * question as open and asks the post-error read instead (bug 241).
-   */
-  userMessagePersisted?: boolean
-  /** Error frame only: whether the staged tool results were saved as rows. */
-  pendingToolResultsPersisted?: boolean
-  done?: boolean
-  messageId?: string
-  emptyResponse?: boolean
-  emptyResponseReason?: string
-  toolsDetected?: boolean
-  toolNames?: string[]
-  toolArguments?: Record<string, unknown>[]
-  toolResult?: {
-    index?: number
-    name: string
-    success: boolean
-    result?: any
-    /**
-     * Human-readable failure text, set by the emitter only when `success` is
-     * false (the `result` field is usually null on error). Sibling of `result`,
-     * not nested inside it.
-     */
-    error?: string
-  }
-  provider?: string
-  modelName?: string
-  /** The turn's route trail on the done event — every profile tried, in order —
-   *  so the optimistic assistant push carries the call sheet without a refetch.
-   *  Absent/null (the common case) when nothing failed. */
-  routeTrail?: RouteAttempt[] | null
-  /**
-   * What the provider plugin managed to put on the wire. `failed` entries are
-   * attachments the model never received — surfaced as a warning toast on the
-   * done event, because a silently dropped image is indistinguishable from a
-   * model that saw it and said nothing (bug 94).
-   */
-  attachmentResults?: {
-    sent?: string[]
-    failed?: Array<{ id: string; error: string }>
-  } | null
-  // Turn/chain events are sent as flat JSON with boolean flags
-  // e.g. { turnStart: true, participantId: "...", characterName: "...", chainDepth: 1 }
-  turnStart?: boolean
-  turnComplete?: boolean
-  chainComplete?: boolean
-  participantId?: string
-  characterName?: string
-  chainDepth?: number
-  nextSpeakerId?: string | null
-  reason?: string
-  /** chainComplete: the chat is (or was just) marked paused as part of this stop (bug 123). */
-  paused?: boolean
-  /** chainComplete: the stop is the user's own message — a paused room recorded
-   *  it and gave it to nobody (bug 137). */
-  heldUserTurn?: boolean
-  isSilentMessage?: boolean
-  // The Courier: { pendingExternalTurn: true, messageId, participantId, characterName }
-  pendingExternalTurn?: boolean
-  // Carina: the full posted reference-answer message, surfaced the instant it
-  // returns so the Salon renders the card without waiting for the post-turn
-  // fetchChat(). Inserted optimistically and deduped by id; the end-of-turn
-  // refresh reconciles it to the authoritative copy.
-  carinaAnswer?: Message
-  // "Nothing to add" turn-skipping. `hostAnnouncement` carries the full posted
-  // Host turn-pass message (surfaced live like carinaAnswer, deduped by id).
-  // On the done event, `skipped` marks that this turn was passed so the client
-  // resets its streaming buffer without appending a phantom bubble.
-  hostAnnouncement?: Message
-  // Pascal: the full posted custom-tool outcome message, surfaced the instant
-  // the dice fall so the Salon renders the bubble without waiting for the
-  // post-turn fetchChat(). Inserted optimistically and deduped by id; the
-  // end-of-turn refresh reconciles it to the authoritative copy.
-  pascalResult?: Message
-  skipped?: boolean
-  skippedParticipantId?: string | null
-  /** done: the operator hard-stopped the turn before any prose streamed. */
-  stopped?: boolean
-  /** done / handAnswered: the character yielded the floor to the raised hand. */
-  yielded?: boolean
-  /**
-   * Storyteller: a frame from one of several turns sharing the stream ("all at
-   * once"). Every such frame carries `participantId`; the Salon keeps one
-   * streaming bubble per participant for them.
-   */
-  concurrent?: boolean
-  /** Storyteller: the round's board as it opened. */
-  storytellerRound?: StorytellerRound
-  /** Storyteller: one seat's bid landed. */
-  storytellerBid?: { roundId: string; bid: StorytellerBid }
-  /** Storyteller: every bid is in (or the board timed out); the choice is the operator's. */
-  roundOpen?: boolean
-  roundId?: string
-  /** The character asked about the operator's raised hand has answered it. */
-  handAnswered?: boolean
-  // Answer confirmation: the resolved state for a just-streamed message. On a
-  // re-affirmation rewrite, `content` carries the replacement bubble text.
-  confirmationResult?: {
-    messageId: string
-    confirmed: boolean | null
-    revised: boolean
-    notes: string | null
-    content?: string
-  }
-}
+export type { ResponseStatus } from '@/lib/chat/stream-frames'
 
 /**
  * Pull the human-readable failure sentence out of a `toolResult` frame.
@@ -266,19 +151,34 @@ export function sendFailureToastText(message: string, restored: boolean): string
 export const SEND_FAILURE_TOAST_MS = 8000
 
 /**
- * Parse a raw SSE data string into a structured event, or null if it should be skipped.
+ * The optimistic assistant bubble a `done` frame closes, shown until the
+ * post-turn `fetchChat()` replaces it with the authoritative row (same id).
+ * The server's `participantId` is authoritative; `fallback` covers a frame
+ * that omits it, and a placeholder id for one with no `messageId`.
  */
-export function parseSSEData(rawData: string): SSEEvent | null {
-  const trimmed = rawData.trim()
-  if (!trimmed || trimmed === '[DONE]' || trimmed === '{}') {
-    return null
+export function assistantMessageFromDone(
+  frame: DoneFrame,
+  content: string,
+  fallback: { participantId: string | null; id?: string },
+): Message {
+  return {
+    id: frame.messageId || fallback.id || '',
+    role: 'ASSISTANT',
+    content,
+    createdAt: new Date().toISOString(),
+    participantId: frame.participantId || fallback.participantId,
+    provider: frame.provider || null,
+    modelName: frame.modelName || null,
+    routeTrail: frame.routeTrail ?? null,
+    isSilentMessage: frame.isSilentMessage || undefined,
+    reasoningContent: frame.reasoningContent ?? null,
+    reasoningSegments: frame.reasoningSegments ?? null,
   }
-  try {
-    return JSON.parse(trimmed) as SSEEvent
-  } catch {
-    // Ignore JSON parse errors (SSE chunking artifacts)
-    return null
-  }
+}
+
+/** A message the server already saved, as the Salon's message list holds it. */
+function postedAsMessage(frame: PostedFrame): Message {
+  return frame.message as unknown as Message
 }
 
 /**
@@ -323,6 +223,35 @@ interface UseSSEStreamingParams {
   onToolResult?: (name: string, success: boolean, result: unknown) => void
   /** Storyteller: the board's frames (round opened, bid landed, round open for choosing). */
   onStorytellerEvent?: (event: StorytellerStreamEvent) => void
+}
+
+/**
+ * Where the operator's raised hand stands, shown beside the composer
+ * (`RaisedHandChip`). `raised` is up and nobody asked yet; `asked` names the
+ * speaker weighing it; the last three are the outcome, kept until the
+ * operator dismisses it or speaks again.
+ */
+export type RaisedHandStatus =
+  | { kind: 'raised' }
+  | { kind: 'asked'; characterName: string }
+  | { kind: 'yielded'; characterName: string }
+  | { kind: 'declined'; characterName: string }
+  | { kind: 'unasked' }
+
+/** Is the hand still up — raised, or being weighed by a speaker? */
+export function isHandUp(status: RaisedHandStatus | null): boolean {
+  return status?.kind === 'raised' || status?.kind === 'asked'
+}
+
+/**
+ * The stream has ended. A hand nobody was asked about is said so; one whose
+ * speaker never answered (a stop, an error) simply goes down; an outcome
+ * stays where it is.
+ */
+function settleHandAtStreamEnd(prev: RaisedHandStatus | null): RaisedHandStatus | null {
+  if (prev?.kind === 'raised') return { kind: 'unasked' }
+  if (prev?.kind === 'asked') return null
+  return prev
 }
 
 /**
@@ -373,7 +302,8 @@ export function useSSEStreaming({
   // The operator's interrupts (lib/chat/turn-control.ts on the server): a
   // raised hand waiting for the next speaker's answer, and a hard stop the
   // server is still putting away.
-  const [handRaised, setHandRaised] = useState(false)
+  const [handStatus, setHandStatus] = useState<RaisedHandStatus | null>(null)
+  const handRaised = isHandUp(handStatus)
   const [stopping, setStopping] = useState(false)
   const stoppingRef = useRef(false)
   const [streamingContent, setStreamingContent] = useState('')
@@ -579,9 +509,9 @@ export function useSSEStreaming({
   // Push a freshly-detected tool batch, tagged with the prose offset where it
   // fired, and surface image-generation status. Shared by the send and continue
   // streaming paths so both interleave tool calls into the live bubble.
-  const trackToolsDetected = useCallback((data: SSEEvent, offset: number) => {
-    const toolNames = (data.toolNames || []) as string[]
-    const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
+  const trackToolsDetected = useCallback((frame: ToolsDetectedFrame, offset: number) => {
+    const toolNames = frame.names
+    const toolArgs = frame.arguments
     const seq = toolBatchSeqRef.current++
     const calls: PendingToolCall[] = toolNames.map((name, idx) => ({
       id: `tool-${seq}-${idx}`,
@@ -602,8 +532,10 @@ export function useSSEStreaming({
   // Mark a tool result on the most recent batch (results stream immediately
   // after their detection) and run per-tool side effects (navigation, image
   // toasts, page callback).
-  const trackToolResult = useCallback((data: SSEEvent) => {
-    const { index, name, success, result, error } = data.toolResult!
+  const trackToolResult = useCallback((frame: ToolResultFrame) => {
+    const { index, name, success, error } = frame
+    // Tool results are free-form; the per-tool reads below know their shapes.
+    const result = frame.result as any
 
     setStreamingToolBatches(prev => {
       if (prev.length === 0) return prev
@@ -661,9 +593,9 @@ export function useSSEStreaming({
       participantId: string | null
       /** `offset` is the length of the response text streamed so far — where
        *  this batch of tool calls was invoked in the prose. */
-      onToolsDetected?: (data: SSEEvent, offset: number) => void
-      onToolResult?: (data: SSEEvent) => void
-      onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
+      onToolsDetected?: (frame: ToolsDetectedFrame, offset: number) => void
+      onToolResult?: (frame: ToolResultFrame) => void
+      onDone: (fullContent: string, frame: DoneFrame) => void | Promise<void>
       /**
        * Called for each full message surfaced mid-turn — a Carina reference
        * answer, a Host announcement (e.g. a turn-pass note), or a Pascal
@@ -672,9 +604,9 @@ export function useSSEStreaming({
        */
       onSurfacedMessage?: (message: Message) => void
       /** Called when an answer-confirmation result resolves for a message */
-      onConfirmationResult?: (result: NonNullable<SSEEvent['confirmationResult']>) => void
+      onConfirmationResult?: (result: ConfirmationResultFrame) => void
       /** Called for intermediate done events during a chain (not the final one) */
-      onIntermediateDone?: (fullContent: string, data: SSEEvent) => void | Promise<void>
+      onIntermediateDone?: (fullContent: string, frame: DoneFrame) => void | Promise<void>
       onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
       onTurnComplete?: (event: { participantId: string; messageId: string; chainDepth: number }) => void | Promise<void>
       onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number; paused: boolean; heldUserTurn: boolean }) => void | Promise<void>
@@ -695,222 +627,257 @@ export function useSSEStreaming({
     // connection lost mid-way through the next speaker's turn is just as
     // truncated as one lost before the first.
     let turnClosed = false
+    // Each concurrent seat's prose so far, kept here as well as in
+    // `concurrentStreams`: the seat's `done` needs the finished text now, and
+    // React need not run a state updater before the next line executes, so
+    // reading it back out of one left the reply bubble empty.
+    const seatText = new Map<string, string>()
 
-    const handleLine = async (line: string): Promise<void> => {
-      if (!line.startsWith('data: ')) return
-      const rawData = line.slice(6)
-      const data = parseSSEData(rawData)
-      if (!data) return
+    /** The raised hand and the Storyteller board: the same whoever's seat sent them. */
+    const applyFloorFrame = (
+      frame: FrameOf<'handAsked' | 'handAnswered' | 'storytellerRound' | 'storytellerBid' | 'roundOpen'>,
+    ): void => {
+      switch (frame.kind) {
+        // The chip beside the composer says each step, so neither the asking
+        // nor a decline passes without a word.
+        case 'handAsked':
+          setHandStatus({ kind: 'asked', characterName: frame.characterName || 'The next speaker' })
+          return
+        case 'handAnswered':
+          setHandStatus({
+            kind: frame.yielded ? 'yielded' : 'declined',
+            characterName: frame.characterName || 'The speaker',
+          })
+          return
+        case 'storytellerRound':
+          onStorytellerEventRef.current?.({ kind: 'round', round: frame.round })
+          return
+        case 'storytellerBid':
+          onStorytellerEventRef.current?.({ kind: 'bid', roundId: frame.roundId, bid: frame.bid })
+          return
+        case 'roundOpen':
+          onStorytellerEventRef.current?.({ kind: 'open', roundId: frame.roundId })
+          return
+        default:
+          assertNever(frame)
+      }
+    }
 
-      // Storyteller board frames: handed to the board, nothing else to do.
-      if (data.storytellerRound) {
-        onStorytellerEventRef.current?.({ kind: 'round', round: data.storytellerRound })
-        return
-      }
-      if (data.storytellerBid) {
-        onStorytellerEventRef.current?.({ kind: 'bid', ...data.storytellerBid })
-        return
-      }
-      if (data.roundOpen && data.roundId) {
-        onStorytellerEventRef.current?.({ kind: 'open', roundId: data.roundId })
-        return
-      }
-
-      // Storyteller "all at once": a frame from one of several concurrent
-      // turns. Each participant gets its own bubble; the shared streaming
-      // slot is left alone.
-      if (data.concurrent && data.participantId) {
-        const pid = data.participantId
-        if (data.turnStart) {
+    /**
+     * Storyteller "all at once": a frame from one of several concurrent turns.
+     * Each seat gets its own bubble; the shared streaming slot is left alone.
+     */
+    const handleSeatFrame = (frame: StreamFrame, pid: string): void => {
+      switch (frame.kind) {
+        case 'handAsked':
+        case 'handAnswered':
+        case 'storytellerRound':
+        case 'storytellerBid':
+        case 'roundOpen':
+          applyFloorFrame(frame)
+          return
+        case 'turnStart':
+          if (!seatText.has(pid)) seatText.set(pid, '')
           setWaitingForResponse(false)
           setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
             ? prev
             : [...prev, { participantId: pid, content: '' }])
-        } else if (data.content) {
+          return
+        case 'content': {
+          if (!frame.text) return
+          const text = frame.text
+          seatText.set(pid, (seatText.get(pid) ?? '') + text)
           setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
-            ? prev.map((c) => c.participantId === pid ? { ...c, content: c.content + data.content } : c)
-            : [...prev, { participantId: pid, content: data.content! }])
-        } else if (data.done) {
-          let finished = ''
-          setConcurrentStreams((prev) => {
-            finished = prev.find((c) => c.participantId === pid)?.content ?? ''
-            return prev.filter((c) => c.participantId !== pid)
-          })
-          if (data.messageId && !data.skipped && !data.stopped) {
-            const messageId = data.messageId
-            setMessages((prev) => prev.some((m) => m.id === messageId) ? prev : [...prev, {
-              id: messageId,
-              role: 'ASSISTANT',
-              content: finished,
-              createdAt: new Date().toISOString(),
-              participantId: pid,
-              provider: data.provider || null,
-              modelName: data.modelName || null,
-              routeTrail: data.routeTrail ?? null,
-              isSilentMessage: data.isSilentMessage || undefined,
-              reasoningContent: data.reasoningContent ?? null,
-              reasoningSegments: data.reasoningSegments ?? null,
-            }])
+            ? prev.map((c) => c.participantId === pid ? { ...c, content: c.content + text } : c)
+            : [...prev, { participantId: pid, content: text }])
+          return
+        }
+        case 'done': {
+          const finished = seatText.get(pid) ?? ''
+          seatText.delete(pid)
+          setConcurrentStreams((prev) => prev.filter((c) => c.participantId !== pid))
+          if (frame.messageId && !doneLeavesNoReply(frame.outcome)) {
+            const messageId = frame.messageId
+            setMessages((prev) => prev.some((m) => m.id === messageId)
+              ? prev
+              : [...prev, assistantMessageFromDone(frame, finished, { participantId: pid })])
           }
-        } else if (data.carinaAnswer || data.hostAnnouncement || data.pascalResult) {
-          surfaceMessage((data.carinaAnswer || data.hostAnnouncement || data.pascalResult)!)
-        } else if (data.error) {
-          showErrorToast(data.error)
+          return
         }
-        return
+        case 'posted':
+          surfaceMessage(postedAsMessage(frame))
+          return
+        case 'error':
+          showErrorToast(frame.message)
+          return
+        // A concurrent turn's status, thinking, tools and chain bookkeeping
+        // have no bubble of their own; the round's own frames carry the rest.
+        case 'reasoning':
+        case 'status':
+        case 'fileProcessing':
+        case 'toolsDetected':
+        case 'toolResult':
+        case 'turnComplete':
+        case 'chainComplete':
+        case 'pendingExternalTurn':
+        case 'confirmationResult':
+        case 'swipeDone':
+          return
+        default:
+          assertNever(frame)
       }
+    }
 
-      // Handle status updates
-      if (data.status) {
-        setResponseStatus(data.status)
-        // Show a warning toast when the turn is being rescued: `retrying`
-        // is the same provider having another go after an empty response,
-        // `failing-over` is an understudy from the profile's fallback chain
-        // taking the turn. Both are moments where the reply the user gets is
-        // not the one they configured, so both are worth saying out loud.
-        if (data.status.stage === 'retrying' || data.status.stage === 'failing-over') {
-          showWarningToast(data.status.message)
-        }
-      }
+    const handleFrame = async (frame: StreamFrame): Promise<void> => {
+      switch (frame.kind) {
+        case 'handAsked':
+        case 'handAnswered':
+        case 'storytellerRound':
+        case 'storytellerBid':
+        case 'roundOpen':
+          applyFloorFrame(frame)
+          return
 
-      // Handle content chunks
-      if (data.content) {
-        fullContent += data.content
-        if (!hasStartedStreaming) {
-          setWaitingForResponse(false)
-          setStreaming(true)
-          hasStartedStreaming = true
-        }
-        scheduleStreamingContent(fullContent)
-      }
+        case 'status':
+          setResponseStatus(frame.status)
+          // A turn being rescued: `retrying` is the same provider having
+          // another go after an empty response, `failing-over` an understudy
+          // from the fallback chain. Either way the reply is not the one the
+          // user configured, so say so out loud.
+          if (frame.status.stage === 'retrying' || frame.status.stage === 'failing-over') {
+            showWarningToast(frame.status.message)
+          }
+          return
 
-      // Handle live reasoning ("thinking") — cumulative, so replace the buffer.
-      // DISPLAY ONLY; the StreamingMessage renders it as a leading block when
-      // the chat's thinking-visibility is on.
-      if (typeof data.reasoning === 'string') {
-        scheduleStreamingReasoning(data.reasoning)
-      }
+        case 'content':
+          if (!frame.text) return
+          fullContent += frame.text
+          if (!hasStartedStreaming) {
+            setWaitingForResponse(false)
+            setStreaming(true)
+            hasStartedStreaming = true
+          }
+          scheduleStreamingContent(fullContent)
+          return
 
-      // Handle errors
-      if (data.error) {
-        setResponseStatus(null)
-        const errorMsg = data.details
-          ? `${data.error}: ${data.details}`
-          : data.error
-        throw new SalonSendError(errorMsg, {
-          userMessagePersisted: typeof data.userMessagePersisted === 'boolean' ? data.userMessagePersisted : undefined,
-          pendingToolResultsPersisted: typeof data.pendingToolResultsPersisted === 'boolean' ? data.pendingToolResultsPersisted : undefined,
-        })
-      }
+        // Live reasoning ("thinking") — cumulative, so replace the buffer.
+        // DISPLAY ONLY; the StreamingMessage renders it as a leading block when
+        // the chat's thinking-visibility is on.
+        case 'reasoning':
+          scheduleStreamingReasoning(frame.text)
+          return
 
-      // Handle tool detection. `fullContent` is the prose streamed so far —
-      // the offset at which this batch was invoked.
-      if (data.toolsDetected && opts.onToolsDetected) {
-        opts.onToolsDetected(data, fullContent.length)
-      }
-
-      // Handle tool results
-      if (data.toolResult && opts.onToolResult) {
-        opts.onToolResult(data)
-      }
-
-      // Messages surfaced mid-turn — a Carina reference answer, a Host
-      // announcement (turn-pass note), a Pascal custom-tool outcome — are
-      // inserted into the flow immediately (deduped by id) rather than
-      // waiting for the post-turn fetchChat().
-      if (opts.onSurfacedMessage) {
-        for (const surfaced of [data.carinaAnswer, data.hostAnnouncement, data.pascalResult]) {
-          if (surfaced) opts.onSurfacedMessage(surfaced)
-        }
-      }
-
-      // The raised hand has been answered. A yield speaks for itself (the
-      // Host's note, then the floor); a decline is said here, or the hand
-      // would simply go down with no word of why.
-      if (data.handAnswered) {
-        setHandRaised(false)
-        if (!data.yielded) {
-          showInfoToast(`${data.characterName || 'The speaker'} carried on regardless. Your hand is lowered.`)
-        }
-      }
-
-      // Handle an answer-confirmation result — update the badge and, on a
-      // revision, swap in the corrected bubble text (a deliberate, visible
-      // transparency swap).
-      if (data.confirmationResult && opts.onConfirmationResult) {
-        opts.onConfirmationResult(data.confirmationResult)
-      }
-
-      // Handle completion
-      if (data.done) {
-        turnClosed = true
-        setResponseStatus(null)
-
-        // Attachments the provider plugin could not put on the wire (bug 94).
-        const attachmentWarning = buildFailedAttachmentWarning(data.attachmentResults?.failed)
-        if (attachmentWarning) showWarningToast(attachmentWarning)
-
-        if (inChain && opts.onIntermediateDone) {
-          // Intermediate done during a chain — lighter cleanup, no state reset
-          await opts.onIntermediateDone(fullContent, data)
-        } else {
-          await opts.onDone(fullContent, data)
-        }
-      }
-
-      // The Courier: server placed a placeholder for a manual / clipboard
-      // turn. Refetch so the bubble appears with the Markdown blob + paste
-      // textarea. The accompanying `done` event closes the stream.
-      if (data.pendingExternalTurn) {
-        await fetchChat()
-      }
-
-      // Handle turn start (chained character about to respond)
-      // Server sends flat: { turnStart: true, participantId, characterName, chainDepth }
-      if (data.turnStart) {
-        // Only a chained turn (depth > 0) enters a chain. The server also
-        // sends a depth-0 turnStart before every first turn so the bubble
-        // shows the right responder; that one must leave the turn's `done`
-        // on the ordinary end-of-turn path (bug 242).
-        if ((data.chainDepth || 0) > 0) inChain = true
-        turnClosed = false
-        fullContent = ''
-        hasStartedStreaming = false
-        resetStreamingContent()
-        setStreaming(false)
-        setWaitingForResponse(true)
-        if (data.participantId) {
-          opts.onTurnStart?.({
-            participantId: data.participantId,
-            characterName: data.characterName || 'Unknown',
-            chainDepth: data.chainDepth || 0,
+        case 'error':
+          setResponseStatus(null)
+          throw new SalonSendError(frame.details ? `${frame.message}: ${frame.details}` : frame.message, {
+            userMessagePersisted: frame.userMessagePersisted,
+            pendingToolResultsPersisted: frame.pendingToolResultsPersisted,
           })
+
+        // `fullContent` is the prose streamed so far — the offset at which
+        // this batch was invoked.
+        case 'toolsDetected':
+          opts.onToolsDetected?.(frame, fullContent.length)
+          return
+
+        case 'toolResult':
+          opts.onToolResult?.(frame)
+          return
+
+        // A Carina answer, a Host announcement (turn-pass note) or a Pascal
+        // outcome, inserted at once (deduped by id) rather than waiting for
+        // the post-turn fetchChat().
+        case 'posted':
+          opts.onSurfacedMessage?.(postedAsMessage(frame))
+          return
+
+        // Update the badge and, on a revision, swap in the corrected bubble
+        // text (a deliberate, visible transparency swap).
+        case 'confirmationResult':
+          opts.onConfirmationResult?.(frame)
+          return
+
+        case 'done': {
+          turnClosed = true
+          setResponseStatus(null)
+          // Attachments the provider plugin could not put on the wire (bug 94).
+          const attachmentWarning = buildFailedAttachmentWarning(frame.attachmentResults?.failed)
+          if (attachmentWarning) showWarningToast(attachmentWarning)
+          if (inChain && opts.onIntermediateDone) {
+            // Intermediate done during a chain — lighter cleanup, no state reset
+            await opts.onIntermediateDone(fullContent, frame)
+          } else {
+            await opts.onDone(fullContent, frame)
+          }
+          // The Courier's parked turn: the placeholder arrives with the refetch.
+          if (frame.pendingExternalTurn) await fetchChat()
+          return
         }
-      }
 
-      // Handle turn complete (chained character finished)
-      // Server sends flat: { turnComplete: true, participantId, messageId, chainDepth }
-      if (data.turnComplete) {
-        await opts.onTurnComplete?.({
-          participantId: data.participantId!,
-          messageId: data.messageId || '',
-          chainDepth: data.chainDepth || 0,
-        })
-      }
+        // The Courier placed a placeholder for a manual / clipboard turn.
+        // Refetch so the bubble appears with the Markdown blob + paste
+        // textarea. The accompanying `done` closes the turn.
+        case 'pendingExternalTurn':
+          await fetchChat()
+          return
 
-      // Handle chain complete (all chained turns done)
-      // Server sends flat: { chainComplete: true, reason, nextSpeakerId, chainDepth }
-      if (data.chainComplete) {
-        inChain = false
-        turnClosed = true
-        await opts.onChainComplete?.({
-          reason: data.reason || 'no_next_speaker',
-          nextSpeakerId: data.nextSpeakerId ?? null,
-          chainDepth: data.chainDepth || 0,
-          paused: data.paused === true,
-          heldUserTurn: data.heldUserTurn === true,
-        })
+        case 'turnStart':
+          // Only a chained turn (depth > 0) enters a chain. The server also
+          // sends a depth-0 turnStart before every first turn so the bubble
+          // shows the right responder; that one must leave the turn's `done`
+          // on the ordinary end-of-turn path (bug 242).
+          if (frame.chainDepth > 0) inChain = true
+          turnClosed = false
+          fullContent = ''
+          hasStartedStreaming = false
+          resetStreamingContent()
+          setStreaming(false)
+          setWaitingForResponse(true)
+          opts.onTurnStart?.({
+            participantId: frame.participantId,
+            characterName: frame.characterName || 'Unknown',
+            chainDepth: frame.chainDepth,
+          })
+          return
+
+        case 'turnComplete':
+          await opts.onTurnComplete?.({
+            participantId: frame.participantId,
+            messageId: frame.messageId,
+            chainDepth: frame.chainDepth,
+          })
+          return
+
+        case 'chainComplete':
+          inChain = false
+          turnClosed = true
+          await opts.onChainComplete?.({
+            reason: frame.reason,
+            nextSpeakerId: frame.nextSpeakerId,
+            chainDepth: frame.chainDepth,
+            paused: frame.paused === true,
+            heldUserTurn: frame.heldUserTurn === true,
+          })
+          return
+
+        // Not frames a Salon send carries.
+        case 'fileProcessing':
+        case 'swipeDone':
+          return
+
+        default:
+          assertNever(frame)
       }
+    }
+
+    const handleLine = async (line: string): Promise<void> => {
+      if (!line.startsWith('data: ')) return
+      const frame = parseFrame(line.slice(6))
+      if (!frame) return
+      // A frame is a concurrent seat's or the stream's own, and then exactly
+      // one kind — no order of tests decides what it means.
+      if (frame.seat) handleSeatFrame(frame, frame.seat.participantId)
+      else await handleFrame(frame)
     }
 
     // Lines are carried across reads: a frame split between two chunks used to
@@ -1045,8 +1012,11 @@ export function useSSEStreaming({
      * the restored words survive a reload exactly as they did before Send.
      */
     persistDraft?: (text: string) => void,
+    /** `establishedFact`: post this line as established fact (Deus Ex Machina). */
+    opts?: { establishedFact?: boolean },
   ) => {
     e?.preventDefault()
+    const establishedFact = !!opts?.establishedFact
     // Two refusals, deliberately told apart (bug 136). An empty composer is
     // the operator's own doing and wants no answer; a send declined because a
     // turn is still in flight is a real request refused, and silence there is
@@ -1058,6 +1028,8 @@ export function useSSEStreaming({
       return
     }
 
+    // The operator has the floor now; the last hand's outcome is spent.
+    setHandStatus(null)
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
     const messageAttachments: MessageAttachment[] = attachedFiles.map((f) => ({
@@ -1122,6 +1094,8 @@ export function useSSEStreaming({
       // Renders with the chosen character's name/avatar immediately (not the
       // default user), matching what the server persists.
       participantId: optimisticAuthor?.id ?? activeTypingParticipantIdRef.current ?? undefined,
+      // The ribbon shows at once, before the server's row replaces this one.
+      ...(establishedFact ? { isEstablishedFact: true } : {}),
     }
     setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
     scrollOnUserMessage()
@@ -1130,6 +1104,7 @@ export function useSSEStreaming({
       content: userMessage || (attachedFiles.length > 0 ? 'Please look at the attached file(s).' : ''),
       fileIds,
       speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+      ...(establishedFact ? { isEstablishedFact: true } : {}),
       pendingToolResults: toolResultsToSend.length > 0 ? toolResultsToSend.map(r => ({
         tool: r.tool,
         success: r.success,
@@ -1174,12 +1149,12 @@ export function useSSEStreaming({
         onSurfacedMessage: surfaceMessage,
         onConfirmationResult: applyConfirmationResult,
         onDone: async (fullContent, data) => {
-          if (data.skipped || data.stopped) {
+          if (doneLeavesNoReply(data.outcome)) {
             finishSkippedTurn()
             return
           }
 
-          if (data.emptyResponse) {
+          if (data.outcome === 'empty') {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
             resetStreamingContent()
             setStreaming(false)
@@ -1204,22 +1179,7 @@ export function useSSEStreaming({
             return
           }
 
-          // Use server-provided participantId if available (authoritative)
-          const resolvedParticipantId = data.participantId || currentParticipantId
-
-          const assistantMessage: Message = {
-            id: data.messageId!,
-            role: 'ASSISTANT',
-            content: fullContent,
-            createdAt: new Date().toISOString(),
-            participantId: resolvedParticipantId,
-            provider: data.provider || null,
-            modelName: data.modelName || null,
-            routeTrail: data.routeTrail ?? null,
-            isSilentMessage: data.isSilentMessage || undefined,
-            reasoningContent: data.reasoningContent ?? null,
-            reasoningSegments: data.reasoningSegments ?? null,
-          }
+          const assistantMessage = assistantMessageFromDone(data, fullContent, { participantId: currentParticipantId })
           setMessages((prev) => [...prev, assistantMessage])
           resetStreamingContent()
           // Live tool batches are spent — the refetched message carries the
@@ -1238,28 +1198,13 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          if (data.skipped || data.stopped) {
+          if (doneLeavesNoReply(data.outcome)) {
             finishSkippedTurn()
             return
           }
-          if (data.emptyResponse || !fullContent) return
+          if (data.outcome === 'empty' || !fullContent) return
 
-          // Use server-provided participantId if available (authoritative)
-          const resolvedParticipantId = data.participantId || currentParticipantId
-
-          const assistantMessage: Message = {
-            id: data.messageId!,
-            role: 'ASSISTANT',
-            content: fullContent,
-            createdAt: new Date().toISOString(),
-            participantId: resolvedParticipantId,
-            provider: data.provider || null,
-            modelName: data.modelName || null,
-            routeTrail: data.routeTrail ?? null,
-            isSilentMessage: data.isSilentMessage || undefined,
-            reasoningContent: data.reasoningContent ?? null,
-            reasoningSegments: data.reasoningSegments ?? null,
-          }
+          const assistantMessage = assistantMessageFromDone(data, fullContent, { participantId: currentParticipantId })
           setMessages((prev) => [...prev, assistantMessage])
           resetStreamingContent()
           setStreaming(false)
@@ -1347,7 +1292,7 @@ export function useSSEStreaming({
       setResponseStatus(null)
       // The stream is over: any hand still up has nobody left to ask, and a
       // stop has finished putting the reply away.
-      setHandRaised(false)
+      setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
       // The turn is over, so every optimistic bubble has had its chance: the
@@ -1384,6 +1329,8 @@ export function useSSEStreaming({
       showErrorToast('No characters available. Add a character to continue the conversation.')
       return
     }
+
+    setHandStatus(null)
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -1434,54 +1381,31 @@ export function useSSEStreaming({
           setResponseStatus(null)
           clearPendingToolExecutionStatus()
 
-          if (data.skipped || data.stopped) {
+          if (doneLeavesNoReply(data.outcome)) {
             finishSkippedTurn()
             return
           }
 
           if (fullContent.trim()) {
-            // Use server-provided participantId if available (authoritative)
-            const resolvedParticipantId = data.participantId || currentParticipantId
-
-            const newMessage: Message = {
-              id: data.messageId || `continue-${Date.now()}`,
-              role: 'ASSISTANT',
-              content: fullContent,
-              createdAt: new Date().toISOString(),
-              participantId: resolvedParticipantId,
-              provider: data.provider || null,
-              modelName: data.modelName || null,
-              routeTrail: data.routeTrail ?? null,
-              isSilentMessage: data.isSilentMessage || undefined,
-              reasoningContent: data.reasoningContent ?? null,
-              reasoningSegments: data.reasoningSegments ?? null,
-            }
+            const newMessage = assistantMessageFromDone(data, fullContent, {
+              participantId: currentParticipantId,
+              id: `continue-${Date.now()}`,
+            })
             setMessages(prev => [...prev, newMessage])
           }
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          if (data.skipped || data.stopped) {
+          if (doneLeavesNoReply(data.outcome)) {
             finishSkippedTurn()
             return
           }
           if (!fullContent.trim()) return
 
-          // Use server-provided participantId if available (authoritative)
-          const resolvedParticipantId = data.participantId || currentParticipantId
-
-          const newMessage: Message = {
-            id: data.messageId || `continue-chain-${Date.now()}`,
-            role: 'ASSISTANT',
-            content: fullContent,
-            createdAt: new Date().toISOString(),
-            participantId: resolvedParticipantId,
-            provider: data.provider || null,
-            modelName: data.modelName || null,
-            routeTrail: data.routeTrail ?? null,
-            reasoningContent: data.reasoningContent ?? null,
-            reasoningSegments: data.reasoningSegments ?? null,
-          }
+          const newMessage = assistantMessageFromDone(data, fullContent, {
+            participantId: currentParticipantId,
+            id: `continue-chain-${Date.now()}`,
+          })
           setMessages(prev => [...prev, newMessage])
         },
         onTurnStart: (event) => {
@@ -1523,7 +1447,7 @@ export function useSSEStreaming({
       setRespondingParticipantId(null)
       setResponseStatus(null)
       abortControllerRef.current = null
-      setHandRaised(false)
+      setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
       scrollOnStreamComplete()
@@ -1562,26 +1486,17 @@ export function useSSEStreaming({
     setConcurrentStreams([])
     let currentParticipantId: string | null = null
 
-    const pushReply = (fullContent: string, data: SSEEvent) => {
-      if (data.skipped || data.stopped) {
+    const pushReply = (fullContent: string, data: DoneFrame) => {
+      if (doneLeavesNoReply(data.outcome)) {
         finishSkippedTurn()
         return
       }
       if (!fullContent.trim()) return
-      const resolvedParticipantId = data.participantId || currentParticipantId
-      setMessages(prev => [...prev, {
-        id: data.messageId || `storyteller-${Date.now()}`,
-        role: 'ASSISTANT',
-        content: fullContent,
-        createdAt: new Date().toISOString(),
-        participantId: resolvedParticipantId,
-        provider: data.provider || null,
-        modelName: data.modelName || null,
-        routeTrail: data.routeTrail ?? null,
-        isSilentMessage: data.isSilentMessage || undefined,
-        reasoningContent: data.reasoningContent ?? null,
-        reasoningSegments: data.reasoningSegments ?? null,
-      }])
+      const reply = assistantMessageFromDone(data, fullContent, {
+        participantId: currentParticipantId,
+        id: `storyteller-${Date.now()}`,
+      })
+      setMessages(prev => [...prev, reply])
     }
 
     try {
@@ -1651,7 +1566,7 @@ export function useSSEStreaming({
       setRespondingParticipantId(null)
       setResponseStatus(null)
       abortControllerRef.current = null
-      setHandRaised(false)
+      setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
       scrollOnStreamComplete()
@@ -1692,7 +1607,7 @@ export function useSSEStreaming({
     if (stoppingRef.current) return
     stoppingRef.current = true
     setStopping(true)
-    setHandRaised(false)
+    setHandStatus(null)
     // Reflect the pause at once; the server writes it before it aborts, so
     // the chain's next decision already reads it.
     if (isMultiChar) {
@@ -1728,12 +1643,13 @@ export function useSSEStreaming({
 
   /**
    * Soft interrupt: raise (or lower) the operator's hand. The next character
-   * built to speak is asked whether to yield; the answer arrives as a
-   * `handAnswered` event, and the stream's end lowers any hand left up.
+   * built to speak is asked whether to yield (`handAsked`), the answer arrives
+   * as `handAnswered`, and the stream's end settles any hand left up. The
+   * server's reply never overwrites a `handAsked` that beat it here.
    */
   const toggleRaisedHand = useCallback(async () => {
     const raise = !handRaised
-    setHandRaised(raise)
+    setHandStatus(raise ? { kind: 'raised' } : null)
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=raise-hand`, {
         method: 'POST',
@@ -1742,15 +1658,23 @@ export function useSSEStreaming({
       })
       if (!res.ok) throw new Error(res.statusText || 'Request failed')
       const data = await res.json() as { raised?: boolean; active?: boolean }
-      setHandRaised(data.raised === true)
+      // The stream owns the hand from here (`handAsked` / `handAnswered`, then
+      // the stream's end). The one thing the reply settles is that there is no
+      // stream: nobody will ever be asked, so the hand comes straight down.
       if (raise && data.active === false) {
+        setHandStatus((prev) => (prev?.kind === 'raised' ? null : prev))
         showInfoToast('Nobody is speaking just now. The floor is already yours.')
       }
     } catch (err) {
-      setHandRaised(false)
+      setHandStatus((prev) => (prev?.kind === 'raised' ? null : prev))
       showErrorToast(`Could not raise your hand: ${getErrorMessage(err)}`)
     }
   }, [chatId, handRaised])
+
+  /** Put away the raised hand's outcome note. */
+  const dismissHandStatus = useCallback(() => {
+    setHandStatus((prev) => (isHandUp(prev) ? prev : null))
+  }, [])
 
   return {
     sending,
@@ -1769,7 +1693,9 @@ export function useSSEStreaming({
     concurrentStreams,
     stopStreaming,
     handRaised,
+    handStatus,
     toggleRaisedHand,
+    dismissHandStatus,
     stopping,
   }
 }

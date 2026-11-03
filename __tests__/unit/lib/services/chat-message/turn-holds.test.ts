@@ -154,6 +154,22 @@ describe('maybePauseForUserSeatTurn', () => {
     expect(result).toMatchObject({ hasContent: false, messageId: 'msg-user', userParticipantId: 'a' })
   })
 
+  it('carries an established fact through the fair-rotation pause (bug 262 shape)', async () => {
+    jest.mocked(selectNextSpeakerAfterUserMessage).mockReturnValue({ nextSpeakerId: 'c', reason: 'rotation' } as never)
+    await maybePauseForUserSeatTurn({
+      repos: repos as never,
+      chatId: 'chat-1',
+      chat,
+      userId: 'user-1',
+      options: { content: 'The bridge is gone.', isEstablishedFact: true },
+      speakingAsParticipantId: 'a',
+      ledger: newSubmissionLedger(),
+      controller,
+      encoder: new TextEncoder(),
+    })
+    expect(jest.mocked(recordOperatorPost).mock.calls[0][0]).toMatchObject({ isEstablishedFact: true })
+  })
+
   it('records nothing when an LLM is up next', async () => {
     jest.mocked(selectNextSpeakerAfterUserMessage).mockReturnValue({ nextSpeakerId: 'b', reason: 'rotation' } as never)
     const result = await maybePauseForUserSeatTurn({

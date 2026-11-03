@@ -13,7 +13,9 @@ import { formatNameWithPronouns } from '../../format-utils'
 import { renderStretch, renderTurnContext, type StretchMessage } from '../window'
 import {
   AGREEMENTS_INSTRUCTION_BLOCK,
+  REPAIRS_INSTRUCTION_BLOCK,
   AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE,
+  ESTABLISHED_FACT_INSTRUCTION_BLOCK,
   EVENT_INSTRUCTION_BLOCK,
   IMPORTANCE_FACT_NOT_TELLING_NOTE,
   IMPORTANCE_WORK_CEILING_NOTE,
@@ -100,7 +102,10 @@ WHAT TO SKIP (do not produce a memory for any of these)
   patterns already established in the canon block. Novel or shifted
   gestures belong under category 5, not here.
 - Generic emotional warmth or affection toward established partners,
-  unless this exchange marks a shift in degree or kind.
+  unless this exchange marks a shift in degree or kind. (Kept promises,
+  a time the subject turned out to be right, or showing up when it
+  counted are not generic warmth: record them under STATE CHANGES at
+  0.40–0.55.)
 - Narrative references to tool output: terminal sessions, file paths,
   exit codes, commit hashes, command names, even when the subject
   mentions them in passing.
@@ -108,6 +113,10 @@ WHAT TO SKIP (do not produce a memory for any of these)
 ${ORIENTING_CONTEXT_SKIP_BULLET}
 
 ${AGREEMENTS_INSTRUCTION_BLOCK}
+
+${REPAIRS_INSTRUCTION_BLOCK}
+
+${ESTABLISHED_FACT_INSTRUCTION_BLOCK}
 
 DEDUPLICATION
 Before finalizing, scan your own list. Within a single subject, if two
@@ -123,7 +132,8 @@ IMPORTANCE — calibrate to these anchors
   0.85  A revelation, or a personal commitment the subject themselves
         spoke, that changes how the observer relates to the subject.
         A proposal made TO the subject is not the subject's
-        commitment.
+        commitment. A repair — forgiveness given or an apology
+        accepted — is scored at least as high as what it repairs.
   0.60  A new substantive fact about the subject's background, plans,
         or skills — including a commitment to build, file, fix, or
         rule on something.

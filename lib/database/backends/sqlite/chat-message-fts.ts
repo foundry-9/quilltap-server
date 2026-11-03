@@ -84,11 +84,14 @@ const REBUILD_BATCH_SIZE = 500;
 /**
  * The eligibility filter, as a SQL fragment.
  *
- * Only `type='message'` rows with `role IN ('USER','ASSISTANT')` and non-null
- * `content` are indexed — exactly the filter global search has always applied,
- * so the index is as small as it can be while answering every question the
- * search bar asks. System events, informs and Staff messages stay
- * unsearchable, as they always have been.
+ * Only what a character actually said is indexed: `type='message'` rows with
+ * `role IN ('USER','ASSISTANT')`, non-null `content`, and no `systemSender` or
+ * `customAnnouncer`. That is the same judgement as `isCharacterAuthoredMessage`
+ * (`lib/chat/chat-activity.ts`) — change one and you must change the other.
+ * System events, informs, Staff messages (Commonplace Book recall whispers,
+ * Host and Prospero announcements, …) and announcement bubbles stay
+ * unsearchable. Staff rows carry role `ASSISTANT`, so a role test alone let
+ * them in (#121).
  *
  * Lives here so the triggers, the counts and the rebuild cannot drift apart.
  *
@@ -97,7 +100,10 @@ const REBUILD_BATCH_SIZE = 500;
  */
 export function chatMessageFtsEligibilitySql(alias = ''): string {
   const p = alias ? `${alias}.` : '';
-  return `${p}"type" = 'message' AND ${p}"role" IN ('USER','ASSISTANT') AND ${p}"content" IS NOT NULL`;
+  return (
+    `${p}"type" = 'message' AND ${p}"role" IN ('USER','ASSISTANT') AND ${p}"content" IS NOT NULL` +
+    ` AND ${p}"systemSender" IS NULL AND ${p}"customAnnouncer" IS NULL`
+  );
 }
 
 /**
@@ -117,11 +123,11 @@ export const CHAT_MESSAGE_FTS_SCHEMA_STATEMENTS: readonly string[] = [
   tokenize='unicode61 remove_diacritics 2'
 )`,
 
-  // Eligibility is decided at INSERT time only. Nothing changes a row's `type`
-  // or `role` after it is written, and the map's EXISTS guard keeps the other
-  // two triggers correct either way.
+  // Eligibility is decided at INSERT time only. Nothing changes a row's `type`,
+  // `role` or author after it is written, and the map's EXISTS guard keeps the
+  // other two triggers correct either way.
   `CREATE TRIGGER IF NOT EXISTS "chat_messages_fts_ai" AFTER INSERT ON "chat_messages"
-  WHEN new."type" = 'message' AND new."role" IN ('USER','ASSISTANT') AND new."content" IS NOT NULL
+  WHEN ${chatMessageFtsEligibilitySql('new')}
 BEGIN
   INSERT INTO "chat_messages_fts_map"("messageId") VALUES (new."id");
   INSERT INTO "chat_messages_fts"(rowid, content)
@@ -156,12 +162,53 @@ END`,
 ];
 
 /**
- * Create the index, the map and the triggers if they are missing.
+ * The text SQLite keeps in `sqlite_master.sql` for each trigger, keyed by name.
+ * SQLite stores a CREATE statement as written, minus `IF NOT EXISTS`.
+ */
+function expectedTriggerSql(): Map<string, string> {
+  const expected = new Map<string, string>();
+  for (const sql of CHAT_MESSAGE_FTS_SCHEMA_STATEMENTS) {
+    const m = /^CREATE TRIGGER IF NOT EXISTS "([^"]+)"/.exec(sql);
+    if (m) expected.set(m[1], sql.replace('CREATE TRIGGER IF NOT EXISTS ', 'CREATE TRIGGER '));
+  }
+  return expected;
+}
+
+/**
+ * Report which of this module's triggers exist but no longer match the DDL
+ * above — an instance that was indexed under an older eligibility rule.
+ *
+ * `IF NOT EXISTS` cannot replace a trigger, so without this check a changed
+ * rule would apply to rebuilds but never to new rows.
+ */
+export function staleChatMessageFtsTriggers(db: DatabaseType): string[] {
+  const expected = expectedTriggerSql();
+  const rows = db
+    .prepare(
+      `SELECT name, sql FROM sqlite_master
+        WHERE type = 'trigger' AND name IN (${CHAT_MESSAGE_FTS_TRIGGERS.map(() => '?').join(',')})`,
+    )
+    .all(...CHAT_MESSAGE_FTS_TRIGGERS) as { name: string; sql: string }[];
+  return rows.filter((r) => r.sql !== expected.get(r.name)).map((r) => r.name);
+}
+
+/**
+ * Create the index, the map and the triggers if they are missing, and replace
+ * any trigger whose definition has drifted from this module's.
  *
  * Every statement is `IF NOT EXISTS`, so this is a cheap no-op on a healthy
- * instance and is safe to call from the migration and from every boot.
+ * instance and is safe to call from the migration and from every boot. It
+ * does not re-index: after a trigger is replaced, the eligible and indexed
+ * counts disagree, which is what tells the caller to rebuild.
  */
 export function ensureChatMessageFtsSchema(db: DatabaseType): void {
+  const stale = staleChatMessageFtsTriggers(db);
+  if (stale.length > 0) {
+    logger.debug('Replacing outdated chat message FTS triggers', { stale });
+    for (const name of stale) {
+      db.exec(`DROP TRIGGER IF EXISTS "${name}"`);
+    }
+  }
   for (const sql of CHAT_MESSAGE_FTS_SCHEMA_STATEMENTS) {
     db.exec(sql);
   }

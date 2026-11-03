@@ -12,7 +12,7 @@ Quilltap uses **SQLite** as its database backend. SQLite provides:
 
 ## Encryption
 
-All databases are encrypted at rest using **SQLCipher** via the `better-sqlite3-multiple-ciphers` package. The encryption key (pepper) is managed through `.dbkey` files in the data directory. For full details on the encryption architecture, key management, startup lifecycle, and API endpoints, see [Database Encryption](DATABASE_ENCRYPTION.md).
+All databases are encrypted at rest with **ChaCha20-Poly1305** (the default cipher of SQLite3 Multiple Ciphers) via the `better-sqlite3-multiple-ciphers` package. The encryption key (pepper) is managed through `.dbkey` files in the data directory. For full details on the encryption architecture, key management, startup lifecycle, and API endpoints, see [Database Encryption](DATABASE_ENCRYPTION.md).
 
 ## Configuration
 
@@ -24,7 +24,7 @@ All databases are encrypted at rest using **SQLCipher** via the `better-sqlite3-
 | `SQLITE_LLM_LOGS_PATH` | Path to LLM logs database file | `~/.quilltap/data/quilltap-llm-logs.db` |
 | `SQLITE_WAL_MODE` | Enable WAL mode for SQLite | `true` |
 | `SQLITE_BUSY_TIMEOUT` | Maximum wait time for database locks (milliseconds) | `5000` |
-| `ENCRYPTION_MASTER_PEPPER` | SQLCipher database key (base64, auto-managed via `.dbkey` file) | Auto-provisioned |
+| `ENCRYPTION_MASTER_PEPPER` | Database encryption key (base64, auto-managed via `.dbkey` file) | Auto-provisioned |
 
 > **Note:** SQLite is the only supported database backend. The `ENCRYPTION_MASTER_PEPPER` environment variable is normally managed automatically by the `.dbkey` file system — see [Database Encryption](DATABASE_ENCRYPTION.md) for details.
 

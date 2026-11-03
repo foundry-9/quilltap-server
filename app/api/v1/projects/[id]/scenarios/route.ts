@@ -13,9 +13,9 @@
  *                                                  description?, isDefault?,
  *                                                  body }.
  *
- * Both provision the project's official store and its `Scenarios/` folder
- * through the scenario location (`ensure: true`), so users hitting this
- * endpoint don't have to wait for the next startup-time heal pass. The bodies
+ * The POST provisions the project's official store and its `Scenarios/` folder
+ * through the scenario location (`ensure: true`), so users creating one
+ * don't have to wait for the next startup-time heal pass; the GET only reads (#136). The bodies
  * live in `lib/mount-index/scenario-item-route-factory.ts`.
  */
 

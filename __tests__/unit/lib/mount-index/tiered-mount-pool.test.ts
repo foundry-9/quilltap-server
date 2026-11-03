@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 const mockFindCharacterById = jest.fn()
 const mockFindProjectMountLinks = jest.fn()
 const mockFindChatById = jest.fn()
+const mockFindProjectByIdRaw = jest.fn()
+const mockFindMountById = jest.fn()
+const mockRosterGatedProjectId = jest.fn()
 const mockGetGeneralMountPointId = jest.fn()
 const mockGetRepositories = jest.fn()
 // Group tier mocks
@@ -28,16 +31,25 @@ jest.mock('@/lib/logger', () => ({
   logger: mockLogger,
 }))
 
+jest.mock('@/lib/projects/roster-access', () => ({
+  rosterGatedProjectId: (...args: unknown[]) => mockRosterGatedProjectId(...args),
+}))
+
 const {
   dedupeTierTriple,
   flattenTierPool,
   classifyMountTier,
-  resolveTieredMountPool,
+  resolveTieredMountPool: resolveTieredMountPoolWith,
   resolveProjectMountPointIds,
   resolveProjectMountPointIdsForChat,
   resolveGroupMountPointIdsForCharacter,
   resolveGroupMountsForCharacter,
 } = require('@/lib/mount-index/tiered-mount-pool') as typeof import('@/lib/mount-index/tiered-mount-pool')
+
+type PoolArgs = Parameters<typeof resolveTieredMountPoolWith>
+/** The walk with today's per-call defaults spelled out: roster open, disabled stores kept. */
+const resolveTieredMountPool = (ctx: PoolArgs[0], opts: Partial<PoolArgs[1]> = {}) =>
+  resolveTieredMountPoolWith(ctx, { roster: 'open', enabled: 'ignore', ...opts })
 
 describe('tiered-mount-pool', () => {
   beforeEach(() => {
@@ -45,12 +57,17 @@ describe('tiered-mount-pool', () => {
     mockGetRepositories.mockReturnValue({
       characters: { findById: mockFindCharacterById },
       projectDocMountLinks: { findByProjectId: mockFindProjectMountLinks },
+      projects: { findByIdRaw: mockFindProjectByIdRaw },
+      docMountPoints: { findById: mockFindMountById },
       chats: { findById: mockFindChatById },
       groupCharacterMembers: { findByCharacterId: mockFindMembersByCharacterId },
       groups: { findByIdRaw: mockFindGroupByIdRaw },
       groupDocMountLinks: { findByGroupId: mockFindGroupLinks },
     })
     mockFindProjectMountLinks.mockResolvedValue([])
+    mockFindProjectByIdRaw.mockResolvedValue(null)
+    mockFindMountById.mockImplementation(async (id: unknown) => ({ id, enabled: true }))
+    mockRosterGatedProjectId.mockImplementation(async (projectId: unknown) => projectId)
     mockGetGeneralMountPointId.mockResolvedValue(null)
     // Default: the responding character belongs to no groups.
     mockFindMembersByCharacterId.mockResolvedValue([])
@@ -169,6 +186,39 @@ describe('tiered-mount-pool', () => {
   })
 
   describe('resolveTieredMountPool', () => {
+    it('puts the project official store first, then every linked store (Refactor 4.12)', async () => {
+      mockFindProjectByIdRaw.mockResolvedValue({ id: 'proj1', officialMountPointId: 'official' })
+      mockFindProjectMountLinks.mockResolvedValue([{ mountPointId: 'linked-a' }, { mountPointId: 'official' }, { mountPointId: 'linked-b' }])
+      const pool = await resolveTieredMountPool({ projectId: 'proj1' })
+      expect(pool.projectMountPointIds).toEqual(['official', 'linked-a', 'linked-b'])
+    })
+
+    it("roster: 'gated' withholds the project tier from a character off the roster", async () => {
+      mockFindProjectMountLinks.mockResolvedValue([{ mountPointId: 'p1' }])
+      mockRosterGatedProjectId.mockResolvedValue(undefined)
+      const gated = await resolveTieredMountPool({ characterId: 'c1', projectId: 'proj1' }, { roster: 'gated' })
+      expect(gated.projectMountPointIds).toEqual([])
+      expect(mockRosterGatedProjectId).toHaveBeenCalledWith('proj1', 'c1')
+
+      const open = await resolveTieredMountPool({ characterId: 'c1', projectId: 'proj1' }, { roster: 'open' })
+      expect(open.projectMountPointIds).toEqual(['p1'])
+    })
+
+    it("enabled: 'require' drops disabled stores, General included; 'ignore' keeps them", async () => {
+      mockFindProjectMountLinks.mockResolvedValue([{ mountPointId: 'p-on' }, { mountPointId: 'p-off' }])
+      mockGetGeneralMountPointId.mockResolvedValue('global')
+      mockFindMountById.mockImplementation(async (id: unknown) => ({ id, enabled: id !== 'p-off' && id !== 'global' }))
+
+      const required = await resolveTieredMountPool({ characterMountPointId: 'char', projectId: 'proj1' }, { enabled: 'require' })
+      expect(required.projectMountPointIds).toEqual(['p-on'])
+      expect(required.globalMountPointId).toBeNull()
+      expect(required.characterMountPointId).toBe('char')
+
+      const ignored = await resolveTieredMountPool({ characterMountPointId: 'char', projectId: 'proj1' }, { enabled: 'ignore' })
+      expect(ignored.projectMountPointIds).toEqual(['p-on', 'p-off'])
+      expect(ignored.globalMountPointId).toBe('global')
+    })
+
     it('uses the pre-resolved characterMountPointId fast path (no lookup)', async () => {
       const pool = await resolveTieredMountPool({ characterMountPointId: 'char' })
       expect(pool.characterMountPointId).toBe('char')

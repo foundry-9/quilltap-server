@@ -162,7 +162,7 @@ Store files travel by path already (`ndjson-writer.ts` `streamOneStore`, backup'
 ### 5.11 Not in this version
 
 - Drag-and-drop onto folders or crumbs.
-- A `wardrobe` realtime topic (still the refactor doc's §6 debt).
+- A `wardrobe` realtime topic (still the refactor doc's §6 debt). *Since added in 4.12 ([refactor-4-12-browser-family.md](../refactor-4-12-browser-family.md) §4.1): every wardrobe location write publishes it.*
 - Folder-aware tool inputs.
 - A folder control on the tier-transfer dialog.
 - Merging folders across tiers in the character view.
