@@ -4,6 +4,15 @@
 
 ### 4.12-dev
 
+#### Fix: theme-storybook stories use only real `qt-*` classes
+
+Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.
+
+- Badges / ThemeComparison: dropped `qt-badge-default`, `qt-badge-outline-{primary,success,warning,destructive}`, `qt-badge-provider-{anthropic,google}`; added `qt-badge-info`; provider badges are the five embedding providers, standing alone as in `ProviderBadge`.
+- Chat: announcement-bar chevrons are SVG glyphs as in `AnnouncementChip`; `qt-typing-indicator` is replaced by the `qt-thinking-indicator` quill from `QuillAnimation` / `StreamingMessage`; confirmation badges match `ConfirmationBadge`. `qt-chat-system-bar-chevron-down` and `qt-confirmation-badge-label` stay, because the app uses them as unstyled hooks.
+- Tabs: the Navigation Bar demo uses `qt-navbar` > `qt-navbar-container` > `qt-navbar-section` with `qt-navbar-toggle` buttons, plus a scoped base-layer reset standing in for Tailwind preflight. Links no longer underline and the action buttons no longer wrap below the links.
+- theme-storybook 1.0.100. The "Pre-existing gaps" note in `docs/developer/features/refactor-4-12/storybook-css-diff.md` is marked resolved.
+
 #### Build: theme-storybook CSS is generated (Refactor 4.12, spec 1)
 
 `packages/theme-storybook/src/css/qt-components.css` is now build output instead of a hand-written copy of the app's `qt-*` CSS. The copy was missing 334 of 893 classes and carried 7 the app had deleted.

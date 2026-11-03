@@ -101,26 +101,58 @@ export const Tabs: React.FC = () => {
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
           Navigation Bar
         </h3>
-        <div className="qt-navbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ fontWeight: 700, fontSize: '1.125rem' }}>Quilltap</div>
-            <nav style={{ display: 'flex', gap: '0.25rem' }}>
-              <a href="#" className="qt-navbar-link qt-navbar-link-active">Dashboard</a>
-              <a href="#" className="qt-navbar-link">Characters</a>
-              <a href="#" className="qt-navbar-link">Chats</a>
-              <a href="#" className="qt-navbar-link">Settings</a>
-            </nav>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button className="qt-button-icon" aria-label="Notifications">
-              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </button>
-            <div className="qt-avatar qt-avatar-sm">
-              <div className="qt-avatar-fallback">U</div>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          The <code>qt-navbar</code> family from <code>_layout.css</code>: the bar holds a{' '}
+          <code>qt-navbar-container</code>, which lays out <code>qt-navbar-section</code> groups end to end.
+          Links are <code>qt-navbar-link</code> / <code>qt-navbar-link-active</code>; icon buttons are{' '}
+          <code>qt-navbar-toggle</code> (with <code>qt-navbar-toggle-active</code> when pressed), as in the
+          app&apos;s content-width toggle.
+        </p>
+        {/* Quilltap runs on Tailwind's preflight, which strips the browser's link
+            underline and button chrome before any qt-* rule applies. Storybook has
+            no preflight, so this demo restores just that much — in the base layer,
+            beneath the qt-* component rules, so they still win. */}
+        <style>{`
+          @layer base {
+            .sb-navbar-demo a { color: inherit; text-decoration: inherit; }
+            .sb-navbar-demo button { background: transparent; border: 0; padding: 0; font: inherit; color: inherit; }
+          }
+        `}</style>
+        <div className="sb-navbar-demo">
+          <header className="qt-navbar">
+            <div className="qt-navbar-container">
+              <div className="qt-navbar-section">
+                <span className="qt-font-brand">Quilltap</span>
+                <nav aria-label="Main" className="qt-navbar-section" style={{ gap: '0.25rem' }}>
+                  <a href="#" className="qt-navbar-link-active" aria-current="page">Salon</a>
+                  <a href="#" className="qt-navbar-link">Aurora</a>
+                  <a href="#" className="qt-navbar-link">Scriptorium</a>
+                  <a href="#" className="qt-navbar-link">Settings</a>
+                </nav>
+              </div>
+              <div className="qt-navbar-section" style={{ gap: '0.5rem' }}>
+                <button type="button" className="qt-navbar-toggle" aria-label="Notifications" title="Notifications">
+                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="qt-navbar-toggle qt-navbar-toggle-active"
+                  aria-label="Switch to narrow layout"
+                  title="Switch to narrow layout"
+                  aria-pressed={true}
+                >
+                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9L4 4m0 0v4m0-4h4m6 5l5-5m0 0v4m0-4h-4M9 15l-5 5m0 0v-4m0 4h4m6-5l5 5m0 0v-4m0 4h-4" />
+                  </svg>
+                </button>
+                <div className="qt-avatar qt-avatar-sm">
+                  <div className="qt-avatar-fallback">U</div>
+                </div>
+              </div>
             </div>
-          </div>
+          </header>
         </div>
       </section>
     </div>
