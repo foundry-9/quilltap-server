@@ -286,7 +286,7 @@ var init_sleep = __esm({
 var VERSION;
 var init_version = __esm({
   "node_modules/@anthropic-ai/sdk/version.mjs"() {
-    VERSION = "1.3.0";
+    VERSION = "1.4.0";
   }
 });
 
@@ -11968,11 +11968,11 @@ async function heartbeatLoop(client, work, lease, logger3, requestOptions, onLea
       }
       if (resp.state === "stopping" || resp.state === "stopped") {
         logger3.info("heartbeat signals shutdown", { work_id: work.id, state: resp.state });
-        lease.finish("control_plane_stop");
+        lease.finish("heartbeat_stop");
       }
       if (!resp.lease_extended) {
         logger3.warn("lease not extended, shutting down", { work_id: work.id });
-        lease.finish("control_plane_stop");
+        lease.finish("heartbeat_stop");
       }
     } catch (e) {
       lease.signal.throwIfAborted();
@@ -12101,7 +12101,7 @@ var init_worker = __esm({
          * download the session agent's skills (`setupSkills`), run a
          * {@link SessionToolRunner} for the session while heartbeating the work-item
          * lease, and force-stop the work item on exit (whether the runner finishes
-         * normally, throws, or the control plane signals shutdown). The one
+         * normally, throws, or the API signals shutdown). The one
          * exception is a lost lease: the item then belongs to the queue or another
          * worker and is left alone.
          *
@@ -15382,14 +15382,14 @@ var init_chat = __esm({
     init_projects();
     init_projects();
     Chat = /* @__PURE__ */ (() => {
-      class Chat3 extends APIResource {
+      class Chat4 extends APIResource {
         constructor() {
           super(...arguments);
           this.projects = new Projects(this._client);
         }
       }
-      Chat3.Projects = Projects;
-      return Chat3;
+      Chat4.Projects = Projects;
+      return Chat4;
     })();
   }
 });
@@ -15402,14 +15402,14 @@ var init_apps = __esm({
     init_chat();
     init_chat();
     Apps = /* @__PURE__ */ (() => {
-      class Apps2 extends APIResource {
+      class Apps3 extends APIResource {
         constructor() {
           super(...arguments);
           this.chat = new Chat(this._client);
         }
       }
-      Apps2.Chat = Chat;
-      return Apps2;
+      Apps3.Chat = Chat;
+      return Apps3;
     })();
   }
 });
@@ -15446,7 +15446,7 @@ var init_analytics = __esm({
     init_apps();
     init_apps();
     Analytics = /* @__PURE__ */ (() => {
-      class Analytics2 extends APIResource {
+      class Analytics3 extends APIResource {
         constructor() {
           super(...arguments);
           this.summaries = new Summaries(this._client);
@@ -15464,20 +15464,20 @@ var init_analytics = __esm({
           this.userCostReport = new UserCostReport(this._client);
         }
       }
-      Analytics2.Summaries = Summaries;
-      Analytics2.Users = Users;
-      Analytics2.Apps = Apps;
-      Analytics2.Connectors = Connectors;
-      Analytics2.Plugins = Plugins;
-      Analytics2.Skills = Skills;
-      Analytics2.Artifacts = Artifacts;
-      Analytics2.Usage = Usage;
-      Analytics2.Cost = Cost;
-      Analytics2.UsageReport = UsageReport;
-      Analytics2.UserUsageReport = UserUsageReport;
-      Analytics2.CostReport = CostReport;
-      Analytics2.UserCostReport = UserCostReport;
-      return Analytics2;
+      Analytics3.Summaries = Summaries;
+      Analytics3.Users = Users;
+      Analytics3.Apps = Apps;
+      Analytics3.Connectors = Connectors;
+      Analytics3.Plugins = Plugins;
+      Analytics3.Skills = Skills;
+      Analytics3.Artifacts = Artifacts;
+      Analytics3.Usage = Usage;
+      Analytics3.Cost = Cost;
+      Analytics3.UsageReport = UsageReport;
+      Analytics3.UserUsageReport = UserUsageReport;
+      Analytics3.CostReport = CostReport;
+      Analytics3.UserCostReport = UserCostReport;
+      return Analytics3;
     })();
   }
 });
@@ -16073,8 +16073,11 @@ var init_compliance_settings = __esm({
        * Update your organization's Compliance Settings.
        *
        * Setting `state` to `enabled` turns on the Compliance API and begins capturing
-       * organization activity events. Setting it to `disabled` turns both off. `state`
-       * reflects whether the Compliance API is enabled.
+       * organization activity events. Setting it to `disabled` turns both off. Access
+       * Transparency events are an exception: they are still captured while the
+       * Compliance API is disabled, and the Compliance API activity feed returns them
+       * once it is enabled again. `state` reflects whether the Compliance API is
+       * enabled.
        *
        * A request that sets `state` to its current value succeeds and leaves the
        * resource unchanged. A `disabled` request stays in effect until a later `enabled`
@@ -18050,7 +18053,7 @@ var init_plugins2 = __esm({
     init_uploads();
     init_path();
     Plugins2 = /* @__PURE__ */ (() => {
-      class Plugins3 extends APIResource {
+      class Plugins4 extends APIResource {
         constructor() {
           super(...arguments);
           this.versions = new Versions2(this._client);
@@ -18325,10 +18328,10 @@ var init_plugins2 = __esm({
           });
         }
       }
-      Plugins3.Versions = Versions2;
-      Plugins3.InstallationSettings = InstallationSettings;
-      Plugins3.Shares = Shares;
-      return Plugins3;
+      Plugins4.Versions = Versions2;
+      Plugins4.InstallationSettings = InstallationSettings;
+      Plugins4.Shares = Shares;
+      return Plugins4;
     })();
   }
 });
@@ -18381,7 +18384,7 @@ var init_members = __esm({
        * const betaRBACGroupMember =
        *   await client.beta.organization.rbacGroups.members.add(
        *     'rbac_group_id',
-       *     { user_id: 'user_01WCz1FkmYMm4gnmykNKUu3Q' },
+       *     { user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu' },
        *   );
        * ```
        */
@@ -18407,7 +18410,7 @@ var init_members = __esm({
        *
        * @example
        * ```ts
-       * const member =
+       * const betaDeletedRBACGroupMember =
        *   await client.beta.organization.rbacGroups.members.remove(
        *     'user_id',
        *     { rbac_group_id: 'rbac_group_id' },
@@ -18443,7 +18446,7 @@ var init_rbac_groups = __esm({
     init_tracing();
     init_path();
     RBACGroups = /* @__PURE__ */ (() => {
-      class RBACGroups2 extends APIResource {
+      class RBACGroups3 extends APIResource {
         constructor() {
           super(...arguments);
           this.members = new Members(this._client);
@@ -18555,7 +18558,7 @@ var init_rbac_groups = __esm({
          *
          * @example
          * ```ts
-         * const rbacGroup =
+         * const betaDeletedRBACGroup =
          *   await client.beta.organization.rbacGroups.delete(
          *     'rbac_group_id',
          *   );
@@ -18572,8 +18575,8 @@ var init_rbac_groups = __esm({
           });
         }
       }
-      RBACGroups2.Members = Members;
-      return RBACGroups2;
+      RBACGroups3.Members = Members;
+      return RBACGroups3;
     })();
   }
 });
@@ -18629,7 +18632,7 @@ var init_rbac_roles = __esm({
     init_tracing();
     init_path();
     RBACRoles = /* @__PURE__ */ (() => {
-      class RBACRoles2 extends APIResource {
+      class RBACRoles3 extends APIResource {
         constructor() {
           super(...arguments);
           this.permissions = new Permissions(this._client);
@@ -18682,8 +18685,8 @@ var init_rbac_roles = __esm({
           });
         }
       }
-      RBACRoles2.Permissions = Permissions;
-      return RBACRoles2;
+      RBACRoles3.Permissions = Permissions;
+      return RBACRoles3;
     })();
   }
 });
@@ -19212,7 +19215,7 @@ var init_spend_limits = __esm({
     init_tracing();
     init_path();
     SpendLimits = /* @__PURE__ */ (() => {
-      class SpendLimits2 extends APIResource {
+      class SpendLimits3 extends APIResource {
         constructor() {
           super(...arguments);
           this.effective = new Effective(this._client);
@@ -19318,7 +19321,7 @@ var init_spend_limits = __esm({
          *     amount: '50000',
          *     scope: {
          *       type: 'user',
-         *       user_id: 'user_01WCz1FkmYMm4gnmykNKUu3Q',
+         *       user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu',
          *     },
          *   });
          * ```
@@ -19340,9 +19343,9 @@ var init_spend_limits = __esm({
           });
         }
       }
-      SpendLimits2.Effective = Effective;
-      SpendLimits2.IncreaseRequests = IncreaseRequests;
-      return SpendLimits2;
+      SpendLimits3.Effective = Effective;
+      SpendLimits3.IncreaseRequests = IncreaseRequests;
+      return SpendLimits3;
     })();
   }
 });
@@ -19811,7 +19814,7 @@ var init_members2 = __esm({
        *   await client.beta.organization.workspaces.members.add(
        *     'workspace_id',
        *     {
-       *       user_id: 'user_01WCz1FkmYMm4gnmykNKUu3Q',
+       *       user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu',
        *       workspace_role: 'workspace_admin',
        *     },
        *   );
@@ -21395,7 +21398,7 @@ var init_skills3 = __esm({
     init_uploads();
     init_path();
     Skills2 = /* @__PURE__ */ (() => {
-      class Skills5 extends APIResource {
+      class Skills6 extends APIResource {
         constructor() {
           super(...arguments);
           this.versions = new Versions3(this._client);
@@ -21516,8 +21519,8 @@ var init_skills3 = __esm({
           });
         }
       }
-      Skills5.Versions = Versions3;
-      return Skills5;
+      Skills6.Versions = Versions3;
+      return Skills6;
     })();
   }
 });
@@ -24812,8 +24815,11 @@ var init_compliance_settings2 = __esm({
        * Update your organization's Compliance Settings.
        *
        * Setting `state` to `enabled` turns on the Compliance API and begins capturing
-       * organization activity events. Setting it to `disabled` turns both off. `state`
-       * reflects whether the Compliance API is enabled.
+       * organization activity events. Setting it to `disabled` turns both off. Access
+       * Transparency events are an exception: they are still captured while the
+       * Compliance API is disabled, and the Compliance API activity feed returns them
+       * once it is enabled again. `state` reflects whether the Compliance API is
+       * enabled.
        *
        * A request that sets `state` to its current value succeeds and leaves the
        * resource unchanged. A `disabled` request stays in effect until a later `enabled`
@@ -25225,6 +25231,431 @@ var init_users3 = __esm({
         });
       }
     };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/artifacts.mjs
+var Artifacts2;
+var init_artifacts2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/artifacts.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Artifacts2 = class extends APIResource {
+      /**
+       * Get artifact-creation activity for a given day, broken out by MIME type.
+       *
+       * Returns the full (`artifact_type`, `is_shared`) cube for the organization;
+       * `next_page` is null except for grouped queries, which paginate. The cube can be
+       * broken out per product, per member, or per RBAC group via `group_by[]`, and
+       * scoped via `filter[]`. Requires an API key with the `read:analytics` scope.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const analyticsArtifactActivity of client.organization.analytics.artifacts.list(
+       *   { date: '2019-12-27' },
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query, options) {
+        return this._client.getAPIList("/v1/organizations/analytics/artifacts", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.analytics.artifacts.list", options, {
+            route: "/v1/organizations/analytics/artifacts",
+            queryParams: ["date", "filter", "group_by", "limit", "page"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/connectors.mjs
+var Connectors2;
+var init_connectors2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/connectors.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Connectors2 = class extends APIResource {
+      /**
+       * Get per-connector usage for a given day, with cursor-based pagination.
+       *
+       * Returns connector usage metrics for the organization, sorted by connector name.
+       * Connector names are normalized from their various sources — for example,
+       * "Atlassian MCP server" and "mcp-atlassian" both appear as "atlassian". Use
+       * `group_by[]` to break usage out per member, per RBAC group, or per product
+       * surface, and `filter[]` to scope results; the parameter descriptions list the
+       * supported dimensions. Available to organizations on a Claude Enterprise plan.
+       * Requires an API key with the `read:analytics` scope.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const analyticsConnectorActivity of client.organization.analytics.connectors.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/analytics/connectors", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.analytics.connectors.list", options, {
+            route: "/v1/organizations/analytics/connectors",
+            queryParams: [
+              "date",
+              "ending_date",
+              "filter",
+              "group_by",
+              "limit",
+              "order",
+              "order_by",
+              "page",
+              "starting_date"
+            ],
+            contentQueryParams: ["filter"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/plugins.mjs
+var Plugins3;
+var init_plugins3 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/plugins.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Plugins3 = class extends APIResource {
+      /**
+       * Get per-plugin install + invocation usage for a given day, with pagination.
+       *
+       * Returns plugin usage metrics for the organization across Cowork and Claude Code,
+       * sorted by plugin name. The `plugin_name` value `third-party` is an aggregate
+       * bucket, not a plugin: it collects plugin activity, from either surface, for
+       * which the reporting client did not provide a plugin name — so an organization's
+       * own plugins can contribute both to their own named rows and to this bucket. Use
+       * `group_by[]` to break usage out per member, per RBAC group, or per product
+       * surface (Cowork / Claude Code), and `filter[]` to scope results; the parameter
+       * descriptions list the supported dimensions. Requires an API key with the
+       * `read:analytics` scope. `starting_date` / `ending_date` select range-rollup mode
+       * like `/skills`.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const analyticsPluginActivity of client.organization.analytics.plugins.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/analytics/plugins", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.analytics.plugins.list", options, {
+            route: "/v1/organizations/analytics/plugins",
+            queryParams: [
+              "date",
+              "ending_date",
+              "filter",
+              "group_by",
+              "limit",
+              "order",
+              "order_by",
+              "page",
+              "starting_date"
+            ],
+            contentQueryParams: ["filter"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/skills.mjs
+var Skills3;
+var init_skills4 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/skills.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Skills3 = class extends APIResource {
+      /**
+       * Get per-skill usage for a given day, with cursor-based pagination.
+       *
+       * Returns skill usage metrics for the organization, sorted by skill name. Use
+       * `group_by[]` to break usage out per member, per RBAC group, or per product
+       * surface, and `filter[]` to scope results; the parameter descriptions list the
+       * supported dimensions. Available to organizations on a Claude Enterprise plan.
+       * Requires an API key with the `read:analytics` scope.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const analyticsSkillActivity of client.organization.analytics.skills.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/analytics/skills", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.analytics.skills.list", options, {
+            route: "/v1/organizations/analytics/skills",
+            queryParams: [
+              "date",
+              "ending_date",
+              "filter",
+              "group_by",
+              "limit",
+              "order",
+              "order_by",
+              "page",
+              "starting_date"
+            ],
+            contentQueryParams: ["filter"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/summaries.mjs
+var Summaries2;
+var init_summaries2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/summaries.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Summaries2 = class extends APIResource {
+      /**
+       * Get organization-wide activity summaries for a date range.
+       *
+       * Returns one entry per day from `starting_date` (inclusive) to `ending_date`
+       * (exclusive) in `data`, the same `data` / `next_page` envelope as the other
+       * analytics list endpoints; the series is currently returned in full, so
+       * `next_page` is always null. Data is typically available with a 1-day lag and may
+       * be revised by a few percent over the following days: when `ending_date` is
+       * omitted it defaults to the most recent available day + 1, so the last entry
+       * covers the most recent available day. The series can be scoped to an RBAC group
+       * via `filter[]=rbac_group_id:{id}`. Available to organizations on a Claude
+       * Enterprise plan. Requires an API key with the `read:analytics` scope.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const analyticsSingleDayActivitySummary of client.organization.analytics.summaries.list(
+       *   { starting_date: '2019-12-27' },
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query, options) {
+        return this._client.getAPIList("/v1/organizations/analytics/summaries", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.analytics.summaries.list", options, {
+            route: "/v1/organizations/analytics/summaries",
+            queryParams: ["ending_date", "filter", "limit", "page", "starting_date"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/users.mjs
+var Users4;
+var init_users4 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/users.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Users4 = class extends APIResource {
+      /**
+       * Get per-user activity for a given day, with cursor-based pagination.
+       *
+       * Returns activity metrics for each user in the organization, sorted by email
+       * address. Use `group_by[]` for per-RBAC-group aggregates, or `filter[]` to scope
+       * results to specific members, groups, or a chat project. Available to
+       * organizations on a Claude Enterprise plan. Requires an API key with the
+       * `read:analytics` scope.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const analyticsUserActivity of client.organization.analytics.users.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/analytics/users", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.analytics.users.list", options, {
+            route: "/v1/organizations/analytics/users",
+            queryParams: [
+              "date",
+              "ending_date",
+              "filter",
+              "group_by",
+              "limit",
+              "order",
+              "order_by",
+              "page",
+              "starting_date"
+            ],
+            contentQueryParams: ["page"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/chat/projects.mjs
+var Projects2;
+var init_projects2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/chat/projects.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Projects2 = class extends APIResource {
+      /**
+       * Get per-project activity for a given day, with cursor-based pagination.
+       *
+       * Returns activity metrics for each project in the organization, sorted by project
+       * ID. Use `group_by[]` to break projects out per member or per RBAC group, and
+       * `filter[]` to scope results; the parameter descriptions list the supported
+       * dimensions. Available to organizations on a Claude Enterprise plan. Requires an
+       * API key with the `read:analytics` scope.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const analyticsProjectActivity of client.organization.analytics.apps.chat.projects.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/analytics/apps/chat/projects", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.analytics.apps.chat.projects.list", options, {
+            route: "/v1/organizations/analytics/apps/chat/projects",
+            queryParams: [
+              "date",
+              "ending_date",
+              "filter",
+              "group_by",
+              "limit",
+              "order",
+              "order_by",
+              "page",
+              "starting_date"
+            ]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/chat/chat.mjs
+var Chat2;
+var init_chat2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/chat/chat.mjs"() {
+    init_resource();
+    init_projects2();
+    init_projects2();
+    Chat2 = /* @__PURE__ */ (() => {
+      class Chat4 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.projects = new Projects2(this._client);
+        }
+      }
+      Chat4.Projects = Projects2;
+      return Chat4;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/apps.mjs
+var Apps2;
+var init_apps2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/apps/apps.mjs"() {
+    init_resource();
+    init_chat2();
+    init_chat2();
+    Apps2 = /* @__PURE__ */ (() => {
+      class Apps3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.chat = new Chat2(this._client);
+        }
+      }
+      Apps3.Chat = Chat2;
+      return Apps3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/analytics/analytics.mjs
+var Analytics2;
+var init_analytics2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/analytics/analytics.mjs"() {
+    init_resource();
+    init_artifacts2();
+    init_artifacts2();
+    init_connectors2();
+    init_connectors2();
+    init_plugins3();
+    init_plugins3();
+    init_skills4();
+    init_skills4();
+    init_summaries2();
+    init_summaries2();
+    init_users4();
+    init_users4();
+    init_apps2();
+    init_apps2();
+    Analytics2 = /* @__PURE__ */ (() => {
+      class Analytics3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.summaries = new Summaries2(this._client);
+          this.users = new Users4(this._client);
+          this.apps = new Apps2(this._client);
+          this.connectors = new Connectors2(this._client);
+          this.plugins = new Plugins3(this._client);
+          this.skills = new Skills3(this._client);
+          this.artifacts = new Artifacts2(this._client);
+        }
+      }
+      Analytics3.Summaries = Summaries2;
+      Analytics3.Users = Users4;
+      Analytics3.Apps = Apps2;
+      Analytics3.Connectors = Connectors2;
+      Analytics3.Plugins = Plugins3;
+      Analytics3.Skills = Skills3;
+      Analytics3.Artifacts = Artifacts2;
+      return Analytics3;
+    })();
   }
 });
 
@@ -25732,6 +26163,350 @@ var init_federation2 = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/organization/rbac-groups/members.mjs
+var Members3;
+var init_members3 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/rbac-groups/members.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    init_path();
+    Members3 = class extends APIResource {
+      /**
+       * List members of an RBAC Group.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const rbacGroupMember of client.organization.rbacGroups.members.list(
+       *   'rbac_group_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(rbacGroupID, query = {}, options) {
+        return this._client.getAPIList(path2`/v1/organizations/rbac_groups/${rbacGroupID}/members`, PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.list", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
+            queryParams: ["limit", "page"],
+            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+          })
+        });
+      }
+      /**
+       * Add a User to an RBAC Group. Membership of groups provisioned by an identity
+       * provider (source type `"scim"`) cannot be modified via the API while an
+       * organization in the tenant uses SCIM provisioning.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @example
+       * ```ts
+       * const rbacGroupMember =
+       *   await client.organization.rbacGroups.members.add(
+       *     'rbac_group_id',
+       *     { user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu' },
+       *   );
+       * ```
+       */
+      add(rbacGroupID, body, options) {
+        return this._client.post(path2`/v1/organizations/rbac_groups/${rbacGroupID}/members`, {
+          body,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.add", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members",
+            attributes: { "anthropic.organization.rbac_group.id": rbacGroupID },
+            createdIDAttribute: "anthropic.organization.rbac_group.member.id",
+            createdIDField: "user_id"
+          })
+        });
+      }
+      /**
+       * Remove a User from an RBAC Group. Membership of groups provisioned by an
+       * identity provider (source type `"scim"`) cannot be modified via the API while an
+       * organization in the tenant uses SCIM provisioning.
+       *
+       * The RBAC Groups API is available to Claude Enterprise organizations only.
+       *
+       * @example
+       * ```ts
+       * const deletedRBACGroupMember =
+       *   await client.organization.rbacGroups.members.remove(
+       *     'user_id',
+       *     { rbac_group_id: 'rbac_group_id' },
+       *   );
+       * ```
+       */
+      remove(userID, params, options) {
+        const { rbac_group_id } = params;
+        return this._client.delete(path2`/v1/organizations/rbac_groups/${rbac_group_id}/members/${userID}`, {
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.members.remove", options, {
+            route: "/v1/organizations/rbac_groups/{rbac_group_id}/members/{user_id}",
+            attributes: {
+              "anthropic.organization.rbac_group.id": rbac_group_id,
+              "anthropic.organization.rbac_group.member.id": userID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/rbac-groups/rbac-groups.mjs
+var RBACGroups2;
+var init_rbac_groups2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/rbac-groups/rbac-groups.mjs"() {
+    init_resource();
+    init_members3();
+    init_members3();
+    init_pagination();
+    init_tracing();
+    init_path();
+    RBACGroups2 = /* @__PURE__ */ (() => {
+      class RBACGroups3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.members = new Members3(this._client);
+        }
+        /**
+         * Create an RBAC Group in the Claude Enterprise tenant. Groups created via the API
+         * have source type `"direct"`.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * const rbacGroup =
+         *   await client.organization.rbacGroups.create({
+         *     name: 'Engineering',
+         *   });
+         * ```
+         */
+        create(body, options) {
+          return this._client.post("/v1/organizations/rbac_groups", {
+            body,
+            ...options,
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.create", options, {
+              route: "/v1/organizations/rbac_groups",
+              createdIDAttribute: "anthropic.organization.rbac_group.id"
+            })
+          });
+        }
+        /**
+         * Retrieve an RBAC Group by ID.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * const rbacGroup =
+         *   await client.organization.rbacGroups.retrieve(
+         *     'rbac_group_id',
+         *   );
+         * ```
+         */
+        retrieve(rbacGroupID, options) {
+          return this._client.get(path2`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            ...options,
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.retrieve", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+        /**
+         * Update an RBAC Group's name. Groups provisioned by an identity provider (source
+         * type `"scim"`) cannot be modified via the API while an organization in the
+         * tenant uses SCIM provisioning.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * const rbacGroup =
+         *   await client.organization.rbacGroups.update(
+         *     'rbac_group_id',
+         *   );
+         * ```
+         */
+        update(rbacGroupID, body, options) {
+          return this._client.post(path2`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            body,
+            ...options,
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.update", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+        /**
+         * List RBAC Groups in the Claude Enterprise tenant.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const rbacGroup of client.organization.rbacGroups.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(query = {}, options) {
+          return this._client.getAPIList("/v1/organizations/rbac_groups", PageCursor, {
+            query,
+            ...options,
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.list", options, {
+              route: "/v1/organizations/rbac_groups",
+              queryParams: ["limit", "page"]
+            })
+          });
+        }
+        /**
+         * Delete an RBAC Group. Groups provisioned by an identity provider (source type
+         * `"scim"`) cannot be deleted via the API while an organization in the tenant uses
+         * SCIM provisioning.
+         *
+         * The RBAC Groups API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * const deletedRBACGroup =
+         *   await client.organization.rbacGroups.delete(
+         *     'rbac_group_id',
+         *   );
+         * ```
+         */
+        delete(rbacGroupID, options) {
+          return this._client.delete(path2`/v1/organizations/rbac_groups/${rbacGroupID}`, {
+            ...options,
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_groups.delete", options, {
+              route: "/v1/organizations/rbac_groups/{rbac_group_id}",
+              attributes: { "anthropic.organization.rbac_group.id": rbacGroupID }
+            })
+          });
+        }
+      }
+      RBACGroups3.Members = Members3;
+      return RBACGroups3;
+    })();
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/rbac-roles/permissions.mjs
+var Permissions2;
+var init_permissions2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/rbac-roles/permissions.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    init_path();
+    Permissions2 = class extends APIResource {
+      /**
+       * List the permissions an RBAC Role grants.
+       *
+       * The RBAC Roles API is available to Claude Enterprise organizations only.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const rbacRolePermission of client.organization.rbacRoles.permissions.list(
+       *   'rbac_role_id',
+       * )) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(rbacRoleID, query = {}, options) {
+        return this._client.getAPIList(path2`/v1/organizations/rbac_roles/${rbacRoleID}/permissions`, PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.rbac_roles.permissions.list", options, {
+            route: "/v1/organizations/rbac_roles/{rbac_role_id}/permissions",
+            queryParams: ["limit", "page"],
+            attributes: { "anthropic.organization.rbac_role.id": rbacRoleID }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/rbac-roles/rbac-roles.mjs
+var RBACRoles2;
+var init_rbac_roles2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/rbac-roles/rbac-roles.mjs"() {
+    init_resource();
+    init_permissions2();
+    init_permissions2();
+    init_pagination();
+    init_tracing();
+    init_path();
+    RBACRoles2 = /* @__PURE__ */ (() => {
+      class RBACRoles3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.permissions = new Permissions2(this._client);
+        }
+        /**
+         * Retrieve an RBAC Role by ID.
+         *
+         * The RBAC Roles API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * const rbacRole =
+         *   await client.organization.rbacRoles.retrieve(
+         *     'rbac_role_id',
+         *   );
+         * ```
+         */
+        retrieve(rbacRoleID, options) {
+          return this._client.get(path2`/v1/organizations/rbac_roles/${rbacRoleID}`, {
+            ...options,
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_roles.retrieve", options, {
+              route: "/v1/organizations/rbac_roles/{rbac_role_id}",
+              attributes: { "anthropic.organization.rbac_role.id": rbacRoleID }
+            })
+          });
+        }
+        /**
+         * List RBAC Roles in the organization.
+         *
+         * The RBAC Roles API is available to Claude Enterprise organizations only.
+         *
+         * @example
+         * ```ts
+         * // Automatically fetches more pages as needed.
+         * for await (const rbacRole of client.organization.rbacRoles.list()) {
+         *   // ...
+         * }
+         * ```
+         */
+        list(query = {}, options) {
+          return this._client.getAPIList("/v1/organizations/rbac_roles", PageCursor, {
+            query,
+            ...options,
+            __span: startApiCallSpan(this._client, "anthropic.organization.rbac_roles.list", options, {
+              route: "/v1/organizations/rbac_roles",
+              queryParams: ["limit", "page"]
+            })
+          });
+        }
+      }
+      RBACRoles3.Permissions = Permissions2;
+      return RBACRoles3;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/organization/service-accounts/workspaces.mjs
 var Workspaces6;
 var init_workspaces6 = __esm({
@@ -26034,15 +26809,193 @@ var init_service_accounts3 = __esm({
   }
 });
 
+// node_modules/@anthropic-ai/sdk/resources/organization/spend-limits/effective.mjs
+var Effective2;
+var init_effective2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/spend-limits/effective.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    Effective2 = class extends APIResource {
+      /**
+       * List each member's effective spend limit and period-to-date spend.
+       *
+       * Returns one row per (member, period) the member resolves a spend limit for, with
+       * the `source` scope the spend limit was inherited from. Paginates by member, so a
+       * member's periods never split across pages. Supported for Claude Enterprise
+       * organizations only, not for Claude Console organizations.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const spendSummary of client.organization.spendLimits.effective.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/spend_limits/effective", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.effective.list", options, {
+            route: "/v1/organizations/spend_limits/effective",
+            queryParams: ["limit", "page", "period", "user_ids"]
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/spend-limits/increase-requests.mjs
+var IncreaseRequests2;
+var init_increase_requests2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/spend-limits/increase-requests.mjs"() {
+    init_resource();
+    init_pagination();
+    init_tracing();
+    init_path();
+    IncreaseRequests2 = class extends APIResource {
+      /**
+       * Retrieve a spend limit increase request.
+       *
+       * While `pending`, the response includes a live `spend_summary` for the requester
+       * at the request's period.
+       *
+       * @example
+       * ```ts
+       * const spendLimitIncreaseRequest =
+       *   await client.organization.spendLimits.increaseRequests.retrieve(
+       *     'spend_limit_increase_request_id',
+       *   );
+       * ```
+       */
+      retrieve(spendLimitIncreaseRequestID, options) {
+        return this._client.get(path2`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}`, {
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.retrieve", options, {
+            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}",
+            attributes: {
+              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
+            }
+          })
+        });
+      }
+      /**
+       * List spend limit increase requests, most recent first.
+       *
+       * Pending requests include a live `spend_summary` for the requester. Requests
+       * whose requester is no longer a member are excluded.
+       *
+       * @example
+       * ```ts
+       * // Automatically fetches more pages as needed.
+       * for await (const spendLimitIncreaseRequest of client.organization.spendLimits.increaseRequests.list()) {
+       *   // ...
+       * }
+       * ```
+       */
+      list(query = {}, options) {
+        return this._client.getAPIList("/v1/organizations/spend_limit_increase_requests", PageCursor, {
+          query,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.list", options, {
+            route: "/v1/organizations/spend_limit_increase_requests",
+            queryParams: ["actor_ids", "limit", "page", "status"]
+          })
+        });
+      }
+      /**
+       * Approve a pending spend limit increase request.
+       *
+       * Writes a per-user spend limit at `amount` for the requester and transitions the
+       * request to `approved`. `period` defaults to the period the member was blocked
+       * on. Anthropic emails the requester unless `suppress_notification` is set.
+       *
+       * @example
+       * ```ts
+       * const response =
+       *   await client.organization.spendLimits.increaseRequests.approve(
+       *     'spend_limit_increase_request_id',
+       *     { amount: '50000' },
+       *   );
+       * ```
+       */
+      approve(spendLimitIncreaseRequestID, body, options) {
+        return this._client.post(path2`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}/approve`, {
+          body,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.approve", options, {
+            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}/approve",
+            attributes: {
+              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
+            }
+          })
+        });
+      }
+      /**
+       * Deny a pending spend limit increase request.
+       *
+       * Idempotent on `denied`; denying an already-`approved` request returns 400.
+       * Anthropic emails the requester unless `suppress_notification` is set.
+       *
+       * @example
+       * ```ts
+       * const spendLimitIncreaseRequest =
+       *   await client.organization.spendLimits.increaseRequests.deny(
+       *     'spend_limit_increase_request_id',
+       *   );
+       * ```
+       */
+      deny(spendLimitIncreaseRequestID, body, options) {
+        return this._client.post(path2`/v1/organizations/spend_limit_increase_requests/${spendLimitIncreaseRequestID}/deny`, {
+          body,
+          ...options,
+          __span: startApiCallSpan(this._client, "anthropic.organization.spend_limits.increase_requests.deny", options, {
+            route: "/v1/organizations/spend_limit_increase_requests/{spend_limit_increase_request_id}/deny",
+            attributes: {
+              "anthropic.organization.spend_limit_increase_request.id": spendLimitIncreaseRequestID
+            }
+          })
+        });
+      }
+    };
+  }
+});
+
+// node_modules/@anthropic-ai/sdk/resources/organization/spend-limits/spend-limits.mjs
+var SpendLimits2;
+var init_spend_limits2 = __esm({
+  "node_modules/@anthropic-ai/sdk/resources/organization/spend-limits/spend-limits.mjs"() {
+    init_resource();
+    init_effective2();
+    init_effective2();
+    init_increase_requests2();
+    init_increase_requests2();
+    SpendLimits2 = /* @__PURE__ */ (() => {
+      class SpendLimits3 extends APIResource {
+        constructor() {
+          super(...arguments);
+          this.effective = new Effective2(this._client);
+          this.increaseRequests = new IncreaseRequests2(this._client);
+        }
+      }
+      SpendLimits3.Effective = Effective2;
+      SpendLimits3.IncreaseRequests = IncreaseRequests2;
+      return SpendLimits3;
+    })();
+  }
+});
+
 // node_modules/@anthropic-ai/sdk/resources/organization/workspaces/members.mjs
-var Members3;
-var init_members3 = __esm({
+var Members4;
+var init_members4 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/workspaces/members.mjs"() {
     init_resource();
     init_pagination();
     init_tracing();
     init_path();
-    Members3 = class extends APIResource {
+    Members4 = class extends APIResource {
       /**
        * Get Workspace Member
        *
@@ -26130,7 +27083,7 @@ var init_members3 = __esm({
        *   await client.organization.workspaces.members.add(
        *     'workspace_id',
        *     {
-       *       user_id: 'user_01WCz1FkmYMm4gnmykNKUu3Q',
+       *       user_id: 'user_01WxYzAbCdEfGhJkMnPqRsTu',
        *       workspace_role: 'workspace_admin',
        *     },
        *   );
@@ -26466,8 +27419,8 @@ var Workspaces7;
 var init_workspaces7 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/organization/workspaces/workspaces.mjs"() {
     init_resource();
-    init_members3();
-    init_members3();
+    init_members4();
+    init_members4();
     init_rate_limits4();
     init_rate_limits4();
     init_service_accounts4();
@@ -26480,7 +27433,7 @@ var init_workspaces7 = __esm({
         constructor() {
           super(...arguments);
           this.rateLimits = new RateLimits4(this._client);
-          this.members = new Members3(this._client);
+          this.members = new Members4(this._client);
           this.serviceAccounts = new ServiceAccounts4(this._client);
         }
         /**
@@ -26588,7 +27541,7 @@ var init_workspaces7 = __esm({
         }
       }
       Workspaces8.RateLimits = RateLimits4;
-      Workspaces8.Members = Members3;
+      Workspaces8.Members = Members4;
       Workspaces8.ServiceAccounts = ServiceAccounts4;
       return Workspaces8;
     })();
@@ -26612,10 +27565,18 @@ var init_organization2 = __esm({
     init_rate_limits3();
     init_users3();
     init_users3();
+    init_analytics2();
+    init_analytics2();
     init_federation2();
     init_federation2();
+    init_rbac_groups2();
+    init_rbac_groups2();
+    init_rbac_roles2();
+    init_rbac_roles2();
     init_service_accounts3();
     init_service_accounts3();
+    init_spend_limits2();
+    init_spend_limits2();
     init_workspaces7();
     init_workspaces7();
     init_tracing();
@@ -26632,6 +27593,10 @@ var init_organization2 = __esm({
           this.workspaces = new Workspaces7(this._client);
           this.rateLimits = new RateLimits3(this._client);
           this.complianceSettings = new ComplianceSettings2(this._client);
+          this.analytics = new Analytics2(this._client);
+          this.spendLimits = new SpendLimits2(this._client);
+          this.rbacGroups = new RBACGroups2(this._client);
+          this.rbacRoles = new RBACRoles2(this._client);
         }
         /**
          * Retrieve information about the organization associated with the authenticated
@@ -26661,6 +27626,10 @@ var init_organization2 = __esm({
       Organization4.Workspaces = Workspaces7;
       Organization4.RateLimits = RateLimits3;
       Organization4.ComplianceSettings = ComplianceSettings2;
+      Organization4.Analytics = Analytics2;
+      Organization4.SpendLimits = SpendLimits2;
+      Organization4.RBACGroups = RBACGroups2;
+      Organization4.RBACRoles = RBACRoles2;
       return Organization4;
     })();
   }
@@ -26788,8 +27757,8 @@ var init_versions4 = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/resources/skills/skills.mjs
-var Skills3;
-var init_skills4 = __esm({
+var Skills4;
+var init_skills5 = __esm({
   "node_modules/@anthropic-ai/sdk/resources/skills/skills.mjs"() {
     init_resource();
     init_versions4();
@@ -26799,8 +27768,8 @@ var init_skills4 = __esm({
     init_tracing();
     init_uploads();
     init_path();
-    Skills3 = /* @__PURE__ */ (() => {
-      class Skills5 extends APIResource {
+    Skills4 = /* @__PURE__ */ (() => {
+      class Skills6 extends APIResource {
         constructor() {
           super(...arguments);
           this.versions = new Versions4(this._client);
@@ -26901,8 +27870,8 @@ var init_skills4 = __esm({
           });
         }
       }
-      Skills5.Versions = Versions4;
-      return Skills5;
+      Skills6.Versions = Versions4;
+      return Skills6;
     })();
   }
 });
@@ -27102,7 +28071,7 @@ var init_resources2 = __esm({
     init_files2();
     init_models2();
     init_organization2();
-    init_skills4();
+    init_skills5();
     init_user_profiles2();
   }
 });
@@ -27138,7 +28107,7 @@ var init_client = __esm({
     init_beta3();
     init_messages();
     init_organization2();
-    init_skills4();
+    init_skills5();
     init_user_profiles2();
     init_detect_platform();
     init_headers();
@@ -28024,7 +28993,7 @@ var init_client = __esm({
           this.messages = new Messages(this);
           this.models = new Models2(this);
           this.files = new Files2(this);
-          this.skills = new Skills3(this);
+          this.skills = new Skills4(this);
           this.userProfiles = new UserProfiles2(this);
           this.organization = new Organization2(this);
           this.beta = new Beta(this);
@@ -28033,7 +29002,7 @@ var init_client = __esm({
       Anthropic2.Messages = Messages;
       Anthropic2.Models = Models2;
       Anthropic2.Files = Files2;
-      Anthropic2.Skills = Skills3;
+      Anthropic2.Skills = Skills4;
       Anthropic2.UserProfiles = UserProfiles2;
       Anthropic2.Organization = Organization2;
       Anthropic2.Beta = Beta;
@@ -36173,13 +37142,13 @@ var Completions = class extends APIResource2 {
 Completions.Messages = Messages3;
 
 // ../../../node_modules/openai/resources/chat/chat.mjs
-var Chat2 = class extends APIResource2 {
+var Chat3 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.completions = new Completions(this._client);
   }
 };
-Chat2.Completions = Completions;
+Chat3.Completions = Completions;
 
 // ../../../node_modules/openai/resources/admin/organization/admin-api-keys.mjs
 function resolveResourceRequestOptions3(options, buildOptions) {
@@ -37688,7 +38657,7 @@ function normalizeRequestOptionsForQuery12(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Users4 = class extends APIResource2 {
+var Users5 = class extends APIResource2 {
   /**
    * Adds a user to a group.
    *
@@ -37809,7 +38778,7 @@ function normalizeRequestOptionsForQuery13(value, queryKeys, options) {
 var Groups = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.users = new Users4(this._client);
+    this.users = new Users5(this._client);
     this.roles = new Roles2(this._client);
   }
   /**
@@ -37894,7 +38863,7 @@ var Groups = class extends APIResource2 {
     })));
   }
 };
-Groups.Users = Users4;
+Groups.Users = Users5;
 Groups.Roles = Roles2;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/api-keys.mjs
@@ -39250,7 +40219,7 @@ function normalizeRequestOptionsForQuery21(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Users5 = class extends APIResource2 {
+var Users6 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.roles = new Roles5(this._client);
@@ -39350,7 +40319,7 @@ var Users5 = class extends APIResource2 {
     })));
   }
 };
-Users5.Roles = Roles5;
+Users6.Roles = Roles5;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/projects.mjs
 function resolveResourceRequestOptions32(options, buildOptions) {
@@ -39397,10 +40366,10 @@ function normalizeRequestOptionsForQuery22(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Projects2 = class extends APIResource2 {
+var Projects3 = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.users = new Users5(this._client);
+    this.users = new Users6(this._client);
     this.serviceAccounts = new ServiceAccounts5(this._client);
     this.apiKeys = new APIKeys3(this._client);
     this.rateLimits = new RateLimits5(this._client);
@@ -39499,18 +40468,18 @@ var Projects2 = class extends APIResource2 {
     })));
   }
 };
-Projects2.Users = Users5;
-Projects2.ServiceAccounts = ServiceAccounts5;
-Projects2.APIKeys = APIKeys3;
-Projects2.RateLimits = RateLimits5;
-Projects2.ModelPermissions = ModelPermissions;
-Projects2.HostedToolPermissions = HostedToolPermissions;
-Projects2.Groups = Groups2;
-Projects2.Roles = Roles3;
-Projects2.DataRetention = DataRetention2;
-Projects2.SpendLimit = SpendLimit2;
-Projects2.SpendAlerts = SpendAlerts2;
-Projects2.Certificates = Certificates3;
+Projects3.Users = Users6;
+Projects3.ServiceAccounts = ServiceAccounts5;
+Projects3.APIKeys = APIKeys3;
+Projects3.RateLimits = RateLimits5;
+Projects3.ModelPermissions = ModelPermissions;
+Projects3.HostedToolPermissions = HostedToolPermissions;
+Projects3.Groups = Groups2;
+Projects3.Roles = Roles3;
+Projects3.DataRetention = DataRetention2;
+Projects3.SpendLimit = SpendLimit2;
+Projects3.SpendAlerts = SpendAlerts2;
+Projects3.Certificates = Certificates3;
 
 // ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
 function resolveResourceRequestOptions33(options, buildOptions) {
@@ -39675,7 +40644,7 @@ function normalizeRequestOptionsForQuery24(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Users6 = class extends APIResource2 {
+var Users7 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.roles = new Roles6(this._client);
@@ -39741,7 +40710,7 @@ var Users6 = class extends APIResource2 {
     })));
   }
 };
-Users6.Roles = Roles6;
+Users7.Roles = Roles6;
 
 // ../../../node_modules/openai/resources/admin/organization/organization.mjs
 var Organization3 = class extends APIResource2 {
@@ -39751,7 +40720,7 @@ var Organization3 = class extends APIResource2 {
     this.adminAPIKeys = new AdminAPIKeys(this._client);
     this.usage = new Usage2(this._client);
     this.invites = new Invites3(this._client);
-    this.users = new Users6(this._client);
+    this.users = new Users7(this._client);
     this.groups = new Groups(this._client);
     this.roles = new Roles(this._client);
     this.dataRetention = new DataRetention(this._client);
@@ -39760,14 +40729,14 @@ var Organization3 = class extends APIResource2 {
     this.spendLimit = new SpendLimit(this._client);
     this.spendAlerts = new SpendAlerts(this._client);
     this.certificates = new Certificates2(this._client);
-    this.projects = new Projects2(this._client);
+    this.projects = new Projects3(this._client);
   }
 };
 Organization3.AuditLogs = AuditLogs;
 Organization3.AdminAPIKeys = AdminAPIKeys;
 Organization3.Usage = Usage2;
 Organization3.Invites = Invites3;
-Organization3.Users = Users6;
+Organization3.Users = Users7;
 Organization3.Groups = Groups;
 Organization3.Roles = Roles;
 Organization3.DataRetention = DataRetention;
@@ -39776,7 +40745,7 @@ Organization3.ExternalStorage = ExternalStorage;
 Organization3.SpendLimit = SpendLimit;
 Organization3.SpendAlerts = SpendAlerts;
 Organization3.Certificates = Certificates2;
-Organization3.Projects = Projects2;
+Organization3.Projects = Projects3;
 
 // ../../../node_modules/openai/resources/admin/admin.mjs
 var Admin = class extends APIResource2 {
@@ -41063,7 +42032,7 @@ function normalizeRequestOptionsForQuery32(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Artifacts2 = class extends APIResource2 {
+var Artifacts3 = class extends APIResource2 {
   /**
    * Retrieves immutable metadata for one durable session artifact. See
    * [session artifacts](https://developers.openai.com/api/docs/guides/agents-api/environments/files#openai-hosted-artifacts).
@@ -42570,7 +43539,7 @@ var Sessions2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.subagents = new Subagents(this._client);
-    this.artifacts = new Artifacts2(this._client);
+    this.artifacts = new Artifacts3(this._client);
     this.items = new Items(this._client);
     this.events = new Events3(this._client);
     this.traces = new Traces(this._client);
@@ -42667,7 +43636,7 @@ var Sessions2 = class extends APIResource2 {
   }
 };
 Sessions2.Subagents = Subagents;
-Sessions2.Artifacts = Artifacts2;
+Sessions2.Artifacts = Artifacts3;
 Sessions2.Items = Items;
 Sessions2.Events = Events3;
 Sessions2.Traces = Traces;
@@ -46101,7 +47070,7 @@ function normalizeRequestOptionsForQuery52(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Permissions2 = class extends APIResource2 {
+var Permissions3 = class extends APIResource2 {
   /**
    * **NOTE:** Calling this endpoint requires an
    * [admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys).
@@ -46186,10 +47155,10 @@ var Permissions2 = class extends APIResource2 {
 var Checkpoints = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.permissions = new Permissions2(this._client);
+    this.permissions = new Permissions3(this._client);
   }
 };
-Checkpoints.Permissions = Permissions2;
+Checkpoints.Permissions = Permissions3;
 
 // ../../../node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
 function resolveResourceRequestOptions84(options, buildOptions) {
@@ -49209,7 +50178,7 @@ function normalizeRequestOptionsForQuery58(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Skills4 = class extends APIResource2 {
+var Skills5 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.content = new Content2(this._client);
@@ -49257,8 +50226,8 @@ var Skills4 = class extends APIResource2 {
     return this._client.delete(path4`/skills/${skillID}`, resolveResourceRequestOptions102(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
-Skills4.Content = Content2;
-Skills4.Versions = Versions5;
+Skills5.Content = Content2;
+Skills5.Versions = Versions5;
 
 // ../../../node_modules/openai/resources/uploads/parts.mjs
 function resolveResourceRequestOptions103(options, buildOptions) {
@@ -50380,7 +51349,7 @@ var OpenAI = class {
     this._lastCachedAPIKeyInvocation = 0;
     this.decisions = new Decisions(this);
     this.completions = new Completions2(this);
-    this.chat = new Chat2(this);
+    this.chat = new Chat3(this);
     this.embeddings = new Embeddings(this);
     this.files = new Files5(this);
     this.images = new Images(this);
@@ -50403,7 +51372,7 @@ var OpenAI = class {
     this.conversations = new Conversations(this);
     this.evals = new Evals(this);
     this.containers = new Containers(this);
-    this.skills = new Skills4(this);
+    this.skills = new Skills5(this);
     this.videos = new Videos(this);
     const { credential, options: normalizedOptions } = normalizeX509CredentialOptions(clientOptions);
     clientOptions = normalizedOptions;
@@ -51825,7 +52794,7 @@ OpenAI.toFile = toFile2;
 OpenAI.toStreamingFile = toStreamingFile;
 OpenAI.Decisions = Decisions;
 OpenAI.Completions = Completions2;
-OpenAI.Chat = Chat2;
+OpenAI.Chat = Chat3;
 OpenAI.Embeddings = Embeddings;
 OpenAI.Files = Files5;
 OpenAI.Images = Images;
@@ -51848,7 +52817,7 @@ OpenAI.Realtime = Realtime2;
 OpenAI.Conversations = Conversations;
 OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
-OpenAI.Skills = Skills4;
+OpenAI.Skills = Skills5;
 OpenAI.Videos = Videos;
 OpenAI.ConversationCursorPage = ConversationCursorPage;
 OpenAI.CursorPage = CursorPage;

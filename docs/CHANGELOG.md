@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### Chore: update npm dependencies
+
+- Ran `npm update -S` across the root project, `packages/`, and all plugins in `plugins/dist/`.
+- Package bumps: `@quilltap/plugin-utils` 2.7.4 (now on `@quilltap/plugin-types` ^2.10.0 and `openai` ^7.47.0; published), `theme-storybook` 1.0.101 (regenerated `qt-components.css` for Tailwind 4.3.4), and the `quilltap` CLI (`@napi-rs/canvas` ^1.1.0).
+- All 15 plugins patch-bumped (`package.json` and `manifest.json`) and rebuilt.
+
 #### Cleanup: remove Playwright e2e tests
 
 - Removed the four Playwright specs in `__tests__/integration/` (they predated the current UI and API; character creation and the home-page assertions already failed), `helpers/test-user.ts`, `playwright.config.ts`, the `test:e2e*` scripts and the `@playwright/test` dev dependency. The Jest integration tests under `__tests__/integration/api/` are unchanged.
