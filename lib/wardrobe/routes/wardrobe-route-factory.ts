@@ -44,7 +44,7 @@ import {
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 import { WardrobeComponentCycleError } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
 import {
   copyWardrobeItemsSchema,
   createWardrobeSchema,
@@ -303,13 +303,12 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   /** The character tier's `?scope=group`: the group tier, each item tagged with its group. */
   async function listGroupTier(req: NextRequest, ctx: RequestContext, location: WardrobeLocation) {
     const characterId = location.characterId as string;
-    const groups = await resolveGroupMountsForCharacter(characterId);
-    const originByMount = new Map<string, WardrobeOrigin>();
-    for (const { group, mountPointIds } of groups) {
-      for (const mp of mountPointIds) originByMount.set(mp, { scope: 'group', id: group.id, name: group.name });
-    }
+    const groups = await groupMountsFor(characterId);
+    const originByMount: Map<string, WardrobeOrigin> = groupOriginMap(groups);
+    // Strongest first in the tier (membership order, first group claims); the
+    // repository shadows later-over-earlier, so read it reversed.
     const items = await ctx.repos.wardrobe.readSharedTiers(
-      Array.from(originByMount.keys()),
+      Array.from(originByMount.keys()).reverse(),
       readIncludeArchived(req),
       (mp) => originByMount.get(mp)!,
     );

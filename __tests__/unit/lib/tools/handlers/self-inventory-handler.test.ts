@@ -37,6 +37,7 @@ const mockRepos = {
   },
   groups: {
     findById: jest.fn(),
+    findByIdRaw: jest.fn(),
   },
   groupDocMountLinks: {
     findByGroupId: jest.fn(),
@@ -49,6 +50,7 @@ const mockRepos = {
   },
   projects: {
     findById: jest.fn(),
+    findByIdRaw: jest.fn(),
   },
   projectDocMountLinks: {
     findByProjectId: jest.fn(),
@@ -57,6 +59,13 @@ const mockRepos = {
     findByUserId: jest.fn(),
   },
 }
+
+// The shared reach walk reads group and project rows raw; answer those reads
+// with whatever each test set on the hydrated mock.
+beforeEach(() => {
+  mockRepos.groups.findByIdRaw.mockImplementation((...args: unknown[]) => (mockRepos.groups.findById as jest.Mock)(...args))
+  mockRepos.projects.findByIdRaw.mockImplementation((...args: unknown[]) => (mockRepos.projects.findById as jest.Mock)(...args))
+})
 
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(() => mockRepos),

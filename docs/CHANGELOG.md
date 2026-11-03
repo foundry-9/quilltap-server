@@ -4,6 +4,21 @@
 
 ### 4.12-dev
 
+#### Refactor: one tier walk (Refactor 4.12, spec 4)
+
+New `lib/mount-index/reach.ts` settles what a character or a cast can reach. Behaviour changes are marked.
+
+- `resolveOwnerStore`: one owner → official-store resolver under `resolveWardrobeLocation`, `resolveInventoryLocation` and `resolveScenarioLocation` (folder to heal, swallow/rethrow on folder failure, archived allow/refuse as options). Project/group rows are read raw.
+- `groupMountsFor` / `groupOriginMap`: the group tier and its origin map, used by both pools, both `groupLocationsForCharacter`, the wardrobe `?scope=group` read, `core-whisper` and `self_inventory` (which gains cross-group dedupe). `groupMountsFor` takes `includeEmpty`.
+- `resolveCastPool` / `castGroupMounts`: a cast's reach. `resolveScenarioBuilderMountPool` wraps it; the document picker (`?action=accessible-stores`), `?action=group-stores` and `GET /api/v1/groups/scenarios` use it. The picker no longer lists an archived participant's vault.
+- `orderMounts` / `bucketMounts`: a pool as a probe list or as knowledge tiers with boosts. Used by custom tools, tool presets, dressing instructions, the scriptorium search and the knowledge injector (which no longer re-dedupes the pool).
+- `classifyMount`: mount → owner. `classifyScenarioMount`, the inventory `mountOwnerResolver` and the title lint's mount lookup filter over it. The title lint now tags a group's official store as `group` (was `project`, no id).
+- **Behaviour:** inside a tier the earlier mount wins. Groups: the first group in membership order (was: the last, for wardrobe and inventory; the smallest mount id, for custom tools, presets and dressing instructions). Project: the official store first.
+- **Behaviour:** the project tier is the official store plus every linked store everywhere (`resolveProjectMountPointIds`). The wardrobe transfer source probe now searches linked project stores (was: official only).
+- `resolveTieredMountPool` requires `roster: 'gated' | 'open'` and `enabled: 'require' | 'ignore'`. The path resolver and scriptorium search pass `gated` instead of gating around the call; the preset pool passes `require`.
+- Tests: `reach.test.ts`, `reach-chokepoint.test.ts` (no hand group loops; project-link reads only at listed display sites), `inventory/pool-order.test.ts`, and old/new-winner cases in the wardrobe pool, transfer, dressing-instruction and custom-tool suites.
+- Docs: `help/wardrobe.md`, `help/custom-tools.md`, `help/inventory.md` explain the within-tier rule; CLAUDE.md names `reach.ts`.
+
 #### Fix: wardrobe and scenario GETs no longer create stores (#135, #136)
 
 Reads no longer provision a project's or group's official store. Only writers pass `ensure`.

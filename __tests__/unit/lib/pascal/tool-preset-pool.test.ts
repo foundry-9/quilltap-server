@@ -101,15 +101,19 @@ describe('resolveToolPresetPool', () => {
   })
 
   it('names every enabled store on the walk as a save destination, nearest first', async () => {
-    primeMounts({ vault: [], group: [], off: [], general: [] }, ['off'])
+    // The walk itself drops disabled stores (`enabled: 'require'`), so the
+    // pool it answers holds only enabled ones.
+    primeMounts({ vault: [], group: [], general: [] })
     primePool({
       characterMountPointId: 'vault',
       groupMountPointIds: ['group'],
-      projectMountPointIds: ['off'],
+      projectMountPointIds: [],
       globalMountPointId: 'general',
     })
 
     const pool = await resolveToolPresetPool(ctx)
+
+    expect(mockResolvePool).toHaveBeenCalledWith(expect.any(Object), { roster: 'open', enabled: 'require' })
 
     expect(pool.stores.map((s) => [s.mountPointId, s.tier])).toEqual([
       ['vault', 'character'],

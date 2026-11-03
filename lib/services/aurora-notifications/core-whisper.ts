@@ -25,6 +25,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
+import { groupMountsFor } from '@/lib/mount-index/reach';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
@@ -254,45 +255,13 @@ async function assembleGroupCoreFiles(
 ): Promise<CoreFile[]> {
   try {
     const repos = getRepositories();
-    const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
-    if (memberships.length === 0) {
-      return [];
-    }
-
-    // Track mounts already accounted for so a store shared across the vault or
-    // multiple groups is read once. Seed with the character's own vault.
-    const seenMounts = new Set<string>();
-    if (characterMountPointId) seenMounts.add(characterMountPointId);
-
+    // The character's group tier, through the shared walk: membership order,
+    // a store shared by two groups credited to the first. A store that is
+    // also the character's own vault is read there, not here.
     const groups: Array<{ name: string; mountIds: string[] }> = [];
-    for (const membership of memberships) {
-      try {
-        const group = await repos.groups.findByIdRaw(membership.groupId);
-        if (!group) continue;
-
-        const mountIds: string[] = [];
-        if (group.officialMountPointId && !seenMounts.has(group.officialMountPointId)) {
-          seenMounts.add(group.officialMountPointId);
-          mountIds.push(group.officialMountPointId);
-        }
-        const links = await repos.groupDocMountLinks.findByGroupId(membership.groupId);
-        for (const link of links) {
-          if (seenMounts.has(link.mountPointId)) continue;
-          seenMounts.add(link.mountPointId);
-          mountIds.push(link.mountPointId);
-        }
-
-        if (mountIds.length > 0) {
-          groups.push({ name: group.name, mountIds });
-        }
-      } catch (error) {
-        logger.warn('[CoreWhisper] Failed to resolve group Core mounts', {
-          context: LOG_CONTEXT,
-          characterId,
-          groupId: membership.groupId,
-          error: getErrorMessage(error),
-        });
-      }
+    for (const { group, mountPointIds } of await groupMountsFor(characterId)) {
+      const mountIds = mountPointIds.filter((id) => id !== characterMountPointId);
+      if (mountIds.length > 0) groups.push({ name: group.name, mountIds });
     }
 
     groups.sort((a, b) => a.name.localeCompare(b.name));

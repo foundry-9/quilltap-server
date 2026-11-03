@@ -133,7 +133,7 @@ describe('resolveWardrobeInstructions', () => {
     expect(readVaultTextFileMock).not.toHaveBeenCalled();
   });
 
-  it('probes multi-mount tiers deduped and in sorted order for determinism', async () => {
+  it('probes multi-mount tiers deduped and in the tier order given — never sorted by id', async () => {
     filesByMount({});
     await resolveWardrobeInstructions({
       characterMountPointId: null,
@@ -141,7 +141,17 @@ describe('resolveWardrobeInstructions', () => {
       projectMountPointIds: ['m-z', 'm-y'],
     });
     const probedMounts = readVaultTextFileMock.mock.calls.map((c) => c[0]);
-    expect(probedMounts).toEqual(['m-a', 'm-b', 'm-y', 'm-z', 'm-general']);
+    expect(probedMounts).toEqual(['m-b', 'm-a', 'm-z', 'm-y', 'm-general']);
+  });
+
+  it('the first group in membership order wins a two-group collision (was: the smallest mount id)', async () => {
+    filesByMount({ 'm-b': 'First group rules.', 'm-a': 'Second group rules.' });
+    const result = await resolveWardrobeInstructions({
+      characterMountPointId: null,
+      groupMountPointIds: ['m-b', 'm-a'],
+      projectMountPointIds: [],
+    });
+    expect(result).toEqual({ content: 'First group rules.', tier: 'group', mountPointId: 'm-b' });
   });
 });
 

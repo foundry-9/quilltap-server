@@ -26,10 +26,8 @@
 
 import { logger } from '@/lib/logger';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
-import {
-  resolveGroupMountsForCharacter,
-  resolveProjectMountPointIds,
-} from '@/lib/mount-index/tiered-mount-pool';
+import { groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { readInventoryRecords } from '@/lib/database/repositories/vault-overlay/inventory-readers';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryOrigin, InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
@@ -140,9 +138,13 @@ export function buildInventoryPool(
 }
 
 /**
- * Read a list of mounts weakest-first, tagging each record. Fails soft per
- * mount, noting each failure in `unread` so a caller that must not guess can
- * tell "this tier is empty" from "this tier was not read".
+ * Read one tier's mounts, tagging each record. The mounts come strongest-
+ * first, in the settled within-tier order (`orderMounts`: membership order for
+ * groups, the official store first for the project), so an earlier mount's
+ * record wins a same-id collision; the pool shadows later-over-earlier, hence
+ * the reverse. Fails soft per mount, noting each failure in `unread` so a
+ * caller that must not guess can tell "this tier is empty" from "this tier
+ * was not read".
  */
 async function readTier(
   mountPointIds: readonly string[],
@@ -151,7 +153,7 @@ async function readTier(
   consulted: string[],
 ): Promise<InventoryRecordWithOrigin[]> {
   const out: InventoryRecordWithOrigin[] = [];
-  for (const mountPointId of mountPointIds) {
+  for (const mountPointId of [...mountPointIds].reverse()) {
     consulted.push(mountPointId);
     try {
       const records = await readInventoryRecords(mountPointId);
@@ -245,17 +247,12 @@ export async function loadInventoryPool(
   const character = await repos.characters.findByIdRaw(characterId);
   const ownMountPointId = character?.characterDocumentMountPointId ?? null;
   const [groups, projectMountPointIds, generalMountPointId, projectName] = await Promise.all([
-    resolveGroupMountsForCharacter(characterId),
+    groupMountsFor(characterId),
     resolveProjectMountPointIds(projectId),
     getGeneralMountPointId(),
     projectNameOf(repos, projectId),
   ]);
-  const groupOriginByMount = new Map<string, InventoryOrigin>();
-  for (const { group, mountPointIds } of groups) {
-    for (const mountPointId of mountPointIds) {
-      groupOriginByMount.set(mountPointId, { scope: 'group', id: group.id, name: group.name });
-    }
-  }
+  const groupOriginByMount: Map<string, InventoryOrigin> = groupOriginMap(groups);
   const ownOrigin: InventoryOrigin = { scope: 'character', id: characterId, name: character?.name ?? '' };
   const projectOrigin: InventoryOrigin = { scope: 'project', id: projectId, name: projectName };
 

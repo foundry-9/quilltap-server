@@ -15,19 +15,14 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
 import { buildDocStoreUriResolver } from '@/lib/doc-edit/uri-producers'
-import {
-  LITERAL_BOOST_CHARACTER,
-  LITERAL_BOOST_GROUP,
-  LITERAL_BOOST_PROJECT,
-  LITERAL_BOOST_GLOBAL,
-} from '@/lib/embedding/literal-boost'
+import { LITERAL_BOOST_GLOBAL } from '@/lib/embedding/literal-boost'
+import { bucketMounts } from '@/lib/mount-index/reach'
 import {
   resolveTieredMountPool,
   flattenTierPool,
   type TieredMountPool,
 } from '@/lib/mount-index/tiered-mount-pool'
 import { getRepositories } from '@/lib/repositories/factory'
-import { rosterGatedProjectId } from '@/lib/projects/roster-access'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   SearchScriptoriumToolInput,
@@ -177,9 +172,9 @@ export async function executeSearchScriptoriumTool(
           {
             userId: context.userId,
             characterId: context.characterId,
-            projectId: await rosterGatedProjectId(context.projectId, context.characterId),
+            projectId: context.projectId,
           },
-          { requireOwnership: true },
+          { requireOwnership: true, roster: 'gated', enabled: 'ignore' },
         )
         // With ownership gating, a character vault is present only when the
         // calling user owns the character — mirror that for the tier filter below.
@@ -211,32 +206,10 @@ export async function executeSearchScriptoriumTool(
           ? [{ tier: 'global', mountPointIds: operatorStoreIds, boost: LITERAL_BOOST_GLOBAL }]
           : []
       }
-      const tiers: Array<{
-        tier: 'character' | 'group' | 'project' | 'global'
-        mountPointIds: string[]
-        boost: number
-      }> = []
-      const wantCharacter = scope === 'all' || scope === 'character'
-      const wantGroup = scope === 'all' || scope === 'group'
-      const wantProject = scope === 'all' || scope === 'project'
-      const wantGlobal = scope === 'all'
-      if (wantCharacter && pool.characterMountPointId) {
-        tiers.push({ tier: 'character', mountPointIds: [pool.characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
-      }
-      // Pre-built pool: the cast vaults stand where the character tier would.
-      if (wantCharacter && prebuiltPool && pool.participantMountPointIds.length > 0) {
-        tiers.push({ tier: 'character', mountPointIds: pool.participantMountPointIds, boost: LITERAL_BOOST_CHARACTER })
-      }
-      if (wantGroup && pool.groupMountPointIds.length > 0) {
-        tiers.push({ tier: 'group', mountPointIds: pool.groupMountPointIds, boost: LITERAL_BOOST_GROUP })
-      }
-      if (wantProject && pool.projectMountPointIds.length > 0) {
-        tiers.push({ tier: 'project', mountPointIds: pool.projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
-      }
-      if (wantGlobal && pool.globalMountPointId) {
-        tiers.push({ tier: 'global', mountPointIds: [pool.globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
-      }
-      return tiers
+      // The shared bucketing (`bucketMounts`): tiers nearest first, each
+      // with its literal-phrase boost. A pre-built pool's cast vaults stand
+      // where the character tier would.
+      return bucketMounts(pool, { scope, participantsAsCharacter: !!prebuiltPool })
     }
 
     // Search memories if requested (never on the operator surface — see above)

@@ -10,7 +10,8 @@
  */
 import { NextResponse } from 'next/server';
 import { notFound, successResponse } from '@/lib/api/responses';
-import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { castGroupMounts } from '@/lib/mount-index/reach';
+import { logger } from '@/lib/logger';
 import type { RequestContext } from '@/lib/api/middleware';
 
 export async function handleGetGroupStores(
@@ -22,19 +23,15 @@ export async function handleGetGroupStores(
     return notFound('Chat');
   }
 
-  const mountIdSet = new Set<string>();
-
-  for (const participant of chat.participants) {
-    if (participant.type !== 'CHARACTER') continue;
-    if (!participant.characterId) continue;
-    if (participant.controlledBy !== 'user') continue;
-    if (participant.status === 'removed') continue;
-
-    const ids = await resolveGroupMountPointIdsForCharacter(participant.characterId);
-    for (const id of ids) {
-      mountIdSet.add(id);
-    }
-  }
+  // The group tier of the cast this picker serves: the user-controlled
+  // character participants (the persona's groups), through the shared walk.
+  const personaIds = chat.participants
+    .filter(
+      (p) => p.type === 'CHARACTER' && !!p.characterId && p.controlledBy === 'user' && p.status !== 'removed',
+    )
+    .map((p) => p.characterId as string);
+  const mountIds = await castGroupMounts(personaIds);
+  logger.debug('[Chats v1] Resolved persona group stores', { chatId, personaCount: personaIds.length, mountCount: mountIds.length });
 
   const stores: Array<{
     id: string;
@@ -44,7 +41,7 @@ export async function handleGetGroupStores(
     enabled: boolean;
   }> = [];
 
-  for (const id of mountIdSet) {
+  for (const id of mountIds) {
     const mp = await repos.docMountPoints.findById(id);
     if (!mp) continue;
     if (!mp.enabled) continue;
