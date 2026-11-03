@@ -74,13 +74,21 @@ correctly for the first time. One story-side divergence: the Tabs story's
 the app's rules its links underline and the actions wrap below. That is the
 story's markup, not the CSS.
 
-## Pre-existing gaps noticed in passing (not changed)
+## Pre-existing gaps noticed in passing (resolved in theme-storybook 1.0.100)
 
-The stories name a few classes that neither the hand copy nor the app defines:
+The stories named a few classes that neither the hand copy nor the app defines:
 `qt-badge-default`, `qt-badge-outline-{destructive,primary,success,warning}`,
 `qt-badge-provider-{anthropic,google}`, `qt-chat-system-bar-chevron-down`,
-`qt-confirmation-badge-label`, `qt-typing-indicator`. They rendered unstyled
-before and still do.
+`qt-confirmation-badge-label`, `qt-typing-indicator`. They rendered unstyled.
+The Tabs story's Navigation Bar also used markup the app's `qt-navbar` rules do
+not expect, so its links underlined and its buttons wrapped below the links.
+
+Resolved in theme-storybook 1.0.100 by changing the stories, not the CSS: each
+demo now uses the app component's own classes and markup (`ProviderBadge`,
+`AnnouncementChip`, `QuillAnimation`, `ConfirmationBadge`, the `_layout.css`
+navbar family). `qt-chat-system-bar-chevron-down` and
+`qt-confirmation-badge-label` remain because the app uses them too, as
+unstyled hooks.
 
 ## Detail
 

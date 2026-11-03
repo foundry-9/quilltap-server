@@ -6,7 +6,7 @@
 
 #### Refactor: the browser family, finished (Refactor 4.12, spec 6, Phases 1–3)
 
-The remaining Wardrobe / Inventory pairs are one component or one factory with a kind parameter. Phase 4 (server-side wardrobe merge) is held for the tier-walk spec's project-tier decision. Phase 5 (`FileBrowser` retirement) is decided in the spec's §4.4 and waits on specs 7 and 2.
+The remaining Wardrobe / Inventory pairs are one component or one factory with a kind parameter. Phase 4 (server-side wardrobe merge) is held for the tier-walk spec's project-tier decision. Phase 5 (`FileBrowser` retirement) is decided in the spec's §4.4 and waits on spec 2.
 
 - Dead code: `createWardrobeFolder` / `renameWardrobeFolder` / `deleteWardrobeFolder` and `lib/wardrobe/folder-mutations.ts` removed (`WARDROBE_FOLDER_KIND` moved to `lib/wardrobe/item-mutations.ts`); `lib/wardrobe/folder-view.ts` no longer re-exports the shared view helpers; `FileBrowser`'s unreachable project branch (project file list, project folders, upload) removed along with its `projectId` / `showUpload` props.
 - `normaliseRelativePath` has one copy (`lib/mount-index/path-utils.ts`, new `allowRoot` option and `isSafeRelativePath`). `database-store.ts` and `POST /api/v1/mount-points/[id]/folders` use it.
@@ -21,6 +21,27 @@ The remaining Wardrobe / Inventory pairs are one component or one factory with a
 - New `POST …/wardrobe?action=duplicate` (`{ itemId }` → `201 { wardrobeItem }`), through `createItem`; the browser's Duplicate calls it instead of building the copy client-side. The "(copy)" title now avoids every title in the tier, archived ones included.
 - `createItemImagesRoute(kind)` (`lib/mount-index/item-images-route.ts`) is behind both `[itemId]/images` routes; the Inventory's archetype fallthrough and the wardrobe's `link-image` are kind options. Wire responses unchanged.
 - Tests: `item-control-shared.test.tsx`, `item-image-viewer.test.tsx`, `item-dialog-provider.test.tsx`, `use-item-folders.test.tsx`, trigger cases in `item-action-menu.test.tsx`, `item-images-route.test.ts`, and preamble, duplicate and no-provision cases in `item-folder-routes.test.ts` / `wardrobe-route-factory.test.ts`.
+#### Refactor: one recursive watcher core under both filesystem watchers (Refactor 4.12, spec 7)
+
+The document-store watcher and the `files/` watcher were copies of each other that had drifted. They now share `createRecursiveWatcher` (`lib/files/recursive-watcher.ts`): the native recursive `fs.watch`, the per-path debounce, `lstat` dispatch, symlink skip, cloud-placeholder skip, `'error'` logging, and the polling fallback. Each watcher keeps only its domain handlers.
+
+- `files/` watcher falls back to polling when `fs.watch` refuses a recursive watch, and honours `QUILLTAP_WATCHER_POLLING=1`. It used to log a warning and stay off.
+- `files/` watcher no longer hashes an evicted iCloud / OneDrive placeholder, which made the provider download it. Covered for direct events (core) and for files inside a folder that arrived (`handleFileAdd` / `handleFileChange`).
+- `files/` watcher no longer reads every file record on a plain file delete. The folder sweep runs only after a rename of a path that had no record of its own.
+- Both watchers debounce 750 ms (`WATCH_DEBOUNCE_MS`); the `files/` watcher was 500 ms.
+- `stopMountWatchers` / `stopWatcher` are now called on SIGTERM / SIGINT (`lib/startup/watcher-shutdown.ts`, prepended so it runs before the database close). `stopMountWatchers` is synchronous; `stopWatcher({ flushPendingDeletes: false })` leaves deferred deletes to startup reconciliation.
+- One recursive `readdir` skeleton, `walkTree` (`lib/files/walk.ts`), under `walkDirectory`, `listFilesystemFolders`, `walkDisk` and `scanDirectory`. Filter rules unchanged.
+- Stale chokidar comments in `database-store.ts` and `db-store-events.ts` fixed; `FILE-SYSTEM-IMPLEMENTATION.md`'s watcher section rewritten (it described a class that does not exist).
+- Tests: shared cases moved to `lib/files/__tests__/recursive-watcher.test.ts`; new `lib/files/__tests__/walk.test.ts`; both `watcher-native.test.ts` suites keep only domain cases plus the three new `files/` behaviours.
+
+#### Fix: theme-storybook stories use only real `qt-*` classes
+
+Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.
+
+- Badges / ThemeComparison: dropped `qt-badge-default`, `qt-badge-outline-{primary,success,warning,destructive}`, `qt-badge-provider-{anthropic,google}`; added `qt-badge-info`; provider badges are the five embedding providers, standing alone as in `ProviderBadge`.
+- Chat: announcement-bar chevrons are SVG glyphs as in `AnnouncementChip`; `qt-typing-indicator` is replaced by the `qt-thinking-indicator` quill from `QuillAnimation` / `StreamingMessage`; confirmation badges match `ConfirmationBadge`. `qt-chat-system-bar-chevron-down` and `qt-confirmation-badge-label` stay, because the app uses them as unstyled hooks.
+- Tabs: the Navigation Bar demo uses `qt-navbar` > `qt-navbar-container` > `qt-navbar-section` with `qt-navbar-toggle` buttons, plus a scoped base-layer reset standing in for Tailwind preflight. Links no longer underline and the action buttons no longer wrap below the links.
+- theme-storybook 1.0.100. The "Pre-existing gaps" note in `docs/developer/features/refactor-4-12/storybook-css-diff.md` is marked resolved.
 
 #### Build: theme-storybook CSS is generated (Refactor 4.12, spec 1)
 

@@ -1,6 +1,6 @@
 # Refactor 4.12 — The browser family, finished: the remaining Wardrobe / Inventory pairs and the last legacy browser
 
-**Status:** Phases 1–3 done (2026-11-03). Phase 4 is held for the tier-walk spec's project-tier decision; Phase 5 is decided (§4.4) and waits on specs 7 and 2. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](refactor-4-12-tier-walk.md)'s family A and is not repeated here.
+**Status:** Phases 1–3 done (2026-11-03). Phase 4 is held for the tier-walk spec's project-tier decision; Phase 5 is decided (§4.4) and waits on spec 2. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](refactor-4-12-tier-walk.md)'s family A and is not repeated here.
 
 ## 1. The problem
 
@@ -79,9 +79,9 @@ Finish what the folder-browser programme started: every Wardrobe / Inventory sur
 
 Not a refactor of the browser family so much as the end of the `files` table as a browsable surface. The human accepted the proposals below on 2026-11-03.
 
-**Prerequisites.** Two other 4.12 specs land first:
+**Prerequisites.** Two other 4.12 specs land first. Spec 7 is done (#138); spec 2 is still to come.
 
-- [Spec 7, one watcher core](refactor-4-12-native-watcher-core.md). The `files/` watcher has no polling fallback today: when a recursive `fs.watch` is refused it logs a warning and stays off. Until it inherits the fallback, the manual *Sync* button is the only recovery, so it cannot be dropped (decision 4).
+- [Spec 7, one watcher core](refactor-4-12-native-watcher-core.md) (**done**). Before it, the `files/` watcher had no polling fallback: when a recursive `fs.watch` was refused it logged a warning and stayed off, leaving the manual *Sync* button as the only recovery. It now inherits the fallback, which is what lets decision 4 drop the button.
 - [Spec 2, one document core](refactor-4-12-document-core.md). The editor and `doc_read_file` read an uploaded blob through two different readers. Once `/files` is a store browser, opening an upload goes through that path, so the divergence should be settled first.
 
 **Decisions.**
@@ -94,7 +94,7 @@ Not a refactor of the browser family so much as the end of the `files` table as 
    - This adds a Librarian announcement on attaching a general file where there was none. That is accepted.
    - Check first whether the Uploads store already appears in the picker's `docStores` list (no filter hiding it was found). If it does, the General step and the store step merge.
 3. **Promote-to-project becomes a store move**: a move or copy from the Uploads store into the project's store, through the existing cross-store `move-folder` / `copyFile` operations. `MoveToProjectModal` and `[id]/actions/promote.ts` go.
-4. **Sync and thumbnail generation are dropped**, once spec 7 has given the `files/` watcher its polling fallback. Before deleting `generate-thumbnails.ts`, check that `DocumentStoreBrowser`'s image rows render from the store without a pre-generation pass.
+4. **Sync and thumbnail generation are dropped**; spec 7 has given the `files/` watcher its polling fallback. Before deleting `generate-thumbnails.ts`, check that `DocumentStoreBrowser`'s image rows render from the store without a pre-generation pass.
 5. **Then delete** the client files in §1.4 and the server routes whose only callers they were, after a grep for other callers of each. `files/folders/route.ts` is the one `ensureByPath` caller on the request path. If nothing else reads the legacy `folders` table afterwards, record that in DDL.md, but do not drop the table in this phase: restore and import still write it.
 
 **Help.** `help/files.md`, `help/file-organization.md`, `help/file-uploads.md`, `help/file-search-preview.md` and `help/files-with-ai.md` all mention `/files` or General Files; each is reread and rewritten for the store view, and the attachment-picker help loses its separate General section.
@@ -105,7 +105,7 @@ Not a refactor of the browser family so much as the end of the `files` table as 
 2. §4.1 client layer, one pair per PR, in the table's order; the `wardrobe` realtime topic lands with the folder hooks.
 3. §4.2 server preamble and images route.
 4. §4.3 server-side wardrobe merge (after the tier-walk decision).
-5. §4.4 `FileBrowser` retirement, after specs 7 and 2: the survey and any migration first, then the `/files` page and the picker, then the deletions.
+5. §4.4 `FileBrowser` retirement, after spec 2 (spec 7 is done): the survey and any migration first, then the `/files` page and the picker, then the deletions.
 
 ## 6. Verification
 
