@@ -4,6 +4,13 @@
 
 ### 4.12-dev
 
+#### Fix: wardrobe and scenario GETs no longer create stores (#135, #136)
+
+Reads no longer provision a project's or group's official store. Only writers pass `ensure`.
+
+- Wardrobe collection GET and `?action=instructions` GET (`lib/wardrobe/routes/wardrobe-route-factory.ts`): an owner with no store yet answers `{ mountPointId: null, wardrobeItems: [] }` / `{ instructions: null }`; a missing owner is still 404. Fixes #135.
+- `GET /api/v1/groups/scenarios` and the project/group/General scenario collection GET (`lib/mount-index/scenario-item-route-factory.ts`) read without `ensure`; an owner with no store lists as empty. POST still provisions the store, its `Scenarios/` folder and the group's `Knowledge/` folder. Fixes #136.
+
 #### Fix: theme-storybook stories use only real `qt-*` classes
 
 Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.

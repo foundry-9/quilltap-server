@@ -166,11 +166,23 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   const { scope, logTag, logIdKey } = config;
   const resolveLocation = makeResolver(config);
 
+  /**
+   * A location that did not resolve on a read probe: is that an owner whose
+   * store simply does not exist yet (answer empty), rather than a missing
+   * owner (404)? General always counts — unprovisioned means empty.
+   */
+  async function ownerAwaitingStore(ctx: RequestContext, id: string | null | undefined): Promise<boolean> {
+    if (scope === 'general') return true;
+    if (scope === 'character' || !id) return false;
+    const owner = scope === 'project' ? await ctx.repos.projects.findById(id) : await ctx.repos.groups.findById(id);
+    return !!owner;
+  }
+
   async function handleGetInstructions(req: NextRequest, ctx: RequestContext, params: P) {
-    const location = await resolveWardrobeLocation(scope, config.paramsToId(params), ctx.repos, ctx.user.id, {
-      ensure: scope !== 'character',
-    });
-    if (!location && scope !== 'general') return notFound(LABELS[scope].owner);
+    // A read never provisions (#135): an owner with no store yet has no instructions.
+    const id = config.paramsToId(params);
+    const location = await resolveWardrobeLocation(scope, id, ctx.repos, ctx.user.id, { ensure: false });
+    if (!location && !(await ownerAwaitingStore(ctx, id))) return notFound(LABELS[scope].owner);
     const mountPointId = location?.mountPointId ?? null;
     return handleReadWardrobeInstructions(mountPointId, ({ present }) => {
       logger.debug(`${logTag} Read dressing instructions`, {
@@ -220,13 +232,9 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     const id = config.paramsToId(params);
     const location = await resolveWardrobeLocation(scope, id, ctx.repos, ctx.user.id, { ensure: false });
     if (!location) {
-      if (scope === 'general') return successResponse({ folders: [] });
-      if (scope !== 'character' && id) {
-        const owner = scope === 'project' ? await ctx.repos.projects.findById(id) : await ctx.repos.groups.findById(id);
-        if (owner) {
-          logger.debug(`${logTag} No store yet; no wardrobe folders`, { [logIdKey]: id, context: 'wardrobe' });
-          return successResponse({ folders: [] });
-        }
+      if (await ownerAwaitingStore(ctx, id)) {
+        logger.debug(`${logTag} No store yet; no wardrobe folders`, { [logIdKey]: id ?? null, context: 'wardrobe' });
+        return successResponse({ folders: [] });
       }
       return notFound(LABELS[scope].owner);
     }
@@ -318,12 +326,15 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
 
   const GET = createContextParamsHandler<P>(
     withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders }, async (req, ctx, params) => {
-      const location = await resolveWardrobeLocation(scope, config.paramsToId(params), ctx.repos, ctx.user.id, {
-        ensure: scope !== 'character',
-      });
+      // A read never provisions (#135): a project or group with no store yet
+      // (or an unprovisioned General) simply has nothing in it.
+      const id = config.paramsToId(params);
+      const location = await resolveWardrobeLocation(scope, id, ctx.repos, ctx.user.id, { ensure: false });
       if (!location) {
-        // An unprovisioned General simply has nothing in it yet.
-        if (scope === 'general') return successResponse({ wardrobeItems: [] });
+        if (await ownerAwaitingStore(ctx, id)) {
+          logger.debug(`${logTag} No store yet; no wardrobe items`, { [logIdKey]: id ?? null, context: 'wardrobe' });
+          return successResponse({ mountPointId: null, wardrobeItems: [] });
+        }
         return notFound(LABELS[scope].owner);
       }
       if (scope === 'character' && new URL(req.url).searchParams.get('scope') === 'group') {

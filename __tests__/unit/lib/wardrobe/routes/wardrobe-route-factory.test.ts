@@ -304,11 +304,11 @@ beforeEach(() => {
 // ============================================================================
 
 describe('collection GET — listing', () => {
-  it('project: ensures the store and folder, then answers the list with its mount', async () => {
+  it('project: reads the existing store without provisioning, answering the list with its mount (#135)', async () => {
     const res = await collection('project').GET(req('https://x.test/'), ctx(), { id: 'proj-1' });
 
-    expect(mockEnsureStore).toHaveBeenCalledWith('project', 'proj-1', 'The Estate');
-    expect(mockEnsureFolder).toHaveBeenCalledWith('mount-1');
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'mount-1',
@@ -316,10 +316,10 @@ describe('collection GET — listing', () => {
     });
   });
 
-  it('group: ensures the group store and tags items with the group', async () => {
+  it('group: reads the group store without provisioning and tags items with the group', async () => {
     const res = await collection('group').GET(req('https://x.test/'), ctx(), { id: 'group-1' });
 
-    expect(mockEnsureStore).toHaveBeenCalledWith('group', 'group-1', 'The Drones Club');
+    expect(mockEnsureStore).not.toHaveBeenCalled();
     expect(mockReadItems).toHaveBeenCalledWith({ mountPointId: 'gmount-1', scope: 'group', characterId: null });
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'gmount-1',
@@ -358,7 +358,7 @@ describe('collection GET — listing', () => {
   it('general: lists the General folder with the General origin', async () => {
     const res = await collection('general').GET(req('https://x.test/'), ctx(), { id: '' });
 
-    expect(mockEnsureFolder).toHaveBeenCalledWith('general-mount');
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'general-mount',
       wardrobeItems: [{ ...wardrobeItem(), origin: GENERAL_ORIGIN, wear: NEVER_WORN }],
@@ -371,7 +371,7 @@ describe('collection GET — listing', () => {
     const res = await collection('general').GET(req('https://x.test/'), ctx(), { id: '' });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ wardrobeItems: [] });
+    await expect(res.json()).resolves.toEqual({ mountPointId: null, wardrobeItems: [] });
     expect(mockReadItems).not.toHaveBeenCalled();
   });
 
@@ -415,12 +415,15 @@ describe('collection GET — listing', () => {
     expect(mockEnsureStore).not.toHaveBeenCalled();
   });
 
-  it('404s when the store cannot be ensured', async () => {
-    mockEnsureStore.mockResolvedValue(null as never);
+  it('answers empty, without minting a store, for a project that has none yet (#135)', async () => {
+    findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
 
     const res = await collection().GET(req('https://x.test/'), ctx(), { id: 'proj-1' });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ mountPointId: null, wardrobeItems: [] });
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     expect(mockReadItems).not.toHaveBeenCalled();
   });
 });
@@ -643,6 +646,17 @@ describe('?action=instructions does not fall through to item CRUD', () => {
     );
 
     expect(mockEnsureFolder).toHaveBeenCalledWith('mount-1');
+  });
+
+  it('GET reads null, without minting a store, for a project that has none yet (#135)', async () => {
+    findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
+
+    const res = await collection().GET(req('https://x.test/?action=instructions'), ctx(), { id: 'proj-1' });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ instructions: null });
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockReadInstructions).not.toHaveBeenCalled();
   });
 
   it('404s on a missing owner before reading a file', async () => {

@@ -70,7 +70,8 @@ export const GET = createContextHandler(
 
     for (const groupId of groupIds) {
       try {
-        const location = await resolveScenarioLocation('group', groupId, repos, user.id, { ensure: true });
+        // A read never provisions (#136): a group with no store yet has no scenarios.
+        const location = await resolveScenarioLocation('group', groupId, repos, user.id);
         if (!location?.id) continue;
 
         const { scenarios, warnings } = await location.list({ includeArchived });
