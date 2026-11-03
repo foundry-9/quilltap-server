@@ -195,12 +195,28 @@ describe('loadWearablePool — precedence', () => {
     expect(mockMount).toHaveBeenCalledWith('grp-1', true);
   });
 
-  it('lets the last mount win a collision between stores of the same tier', async () => {
+  it('lets the first mount win a collision between stores of the same tier (was: the last)', async () => {
     serveMounts({ 'mp-1': [item('livery', 'project-mp-1')], 'mp-2': [item('livery', 'project-mp-2')] });
 
+    // The project tier comes official-first; before Refactor 4.12 the last
+    // mount (mp-2) won, now the first (mp-1) does.
     const pool = await load(['mp-1', 'mp-2']);
 
-    expect(titlesById(pool.wearable())).toEqual({ livery: 'livery (project-mp-2)' });
+    expect(titlesById(pool.wearable())).toEqual({ livery: 'livery (project-mp-1)' });
+  });
+
+  it('lets the first group win a collision between two groups (membership order; was: the last)', async () => {
+    mockGroups.mockResolvedValue([
+      { group: { id: 'G1', name: 'First' }, mountPointIds: ['grp-1'] },
+      { group: { id: 'G2', name: 'Second' }, mountPointIds: ['grp-2'] },
+    ]);
+    serveMounts({ 'grp-1': [item('sash', 'grp-1')], 'grp-2': [item('sash', 'grp-2')] });
+
+    const pool = await load([]);
+
+    // Before Refactor 4.12 the Second group's sash won; now the First's does.
+    expect(titlesById(pool.wearable())).toEqual({ sash: 'sash (grp-1)' });
+    expect(pool.get('sash')?.origin).toEqual({ scope: 'group', id: 'G1', name: 'First' });
   });
 });
 

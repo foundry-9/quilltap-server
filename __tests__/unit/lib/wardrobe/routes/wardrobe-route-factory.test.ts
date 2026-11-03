@@ -70,7 +70,7 @@ jest.mock('@/lib/database/repositories/characters.repository', () => {
 
 jest.mock('@/lib/instance-settings', () => ({ getGeneralMountPointId: jest.fn() }));
 jest.mock('@/lib/mount-index/ensure-owner-store', () => ({ ensureOwnerOfficialStore: jest.fn() }));
-jest.mock('@/lib/mount-index/shared-wardrobe', () => ({ ensureSharedWardrobeFolder: jest.fn() }));
+jest.mock('@/lib/mount-index/folder-paths', () => ({ ensureFolderPath: jest.fn() }));
 jest.mock('@/lib/mount-index/general-wardrobe', () => ({ readGeneralWardrobe: jest.fn() }));
 jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({ resolveGroupMountsForCharacter: jest.fn() }));
 jest.mock('@/lib/wardrobe/pool', () => ({ loadWearablePool: jest.fn() }));
@@ -113,7 +113,7 @@ import {
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
-import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe';
+import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { readGeneralWardrobe } from '@/lib/mount-index/general-wardrobe';
 import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
@@ -136,7 +136,7 @@ const mockDelete = jest.mocked(deleteInMount);
 const mockResolveMount = jest.mocked(resolveWardrobeMount);
 const mockGeneralMount = jest.mocked(getGeneralMountPointId);
 const mockEnsureStore = jest.mocked(ensureOwnerOfficialStore);
-const mockEnsureFolder = jest.mocked(ensureSharedWardrobeFolder);
+const mockEnsureFolder = jest.mocked(ensureFolderPath);
 const mockReadGeneral = jest.mocked(readGeneralWardrobe);
 const mockGroupMounts = jest.mocked(resolveGroupMountsForCharacter);
 const mockLoadPool = jest.mocked(loadWearablePool);
@@ -237,8 +237,8 @@ function ctx(userId = 'user-1') {
   return {
     user: { id: userId },
     repos: {
-      projects: { findById: findProject },
-      groups: { findById: findGroup },
+      projects: { findById: findProject, findByIdRaw: findProject },
+      groups: { findById: findGroup, findByIdRaw: findGroup },
       characters: { findByIdRaw },
       chats: { removeEquippedItemFromAllChats, findById: findChatById },
       wardrobeWear: { deleteByItemIds, findSummaries, findHistory },
@@ -304,11 +304,11 @@ beforeEach(() => {
 // ============================================================================
 
 describe('collection GET — listing', () => {
-  it('project: ensures the store and folder, then answers the list with its mount', async () => {
+  it('project: reads the existing store without provisioning, answering the list with its mount (#135)', async () => {
     const res = await collection('project').GET(req('https://x.test/'), ctx(), { id: 'proj-1' });
 
-    expect(mockEnsureStore).toHaveBeenCalledWith('project', 'proj-1', 'The Estate');
-    expect(mockEnsureFolder).toHaveBeenCalledWith('mount-1');
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'mount-1',
@@ -316,10 +316,10 @@ describe('collection GET — listing', () => {
     });
   });
 
-  it('group: ensures the group store and tags items with the group', async () => {
+  it('group: reads the group store without provisioning and tags items with the group', async () => {
     const res = await collection('group').GET(req('https://x.test/'), ctx(), { id: 'group-1' });
 
-    expect(mockEnsureStore).toHaveBeenCalledWith('group', 'group-1', 'The Drones Club');
+    expect(mockEnsureStore).not.toHaveBeenCalled();
     expect(mockReadItems).toHaveBeenCalledWith({ mountPointId: 'gmount-1', scope: 'group', characterId: null });
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'gmount-1',
@@ -358,7 +358,7 @@ describe('collection GET — listing', () => {
   it('general: lists the General folder with the General origin', async () => {
     const res = await collection('general').GET(req('https://x.test/'), ctx(), { id: '' });
 
-    expect(mockEnsureFolder).toHaveBeenCalledWith('general-mount');
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'general-mount',
       wardrobeItems: [{ ...wardrobeItem(), origin: GENERAL_ORIGIN, wear: NEVER_WORN }],
@@ -371,7 +371,7 @@ describe('collection GET — listing', () => {
     const res = await collection('general').GET(req('https://x.test/'), ctx(), { id: '' });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ wardrobeItems: [] });
+    await expect(res.json()).resolves.toEqual({ mountPointId: null, wardrobeItems: [] });
     expect(mockReadItems).not.toHaveBeenCalled();
   });
 
@@ -415,12 +415,15 @@ describe('collection GET — listing', () => {
     expect(mockEnsureStore).not.toHaveBeenCalled();
   });
 
-  it('404s when the store cannot be ensured', async () => {
-    mockEnsureStore.mockResolvedValue(null as never);
+  it('answers empty, without minting a store, for a project that has none yet (#135)', async () => {
+    findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
 
     const res = await collection().GET(req('https://x.test/'), ctx(), { id: 'proj-1' });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ mountPointId: null, wardrobeItems: [] });
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockEnsureFolder).not.toHaveBeenCalled();
     expect(mockReadItems).not.toHaveBeenCalled();
   });
 });
@@ -442,12 +445,13 @@ describe('character collection GET ?scope=group', () => {
     );
 
     expect(mockGroupMounts).toHaveBeenCalledWith(CHAR_ID);
-    expect(readSharedTiers).toHaveBeenCalledWith(['gmount-1', 'gmount-2'], true, expect.any(Function));
+    // Read weakest-first so the first group (membership order) shadows the second.
+    expect(readSharedTiers).toHaveBeenCalledWith(['gmount-2', 'gmount-1'], true, expect.any(Function));
     expect(mockReadItems).not.toHaveBeenCalled();
     const body = await res.json();
     expect(body.wardrobeItems.map((i: { origin: unknown }) => i.origin)).toEqual([
-      GROUP_ORIGIN,
       { scope: 'group', id: 'group-2', name: 'The Junior Ganymede' },
+      GROUP_ORIGIN,
     ]);
     expect(body.wardrobeItems[0].wear).toEqual(NEVER_WORN);
   });
@@ -642,7 +646,18 @@ describe('?action=instructions does not fall through to item CRUD', () => {
       { id: 'proj-1' },
     );
 
-    expect(mockEnsureFolder).toHaveBeenCalledWith('mount-1');
+    expect(mockEnsureFolder).toHaveBeenCalledWith('mount-1', 'Wardrobe');
+  });
+
+  it('GET reads null, without minting a store, for a project that has none yet (#135)', async () => {
+    findProject.mockResolvedValue({ ...PROJECT, officialMountPointId: null });
+
+    const res = await collection().GET(req('https://x.test/?action=instructions'), ctx(), { id: 'proj-1' });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ instructions: null });
+    expect(mockEnsureStore).not.toHaveBeenCalled();
+    expect(mockReadInstructions).not.toHaveBeenCalled();
   });
 
   it('404s on a missing owner before reading a file', async () => {

@@ -448,11 +448,19 @@ describe('collection bodies', () => {
       logIdKey: 'projectId',
     });
 
-  it('provisions the store before listing', async () => {
+  it('lists the existing store without provisioning it (#136)', async () => {
     const res = await bodies().list(req('https://x.test/'), ctx(), { id: 'proj-1' });
 
-    expect(mockEnsureOwnerOfficialStore).toHaveBeenCalledWith('project', 'proj-1', 'Blackwood');
+    expect(mockEnsureOwnerOfficialStore).not.toHaveBeenCalled();
     await expect(res.json()).resolves.toMatchObject({ mountPointId: MOUNT, scenarios: [{ name: 'Tea' }] });
+  });
+
+  it('lists an owner with no store yet as empty, minting nothing (#136)', async () => {
+    const res = await bodies().list(req('https://x.test/'), ctx(), { id: 'proj-bare' });
+
+    expect(res.status).toBe(200);
+    expect(mockEnsureOwnerOfficialStore).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toEqual({ mountPointId: null, scenarios: [], warnings: [] });
   });
 
   it('creates a scenario and refuses a duplicate name', async () => {

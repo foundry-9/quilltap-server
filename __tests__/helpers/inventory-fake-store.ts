@@ -184,11 +184,15 @@ export function repositories() {
     projects: {
       findAll: jest.fn(async () => state.projects),
       findById: jest.fn(async (id: string) => state.projects.find((p) => p.id === id) ?? null),
+      findByIdRaw: jest.fn(async (id: string) => state.projects.find((p) => p.id === id) ?? null),
+      findByOfficialMountPointIdRaw: jest.fn(async (mp: string) => state.projects.find((p) => p.officialMountPointId === mp) ?? null),
       canCharacterParticipate: jest.fn(async (projectId: string, characterId: string) => !state.offRoster.get(projectId)?.has(characterId)),
     },
     groups: {
       findAll: jest.fn(async () => state.groups),
       findById: jest.fn(async (id: string) => state.groups.find((g) => g.id === id) ?? null),
+      findByIdRaw: jest.fn(async (id: string) => state.groups.find((g) => g.id === id) ?? null),
+      findByOfficialMountPointIdRaw: jest.fn(async (mp: string) => state.groups.find((g) => g.officialMountPointId === mp) ?? null),
     },
     chats: {
       findById: jest.fn(async (id: string) => {

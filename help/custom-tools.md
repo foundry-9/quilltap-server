@@ -669,7 +669,7 @@ To switch off an inherited tool rather than replace it, define it nearer and mar
 
 The name is then suppressed at that tier and every tier beyond it.
 
-If two stores at the *same* distance both define a name, Quilltap picks one deterministically and notes the fact — but this is a coin-toss you did not intend to write, and is worth tidying up.
+If two stores at the *same* distance both define a name, seniority settles it, exactly as it does for garments and inventory: among a character's groups, the group they joined *first* is dealt; within a project, its own official store outranks the stores merely linked to it. Quilltap notes the collision all the same, for it is a tie you did not intend to write and is worth tidying up. (Before Quilltap 4.12 the tie went to whichever store had the alphabetically smaller internal id — a coin-toss in all but name — so a character in two groups may now be dealt the other group's version.)
 
 ## Who may reach for it at all
 

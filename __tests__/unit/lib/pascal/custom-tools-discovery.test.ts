@@ -369,28 +369,27 @@ describe('tier shadowing', () => {
     expect([...roster.tools.keys()]).toEqual(['listen'])
   })
 
-  it('resolves a same-tier collision deterministically by mount id', async () => {
+  it('resolves a same-tier collision by the tier order: the earlier mount wins (was: smallest mount id)', async () => {
+    // The pool's project tier is official-first and its group tier is in
+    // membership order; that order, not the mount id, settles a collision —
+    // the same rule the wardrobe and inventory follow. Before Refactor 4.12
+    // 'aaa' won here by sorting; now 'zzz', first in the tier, does.
     primePool({ projectMountPointIds: ['zzz', 'aaa'] })
     primeMounts({
       aaa: { 'Tools/unlock.tool.json': tool('unlock', { description: 'from aaa' }) },
       zzz: { 'Tools/unlock.tool.json': tool('unlock', { description: 'from zzz' }) },
     })
-
-    // Lexicographic by mount id — arbitrary, but stable, so the roster never
-    // flickers between two equally-close stores.
     const first = await resolveCustomToolRoster(ctx)
-    expect(first.tools.get('unlock')!.definition.description).toBe('from aaa')
+    expect(first.tools.get('unlock')!.definition.description).toBe('from zzz')
 
     jest.clearAllMocks()
-    primePool({ projectMountPointIds: ['aaa', 'zzz'] })
+    primePool({ groupMountPointIds: ['first-group', 'second-group'] })
     primeMounts({
-      aaa: { 'Tools/unlock.tool.json': tool('unlock', { description: 'from aaa' }) },
-      zzz: { 'Tools/unlock.tool.json': tool('unlock', { description: 'from zzz' }) },
+      'first-group': { 'Tools/unlock.tool.json': tool('unlock', { description: 'from the first group' }) },
+      'second-group': { 'Tools/unlock.tool.json': tool('unlock', { description: 'from the second group' }) },
     })
-
-    // Pool order must not change the answer.
     const second = await resolveCustomToolRoster(ctx)
-    expect(second.tools.get('unlock')!.definition.description).toBe('from aaa')
+    expect(second.tools.get('unlock')!.definition.description).toBe('from the first group')
   })
 })
 
@@ -416,7 +415,8 @@ describe('perspective', () => {
         characterId: 'char1',
         characterMountPointId: 'vault1',
         projectId: 'proj1',
-      })
+      }),
+      { roster: 'open', enabled: 'ignore' }
     )
     // Other participants' vaults are never asked for: no `characterIds`, and
     // no `includeParticipants` option.

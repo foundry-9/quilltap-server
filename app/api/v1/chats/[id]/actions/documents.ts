@@ -23,7 +23,7 @@ import { logger } from '@/lib/logger';
 import { successResponse, badRequest, notFound, serverError, errorResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { DocEditScope } from '@/lib/doc-edit';
-import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveCastPool } from '@/lib/mount-index/reach';
 import {
   resolveOperatorDocPath,
   classifyResolvedTarget,
@@ -61,7 +61,6 @@ import {
   documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/error-utils';
-import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import path from 'path';
@@ -227,7 +226,7 @@ export async function handleRecentDocuments(
  */
 export async function handleAccessibleStores(
   chatId: string,
-  { repos }: RequestContext,
+  { repos, user }: RequestContext,
   opts: { all?: boolean } = {}
 ): Promise<NextResponse> {
   try {
@@ -258,17 +257,15 @@ export async function handleAccessibleStores(
       }
     }
 
-    // Group stores reachable from this chat: the union of every group's
-    // official + linked stores across all (non-removed) character participants.
-    // Surfaced as their own "Group Files" bucket in both default and
-    // look-everywhere modes. Resolved once and reused to tag/collect below.
-    const groupMountIds = new Set<string>();
-    for (const participant of chat.participants) {
-      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
-      if (participant.status === 'removed') continue;
-      const ids = await resolveGroupMountPointIdsForCharacter(participant.characterId);
-      for (const id of ids) groupMountIds.add(id);
-    }
+    // The chat's reach as a cast: every live character participant's vault,
+    // the union of their groups' stores, the project's stores and General —
+    // one walk (`resolveCastPool`). The group tier is surfaced as its own
+    // "Group Files" bucket in both default and look-everywhere modes.
+    const castIds = chat.participants
+      .filter((p) => p.type === 'CHARACTER' && !!p.characterId && p.status !== 'removed')
+      .map((p) => p.characterId as string);
+    const reach = await resolveCastPool({ userId: user.id, projectId: chat.projectId ?? null, characterIds: castIds });
+    const groupMountIds = new Set(reach.groupMountPointIds);
 
     let stores: AccessibleStoreOption[];
 
@@ -276,28 +273,25 @@ export async function handleAccessibleStores(
       // "Look everywhere": every enabled store, regardless of chat reach.
       stores = await listAllEnabledStores(repos, { exclude: seen, groupMountIds });
     } else {
-      // Default: only stores reachable from this chat.
+      // Default: only stores reachable from this chat, nearest tier first
+      // (character > group > project).
       stores = [];
 
       // 1. Participant character vaults.
-      for (const participant of chat.participants) {
-        if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
-        if (participant.status === 'removed') continue;
-        const vault = await getCharacterVaultStore(participant.characterId);
-        if (!vault || seen.has(vault.mountPointId)) continue;
-        const mp = await repos.docMountPoints.findById(vault.mountPointId);
+      for (const { characterId, mountPointId } of reach.castVaults) {
+        if (seen.has(mountPointId)) continue;
+        const mp = await repos.docMountPoints.findById(mountPointId);
         if (!mp) continue;
-        const character = await repos.characters.findById(participant.characterId);
+        const character = await repos.characters.findById(characterId);
         stores.push(storeOptionFor(mp, 'character', {
-          owner: { id: participant.characterId, name: character?.name },
+          owner: { id: characterId, name: character?.name },
         }));
         seen.add(mp.id);
       }
 
       // 2. Group stores — official + linked stores of every group a character
-      //    participant belongs to. Resolved above; collected before project
-      //    links so group precedence holds (character > group > project).
-      for (const id of groupMountIds) {
+      //    participant belongs to.
+      for (const id of reach.groupMountPointIds) {
         if (seen.has(id)) continue;
         const mp = await repos.docMountPoints.findById(id);
         if (!mp || !mp.enabled) continue;
@@ -306,15 +300,12 @@ export async function handleAccessibleStores(
       }
 
       // 3. Document stores linked to the chat's project.
-      if (chat.projectId) {
-        const links = await repos.projectDocMountLinks.findByProjectId(chat.projectId);
-        for (const link of links) {
-          if (seen.has(link.mountPointId)) continue;
-          const mp = await repos.docMountPoints.findById(link.mountPointId);
-          if (!mp) continue;
-          stores.push(storeOptionFor(mp, 'document-store'));
-          seen.add(mp.id);
-        }
+      for (const id of reach.projectMountPointIds) {
+        if (seen.has(id)) continue;
+        const mp = await repos.docMountPoints.findById(id);
+        if (!mp) continue;
+        stores.push(storeOptionFor(mp, 'document-store'));
+        seen.add(mp.id);
       }
     }
 

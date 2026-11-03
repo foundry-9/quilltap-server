@@ -292,10 +292,11 @@ export type ScenarioCollectionRouteConfig = ScenarioItemRouteConfig;
 
 /**
  * Build the list (GET) and create (POST) bodies for one scope's collection
- * endpoint. Both provision the store and its `Scenarios/` folder first
- * (`ensure: true`), so a user hitting the endpoint needn't wait for the next
- * startup heal. General tolerates the pre-migration race on GET (an empty
- * list with `mountPointId: null`) and refuses writes in that window.
+ * endpoint. The create provisions the store and its `Scenarios/` folder first
+ * (`ensure: true`), so a user needn't wait for the next startup heal; the
+ * list only reads (#136) — an owner with no store yet, like General in the
+ * pre-migration race, lists as empty with `mountPointId: null`. General
+ * refuses writes in that window.
  *
  * The bodies are returned bare (`(req, ctx, params)`) so a route can wrap
  * them in action dispatch, as the General collection route does.
@@ -317,19 +318,22 @@ export function createScenarioCollectionBodies<P extends Record<string, string>>
         : await repos.groups.findByIdRaw(ownerId);
       if (!row) return { ok: false, response: notFound(ownerLabel) };
     }
-    const location = await resolveScenarioLocation(scope, ownerId, repos, user.id, { ensure: true });
+    // Only a writer provisions (#136); a read probe takes the store as it is.
+    const location = await resolveScenarioLocation(scope, ownerId, repos, user.id, { ensure: forWrite });
     if (!location) {
+      if (!forWrite) {
+        logger.debug(`${logTag} No ${owner} store yet; no scenarios`, { [logIdKey]: ownerId ?? null });
+        return { ok: false, response: successResponse({ mountPointId: null, scenarios: [], warnings: [] }) };
+      }
       if (scope === 'general') {
         return {
           ok: false,
-          response: forWrite
-            ? badRequest('Quilltap General mount has not been provisioned yet — restart the server')
-            : successResponse({ mountPointId: null, scenarios: [], warnings: [] }),
+          response: badRequest('Quilltap General mount has not been provisioned yet — restart the server'),
         };
       }
       return { ok: false, response: serverError(`Failed to ensure ${owner} document store`) };
     }
-    if (afterEnsure) await afterEnsure(location.mountPointId);
+    if (forWrite && afterEnsure) await afterEnsure(location.mountPointId);
     return { ok: true, location };
   }
 

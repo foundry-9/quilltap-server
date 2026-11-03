@@ -439,7 +439,9 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       { userId: 'u1', projectMountPointIds: ['mp-a', 'mp-b'], progress: progress as never },
     )
 
-    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-a', 'mp-b']]))
+    // Read weakest-first (the repository shadows later over earlier), so the
+    // first project store, which wins, is read last.
+    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-b', 'mp-a']]))
     expect(mockResolve).toHaveBeenCalledTimes(1)
     const [pool, slots] = mockResolve.mock.calls[0]
     expect(pool.characterId).toBe(CHAR_ID)

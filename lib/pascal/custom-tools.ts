@@ -36,6 +36,7 @@ import {
   type MountTier,
   type TieredMountPool,
 } from '@/lib/mount-index/tiered-mount-pool';
+import { orderMounts } from '@/lib/mount-index/reach';
 import { getErrorMessage } from '@/lib/error-utils';
 import { parsePath, getAtPath } from '@/lib/state/state-paths';
 import {
@@ -125,15 +126,6 @@ export function resolveStateValue(ref: StateRef, state: CustomToolState): number
 import { formatDiceBreakdown, parseDiceNotation, rollNotation, type DiceNotation, type DiceRollResult } from './dice';
 
 const CONTEXT = 'pascal.custom-tools';
-
-/**
- * Tier precedence, nearest first. A nearer tier shadows a farther one.
- *
- * There is deliberately no 'participant' tier: a tool in a character's vault
- * is that character's alone, and sharing a room with them does not deal it to
- * anybody else. Shared tools belong in a group, project, or General store.
- */
-const TIER_ORDER: MountTier[] = ['character', 'group', 'project', 'global'];
 
 /**
  * A definition found in a store, with the provenance needed to resolve
@@ -435,31 +427,20 @@ export async function loadToolsFromMount(
 }
 
 /**
- * Bucket the pool into (tier, mountPointId) pairs in precedence order.
+ * The pool as (tier, mountPointId) pairs in precedence order — the shared
+ * `orderMounts` (`lib/mount-index/reach.ts`), so a same-tier collision is
+ * settled the way every reach walk settles it: the earlier mount wins
+ * (membership order for groups, the official store first for the project).
  *
  * Exported so run presets walk the stores in exactly the order definitions do
  * (`lib/pascal/tool-preset-pool.ts`) — one precedence, not two copies of it.
+ *
+ * There is deliberately no 'participant' tier: a tool in a character's vault
+ * is that character's alone, and sharing a room with them does not deal it to
+ * anybody else. Shared tools belong in a group, project, or General store.
  */
 export function orderedMounts(pool: TieredMountPool): Array<{ tier: MountTier; mountPointId: string }> {
-  const byTier: Record<MountTier, string[]> = {
-    character: pool.characterMountPointId ? [pool.characterMountPointId] : [],
-    // Never resolved for custom tools (see TIER_ORDER); present only because
-    // the record is keyed by every MountTier.
-    participant: [],
-    group: pool.groupMountPointIds,
-    project: pool.projectMountPointIds,
-    global: pool.globalMountPointId ? [pool.globalMountPointId] : [],
-  };
-
-  const ordered: Array<{ tier: MountTier; mountPointId: string }> = [];
-  for (const tier of TIER_ORDER) {
-    // Same-tier collisions resolve by mount id, lexicographically — arbitrary
-    // but stable, so a roster never flickers between two equally-close stores.
-    for (const mountPointId of [...byTier[tier]].sort()) {
-      ordered.push({ tier, mountPointId });
-    }
-  }
-  return ordered;
+  return orderMounts(pool);
 }
 
 /**
@@ -531,12 +512,17 @@ async function loadInvokerInventory(ctx: RosterContext): Promise<InventoryContex
  */
 export async function resolveCustomToolRoster(ctx: RosterContext): Promise<CustomToolRoster> {
   // No `includeParticipants`: other characters' vaults are not a tier here.
-  const pool = await resolveTieredMountPool({
-    userId: ctx.userId,
-    characterId: ctx.characterId ?? null,
-    characterMountPointId: ctx.characterMountPointId ?? null,
-    projectId: ctx.projectId ?? null,
-  });
+  // The roster does not gate tools; a disabled store is skipped where each
+  // store is loaded (`loadToolsFromMount`), so the pool keeps it.
+  const pool = await resolveTieredMountPool(
+    {
+      userId: ctx.userId,
+      characterId: ctx.characterId ?? null,
+      characterMountPointId: ctx.characterMountPointId ?? null,
+      projectId: ctx.projectId ?? null,
+    },
+    { roster: 'open', enabled: 'ignore' },
+  );
 
   const tools = new Map<string, DiscoveredCustomTool>();
   const errors: CustomToolLoadError[] = [];

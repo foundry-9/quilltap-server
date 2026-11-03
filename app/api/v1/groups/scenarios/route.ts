@@ -24,6 +24,7 @@ import { logger } from '@/lib/logger';
 import { successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { resolveScenarioLocation } from '@/lib/scenarios/location';
+import { groupMountsFor } from '@/lib/mount-index/reach';
 
 export const GET = createContextHandler(
   async (req: NextRequest, { user, repos }: RequestContext) => {
@@ -54,10 +55,12 @@ export const GET = createContextHandler(
     // Collect the distinct set of groups that ANY supplied participant belongs
     // to. A group qualifies as long as at least one selected participant is a
     // member — it does not matter that other participants aren't.
+    // Walked through the shared group tier (`groupMountsFor`), keeping groups
+    // whose stores an earlier group already claimed: each group's own
+    // `Scenarios/` folder is offered under its own name.
     const groupIds = new Set<string>();
     for (const characterId of characterIds) {
-      const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
-      for (const m of memberships) groupIds.add(m.groupId);
+      for (const { group } of await groupMountsFor(characterId, { includeEmpty: true })) groupIds.add(group.id);
     }
 
     const groupScenarios: Array<{
@@ -70,7 +73,8 @@ export const GET = createContextHandler(
 
     for (const groupId of groupIds) {
       try {
-        const location = await resolveScenarioLocation('group', groupId, repos, user.id, { ensure: true });
+        // A read never provisions (#136): a group with no store yet has no scenarios.
+        const location = await resolveScenarioLocation('group', groupId, repos, user.id);
         if (!location?.id) continue;
 
         const { scenarios, warnings } = await location.list({ includeArchived });

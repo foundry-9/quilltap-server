@@ -1,6 +1,6 @@
 # Refactor 4.12 — One tier walk: reach, location and order settled once
 
-**Status:** Proposed (2026-11-02). Part of the [4.12 refactor set](refactor-4-12.md). The line savings are moderate (about 250–350 of roughly 1,200 tier-related lines); the reason to do it is that the sites disagree about what a character can reach, and two GET routes provision stores because of it.
+**Status:** Done (2026-11-03), all five phases; §5.1 confirmed by the human as proposed. See §9 for what landed and where it departs from the plan. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). The line savings are moderate (about 250–350 of roughly 1,200 tier-related lines); the reason to do it is that the sites disagree about what a character can reach, and two GET routes provision stores because of it.
 
 ## 1. The problem
 
@@ -85,3 +85,19 @@ Unit suites for the five location/pool modules, `tool-preset-pool.test.ts`, `ite
 ## 8. Decisions needed from the human
 
 Each row of §5.1, especially the within-tier order (membership-first is the primitive's rule and the one CLAUDE.md implies; lexicographic is what custom tools do today) and the project-tier rule (all links vs official only; all links is what the pools and the picker already do).
+
+## 9. Outcome (2026-11-03)
+
+The human confirmed every row of §5.1 as proposed (membership-order within a tier; all linked project stores, official first; filing the two bugs).
+
+- **Phase 1.** Filed #135 (wardrobe collection GET and `?action=instructions` GET) and #136 (the cast scenario GET and the per-owner scenario collection GET, which also provisioned). Both fixed: reads pass no `ensure`; an owner with no store answers empty.
+- **Phase 2.** `lib/mount-index/reach.ts` holds `resolveOwnerStore` (family A; the three `resolveXxxLocation` functions are wrappers passing their folder, `onFolderFailure` and `archived`), `groupMountsFor` / `groupOriginMap` (family B; the pools, the route factory's `?scope=group` and both `groupLocationsForCharacter` use them). `groupMountsFor` is `resolveGroupMountsForCharacter` re-exported, not moved, so the forward walk and reach share one definition without an import cycle; it gained `includeEmpty`.
+- **Phase 3.** `resolveCastPool` / `castGroupMounts` (family D): `resolveScenarioBuilderMountPool` is a one-line wrapper, the document picker walks the cast pool, `group-stores` and `groups/scenarios` use the group half. Family C: `core-whisper` and `self-inventory` call `groupMountsFor` (self-inventory gains cross-group dedupe; it keeps groups with no stores via `includeEmpty`, as it lists membership).
+- **Phase 4.** `orderMounts` / `bucketMounts` (family E). `resolveProjectMountPointIds` is official-first then every link, and `resolveTieredMountPool` uses it instead of its inline copy. Custom tools, presets and dressing instructions drop the lexicographic sort; the wardrobe and inventory pools (and the `?scope=group` read) read each tier reversed so the earlier mount wins; the transfer probe walks groups strongest-first and every project store. Tests name the old and new winner in `pool.test.ts`, `inventory/pool-order.test.ts`, `wardrobe-instructions.test.ts`, `custom-tools-discovery.test.ts` and the transfer route test.
+- **Phase 5.** `classifyMount` (family F): `scenarios.classify`, `mountOwnerResolver` and the title lint's `locationForMount` filter over it (the title lint now tags an official group store `group`, with its id, rather than `project` / `null`). `resolveTieredMountPool` takes required `roster: 'gated' | 'open'` and `enabled: 'require' | 'ignore'`; the path resolver and the scriptorium search pass `gated` instead of gating around the call, the preset pool passes `require` instead of checking each mount. Grep-test `reach-chokepoint.test.ts`; CLAUDE.md line added.
+
+**Departures.**
+
+- `image-gen/aesthetic.ts` was left on the official store only. §5.1 listed it among the sites that gain linked stores, but §3 lists it as a non-goal ("two tiers"), and its editors write only the official store, so a linked store's file would take effect while being invisible to the editor.
+- The roster stays applied inside the wardrobe pool (`resolveProjectTierForChat`) and the inventory roster gate; those are the pools' own read layers (§3), not `resolveTieredMountPool` callers.
+- The chokepoint test does not try to catch every `officialMountPointId` read at a call site — there are many legitimate ones (heal passes, display) — only the two signatures in §5.3.
