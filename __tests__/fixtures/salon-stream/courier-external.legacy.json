@@ -1,0 +1,30 @@
+[
+  {
+    "turnStart": true,
+    "participantId": "p-ext",
+    "characterName": "Dee",
+    "chainDepth": 0
+  },
+  {
+    "pendingExternalTurn": true,
+    "messageId": "m-5",
+    "participantId": "p-ext",
+    "characterName": "Dee"
+  },
+  {
+    "done": true,
+    "messageId": "m-5",
+    "participantId": "p-ext",
+    "usage": null,
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false,
+    "pendingExternalTurn": true
+  },
+  {
+    "chainComplete": true,
+    "reason": "user_turn",
+    "nextSpeakerId": null,
+    "chainDepth": 0
+  }
+]

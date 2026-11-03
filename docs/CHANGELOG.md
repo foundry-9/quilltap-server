@@ -4,6 +4,15 @@
 
 ### 4.12-dev
 
+#### Refactor: Salon stream frames, phase 1 (Refactor 4.12, spec 5)
+
+The Salon's SSE frames now have one definition, `lib/chat/stream-frames.ts`: a Zod discriminated union on `kind`, `encodeFrame` (the only producer of `data:` bytes on the turn path), `parseFrame`, and `tagFrame`. The wire shape is unchanged in this phase.
+
+- Every `encodeXxxEvent` in `streaming.service.ts` is a one-line `encodeFrame` call; the inline frames in `tool-execution.service.ts` and `regenerate-swipe-stream.ts` are gone. `encodeFrame` renders through `toLegacyBag` until the client switches.
+- A `done` frame carries one `outcome` (`finished` / `skipped` / `yielded` / `stopped` / `empty`) instead of four boolean flags; the legacy rendering restores the flags.
+- Concurrent Storyteller turns write through `seatedFrameEncoder(participantId)`, which tags each frame before encoding. `tagSseChunk` / `taggingController` (decode, regex, re-encode) are deleted; `sharedStreamController` keeps a finishing turn from closing the shared stream.
+- Golden streams recorded from the old encoders in `__tests__/fixtures/salon-stream/`; tests in `__tests__/unit/lib/chat/stream-frames.test.ts` and a chokepoint grep-test, `stream-frames-chokepoint.test.ts`.
+
 #### Fix: theme-storybook stories use only real `qt-*` classes
 
 Several stories used classes the app never defined, so those elements rendered unstyled. The stories now copy the app components' class names and markup. No CSS changed.

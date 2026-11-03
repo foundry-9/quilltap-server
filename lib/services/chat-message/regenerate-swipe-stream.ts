@@ -5,7 +5,7 @@
  * (`POST /api/v1/messages/[id]?action=swipe&stream=1`) and the Concierge's
  * "Try uncensored" (`POST /api/v1/chats/[id]/messages/[messageId]?action=retry-uncensored`).
  * Each step is reported as it happens — a `status` line, `content` deltas
- * (append) and cumulative `reasoning` (replace) — then a final `done` carrying
+ * (append) and cumulative `reasoning` (replace) — then a final `swipeDone` carrying
  * the persisted swipe. A failure after the stream has opened is an `error`
  * event, because the headers are long gone; a caller that can refuse the
  * request outright must do so *before* calling this.
@@ -25,6 +25,7 @@ import {
   safeEnqueue,
 } from './streaming.service'
 import { sseStreamResponse } from './request-helpers'
+import { encodeFrame } from '@/lib/chat/stream-frames'
 
 export function streamSwipeRegeneration(
   options: Omit<RegenerateSwipeOptions, 'onProgress'>,
@@ -47,10 +48,7 @@ export function streamSwipeRegeneration(
           },
         })
 
-        safeEnqueue(
-          controller,
-          encoder.encode(`data: ${JSON.stringify({ done: true, message: newSwipe })}\n\n`)
-        )
+        safeEnqueue(controller, encodeFrame(encoder, { kind: 'swipeDone', message: newSwipe }))
       } catch (error) {
         logger.error(
           `${logContext} Streaming swipe generation failed`,

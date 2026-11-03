@@ -22,8 +22,15 @@ import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schema
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
-import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { StorytellerBid, StorytellerRound } from '@/lib/schemas/storyteller.types'
+import {
+  encodeFrame,
+  type ChainCompleteFrame,
+  type ConfirmationResultFrame,
+  type DoneFrame,
+  type ErrorFrame,
+  type ResponseStatus,
+} from '@/lib/chat/stream-frames'
 import { inventoryToolFlags } from '@/lib/tools/inventory-tool-flags'
 import { customToolEffectMap } from '@/lib/pascal/tool-effect'
 import {
@@ -683,14 +690,14 @@ export function encodeFallbackInfo(
     error: result.error,
   }))
 
-  return encoder.encode(`data: ${JSON.stringify({ fileProcessing: fallbackInfo })}\n\n`)
+  return encodeFrame(encoder, { kind: 'fileProcessing', info: fallbackInfo })
 }
 
 /**
  * Encode a content chunk
  */
 export function encodeContentChunk(encoder: TextEncoder, content: string): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+  return encodeFrame(encoder, { kind: 'content', text: content })
 }
 
 /**
@@ -700,7 +707,7 @@ export function encodeContentChunk(encoder: TextEncoder, content: string): Uint8
  * based on the chat's thinking-visibility setting; it is never fed to a model.
  */
 export function encodeReasoningChunk(encoder: TextEncoder, reasoning: string): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ reasoning })}\n\n`)
+  return encodeFrame(encoder, { kind: 'reasoning', text: reasoning })
 }
 
 /**
@@ -764,64 +771,17 @@ export function flushReasoningSegment(streaming: StreamingState): void {
 }
 
 /**
- * The payload of the done event
+ * The payload of the done event: a `done` frame without its `kind`. `outcome`
+ * defaults to `'finished'` — a done frame closed an ordinary turn unless it
+ * says otherwise (see `DoneOutcome` in `lib/chat/stream-frames.ts`).
  */
-export interface DoneEventData {
-  messageId: string | null
-  participantId?: string | null
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
-  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
-  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
-  toolsExecuted: boolean
-  turn?: {
-    nextSpeakerId: string | null
-    reason: string
-    cycleComplete: boolean
-    isUsersTurn: boolean
-  }
-  emptyResponse?: boolean
-  emptyResponseReason?: string
-  provider?: string
-  modelName?: string
-  /** The turn's route trail — every profile tried, in order — so the client's
-   *  optimistic assistant push carries it without a refetch. Null (the common
-   *  case) when nothing failed. */
-  routeTrail?: RouteAttempt[] | null
-  isSilentMessage?: boolean
-  /** The Courier: signals that this done event closes a parked placeholder turn,
-   * not an actual streamed response. The Salon should skip its optimistic
-   * assistant-message push and rely on the prior fetchChat() refresh. */
-  pendingExternalTurn?: boolean
-  /** Full reasoning ("thinking") text for the turn — DISPLAY ONLY. Lets the
-   * client's optimistic assistant-message push carry thinking without a refetch. */
-  reasoningContent?: string | null
-  /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
-  reasoningSegments?: ReasoningSegment[] | null
-  /**
-   * "Nothing to add" turn-skipping: this turn was passed. The client resets
-   * its streaming buffer without appending a bubble or toasting (the Host
-   * turn-pass announcement already carries the visible note).
-   */
-  skipped?: boolean
-  /** Participant ID of the character who passed (set when `skipped` is true). */
-  skippedParticipantId?: string | null
-  /**
-   * Raised hand: this character yielded the floor. Rides with `skipped` on a
-   * bare yield (no bubble to append — the Host announcement is the note).
-   */
-  yielded?: boolean
-  /**
-   * The operator hard-stopped the turn before any prose streamed. Like
-   * `skipped`, the client resets its buffer without a bubble or a toast.
-   */
-  stopped?: boolean
-}
+export type DoneEventData = Omit<DoneFrame, 'kind' | 'outcome' | 'seat'> & { outcome?: DoneFrame['outcome'] }
 
 /**
  * Encode the done event
  */
-export function encodeDoneEvent(encoder: TextEncoder, data: DoneEventData): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
+export function encodeDoneEvent(encoder: TextEncoder, { outcome = 'finished', ...data }: DoneEventData): Uint8Array {
+  return encodeFrame(encoder, { kind: 'done', outcome, ...data })
 }
 
 /**
@@ -845,22 +805,11 @@ export function encodeTurnDoneEvent(
 }
 
 /**
- * Extra fields an error frame may carry beside `error` / `errorType` /
- * `details`. Optional and additive, so older clients that read only the three
- * base fields are unaffected.
+ * Extra fields an error frame may carry beside its message, type and details:
+ * whether the user's message row (bug 241) and the staged tool results were
+ * saved before the failure. See the `error` frame in `lib/chat/stream-frames.ts`.
  */
-export interface ErrorEventExtras {
-  /**
-   * Whether the user's message row was saved before the failure. The Salon
-   * reads it to decide whether to hand the operator's text back to the
-   * composer: a send that died before the row landed (a missing API key, a
-   * profile that will not resolve) has nothing on the server to fall back on
-   * (bug 241).
-   */
-  userMessagePersisted?: boolean
-  /** Whether the staged tool results were saved as TOOL rows before the failure. */
-  pendingToolResultsPersisted?: boolean
-}
+export type ErrorEventExtras = Pick<ErrorFrame, 'userMessagePersisted' | 'pendingToolResultsPersisted'>
 
 /**
  * Encode an error event
@@ -872,7 +821,7 @@ export function encodeErrorEvent(
   details: string,
   extras?: ErrorEventExtras
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ error, errorType, details, ...extras })}\n\n`)
+  return encodeFrame(encoder, { kind: 'error', message: error, errorType, details, ...extras })
 }
 
 /**
@@ -888,15 +837,9 @@ export function encodeKeepAlive(encoder: TextEncoder): Uint8Array {
  */
 export function encodeStatusEvent(
   encoder: TextEncoder,
-  status: {
-    stage: string
-    message: string
-    toolName?: string
-    characterName?: string
-    characterId?: string
-  }
+  status: ResponseStatus
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ status })}\n\n`)
+  return encodeFrame(encoder, { kind: 'status', status })
 }
 
 /** Emits one status line for the character whose turn is being built. */
@@ -929,7 +872,7 @@ export function encodePendingExternalTurnEvent(
   encoder: TextEncoder,
   data: { messageId: string; participantId: string; characterName: string }
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ pendingExternalTurn: true, ...data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'pendingExternalTurn', ...data })
 }
 
 /**
@@ -939,7 +882,7 @@ export function encodeTurnStartEvent(
   encoder: TextEncoder,
   data: { participantId: string; characterName: string; chainDepth: number }
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ turnStart: true, ...data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'turnStart', ...data })
 }
 
 /**
@@ -949,7 +892,7 @@ export function encodeTurnCompleteEvent(
   encoder: TextEncoder,
   data: { participantId: string; messageId: string; chainDepth: number; skipped?: boolean }
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ turnComplete: true, ...data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'turnComplete', ...data })
 }
 
 /**
@@ -957,36 +900,16 @@ export function encodeTurnCompleteEvent(
  */
 export function encodeChainCompleteEvent(
   encoder: TextEncoder,
-  data: {
-    reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete' | 'yielded' | 'stopped' | 'round_open'
-    nextSpeakerId: string | null
-    chainDepth: number
-    /**
-     * True when the chat is (or has just been) marked `isPaused` as part of this
-     * stop — a `paused` decision, the paused early-return, or the chain-error
-     * handler that pauses as its safety stop. `reason` alone cannot say so: an
-     * `error` stop pauses when a chained turn threw but not when it merely came
-     * back empty. The Salon uses this to announce the pause instead of letting
-     * the room fall silent with no explanation (bug 123).
-     */
-    paused?: boolean
-    /**
-     * The stop IS the user's own message: a paused chat recorded what they
-     * typed and gave it to nobody. Distinguishes that from a chain that ran and
-     * then stopped, which is the difference between "your remark is in, the room
-     * is still paused" and no explanation at all.
-     */
-    heldUserTurn?: boolean
-  }
+  data: Omit<ChainCompleteFrame, 'kind' | 'seat'>
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'chainComplete', ...data })
 }
 
 /**
  * Storyteller: the round's board as it stands (sent when a round opens).
  */
 export function encodeStorytellerRoundEvent(encoder: TextEncoder, round: StorytellerRound): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ storytellerRound: round })}\n\n`)
+  return encodeFrame(encoder, { kind: 'storytellerRound', round })
 }
 
 /**
@@ -996,7 +919,7 @@ export function encodeStorytellerBidEvent(
   encoder: TextEncoder,
   data: { roundId: string; bid: StorytellerBid }
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ storytellerBid: data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'storytellerBid', ...data })
 }
 
 /**
@@ -1005,7 +928,7 @@ export function encodeStorytellerBidEvent(
  * chain-complete, which ends the send's stream.
  */
 export function encodeRoundOpenEvent(encoder: TextEncoder, data: { roundId: string }): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ roundOpen: true, ...data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'roundOpen', ...data })
 }
 
 /**
@@ -1017,7 +940,7 @@ export function encodeHandAskedEvent(
   encoder: TextEncoder,
   data: { participantId: string; characterName: string }
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ handAsked: true, ...data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'handAsked', ...data })
 }
 
 /**
@@ -1029,7 +952,7 @@ export function encodeHandAnsweredEvent(
   encoder: TextEncoder,
   data: { participantId: string; characterName: string; yielded: boolean }
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ handAnswered: true, ...data })}\n\n`)
+  return encodeFrame(encoder, { kind: 'handAnswered', ...data })
 }
 
 /**
@@ -1049,7 +972,7 @@ export function encodeCarinaAnswerEvent(
   encoder: TextEncoder,
   message: MessageEvent
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ carinaAnswer: message })}\n\n`)
+  return encodeFrame(encoder, { kind: 'posted', what: 'carinaAnswer', message })
 }
 
 /**
@@ -1066,7 +989,7 @@ export function encodeHostAnnouncementEvent(
   encoder: TextEncoder,
   message: MessageEvent
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ hostAnnouncement: message })}\n\n`)
+  return encodeFrame(encoder, { kind: 'posted', what: 'hostAnnouncement', message })
 }
 
 /**
@@ -1086,7 +1009,7 @@ export function encodePascalResultEvent(
   encoder: TextEncoder,
   message: MessageEvent
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ pascalResult: message })}\n\n`)
+  return encodeFrame(encoder, { kind: 'posted', what: 'pascalResult', message })
 }
 
 /**
@@ -1098,15 +1021,9 @@ export function encodePascalResultEvent(
  */
 export function encodeConfirmationResultEvent(
   encoder: TextEncoder,
-  result: {
-    messageId: string
-    confirmed: boolean | null
-    revised: boolean
-    notes: string | null
-    content?: string
-  }
+  result: Omit<ConfirmationResultFrame, 'kind' | 'seat'>
 ): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify({ confirmationResult: result })}\n\n`)
+  return encodeFrame(encoder, { kind: 'confirmationResult', ...result })
 }
 
 /**
