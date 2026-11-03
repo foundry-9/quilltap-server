@@ -24,6 +24,7 @@ import { folderCrumb } from '@/lib/inventory/folders'
 import { OWN_TIER } from '@/lib/folder-browser/view'
 import { encodeWardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import { useInventoryFolders } from '@/lib/hooks/use-inventory'
+import { ItemFolderPickerDialog, type ItemFolderPickerWording } from '@/components/item-browser/ItemFolderPickerDialog'
 import { FolderBrowserShell } from '@/components/item-browser/FolderBrowserShell'
 import { useFolderBrowserState, useItemFolderHandlers } from '@/components/item-browser/useFolderBrowserState'
 import type { InventoryListData } from './hooks/useInventoryListData'
@@ -50,6 +51,16 @@ export interface InventoryBrowserProps {
   equip?: InventoryBrowserEquip
   /** Cap the list's height (the dialog) instead of letting it grow (a card). */
   scrollList?: boolean
+}
+
+const INVENTORY_PICKER_WORDING: ItemFolderPickerWording = {
+  rootLabel: 'Inventory (top level)',
+  noun: 'object',
+  rootPhrase: 'the top of the inventory',
+  rests: ['sits', 'sit'],
+  moveNote: 'Folders are for your browsing; what anyone carries stays exactly as it was.',
+  copyNote: 'Each copy is a new object of its own; nobody carries it until it is equipped.',
+  describeError: describeInventoryRefusal,
 }
 
 /** The tier an object sits in from the character's view: own, or the tier it is borrowed from. */
@@ -106,7 +117,8 @@ export function InventoryBrowser({
     showShared,
     searching,
   })
-  const { inOwnTier, currentFolder, navigate, selectMode, selectedIds, selectedItems } = state
+  const { inOwnTier, currentFolder, selectMode, selectedIds, setSelectMode } = state
+  const picker = actions.folderPicker
 
   const folderHandlers = useItemFolderHandlers({
     state,
@@ -190,34 +202,18 @@ export function InventoryBrowser({
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            {equip && (
-              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-                <input type="checkbox" checked={equippedOnly} onChange={(e) => setEquippedOnly(e.target.checked)} className="qt-checkbox" />
-                Equipped only
-              </label>
-            )}
-            <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-              <input type="checkbox" checked={showArchived} onChange={(e) => onShowArchivedChange(e.target.checked)} className="qt-checkbox" />
-              Show archived
-            </label>
-            {isCharacterScope && (
-              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={showShared}
-                  onChange={(e) => {
-                    setShowShared(e.target.checked)
-                    if (!e.target.checked && !inOwnTier) navigate(OWN_TIER, '')
-                  }}
-                  className="qt-checkbox"
-                />
-                Show shared
-              </label>
-            )}
-          </div>
         </>
       )}
+      toggles={{
+        before: equip && (
+          <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+            <input type="checkbox" checked={equippedOnly} onChange={(e) => setEquippedOnly(e.target.checked)} className="qt-checkbox" />
+            Equipped only
+          </label>
+        ),
+        archived: { checked: showArchived, onChange: onShowArchivedChange },
+        shared: isCharacterScope ? { checked: showShared, onChange: setShowShared } : undefined,
+      }}
       renderItem={(item) => (
         <InventoryItemRow
           key={item.id}
@@ -229,27 +225,10 @@ export function InventoryBrowser({
           folderCrumb={searching && item.folder ? folderCrumb(item.folder) : null}
         />
       )}
-      selectActions={(
-        <>
-          <button
-            type="button"
-            className="qt-button-secondary qt-button-sm"
-            disabled={selectedItems.length === 0}
-            onClick={() => actions.openFolderPicker(selectedItems, 'move')}
-          >
-            Move to folder…
-          </button>
-          <button
-            type="button"
-            className="qt-button-secondary qt-button-sm"
-            disabled={selectedItems.length === 0 || selectedItems.some((i) => !i.canCopy)}
-            title={selectedItems.some((i) => !i.canCopy) ? 'Some of these objects cannot be copied' : undefined}
-            onClick={() => actions.openFolderPicker(selectedItems, 'copy')}
-          >
-            Copy to folder…
-          </button>
-        </>
-      )}
+      folderFiling={{
+        open: actions.openFolderPicker,
+        copyBlocked: (selected) => (selected.some((i) => !i.canCopy) ? 'Some of these objects cannot be copied' : undefined),
+      }}
       footer={(
         <>
           <button
@@ -276,6 +255,21 @@ export function InventoryBrowser({
           </button>
         </>
       )}
-    />
+    >
+      {picker && (
+        <ItemFolderPickerDialog
+          mode={picker.mode}
+          items={picker.items}
+          container={actions.addressOf(picker.items[0])}
+          port={{ useFolders: useInventoryFolders, createFolder: actions.mutations.createFolder, creating: actions.mutations.pending }}
+          wording={INVENTORY_PICKER_WORDING}
+          file={(folder) =>
+            actions.mutations.fileItems(picker.mode, actions.addressOf(picker.items[0]), picker.items.map((i) => i.id), folder)
+          }
+          onFiled={() => setSelectMode(false)}
+          onClose={actions.closeFolderPicker}
+        />
+      )}
+    </FolderBrowserShell>
   )
 }

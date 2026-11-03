@@ -4,8 +4,7 @@
  * ScenarioRow — one width-adaptive row inside {@link ScenariosManager}.
  *
  * Purely presentational: every mutation lives in the manager (which owns the
- * confirm/prompt/error flow). This component only renders a single scenario and
- * owns the local open-state for its kebab menu.
+ * confirm/prompt/error flow). This component only renders a single scenario.
  *
  * The row is **container-query adaptive** (Tailwind v4, no plugin). It renders
  * both control affordances and lets CSS pick one by the row's actual width:
@@ -15,15 +14,13 @@
  *   - Narrow container (below `@lg`, e.g. the project ScenariosCard at `xl`):
  *     a single `⋮` kebab menu, so the four actions never wrap.
  *
- * The kebab open-state mechanics (outside-`mousedown` + capture-phase `Escape`)
- * mirror `components/wardrobe/wardrobe-item-row.tsx`, the house pattern; the menu
- * chrome uses the existing `qt-dropdown` / `qt-dropdown-item` semantic classes.
+ * The kebab is the shared `ItemActionMenu` (`components/item-browser/`), so it
+ * behaves as every other row's ⋮ does: arrow keys, Escape, outside click.
  *
  * @module components/scenarios/ScenarioRow
  */
 
-import { useEffect, useRef } from 'react'
-import { useFixedMenu } from '@/hooks/useFixedMenu'
+import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
 import type { Scenario } from './types'
 
 interface ScenarioRowProps {
@@ -47,37 +44,7 @@ export function ScenarioRow({
   onDelete,
   onToggleArchived,
 }: ScenarioRowProps) {
-  const kebabRef = useRef<HTMLDivElement>(null)
-  // Fixed to the viewport so a scrolling scenario list cannot clip the menu.
-  const { anchorRef: kebabAnchorRef, menuStyle: kebabStyle, open: kebabOpen, setOpen: setKebabOpen, close: closeKebab } =
-    useFixedMenu(kebabRef, 200)
-
   const archiveLabel = scenario.archived ? 'Restore' : 'Archive'
-
-  // Close on outside pointer press while open.
-  useEffect(() => {
-    if (!kebabOpen) return
-    const onDoc = (e: MouseEvent): void => {
-      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
-        closeKebab()
-      }
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [kebabOpen, closeKebab])
-
-  // Close on Escape while open (capture phase, mirroring the wardrobe row).
-  useEffect(() => {
-    if (!kebabOpen) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      e.stopPropagation()
-      e.preventDefault()
-      closeKebab()
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [kebabOpen, closeKebab])
 
   return (
     <li className="py-3 flex items-start gap-3">
@@ -159,67 +126,18 @@ export function ScenarioRow({
       </div>
 
       {/* Narrow container: kebab menu holding the same four actions. */}
-      <div className="relative @lg:hidden shrink-0" ref={kebabRef}>
-        <button
-          ref={kebabAnchorRef}
-          type="button"
-          onClick={() => setKebabOpen(!kebabOpen)}
-          className="qt-button-ghost qt-button-sm"
-          aria-label={`More actions for ${scenario.name}`}
-          title="More actions"
-          aria-haspopup="menu"
-          aria-expanded={kebabOpen}
-        >
-          ⋮
-        </button>
-        {kebabOpen && (
-          <div role="menu" style={kebabStyle ?? undefined} className="qt-dropdown">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeKebab()
-                onEdit(scenario)
-              }}
-              className="qt-dropdown-item w-full text-left"
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeKebab()
-                onRename(scenario)
-              }}
-              className="qt-dropdown-item w-full text-left"
-            >
-              Rename
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeKebab()
-                onToggleArchived(scenario)
-              }}
-              className="qt-dropdown-item w-full text-left"
-            >
-              {archiveLabel}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeKebab()
-                onDelete(scenario)
-              }}
-              className="qt-dropdown-item w-full text-left qt-text-destructive"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+      <div className="@lg:hidden shrink-0">
+        <ItemActionMenu
+          label={`More actions for ${scenario.name}`}
+          room={200}
+          minWidthClass="min-w-[10rem]"
+          entries={[
+            { key: 'edit', label: 'Edit', onSelect: () => onEdit(scenario) },
+            { key: 'rename', label: 'Rename', onSelect: () => onRename(scenario) },
+            { key: 'archive', label: archiveLabel, onSelect: () => onToggleArchived(scenario) },
+            { key: 'delete', label: 'Delete', destructive: true, onSelect: () => onDelete(scenario) },
+          ]}
+        />
       </div>
     </li>
   )

@@ -12,7 +12,7 @@
 import React from 'react'
 import { fireEvent, screen, waitFor, render } from '@testing-library/react'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
-import { WardrobeImageViewer } from '@/components/wardrobe/wardrobe-image-viewer'
+import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
 import { FullScreenImageViewer } from '@/components/images/FullScreenImageViewer'
 import { queryKeys } from '@/lib/query/keys'
 
@@ -46,11 +46,12 @@ async function removeMissingPicture(): Promise<void> {
   fireEvent.click(await screen.findByText('Remove'))
 }
 
-describe('WardrobeImageViewer — missing-picture cleanup (bug 194)', () => {
+describe('ItemImageViewer (wardrobe) — missing-picture cleanup (bug 194)', () => {
   it('removes the picture through the wardrobe images route and refreshes the wardrobe', async () => {
     const onClose = jest.fn()
     const { queryClient } = renderWithQuery(
-      <WardrobeImageViewer
+      <ItemImageViewer
+        kind="wardrobe"
         onClose={onClose}
         itemId={ITEM_ID}
         itemTitle="Opera coat"

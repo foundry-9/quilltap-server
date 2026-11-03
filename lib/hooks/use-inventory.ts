@@ -8,7 +8,10 @@
  * realtime topic and the lists, folders, archetype pickers and carried sets on
  * the `inventory` topic, which every object write publishes
  * (`lib/realtime/topic-map.ts`). A write refreshes what it changed itself only
- * while the socket is down ({@link refreshUnlessRealtime}).
+ * while the socket is down (`lib/query/refresh-unless-realtime.ts`).
+ *
+ * The folder reads and writes are the shared folder hooks'
+ * (`lib/hooks/use-item-folders.ts`), bound to the Inventory here.
  *
  * Every write throws an {@link InventoryRequestError} carrying the server's
  * refusal `code` (`ARCHETYPE_IN_USE`, `CAP_EXCEEDED`, …) so a surface can
@@ -17,11 +20,12 @@
  * @module lib/hooks/use-inventory
  */
 
-import { useCallback } from 'react'
-import { useMutation, useQuery, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
-import { getRealtimeStatus } from '@/lib/realtime/client'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
-import { apiFetch, apiErrorMessage, ApiFetchError } from '@/lib/query/fetcher'
+import { apiFetch } from '@/lib/query/fetcher'
+import { refreshUnlessRealtime } from '@/lib/query/refresh-unless-realtime'
+import { inventoryRequest } from '@/lib/inventory/request'
+import { itemFolderRefreshKeys, useItemFolderMutations, useItemFolders } from '@/lib/hooks/use-item-folders'
 import type { InventoryFolder } from '@/lib/inventory/folders'
 import type { InventoryImageSummary } from '@/lib/inventory/item-images'
 import type {
@@ -38,40 +42,7 @@ import {
   type InventoryContainer,
 } from '@/lib/inventory/container'
 
-/** A refused write, with the server's code and details. */
-export class InventoryRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly code: string | null,
-    readonly details: Record<string, unknown>,
-  ) {
-    super(message)
-    this.name = 'InventoryRequestError'
-  }
-}
-
-/** POST / PUT / DELETE JSON, turning a refusal into an {@link InventoryRequestError}. */
-export async function inventoryRequest<T>(url: string, method: string, body?: unknown): Promise<T> {
-  try {
-    return await apiFetch<T>(url, {
-      method,
-      ...(body !== undefined && { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-    })
-  } catch (error) {
-    if (error instanceof ApiFetchError) {
-      const info = (error.info ?? {}) as { details?: Record<string, unknown> }
-      const details = info.details ?? {}
-      throw new InventoryRequestError(
-        apiErrorMessage(error, 'The Inventory would not oblige'),
-        error.status,
-        typeof details.code === 'string' ? details.code : null,
-        details,
-      )
-    }
-    throw error
-  }
-}
+export { InventoryRequestError, inventoryRequest } from '@/lib/inventory/request'
 
 /** The tier key a container's reads are cached under. */
 export function inventoryTierKey(container: InventoryContainer, shared = false): string {
@@ -79,7 +50,6 @@ export function inventoryTierKey(container: InventoryContainer, shared = false):
 }
 
 const EMPTY_ITEMS: ResolvedInventoryItem[] = []
-const EMPTY_FOLDERS: InventoryFolder[] = []
 
 export interface InventoryListOptions {
   includeArchived: boolean
@@ -112,23 +82,9 @@ export function useInventoryList(container: InventoryContainer | null, opts: Inv
   return { items: query.data ?? EMPTY_ITEMS, loading: query.isLoading, error: query.error }
 }
 
-/** One tier's folder tree. */
-export function useInventoryFolders(container: InventoryContainer | null) {
-  const tierKey = container ? inventoryTierKey(container) : 'none'
-  // The URL is a pure function of the container (and object), which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
-  const query = useQuery({
-    queryKey: queryKeys.inventory.folders(tierKey),
-    queryFn: async ({ signal }) => {
-      const data = await apiFetch<{ folders?: InventoryFolder[] }>(
-        inventoryActionUrl(container as InventoryContainer, 'folders'),
-        { signal },
-      )
-      return data?.folders ?? []
-    },
-    enabled: container !== null,
-  })
-  return { folders: query.data ?? EMPTY_FOLDERS, loading: query.isLoading }
+/** One tier's folder tree (the shared folder hook, Inventory-bound). */
+export function useInventoryFolders(container: InventoryContainer | null): { folders: InventoryFolder[]; loading: boolean } {
+  return useItemFolders('inventory', container)
 }
 
 /** The archetypes a tier can reach (the instantiate picker). */
@@ -188,18 +144,6 @@ export type InventoryItemBody = Partial<
   >
 > & { archived?: boolean }
 
-/**
- * After this tab's own write: refresh `keys` only while the realtime socket
- * is down. While it is up, the server's publish for that write refreshes the
- * same keys (`lib/realtime/topic-map.ts`), and refreshing here as well would
- * fetch everything twice. A socket that drops before the hint arrives
- * re-reads every realtime key when it reconnects (`RealtimeProvider`).
- */
-function refreshUnlessRealtime(queryClient: QueryClient, keys: readonly QueryKey[]): Promise<unknown> {
-  if (getRealtimeStatus() === 'connected') return Promise.resolve()
-  return Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })))
-}
-
 /** A collection or item URL with the project context a kit's pool reads. */
 function withProjectContext(url: string, projectId?: string | null): string {
   return projectId ? `${url}?projectId=${encodeURIComponent(projectId)}` : url
@@ -212,26 +156,18 @@ function withProjectContext(url: string, projectId?: string | null): string {
 export function useInventoryMutations() {
   const queryClient = useQueryClient()
   // Every object or folder write publishes `inventory`, which refreshes the
-  // lists, folders, archetype pickers and carried sets (`topic-map.ts`).
-  const invalidate = useCallback(
-    () =>
-      refreshUnlessRealtime(queryClient, [
-        queryKeys.inventory.lists,
-        queryKeys.inventory.folderLists,
-        queryKeys.inventory.archetypeLists,
-        queryKeys.inventory.equippedLists,
-      ]),
-    [queryClient],
-  )
+  // lists, folders, archetype pickers and carried sets (`topic-map.ts`); the
+  // folder writes are the shared folder hook's, with the same strategy.
+  const folders = useItemFolderMutations('inventory')
   const mutation = useMutation({
     mutationFn: ({ url, method, body }: { url: string; method: string; body?: unknown }) =>
       inventoryRequest<Record<string, unknown>>(url, method, body),
-    onSettled: invalidate,
+    onSettled: () => refreshUnlessRealtime(queryClient, itemFolderRefreshKeys('inventory')),
   })
   const run = mutation.mutateAsync
 
   return {
-    pending: mutation.isPending,
+    pending: mutation.isPending || folders.pending,
     // `projectId` names the project a character's kit may borrow members from.
     create: async (container: InventoryContainer, body: InventoryItemBody, projectId?: string | null) =>
       (await run({ url: withProjectContext(inventoryCollectionUrl(container), projectId), method: 'POST', body }))
@@ -253,17 +189,10 @@ export function useInventoryMutations() {
     ) => (await run({ url: inventoryActionUrl(container, 'instantiate'), method: 'POST', body })).item as ResolvedInventoryItem,
     duplicate: async (container: InventoryContainer, itemId: string) =>
       (await run({ url: inventoryActionUrl(container, 'duplicate'), method: 'POST', body: { itemId } })).item as ResolvedInventoryItem,
-    createFolder: async (container: InventoryContainer, path: string) =>
-      (await run({ url: inventoryActionUrl(container, 'create-folder'), method: 'POST', body: { path } })).folder as InventoryFolder,
-    renameFolder: async (container: InventoryContainer, path: string, name: string) =>
-      (await run({ url: inventoryActionUrl(container, 'rename-folder'), method: 'POST', body: { path, name } })).folder as InventoryFolder,
-    deleteFolder: async (container: InventoryContainer, path: string) => {
-      const data = await run({ url: inventoryActionUrl(container, 'delete-folder'), method: 'POST', body: { path } })
-      return { movedItems: Number(data.movedItems ?? 0), movedFolders: Number(data.movedFolders ?? 0) }
-    },
-    fileItems: async (mode: 'move' | 'copy', container: InventoryContainer, itemIds: string[], folder: string) =>
-      ((await run({ url: inventoryActionUrl(container, mode === 'move' ? 'move-items' : 'copy-items'), method: 'POST', body: { itemIds, folder } }))
-        .items ?? []) as ResolvedInventoryItem[],
+    createFolder: folders.createFolder,
+    renameFolder: folders.renameFolder,
+    deleteFolder: folders.deleteFolder,
+    fileItems: folders.fileItems,
     transfer: async (body: {
       action: 'move' | 'copy'
       itemId: string

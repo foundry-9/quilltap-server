@@ -15,6 +15,13 @@
  * its `Wardrobe/` folder when missing, and is for callers about to write. A
  * read probe passes `false` and gets null for a store that doesn't exist yet.
  *
+ * Every write through a location that changes something publishes the
+ * `wardrobe` realtime topic once it lands, so an open wardrobe browser
+ * re-reads whoever made the change (the operator in another window, a
+ * character's `wardrobe_*` tool, Pascal). In the job child the publish is a
+ * no-op and the commit hook names the topic instead
+ * (`lib/realtime/job-topics.ts`).
+ *
  * The archived-character tombstone stays where it lives
  * (`resolveWardrobeMount` throws `CharacterArchivedError`): an archived
  * character's location still reads, but every write through it — and
@@ -28,6 +35,7 @@
 
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
 import {
   createFolderInMount,
   createInMount,
@@ -106,8 +114,31 @@ export function locationForMount(
     return current;
   };
 
+  /**
+   * Run a write against the current writable mount, then tell the open
+   * browsers — only when something landed (`landed`, default always; a batch
+   * or delete that matched nothing changed nothing).
+   */
+  const write = async <T>(
+    op: string,
+    fn: (target: WardrobeMount) => Promise<T>,
+    landed: (result: T) => boolean = () => true,
+  ): Promise<T> => {
+    const result = await fn(await writableMount());
+    const changed = landed(result);
+    if (changed) publishRealtime('wardrobe');
+    logger.debug('[WardrobeLocation] Location write', {
+      op,
+      mountPointId: mount.mountPointId,
+      scope: mount.scope,
+      published: changed,
+      context: 'wardrobe',
+    });
+    return result;
+  };
+
   // Identity and timestamps are the writer's, never a patch's.
-  const updateMany: WardrobeLocation['updateMany'] = async (patches, opts) => {
+  const updateMany: WardrobeLocation['updateMany'] = (patches, opts) => {
     const cleaned = patches.map(({ id: itemId, patch }) => {
       const rest = { ...patch };
       delete rest.id;
@@ -115,7 +146,7 @@ export function locationForMount(
       delete rest.updatedAt;
       return { id: itemId, patch: rest };
     });
-    return updateManyInMount(await writableMount(), cleaned, opts);
+    return write('updateMany', (target) => updateManyInMount(target, cleaned, opts), (updated) => updated.length > 0);
   };
 
   return {
@@ -131,17 +162,13 @@ export function locationForMount(
     async findItem(itemId) {
       return (await readMountItems(mount)).find((item) => item.id === itemId) ?? null;
     },
-    async create(item) {
-      return createInMount(await writableMount(), item);
-    },
+    create: (item) => write('create', (target) => createInMount(target, item)),
     async update(itemId, patch) {
       const [updated] = await updateMany([{ id: itemId, patch }]);
       return updated ?? null;
     },
     updateMany,
-    async delete(itemId) {
-      return deleteInMount(await writableMount(), itemId);
-    },
+    delete: (itemId) => write('delete', (target) => deleteInMount(target, itemId), (deleted) => deleted),
     async listFolders() {
       return listFoldersInMount(mount);
     },
@@ -149,15 +176,9 @@ export function locationForMount(
       if (!requested || !requested.trim()) return '';
       return resolveWardrobeFolder(await listFolderPathsInMount(mount), requested);
     },
-    async createFolder(path) {
-      return createFolderInMount(await writableMount(), path);
-    },
-    async renameFolder(path, newName) {
-      return renameFolderInMount(await writableMount(), path, newName);
-    },
-    async deleteFolder(path) {
-      return deleteFolderInMount(await writableMount(), path);
-    },
+    createFolder: (path) => write('createFolder', (target) => createFolderInMount(target, path)),
+    renameFolder: (path, newName) => write('renameFolder', (target) => renameFolderInMount(target, path, newName)),
+    deleteFolder: (path) => write('deleteFolder', (target) => deleteFolderInMount(target, path)),
     async writableMountPointId() {
       return (await writableMount()).mountPointId;
     },

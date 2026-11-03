@@ -19,6 +19,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { useContainerCatalogue } from '@/lib/hooks/use-container-catalogue'
 import { ContainerSelect } from '@/components/item-browser/ContainerSelect'
+import { ItemTransferFooter } from '@/components/item-browser/ItemTransferFooter'
 import {
   GENERAL_CONTAINER,
   GENERAL_WARDROBE_NAME,
@@ -124,24 +125,14 @@ export function WardrobeTransferDialog({
       closeOnClickOutside={!working}
       closeOnEscape={!working}
       footer={(
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="qt-button-secondary qt-button-sm"
-            disabled={working}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="qt-button-primary qt-button-sm"
-            disabled={working || catalogue.loading || !selection}
-          >
-            {working ? (mode === 'move' ? 'Moving…' : 'Copying…') : submitLabel}
-          </button>
-        </div>
+        <ItemTransferFooter
+          mode={mode}
+          working={working}
+          submitLabel={submitLabel}
+          submitDisabled={catalogue.loading || !selection}
+          onCancel={onClose}
+          onSubmit={handleSubmit}
+        />
       )}
     >
       <div className="space-y-3">

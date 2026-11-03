@@ -13,7 +13,7 @@ The brief: look over everything the 4.12-dev cycle touched and specify deep refa
 | 3 | [One image transport budget](refactor-4-12-image-transport-budget.md) (**done**) | Five sites decide which images reach a provider; the byte budget covers one of three sources, the count cap is enforced twice with opposite tie-breaks, over-budget images vanish silently, understudies get count but not bytes. One ranked pass on the final array, run per profile tried. | Medium | Medium |
 | 4 | [One tier walk](refactor-4-12-tier-walk.md) (**done**) | Seven questions about "what can this character reach" with two to four answers each; six families of copied tier code (~1,200 lines, ~300 collapsible); two GET routes that provision stores. One reach module and settled rules. | Large | Medium–High (within-tier order changes a winner) |
 | 5 | [Salon stream frames as a tagged union](refactor-4-12-salon-stream-frames.md) (**done**, Phases 1–2) | A fifty-optional-field SSE bag, nineteen encoders, a hand-ordered client dispatch chain that this cycle had to reorder, and a byte-level re-encoder for Storyteller tagging become one Zod discriminated union with one encoder and one parser. | Medium | Low–Medium |
-| 6 | [The browser family, finished](refactor-4-12-browser-family.md) | After six folder-browser phases: ~950–1,350 lines of remaining Wardrobe / Inventory pairs (control dialogs, pickers, overlays, viewers, providers, route-factory preamble, images routes), dead folder wrappers, three hand-rolled menus; and the decision list for retiring `FileBrowser` (~1,900 client + ~850 server lines). | Large | Low for the pairs; the `FileBrowser` retirement is a product decision |
+| 6 | [The browser family, finished](refactor-4-12-browser-family.md) (**Phases 1–3 done**) | After six folder-browser phases: ~950–1,350 lines of remaining Wardrobe / Inventory pairs (control dialogs, pickers, overlays, viewers, providers, route-factory preamble, images routes), dead folder wrappers, three hand-rolled menus; and the decision list for retiring `FileBrowser` (~1,900 client + ~850 server lines). | Large | Low for the pairs; the `FileBrowser` retirement is a product decision |
 | 7 | [One recursive watcher core](refactor-4-12-native-watcher-core.md) (**done**) | Two `fs.watch` watchers copied from each other (~100 lines each) that diverged: the `files/` watcher has no polling fallback, no cloud-placeholder guard, and scans every record on a plain delete. One core; the gaps close by construction. | Small | Low |
 
 Specs 2, 3, 4 and 6 each name bugs to file first (CLAUDE.md: filing is outward-facing, confirm with the human). Spec 1 touches `packages/` and so meets the publish rule. Every spec ends with the decisions it needs from the human.
@@ -25,7 +25,7 @@ Specs 2, 3, 4 and 6 each name bugs to file first (CLAUDE.md: filing is outward-f
 3. **Spec 2** and **spec 3**: both start by fixing a bug in place, then move code.
 4. **Spec 5**: Phase 1 (server-side, legacy shape preserved) can land any time; Phase 2 waits for a quiet moment in the Salon.
 5. **Spec 4**: needs the §5.1 decisions first; then its families in order; the order and project-tier rules last.
-6. **Spec 6** Phases 2–5 after spec 4's project-tier decision, and `FileBrowser` only after its four questions are answered.
+6. **Spec 6**: Phases 1–3 done. Phases 4 and 5 are unblocked: spec 4 settled the project tier, and specs 7 and 2, Phase 5's prerequisites, are done.
 
 ## Examined and left alone
 

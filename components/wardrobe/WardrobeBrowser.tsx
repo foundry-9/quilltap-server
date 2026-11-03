@@ -39,21 +39,24 @@ import {
   encodeWardrobeContainer,
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
-import { folderCrumb, isSameFolder } from '@/lib/wardrobe/folders'
-import { OWN_TIER, viewTierOf } from '@/lib/wardrobe/folder-view'
+import { folderCrumb } from '@/lib/wardrobe/folders'
+import { viewTierOf } from '@/lib/wardrobe/folder-view'
 import { useWardrobeFolderMutations, useWardrobeFolders } from '@/lib/hooks/use-wardrobe-folders'
 import type { TierItem } from '@/lib/hooks/use-wardrobe-tier'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { WardrobeListData } from './hooks/useWardrobeListData'
 import type { WardrobeItemActions } from './hooks/useWardrobeItemActions'
 import { WardrobeItemRow } from './wardrobe-item-row'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
-import { WardrobeImageViewer } from './wardrobe-image-viewer'
+import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
 import { WardrobeTransferDialog } from './WardrobeTransferDialog'
-import { WardrobeFolderPickerDialog } from './WardrobeFolderPickerDialog'
+import { ItemFolderPickerDialog, type ItemFolderPickerWording } from '@/components/item-browser/ItemFolderPickerDialog'
 import { FolderBrowserShell } from '@/components/item-browser/FolderBrowserShell'
 import { useFolderBrowserState, useItemFolderHandlers } from '@/components/item-browser/useFolderBrowserState'
-import type { ComponentMode } from './WardrobeComponentModeFieldset'
+import {
+  WardrobeComponentModeFieldset,
+  defaultComponentMode,
+  type ComponentMode,
+} from './WardrobeComponentModeFieldset'
 import { PronounAwareToggle } from './PronounAwareToggle'
 import type { PronounGuidanceFilter } from '@/lib/hooks/use-pronoun-guidance-filter'
 
@@ -89,6 +92,16 @@ export interface WardrobeBrowserProps {
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
+const WARDROBE_PICKER_WORDING: ItemFolderPickerWording = {
+  rootLabel: 'Wardrobe (top level)',
+  noun: 'item',
+  rootPhrase: 'the top of the wardrobe',
+  rests: ['hangs', 'hang'],
+  moveNote: 'Folders are for your browsing; what anyone can wear stays exactly as it was.',
+  copyNote: 'Each copy is a new item with its own ID and a "(copy)" title, filed in the folder you choose.',
+  describeError: (error, fallback) => (error instanceof Error ? error.message : fallback),
+}
+
 export function WardrobeBrowser({
   container,
   data,
@@ -119,7 +132,6 @@ export function WardrobeBrowser({
   // The Move-to-folder picker's state lives in the actions hook, so the
   // dialog's `overlayOpen` counts it (bug 229).
   const picker = actions.folderPicker
-  const [moving, setMoving] = useState(false)
   const searching = titleFilter.trim().length > 0
 
   const { folders: tree } = useWardrobeFolders(container)
@@ -175,7 +187,7 @@ export function WardrobeBrowser({
     showShared,
     searching,
   })
-  const { inOwnTier, currentFolder, navigate, selectMode, selectedIds, selectedItems, setSelectMode } = state
+  const { inOwnTier, currentFolder, selectMode, selectedIds, setSelectMode } = state
 
   const folderHandlers = useItemFolderHandlers({
     state,
@@ -209,43 +221,12 @@ export function WardrobeBrowser({
   // ---- filing items -------------------------------------------------------
 
   const pickerHome = picker ? actions.addressOf(picker.items[0]) : null
-  const pickerCurrentFolder = useMemo(() => {
-    if (!picker) return null
-    const first = picker.items[0].folder ?? ''
-    return picker.items.every((i) => isSameFolder(i.folder ?? '', first)) ? first : null
-  }, [picker])
-
   const pickerOutfits = useMemo(() => (picker ? picker.items.filter(isComposite) : []), [picker])
-
-  const fileToFolder = async (folder: string, components?: ComponentMode): Promise<void> => {
-    if (!picker || !pickerHome) return
-    const copying = picker.mode === 'copy'
-    setMoving(true)
-    try {
-      const ids = picker.items.map((i) => i.id)
-      const filed = copying
-        ? await folderOps.copyItems(pickerHome, ids, folder, components === 'move' ? undefined : components)
-        : await folderOps.moveItems(pickerHome, ids, folder, components)
-      const where = folder ? `"${folderCrumb(filed[0]?.folder || folder)}"` : 'the top of the wardrobe'
-      showSuccessToast(
-        copying
-          ? picker.items.length === 1
-            ? `A copy of "${picker.items[0].title}" now hangs in ${where}`
-            : `Copies of ${plural(filed.length, 'item')} now hang in ${where}`
-          : picker.items.length === 1
-            ? `"${picker.items[0].title}" now hangs in ${where}`
-            : `${plural(filed.length, 'item')} now hang in ${where}`,
-      )
-      actions.closeFolderPicker()
-      setSelectMode(false)
-    } catch (error) {
-      showErrorToast(
-        error instanceof Error ? error.message : copying ? 'The items would not be copied' : 'The items would not be moved',
-      )
-    } finally {
-      setMoving(false)
-    }
-  }
+  const componentCount = pickerOutfits.reduce((n, o) => n + o.componentItemIds.length, 0)
+  const componentsLegend =
+    pickerOutfits.length === 1
+      ? `This outfit bundles ${plural(componentCount, 'component')}`
+      : `${pickerOutfits.length} of these are outfits, bundling ${plural(componentCount, 'component')} between them`
 
   return (
     <FolderBrowserShell
@@ -323,33 +304,15 @@ export function WardrobeBrowser({
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => onShowArchivedChange(e.target.checked)}
-                className="qt-checkbox"
-              />
-              Show archived
-            </label>
-            {/* Only the character view merges in other tiers; browsing a
-                container, every row already belongs to it. */}
-            {isCharacterScope && (
-              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={showShared}
-                  onChange={(e) => {
-                    setShowShared(e.target.checked)
-                    // Hiding shared wardrobes from inside one goes back to the closet.
-                    if (!e.target.checked && !inOwnTier) navigate(OWN_TIER, '')
-                  }}
-                  className="qt-checkbox"
-                />
-                Show shared
-              </label>
-            )}
+        </>
+      )}
+      toggles={{
+        archived: { checked: showArchived, onChange: onShowArchivedChange },
+        // Only the character view merges in other tiers; browsing a
+        // container, every row already belongs to it.
+        shared: isCharacterScope ? { checked: showShared, onChange: setShowShared } : undefined,
+        after: (
+          <>
             <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
               <input
                 type="checkbox"
@@ -362,9 +325,9 @@ export function WardrobeBrowser({
             {isCharacterScope && pronounFilter && (
               <PronounAwareToggle filter={pronounFilter} items={listItems} />
             )}
-          </div>
-        </>
-      )}
+          </>
+        ),
+      }}
       renderItem={(item) => (
         <WardrobeItemRow
           key={item.id}
@@ -395,26 +358,7 @@ export function WardrobeBrowser({
           onAddToSlot={wear?.onAddToSlot}
         />
       )}
-      selectActions={(
-        <>
-          <button
-            type="button"
-            className="qt-button-secondary qt-button-sm"
-            disabled={selectedItems.length === 0}
-            onClick={() => actions.openFolderPicker(selectedItems, 'move')}
-          >
-            Move to folder…
-          </button>
-          <button
-            type="button"
-            className="qt-button-secondary qt-button-sm"
-            disabled={selectedItems.length === 0}
-            onClick={() => actions.openFolderPicker(selectedItems, 'copy')}
-          >
-            Copy to folder…
-          </button>
-        </>
-      )}
+      folderFiling={{ open: actions.openFolderPicker }}
       footer={(
         <>
           {/* Import-from-image analyzes a reference photo against a
@@ -441,16 +385,38 @@ export function WardrobeBrowser({
       )}
     >
       {picker && pickerHome && (
-        <WardrobeFolderPickerDialog
-          isOpen
+        <ItemFolderPickerDialog<WardrobeItem, ComponentMode>
           mode={picker.mode}
+          items={picker.items}
           container={pickerHome}
-          subject={picker.items.length === 1 ? `"${picker.items[0].title}"` : plural(picker.items.length, 'item')}
-          outfits={pickerOutfits}
-          currentFolder={pickerCurrentFolder}
-          working={moving}
+          port={{ useFolders: useWardrobeFolders, createFolder: folderOps.createFolder, creating: folderOps.pending }}
+          wording={WARDROBE_PICKER_WORDING}
+          choice={
+            pickerOutfits.length > 0
+              ? {
+                  initial: defaultComponentMode(picker.mode),
+                  render: (value, onChange, working) => (
+                    <WardrobeComponentModeFieldset
+                      mode={picker.mode}
+                      value={value}
+                      onChange={onChange}
+                      legend={componentsLegend}
+                      destination="folder"
+                      name="wardrobe-folder-components"
+                      disabled={working}
+                    />
+                  ),
+                }
+              : undefined
+          }
+          file={(folder, components) => {
+            const ids = picker.items.map((i) => i.id)
+            return picker.mode === 'copy'
+              ? folderOps.copyItems(pickerHome, ids, folder, components === 'move' ? undefined : components)
+              : folderOps.moveItems(pickerHome, ids, folder, components)
+          }}
+          onFiled={() => setSelectMode(false)}
           onClose={actions.closeFolderPicker}
-          onSubmit={fileToFolder}
         />
       )}
     </FolderBrowserShell>
@@ -480,7 +446,8 @@ export function WardrobeItemOverlays({
     <>
       {/* A row's picture, full screen — above the dialog and the editor */}
       {imageView?.item.imageFileId && (
-        <WardrobeImageViewer
+        <ItemImageViewer
+          kind="wardrobe"
           onClose={actions.closeImage}
           itemId={imageView.item.id}
           itemTitle={imageView.item.title}

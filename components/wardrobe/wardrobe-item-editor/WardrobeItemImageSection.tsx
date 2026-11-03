@@ -8,7 +8,7 @@
  * caption naming who drew the current picture, and a history strip of every
  * picture the item has had, each of which can be made current or taken down.
  * Clicking the current picture or a history entry opens it full screen in
- * `WardrobeImageViewer` (Save to a store, Download, Copy), where Previous /
+ * `ItemImageViewer` (Save to a store, Download, Copy), where Previous /
  * Next walk the history.
  *
  * Every URL and request goes through `lib/wardrobe/item-images-client`; the
@@ -35,7 +35,7 @@ import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import type { ChatSettings } from '@/components/settings/chat-settings/types'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
-import { WardrobeImageViewer } from '@/components/wardrobe/wardrobe-image-viewer'
+import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
 import {
   WardrobeImageRequestError,
   deleteWardrobeItemImage,
@@ -510,7 +510,8 @@ function ActiveImageSection({
       )}
 
       {viewing && viewingIndex !== null && (
-        <WardrobeImageViewer
+        <ItemImageViewer
+          kind="wardrobe"
           onClose={() => setViewingIndex(null)}
           itemId={item.id}
           itemTitle={item.title}

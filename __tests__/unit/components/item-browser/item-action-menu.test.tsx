@@ -119,3 +119,41 @@ describe('ItemFolderRow', () => {
     expect(items().map((b) => b.textContent)).toEqual(['Rename', 'Copy to…', 'Delete'])
   })
 })
+
+describe('ItemActionMenu with a visible trigger', () => {
+  it('shows the trigger content, names the menu by its label, and keeps the menu behaviour', () => {
+    const onSelect = jest.fn()
+    render(
+      <ItemActionMenu
+        label="Reset the staged composition"
+        trigger={{ content: 'Reset…' }}
+        entries={[
+          { key: 'defaults', label: 'Reset to defaults', onSelect },
+          { key: 'clear', label: 'Clear all', onSelect: jest.fn() },
+        ]}
+      />,
+    )
+    const button = screen.getByRole('button', { name: 'Reset…' })
+    expect(button).toHaveAttribute('title', 'Reset the staged composition')
+    fireEvent.click(button)
+    expect(screen.getByRole('menu', { name: 'Reset the staged composition' })).toBeInTheDocument()
+    expect(document.activeElement).toHaveTextContent('Reset to defaults')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reset to defaults' }))
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(button)
+  })
+
+  it('takes an accessible name for an icon trigger', () => {
+    render(
+      <ItemActionMenu
+        label="Add to a slot"
+        trigger={{ content: '+', ariaLabel: 'Add to a slot' }}
+        entries={[{ key: 'top', label: 'Top', onSelect: jest.fn() }]}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add to a slot' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+})

@@ -34,6 +34,7 @@ import {
   renameScenarioSchema,
 } from '@/lib/mount-index/scenarios-common';
 import { readIncludeArchived } from '@/lib/api/query-params';
+import type { ItemRouteConfigBase } from '@/lib/mount-index/item-folder-routes';
 import {
   ScenarioConflictError,
   ScenarioFilenameError,
@@ -42,16 +43,16 @@ import {
   type StoreScenarioLocation,
 } from '@/lib/scenarios/location';
 
-export interface ScenarioItemRouteConfig {
-  /** The store scope this endpoint serves. */
-  scope: 'project' | 'group' | 'general';
+/**
+ * The tiered item routes' config shape (`ItemRouteConfigBase`: scope, log
+ * tag, log id key — shared with the wardrobe and Inventory factories), over
+ * the three store tiers, plus the scenario routes' own label and heal. The
+ * owner id is read from `params.id`; General has none.
+ */
+export interface ScenarioItemRouteConfig extends ItemRouteConfigBase<'project' | 'group' | 'general'> {
   /** Capitalised owner label — `'Group'` / `'Project'` / `'General'`. Feeds
    *  `notFound(...)` bodies and, lower-cased, the error strings and log messages. */
   ownerLabel: 'Group' | 'Project' | 'General';
-  /** Log-message prefix — `'[Groups v1]'` / `'[Projects v1]'` / `'[General v1]'`. */
-  logTag: string;
-  /** Metadata key naming the owner id in log lines — `'groupId'` / `'projectId'` / `'ownerId'`. */
-  logIdKey: string;
   /** Extra idempotent folder heals once the store is known for a write (the group tier's `Knowledge/`). */
   afterEnsure?: (mountPointId: string) => Promise<void>;
 }

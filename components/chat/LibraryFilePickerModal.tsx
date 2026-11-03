@@ -414,9 +414,7 @@ export default function LibraryFilePickerModal({
             </div>
           ) : (
             <FileBrowser
-              projectId={null}
               onFileClick={handleFileClick}
-              showUpload={false}
             />
           )}
         </div>

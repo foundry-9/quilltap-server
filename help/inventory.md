@@ -138,7 +138,7 @@ Pictures are for *choosing*, not for decoration: they appear where you pick from
 
 ## Folders
 
-An inventory is a folder tree, under exactly the rules the Wardrobe follows: up to eight levels deep, `images` reserved, sibling names unique regardless of case. **New folder**, rename and delete are on the folder bar; deleting a folder moves what it held up a level, never away. Each item's `⋮` menu offers **Move to folder…**, and **Copy to folder…** for an item that may be copied (the copy is a new item, carried by nobody until it is equipped); select several items to move or copy them together. In the item editor, **Folder** is a list of the shelf's folders, with **New folder…** at the foot for filing it somewhere that does not exist yet. Since every folder is a real folder in the document store, rearranging things in the Scriptorium rearranges them here as well.
+An inventory is a folder tree, under exactly the rules the Wardrobe follows: up to eight levels deep, `images` reserved, sibling names unique regardless of case. **New folder**, rename and delete are on the folder bar; deleting a folder moves what it held up a level, never away. Each item's `⋮` menu offers **Move to folder…**, and **Copy to folder…** for an item that may be copied (the copy is a new item, carried by nobody until it is equipped); select several items to move or copy them together (the tickboxes withdraw once they are filed). In the item editor, **Folder** is a list of the shelf's folders, with **New folder…** at the foot for filing it somewhere that does not exist yet. Since every folder is a real folder in the document store, rearranging things in the Scriptorium rearranges them here as well.
 
 ## Moving and copying between shelves
 

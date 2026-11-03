@@ -39,7 +39,6 @@ export function WardrobeCard({ projectId, projectName, expanded, onToggle }: War
   const actions = useWardrobeItemActions({
     container,
     chatId: null,
-    listItems: data.listItems,
     requestConfirmation,
   })
 

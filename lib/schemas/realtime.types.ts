@@ -55,6 +55,14 @@ export const REALTIME_TOPICS = [
    */
   'inventory',
   /**
+   * Wardrobe items and folders: a file created, edited, archived, deleted or
+   * filed, or a folder made, renamed or removed — published by every write
+   * through a wardrobe location (`lib/wardrobe/location.ts`). Collection-wide:
+   * the browsers' lists and folder trees. What a chat's cast is *wearing* is
+   * the `chats` topic's.
+   */
+  'wardrobe',
+  /**
    * Storyteller rounds, scoped by *chat* id: a round opened, a bid landed, a
    * selection made, a round closed. The board re-reads the chat's round.
    */

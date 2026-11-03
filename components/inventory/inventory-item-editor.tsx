@@ -39,7 +39,7 @@ import { ItemFolderField } from '@/components/item-browser/ItemFolderField'
 import type { InventoryItemActions } from './hooks/useInventoryItemActions'
 import { describeInventoryRefusal } from './hooks/useInventoryItemActions'
 import { InventoryPicture } from './inventory-glyph'
-import { InventoryImageViewer } from './inventory-image-viewer'
+import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
 
 interface InventoryItemEditorProps {
   /** The tier a new object is created in; an edited one's own tier. */
@@ -552,7 +552,8 @@ function InventoryPicturesSection({ container, item }: { container: InventoryCon
         </ul>
       )}
       {viewing !== null && images[viewing] && (
-        <InventoryImageViewer
+        <ItemImageViewer
+          kind="inventory"
           onClose={() => setViewing(null)}
           itemId={item.id}
           itemTitle={item.title || item.name}

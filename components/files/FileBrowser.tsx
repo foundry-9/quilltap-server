@@ -3,12 +3,11 @@
 /**
  * FileBrowser Component
  *
- * File explorer UI for browsing files within a project or general files.
+ * File explorer UI for the general files (those in no project).
  *
- * Reads and writes the legacy files table through /api/v1/files and
- * /api/v1/projects/{id}/files. A document store (a project's included) is
- * browsed with the Scriptorium's folder browser instead
- * (`components/document-browser`).
+ * Reads and writes the legacy files table through /api/v1/files. A document
+ * store (a project's included) is browsed with the Scriptorium's folder
+ * browser instead (`components/document-browser`).
  *
  * Supports grid and list view modes with sorting.
  */
@@ -24,21 +23,16 @@ import { CreateFolderModal } from './FolderManagement'
 import MoveToProjectModal from './MoveToProjectModal'
 import FileDeleteConfirmation from './FileDeleteConfirmation'
 import OrphanCleanupModal from './OrphanCleanupModal'
-import { useProjectFileUpload } from './useProjectFileUpload'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
 
 // Re-export FileInfo for backwards compatibility
 export type { FileInfo }
 
 interface FileBrowserProps {
-  /** Project ID to browse (null for general files) */
-  projectId: string | null
   /** Optional title override */
   title?: string
   /** Called when a file is clicked */
   onFileClick?: (file: FileInfo) => void
-  /** Whether to show upload functionality */
-  showUpload?: boolean
   /** Called when files are added/removed (for parent refresh) */
   onFilesChange?: () => void
   /** Optional class name */
@@ -55,10 +49,8 @@ interface DbFolder {
 }
 
 export default function FileBrowser({
-  projectId,
   title,
   onFileClick,
-  showUpload = false,
   onFilesChange,
   className = '',
 }: Readonly<FileBrowserProps>) {
@@ -92,37 +84,15 @@ export default function FileBrowser({
     uniqueSize: number
   } | null>(null)
 
-  const {
-    uploading,
-    uploadProgress,
-    fileInputRef,
-    handleFileSelect,
-    triggerFileSelect,
-  } = useProjectFileUpload({
-    projectId: projectId || '',
-    folderPath: currentFolder,
-    onSuccess: () => {
-      fetchFiles()
-      onFilesChange?.()
-    },
-  })
   const fetchFiles = useCallback(async (opts?: { silent?: boolean }) => {
     try {
       // A silent refresh (workspace tab re-activation) keeps the current
       // listing on screen instead of flipping back to the loading state.
       if (!opts?.silent) setLoading(true)
 
-      const filesUrl = projectId
-        ? `/api/v1/projects/${projectId}?action=list-files`
-        : '/api/v1/files?filter=general'
-
-      const foldersUrl = projectId
-        ? `/api/v1/files/folders?projectId=${projectId}`
-        : '/api/v1/files/folders'
-
       const [filesRes, foldersRes] = await Promise.all([
-        fetch(filesUrl),
-        fetch(foldersUrl),
+        fetch('/api/v1/files?filter=general'),
+        fetch('/api/v1/files/folders'),
       ])
 
       if (filesRes.ok) {
@@ -147,14 +117,15 @@ export default function FileBrowser({
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the initial load
     fetchFiles()
   }, [fetchFiles])
 
-  // Navigating back to the containing workspace tab (Files, or a project
-  // detail hosting this browser) refreshes the listing in place.
+  // Navigating back to the containing workspace tab refreshes the listing in
+  // place.
   useOnTabActivated(() => {
     void fetchFiles({ silent: true })
   })
@@ -435,7 +406,7 @@ export default function FileBrowser({
     }
   }, [fetchFiles])
 
-  const displayTitle = title || (projectId ? 'Project Files' : 'General Files')
+  const displayTitle = title || 'General Files'
 
   const showCleanupButton = orphanedCount > 0
 
@@ -444,19 +415,6 @@ export default function FileBrowser({
       <div className="flex items-center justify-between mb-4">
         <h2 className="qt-heading-4">{displayTitle}</h2>
         <div className="flex items-center gap-2">
-          {showUpload && (
-            projectId ? (
-              <button
-                onClick={triggerFileSelect}
-                disabled={uploading}
-                className="qt-button qt-button-secondary p-2"
-                title={uploading ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...` : 'Upload Files'}
-                aria-label={uploading ? `Uploading ${uploadProgress?.current} of ${uploadProgress?.total}` : 'Upload files'}
-              >
-                <span aria-hidden="true">{uploading ? '⏳' : '\u{1F4E4}'}</span>
-              </button>
-            ) : null
-          )}
           <button
             onClick={() => setShowCreateFolder(true)}
             className="qt-button qt-button-secondary p-2"
@@ -605,7 +563,7 @@ export default function FileBrowser({
         isOpen={showCreateFolder}
         onClose={() => setShowCreateFolder(false)}
         currentFolder={currentFolder}
-        projectId={projectId}
+        projectId={null}
         onSuccess={(folderPath) => {
           fetchFiles()
           setCurrentFolder(folderPath)
@@ -618,7 +576,7 @@ export default function FileBrowser({
           onClose={() => setMoveModalFile(null)}
           fileId={moveModalFile.id}
           fileName={moveModalFile.name}
-          currentProjectId={projectId}
+          currentProjectId={null}
           onSuccess={handleMoveSuccess}
         />
       )}
@@ -648,16 +606,6 @@ export default function FileBrowser({
         />
       )}
 
-      {showUpload && projectId && (
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={handleFileSelect}
-          accept="*/*"
-        />
-      )}
     </div>
   )
 }
