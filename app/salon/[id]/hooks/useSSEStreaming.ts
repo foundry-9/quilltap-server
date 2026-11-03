@@ -627,6 +627,11 @@ export function useSSEStreaming({
     // connection lost mid-way through the next speaker's turn is just as
     // truncated as one lost before the first.
     let turnClosed = false
+    // Each concurrent seat's prose so far, kept here as well as in
+    // `concurrentStreams`: the seat's `done` needs the finished text now, and
+    // React need not run a state updater before the next line executes, so
+    // reading it back out of one left the reply bubble empty.
+    const seatText = new Map<string, string>()
 
     /** The raised hand and the Storyteller board: the same whoever's seat sent them. */
     const applyFloorFrame = (
@@ -672,6 +677,7 @@ export function useSSEStreaming({
           applyFloorFrame(frame)
           return
         case 'turnStart':
+          if (!seatText.has(pid)) seatText.set(pid, '')
           setWaitingForResponse(false)
           setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
             ? prev
@@ -680,17 +686,16 @@ export function useSSEStreaming({
         case 'content': {
           if (!frame.text) return
           const text = frame.text
+          seatText.set(pid, (seatText.get(pid) ?? '') + text)
           setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
             ? prev.map((c) => c.participantId === pid ? { ...c, content: c.content + text } : c)
             : [...prev, { participantId: pid, content: text }])
           return
         }
         case 'done': {
-          let finished = ''
-          setConcurrentStreams((prev) => {
-            finished = prev.find((c) => c.participantId === pid)?.content ?? ''
-            return prev.filter((c) => c.participantId !== pid)
-          })
+          const finished = seatText.get(pid) ?? ''
+          seatText.delete(pid)
+          setConcurrentStreams((prev) => prev.filter((c) => c.participantId !== pid))
           if (frame.messageId && !doneLeavesNoReply(frame.outcome)) {
             const messageId = frame.messageId
             setMessages((prev) => prev.some((m) => m.id === messageId)

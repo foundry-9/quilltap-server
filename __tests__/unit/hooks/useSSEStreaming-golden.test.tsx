@@ -155,11 +155,7 @@ describe('useSSEStreaming — golden streams', () => {
     expect(h.onStorytellerEvent.mock.calls.map(([e]) => e.kind)).toEqual(['round', 'bid', 'open'])
     expect(h.onStorytellerEvent.mock.calls[1][0]).toMatchObject({ kind: 'bid', roundId: 'r-1' })
     // Ada spoke concurrently; Bo yielded (no bubble), and the Host noted it.
-    // (Its optimistic bubble's text is read inside a setConcurrentStreams
-    // updater, which React does not run eagerly here, so the content is not
-    // asserted; the end-of-run fetchChat() brings the persisted row. The pre-4.12
-    // hook behaved the same against the recorded streams.)
-    expect(h.byId('m-3')).toMatchObject({ participantId: 'p-ada', role: 'ASSISTANT' })
+    expect(h.byId('m-3')).toMatchObject({ participantId: 'p-ada', role: 'ASSISTANT', content: 'I say' })
     expect(h.messages().some((m) => m.participantId === 'p-bo' && m.role === 'ASSISTANT')).toBe(false)
     expect(h.byId('m-host')).toBeDefined()
     // The chained speaker after the concurrent ones, then Carina's answer.

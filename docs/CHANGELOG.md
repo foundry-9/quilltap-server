@@ -4,6 +4,10 @@
 
 ### 4.12-dev
 
+#### Fix: Storyteller "all at once" replies no longer land as empty bubbles
+
+When a concurrent Storyteller turn finished, the Salon built its reply bubble from text read inside a React state updater, which had not always run yet, so the bubble could show empty until the end-of-round refresh. `useSSEStreaming` now keeps each seat's streamed text in a map local to the stream and reads it from there. The golden-stream test checks the text.
+
 #### Refactor: Salon stream frames, phase 2 (Refactor 4.12, spec 5)
 
 The Salon's SSE stream now sends frames tagged with `kind` (`lib/chat/stream-frames.ts`) instead of the untagged flag bag. Client and server change together; no behavior change intended.
