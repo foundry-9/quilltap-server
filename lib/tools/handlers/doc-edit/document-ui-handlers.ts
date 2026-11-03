@@ -10,7 +10,6 @@
  */
 
 import path from 'path';
-import fs from 'fs/promises';
 import { projectRosterAdmits } from '@/lib/projects/roster-access';
 import {
   resolveDocEditPath,
@@ -26,7 +25,7 @@ import {
   documentHiddenFromCharacters,
   toLibrarianOpenKind,
 } from '@/lib/services/librarian-notifications/writer';
-import { databaseDocumentExists } from '@/lib/mount-index/database-store';
+import { ensureDocument, readDocument, viewTargetFor } from '@/lib/documents/core';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import {
   logger,
@@ -103,13 +102,14 @@ export async function handleOpenDocument(
       hiddenFromCharacters = await documentHiddenFromCharacters(resolved.mountPointId, resolved.relativePath);
       storeName = publishedMountPoint(resolved, input.mount_point);
       docUri = await uriForResolvedPath(resolved);
-      if (resolved.mountType === 'database' && resolved.mountPointId) {
-        const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
-        if (!exists) throw new Error(`File not found: ${filePath}`);
-        mtime = Date.now();
+      // Open what the operator's Document Mode would open: a file it only
+      // views (an image, a PDF) by its view target, anything else — an
+      // uploaded text blob included — by reading it through the core.
+      const viewer = await viewTargetFor(resolved);
+      if (viewer) {
+        mtime = Date.parse(viewer.updatedAt);
       } else {
-        const stat = await fs.stat(resolved.absolutePath);
-        mtime = stat.mtimeMs;
+        ({ mtime } = await readDocument(resolved));
       }
       // Use filename as display title if not provided
       if (!input.title) {
@@ -139,11 +139,13 @@ export async function handleOpenDocument(
         projectId: context.projectId,
         characterId: context.characterId,
       });
-      // Create the blank file
-      await fs.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-      await fs.writeFile(resolved.absolutePath, '', 'utf-8');
-      const stat = await fs.stat(resolved.absolutePath);
-      mtime = stat.mtimeMs;
+      // Create the blank file through the core's writer — a database store
+      // gets a document row and every store its refresh, never raw `fs`.
+      const ensured = await ensureDocument(resolved);
+      if (!ensured.created) {
+        return { success: false, error: `Failed to create blank document: ${filePath} already exists` };
+      }
+      mtime = ensured.mtime;
       docUri = await uriForResolvedPath(resolved);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

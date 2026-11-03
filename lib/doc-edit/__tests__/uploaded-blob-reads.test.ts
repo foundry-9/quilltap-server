@@ -20,6 +20,7 @@
 // ── Subject ─────────────────────────────────────────────────────────────────
 import { handleGrep, handleListFiles, handleReadFile, handleStrReplace } from '@/lib/tools/handlers/doc-edit/text-handlers';
 import { handleReadHeading } from '@/lib/tools/handlers/doc-edit/markdown-handlers';
+import { handleOpenDocument } from '@/lib/tools/handlers/doc-edit/document-ui-handlers';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
@@ -30,6 +31,7 @@ import {
   readDatabaseBlobForDocument,
   readDatabaseDocument,
   writeDatabaseDocument,
+  databaseDocumentExists,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 
@@ -55,6 +57,8 @@ jest.mock('@/lib/mount-index/database-store', () => {
     readDatabaseBlobForDocument: jest.fn(),
     readDatabaseDocument: jest.fn(),
     writeDatabaseDocument: jest.fn(),
+    databaseDocumentExists: jest.fn(),
+    databaseFolderExists: jest.fn(),
   };
 });
 
@@ -67,8 +71,13 @@ jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
 }));
 jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianWriteAnnouncement: jest.fn(),
+  postLibrarianOpenAnnouncement: jest.fn(),
   contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
+  toLibrarianOpenKind: jest.fn((origin: unknown) => origin),
 }));
+
+const mockOpenChatDocument = jest.fn();
 
 const ACTING = 'char-friday';
 
@@ -127,7 +136,9 @@ function mockWorld() {
       findByMountPointAndPath: jest.fn().mockResolvedValue(null),
       listByMountPoint: jest.fn().mockResolvedValue([]),
     },
+    chatDocuments: { openDocument: mockOpenChatDocument },
     chats: {
+      update: jest.fn(),
       findById: jest.fn().mockResolvedValue({
         id: 'chat-1',
         allowCrossCharacterVaultReads: false,
@@ -190,6 +201,39 @@ describe('the markdown tools read an uploaded text blob (#134)', () => {
 
     expect(res.success).toBe(true);
     expect(JSON.stringify(res.result)).toContain('drag ordering');
+  });
+});
+
+describe('doc_open_document (#134)', () => {
+  it('opens an uploaded text file, as Document Mode does', async () => {
+    const res = await handleOpenDocument({ uri: 'qtap://project/CHANGELOG.md' } as never, toolContext);
+
+    expect(res.success).toBe(true);
+    expect(res.result).toMatchObject({ filePath: 'CHANGELOG.md', isNew: false, mtime: 1792771329442 });
+    expect(mockOpenChatDocument).toHaveBeenCalled();
+  });
+
+  it('still refuses a file that is not there', async () => {
+    const res = await handleOpenDocument({ uri: 'qtap://project/MISSING.md' } as never, toolContext);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('File not found: MISSING.md');
+  });
+
+  it('creates a blank document through the store writer, never raw fs', async () => {
+    jest.mocked(databaseDocumentExists).mockResolvedValue(false);
+    jest.mocked(writeDatabaseDocument).mockResolvedValue({ mtime: 1792771330000 } as never);
+
+    const res = await handleOpenDocument({} as never, toolContext);
+
+    expect(res.success).toBe(true);
+    expect(res.result).toMatchObject({ isNew: true, mtime: 1792771330000 });
+    expect(writeDatabaseDocument).toHaveBeenCalledWith(
+      PROJECT_STORE.id,
+      expect.stringMatching(/^[0-9a-f-]+\.md$/),
+      '',
+      undefined,
+    );
   });
 });
 
