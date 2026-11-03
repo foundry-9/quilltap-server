@@ -952,6 +952,37 @@ describe('context-builder.service', () => {
       expect(prefix).toContain('[User attached text file: CHANGELOG.md]')
       expect(prefix.length).toBeGreaterThan(144_000)
     })
+
+    it('hands an unseen image back whole and tagged, for the transport budget to decide', async () => {
+      // Even for a profile that cannot read it: describing is the transport
+      // budget's job now, on the final array, for whichever profile is called.
+      ;(loadChatFilesForLLM as jest.Mock).mockResolvedValue([
+        { id: 'pic', filename: 'pic.png', mimeType: 'image/png', size: 10, data: 'AAAA' },
+      ])
+      const messages = [
+        { type: 'message', role: 'USER', content: 'Look.', id: 'm1', attachments: ['pic'], createdAt: '2026-11-01T10:00:00.000Z' },
+        { type: 'message', role: 'ASSISTANT', content: 'Amy looks', id: 'm2', participantId: 'amy' },
+      ]
+
+      const { rehydratedContentByMessageId, rehydratedAttachmentsToKeep } = await rehydrateUserAttachments({
+        messages,
+        characterParticipantId: 'friday',
+        isMultiCharacter: true,
+        historyCutoff: null,
+        connectionProfile: textProfile,
+        repos: {} as any,
+        userId: 'user-1',
+        chatId: 'chat-1',
+      })
+
+      expect(rehydratedContentByMessageId.size).toBe(0)
+      expect(rehydratedAttachmentsToKeep).toEqual([
+        expect.objectContaining({
+          id: 'pic',
+          transport: { origin: 'rehydrated', createdAt: Date.parse('2026-11-01T10:00:00.000Z'), describable: true },
+        }),
+      ])
+    })
   })
 
   describe('normalizeWhisperRoles', () => {
