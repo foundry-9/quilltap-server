@@ -25,6 +25,7 @@ import path from 'path';
 import { createHash } from 'crypto';
 import { logger } from '@/lib/logger';
 import { matchesPattern } from '@/lib/mount-index/scanner';
+import { walkTree } from '@/lib/files/walk';
 import { detectNativeText } from '@/lib/mount-index/path-utils';
 import { isSidecarPath, parseSidecar, partnerPathFor } from './sidecar';
 import { DISK_TEMP_SUFFIX, type SyncEntry, type SyncEntryMap } from './types';
@@ -57,62 +58,43 @@ export async function walkDisk(
   /** Lower-cased key → the casing already claimed, so a collision is detectable. */
   const claimed = new Map<string, string>();
 
-  async function walk(relativeDir: string): Promise<void> {
-    const absoluteDir = relativeDir ? path.join(targetPath, relativeDir) : targetPath;
-    let dirents;
-    try {
-      dirents = await fs.readdir(absoluteDir, { withFileTypes: true });
-    } catch (err) {
-      // A target that does not exist yet is not an error — it is an empty
-      // side, which is exactly what `--dry-run` against a new path should see.
-      // (A real run has already created it by this point.)
-      if (relativeDir === '' && (err as NodeJS.ErrnoException).code === 'ENOENT') return;
-      unreadable.push(relativeDir || '.');
-      warnings.push(
-        `Could not read ${relativeDir || 'the target directory'}: ${err instanceof Error ? err.message : String(err)}`
-      );
-      return;
-    }
-
-    for (const dirent of dirents) {
+  await walkTree(
+    targetPath,
+    async ({ name, relativePath, absolutePath, dirent }) => {
       // Dot-entries — and their whole subtree — are as good as absent.
-      if (dirent.name.startsWith('.')) continue;
+      if (name.startsWith('.')) return false;
       // A previous run's interrupted write, not a document.
-      if (dirent.name.endsWith(DISK_TEMP_SUFFIX)) continue;
+      if (name.endsWith(DISK_TEMP_SUFFIX)) return false;
 
-      const relativePath = relativeDir ? `${relativeDir}/${dirent.name}` : dirent.name;
-
-      if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) continue;
+      if (excludePatterns.some(pattern => matchesPattern(relativePath, pattern))) return false;
 
       // A symlink is neither followed nor copied: resolving it would let a
       // link inside the target pull bytes from anywhere on the host into the
       // store, and copying it would put the wrong thing on the other side.
       if (dirent.isSymbolicLink()) {
         warnings.push(`${relativePath} is a symbolic link and is skipped`);
-        continue;
+        return false;
       }
 
-      const absolutePath = path.join(targetPath, relativePath);
       const key = relativePath.toLowerCase();
 
       if (dirent.isDirectory()) {
         const stat = await statOrNull(absolutePath);
-        if (!stat) { unreadable.push(relativePath); continue; }
-        if (noteCollision(claimed, key, relativePath, entries, warnings)) continue;
+        if (!stat) { unreadable.push(relativePath); return false; }
+        if (noteCollision(claimed, key, relativePath, entries, warnings)) return false;
         entries.set(key, {
           relativePath,
           kind: 'folder',
           lastModified: stat.mtime.toISOString(),
           createdAt: birthtimeOf(stat),
         });
-        await walk(relativePath);
-        continue;
+        return true;
       }
 
-      if (!dirent.isFile()) continue;
+      if (!dirent.isFile()) return false;
 
       const stat = await statOrNull(absolutePath);
-      if (!stat) { unreadable.push(relativePath); continue; }
+      if (!stat) { unreadable.push(relativePath); return false; }
 
       let bytes: Buffer;
       try {
@@ -122,7 +104,7 @@ export async function walkDisk(
         warnings.push(
           `Could not read ${relativePath}: ${err instanceof Error ? err.message : String(err)}`
         );
-        continue;
+        return false;
       }
 
       if (isSidecarPath(relativePath)) {
@@ -135,7 +117,7 @@ export async function walkDisk(
             mtime: stat.mtime.toISOString(),
           });
         }
-        continue;
+        return false;
       }
 
       // A database store holds text-native content as a string, so a `.md`
@@ -146,10 +128,10 @@ export async function walkDisk(
         warnings.push(
           `${relativePath} has a text extension but is not valid UTF-8; a database store cannot hold it verbatim`
         );
-        continue;
+        return false;
       }
 
-      if (noteCollision(claimed, key, relativePath, entries, warnings)) continue;
+      if (noteCollision(claimed, key, relativePath, entries, warnings)) return false;
 
       entries.set(key, {
         relativePath,
@@ -159,10 +141,22 @@ export async function walkDisk(
         lastModified: stat.mtime.toISOString(),
         createdAt: birthtimeOf(stat),
       });
-    }
-  }
-
-  await walk('');
+      return false;
+    },
+    {
+      separator: 'posix',
+      onReadError: (relativeDir, err) => {
+        // A target that does not exist yet is not an error — it is an empty
+        // side, which is exactly what `--dry-run` against a new path should see.
+        // (A real run has already created it by this point.)
+        if (relativeDir === '' && err.code === 'ENOENT') return;
+        unreadable.push(relativeDir || '.');
+        warnings.push(
+          `Could not read ${relativeDir || 'the target directory'}: ${err instanceof Error ? err.message : String(err)}`
+        );
+      },
+    },
+  );
 
   // Attach every sidecar to its partner. One that matches nothing is reported
   // rather than deleted — it may belong to a file the operator is about to add.
