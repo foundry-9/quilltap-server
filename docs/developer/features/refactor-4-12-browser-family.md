@@ -99,6 +99,6 @@ The existing suites: `wardrobe-route-factory.test.ts` (1,329 lines), `inventory/
 
 ## 7. Decisions needed from the human
 
-1. Proceed with §4.3 (server-side wardrobe merge) now or hold it.
+1. ~~Proceed with §4.3 (server-side wardrobe merge) now or hold it.~~ **Answered (2026-11-03): hold until the tier-walk spec's project-tier decision.**
 2. The four `FileBrowser` questions in §4.4.
 3. Whether the Wardrobe's provisioning-on-GET is a bug to file (recommended) or an intended convenience for first-time browsers.
