@@ -1,6 +1,6 @@
 # Refactor 4.12 — The browser family, finished: the remaining Wardrobe / Inventory pairs and the last legacy browser
 
-**Status:** Phases 1–3 done (2026-11-03); Phases 4–5 wait on §7's decisions. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](refactor-4-12-tier-walk.md)'s family A and is not repeated here.
+**Status:** Phases 1–3 done (2026-11-03). Phase 4 is held for the tier-walk spec's project-tier decision; Phase 5 is decided (§4.4) and waits on specs 7 and 2. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Sequel to the six-phase [folder browser](complete/folder-browser.md), whose own "left for later" list this picks up. The server-side tier resolver (`location.ts` ×3) is the [tier-walk spec](refactor-4-12-tier-walk.md)'s family A and is not repeated here.
 
 ## 1. The problem
 
@@ -75,15 +75,29 @@ Finish what the folder-browser programme started: every Wardrobe / Inventory sur
 
 `use-character-wardrobe-items.ts` merges four tier queries in the browser, and its project tier is the official store only, which disagrees with `loadWearablePool`. The Inventory merges on the server (`?shared=true`). Moving the Wardrobe to the server merge removes about 150–200 client lines (`use-character-wardrobe-items` 140, `use-wardrobe-tier` 85, `use-wardrobe-container-items` 80, minus a thin replacement) and makes the browser show exactly what `loadWearablePool` gives the character. It touches the reference picker and the vantage hooks (`wardrobe-reference-picker.tsx` 336, `use-wardrobe-vantage-items`). Recommendation: do it, after the tier-walk spec's project-tier decision, as its own PR.
 
-### 4.4 Retiring `FileBrowser` (separate decision; ~1,900 client + up to ~850 server lines)
+### 4.4 Retiring `FileBrowser` (decided 2026-11-03; ~1,900 client + up to ~850 server lines)
 
-Not a refactor of the browser family so much as the end of the `files` table as a browsable surface. The decisions are the human's:
+Not a refactor of the browser family so much as the end of the `files` table as a browsable surface. The human accepted the proposals below on 2026-11-03.
 
-1. **What `/files` becomes.** Proposed: a `DocumentStoreBrowser` over the Quilltap Uploads store (where the bytes already are), with the legacy rows' `description` surfaced through the store's description column and `fileStatus: 'orphaned'` handled by a Scriptorium-side "unreferenced blobs" action rather than the `files`-id cleanup.
-2. **The picker's General source** becomes the same store; linking by `files.id` (`chats/{id}/files?action=link`) becomes `attach-mount-file` like the project and store steps already are, which also means a Librarian announcement where there was none. Check first whether the Uploads store already appears in the picker's `docStores` list (no filter hiding it was found).
-3. **Promote-to-project** becomes a store transfer (`move-folder` / `copyFile` across stores exist since Phase 3).
-4. **Sync and thumbnail generation** move to Scriptorium store actions or are dropped if the store watcher covers them.
-5. Then delete the client files in §1.4 and the server routes whose only callers they were, after a grep for other callers of each.
+**Prerequisites.** Two other 4.12 specs land first:
+
+- [Spec 7, one watcher core](refactor-4-12-native-watcher-core.md). The `files/` watcher has no polling fallback today: when a recursive `fs.watch` is refused it logs a warning and stays off. Until it inherits the fallback, the manual *Sync* button is the only recovery, so it cannot be dropped (decision 4).
+- [Spec 2, one document core](refactor-4-12-document-core.md). The editor and `doc_read_file` read an uploaded blob through two different readers. Once `/files` is a store browser, opening an upload goes through that path, so the divergence should be settled first.
+
+**Decisions.**
+
+1. **`/files` becomes a `DocumentStoreBrowser` over the Quilltap Uploads store**, where the bytes already are (`lib/file-storage/user-uploads-bridge.ts`). The page shows the store's real folders (`chat/`, `images/`, `diagnostics/`, `restored/`, `imported/`, …), not the legacy `folders` tree.
+   - Before switching, a one-off survey on a real instance (read-only, through `npx quilltap`) counts hand-made `folders` rows with no project, and `files` rows with no project that carry a `description` or a non-root `folderPath`.
+   - If the counts are non-trivial, a migration carries them over: descriptions into the store's description column, hand-made folders as real folders in the Uploads store with their files moved in. It follows the migration rules (pretty label, `reportProgress`). If the counts are negligible, they are dropped and the CHANGELOG says so.
+   - `fileStatus: 'orphaned'` is handled by a Scriptorium-side "unreferenced files" action instead of the `files`-id orphan cleanup.
+2. **The picker's General step browses the same store** with `DocumentStoreBrowser`, as the project and store steps already do. Linking by `files.id` (`chats/{id}/files?action=link`) gives way to `attach-mount-file`.
+   - This adds a Librarian announcement on attaching a general file where there was none. That is accepted.
+   - Check first whether the Uploads store already appears in the picker's `docStores` list (no filter hiding it was found). If it does, the General step and the store step merge.
+3. **Promote-to-project becomes a store move**: a move or copy from the Uploads store into the project's store, through the existing cross-store `move-folder` / `copyFile` operations. `MoveToProjectModal` and `[id]/actions/promote.ts` go.
+4. **Sync and thumbnail generation are dropped**, once spec 7 has given the `files/` watcher its polling fallback. Before deleting `generate-thumbnails.ts`, check that `DocumentStoreBrowser`'s image rows render from the store without a pre-generation pass.
+5. **Then delete** the client files in §1.4 and the server routes whose only callers they were, after a grep for other callers of each. `files/folders/route.ts` is the one `ensureByPath` caller on the request path. If nothing else reads the legacy `folders` table afterwards, record that in DDL.md, but do not drop the table in this phase: restore and import still write it.
+
+**Help.** `help/files.md`, `help/file-organization.md`, `help/file-uploads.md`, `help/file-search-preview.md` and `help/files-with-ai.md` all mention `/files` or General Files; each is reread and rewritten for the store view, and the attachment-picker help loses its separate General section.
 
 ## 5. Phases
 
@@ -91,7 +105,7 @@ Not a refactor of the browser family so much as the end of the `files` table as 
 2. §4.1 client layer, one pair per PR, in the table's order; the `wardrobe` realtime topic lands with the folder hooks.
 3. §4.2 server preamble and images route.
 4. §4.3 server-side wardrobe merge (after the tier-walk decision).
-5. §4.4 `FileBrowser` retirement, once the human has answered its four questions.
+5. §4.4 `FileBrowser` retirement, after specs 7 and 2: the survey and any migration first, then the `/files` page and the picker, then the deletions.
 
 ## 6. Verification
 
@@ -100,5 +114,5 @@ The existing suites: `wardrobe-route-factory.test.ts` (1,329 lines), `inventory/
 ## 7. Decisions needed from the human
 
 1. ~~Proceed with §4.3 (server-side wardrobe merge) now or hold it.~~ **Answered (2026-11-03): hold until the tier-walk spec's project-tier decision.**
-2. The four `FileBrowser` questions in §4.4.
-3. Whether the Wardrobe's provisioning-on-GET is a bug to file (recommended) or an intended convenience for first-time browsers.
+2. ~~The four `FileBrowser` questions in §4.4.~~ **Answered (2026-11-03): the proposals as written in §4.4.**
+3. ~~Whether the Wardrobe's provisioning-on-GET is a bug to file or an intended convenience.~~ Fixed in Phase 3 (no GET passes `ensure`); no issue filed.

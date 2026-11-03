@@ -25,7 +25,7 @@ Specs 2, 3, 4 and 6 each name bugs to file first (CLAUDE.md: filing is outward-f
 3. **Spec 2** and **spec 3**: both start by fixing a bug in place, then move code.
 4. **Spec 5**: Phase 1 (server-side, legacy shape preserved) can land any time; Phase 2 waits for a quiet moment in the Salon.
 5. **Spec 4**: needs the §5.1 decisions first; then its families in order; the order and project-tier rules last.
-6. **Spec 6** Phases 2–5 after spec 4's project-tier decision, and `FileBrowser` only after its four questions are answered.
+6. **Spec 6**: Phases 1–3 done. Phase 4 waits on spec 4's project-tier decision; Phase 5 (`FileBrowser`) is decided and waits on specs 7 and 2.
 
 ## Examined and left alone
 

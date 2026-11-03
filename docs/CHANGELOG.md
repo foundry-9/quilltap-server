@@ -6,7 +6,7 @@
 
 #### Refactor: the browser family, finished (Refactor 4.12, spec 6, Phases 1–3)
 
-The remaining Wardrobe / Inventory pairs are one component or one factory with a kind parameter. Phases 4 (server-side wardrobe merge) and 5 (`FileBrowser` retirement) wait on the spec's open decisions.
+The remaining Wardrobe / Inventory pairs are one component or one factory with a kind parameter. Phase 4 (server-side wardrobe merge) is held for the tier-walk spec's project-tier decision. Phase 5 (`FileBrowser` retirement) is decided in the spec's §4.4 and waits on specs 7 and 2.
 
 - Dead code: `createWardrobeFolder` / `renameWardrobeFolder` / `deleteWardrobeFolder` and `lib/wardrobe/folder-mutations.ts` removed (`WARDROBE_FOLDER_KIND` moved to `lib/wardrobe/item-mutations.ts`); `lib/wardrobe/folder-view.ts` no longer re-exports the shared view helpers; `FileBrowser`'s unreachable project branch (project file list, project folders, upload) removed along with its `projectId` / `showUpload` props.
 - `normaliseRelativePath` has one copy (`lib/mount-index/path-utils.ts`, new `allowRoot` option and `isSafeRelativePath`). `database-store.ts` and `POST /api/v1/mount-points/[id]/folders` use it.
