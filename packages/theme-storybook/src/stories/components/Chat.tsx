@@ -7,6 +7,58 @@
 
 import React from 'react';
 
+/**
+ * The announcement bar's chevron. The app renders its `chevron-right` /
+ * `chevron-down` icon (sized by `.qt-chat-system-bar-chevron`); an expanded bar
+ * also carries `qt-chat-system-bar-chevron-down`, a hook with no rule of its own —
+ * the glyph itself points down. Inline SVG here, since a theme's Storybook does
+ * not serve the app's `/images/icons/` files.
+ */
+const BarChevron: React.FC<{ expanded?: boolean }> = ({ expanded = false }) => (
+  <svg
+    className={`qt-chat-system-bar-chevron${expanded ? ' qt-chat-system-bar-chevron-down' : ''}`}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <polyline points={expanded ? '6 9 12 15 18 9' : '9 18 15 12 9 6'} />
+  </svg>
+);
+
+/**
+ * The app's QuillAnimation: the `thinking` glyph rocking under
+ * `.qt-thinking-indicator`, in a box of 3rem (`lg`, awaiting a reply) or 1rem
+ * (`sm`, trailing streamed prose).
+ */
+const QuillAnimation: React.FC<{ size?: 'lg' | 'sm'; style?: React.CSSProperties }> = ({ size = 'lg', style }) => {
+  const box = size === 'lg' ? '3rem' : '1rem';
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: box, height: box, ...style }}>
+      <svg
+        className="qt-thinking-indicator"
+        width={box}
+        height={box}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        role="img"
+        aria-label="Writing…"
+      >
+        <path d="M21 3.5c-7.5 1.5-12 6-13.5 13.5 7.5-1.5 12-6 13.5-13.5Z" />
+        <path d="M19 5.5 9.5 15" />
+        <path d="m3 21 4.5-4.5" />
+      </svg>
+    </span>
+  );
+};
+
 export const Chat: React.FC = () => {
   return (
     <div style={{ padding: '1.5rem' }}>
@@ -301,7 +353,7 @@ export const Chat: React.FC = () => {
             <span className="qt-chat-system-bar-sender">The Librarian</span>
             <span className="qt-chat-system-bar-kind">edited by character</span>
             <span className="qt-chat-system-bar-time">4:12 PM</span>
-            <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+            <BarChevron />
           </button>
 
           <div className="qt-chat-announcement-group" style={{ width: '100%', margin: 0 }}>
@@ -310,21 +362,21 @@ export const Chat: React.FC = () => {
               <span className="qt-chat-system-bar-sender">The Host</span>
               <span className="qt-chat-system-bar-kind">status change</span>
               <span className="qt-chat-system-bar-time">4:13 PM</span>
-              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+              <BarChevron />
             </button>
             <button type="button" className="qt-chat-announcement-chip">
               <span className="qt-chat-announcement-dot qt-chat-announcement-dot-medium" aria-hidden="true" />
               <span className="qt-chat-system-bar-sender">The Lantern</span>
               <span className="qt-chat-system-bar-kind">background</span>
               <span className="qt-chat-system-bar-time">4:14 PM</span>
-              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+              <BarChevron />
             </button>
             <button type="button" className="qt-chat-announcement-chip">
               <span className="qt-chat-announcement-dot qt-chat-announcement-dot-low" aria-hidden="true" />
               <span className="qt-chat-system-bar-sender">Prospero</span>
               <span className="qt-chat-system-bar-kind">project information</span>
               <span className="qt-chat-system-bar-time">4:14 PM</span>
-              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+              <BarChevron />
             </button>
             <button type="button" className="qt-chat-announcement-chip qt-chat-announcement-chip-whisper">
               <span className="qt-chat-announcement-dot qt-chat-announcement-dot-medium" aria-hidden="true" />
@@ -332,7 +384,7 @@ export const Chat: React.FC = () => {
               <span className="qt-chat-system-bar-kind">announcement</span>
               <span className="qt-chat-system-bar-whisper">to Amy</span>
               <span className="qt-chat-system-bar-time">4:15 PM</span>
-              <span className="qt-chat-system-bar-chevron" aria-hidden="true">&rsaquo;</span>
+              <BarChevron />
             </button>
           </div>
 
@@ -343,7 +395,7 @@ export const Chat: React.FC = () => {
             <span className="qt-chat-system-bar-kind">announcement</span>
             <span className="qt-chat-system-bar-whisper">to Amy, Bartholomew</span>
             <span className="qt-chat-system-bar-time">4:15 PM</span>
-            <span className="qt-chat-system-bar-chevron qt-chat-system-bar-chevron-down" aria-hidden="true">&rsaquo;</span>
+            <BarChevron expanded />
           </button>
         </div>
       </section>
@@ -374,7 +426,7 @@ export const Chat: React.FC = () => {
                 <span className="qt-chat-system-bar-sender">Pascal</span>
                 <span className="qt-chat-system-bar-kind">{tool}</span>
                 <span className="qt-chat-system-bar-time">4:15 PM</span>
-                <span className="qt-chat-system-bar-chevron" aria-hidden="true">&and;</span>
+                <BarChevron expanded />
               </button>
               <div className={`qt-chat-message-body qt-chat-message-assistant qt-pascal-result qt-pascal-result--${state}`}>
                 <p>🎲 <strong>{tool}</strong> &mdash; {message}</p>
@@ -552,20 +604,31 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
-      {/* Typing Indicator */}
+      {/* Writing Indicator */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
-          Typing Indicator
+          Writing Indicator
         </h3>
-        <div style={{ display: 'flex', gap: '0.5rem', maxWidth: '32rem' }}>
-          <div className="qt-avatar qt-avatar-sm">
-            <div className="qt-avatar-fallback">AI</div>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          The rocking quill (<code>.qt-thinking-indicator</code>, tuned by the <code>--qt-thinking-*</code>{' '}
+          properties): large while a reply is awaited, small at the tail of prose still streaming in.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '32rem' }}>
+          {/* Awaiting the first token */}
+          <div className="qt-chat-message-row qt-chat-message-row-assistant">
+            <div className="qt-chat-message-body">
+              <div className="qt-text-secondary">
+                <QuillAnimation size="lg" />
+              </div>
+            </div>
           </div>
-          <div className="qt-chat-message qt-chat-message-assistant">
-            <div className="qt-typing-indicator">
-              <span></span>
-              <span></span>
-              <span></span>
+          {/* Streaming */}
+          <div className="qt-chat-message-row qt-chat-message-row-assistant">
+            <div className="qt-chat-message-body qt-chat-message-assistant">
+              <p>
+                The merchant counts the coins twice, then a third time
+                <QuillAnimation size="sm" style={{ marginLeft: '0.5rem' }} />
+              </p>
             </div>
           </div>
         </div>
@@ -733,22 +796,24 @@ export const Chat: React.FC = () => {
         <p style={{ fontSize: '0.875rem', color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
           The fact-checker&apos;s verdict on a message, shown among the message action icons. Quiet by
           design; the discrepancy notes live in a tooltip. Hover one to see its hover state.
+          Same markup as the app: <code>qt-confirmation-badge qt-text-xs</code>, a glyph and a label.{' '}
+          <code>qt-confirmation-badge-label</code> has no rule in the app; it is a hook a theme may style.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <button className="qt-confirmation-badge" data-confirmation-state="vouched">
-            <span className="qt-confirmation-badge-glyph">✓</span>
+          <button type="button" className="qt-confirmation-badge qt-text-xs" data-confirmation-state="vouched">
+            <span aria-hidden="true" className="qt-confirmation-badge-glyph">✓</span>
             <span className="qt-confirmation-badge-label">Vouched</span>
           </button>
-          <button className="qt-confirmation-badge" data-confirmation-state="amended">
-            <span className="qt-confirmation-badge-glyph">✎</span>
+          <button type="button" className="qt-confirmation-badge qt-text-xs" data-confirmation-state="amended">
+            <span aria-hidden="true" className="qt-confirmation-badge-glyph">✎</span>
             <span className="qt-confirmation-badge-label">Amended</span>
           </button>
-          <button className="qt-confirmation-badge" data-confirmation-state="stood-by">
-            <span className="qt-confirmation-badge-glyph">!</span>
+          <button type="button" className="qt-confirmation-badge qt-text-xs" data-confirmation-state="stood-by">
+            <span aria-hidden="true" className="qt-confirmation-badge-glyph">!</span>
             <span className="qt-confirmation-badge-label">Stood by</span>
           </button>
-          <button className="qt-confirmation-badge" data-confirmation-state="unvetted">
-            <span className="qt-confirmation-badge-glyph">—</span>
+          <button type="button" className="qt-confirmation-badge qt-text-xs" data-confirmation-state="unvetted">
+            <span aria-hidden="true" className="qt-confirmation-badge-glyph">—</span>
             <span className="qt-confirmation-badge-label">Unvetted</span>
           </button>
         </div>

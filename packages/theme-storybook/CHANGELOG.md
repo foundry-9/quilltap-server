@@ -2,6 +2,14 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.100] - 2026-11-03
+
+### Fixed
+- Stories no longer use `qt-*` classes the app does not define. Each demo now uses the class names and markup of the app component it shows:
+  - Badges: the variants are primary, secondary, info, success, warning, destructive and the single `qt-badge-outline` (`qt-badge-default` and `qt-badge-outline-{primary,success,warning,destructive}` never existed). Provider badges are the five embedding providers (`openai`, `ollama`, `openrouter`, `nanogpt`, `builtin`), each class standing alone as in `ProviderBadge`; `anthropic` and `google` never existed. The ThemeComparison badge row follows.
+  - Chat: announcement-bar chevrons are SVG `chevron-right` / `chevron-down` glyphs sized by `qt-chat-system-bar-chevron`, as `AnnouncementChip` renders them (expanded bars, Pascal's included, point down and keep the `qt-chat-system-bar-chevron-down` hook). The "Typing Indicator" (`qt-typing-indicator`) is replaced by the app's writing indicator: the rocking `thinking` quill under `qt-thinking-indicator`, large while a reply is awaited and small after streaming prose. Confirmation badges carry `qt-text-xs`, `type="button"` and an `aria-hidden` glyph, as `ConfirmationBadge` does; `qt-confirmation-badge-label` stays, as an unstyled hook the app also uses.
+  - Tabs: the Navigation Bar demo uses the `_layout.css` structure (`qt-navbar` > `qt-navbar-container` > `qt-navbar-section`), `qt-navbar-link` / `qt-navbar-link-active` links, and `qt-navbar-toggle` icon buttons. A base-layer reset scoped to the demo stands in for Tailwind's preflight, so links no longer underline and buttons no longer show browser chrome, and the actions sit on the right instead of wrapping below the links.
+
 ## [1.0.99] - 2026-11-02
 
 ### Changed

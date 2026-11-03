@@ -17,9 +17,9 @@ export const Badges: React.FC = () => {
           Badge Variants
         </h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-          <span className="qt-badge qt-badge-default">Default</span>
           <span className="qt-badge qt-badge-primary">Primary</span>
           <span className="qt-badge qt-badge-secondary">Secondary</span>
+          <span className="qt-badge qt-badge-info">Info</span>
           <span className="qt-badge qt-badge-success">Success</span>
           <span className="qt-badge qt-badge-warning">Warning</span>
           <span className="qt-badge qt-badge-destructive">Destructive</span>
@@ -29,14 +29,16 @@ export const Badges: React.FC = () => {
       {/* Outline Badges */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
-          Outline Badges
+          Outline Badge
         </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          There is one outline variant, used for quiet labels beside an item &mdash; a Workbench tool&apos;s
+          roll form, an Inventory kit, a scenario already in this chat.
+        </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-          <span className="qt-badge qt-badge-outline">Outline</span>
-          <span className="qt-badge qt-badge-outline-primary">Primary</span>
-          <span className="qt-badge qt-badge-outline-success">Success</span>
-          <span className="qt-badge qt-badge-outline-warning">Warning</span>
-          <span className="qt-badge qt-badge-outline-destructive">Destructive</span>
+          <span className="qt-badge qt-badge-outline">dice</span>
+          <span className="qt-badge qt-badge-outline">kit</span>
+          <span className="qt-badge qt-badge-outline">in this chat</span>
         </div>
       </section>
 
@@ -46,13 +48,15 @@ export const Badges: React.FC = () => {
           Provider Badges
         </h3>
         <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
-          Used to identify AI provider sources.
+          Identify an embedding profile&apos;s provider. Each class stands alone (no <code>qt-badge</code>{' '}
+          beside it), one per embedding provider.
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-          <span className="qt-badge qt-badge-provider-openai">OpenAI</span>
-          <span className="qt-badge qt-badge-provider-anthropic">Anthropic</span>
-          <span className="qt-badge qt-badge-provider-google">Google</span>
-          <span className="qt-badge qt-badge-provider-openrouter">OpenRouter</span>
+          <span className="qt-badge-provider-openai">OPENAI</span>
+          <span className="qt-badge-provider-ollama">OLLAMA</span>
+          <span className="qt-badge-provider-openrouter">OPENROUTER</span>
+          <span className="qt-badge-provider-nanogpt">NANOGPT</span>
+          <span className="qt-badge-provider-builtin">BUILTIN</span>
         </div>
       </section>
 
