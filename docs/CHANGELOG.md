@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### Docs: bring the 4.12.0 release notes up to date
+
+- `docs/releases/4.12.0.md` now covers the commits made after the Nov 2 draft: the shared image byte budget, the WCAG 2.2 AA pass and undefined-CSS-variable fixes, the within-tier "earlier mount wins" rule, Wardrobe odds and ends (live refresh, server-side duplicate, no store creation on GET, avatar regeneration), the `files/` watcher changes, and the document and Storyteller repairs (#133–#137).
+- Upgrading gains the 4 MB request weight limit and the same-named-item precedence change; the theme-author section covers the generated theme-storybook CSS, new bundled theme versions and token guidance.
+- Version numbers corrected: Anthropic plugin 1.0.65, default-system-prompts 1.1.31, theme-storybook 1.0.101, plugin-utils 2.7.4.
+
 #### Chore: update npm dependencies
 
 - Ran `npm update -S` across the root project, `packages/`, and all plugins in `plugins/dist/`.
