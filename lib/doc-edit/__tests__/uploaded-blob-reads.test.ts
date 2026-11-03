@@ -26,7 +26,7 @@ import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
   listDatabaseFiles,
   listDatabaseBlobTexts,
-  readDatabaseBlobText,
+  readDatabaseBlobForDocument,
   readDatabaseDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
@@ -50,6 +50,7 @@ jest.mock('@/lib/mount-index/database-store', () => {
     listDatabaseFiles: jest.fn(),
     listDatabaseBlobTexts: jest.fn(),
     readDatabaseBlobText: jest.fn(),
+    readDatabaseBlobForDocument: jest.fn(),
     readDatabaseDocument: jest.fn(),
   };
 });
@@ -77,9 +78,10 @@ function mockWorld() {
   ] as never);
   // The upload is a blob: no document at its path, but converted text.
   jest.mocked(readDatabaseDocument).mockRejectedValue(new DatabaseStoreError('Document not found', 'NOT_FOUND'));
-  jest.mocked(readDatabaseBlobText).mockImplementation(async (_mp: string, rel: string) =>
+  // An uploaded .md reads as its own bytes, the same reader the editor uses (#134).
+  jest.mocked(readDatabaseBlobForDocument).mockImplementation(async (_mp: string, rel: string) =>
     rel.toLowerCase() === 'changelog.md'
-      ? { content: CHANGELOG, mtime: 1792771329442, size: CHANGELOG.length, storedMimeType: 'text/markdown' }
+      ? { content: CHANGELOG, mtime: 1792771329442, size: CHANGELOG.length, source: 'blob-bytes' as const }
       : null,
   );
   jest.mocked(listDatabaseBlobTexts).mockResolvedValue([{ relativePath: 'CHANGELOG.md', content: CHANGELOG }]);
@@ -134,7 +136,7 @@ describe('doc_read_file reads an uploaded text blob (bug 260)', () => {
 
     expect(res.success).toBe(true);
     expect(res.result?.content).toBe(CHANGELOG);
-    expect(readDatabaseBlobText).toHaveBeenCalledWith(PROJECT_STORE.id, 'CHANGELOG.md');
+    expect(readDatabaseBlobForDocument).toHaveBeenCalledWith(PROJECT_STORE.id, 'CHANGELOG.md');
   });
 
   it('still reports a missing file when there is no blob either', async () => {

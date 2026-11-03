@@ -34,7 +34,7 @@ import {
   moveDatabaseDocument,
   deleteDatabaseDocument,
   readDatabaseDocument,
-  readDatabaseBlobAsDocument,
+  readDatabaseBlobForDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -304,9 +304,10 @@ export async function documentViewTargetFor(resolved: ResolvedPath): Promise<Doc
 }
 
 /**
- * Read a file the editor can open. A native-text upload in a database store
- * is a blob, not a document, so when no document is there its own bytes are
- * read instead; the first save turns it into a document. Throws ENOENT as
+ * Read a file the editor can open. An upload in a database store is a blob,
+ * not a document, so when no document is there the blob is read through
+ * {@link readDatabaseBlobForDocument} — the same reader `doc_read_file` uses
+ * (#134); the first save turns it into a document. Throws ENOENT as
  * {@link readFileWithMtime} does when neither is there.
  */
 export async function readEditableDocument(
@@ -317,9 +318,9 @@ export async function readEditableDocument(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     if (resolved.mountType !== 'database' || !resolved.mountPointId) throw error;
-    const blob = await readDatabaseBlobAsDocument(resolved.mountPointId, resolved.relativePath);
+    const blob = await readDatabaseBlobForDocument(resolved.mountPointId, resolved.relativePath);
     if (!blob) throw error;
-    return blob;
+    return { content: blob.content, mtime: blob.mtime, size: blob.size };
   }
 }
 

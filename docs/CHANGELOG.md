@@ -7,6 +7,7 @@
 #### Refactor: one document core for Document Mode and the `doc_*` tools (Refactor 4.12, spec 2)
 
 - Fix (#133): a Document Mode save or rename into a store now re-indexes whenever the path lands in a store (`mountPointId`), not only in `document_store` scope. A `project`-scope save into a project's official store used to skip the chunk/embed pass until the next periodic scan. Operator saves now also re-index hard-link siblings, as tool writes do.
+- Fix (#134): Document Mode and `doc_read_file` read an uploaded blob through one reader, `readDatabaseBlobForDocument` (`lib/mount-index/database-store.ts`): a native-text upload (.md, .txt, .json, .jsonl) is read as its own bytes, any other kind as its converted extracted text. `doc_read_file` used to return the extracted text for an uploaded `.md` while the editor showed the bytes.
 
 #### Fix: theme-storybook stories use only real `qt-*` classes
 

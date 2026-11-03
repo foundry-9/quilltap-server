@@ -25,7 +25,7 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   moveDatabaseDocument: jest.fn(),
   deleteDatabaseDocument: jest.fn(),
   readDatabaseDocument: jest.fn(),
-  readDatabaseBlobAsDocument: jest.fn(),
+  readDatabaseBlobForDocument: jest.fn(),
 }))
 const mockFindLink = jest.fn()
 jest.mock('@/lib/repositories/factory', () => ({
@@ -33,7 +33,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 }))
 
 import { readFileWithMtime, resolveDocEditPath, writeFileWithMtimeCheck } from '@/lib/doc-edit'
-import { readDatabaseBlobAsDocument } from '@/lib/mount-index/database-store'
+import { readDatabaseBlobForDocument } from '@/lib/mount-index/database-store'
 import {
   documentViewTargetFor,
   DocumentReadOnlyError,
@@ -127,7 +127,7 @@ describe('opening and writing a viewed file', () => {
   it('opens a text file uploaded as a blob from its own bytes', async () => {
     ;(resolveDocEditPath as jest.Mock).mockResolvedValue(resolved('uploads/notes.md'))
     ;(readFileWithMtime as jest.Mock).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
-    ;(readDatabaseBlobAsDocument as jest.Mock).mockResolvedValue({ content: '# Uploaded', mtime: 9, size: 10 })
+    ;(readDatabaseBlobForDocument as jest.Mock).mockResolvedValue({ content: '# Uploaded', mtime: 9, size: 10, source: 'blob-bytes' })
     const opened = await openDocumentFile(STANDALONE_ACCESS_CONTEXT, {
       scope: 'document_store',
       filePath: 'uploads/notes.md',
@@ -135,7 +135,7 @@ describe('opening and writing a viewed file', () => {
     })
     expect(opened).toMatchObject({ content: '# Uploaded', mtime: 9, isNew: false })
     expect(opened.viewer).toBeUndefined()
-    expect(readDatabaseBlobAsDocument).toHaveBeenCalledWith('mp-1', 'uploads/notes.md')
+    expect(readDatabaseBlobForDocument).toHaveBeenCalledWith('mp-1', 'uploads/notes.md')
   })
 
   it('refuses an editor write to it', async () => {

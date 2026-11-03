@@ -42,7 +42,7 @@ import type { DocGrepInput, DocGrepOutput, DocGrepMatch } from '../../doc-grep-t
 import type { DocListFilesInput, DocListFilesOutput, DocFileInfo } from '../../doc-list-files-tool';
 import { isAutomaticImagePath, isOsCruftName } from '@/lib/files/folder-utils';
 import { getRepositories } from '@/lib/repositories/factory';
-import { listDatabaseFiles, listDatabaseBlobTexts, readDatabaseBlobText } from '@/lib/mount-index/database-store';
+import { listDatabaseFiles, listDatabaseBlobTexts, readDatabaseBlobText, readDatabaseBlobForDocument } from '@/lib/mount-index/database-store';
 import { compilePathGlob } from '@/lib/doc-edit/path-glob';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
@@ -78,8 +78,9 @@ function getLineNumber(content: string, offset: number): number {
 /**
  * Read a text file for `doc_read_file`. In a database store a path with no
  * document may still hold an uploaded blob — every chat upload is stored as
- * one, .md and .txt included — so fall back to the blob's extracted text, which
- * for native text is the file itself (bug 260). Read-only: the edit tools keep
+ * one, .md and .txt included — so fall back to the blob through the same
+ * reader the editor uses: a native-text upload's own bytes, otherwise its
+ * extracted text (bug 260, #134). Read-only: the edit tools keep
  * calling `readFileWithMtime` and still see no document there.
  */
 async function readTextFileOrUploadedBlob(
@@ -90,12 +91,13 @@ async function readTextFileOrUploadedBlob(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     if (resolved.mountType !== 'database' || !resolved.mountPointId) throw error;
-    const blob = await readDatabaseBlobText(resolved.mountPointId, resolved.relativePath);
+    const blob = await readDatabaseBlobForDocument(resolved.mountPointId, resolved.relativePath);
     if (!blob) throw error;
     logger.debug('doc_read_file: no document at path; reading the uploaded blob\'s text', {
       mountPointId: resolved.mountPointId,
       relativePath: resolved.relativePath,
       size: blob.size,
+      source: blob.source,
     });
     return { content: blob.content, mtime: blob.mtime, size: blob.size };
   }
