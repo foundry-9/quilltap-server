@@ -126,11 +126,9 @@ quilltap/
 │   └── developer/features/   # Feature roadmap (with completed/ subdir)
 ├── docker/                   # Docker configuration (entrypoint script)
 ├── first-startup/            # First-startup helper assets
-├── cicd/                     # CI/CD scripts and deploy helpers
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
 ├── public/                   # Static assets (icons, manifest, schemas)
 ├── website/                  # Website assets (images, splash graphics)
-├── certs/                    # Development TLS certificates
 ├── logs/                     # Application log files (when LOG_OUTPUT includes file)
 ├── Dockerfile                # Production Docker build
 ├── Dockerfile.ci             # CI Docker build
@@ -165,15 +163,12 @@ npm install
 # Build plugins (required before first run)
 npm run build:plugins
 
-# Start the development server with HTTPS
-npm run devssl
-
-# Or plain HTTP
+# Start the development server
 npm run dev
 
 ```
 
-The application will be available at [https://localhost:3000](https://localhost:3000)
+The application will be available at [http://localhost:3000](http://localhost:3000)
 
 ### Running with Docker
 

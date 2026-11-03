@@ -199,7 +199,7 @@ logger.error('Migration failed', {
 
 1. **Local testing**:
    - Create test data with old format
-   - Run `npm run devssl`
+   - Run `npm run dev`
    - Verify migrations run in logs
    - Check data format after migration
 

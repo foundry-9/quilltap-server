@@ -4,6 +4,12 @@
 
 ### 4.12-dev
 
+#### Cleanup: remove obsolete top-level files and scripts
+
+- Removed `process_qt.sh` (a finished one-off typography codemod), `GEMINI.md` (a stale AI-agent overview that duplicated `CLAUDE.md`), and the `cicd/` directory with its `deploy:dev` script.
+- Removed the `certs/` directory and the `devssl` script (HTTPS dev server). `npm run dev` is plain HTTP only.
+- Updated `docs/developer/DEVELOPMENT.md` and `migrations/README.md` to match. Gitignored build output (`coverage/`, `playwright-report/`, `tsbuildinfo` files, `debug-storybook.log`) and `.DS_Store` files were deleted from the working tree; none were tracked.
+
 #### Fix: avatar regeneration no longer absorbs changes made mid-job
 
 - An outfit or Inventory change made while a character avatar job was already processing was collapsed onto that job, so the new portrait missed the change (the job had built its prompt before the change). `enqueueCharacterAvatarGeneration` (`lib/background-jobs/queue-service.ts`) now reuses only a PENDING job, matching the wardrobe item-image path.
