@@ -106,7 +106,8 @@ function makeCtx() {
   const chatDocuments = {
     findRecentAcrossChats: jest.fn(async () => [] as unknown[]),
     openDocument: jest.fn(async () => undefined),
-    renameFilePathInStore: jest.fn(async () => undefined),
+    findByFilePath: jest.fn(async (_filePath: string) => [] as unknown[]),
+    update: jest.fn(async (id: string) => ({ id }) as unknown),
   };
   const ctx = { user: { id: 'user-1' }, repos: { chatDocuments } } as never;
   return { ctx, chatDocuments };
@@ -519,6 +520,9 @@ describe('POST ?action=rename-document', () => {
 
   it('repoints the recent-documents history at the new name', async () => {
     const { ctx, chatDocuments } = makeCtx();
+    chatDocuments.findByFilePath.mockResolvedValue([
+      { id: 'recent-1', chatId: STANDALONE_CHAT_ID, scope: 'document_store', mountPoint: 'Library', filePath: 'Notes/a.md' },
+    ]);
 
     await POST(
       req('rename-document', {
@@ -530,18 +534,16 @@ describe('POST ?action=rename-document', () => {
       ctx
     );
 
-    expect(chatDocuments.renameFilePathInStore).toHaveBeenCalledWith(
-      'document_store',
-      'Library',
-      'Notes/a.md',
-      'Notes/Better Name.md',
-      'Better Name.md'
-    );
+    expect(chatDocuments.findByFilePath).toHaveBeenCalledWith('Notes/a.md');
+    expect(chatDocuments.update).toHaveBeenCalledWith('recent-1', {
+      filePath: 'Notes/Better Name.md',
+      displayTitle: 'Better Name.md',
+    });
   });
 
   it('succeeds even when history tracking fails after the rename landed', async () => {
     const { ctx, chatDocuments } = makeCtx();
-    chatDocuments.renameFilePathInStore.mockRejectedValue(new Error('tracking table locked'));
+    chatDocuments.findByFilePath.mockRejectedValue(new Error('tracking table locked'));
 
     const res = await POST(
       req('rename-document', { filePath: 'Notes/a.md', newTitle: 'Better Name' }),
@@ -558,7 +560,7 @@ describe('POST ?action=rename-document', () => {
 
     expect(res.status).toBe(200);
     expect(renameDoc).not.toHaveBeenCalled();
-    expect(chatDocuments.renameFilePathInStore).not.toHaveBeenCalled();
+    expect(chatDocuments.findByFilePath).not.toHaveBeenCalled();
   });
 
   it.each([

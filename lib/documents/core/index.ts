@@ -23,6 +23,7 @@ export {
   renameDocument,
   computeRenameTarget,
   sweepChatDocumentsAfterMove,
+  sweepChatDocumentsAfterFolderMove,
   type RenameDocumentResult,
   type RenameTarget,
 } from './move';

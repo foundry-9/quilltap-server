@@ -4,6 +4,15 @@
 
 ### 4.12-dev
 
+#### Fix: document moves follow every open copy; edits over uploads drop stale text
+
+Found in the 4.12 refactor's live V4test pass.
+
+- A move or rename now repoints every `chat_documents` row that reaches the moved file's store, whatever address the row was recorded under. Before, the sweep matched `(scope, mountPoint)` literally, so a `doc_move_file` made as `project` left another chat that had the same file open by store name on the old path (and the reverse). A `project` row is resolved through its chat's project's official store, a `document_store` row by store name, and `general` still matches literally. This also stops a `project`-scope move from repointing a same-named file open in a chat from a different project.
+- The rule lives in `sweepChatDocumentsAfterMove` / the new `sweepChatDocumentsAfterFolderMove` (`lib/documents/core/move.ts`), which take the resolved `mountPointId`. Callers: `doc_move_file`, `doc_move_folder` (which also now records the resolved store name instead of a raw `self`), and both Document Mode rename routes. `ChatDocumentsRepository.renameFilePathInStore` / `renameFolderPathInStore` are replaced by `findByFilePath` / `findUnderFolder`.
+- Writing a document over an uploaded text blob at the same path (`doc_str_replace`, a Document Mode save) cleared nothing on the link, so the blob's `extractedText` kept describing the old revision and `quilltap docs grep` matched it. `linkDocumentContent` now clears `extractedText`, `extractedTextSha256` and `extractionError` and sets `extractionStatus = 'none'` on every document write; the description is kept.
+- Tests: store-matching and folder cases in `core.test.ts`, the `project`-move regression in `doc-edit-handler-chat-doc-sync.test.ts`, and the blob-to-document case in `doc-mount-write-metadata.integration.test.ts`.
+
 #### Refactor: the browser family, finished (Refactor 4.12, spec 6, Phases 1–3)
 
 The remaining Wardrobe / Inventory pairs are one component or one factory with a kind parameter. Phases 4 (server-side wardrobe merge) and 5 (`FileBrowser` retirement, decided in the spec's §4.4) are not done here.

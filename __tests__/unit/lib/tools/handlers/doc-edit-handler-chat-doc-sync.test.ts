@@ -127,9 +127,12 @@ const mockMoveDatabaseFolder = moveDatabaseFolder as jest.Mock
 const mockRepos = {
   chats: { findById: jest.fn().mockResolvedValue(null) },
   characters: { findById: jest.fn().mockResolvedValue(null) },
+  projects: { findById: jest.fn().mockResolvedValue(null) },
+  docMountPoints: { findByName: jest.fn().mockResolvedValue([]) },
   chatDocuments: {
-    renameFilePathInStore: jest.fn().mockResolvedValue(1),
-    renameFolderPathInStore: jest.fn().mockResolvedValue(2),
+    findByFilePath: jest.fn().mockResolvedValue([]),
+    findUnderFolder: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockImplementation(async (id: string) => ({ id })),
   },
   // Per-document policy gates look these up; no protected docs in these tests.
   docMountFileLinks: {
@@ -151,11 +154,18 @@ describe('doc-edit move handlers sync chat_documents pointers', () => {
     mockDatabaseDocumentExists.mockImplementation(async (_mountPointId: string, relativePath: string) => relativePath === 'old/name.md')
     mockMoveDatabaseDocument.mockResolvedValue(undefined)
     mockMoveDatabaseFolder.mockResolvedValue(undefined)
-    mockRepos.chatDocuments.renameFilePathInStore.mockResolvedValue(1)
-    mockRepos.chatDocuments.renameFolderPathInStore.mockResolvedValue(2)
+    mockRepos.chats.findById.mockResolvedValue(null)
+    mockRepos.projects.findById.mockResolvedValue(null)
+    mockRepos.docMountPoints.findByName.mockResolvedValue([])
+    mockRepos.chatDocuments.findByFilePath.mockResolvedValue([])
+    mockRepos.chatDocuments.findUnderFolder.mockResolvedValue([])
+    mockRepos.chatDocuments.update.mockImplementation(async (id: string) => ({ id }))
   })
 
   it('doc_move_file updates chat_documents path in the same store', async () => {
+    mockRepos.chatDocuments.findByFilePath.mockResolvedValue([
+      { id: 'row-lore', chatId: 'chat-2', scope: 'document_store', mountPoint: 'Lore', filePath: 'old/name.md' },
+    ])
     mockResolveDocEditPath
       .mockResolvedValueOnce({
         mountType: 'database',
@@ -183,13 +193,40 @@ describe('doc-edit move handlers sync chat_documents pointers', () => {
 
     expect(result.success).toBe(true)
     expect(mockMoveDatabaseDocument).toHaveBeenCalledWith('mp-1', 'old/name.md', 'new/title.md')
-    expect(mockRepos.chatDocuments.renameFilePathInStore).toHaveBeenCalledWith(
-      'document_store',
-      'Lore',
-      'old/name.md',
-      'new/title.md',
-      'title.md',
+    expect(mockRepos.chatDocuments.findByFilePath).toHaveBeenCalledWith('old/name.md')
+    expect(mockRepos.chatDocuments.update).toHaveBeenCalledWith('row-lore', {
+      filePath: 'new/title.md',
+      displayTitle: 'title.md',
+    })
+  })
+
+  it('doc_move_file made as `project` follows a row another chat recorded by store name', async () => {
+    // The live V4test case: Lorian moved a file as `project`; another chat had
+    // it open under the project store's name and was left on the old path.
+    const projectStore = { scope: 'project', mountType: 'database', mountPointId: 'mp-proj', mountPointName: 'Project Files: P' }
+    mockResolveDocEditPath
+      .mockResolvedValueOnce({ ...projectStore, relativePath: 'ledger.md' })
+      .mockResolvedValueOnce({ ...projectStore, relativePath: 'Ledgers/ledger.md' })
+    mockDatabaseDocumentExists.mockImplementation(async (_mp: string, rel: string) => rel === 'ledger.md')
+    mockRepos.chatDocuments.findByFilePath.mockResolvedValue([
+      { id: 'row-by-name', chatId: 'chat-2', scope: 'document_store', mountPoint: 'Project Files: P', filePath: 'ledger.md' },
+      { id: 'row-other-store', chatId: 'chat-2', scope: 'document_store', mountPoint: 'Lore', filePath: 'ledger.md' },
+    ])
+    mockRepos.docMountPoints.findByName.mockImplementation(async (name: string) =>
+      name === 'Project Files: P' ? [{ id: 'mp-proj' }] : [{ id: 'mp-lore' }])
+
+    const result = await executeDocEditTool(
+      'doc_move_file',
+      { scope: 'project', path: 'ledger.md', new_path: 'Ledgers/ledger.md' },
+      context,
     )
+
+    expect(result.success).toBe(true)
+    expect(mockRepos.chatDocuments.update).toHaveBeenCalledWith('row-by-name', {
+      filePath: 'Ledgers/ledger.md',
+      displayTitle: 'ledger.md',
+    })
+    expect(mockRepos.chatDocuments.update).not.toHaveBeenCalledWith('row-other-store', expect.anything())
   })
 
   it('doc_move_file sweeps under the resolved store name, never `self` (bug 256)', async () => {
@@ -203,6 +240,10 @@ describe('doc-edit move handlers sync chat_documents pointers', () => {
       .mockResolvedValueOnce({ ...vault, relativePath: 'old/name.md' })
       .mockResolvedValueOnce({ ...vault, relativePath: 'new/title.md' })
 
+    mockRepos.chatDocuments.findByFilePath.mockResolvedValue([
+      { id: 'row-vault', chatId: 'chat-2', scope: 'document_store', mountPoint: 'Friday Character Vault', filePath: 'old/name.md' },
+    ])
+
     const result = await executeDocEditTool(
       'doc_move_file',
       { scope: 'document_store', mount_point: 'self', path: 'old/name.md', new_path: 'new/title.md' },
@@ -210,16 +251,18 @@ describe('doc-edit move handlers sync chat_documents pointers', () => {
     )
 
     expect(result.success).toBe(true)
-    expect(mockRepos.chatDocuments.renameFilePathInStore).toHaveBeenCalledWith(
-      'document_store',
-      'Friday Character Vault',
-      'old/name.md',
-      'new/title.md',
-      'title.md',
-    )
+    expect(mockRepos.chatDocuments.update).toHaveBeenCalledWith('row-vault', {
+      filePath: 'new/title.md',
+      displayTitle: 'title.md',
+    })
+    // Matched by its recorded name, so no lookup of the word `self`.
+    expect(mockRepos.docMountPoints.findByName).not.toHaveBeenCalledWith('self')
   })
 
   it('doc_move_folder updates nested chat_documents paths in the same store', async () => {
+    mockRepos.chatDocuments.findUnderFolder.mockResolvedValue([
+      { id: 'row-nested', chatId: 'chat-2', scope: 'document_store', mountPoint: 'Lore', filePath: 'old/folder/deep/a.md' },
+    ])
     mockResolveDocEditPath
       .mockResolvedValueOnce({
         mountType: 'database',
@@ -247,12 +290,11 @@ describe('doc-edit move handlers sync chat_documents pointers', () => {
 
     expect(result.success).toBe(true)
     expect(mockMoveDatabaseFolder).toHaveBeenCalledWith('mp-1', 'old/folder', 'new/folder')
-    expect(mockRepos.chatDocuments.renameFolderPathInStore).toHaveBeenCalledWith(
-      'document_store',
-      'Lore',
-      'old/folder',
-      'new/folder',
-    )
+    expect(mockRepos.chatDocuments.findUnderFolder).toHaveBeenCalledWith('old/folder')
+    expect(mockRepos.chatDocuments.update).toHaveBeenCalledWith('row-nested', {
+      filePath: 'new/folder/deep/a.md',
+      displayTitle: 'a.md',
+    })
   })
 
   it('move still succeeds when chat_documents sync throws (best-effort behavior)', async () => {
@@ -270,7 +312,7 @@ describe('doc-edit move handlers sync chat_documents pointers', () => {
         relativePath: 'new/name.md',
       })
 
-    mockRepos.chatDocuments.renameFilePathInStore.mockRejectedValue(new Error('db unavailable'))
+    mockRepos.chatDocuments.findByFilePath.mockRejectedValue(new Error('db unavailable'))
 
     const result = await executeDocEditTool(
       'doc_move_file',

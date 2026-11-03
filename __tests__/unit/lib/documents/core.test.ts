@@ -38,11 +38,22 @@ jest.mock('@/lib/mount-index/database-store', () => {
   }
 })
 const mockRefreshStats = jest.fn()
-const mockRenameFilePathInStore = jest.fn()
+const mockFindByName = jest.fn()
+const mockFindByFilePath = jest.fn()
+const mockFindUnderFolder = jest.fn()
+const mockUpdateChatDocument = jest.fn()
+const mockFindChat = jest.fn()
+const mockFindProject = jest.fn()
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: () => ({
-    docMountPoints: { refreshStats: mockRefreshStats },
-    chatDocuments: { renameFilePathInStore: mockRenameFilePathInStore },
+    docMountPoints: { refreshStats: mockRefreshStats, findByName: mockFindByName },
+    chatDocuments: {
+      findByFilePath: mockFindByFilePath,
+      findUnderFolder: mockFindUnderFolder,
+      update: mockUpdateChatDocument,
+    },
+    chats: { findById: mockFindChat },
+    projects: { findById: mockFindProject },
   }),
 }))
 
@@ -75,6 +86,7 @@ import {
   deleteDocument,
   computeRenameTarget,
   sweepChatDocumentsAfterMove,
+  sweepChatDocumentsAfterFolderMove,
   DocumentConflictError,
 } from '@/lib/documents/core'
 
@@ -372,32 +384,142 @@ describe('computeRenameTarget', () => {
 })
 
 describe('sweepChatDocumentsAfterMove', () => {
-  it('repoints every row at the old path, titled by the new basename', async () => {
-    mockRenameFilePathInStore.mockResolvedValue(2)
+  // The same file in the project's official store ("Project Files: P",
+  // mp-proj), recorded three ways by three chats, plus a namesake path in an
+  // unrelated store and one in the filesystem `general` directory.
+  const rows = [
+    { id: 'r-name', chatId: 'chat-other', scope: 'document_store', mountPoint: 'Project Files: P', filePath: 'a.md' },
+    { id: 'r-case', chatId: 'chat-third', scope: 'document_store', mountPoint: 'project files: p', filePath: 'a.md' },
+    { id: 'r-project', chatId: 'chat-in-project', scope: 'project', mountPoint: null, filePath: 'a.md' },
+    { id: 'r-elsewhere', chatId: 'chat-other', scope: 'document_store', mountPoint: 'Shelf', filePath: 'a.md' },
+    { id: 'r-general', chatId: 'chat-other', scope: 'general', mountPoint: null, filePath: 'a.md' },
+    { id: 'r-loose-project', chatId: 'chat-no-project', scope: 'project', mountPoint: null, filePath: 'a.md' },
+  ]
 
+  beforeEach(() => {
+    mockFindByFilePath.mockResolvedValue(rows)
+    mockUpdateChatDocument.mockImplementation(async (id: string) => ({ id }))
+    mockFindByName.mockImplementation(async (name: string) => {
+      const n = name.trim().toLowerCase()
+      if (n === 'project files: p') return [{ id: 'mp-proj' }]
+      if (n === 'shelf') return [{ id: 'mp-shelf' }]
+      return []
+    })
+    mockFindChat.mockImplementation(async (id: string) =>
+      id === 'chat-in-project' ? { id, projectId: 'proj-1' } : { id, projectId: null })
+    mockFindProject.mockResolvedValue({ id: 'proj-1', officialMountPointId: 'mp-proj' })
+  })
+
+  const updatedIds = () => mockUpdateChatDocument.mock.calls.map(c => c[0]).sort()
+
+  it('follows a move made as `project` into rows recorded by store name', async () => {
     await expect(sweepChatDocumentsAfterMove({
-      scope: 'document_store',
-      mountPoint: 'Shelf',
+      scope: 'project',
+      mountPoint: null,
+      mountPointId: 'mp-proj',
       oldFilePath: 'a.md',
-      newFilePath: 'Notes/b.md',
-    })).resolves.toBe(2)
-    expect(mockRenameFilePathInStore).toHaveBeenCalledWith('document_store', 'Shelf', 'a.md', 'Notes/b.md', 'b.md')
+      newFilePath: 'Ledgers/a.md',
+    })).resolves.toBe(3)
+
+    expect(updatedIds()).toEqual(['r-case', 'r-name', 'r-project'])
+    expect(mockUpdateChatDocument).toHaveBeenCalledWith('r-name', { filePath: 'Ledgers/a.md', displayTitle: 'a.md' })
+  })
+
+  it('leaves a `project` row from a chat outside that project alone', async () => {
+    mockFindByFilePath.mockResolvedValue([rows[2], rows[5]])
+    await sweepChatDocumentsAfterMove({
+      scope: 'project', mountPoint: null, mountPointId: 'mp-proj', oldFilePath: 'a.md', newFilePath: 'b.md',
+    })
+    expect(updatedIds()).toEqual(['r-project'])
+  })
+
+  it('follows a move made by store name into rows recorded as `project`', async () => {
+    await sweepChatDocumentsAfterMove({
+      scope: 'document_store',
+      mountPoint: 'Project Files: P',
+      mountPointId: 'mp-proj',
+      oldFilePath: 'a.md',
+      newFilePath: 'b.md',
+      newDisplayTitle: 'B',
+    })
+    expect(updatedIds()).toEqual(['r-case', 'r-name', 'r-project'])
+    expect(mockUpdateChatDocument).toHaveBeenCalledWith('r-project', { filePath: 'b.md', displayTitle: 'B' })
+  })
+
+  it('without a store id, matches only the exact address it was given', async () => {
+    await sweepChatDocumentsAfterMove({
+      scope: 'general', mountPoint: undefined, oldFilePath: 'a.md', newFilePath: 'b.md',
+    })
+    expect(updatedIds()).toEqual(['r-general'])
+    expect(mockFindByName).not.toHaveBeenCalled()
+  })
+
+  it('treats an ambiguous store name as no match', async () => {
+    mockFindByName.mockResolvedValue([{ id: 'mp-proj' }, { id: 'mp-twin' }])
+    mockFindByFilePath.mockResolvedValue([rows[0]])
+    await expect(sweepChatDocumentsAfterMove({
+      scope: 'project', mountPoint: null, mountPointId: 'mp-proj', oldFilePath: 'a.md', newFilePath: 'b.md',
+    })).resolves.toBe(0)
+  })
+
+  it('looks each store name and chat up once per sweep', async () => {
+    mockFindByFilePath.mockResolvedValue([rows[0], { ...rows[0], id: 'r-name-2' }, rows[2], { ...rows[2], id: 'r-project-2' }])
+    await sweepChatDocumentsAfterMove({
+      scope: 'general', mountPoint: null, mountPointId: 'mp-proj', oldFilePath: 'a.md', newFilePath: 'b.md',
+    })
+    expect(mockFindByName).toHaveBeenCalledTimes(1)
+    expect(mockFindChat).toHaveBeenCalledTimes(1)
+    expect(updatedIds()).toEqual(['r-name', 'r-name-2', 'r-project', 'r-project-2'])
   })
 
   it('uses the repositories it is handed', async () => {
-    const renameFilePathInStore = jest.fn().mockResolvedValue(1)
+    const findByFilePath = jest.fn().mockResolvedValue([rows[4]])
+    const update = jest.fn().mockResolvedValue({})
     await sweepChatDocumentsAfterMove(
-      { scope: 'general', mountPoint: undefined, oldFilePath: 'a.md', newFilePath: 'b.md', newDisplayTitle: 'B' },
-      { repos: { chatDocuments: { renameFilePathInStore } } as never },
+      { scope: 'general', mountPoint: undefined, oldFilePath: 'a.md', newFilePath: 'b.md' },
+      { repos: { chatDocuments: { findByFilePath, update } } as never },
     )
-    expect(renameFilePathInStore).toHaveBeenCalledWith('general', null, 'a.md', 'b.md', 'B')
-    expect(mockRenameFilePathInStore).not.toHaveBeenCalled()
+    expect(update).toHaveBeenCalledWith('r-general', { filePath: 'b.md', displayTitle: 'b.md' })
+    expect(mockFindByFilePath).not.toHaveBeenCalled()
   })
 
   it('never throws', async () => {
-    mockRenameFilePathInStore.mockRejectedValue(new Error('locked'))
+    mockFindByFilePath.mockRejectedValue(new Error('locked'))
     await expect(sweepChatDocumentsAfterMove({
       scope: 'general', mountPoint: null, oldFilePath: 'a.md', newFilePath: 'b.md',
+    })).resolves.toBe(0)
+  })
+})
+
+describe('sweepChatDocumentsAfterFolderMove', () => {
+  beforeEach(() => {
+    mockUpdateChatDocument.mockImplementation(async (id: string) => ({ id }))
+    mockFindByName.mockImplementation(async (name: string) =>
+      name.toLowerCase() === 'project files: p' ? [{ id: 'mp-proj' }] : [{ id: 'mp-shelf' }])
+    mockFindChat.mockResolvedValue({ id: 'chat-in-project', projectId: 'proj-1' })
+    mockFindProject.mockResolvedValue({ id: 'proj-1', officialMountPointId: 'mp-proj' })
+    mockFindUnderFolder.mockResolvedValue([
+      { id: 'f-name', chatId: 'c1', scope: 'document_store', mountPoint: 'Project Files: P', filePath: 'Old/x.md' },
+      { id: 'f-deep', chatId: 'chat-in-project', scope: 'project', mountPoint: null, filePath: 'Old/Sub/y.md' },
+      { id: 'f-shelf', chatId: 'c1', scope: 'document_store', mountPoint: 'Shelf', filePath: 'Old/z.md' },
+    ])
+  })
+
+  it('rewrites the prefix on every row in the same store, whatever address it was recorded under', async () => {
+    await expect(sweepChatDocumentsAfterFolderMove({
+      scope: 'project', mountPoint: null, mountPointId: 'mp-proj', oldFolderPath: 'Old', newFolderPath: 'New/Place',
+    })).resolves.toBe(2)
+
+    expect(mockFindUnderFolder).toHaveBeenCalledWith('Old')
+    expect(mockUpdateChatDocument).toHaveBeenCalledWith('f-name', { filePath: 'New/Place/x.md', displayTitle: 'x.md' })
+    expect(mockUpdateChatDocument).toHaveBeenCalledWith('f-deep', { filePath: 'New/Place/Sub/y.md', displayTitle: 'y.md' })
+    expect(mockUpdateChatDocument).not.toHaveBeenCalledWith('f-shelf', expect.anything())
+  })
+
+  it('never throws', async () => {
+    mockFindUnderFolder.mockRejectedValue(new Error('locked'))
+    await expect(sweepChatDocumentsAfterFolderMove({
+      scope: 'general', mountPoint: null, oldFolderPath: 'a', newFolderPath: 'b',
     })).resolves.toBe(0)
   })
 })

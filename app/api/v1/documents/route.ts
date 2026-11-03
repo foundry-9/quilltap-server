@@ -280,6 +280,7 @@ async function handleRenameDocument(
     {
       scope: data.scope,
       mountPoint: data.mountPoint,
+      mountPointId: resolution.resolved.mountPointId,
       oldFilePath: data.filePath,
       newFilePath,
       newDisplayTitle,

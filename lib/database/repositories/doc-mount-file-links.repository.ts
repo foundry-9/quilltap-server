@@ -1290,11 +1290,18 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
         if (contentChanged) {
           dropChunksForLinks(db, [linkId]);
         }
+        // A document link carries no derived text (its content is the text),
+        // so the extraction fields are always cleared. Without this, a write
+        // over an uploaded text blob at the same path kept the blob's
+        // `extractedText` — read first by `docs grep` and the blob readers —
+        // describing the old revision.
         db.prepare(
           `UPDATE doc_mount_file_links SET
              fileId = ?, folderId = ?,
              plainTextLength = ?,
              conversionStatus = 'converted', conversionError = NULL,
+             extractedText = NULL, extractedTextSha256 = NULL,
+             extractionStatus = 'none', extractionError = NULL,
              allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              ${contentChanged ? 'chunkCount = 0,' : ''}
              lastModified = ?, updatedAt = ?

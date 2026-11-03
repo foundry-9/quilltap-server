@@ -45,6 +45,7 @@ import {
   renameDocument,
   deleteDocument,
   sweepChatDocumentsAfterMove,
+  sweepChatDocumentsAfterFolderMove,
 } from '@/lib/documents/core';
 import {
   logger,
@@ -59,44 +60,6 @@ import {
   assertFolderHasNoWriteProtectedDescendants,
   publishedMountPoint,
 } from './shared';
-
-/**
- * Folder-level counterpart to the core's `sweepChatDocumentsAfterMove`. Rewrites the
- * `oldFolderPath/` prefix on any chat_documents row in the same store so a
- * file open under that folder follows the rename instead of going stale.
- */
-async function syncChatDocumentsAfterFolderMove(
-  scope: DocEditScope,
-  mountPoint: string | undefined,
-  oldFolderPath: string,
-  newFolderPath: string,
-): Promise<void> {
-  try {
-    const updated = await getRepositories().chatDocuments.renameFolderPathInStore(
-      scope,
-      mountPoint ?? null,
-      oldFolderPath,
-      newFolderPath,
-    );
-    if (updated > 0) {
-      logger.info('Synced chat_documents after folder move', {
-        scope,
-        mountPoint,
-        from: oldFolderPath,
-        to: newFolderPath,
-        rowsUpdated: updated,
-      });
-    }
-  } catch (error) {
-    logger.warn('Failed to sync chat_documents after folder move', {
-      scope,
-      mountPoint,
-      from: oldFolderPath,
-      to: newFolderPath,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
 
 // --- doc_move_file ---
 
@@ -147,6 +110,7 @@ export async function handleMoveFile(
   await sweepChatDocumentsAfterMove({
     scope,
     mountPoint: publishedMountPoint(resolvedSource, input.mount_point),
+    mountPointId: resolvedSource.mountPointId,
     oldFilePath: input.path,
     newFilePath: input.new_path,
   }, { logFields: { chatId: context.chatId } });
@@ -625,7 +589,13 @@ export async function handleMoveFolder(
         resolvedSource.relativePath,
         resolvedDest.relativePath
       );
-      await syncChatDocumentsAfterFolderMove(scope, input.mount_point, input.path, input.new_path);
+      await sweepChatDocumentsAfterFolderMove({
+        scope,
+        mountPoint: publishedMountPoint(resolvedSource, input.mount_point),
+        mountPointId: resolvedSource.mountPointId,
+        oldFolderPath: input.path,
+        newFolderPath: input.new_path,
+      }, { logFields: { chatId: context.chatId } });
       logger.info('Moved database folder', {
         from: input.path,
         to: input.new_path,
@@ -690,7 +660,13 @@ export async function handleMoveFolder(
   // Perform the move
   await fs.rename(resolvedSource.absolutePath, resolvedDest.absolutePath);
 
-  await syncChatDocumentsAfterFolderMove(scope, input.mount_point, input.path, input.new_path);
+  await sweepChatDocumentsAfterFolderMove({
+    scope,
+    mountPoint: publishedMountPoint(resolvedSource, input.mount_point),
+    mountPointId: resolvedSource.mountPointId,
+    oldFolderPath: input.path,
+    newFolderPath: input.new_path,
+  }, { logFields: { chatId: context.chatId } });
 
   logger.info('Moved folder', {
     from: input.path,

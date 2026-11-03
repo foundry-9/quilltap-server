@@ -12,6 +12,7 @@ import { moveResolvedFile, type ResolvedPath } from '@/lib/doc-edit';
 import { moveDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory';
 import { getErrorMessage } from '@/lib/error-utils';
+import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import { statDocument } from './read';
 import { afterDocumentWrite } from './write';
 
@@ -104,20 +105,89 @@ export function computeRenameTarget(currentFilePath: string, newTitle: string): 
   return { ok: true, newFilePath, newDisplayTitle: path.basename(newFilePath) };
 }
 
+/** Where a move landed, as the sweep needs it. */
+interface SweepStore {
+  /** The scope and store name the caller addressed the file through. */
+  scope: string;
+  mountPoint: string | null | undefined;
+  /**
+   * The resolved store's id. When given, a row recorded under a different
+   * address for the same store — `project` for the project's official store,
+   * or that store by name — is swept too. Without it only rows under the
+   * caller's exact (scope, mountPoint) are.
+   */
+  mountPointId?: string | null;
+}
+
+/**
+ * Decide, row by row, whether a `chat_documents` row addresses the store a
+ * move happened in. With the store's id in hand, a row's own address is
+ * resolved to a store id and compared: a `document_store` row by its store
+ * name, a `project` row through its chat's project's official store — so a
+ * `project` row from another project's chat is not swept just because it too
+ * says `project`. `general` is a filesystem directory with no store id and
+ * matches literally, as does every row when the caller has no store id.
+ * Lookups are cached for one sweep.
+ */
+function sameStoreMatcher(store: SweepStore, repos: RepositoryContainer) {
+  const callerMount = store.mountPoint ?? null;
+  const byName = new Map<string, Promise<string | null>>();
+  const byChat = new Map<string, Promise<string | null>>();
+
+  const storeIdForName = (name: string) => {
+    const key = name.trim().toLowerCase();
+    let pending = byName.get(key);
+    if (!pending) {
+      pending = repos.docMountPoints.findByName(name)
+        .then(matches => (matches.length === 1 ? matches[0].id : null));
+      byName.set(key, pending);
+    }
+    return pending;
+  };
+
+  const storeIdForChatProject = (chatId: string) => {
+    let pending = byChat.get(chatId);
+    if (!pending) {
+      pending = (async () => {
+        const chat = await repos.chats.findById(chatId);
+        if (!chat?.projectId) return null;
+        const project = await repos.projects.findById(chat.projectId);
+        return project?.officialMountPointId ?? null;
+      })();
+      byChat.set(chatId, pending);
+    }
+    return pending;
+  };
+
+  return async (row: ChatDocument): Promise<boolean> => {
+    const literal = row.scope === store.scope && (row.mountPoint ?? null) === callerMount;
+    if (!store.mountPointId || row.scope === 'general') return literal;
+    if (row.scope === 'document_store' && row.mountPoint) {
+      if (literal || row.mountPoint === store.mountPointId) return true;
+      return (await storeIdForName(row.mountPoint)) === store.mountPointId;
+    }
+    if (row.scope === 'project') {
+      return (await storeIdForChatProject(row.chatId)) === store.mountPointId;
+    }
+    return false;
+  };
+}
+
 /**
  * Keep every `chat_documents` row still pointing at the old path (any chat's,
  * or the standalone sentinel's) in step with a move, so an open document and
  * the recent-documents list follow it instead of 404ing on the next read.
- * Best-effort: the move already landed, so a tracking failure is logged and
- * never thrown. Returns how many rows moved.
+ * Rows are matched by the store they reach, not the words they were recorded
+ * with, so a file opened as `project` in one chat and by store name in another
+ * follows a move made through either. Best-effort: the move already landed,
+ * so a tracking failure is logged and never thrown. Returns how many rows
+ * moved.
  *
- * `mountPoint` is the store name the rows were recorded under — the resolved
- * store's name, never a caller's `self` (bug 256).
+ * `mountPoint` is the store name the caller addressed — the resolved store's
+ * name, never a caller's `self` (bug 256).
  */
 export async function sweepChatDocumentsAfterMove(
-  params: {
-    scope: string;
-    mountPoint: string | null | undefined;
+  params: SweepStore & {
     oldFilePath: string;
     newFilePath: string;
     /** Defaults to the new path's basename. */
@@ -127,22 +197,33 @@ export async function sweepChatDocumentsAfterMove(
 ): Promise<number> {
   try {
     const repos = opts.repos ?? getRepositories();
-    const updated = await repos.chatDocuments.renameFilePathInStore(
-      params.scope,
-      params.mountPoint ?? null,
-      params.oldFilePath,
-      params.newFilePath,
-      params.newDisplayTitle ?? path.basename(params.newFilePath),
-    );
-    const rowsUpdated = typeof updated === 'number' ? updated : 0;
+    const sameStore = sameStoreMatcher(params, repos);
+    const newDisplayTitle = params.newDisplayTitle ?? path.basename(params.newFilePath);
+    let rowsUpdated = 0;
+    for (const row of await repos.chatDocuments.findByFilePath(params.oldFilePath)) {
+      if (!(await sameStore(row))) continue;
+      const updated = await repos.chatDocuments.update(row.id, {
+        filePath: params.newFilePath,
+        displayTitle: newDisplayTitle,
+      });
+      if (updated) rowsUpdated++;
+    }
     if (rowsUpdated > 0) {
       logger.info('Swept chat_documents after a document move', {
         ...opts.logFields,
         scope: params.scope,
         mountPoint: params.mountPoint,
+        mountPointId: params.mountPointId ?? null,
         from: params.oldFilePath,
         to: params.newFilePath,
         rowsUpdated,
+      });
+    } else {
+      logger.debug('No chat_documents rows to sweep after a document move', {
+        ...opts.logFields,
+        scope: params.scope,
+        mountPoint: params.mountPoint,
+        from: params.oldFilePath,
       });
     }
     return rowsUpdated;
@@ -153,6 +234,55 @@ export async function sweepChatDocumentsAfterMove(
       mountPoint: params.mountPoint,
       from: params.oldFilePath,
       to: params.newFilePath,
+      error: getErrorMessage(error),
+    });
+    return 0;
+  }
+}
+
+/**
+ * The folder counterpart of {@link sweepChatDocumentsAfterMove}: rewrites the
+ * `oldFolderPath/` prefix on every row under it that reaches the same store,
+ * titling each by its new basename. Best-effort; returns how many rows moved.
+ */
+export async function sweepChatDocumentsAfterFolderMove(
+  params: SweepStore & { oldFolderPath: string; newFolderPath: string },
+  opts: { repos?: RepositoryContainer; logFields?: Record<string, unknown> } = {},
+): Promise<number> {
+  try {
+    const repos = opts.repos ?? getRepositories();
+    const sameStore = sameStoreMatcher(params, repos);
+    const oldPrefix = params.oldFolderPath.endsWith('/') ? params.oldFolderPath : `${params.oldFolderPath}/`;
+    const newPrefix = params.newFolderPath.endsWith('/') ? params.newFolderPath : `${params.newFolderPath}/`;
+    let rowsUpdated = 0;
+    for (const row of await repos.chatDocuments.findUnderFolder(params.oldFolderPath)) {
+      if (!(await sameStore(row))) continue;
+      const newFilePath = newPrefix + row.filePath.slice(oldPrefix.length);
+      const updated = await repos.chatDocuments.update(row.id, {
+        filePath: newFilePath,
+        displayTitle: path.basename(newFilePath),
+      });
+      if (updated) rowsUpdated++;
+    }
+    if (rowsUpdated > 0) {
+      logger.info('Swept chat_documents after a folder move', {
+        ...opts.logFields,
+        scope: params.scope,
+        mountPoint: params.mountPoint,
+        mountPointId: params.mountPointId ?? null,
+        from: params.oldFolderPath,
+        to: params.newFolderPath,
+        rowsUpdated,
+      });
+    }
+    return rowsUpdated;
+  } catch (error) {
+    logger.warn('Failed to sweep chat_documents after a folder move', {
+      ...opts.logFields,
+      scope: params.scope,
+      mountPoint: params.mountPoint,
+      from: params.oldFolderPath,
+      to: params.newFolderPath,
       error: getErrorMessage(error),
     });
     return 0;

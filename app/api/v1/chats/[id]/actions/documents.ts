@@ -737,6 +737,7 @@ export async function handleRenameDocument(
     {
       scope: doc.scope,
       mountPoint: doc.mountPoint,
+      mountPointId: resolvedOld.mountPointId,
       oldFilePath: doc.filePath,
       newFilePath,
       newDisplayTitle,
