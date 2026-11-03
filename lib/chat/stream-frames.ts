@@ -32,7 +32,7 @@
  *
  * Client-safe: Zod and types only.
  *
- * Design of record: docs/developer/features/complete/refactor-4-12-salon-stream-frames.md
+ * Design of record: docs/developer/features/refactor-4-12-salon-stream-frames.md
  */
 
 import { z } from 'zod'
@@ -355,7 +355,7 @@ interface EncoderProfile {
 type WireDialect = 'frames' | 'legacy'
 
 /** What a plain `TextEncoder` renders. */
-const DEFAULT_DIALECT: WireDialect = 'legacy'
+const DEFAULT_DIALECT: WireDialect = 'frames'
 
 const ENCODER_PROFILES = new WeakMap<TextEncoder, EncoderProfile>()
 

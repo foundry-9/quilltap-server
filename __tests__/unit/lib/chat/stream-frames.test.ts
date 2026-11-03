@@ -54,7 +54,7 @@ describe('golden streams', () => {
 
 describe('schema round-trip', () => {
   it.each(allFrames.map((f, i) => [i, f.kind, f] as const))('#%i %s', (_i, _kind, frame) => {
-    expect(parseFrame(JSON.stringify(frame))).toEqual(frame)
+    expect(parseFrame(payloadOf(encodeFrame(new TextEncoder(), frame)))).toEqual(frame)
   })
 })
 
@@ -90,7 +90,8 @@ describe('encodeFrame', () => {
     const frame: StreamFrame = { kind: 'content', text: 'Rather' }
     const tagged = tagFrame(frame, 'p-bo')
     expect(tagged.seat).toEqual({ participantId: 'p-bo', concurrent: true })
-    expect(JSON.parse(payloadOf(encodeFrame(encoder, frame)))).toEqual(toLegacyBag(tagged))
+    expect(parseFrame(payloadOf(encodeFrame(encoder, frame)))).toEqual(tagged)
+    expect(JSON.parse(payloadOf(encodeFrame(legacyFrameEncoder(), tagged)))).toEqual(toLegacyBag(tagged))
   })
 
   it('the legacy shape keeps a frame’s own participantId over its seat', () => {

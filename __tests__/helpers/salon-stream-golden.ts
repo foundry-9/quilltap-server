@@ -10,7 +10,7 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import { StreamFrameSchema, type DoneOutcome, type StreamFrame } from '@/lib/chat/stream-frames'
+import { StreamFrameSchema, type DoneFrame, type DoneOutcome, type StreamFrame } from '@/lib/chat/stream-frames'
 
 const FIXTURE_DIR = path.join(__dirname, '..', 'fixtures', 'salon-stream')
 
@@ -99,4 +99,18 @@ function translate(bag: Record<string, unknown>): StreamFrame {
   if (bag.turnComplete) return { kind: 'turnComplete', ...strip(bag, 'turnComplete') } as StreamFrame
   if (bag.chainComplete) return { kind: 'chainComplete', ...strip(bag, 'chainComplete') } as StreamFrame
   throw new Error(`Untranslatable legacy bag: ${JSON.stringify(bag)}`)
+}
+
+/** A complete `done` frame: an ordinary finish unless `fields` says otherwise. */
+export function doneFrame(fields: Partial<Omit<DoneFrame, 'kind'>> = {}): DoneFrame {
+  return {
+    kind: 'done',
+    outcome: 'finished',
+    messageId: null,
+    usage: null,
+    cacheUsage: null,
+    attachmentResults: null,
+    toolsExecuted: false,
+    ...fields,
+  }
 }

@@ -23,6 +23,8 @@ jest.mock('@/components/layout/queue-status-badges', () => ({
 import { useSSEStreaming } from '@/app/salon/[id]/hooks/useSSEStreaming'
 import type { Message } from '@/app/salon/[id]/types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
+import type { StreamFrame } from '@/lib/chat/stream-frames'
+import { doneFrame } from '../../helpers/salon-stream-golden'
 
 const TRAIL: RouteAttempt[] = [
   {
@@ -46,7 +48,7 @@ const TRAIL: RouteAttempt[] = [
 ]
 
 /** A response body that plays the given SSE frames and closes. */
-function sseBody(frames: Array<Record<string, unknown>>) {
+function sseBody(frames: StreamFrame[]) {
   const encoder = new TextEncoder()
   return {
     getReader() {
@@ -64,7 +66,7 @@ function sseBody(frames: Array<Record<string, unknown>>) {
   }
 }
 
-function setup(frames: Array<Record<string, unknown>>) {
+function setup(frames: StreamFrame[]) {
   let messages: Message[] = []
   const setMessages = jest.fn((next: Message[] | ((prev: Message[]) => Message[])) => {
     messages = typeof next === 'function' ? next(messages) : next
@@ -124,15 +126,14 @@ describe('useSSEStreaming — the route trail on the done event', () => {
 
   it('lands the call sheet on the optimistic assistant message', async () => {
     const { send, assistant } = setup([
-      { content: 'A reply, at length.' },
-      {
-        done: true,
+      { kind: 'content', text: 'A reply, at length.' },
+      doneFrame({
         messageId: 'assistant-1',
         participantId: 'participant-1',
         provider: 'anthropic',
         modelName: 'claude-sonnet-5',
         routeTrail: TRAIL,
-      },
+      }),
     ])
 
     await send()
@@ -144,14 +145,13 @@ describe('useSSEStreaming — the route trail on the done event', () => {
 
   it('leaves it null when the turn had no trouble', async () => {
     const { send, assistant } = setup([
-      { content: 'All is well.' },
-      {
-        done: true,
+      { kind: 'content', text: 'All is well.' },
+      doneFrame({
         messageId: 'assistant-2',
         participantId: 'participant-1',
         provider: 'openai',
         modelName: 'gpt-5',
-      },
+      }),
     ])
 
     await send()

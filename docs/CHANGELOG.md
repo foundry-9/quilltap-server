@@ -4,6 +4,16 @@
 
 ### 4.12-dev
 
+#### Refactor: Salon stream frames, phase 2 (Refactor 4.12, spec 5)
+
+The Salon's SSE stream now sends frames tagged with `kind` (`lib/chat/stream-frames.ts`) instead of the untagged flag bag. Client and server change together; no behavior change intended.
+
+- `useSSEStreaming` reads frames with `parseFrame` and dispatches with an exhaustive `switch (frame.kind)`; seat-tagged (concurrent Storyteller) frames go to their own switch. The hand-ordered `if` chain, the `SSEEvent` type and `parseSSEData` are deleted. The optimistic assistant message is built in one place, `assistantMessageFromDone`.
+- `useRegeneration` switches on frames; a swipe stream ends with `swipeDone` (was `{ done: true, message }`).
+- The raise-hand POST reply no longer lowers the hand on `raised: false`; it lowers a still-raised hand only when the reply says no stream is open.
+- Help chat, the Brahma console, the Scenario Builder and the one-shot tool loop keep the old bag shape via `legacyFrameEncoder()`; their clients are unchanged.
+- Hook tests feed frames. New: `useSSEStreaming-golden.test.tsx` replays the recorded golden streams through the hook. API.md documents the frame kinds; CLAUDE.md gains the chokepoint.
+
 #### Refactor: Salon stream frames, phase 1 (Refactor 4.12, spec 5)
 
 The Salon's SSE frames now have one definition, `lib/chat/stream-frames.ts`: a Zod discriminated union on `kind`, `encodeFrame` (the only producer of `data:` bytes on the turn path), `parseFrame`, and `tagFrame`. The wire shape is unchanged in this phase.
