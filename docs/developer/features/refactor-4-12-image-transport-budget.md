@@ -1,6 +1,6 @@
 # Refactor 4.12 — One image transport budget on the way to a provider
 
-**Status:** Proposed (2026-11-02). Part of the [4.12 refactor set](refactor-4-12.md). Extends the CLAUDE.md rule "What an image costs a model is not what it costs the gallery" from *per image* to *per request*.
+**Status:** Done (2026-11-03), Phases 0–2 landed together; see §9 for what was decided and where the build departs from this text. Proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). Extends the CLAUDE.md rule "What an image costs a model is not what it costs the gallery" from *per image* to *per request*.
 
 ## 1. The problem
 
@@ -90,3 +90,14 @@ Ranking, highest kept first: this turn's uploads newest first; then rehydrated u
 
 1. **The per-request total.** 4 MB base64 (about 3 MB of image) is proposed, as the budget bug 151 implied. The Lantern-only 2 MB constant is retired into it.
 2. **Drop-with-note wording** reaches the model. Plain and short; proposed above. Confirm it may say "image omitted".
+
+## 9. As built (2026-11-03)
+
+- **Decisions taken (§8):** the per-request total is **4 MB of base64** (`LLM_TRANSPORT_TOTAL_BASE64`, `lib/files/llm-image-budget.ts`), and `LANTERN_IMAGE_BASE64_BUDGET` is gone. The note is `[image omitted: over the request budget]` (`IMAGE_OMITTED_NOTE`). Both were the proposals here; either is a one-line change.
+- **Phase 0, by reading rather than on V4test:** `loadMountFileAsAttachment` (`lib/chat-files-v2.ts`) returns `id: mountLink.id`, and `runGenerateImageDescription` looks the id up in `repos.files` only, so a vault-stored image never finds a persisted prompt and describing it is a real vision call. The LLM-log check on a live instance was not run from this session.
+- **`describable`** is the switch for that cost: overflow is described when `describable`, otherwise omitted with the note (as is a describe that fails). Uploads (this turn's and re-hydrated) are always describable — the operator's own picture is worth a describer call, as it was under the old cap. A Lantern image is describable when its `files` row carries `generationRevisedPrompt` / `generationPrompt` / `description` (`hasPersistedImageDescription` in the context builder); a mount-link id never is. So the "or when a describer profile is configured" clause of §5.2 applies to uploads only: spending a vision call on every old vault portrait on every turn was the cost Phase 0 was asked to rule out.
+- **Capability is moved for images only.** Sites 2 and 3 still run `processFileAttachmentFallback` for non-image files (a text file is inlined into the message that carried it, which bug 121 depends on); images are tagged and passed whole. The pass still runs the capability fallback for *any* attachment a profile cannot receive, as `adaptMessagesForProfile` did, so a substitute that cannot read a PDF still gets it handled. A consequence: for a non-vision primary, a re-hydrated image's description now sits on the anchor message instead of the message that carried it.
+- **The tag lives on the Quilltap side.** `FileAttachment` is in `@quilltap/plugin-types`; rather than bump and publish it, the tag is an extra field on the loaded attachment (`tagForTransport`) and `streamMessage` strips it (`stripTransportTags`) before a plugin or the LLM log sees the message.
+- **Rename, no alias.** `lib/chat/message-attachment-adapter.ts` is deleted; `collectAttachmentMimeTypes` moved into the new module with its callers.
+- **Not done:** the report is logged (info when anything overflowed, debug always) but not attached to the route trail, which is a persisted column; that would be a schema change for telemetry alone. Phase 1's "kept set identical on recorded fixtures" snapshot was skipped because Phases 1 and 2 landed together; the unit suite pins the new ranking instead.
+- **Tests:** `__tests__/unit/lib/chat/image-transport-budget.test.ts` (replaces the adapter suite, keeps its assertions; ranking, count then bytes, describe vs omit, tag stripping, the bug-151 regression), a lower-cap substitute in `provider-failover.service.test.ts`, and the re-hydration hand-back in `context-builder.service.test.ts`.

@@ -1,0 +1,25 @@
+[
+  {
+    "status": {
+      "stage": "regenerating",
+      "message": "Regenerating..."
+    }
+  },
+  {
+    "content": "Ano"
+  },
+  {
+    "reasoning": "thinking"
+  },
+  {
+    "done": true,
+    "message": {
+      "type": "message",
+      "id": "m-swipe",
+      "role": "ASSISTANT",
+      "content": "x",
+      "createdAt": "2026-11-02T00:00:00.000Z",
+      "attachments": []
+    }
+  }
+]

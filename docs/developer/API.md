@@ -2725,7 +2725,7 @@ The chat's open or running round, else its latest closed one (the board's summar
 
 ##### `POST /api/v1/chats/[id]?action=storyteller-run`
 
-Run the operator's selection. **Request Body**: `{ "roundId": "...", "participantIds": ["..."], "order": "sequential" | "simultaneous", "keepOrder": boolean }` (`order` defaults to `sequential`). The chosen seats run in the turn manager's rotation order unless `keepOrder` is `true`, in which case they run in `participantIds` order (the operator dragged the board's cards into place); this also orders an all-at-once round's Act / Destroy tail. Only seats whose bid status is `bid` may be chosen, and a `destroy`-tier bid only on its own (`400`); a round that is no longer open answers `409`. The response is an SSE stream in the chain dialect: `turnStart` (chainDepth ≥ 1) before each sequential speaker, the turn's own events, `turnComplete`, and one `chainComplete` (`user_turn`, `yielded`, or `stopped` with `paused: true`). With `simultaneous`, Simple and Lookup turns run concurrently (at most 4 per connection profile) and every frame they write carries `participantId` and `concurrent: true`; Act and Destroy turns follow one at a time. Each turn runs under its bid's effect ceiling and stores the bid on its reply (`chat_messages.storytellerBid`).
+Run the operator's selection. **Request Body**: `{ "roundId": "...", "participantIds": ["..."], "order": "sequential" | "simultaneous", "keepOrder": boolean }` (`order` defaults to `sequential`). The chosen seats run in the turn manager's rotation order unless `keepOrder` is `true`, in which case they run in `participantIds` order (the operator dragged the board's cards into place); this also orders an all-at-once round's Act / Destroy tail. Only seats whose bid status is `bid` may be chosen, and a `destroy`-tier bid only on its own (`400`); a round that is no longer open answers `409`. The response is an SSE stream in the chain dialect: `turnStart` (chainDepth ≥ 1) before each sequential speaker, the turn's own events, `turnComplete`, and one `chainComplete` (`user_turn`, `yielded`, or `stopped` with `paused: true`). With `simultaneous`, Simple and Lookup turns run concurrently (at most 4 per connection profile) and every frame they write carries `seat: { participantId, concurrent: true }`; Act and Destroy turns follow one at a time. Each turn runs under its bid's effect ceiling and stores the bid on its reply (`chat_messages.storytellerBid`).
 
 ##### `POST /api/v1/chats/[id]?action=storyteller-ask`
 
@@ -3899,7 +3899,7 @@ The chat-scoped Document Mode actions. All are `POST /api/v1/chats/[id]?action=<
 | `rename-document` | `{ newTitle, chatDocumentId? }` | `{ document, librarianMessage }` — `newTitle` is the new basename in the same directory (old extension inherited when omitted, separators rejected); other chats' recent-document rows follow the rename |
 | `delete-document` | `{ chatDocumentId? }` | `{ success, librarianMessage }` — deletes the underlying file, closes the document and recomputes `documentMode` |
 
-**Read-only files.** Document Mode edits text files only. For any other file in a document store, `open-document` and `read-document` return `viewer: { mountPointId, relativePath, fileName, fileType, fileSizeBytes, originalMimeType, updatedAt }` (`DocumentViewTarget`, `lib/folder-browser/document-actions.ts`) and never read the bytes as text; the client shows them through `GET /api/v1/mount-points/[id]/files/<path>?raw=1` (and `?action=render-html` for `.docx`). The decision is `documentViewTargetFor` (`lib/documents/operator-doc-actions.ts`). A file outside a store (the legacy project and general areas) has no viewer and is read as before. The standalone `/api/v1/documents` actions behave the same way.
+**Read-only files.** Document Mode edits text files only. For any other file in a document store, `open-document` and `read-document` return `viewer: { mountPointId, relativePath, fileName, fileType, fileSizeBytes, originalMimeType, updatedAt }` (`DocumentViewTarget`, `lib/folder-browser/document-actions.ts`) and never read the bytes as text; the client shows them through `GET /api/v1/mount-points/[id]/files/<path>?raw=1` (and `?action=render-html` for `.docx`). The decision is `viewTargetFor` (`lib/documents/core/view-target.ts`). A file outside a store (the legacy project and general areas) has no viewer and is read as before. The standalone `/api/v1/documents` actions behave the same way.
 
 ### Chat Photo Albums
 
@@ -4261,7 +4261,7 @@ not block it.
 
 - Without `stream=1`: `201 Created` with `{ "message": <swipe> }`.
 - With `&stream=1`: `text/event-stream`, the same narration as the swipe stream (`status`,
-  `content` deltas, cumulative `reasoning`, then `{ done: true, message }`, or an `error` event).
+  `content` deltas, cumulative `reasoning`, then `swipeDone` with the persisted swipe, or an `error` frame).
 
 **Errors**: `404` chat or message; `400` for a non-assistant or Staff message;
 `409 { "error": "locked" }` on a Locked chat; `409 { "error": "no-understudy" }` when no uncensored
@@ -4373,27 +4373,41 @@ Send a message and get streaming response.
 
 `isEstablishedFact` (optional boolean) posts the operator's line as an **established fact** (the Salon's "Deus Ex Machina"): persisted on the USER row as `chat_messages.isEstablishedFact`, framed for every model at read time by `lib/chat/established-fact.ts`. It is refused (`400`) with a non-empty `targetParticipantIds` (a fact is public) and with empty `content` (a fact needs words).
 
-**Response**: Server-Sent Events (text/event-stream)
+**Response**: Server-Sent Events (`text/event-stream`). Every `data:` line is one **Salon stream frame**, a tagged union on `kind` defined (and validated) in `lib/chat/stream-frames.ts`; that schema is the reference, and the client reads it only through `parseFrame`. Keep-alives are SSE comment lines (`: keep-alive`).
 
 ```
-data: {"type":"start"}
+data: {"kind":"turnStart","participantId":"…","characterName":"Ada","chainDepth":0}
 
-data: {"type":"token","content":"I"}
+data: {"kind":"content","text":"I"}
 
-data: {"type":"token","content":"'m doing well"}
+data: {"kind":"content","text":"'m doing well"}
 
-data: {"type":"done","messageId":"msg-uuid"}
+data: {"kind":"done","outcome":"finished","messageId":"msg-uuid","participantId":"…","usage":{…},"cacheUsage":null,"attachmentResults":null,"toolsExecuted":false}
+
+data: {"kind":"chainComplete","reason":"user_turn","nextSpeakerId":null,"chainDepth":0}
 ```
 
-**Tool Calls**:
+| `kind` | Meaning |
+|---|---|
+| `content` | A delta of the reply (`text`) — append it. |
+| `reasoning` | Cumulative thinking (`text`) — replace it. Display only. |
+| `status` | A status line (`status: { stage, message, toolName?, characterName?, characterId? }`). |
+| `fileProcessing` | Attachments the fallback pipeline described or converted (`info`). |
+| `toolsDetected` | A batch of tool calls (`names`, `arguments`). |
+| `toolResult` | One call's result (`index`, `name`, `success`, `result`, `error` on failure). |
+| `turnStart` | A character is about to respond (`chainDepth` 0 before the first turn, ≥ 1 for a chained one). |
+| `done` | A turn closed. `outcome` is `finished`, `skipped` (a pass), `yielded` (a bare yield to the raised hand), `stopped` (hard stop before any prose) or `empty` (with `emptyResponseReason`). Carries `messageId`, usage, `attachmentResults`, `provider` / `modelName`, `routeTrail`, reasoning, and `pendingExternalTurn` for a Courier placeholder. |
+| `turnComplete` | A chained turn finished. |
+| `chainComplete` | The chain stopped (`reason`, `paused`, `heldUserTurn`); the stream ends. |
+| `error` | The turn failed after the stream opened (`message`, `errorType`, `details`, `userMessagePersisted`, `pendingToolResultsPersisted`). |
+| `pendingExternalTurn` | The Courier parked a placeholder for a manual turn. |
+| `posted` | A message the server already saved mid-turn (`what`: `carinaAnswer`, `hostAnnouncement` or `pascalResult`; `message`). |
+| `storytellerRound` / `storytellerBid` / `roundOpen` | The Storyteller board. |
+| `handAsked` / `handAnswered` | The operator's raised hand was taken / answered (`yielded`). |
+| `confirmationResult` | The answer-confirmation check resolved (`content` only on a rewrite). |
+| `swipeDone` | A swipe regeneration finished (swipe streams only). |
 
-When tools are called (image generation, memory search, web search):
-
-```
-data: {"type":"tool_call","name":"generate_image","arguments":{...}}
-
-data: {"type":"tool_result","name":"generate_image","result":{...}}
-```
+Any frame may carry `seat: { participantId, concurrent: true }` — a Storyteller "all at once" turn sharing the stream.
 
 #### `GET /api/v1/messages/[id]`
 
@@ -4441,11 +4455,13 @@ generating. Without it, generates a new one.
 
 | Frame | Meaning |
 |---|---|
-| `{"status":{"stage","message",…}}` | A step of the regeneration. Stages: `gathering`, `sending`, `regenerating`, `saving`. |
-| `{"content":"…"}` | A **delta** of the new line — append it. |
-| `{"reasoning":"…"}` | **Cumulative** reasoning so far — replace it. DISPLAY ONLY. |
-| `{"done":true,"message":{…}}` | The persisted swipe. Always last on success. |
-| `{"error","errorType","details"}` | The generation failed *after* the stream opened. |
+| `{"kind":"status","status":{"stage","message",…}}` | A step of the regeneration. Stages: `gathering`, `sending`, `regenerating`, `saving`. |
+| `{"kind":"content","text":"…"}` | A **delta** of the new line — append it. |
+| `{"kind":"reasoning","text":"…"}` | **Cumulative** reasoning so far — replace it. DISPLAY ONLY. |
+| `{"kind":"swipeDone","message":{…}}` | The persisted swipe. Always last on success. |
+| `{"kind":"error","message","errorType","details"}` | The generation failed *after* the stream opened. |
+
+These are Salon stream frames (`lib/chat/stream-frames.ts`).
 
 A failure *before* the stream opens (unknown message, non-assistant message,
 staff message) is an ordinary JSON error response, so callers should check
@@ -5777,7 +5793,7 @@ Every file and folder operation publishes the `mountPoints` realtime topic scope
 
 ### Documents (Standalone Document Mode)
 
-Chat-less Document Mode operations for the left rail's standalone document tabs. These reuse the same shared core as the chat-scoped document actions (`lib/documents/operator-doc-actions.ts`) but create **no `chat_documents` rows and post no Librarian announcements** — no conversation is attached, so nothing is notified of edits. All actions resolve paths with the operator override (any enabled store is reachable). The `project` scope is not accepted here (no chat means no project context); project files are reachable through their project's official document store by mount name.
+Chat-less Document Mode operations for the left rail's standalone document tabs. These reuse the same document core (`lib/documents/core/`, through `lib/documents/operator-doc-actions.ts`) as the chat-scoped document actions but create **no `chat_documents` rows and post no Librarian announcements** — no conversation is attached, so nothing is notified of edits. All actions resolve paths with the operator override (any enabled store is reachable). The `project` scope is not accepted here (no chat means no project context); project files are reachable through their project's official document store by mount name.
 
 - `GET /api/v1/documents?action=accessible-stores` — every enabled store (the picker's chat-less "look everywhere"). Returns `{ stores, projectLibrary: null, generalLibrary }`; Quilltap General is held back from `stores` as `generalLibrary`, and character vaults are labelled by their owning character.
 - `POST /api/v1/documents?action=recent-documents` — recently-opened documents across all chats (sourced from `chat_documents` history), deduped by file identity, `project`-scoped rows filtered out. Returns `{ documents }`.

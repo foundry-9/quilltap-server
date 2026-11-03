@@ -18,6 +18,8 @@ import {
 } from '@/app/salon/[id]/hooks/useSSEStreaming'
 import type { Message, PendingToolResult } from '@/app/salon/[id]/types'
 import { showErrorToast } from '@/lib/toast'
+import type { StreamFrame } from '@/lib/chat/stream-frames'
+import { doneFrame } from '../../helpers/salon-stream-golden'
 
 jest.mock('@/lib/toast', () => ({
   showSuccessToast: jest.fn(),
@@ -49,7 +51,7 @@ const TOOL_RESULTS: PendingToolResult[] = [
   } as PendingToolResult,
 ]
 
-function frame(event: Record<string, unknown>): string {
+function frame(event: StreamFrame): string {
   return `data: ${JSON.stringify(event)}\n\n`
 }
 
@@ -182,7 +184,8 @@ function expectNotRestored(h: ReturnType<typeof setup>) {
 }
 
 const PRE_PERSIST_ERROR = frame({
-  error: 'Failed to generate response',
+  kind: 'error',
+  message: 'Failed to generate response',
   errorType: 'Error',
   details: 'No API key configured for this connection profile',
   userMessagePersisted: false,
@@ -195,7 +198,7 @@ describe('useSSEStreaming — a send that fails before the server saves it', () 
   })
 
   it('toasts the error and hands the submission back to the composer', async () => {
-    const h = setup({ chunks: [frame({ status: { stage: 'initializing', message: 'Loading chat...' } }), PRE_PERSIST_ERROR] })
+    const h = setup({ chunks: [frame({ kind: 'status', status: { stage: 'initializing', message: 'Loading chat...' } }), PRE_PERSIST_ERROR] })
 
     await h.send()
 
@@ -221,7 +224,8 @@ describe('useSSEStreaming — a send that fails before the server saves it', () 
   it('leaves the composer empty when the server says the message was saved', async () => {
     const h = setup({
       chunks: [frame({
-        error: 'Failed to generate response',
+        kind: 'error',
+        message: 'Failed to generate response',
         errorType: 'Error',
         details: 'Provider exploded',
         userMessagePersisted: true,
@@ -267,7 +271,7 @@ describe('useSSEStreaming — a stream that ends without a terminal event', () =
   })
 
   it('raises an error instead of reading the silence as success', async () => {
-    const h = setup({ chunks: [frame({ content: 'Half a reply' })] })
+    const h = setup({ chunks: [frame({ kind: 'content', text: 'Half a reply' })] })
 
     await h.send()
 
@@ -277,7 +281,7 @@ describe('useSSEStreaming — a stream that ends without a terminal event', () =
   })
 
   it('restores the submission when the read shows no row for it', async () => {
-    const h = setup({ chunks: [frame({ status: { stage: 'initializing', message: 'Loading chat...' } })] })
+    const h = setup({ chunks: [frame({ kind: 'status', status: { stage: 'initializing', message: 'Loading chat...' } })] })
 
     await h.send()
 
@@ -285,7 +289,7 @@ describe('useSSEStreaming — a stream that ends without a terminal event', () =
   })
 
   it('leaves it alone when the read reconciled the bubble to a saved row', async () => {
-    const h = setup({ chunks: [frame({ content: 'Half a reply' })], readReconcilesBubble: true })
+    const h = setup({ chunks: [frame({ kind: 'content', text: 'Half a reply' })], readReconcilesBubble: true })
 
     await h.send()
 
@@ -301,9 +305,9 @@ describe('useSSEStreaming — frames split across reads', () => {
 
   it('parses a normal stream cut mid-line', async () => {
     const body =
-      frame({ content: 'Good evening, ' }) +
-      frame({ content: 'one and all.' }) +
-      frame({ done: true, messageId: 'assistant-1', participantId: 'participant-1' })
+      frame({ kind: 'content', text: 'Good evening, ' }) +
+      frame({ kind: 'content', text: 'one and all.' }) +
+      frame(doneFrame({ messageId: 'assistant-1', participantId: 'participant-1' }))
     const h = setup({ chunks: [body.slice(0, 7), body.slice(7, 40), body.slice(40, 95), body.slice(95)] })
 
     await h.send()
@@ -315,8 +319,8 @@ describe('useSSEStreaming — frames split across reads', () => {
 
   it('reads a final frame that arrives without its trailing newline', async () => {
     const body =
-      frame({ content: 'Brief.' }) +
-      `data: ${JSON.stringify({ done: true, messageId: 'assistant-2', participantId: 'participant-1' })}`
+      frame({ kind: 'content', text: 'Brief.' }) +
+      `data: ${JSON.stringify(doneFrame({ messageId: 'assistant-2', participantId: 'participant-1' }))}`
     const h = setup({ chunks: [body] })
 
     await h.send()

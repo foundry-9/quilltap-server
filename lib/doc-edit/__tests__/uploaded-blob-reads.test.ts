@@ -18,7 +18,13 @@
  */
 
 // ── Subject ─────────────────────────────────────────────────────────────────
-import { handleGrep, handleListFiles, handleReadFile } from '@/lib/tools/handlers/doc-edit/text-handlers';
+import { handleGrep, handleListFiles, handleReadFile, handleStrReplace } from '@/lib/tools/handlers/doc-edit/text-handlers';
+import { handleReadHeading } from '@/lib/tools/handlers/doc-edit/markdown-handlers';
+import { handleOpenDocument } from '@/lib/tools/handlers/doc-edit/document-ui-handlers';
+
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
@@ -26,13 +32,22 @@ import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
   listDatabaseFiles,
   listDatabaseBlobTexts,
-  readDatabaseBlobText,
+  readDatabaseBlobForDocument,
   readDatabaseDocument,
+  writeDatabaseDocument,
+  databaseDocumentExists,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+}));
+
+// The general scope is the on-disk `_general` area; point it at a scratch dir.
+const mockFilesDir = { path: '' };
+jest.mock('@/lib/paths', () => ({
+  ...jest.requireActual('@/lib/paths'),
+  getFilesDir: () => mockFilesDir.path,
 }));
 
 jest.mock('@/lib/instance-settings', () => ({
@@ -50,9 +65,30 @@ jest.mock('@/lib/mount-index/database-store', () => {
     listDatabaseFiles: jest.fn(),
     listDatabaseBlobTexts: jest.fn(),
     readDatabaseBlobText: jest.fn(),
+    readDatabaseBlobForDocument: jest.fn(),
     readDatabaseDocument: jest.fn(),
+    writeDatabaseDocument: jest.fn(),
+    databaseDocumentExists: jest.fn(),
+    databaseFolderExists: jest.fn(),
   };
 });
+
+// Writes are what is under test, not their background refresh or announcement.
+jest.mock('@/lib/doc-edit/reindex-file', () => ({
+  reindexSingleFile: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
+  enqueueEmbeddingJobsForMountPoint: jest.fn(),
+}));
+jest.mock('@/lib/services/librarian-notifications/writer', () => ({
+  postLibrarianWriteAnnouncement: jest.fn(),
+  postLibrarianOpenAnnouncement: jest.fn(),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
+  toLibrarianOpenKind: jest.fn((origin: unknown) => origin),
+}));
+
+const mockOpenChatDocument = jest.fn();
 
 const ACTING = 'char-friday';
 
@@ -77,9 +113,10 @@ function mockWorld() {
   ] as never);
   // The upload is a blob: no document at its path, but converted text.
   jest.mocked(readDatabaseDocument).mockRejectedValue(new DatabaseStoreError('Document not found', 'NOT_FOUND'));
-  jest.mocked(readDatabaseBlobText).mockImplementation(async (_mp: string, rel: string) =>
+  // An uploaded .md reads as its own bytes, the same reader the editor uses (#134).
+  jest.mocked(readDatabaseBlobForDocument).mockImplementation(async (_mp: string, rel: string) =>
     rel.toLowerCase() === 'changelog.md'
-      ? { content: CHANGELOG, mtime: 1792771329442, size: CHANGELOG.length, storedMimeType: 'text/markdown' }
+      ? { content: CHANGELOG, mtime: 1792771329442, size: CHANGELOG.length, source: 'blob-bytes' as const }
       : null,
   );
   jest.mocked(listDatabaseBlobTexts).mockResolvedValue([{ relativePath: 'CHANGELOG.md', content: CHANGELOG }]);
@@ -110,7 +147,9 @@ function mockWorld() {
       findByMountPointAndPath: jest.fn().mockResolvedValue(null),
       listByMountPoint: jest.fn().mockResolvedValue([]),
     },
+    chatDocuments: { openDocument: mockOpenChatDocument },
     chats: {
+      update: jest.fn(),
       findById: jest.fn().mockResolvedValue({
         id: 'chat-1',
         allowCrossCharacterVaultReads: false,
@@ -134,13 +173,105 @@ describe('doc_read_file reads an uploaded text blob (bug 260)', () => {
 
     expect(res.success).toBe(true);
     expect(res.result?.content).toBe(CHANGELOG);
-    expect(readDatabaseBlobText).toHaveBeenCalledWith(PROJECT_STORE.id, 'CHANGELOG.md');
+    expect(readDatabaseBlobForDocument).toHaveBeenCalledWith(PROJECT_STORE.id, 'CHANGELOG.md');
   });
 
   it('still reports a missing file when there is no blob either', async () => {
     await expect(
       handleReadFile({ uri: 'qtap://project/MISSING.md' } as never, toolContext),
     ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('doc_str_replace edits an uploaded text blob (#134)', () => {
+  it('reads the upload through the same reader and writes a document over it', async () => {
+    jest.mocked(writeDatabaseDocument).mockResolvedValue({ mtime: 1792771329999 } as never);
+
+    const res = await handleStrReplace(
+      { uri: 'qtap://project/CHANGELOG.md', find: 'drag ordering', replace: 'keyboard ordering' } as never,
+      toolContext,
+    );
+
+    expect(res.success).toBe(true);
+    expect(readDatabaseBlobForDocument).toHaveBeenCalledWith(PROJECT_STORE.id, 'CHANGELOG.md');
+    expect(writeDatabaseDocument).toHaveBeenCalledWith(
+      PROJECT_STORE.id,
+      'CHANGELOG.md',
+      CHANGELOG.replace('drag ordering', 'keyboard ordering'),
+      undefined,
+    );
+  });
+});
+
+describe('the markdown tools read an uploaded text blob (#134)', () => {
+  it('doc_read_heading finds a heading in an upload', async () => {
+    const res = await handleReadHeading(
+      { uri: 'qtap://project/CHANGELOG.md', heading: '4.11-dev' } as never,
+      toolContext,
+    );
+
+    expect(res.success).toBe(true);
+    expect(JSON.stringify(res.result)).toContain('drag ordering');
+  });
+});
+
+describe('doc_open_document (#134)', () => {
+  it('opens an uploaded text file, as Document Mode does', async () => {
+    const res = await handleOpenDocument({ uri: 'qtap://project/CHANGELOG.md' } as never, toolContext);
+
+    expect(res.success).toBe(true);
+    expect(res.result).toMatchObject({ filePath: 'CHANGELOG.md', isNew: false, mtime: 1792771329442 });
+    expect(mockOpenChatDocument).toHaveBeenCalled();
+  });
+
+  it('still refuses a file that is not there', async () => {
+    const res = await handleOpenDocument({ uri: 'qtap://project/MISSING.md' } as never, toolContext);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('File not found: MISSING.md');
+  });
+
+  it('creates a blank document through the store writer, never raw fs', async () => {
+    jest.mocked(databaseDocumentExists).mockResolvedValue(false);
+    jest.mocked(writeDatabaseDocument).mockResolvedValue({ mtime: 1792771330000 } as never);
+
+    const res = await handleOpenDocument({} as never, toolContext);
+
+    expect(res.success).toBe(true);
+    expect(res.result).toMatchObject({ isNew: true, mtime: 1792771330000, scope: 'project' });
+    expect(writeDatabaseDocument).toHaveBeenCalledWith(
+      PROJECT_STORE.id,
+      expect.stringMatching(/^[0-9a-f-]+\.md$/),
+      '',
+      undefined,
+    );
+    expect(mockOpenChatDocument).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      scope: 'project',
+      mountPoint: undefined,
+    }));
+  });
+
+  it('records a blank document made in Quilltap General under general, whatever was asked (#137)', async () => {
+    mockFilesDir.path = fs.mkdtempSync(path.join(os.tmpdir(), 'qt-open-doc-'));
+    fs.mkdirSync(path.join(mockFilesDir.path, '_general'));
+
+    // No project in this chat: the document can only land in Quilltap General.
+    const res = await handleOpenDocument(
+      { scope: 'project' } as never,
+      { ...toolContext, projectId: undefined },
+    );
+
+    expect(res.success).toBe(true);
+    // Created on disk in the general area, through the store writer.
+    const created = fs.readdirSync(path.join(mockFilesDir.path, '_general'));
+    expect(created).toEqual([expect.stringMatching(/^[0-9a-f-]+\.md$/)]);
+    expect(writeDatabaseDocument).not.toHaveBeenCalled();
+    fs.rmSync(mockFilesDir.path, { recursive: true, force: true });
+    expect(res.result).toMatchObject({ isNew: true, scope: 'general', mountPoint: undefined });
+    expect(mockOpenChatDocument).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      scope: 'general',
+      mountPoint: undefined,
+    }));
   });
 });
 

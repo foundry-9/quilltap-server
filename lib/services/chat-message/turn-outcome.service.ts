@@ -292,7 +292,7 @@ async function announceTurnYield(params: SettleTurnParams): Promise<void> {
 /**
  * Raised hand: the asked character yielded and said nothing else.
  *
- * Like a pass, no reply is persisted and the done event is flagged `skipped`
+ * Like a pass, no reply is persisted and the done event's outcome is `yielded`
  * so the client drops its streaming buffer without a phantom bubble (the Host's
  * yield note is the visible record). Unlike a pass, the rotation is not
  * advanced — the character gave the floor away rather than spending its turn —
@@ -307,9 +307,8 @@ async function closeBareYield(params: SettleTurnParams): Promise<ProcessMessageR
     messageId: null,
     participantId: characterParticipant.id,
     toolsExecuted: false,
-    skipped: true,
+    outcome: 'yielded',
     skippedParticipantId: characterParticipant.id,
-    yielded: true,
   }))
   logger.debug('[TurnYield] Bare yield closed without a reply', {
     chatId,
@@ -322,7 +321,7 @@ async function closeBareYield(params: SettleTurnParams): Promise<ProcessMessageR
 /**
  * "Nothing to add": the Host notes the pass, the passing seat is recorded in
  * the persisted cycle (so the rotation advances past it), and the done event
- * is flagged `skipped` so the client resets its buffer without a phantom
+ * has outcome `skipped` so the client resets its buffer without a phantom
  * bubble. No character reply is persisted.
  */
 async function closePass(params: SettleTurnParams): Promise<ProcessMessageResult> {
@@ -382,7 +381,7 @@ async function closePass(params: SettleTurnParams): Promise<ProcessMessageResult
     messageId: null,
     participantId: characterParticipant.id,
     toolsExecuted: false,
-    skipped: true,
+    outcome: 'skipped',
     skippedParticipantId: characterParticipant.id,
   }))
 
@@ -432,7 +431,7 @@ function closeStopped(params: SettleTurnParams): ProcessMessageResult {
     messageId: null,
     participantId: params.characterParticipant.id,
     toolsExecuted: false,
-    stopped: true,
+    outcome: 'stopped',
   }))
   return silentResult(params)
 }
@@ -475,7 +474,7 @@ function closeEmpty(params: SettleTurnParams): ProcessMessageResult {
     messageId: null,
     participantId: params.characterParticipant.id,
     toolsExecuted: false,
-    emptyResponse: true,
+    outcome: 'empty',
     emptyResponseReason: emptyReason,
   }))
   return silentResult(params)

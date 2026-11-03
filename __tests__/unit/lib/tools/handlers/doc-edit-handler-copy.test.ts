@@ -58,6 +58,16 @@ jest.mock('@/lib/doc-edit', () => {
     writeFileWithMtimeCheck: jest.fn(),
     getAccessibleMountPoints: jest.fn(),
     isTextFile: jest.fn(),
+    // The document core stats through this; answer from the mocked fs.stat.
+    statResolvedFile: jest.fn(async (resolved: { absolutePath?: string }) => {
+      if (!resolved.absolutePath) return null;
+      try {
+        const stats = await jest.requireMock<typeof import('fs/promises')>('fs/promises').stat(resolved.absolutePath);
+        return { isFile: stats.isFile(), size: 0, mtime: new Date(0) };
+      } catch {
+        return null;
+      }
+    }),
     PathResolutionError,
     findUniqueMatch: jest.fn(),
     findAllMatches: jest.fn(),
@@ -299,7 +309,7 @@ describe('doc_copy_file handler', () => {
 
       expect(result.success).toBe(true);
       expect(mockReadFileWithMtime).toHaveBeenCalledWith(source);
-      expect(mockWriteFileWithMtimeCheck).toHaveBeenCalledWith(dest, 'hello world');
+      expect(mockWriteFileWithMtimeCheck).toHaveBeenCalledWith(dest, 'hello world', undefined);
       const out = result.result as { dest_path: string; mtime: number };
       expect(out.dest_path).toBe('archive/notes.md');
       expect(out.mtime).toBe(222);
@@ -343,7 +353,7 @@ describe('doc_copy_file handler', () => {
       // Third resolve should be for the appended path.
       const thirdCall = mockResolveDocEditPath.mock.calls[2];
       expect(thirdCall[1]).toBe('archive/notes.md');
-      expect(mockWriteFileWithMtimeCheck).toHaveBeenCalledWith(destFile, 'hi');
+      expect(mockWriteFileWithMtimeCheck).toHaveBeenCalledWith(destFile, 'hi', undefined);
     });
 
     it('uses source basename at dest root when dest_path is empty', async () => {
@@ -473,7 +483,8 @@ describe('doc_copy_file handler', () => {
         .mockResolvedValueOnce(dest)
         .mockResolvedValueOnce(dest);
 
-      // Nothing stats successfully — source is missing.
+      // Nothing stats successfully and nothing reads — source is missing.
+      mockReadFileWithMtime.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
       const result = await executeDocEditTool(
         'doc_copy_file',
         {

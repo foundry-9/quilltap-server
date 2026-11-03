@@ -17,12 +17,14 @@
  *
  *  - **Per image** (`LLM_TRANSPORT_MAX_EDGE`, `LLM_TRANSPORT_TARGET_BASE64`).
  *    A long-edge cap plus a quality ladder down to a byte ceiling.
- *  - **Per turn** (`LANTERN_IMAGE_BASE64_BUDGET`, spent by the Lantern walk in
- *    `lib/services/chat-message/context-builder.service.ts`). The per-image
- *    cap cannot see how many images a turn carries, which is precisely how
- *    bug 151 happened: two avatars, each comfortably under the provider's
- *    4 MB per-image limit, summed to 4.52 MB of base64 and NanoGPT answered
- *    the turn with `413 Request Entity Too Large`.
+ *  - **Per request** (`LLM_TRANSPORT_TOTAL_BASE64`, spent by
+ *    `applyImageTransportBudget` in `lib/chat/image-transport-budget.ts` over
+ *    every image on the final message array — uploads, re-hydrated uploads and
+ *    Lantern images alike — for each profile tried). The per-image cap cannot
+ *    see how many images a turn carries, which is precisely how bug 151
+ *    happened: two avatars, each comfortably under the provider's 4 MB
+ *    per-image limit, summed to 4.52 MB of base64 and NanoGPT answered the
+ *    turn with `413 Request Entity Too Large`.
  *
  * The provider's own per-image limit still applies on top — this module
  * lowers the ceiling, it never raises it.
@@ -66,14 +68,18 @@ export const LLM_TRANSPORT_TARGET_BASE64 = 500 * 1024
 export const LLM_TRANSPORT_QUALITY_LADDER = [78, 65, 55, 45] as const
 
 /**
- * Ceiling on the *total* base64 an unseen-image walk may add to one turn.
+ * Ceiling on the *total* base64 of the images one LLM request may carry, from
+ * every source together.
  *
- * ~2 MB is four images at the per-image ceiling, which is more pictures than
- * a turn has ever usefully carried, and leaves a wide margin under the
+ * 4 MB of base64 is about 3 MB of image: eight images at the per-image
+ * ceiling, which is twice the default per-request image cap, and under the
  * narrowest provider body limit we have met (NanoGPT's, which bug 151 found
- * somewhere under 4.5 MB). Spent newest-first: see the consumer's note.
+ * somewhere under 4.5 MB). Spent down a ranked list — this turn's uploads,
+ * then re-hydrated uploads, then Lantern images, each newest first — by
+ * `applyImageTransportBudget`. It replaces the Lantern-only 2 MB budget, which
+ * covered one of the three sources.
  */
-export const LANTERN_IMAGE_BASE64_BUDGET = 2 * 1024 * 1024
+export const LLM_TRANSPORT_TOTAL_BASE64 = 4 * 1024 * 1024
 
 /** Outcome of a transport shrink. `wasShrunk` is false when nothing was done. */
 export interface LlmImageShrinkResult {

@@ -151,6 +151,37 @@ export async function readDatabaseBlobAsDocument(
 }
 
 /**
+ * The one way to read an uploaded blob where a document was expected (#134):
+ * a native-text upload (.md, .txt, .json, .jsonl) is read as its own bytes —
+ * what the editor saves back — and any other kind falls back to its converted
+ * `extractedText` (a PDF's or DOCX's derived text). Null when neither is
+ * there. `source` says which it was, so a caller can tell derived text from
+ * the file itself.
+ */
+export async function readDatabaseBlobForDocument(
+  mountPointId: string,
+  relativePath: string
+): Promise<{
+  content: string;
+  mtime: number;
+  size: number;
+  source: 'blob-bytes' | 'blob-text';
+  storedMimeType?: string;
+} | null> {
+  const bytes = await readDatabaseBlobAsDocument(mountPointId, relativePath);
+  if (bytes) return { ...bytes, source: 'blob-bytes' };
+  const text = await readDatabaseBlobText(mountPointId, relativePath);
+  if (!text) return null;
+  return {
+    content: text.content,
+    mtime: text.mtime,
+    size: text.size,
+    source: 'blob-text',
+    storedMimeType: text.storedMimeType,
+  };
+}
+
+/**
  * Every blob in a store whose text can be searched, as `{ relativePath,
  * content }`: extractable types (PDF, DOCX, native text) with converted text.
  * `doc_grep` reads this beside `doc_mount_documents` so an upload is found
