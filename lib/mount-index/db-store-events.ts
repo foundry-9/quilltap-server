@@ -5,8 +5,9 @@
  * watch. Instead, every mutation performed through `database-store.ts`
  * emits an event here, and the mount watcher (and anything else that needs
  * to react to content changes — search re-index, UI live-refresh) subscribes
- * to those events. This module is the moral equivalent of the chokidar
- * watcher for filesystem-backed stores.
+ * to those events. This module is the moral equivalent of the recursive
+ * filesystem watcher (`lib/files/recursive-watcher.ts`) for
+ * filesystem-backed stores.
  *
  * Events:
  *   'document-written'   — A DB-backed document was created or updated.

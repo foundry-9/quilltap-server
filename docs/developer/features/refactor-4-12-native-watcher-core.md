@@ -1,6 +1,6 @@
 # Refactor 4.12 — One recursive watcher core under both filesystem watchers
 
-**Status:** Proposed (2026-11-02). Part of the [4.12 refactor set](refactor-4-12.md). The smallest spec in the set; the win is behavioural parity more than lines.
+**Status:** Implemented (2026-11-03), all three phases. Decisions taken: the stop functions are wired into shutdown (`lib/startup/watcher-shutdown.ts`, registered beside the start calls in `instrumentation.ts`, prepended to SIGTERM / SIGINT so it runs before the database handlers close the connections; the `files/` watcher's deferred deletes are left to startup reconciliation there rather than flushed against a closing database), and both watchers share one 750 ms debounce (`WATCH_DEBOUNCE_MS`). The core is `lib/files/recursive-watcher.ts`, the walk skeleton `lib/files/walk.ts`. One refinement over §4.2: the `files/` folder sweep is gated on "no record at this exact key" rather than on an extension, since `files/` has no indexable-extension rule. Originally proposed 2026-11-02. Part of the [4.12 refactor set](refactor-4-12.md). The smallest spec in the set; the win is behavioural parity more than lines.
 
 ## 1. The problem
 
