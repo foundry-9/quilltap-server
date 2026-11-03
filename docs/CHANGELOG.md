@@ -2,6 +2,10 @@
 
 ## Recent Changes
 
+### 4.13-dev
+
+(empty — new development starts here)
+
 ### 4.12.0
 
 #### Fix: `quilltap db integrity` no longer reports a check it never ran
