@@ -1,11 +1,12 @@
 /**
  * @jest-environment node
  *
- * The mount watcher on Node's recursive fs.watch. Chokidar 5 held a kqueue
- * descriptor per watched file on macOS; a store on a 24,000-file ~/Documents
- * reached 15,770 and Next.js could no longer spawn ("spawn EBADF"). fs.watch
- * reports only a path and "rename" / "change", so the watcher resolves each
- * event against the disk — these tests pin that resolution.
+ * The document-store watcher's domain on the shared recursive watcher core.
+ * What the core itself does (debounce, ignore, lstat dispatch, symlinks, the
+ * cloud guard, polling and its fallback) is pinned once, in
+ * lib/files/__tests__/recursive-watcher.test.ts; these tests pin what a
+ * store does with each event: index, drop, sweep a departed folder, walk an
+ * arrived one, announce it, and stop on detach.
  */
 
 jest.mock('@/lib/logging/create-logger', () => {
@@ -18,14 +19,12 @@ jest.mock('fs', () => ({
   watch: jest.fn(),
 }));
 
-jest.mock('fs/promises', () => ({
-  __esModule: true,
-  default: {
-    access: jest.fn(),
-    lstat: jest.fn(),
-    stat: jest.fn(),
-  },
-}));
+jest.mock('fs/promises', () => {
+  const lstat = jest.fn();
+  const fns = { access: jest.fn(), lstat, stat: jest.fn() };
+  // The store watcher reads the default export; the core imports lstat by name.
+  return { __esModule: true, default: fns, ...fns };
+});
 
 jest.mock('@/lib/mount-index/scanner', () => {
   const actual = jest.requireActual('@/lib/mount-index/scanner');
@@ -57,7 +56,7 @@ jest.mock('@/lib/mount-index/realtime', () => ({
   publishMountChange: jest.fn(),
 }));
 
-import { attachMountPoint, detachMountPoint } from '@/lib/mount-index/watcher';
+import { attachMountPoint, detachMountPoint, stopMountWatchers } from '@/lib/mount-index/watcher';
 import { watch } from 'fs';
 import fs from 'fs/promises';
 import {
@@ -139,18 +138,7 @@ async function attachTracked(mp: DocMountPoint): Promise<Listener> {
   return attach(mp);
 }
 
-describe('mount watcher on native fs.watch', () => {
-  it('watches the base path recursively and does not poll', async () => {
-    await attachTracked(makeMountPoint());
-
-    expect(mockWatch).toHaveBeenCalledWith(
-      BASE,
-      expect.objectContaining({ recursive: true }),
-      expect.any(Function),
-    );
-    expect(mockWalk).not.toHaveBeenCalled();
-  });
-
+describe('document-store watcher domain', () => {
   it('indexes a file that was changed, once per burst', async () => {
     const listener = await attachTracked(makeMountPoint());
     mockLstat.mockResolvedValue(fileStat);
@@ -166,15 +154,6 @@ describe('mount watcher on native fs.watch', () => {
       `${BASE}/Notes/plan.md`,
       'Notes/plan.md',
     );
-  });
-
-  it('ignores paths under an excluded segment', async () => {
-    const listener = await attachTracked(makeMountPoint());
-
-    listener('change', '.git/index');
-    await jest.advanceTimersByTimeAsync(800);
-
-    expect(mockLstat).not.toHaveBeenCalled();
   });
 
   it('drops a deleted file from the index', async () => {
@@ -225,24 +204,23 @@ describe('mount watcher on native fs.watch', () => {
     expect(mockProcess).toHaveBeenCalledTimes(2);
   });
 
-  it('does not walk a folder whose only event was a change', async () => {
-    const listener = await attachTracked(makeMountPoint());
-    mockLstat.mockResolvedValue(dirStat);
+  it('hands the store\'s exclude patterns to the core', async () => {
+    const listener = await attachTracked(makeMountPoint({ excludePatterns: ['drafts'] }));
 
-    listener('change', 'Notes');
+    listener('change', 'drafts/secret.md');
     await jest.advanceTimersByTimeAsync(800);
 
-    expect(mockWalk).not.toHaveBeenCalled();
+    expect(mockLstat).not.toHaveBeenCalled();
   });
 
-  it('skips symlinks', async () => {
-    const listener = await attachTracked(makeMountPoint());
-    mockLstat.mockResolvedValue({ ...fileStat, isSymbolicLink: () => true });
+  it('closes every store\'s watcher on stopMountWatchers', async () => {
+    await attachMountPoint(makeMountPoint());
+    await attachMountPoint(makeMountPoint());
+    const handles = mockWatch.mock.results.slice(-2).map(r => r.value);
 
-    listener('change', 'link.md');
-    await jest.advanceTimersByTimeAsync(800);
+    stopMountWatchers();
 
-    expect(mockProcess).not.toHaveBeenCalled();
+    for (const h of handles) expect(h.close).toHaveBeenCalled();
   });
 
   it('closes the native watcher on detach', async () => {
@@ -304,10 +282,10 @@ describe('realtime hints for outside changes', () => {
   });
 });
 
-describe('polling and fallback', () => {
+describe('polling snapshot', () => {
   const file = (relativePath: string) => ({ relativePath, absolutePath: `${BASE}/${relativePath}` });
 
-  it('polls by walking the store when QUILLTAP_WATCHER_POLLING=1', async () => {
+  it('snapshots the store by walking it when QUILLTAP_WATCHER_POLLING=1', async () => {
     process.env.QUILLTAP_WATCHER_POLLING = '1';
     mockWalk.mockResolvedValue([]);
     const mp = makeMountPoint();
@@ -339,6 +317,10 @@ describe('polling and fallback', () => {
 
     mtimes['edited.md'] = 2;
     mtimes['new.md'] = 1;
+    mockLstat.mockImplementation(async (abs: string) => {
+      if (abs.endsWith('gone.md')) throw enoent;
+      return fileStat;
+    });
     mockWalk.mockResolvedValue([file('kept.md'), file('edited.md'), file('new.md')]);
     await jest.advanceTimersByTimeAsync(2000 + 800);
 
@@ -347,31 +329,4 @@ describe('polling and fallback', () => {
     expect(mockRemove.mock.calls.map(c => c[1])).toEqual(['gone.md']);
   });
 
-  it('stops walking once detached', async () => {
-    process.env.QUILLTAP_WATCHER_POLLING = '1';
-    mockWalk.mockResolvedValue([]);
-    const mp = makeMountPoint();
-    await attachMountPoint(mp);
-    await jest.advanceTimersByTimeAsync(0);
-    await detachMountPoint(mp.id);
-    mockWalk.mockClear();
-
-    await jest.advanceTimersByTimeAsync(10_000);
-
-    expect(mockWalk).not.toHaveBeenCalled();
-  });
-
-  it('falls back to polling when recursive watch is unavailable', async () => {
-    mockWatch.mockImplementation(() => {
-      throw Object.assign(new Error('unsupported'), { code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM' });
-    });
-    mockWalk.mockResolvedValue([]);
-    const mp = makeMountPoint();
-    attached.push(mp.id);
-
-    await attachMountPoint(mp);
-    await jest.advanceTimersByTimeAsync(0);
-
-    expect(mockWalk).toHaveBeenCalledWith(BASE, [], ['.git']);
-  });
 });

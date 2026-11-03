@@ -12,13 +12,12 @@
  * {@link attachMountPoint}, {@link refreshMountPoint}, and
  * {@link detachMountPoint} to keep watchers in sync with the database.
  *
- * The watcher is Node's recursive `fs.watch`: one FSEvents stream per store
- * on macOS, ReadDirectoryChangesW on Windows, inotify on Linux. Chokidar 5
- * has no FSEvents backend and held a kqueue descriptor open for every file
- * and folder it watched; a store on a 24,000-file `~/Documents` reached
- * 15,770 descriptors and Next.js could no longer spawn its compile workers
- * ("spawn EBADF"). `fs.watch` reports only a path and "rename" / "change",
- * so {@link handleNativeEvent} reads the disk to decide what happened.
+ * Each store runs one {@link createRecursiveWatcher} (`lib/files/recursive-watcher.ts`),
+ * which owns the native recursive `fs.watch`, the per-path debounce, the
+ * resolution of each event against the disk, the cloud-placeholder guard and
+ * the polling fallback. This module keeps only the document-store domain:
+ * what a changed file, a vanished path or an arriving folder means for the
+ * index.
  *
  * Whatever the watcher changes in the index (or a folder arriving or leaving)
  * is announced with {@link publishMountChange}, debounced per store, so an
@@ -29,15 +28,15 @@
  * that occur after it is running.
  *
  * Escape hatch for network filesystems (SMB, NFS) where native events may be
- * missed: `QUILLTAP_WATCHER_POLLING=1` walks the store every
- * {@link POLL_INTERVAL_MS} and compares each indexable file's mtime and size
- * with the previous walk. It holds no descriptors between walks.
+ * missed: `QUILLTAP_WATCHER_POLLING=1` walks the store every couple of seconds
+ * and compares each indexable file's mtime and size with the previous walk
+ * (see {@link snapshotStore}). A store whose filesystem refuses a recursive
+ * watch falls back to the same polling on its own.
  *
  * @module mount-index/watcher
  */
 
 import path from 'path';
-import { watch as fsWatch } from 'fs';
 import fs from 'fs/promises';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -57,6 +56,11 @@ import {
 } from './db-store-events';
 import { publishMountChange } from './realtime';
 import { DocMountPoint } from '@/lib/schemas/mount-index.types';
+import {
+  createRecursiveWatcher,
+  type PolledFile,
+  type RecursiveWatcher,
+} from '@/lib/files/recursive-watcher';
 
 const logger = createServiceLogger('MountIndex:Watcher');
 
@@ -64,21 +68,9 @@ const logger = createServiceLogger('MountIndex:Watcher');
 // STATE
 // ============================================================================
 
-/** What stopWatcherFor needs from either backend. */
-interface WatchHandle {
-  close(): unknown;
-}
-
 interface MountWatcher {
   mountPoint: DocMountPoint;
-  instance: WatchHandle;
-  fileTimers: Map<string, NodeJS.Timeout>;
-  /**
-   * Paths that saw a native "rename" inside the current debounce window. Only
-   * a rename can be a folder arriving or leaving; a bare "change" on a folder
-   * (its metadata) must not trigger a walk.
-   */
-  pendingRenames: Set<string>;
+  instance: RecursiveWatcher | null;
   embeddingTimer: NodeJS.Timeout | null;
   pendingEmbedding: boolean;
   /** Debounces the realtime hint across a burst of changes. */
@@ -87,17 +79,11 @@ interface MountWatcher {
 
 const watchers = new Map<string, MountWatcher>();
 
-/** Per-file debounce — coalesces rapid save cycles from editors */
-const FILE_DEBOUNCE_MS = 750;
-
 /** Per-mount-point debounce — batches embedding enqueue after a burst of edits */
 const EMBEDDING_DEBOUNCE_MS = 2000;
 
 /** Per-mount-point debounce — one realtime hint for a burst of changes */
 const PUBLISH_DEBOUNCE_MS = 250;
-
-/** Pause between walks when polling */
-const POLL_INTERVAL_MS = 2000;
 
 // ============================================================================
 // DATABASE-BACKED STORE EVENT BRIDGE
@@ -202,31 +188,6 @@ function schedulePublish(watcher: MountWatcher): void {
   }, PUBLISH_DEBOUNCE_MS);
 }
 
-function debounceFileEvent(
-  watcher: MountWatcher,
-  relativePath: string,
-  handler: () => Promise<void>
-): void {
-  const existing = watcher.fileTimers.get(relativePath);
-  if (existing) clearTimeout(existing);
-
-  watcher.fileTimers.set(
-    relativePath,
-    setTimeout(async () => {
-      watcher.fileTimers.delete(relativePath);
-      try {
-        await handler();
-      } catch (err) {
-        logger.warn('Error in debounced mount watcher handler', {
-          mountPointId: watcher.mountPoint.id,
-          relativePath,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }, FILE_DEBOUNCE_MS)
-  );
-}
-
 // ============================================================================
 // EVENT HANDLERS
 // ============================================================================
@@ -288,65 +249,46 @@ async function handleUnlink(
 }
 
 /**
- * Resolve one debounced native event against the disk.
- *
- *  - a file that exists: index it (add or change are the same to us)
- *  - a path that is gone: drop it from the index; after a rename, also drop
- *    everything indexed beneath it, since a folder deleted or moved out of
- *    the store sends a single event for the folder alone
- *  - a folder that appeared by rename: index every file in it, since a
- *    folder moved in also sends a single event
- *
- * Symlinks are skipped, as the scanner skips them.
+ * A path the watcher found gone. Drop it from the index; after a rename of a
+ * path with no indexable extension, also drop everything indexed beneath it,
+ * since a folder deleted or moved out of the store sends a single event for
+ * the folder alone.
  */
-async function handleNativeEvent(
+async function handleGone(
   watcher: MountWatcher,
   relativePath: string,
   sawRename: boolean,
 ): Promise<void> {
-  const { mountPoint } = watcher;
-  const absolutePath = path.join(mountPoint.basePath, relativePath);
-
-  let stat;
-  try {
-    stat = await fs.lstat(absolutePath);
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code !== 'ENOENT' && code !== 'ENOTDIR') throw err;
-    await handleUnlink(watcher, relativePath);
-    if (sawRename && !detectFileType(relativePath)) {
-      await removeIndexedBeneath(watcher, relativePath);
-      // A folder that left, even an empty one, changes the listing.
-      schedulePublish(watcher);
-    }
-    return;
-  }
-
-  if (stat.isSymbolicLink()) return;
-
-  if (stat.isFile()) {
-    await handleAddOrChange(watcher, absolutePath, relativePath);
-    return;
-  }
-
-  if (stat.isDirectory() && sawRename) {
-    const files = await walkDirectory(
-      mountPoint.basePath,
-      mountPoint.includePatterns,
-      mountPoint.excludePatterns,
-      relativePath,
-    );
-    logger.debug('Mount watcher indexing a folder that arrived', {
-      mountPointId: mountPoint.id,
-      relativePath,
-      files: files.length,
-    });
-    for (const file of files) {
-      await handleAddOrChange(watcher, file.absolutePath, file.relativePath);
-    }
-    // A folder that arrived, even an empty one, changes the listing.
+  await handleUnlink(watcher, relativePath);
+  if (sawRename && !detectFileType(relativePath)) {
+    await removeIndexedBeneath(watcher, relativePath);
+    // A folder that left, even an empty one, changes the listing.
     schedulePublish(watcher);
   }
+}
+
+/**
+ * A folder appeared by rename: index every file in it, since a folder moved
+ * in also sends a single event.
+ */
+async function handleDirArrived(watcher: MountWatcher, relativePath: string): Promise<void> {
+  const { mountPoint } = watcher;
+  const files = await walkDirectory(
+    mountPoint.basePath,
+    mountPoint.includePatterns,
+    mountPoint.excludePatterns,
+    relativePath,
+  );
+  logger.debug('Mount watcher indexing a folder that arrived', {
+    mountPointId: mountPoint.id,
+    relativePath,
+    files: files.length,
+  });
+  for (const file of files) {
+    await handleAddOrChange(watcher, file.absolutePath, file.relativePath);
+  }
+  // A folder that arrived, even an empty one, changes the listing.
+  schedulePublish(watcher);
 }
 
 /** Drop every indexed file under a folder that has left the store. */
@@ -376,9 +318,9 @@ async function removeIndexedBeneath(
 
 async function startWatcherFor(mountPoint: DocMountPoint): Promise<void> {
   // Database-backed stores have no filesystem to watch — content changes
-  // flow through db-store-events, which the module-level subscription below
-  // translates into the same embedding-scheduler enqueues the filesystem
-  // watcher triggers.
+  // flow through db-store-events, which the module-level subscription in the
+  // bridge above translates into the same embedding-scheduler enqueues the
+  // filesystem watcher triggers.
   if (mountPoint.mountType === 'database') {
     return;
   }
@@ -394,43 +336,40 @@ async function startWatcherFor(mountPoint: DocMountPoint): Promise<void> {
     return;
   }
 
-  const usePolling = process.env.QUILLTAP_WATCHER_POLLING === '1';
-
   const watcher: MountWatcher = {
     mountPoint,
-    instance: { close: () => undefined },
-    fileTimers: new Map(),
-    pendingRenames: new Set(),
+    instance: null,
     embeddingTimer: null,
     pendingEmbedding: false,
     publishTimer: null,
   };
 
-  let backend: 'native' | 'polling' = usePolling ? 'polling' : 'native';
-  if (!usePolling) {
-    try {
-      watcher.instance = startNativeWatcher(watcher);
-    } catch (err) {
-      // A filesystem without recursive change notifications (some network
-      // mounts) refuses here; polling still works there.
-      logger.warn('Native recursive watch unavailable, falling back to polling', {
-        mountPointId: mountPoint.id,
-        basePath: mountPoint.basePath,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      backend = 'polling';
-    }
-  }
-  if (backend === 'polling') {
-    watcher.instance = startPollingWatcher(watcher);
-  }
+  watcher.instance = createRecursiveWatcher({
+    root: mountPoint.basePath,
+    normalize: filename => path.normalize(filename),
+    ignore: rel => isExcluded(rel, mountPoint),
+    polling: { snapshot: () => snapshotStore(mountPoint) },
+    on: {
+      file: rel => handleAddOrChange(watcher, path.join(mountPoint.basePath, rel), rel),
+      gone: (rel, sawRename) => handleGone(watcher, rel, sawRename),
+      dirArrived: rel => handleDirArrived(watcher, rel),
+      inCloud: rel => {
+        logger.debug('Mount watcher left a cloud-evicted file unread', {
+          mountPointId: mountPoint.id,
+          relativePath: rel,
+        });
+      },
+    },
+    log: logger,
+    logContext: { mountPointId: mountPoint.id },
+  });
   watchers.set(mountPoint.id, watcher);
 
   logger.info('Mount watcher started', {
     mountPointId: mountPoint.id,
     name: mountPoint.name,
     basePath: mountPoint.basePath,
-    polling: backend === 'polling',
+    polling: watcher.instance.mode === 'polling',
   });
 }
 
@@ -440,53 +379,9 @@ function isExcluded(relativePath: string, mountPoint: DocMountPoint): boolean {
 }
 
 /**
- * Node's recursive `fs.watch`. Every event is debounced per path and resolved
- * against the disk by {@link handleNativeEvent}.
- */
-function startNativeWatcher(watcher: MountWatcher): WatchHandle {
-  const { mountPoint } = watcher;
-  const instance = fsWatch(
-    mountPoint.basePath,
-    { recursive: true, persistent: true },
-    (eventType, filename) => {
-      if (filename == null) {
-        // Linux can drop the name when its event queue overflows; the next
-        // startup scan reconciles whatever was missed.
-        logger.debug('Mount watcher event arrived without a path', {
-          mountPointId: mountPoint.id,
-          eventType,
-        });
-        return;
-      }
-      const rel = path.normalize(filename.toString());
-      if (!rel || rel === '.' || rel.startsWith('..')) return;
-      if (isExcluded(rel, mountPoint)) return;
-      if (eventType === 'rename') watcher.pendingRenames.add(rel);
-      debounceFileEvent(watcher, rel, () => {
-        const sawRename = watcher.pendingRenames.delete(rel);
-        return handleNativeEvent(watcher, rel, sawRename);
-      });
-    },
-  );
-  instance.on('error', (err: unknown) => {
-    logger.error('Mount watcher error', {
-      mountPointId: mountPoint.id,
-      basePath: mountPoint.basePath,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  });
-  return instance;
-}
-
-/** What one polling walk saw of a file. */
-interface PolledFile {
-  mtimeMs: number;
-  size: number;
-}
-
-/**
- * Walk the store and stat every file the scanner would index. Files it would
- * never index are left out, so they cost nothing per walk.
+ * The polling snapshot: walk the store and stat every file the scanner would
+ * index. Files it would never index are left out, so they cost nothing per
+ * walk.
  */
 async function snapshotStore(mountPoint: DocMountPoint): Promise<Map<string, PolledFile>> {
   const files = await walkDirectory(
@@ -507,71 +402,13 @@ async function snapshotStore(mountPoint: DocMountPoint): Promise<Map<string, Pol
   return snapshot;
 }
 
-/**
- * Polling, for filesystems where native events are unreliable. The first walk
- * is the baseline (the startup scan covers it); every later walk diffs against
- * the one before and debounces each difference like a native event.
- */
-function startPollingWatcher(watcher: MountWatcher): WatchHandle {
-  const { mountPoint } = watcher;
-  let closed = false;
-  let timer: NodeJS.Timeout | null = null;
-  let previous: Map<string, PolledFile> | null = null;
-
-  const tick = async (): Promise<void> => {
-    try {
-      const current = await snapshotStore(mountPoint);
-      if (closed) return;
-      if (previous) {
-        for (const [rel, seen] of current) {
-          const before = previous.get(rel);
-          if (before && before.mtimeMs === seen.mtimeMs && before.size === seen.size) continue;
-          const absolutePath = path.join(mountPoint.basePath, rel);
-          debounceFileEvent(watcher, rel, () => handleAddOrChange(watcher, absolutePath, rel));
-        }
-        for (const rel of previous.keys()) {
-          if (current.has(rel)) continue;
-          debounceFileEvent(watcher, rel, () => handleUnlink(watcher, rel));
-        }
-      }
-      previous = current;
-    } catch (err) {
-      logger.error('Mount watcher polling walk failed', {
-        mountPointId: mountPoint.id,
-        basePath: mountPoint.basePath,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-    if (!closed) timer = setTimeout(tick, POLL_INTERVAL_MS);
-  };
-  void tick();
-
-  return {
-    close: () => {
-      closed = true;
-      if (timer) clearTimeout(timer);
-    },
-  };
-}
-
-async function stopWatcherFor(mountPointId: string): Promise<void> {
+function stopWatcherFor(mountPointId: string): void {
   const watcher = watchers.get(mountPointId);
   if (!watcher) return;
 
-  for (const timer of watcher.fileTimers.values()) clearTimeout(timer);
-  watcher.fileTimers.clear();
-  watcher.pendingRenames.clear();
   if (watcher.embeddingTimer) clearTimeout(watcher.embeddingTimer);
   if (watcher.publishTimer) clearTimeout(watcher.publishTimer);
-
-  try {
-    await watcher.instance.close();
-  } catch (err) {
-    logger.warn('Error closing mount watcher', {
-      mountPointId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
+  watcher.instance?.close();
   watchers.delete(mountPointId);
 
   logger.info('Mount watcher stopped', { mountPointId });
@@ -604,12 +441,13 @@ export async function startMountWatchers(): Promise<void> {
 }
 
 /**
- * Stop all running watchers. Called during graceful shutdown.
+ * Stop every running watcher. Synchronous, so the shutdown hook registered
+ * beside the start call in `instrumentation.ts` finishes before the database
+ * handlers close the connections a pending timer would reach for.
  */
-export async function stopMountWatchers(): Promise<void> {
+export function stopMountWatchers(): void {
   logger.info('Stopping all mount watchers', { count: watchers.size });
-  const ids = Array.from(watchers.keys());
-  await Promise.all(ids.map(stopWatcherFor));
+  for (const id of Array.from(watchers.keys())) stopWatcherFor(id);
 }
 
 /**
@@ -625,7 +463,7 @@ export async function attachMountPoint(mountPoint: DocMountPoint): Promise<void>
  * Stop watching a mount point (deletion or disablement).
  */
 export async function detachMountPoint(mountPointId: string): Promise<void> {
-  await stopWatcherFor(mountPointId);
+  stopWatcherFor(mountPointId);
 }
 
 /**
@@ -633,7 +471,7 @@ export async function detachMountPoint(mountPointId: string): Promise<void> {
  * (basePath, patterns, or enabled flag toggled).
  */
 export async function refreshMountPoint(mountPoint: DocMountPoint): Promise<void> {
-  await stopWatcherFor(mountPoint.id);
+  stopWatcherFor(mountPoint.id);
   if (mountPoint.enabled) {
     await startWatcherFor(mountPoint);
   }
