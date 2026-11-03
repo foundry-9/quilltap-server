@@ -1467,10 +1467,14 @@ export async function enqueueCharacterAvatarGeneration(
 ): Promise<{ jobId: string; isNew: boolean }> {
   const repos = getRepositories();
 
-  // Dedup: skip if there's already a pending/processing avatar job for this chat+character
+  // Dedup: collapse onto a still-PENDING avatar job for this chat+character. The
+  // handler reads the outfit and the carried objects when it runs, so one queued
+  // job covers any later change. A PROCESSING job has already built its prompt,
+  // so a change made after that point needs a fresh job.
   const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
   const existingJob = pendingJobs.find(
     job => job.type === 'CHARACTER_AVATAR_GENERATION'
+      && job.status === 'PENDING'
       && (job.payload as unknown as CharacterAvatarGenerationPayload).characterId === payload.characterId
   );
 

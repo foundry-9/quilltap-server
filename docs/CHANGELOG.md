@@ -4,6 +4,11 @@
 
 ### 4.12-dev
 
+#### Fix: avatar regeneration no longer absorbs changes made mid-job
+
+- An outfit or Inventory change made while a character avatar job was already processing was collapsed onto that job, so the new portrait missed the change (the job had built its prompt before the change). `enqueueCharacterAvatarGeneration` (`lib/background-jobs/queue-service.ts`) now reuses only a PENDING job, matching the wardrobe item-image path.
+- Tests: reuse of a pending job and a fresh job for a processing one, in `__tests__/unit/background-jobs/queue-service.test.ts`.
+
 #### Fix: document moves follow every open copy; edits over uploads drop stale text
 
 Found in the 4.12 refactor's live V4test pass.
