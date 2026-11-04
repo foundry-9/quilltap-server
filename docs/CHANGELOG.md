@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Feature: character kind (roleplay or assistant)
+
+- Every character now has a kind: `roleplay` (default) or `assistant`. Stored as `kind` in the character vault's `properties.json`; an absent or unrecognized value reads as `roleplay`, so existing characters need no migration.
+- Set on a new "Kind of character" card on the Details tab of the character view and edit pages, saved on change. Accepted by `PUT /api/v1/characters/[id]` and returned by `GET /api/v1/characters`. Documented in `qtap-export.schema.json`; export and import carry it with the character.
+- Read only through `lib/characters/kind.ts`; a grep-test fails on hand comparisons against a kind literal elsewhere.
+- Nothing changes behaviour on the kind yet. Phase 1 of `docs/developer/features/character-kind-and-roleplay-defaults.md`; the spec now stores kind in the vault instead of the DB column it first proposed.
+
 #### Docs: design spec for character kind and roleplay defaults
 
 - New `docs/developer/features/character-kind-and-roleplay-defaults.md`. Proposed, not implemented.

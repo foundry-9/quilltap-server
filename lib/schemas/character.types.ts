@@ -15,6 +15,7 @@ import {
 } from './common.types';
 import { TimestampConfigSchema } from './settings.types';
 import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
+import { CHARACTER_KINDS, DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -262,6 +263,14 @@ export const CharacterSchema = z.object({
    * while `canDrawDiagrams` is off. Lives in the vault's `properties.json`.
    */
   diagramStyle: z.enum(DIAGRAM_STYLES).default(DEFAULT_DIAGRAM_STYLE),
+
+  /**
+   * How this character is performed: `roleplay` (a person inside a story, the
+   * default) or `assistant` (a character whose job is to do work for the
+   * operator). Read only through `lib/characters/kind.ts`. Lives in the
+   * vault's `properties.json`, not a DB column.
+   */
+  kind: z.enum(CHARACTER_KINDS).default(DEFAULT_CHARACTER_KIND),
 
   /**
    * When true, this character may inspect and access "the Staff" of personified

@@ -35,7 +35,7 @@ The edit interface has multiple tabs for different aspects of character:
 
 | Tab | Purpose | When to Use |
 |-----|---------|-----------|
-| **Details** | Name, description, personality, scenarios, first message, whether they draw diagrams | Modify core character info |
+| **Details** | Name, description, personality, scenarios, first message, what kind of character they are, whether they draw diagrams | Modify core character info |
 | **System Prompts** | AI instructions and behaviors | Fine-tune how character acts |
 | **Appearance** | Physical descriptions and clothing records | Add visual and outfit information |
 | **Rename/Replace** | Bulk rename or replace content | Reorganize or rebrand character |
@@ -122,6 +122,15 @@ The assembled system prompt addresses the character directly throughout, and eac
 - Remove ones that no longer fit
 - Improve examples that weren't clear
 
+**Kind of character**
+
+- A card near the foot of the Details tab, saved the moment you change it (no need to press **Save**)
+- **Roleplay character** (the default) is a player in the drama: a person inside the story, with stakes of their own, who feels what happens and acts on it
+- **Assistant** is a member of the staff: a capable aide whose business is doing work for you, such as research, drafting or keeping the books
+- The choice is about how the character is *performed*, not what they are in the story. A ship's mind or a household automaton who lives in the scene is still a roleplay character
+- Every character begins as a roleplay character, including every character made before the choice existed
+- The same card appears on the character's view page
+
 **Draws diagrams**
 
 - A card at the foot of the Details tab, saved the moment you change it (no need to press **Save**)
@@ -141,7 +150,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 
 | Vault file | What it replaces |
 |---|---|
-| `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness** |
+| `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness**, **kind** (`roleplay` or `assistant`), and the outfit and diagram settings |
 | `metadata.json` | The character's **fact sheet** — a flat object of keys you invent yourself, answering to no field in the editor. See the note below. |
 | `identity.md` | **Identity** (the surface, outside-view prose field) |
 | `description.md` | **Description** (the acquaintance-view prose field) |

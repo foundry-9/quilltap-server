@@ -9,6 +9,8 @@ import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialo
 import { CanChooseOutfitToggle } from '@/components/wardrobe/CanChooseOutfitToggle'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { CanDrawDiagramsToggle } from '@/components/characters/CanDrawDiagramsToggle'
+import { resolveCharacterKind } from '@/lib/characters/kind'
+import { CharacterKindPicker } from '@/components/characters/CharacterKindPicker'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import LLMLogsSection from '@/components/characters/LLMLogsSection'
@@ -80,7 +82,9 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
     handleSaveCanChooseOutfit,
     savingCanChooseOutfit,
     handleSaveDiagramSettings,
+    handleSaveKind,
     savingDiagramSettings,
+    savingKind,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,
@@ -253,6 +257,12 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
                       onCoreWhisperEnabledChange={handleCoreWhisperEnabledChange}
                     />
                     {/* Saved on change, not with the form. */}
+                    <CharacterKindPicker
+                      kind={resolveCharacterKind(character)}
+                      saving={savingKind}
+                      disabled={!character}
+                      onChange={handleSaveKind}
+                    />
                     <CanDrawDiagramsToggle
                       checked={character?.canDrawDiagrams ?? false}
                       style={character?.diagramStyle ?? 'handDrawn'}

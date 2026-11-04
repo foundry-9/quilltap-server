@@ -10,6 +10,7 @@
  */
 import type { CharacterScenario } from '@/lib/schemas/character.types'
 import type { DiagramStyle } from '@/lib/markdown/diagrams'
+import type { CharacterKind } from '@/lib/characters/kind'
 
 export type { CharacterScenario }
 
@@ -38,6 +39,7 @@ export interface Character {
   canChooseOutfit?: boolean
   canDrawDiagrams?: boolean
   diagramStyle?: DiagramStyle
+  kind?: CharacterKind
   defaultImage?: {
     id: string
     filepath: string

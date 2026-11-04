@@ -493,6 +493,11 @@
           "enum": ["handDrawn", "clean"],
           "description": "How the character's Mermaid and Graphviz diagrams look: 'handDrawn' (sketched) or 'clean' (as the engine drew them). Absent or unrecognized reads as 'handDrawn'. Rendering only; never sent to a model. Stored in the vault's properties.json."
         },
+        "kind": {
+          "type": "string",
+          "enum": ["roleplay", "assistant"],
+          "description": "How the character is performed: 'roleplay' (a person inside a story, the default) or 'assistant' (a character whose job is to do work for the user). Absent or unrecognized reads as 'roleplay'. Stored in the vault's properties.json."
+        },
         "systemTransparency": {
           "type": ["boolean", "null"],
           "description": "When true, the character may inspect 'the Staff' (self_inventory, Staff messages from Lantern/Aurora/Librarian/Prospero/Host, and character vaults) subject to chat/project settings. When null or false, those three are hidden from this character regardless of any chat/project toggle — a hard character-level override. Default null (opaque)."

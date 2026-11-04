@@ -17,6 +17,7 @@ import type {
 } from '@/lib/schemas/types';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { diagramStyleOrDefault } from '@/lib/markdown/diagrams';
+import { characterKindOrDefault } from '@/lib/characters/kind';
 import {
   buildSystemPromptFile,
   buildScenarioFile,
@@ -95,6 +96,7 @@ export async function readCharacterVaultManagedFields(
           snapshot.canChooseOutfit = props.canChooseOutfit;
           snapshot.canDrawDiagrams = props.canDrawDiagrams;
           snapshot.diagramStyle = props.diagramStyle;
+          snapshot.kind = props.kind;
         }
         break;
       }
@@ -233,6 +235,7 @@ export async function writeCharacterVaultManagedFields(
         canChooseOutfit: character.canChooseOutfit ?? false,
         canDrawDiagrams: character.canDrawDiagrams ?? false,
         diagramStyle: diagramStyleOrDefault(character.diagramStyle),
+        kind: characterKindOrDefault(character.kind),
       },
       null,
       2,
@@ -422,7 +425,7 @@ export async function applyDocumentStoreWriteOverlay(
       case 'properties-json': {
         const propsKeys = [
           'pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness',
-          'canChooseOutfit', 'canDrawDiagrams', 'diagramStyle',
+          'canChooseOutfit', 'canDrawDiagrams', 'diagramStyle', 'kind',
         ] as const;
         const touched = propsKeys.filter((k) => k in patch);
         if (touched.length === 0) break;
@@ -434,7 +437,7 @@ export async function applyDocumentStoreWriteOverlay(
         // defaults below is correct); it THROWS when the file exists but is
         // unreadable/unparseable. That refusal is the whole fix for Bug 8: the
         // fields this file owns (pronouns, aliases, title, firstMessage,
-        // talkativeness, canChooseOutfit, canDrawDiagrams, diagramStyle) live
+        // talkativeness, canChooseOutfit, canDrawDiagrams, diagramStyle, kind) live
         // NOWHERE else post-4.6, so
         // seeding empty defaults over a corrupt-but-present file would clobber
         // them permanently and silently. Fail the save loudly instead — the
@@ -450,6 +453,7 @@ export async function applyDocumentStoreWriteOverlay(
           canChooseOutfit: character.canChooseOutfit ?? false,
           canDrawDiagrams: character.canDrawDiagrams ?? false,
           diagramStyle: diagramStyleOrDefault(character.diagramStyle),
+          kind: characterKindOrDefault(character.kind),
         };
         const next: CharacterVaultProperties = {
           pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
@@ -465,12 +469,19 @@ export async function applyDocumentStoreWriteOverlay(
             'canDrawDiagrams' in patch ? (patch.canDrawDiagrams ?? false) : current.canDrawDiagrams,
           diagramStyle:
             'diagramStyle' in patch ? diagramStyleOrDefault(patch.diagramStyle) : current.diagramStyle,
+          kind: 'kind' in patch ? characterKindOrDefault(patch.kind) : current.kind,
         };
         if (touched.includes('canDrawDiagrams') || touched.includes('diagramStyle')) {
           logger.debug('[VaultOverlay] Writing diagram settings to properties.json', {
             characterId,
             canDrawDiagrams: next.canDrawDiagrams,
             diagramStyle: next.diagramStyle,
+          });
+        }
+        if (touched.includes('kind')) {
+          logger.debug('[VaultOverlay] Writing character kind to properties.json', {
+            characterId,
+            kind: next.kind,
           });
         }
         await writeDatabaseDocument(

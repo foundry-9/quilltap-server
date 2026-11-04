@@ -6,7 +6,7 @@
  * post-4.6 cutover). Nine vault targets participate, each independently:
  *
  *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit,
- *                                canDrawDiagrams, diagramStyle
+ *                                canDrawDiagrams, diagramStyle, kind
  *   - identity.md              — character.identity
  *   - description.md           — character.description
  *   - manifesto.md             — character.manifesto

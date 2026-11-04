@@ -16,6 +16,8 @@ import { applyCharacterFieldUpdates } from '@/components/characters/apply-charac
 import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import { saveDiagramSettings, type DiagramSettingsPatch } from '../../../shared/save-diagram-settings'
+import { saveCharacterKind } from '../../../shared/save-character-kind'
+import type { CharacterKind } from '@/lib/characters/kind'
 import {
   Character,
   Tag,
@@ -52,6 +54,7 @@ interface UseCharacterViewReturn {
   savingCanManageInventory: boolean
   savingCanChooseOutfit: boolean
   savingDiagramSettings: boolean
+  savingKind: boolean
   savingTimestampConfig: boolean
   savingDefaultScenario: boolean
   savingDefaultSystemPrompt: boolean
@@ -78,6 +81,7 @@ interface UseCharacterViewReturn {
   handleSaveCanManageInventory: (enabled: boolean | null) => Promise<void>
   handleSaveCanChooseOutfit: (enabled: boolean) => Promise<void>
   handleSaveDiagramSettings: (patch: DiagramSettingsPatch) => Promise<void>
+  handleSaveKind: (kind: CharacterKind) => Promise<void>
   handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
   handleSaveDefaultScenario: (scenarioId: string | null) => Promise<void>
   handleSaveDefaultSystemPrompt: (promptId: string | null) => Promise<void>
@@ -127,6 +131,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingCanManageInventory, setSavingCanManageInventory] = useState(false)
   const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
   const [savingDiagramSettings, setSavingDiagramSettings] = useState(false)
+  const [savingKind, setSavingKind] = useState(false)
   const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
   const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
   const [savingDefaultSystemPrompt, setSavingDefaultSystemPrompt] = useState(false)
@@ -597,6 +602,25 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  /**
+   * Persist the kind of character (vault properties.json). Optimistic, like
+   * the diagram settings: the local character changes first, and a failure
+   * re-fetches to snap the picker back to server truth.
+   */
+  const handleSaveKind = async (kind: CharacterKind) => {
+    setSavingKind(true)
+    if (character) setCharacter({ ...character, kind })
+    try {
+      await saveCharacterKind(characterId, kind)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update the kind of character')
+      console.error('Failed to save character kind', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingKind(false)
+    }
+  }
+
   const handleSaveTimestampConfig = async (config: TimestampConfig | null) => {
     setSavingTimestampConfig(true)
     try {
@@ -833,6 +857,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     savingCanManageInventory,
     savingCanChooseOutfit,
     savingDiagramSettings,
+    savingKind,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -859,6 +884,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveCanManageInventory,
     handleSaveCanChooseOutfit,
     handleSaveDiagramSettings,
+    handleSaveKind,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,

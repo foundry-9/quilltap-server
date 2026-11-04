@@ -14,6 +14,7 @@ import { JsonSchema } from '@/lib/schemas/common.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
+import { CHARACTER_KINDS } from '@/lib/characters/kind';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -75,6 +76,9 @@ const updateCharacterSchema = z.object({
   // Diagrams in the Salon — vault-managed (properties.json) for the same reason.
   canDrawDiagrams: z.boolean().optional(),
   diagramStyle: z.enum(DIAGRAM_STYLES).optional(),
+  // How the character is performed (roleplay / assistant) — vault-managed
+  // (properties.json) for the same reason.
+  kind: z.enum(CHARACTER_KINDS).optional(),
   // Wardrobe-permission tri-states (null = inherit global, true/false = override).
   // Real DB columns, not vault-managed — omitting them here strips the key before
   // it reaches update(), so the editor toggles would silently never persist.

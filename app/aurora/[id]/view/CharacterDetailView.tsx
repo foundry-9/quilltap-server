@@ -21,6 +21,8 @@ import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialo
 import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
 import { CanChooseOutfitToggle } from '@/components/wardrobe/CanChooseOutfitToggle'
 import { CanDrawDiagramsToggle } from '@/components/characters/CanDrawDiagramsToggle'
+import { resolveCharacterKind } from '@/lib/characters/kind'
+import { CharacterKindPicker } from '@/components/characters/CharacterKindPicker'
 import { useCharacterView, useCharacterStats } from './hooks'
 import {
   CharacterHeader,
@@ -104,6 +106,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     handleSaveCanManageInventory,
     handleSaveCanChooseOutfit,
     handleSaveDiagramSettings,
+    handleSaveKind,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,
@@ -125,6 +128,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     savingCanManageInventory,
     savingCanChooseOutfit,
     savingDiagramSettings,
+    savingKind,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -237,6 +241,12 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
               userControlledCharacters={userControlledCharacters}
               onTemplateReplace={handleTemplateReplace}
               onReverseTemplate={handleReverseTemplate}
+            />
+            <CharacterKindPicker
+              kind={resolveCharacterKind(character)}
+              saving={savingKind}
+              disabled={!character}
+              onChange={handleSaveKind}
             />
             <CanDrawDiagramsToggle
               checked={character?.canDrawDiagrams ?? false}

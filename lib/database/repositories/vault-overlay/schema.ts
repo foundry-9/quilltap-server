@@ -14,6 +14,7 @@ import type { Character } from '@/lib/schemas/types';
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import { JsonSchema } from '@/lib/schemas/common.types';
 import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES, diagramStyleOrDefault } from '@/lib/markdown/diagrams';
+import { CHARACTER_KINDS, DEFAULT_CHARACTER_KIND, characterKindOrDefault } from '@/lib/characters/kind';
 import {
   WardrobeItemSchema,
   type WardrobeItem,
@@ -50,6 +51,14 @@ export const CharacterVaultPropertiesSchema = z.object({
   diagramStyle: z.preprocess(
     diagramStyleOrDefault,
     z.enum(DIAGRAM_STYLES).optional().default(DEFAULT_DIAGRAM_STYLE),
+  ),
+  // How the character is performed (roleplay / assistant). Lenient for the
+  // same reason as `diagramStyle`: absent (every vault written before kinds
+  // existed) or unrecognized reads as the default instead of failing the
+  // strict parse and hollowing every field this file owns.
+  kind: z.preprocess(
+    characterKindOrDefault,
+    z.enum(CHARACTER_KINDS).optional().default(DEFAULT_CHARACTER_KIND),
   ),
 });
 
@@ -239,6 +248,7 @@ export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Charac
   'canChooseOutfit',
   'canDrawDiagrams',
   'diagramStyle',
+  'kind',
   'physicalDescription',
   'systemPrompts',
   'scenarios',

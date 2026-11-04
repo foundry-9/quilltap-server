@@ -48,6 +48,7 @@ const PROPERTIES_JSON = {
   canChooseOutfit: false,
   canDrawDiagrams: false,
   diagramStyle: 'handDrawn',
+  kind: 'roleplay',
 };
 
 /**

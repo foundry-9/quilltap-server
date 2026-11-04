@@ -7,6 +7,8 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import { saveDiagramSettings, type DiagramSettingsPatch } from '../../../shared/save-diagram-settings'
+import { saveCharacterKind } from '../../../shared/save-character-kind'
+import type { CharacterKind } from '@/lib/characters/kind'
 import {
   Character,
   CharacterFormData,
@@ -67,6 +69,7 @@ export function useCharacterEdit(id: string) {
   })
   const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
   const [savingDiagramSettings, setSavingDiagramSettings] = useState(false)
+  const [savingKind, setSavingKind] = useState(false)
 
   /**
    * Fetch character data from API
@@ -289,6 +292,28 @@ export function useCharacterEdit(id: string) {
   }
 
   /**
+   * Persist the kind of character (vault properties.json) — an immediate,
+   * optimistic save like `handleSaveDiagramSettings`; the form's unsaved
+   * edits are left alone, and a failure re-fetches to snap the picker back.
+   */
+  const handleSaveKind = async (kind: CharacterKind) => {
+    setSavingKind(true)
+    setState((prev) => ({
+      ...prev,
+      character: prev.character ? { ...prev.character, kind } : prev.character,
+    }))
+    try {
+      await saveCharacterKind(id, kind)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update the kind of character')
+      console.error('Failed to save character kind', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingKind(false)
+    }
+  }
+
+  /**
    * Submit form and save character data
    */
   const handleSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -452,6 +477,7 @@ export function useCharacterEdit(id: string) {
     ...state,
     savingCanChooseOutfit,
     savingDiagramSettings,
+    savingKind,
 
     // Computed
     isNpc,
@@ -466,6 +492,7 @@ export function useCharacterEdit(id: string) {
     handleCoreWhisperEnabledChange,
     handleSaveCanChooseOutfit,
     handleSaveDiagramSettings,
+    handleSaveKind,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

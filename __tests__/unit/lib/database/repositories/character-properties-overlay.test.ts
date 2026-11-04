@@ -150,6 +150,7 @@ const VALID_VAULT_PROPS = {
   canChooseOutfit: false,
   canDrawDiagrams: false,
   diagramStyle: 'handDrawn',
+  kind: 'roleplay',
 };
 
 const VALID_VAULT_PHYSICAL_PROMPTS = {
@@ -1768,6 +1769,77 @@ describe('properties.json — diagram settings (canDrawDiagrams, diagramStyle)',
   });
 });
 
+describe('properties.json — character kind', () => {
+  const CHAR_ID = 'char-kind';
+  const MOUNT_ID = 'mount-kind';
+
+  // A properties.json written before kinds existed: no `kind` key at all.
+  const { kind: _k, ...LEGACY_PROPS } = VALID_VAULT_PROPS;
+
+  function propsWrite() {
+    const call = writeDatabaseDocumentMock.mock.calls.find(
+      ([, relPath]) => relPath === CHARACTER_PROPERTIES_JSON_PATH,
+    );
+    return call ? JSON.parse(call[2] as string) : undefined;
+  }
+
+  function serve(props: Record<string, unknown>) {
+    readDatabaseDocumentMock.mockResolvedValue({ content: JSON.stringify(props), mtime: 0, size: 120 });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getRepositoriesMock.mockReturnValue({
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: CHAR_ID,
+          name: 'Steward',
+          characterDocumentMountPointId: MOUNT_ID,
+        }),
+      },
+    });
+  });
+
+  it('parses a file without the key as roleplay, hollowing nothing', async () => {
+    serve(LEGACY_PROPS);
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result).toEqual({ ...LEGACY_PROPS, kind: 'roleplay' });
+  });
+
+  it('reads an unrecognized kind as roleplay instead of failing the parse', async () => {
+    serve({ ...VALID_VAULT_PROPS, kind: 'butler' });
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result).not.toBeNull();
+    expect(result!.kind).toBe('roleplay');
+    expect(result!.title).toBe(VALID_VAULT_PROPS.title);
+  });
+
+  it('keeps a valid assistant kind', async () => {
+    serve({ ...VALID_VAULT_PROPS, kind: 'assistant' });
+    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    expect(result!.kind).toBe('assistant');
+  });
+
+  it('a kind patch writes only that key and keeps every other', async () => {
+    serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true });
+    const dbPatch = await applyDocumentStoreWriteOverlay(CHAR_ID, { kind: 'assistant' });
+    expect('kind' in dbPatch).toBe(false);
+    expect(propsWrite()).toEqual({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, kind: 'assistant' });
+  });
+
+  it('an unrelated patch keeps an assistant kind', async () => {
+    serve({ ...VALID_VAULT_PROPS, kind: 'assistant' });
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Renamed' });
+    expect(propsWrite()).toEqual({ ...VALID_VAULT_PROPS, title: 'Renamed', kind: 'assistant' });
+  });
+
+  it('an unrelated patch over a legacy file writes the default kind', async () => {
+    serve(LEGACY_PROPS);
+    await applyDocumentStoreWriteOverlay(CHAR_ID, { title: 'Renamed' });
+    expect(propsWrite()).toEqual({ ...LEGACY_PROPS, title: 'Renamed', kind: 'roleplay' });
+  });
+});
+
 describe('applyDocumentStoreWriteOverlay — physical-prompts.json humanoid flag', () => {
   const CHAR_ID = 'char-spheres';
   const MOUNT_ID = 'mount-spheres';
@@ -1882,6 +1954,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       canChooseOutfit: false,
       canDrawDiagrams: false,
       diagramStyle: 'handDrawn',
+      kind: 'roleplay',
     });
 
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
@@ -1985,6 +2058,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       canChooseOutfit: false,
       canDrawDiagrams: false,
       diagramStyle: 'handDrawn',
+      kind: 'roleplay',
     });
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
     expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');

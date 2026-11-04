@@ -94,7 +94,7 @@ export async function readCharacterVaultProperties(
  *
  * That distinction is load-bearing. The fields this file owns (`pronouns`,
  * `aliases`, `title`, `firstMessage`, `talkativeness`, `canChooseOutfit`,
- * `canDrawDiagrams`, `diagramStyle`) live ONLY here post-4.6 — the DB row
+ * `canDrawDiagrams`, `diagramStyle`, `kind`) live ONLY here post-4.6 — the DB row
  * carries none of them. The fail-soft
  * {@link readCharacterVaultProperties} collapses "absent" and "corrupt" into
  * `null`; a read-modify-write seed that treated a *corrupt* file as absent

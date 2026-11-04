@@ -1,6 +1,6 @@
 # Character Kind and Roleplay Defaults
 
-**Status:** Proposed (2026-11-04). Not started.
+**Status:** In progress. Phase 1 (the kind flag) implemented 2026-11-04 — see §12 "As built". Phases 2–6 not started.
 **Scope:** quilltap-server. A new per-character `kind` flag (`roleplay` | `assistant`) and the one resolver that turns it into behaviour; two Agent Mode flavours; a kind-aware tool-rules preamble; a new default Roleplay sample prompt and an Assistant sample prompt in the `default-system-prompts` plugin, with the anti-escalation passages in the existing prompts rewritten; a kind-aware stakes direction for the five generators that write a system prompt; one new group-scene bullet; and a rewording of the inform header (decision D2, accepted 2026-11-04).
 **Non-scope:** users' own prompt copies (never touched, as before); the committee-flavoured memories already in instances (§9); the Brahma Console, Help chat, Scenario Builder and other one-shot loops (they are not characters and stay on the research flavour); per-family Roleplay variants (decision D4).
 **Related:** [prompt-trust-and-anti-committee.md](complete/prompt-trust-and-anti-committee.md) (the generator chokepoint and sample-prompt edit pattern this spec extends), [prompt-trust-the-probation.md](prompt-trust-the-probation.md), [salon-inform](complete/salon-inform.md) (the inform header, design of record), [prompt-person-consistency.md](complete/prompt-person-consistency.md) (identity-stack versioning rules).
@@ -53,8 +53,8 @@ Lyle, the one character told by informs to escalate, did escalate, on an abliter
 
 ### 4.1 Character flags
 
-- Behaviour flags are DB columns on `characters`, not vault content (design of record: [remove-character-overlay-residue.md](complete/remove-character-overlay-residue.md)): `npc`, `controlledBy`, `canDressThemselves`, `canCreateOutfits`, `defaultAgentModeEnabled`, `defaultHelpToolsEnabled`, `coreWhisperEnabled`, `canBeCarina`, among others.
-- `canBeCarina` is the newest such flag and the touchpoint precedent: `lib/schemas/character.types.ts`, `lib/database/repositories/characters.repository.ts`, `app/api/v1/characters/[id]/handlers/{post,put}.ts`, `app/api/v1/characters/handlers/get.ts`, the Aurora view/edit types and hooks (`app/aurora/[id]/view/*`, `app/aurora/[id]/edit/*`, `CharacterBasicInfo.tsx`, `CharacterHeader.tsx`), `lib/services/character-resolver.ts`, `lib/tools/almanack/phase3-ledgers.ts`, `migrations/scripts/add-carina-flag-v1.ts`, `docs/developer/DDL.md`.
+- Two homes exist for per-character settings. Older behaviour flags are DB columns on `characters` (design of record: [remove-character-overlay-residue.md](complete/remove-character-overlay-residue.md)): `npc`, `controlledBy`, `canDressThemselves`, `canCreateOutfits`, `defaultAgentModeEnabled`, `defaultHelpToolsEnabled`, `coreWhisperEnabled`, `canBeCarina`, among others. Newer per-character settings live in the vault's `properties.json` (`canChooseOutfit`, `canDrawDiagrams`, `diagramStyle`): they travel with the vault, exports and shared vaults, an absent key hydrates to a default, and no migration is needed. `kind` follows the `properties.json` precedent (§5.1).
+- `canBeCarina` is the newest DB-column flag and the touchpoint precedent: `lib/schemas/character.types.ts`, `lib/database/repositories/characters.repository.ts`, `app/api/v1/characters/[id]/handlers/{post,put}.ts`, `app/api/v1/characters/handlers/get.ts`, the Aurora view/edit types and hooks (`app/aurora/[id]/view/*`, `app/aurora/[id]/edit/*`, `CharacterBasicInfo.tsx`, `CharacterHeader.tsx`), `lib/services/character-resolver.ts`, `lib/tools/almanack/phase3-ledgers.ts`, `migrations/scripts/add-carina-flag-v1.ts`, `docs/developer/DDL.md`.
 - `public/schemas/qtap-export.schema.json` carries `defaultAgentModeEnabled` on characters (line ~1651); a new flag goes beside it.
 
 ### 4.2 Agent Mode
@@ -91,8 +91,8 @@ Lyle, the one character told by informs to escalate, did escalate, on an abliter
 
 ### 5.1 The kind flag and its resolver
 
-- **Column:** `characters.kind TEXT NOT NULL DEFAULT 'roleplay'`, constrained in Zod as `CharacterKindSchema = z.enum(['roleplay', 'assistant'])`. An enum rather than `assistant: boolean` so a third kind does not need a migration.
-- **Resolver:** `lib/characters/kind.ts` exports `resolveCharacterKind(character)` and `kindPolicy(kind)`. The policy is the only place behaviour is derived:
+- **Storage:** a `kind` key in the character vault's `properties.json`, `'roleplay'` or `'assistant'`, lenient like `diagramStyle`: absent (every vault written before kinds) or unrecognized reads as `'roleplay'` rather than failing the parse. On `Character` it is `kind: z.enum(CHARACTER_KINDS).default('roleplay')`. An enum rather than `assistant: boolean` so a third kind is one more literal. *(Changed during phase 1 from the DB column first proposed here: kind is a fact about the character, so it belongs with the vault-backed settings that travel with it. No migration.)* A character read without its vault (a raw row) resolves to `'roleplay'`.
+- **Resolver:** `lib/characters/kind.ts` (client-safe) exports `CHARACTER_KINDS`, `DEFAULT_CHARACTER_KIND`, `characterKindOrDefault`, `resolveCharacterKind(character)` and `isAssistantCharacter(character)`. Phase 2 adds `kindPolicy(kind)` there once its first consumers exist; the policy is then the only place behaviour is derived:
 
   ```ts
   interface KindPolicy {
@@ -104,8 +104,8 @@ Lyle, the one character told by informs to escalate, did escalate, on an abliter
   }
   ```
 
-  A missing or unknown value resolves to `roleplay` with a `warn`. A grep-test keeps `character.kind ===` comparisons out of every file but the resolver.
-- **Who sets it:** the character create and edit forms (Aurora basic info), the PUT/POST handlers, the AI Wizard and Summon From Lore (they ask the model to choose, defaulting to `roleplay` when the material does not make the character a worker for {{user}}), and import. Project and global settings do **not** set kind; it is a fact about the character.
+  A missing or unknown value resolves to `roleplay`. A grep-test (`__tests__/unit/lib/characters/kind-chokepoint.test.ts`) fails on any comparison against a kind literal outside `lib/characters/kind.ts`.
+- **Who sets it:** the operator, on a "Kind of character" card on the Details tab of the character's view and edit pages (saved on change, through `PUT /api/v1/characters/[id]`); import and restore (the field rides on the character and in the vault). New characters start as `roleplay` from the vault scaffold; there is no picker in the create flow. In phase 4 the AI Wizard and Summon From Lore ask the model to choose, defaulting to `roleplay` when the material does not make the character a worker for {{user}}. Project and global settings do **not** set kind; it is a fact about the character.
 
 ### 5.2 Agent Mode flavours
 
@@ -171,15 +171,14 @@ This still vouches and still does not instruct an action. It adds "in you", "how
 
 ## 6. Migration and data
 
-- New migration `add-character-kind-v1`: `ALTER TABLE characters ADD COLUMN kind TEXT NOT NULL DEFAULT 'roleplay'`, guarded by a column check; pretty label in `PRETTY_LABELS` (`lib/startup/prettify.ts`), e.g. "Sorting the players from the stewards".
-- `.qtap` export and import: `kind` on characters in `qtap-export.schema.json` and the exporter/importer; a bundle without it imports as `roleplay`. SillyTavern import sets `roleplay`.
-- Backups and restore carry the column as part of the row.
-- `docs/developer/DDL.md` updated.
-- The character archive bundle carries the row, so no special handling.
+- **No migration.** `kind` lives in `properties.json`; an absent key hydrates as `roleplay`, and the next write of the file adds it.
+- `.qtap` export and import: the exporter serializes the hydrated character and the importer spreads it into `characters.create`, so `kind` rides along with no field list to update; `qtap-export.schema.json` documents it beside `diagramStyle`. A bundle without it imports as `roleplay`. SillyTavern import gets the default.
+- Backups, restore and the character archive bundle carry the vault, and `properties.json` with it.
+- `docs/developer/DDL.md` updated (the vault `properties.json` row).
 
 ## 7. Phases
 
-1. **Kind flag.** Column, migration, schema, repository, API, resolver and policy, Aurora UI (a two-option control on basic info with a one-line explanation of each), export/import, DDL, help.
+1. **Kind flag.** *(Done.)* Vault `properties.json` key, schema, resolver, grep-test, API, Aurora UI (a two-option card on the Details tab with a one-line explanation of each), export schema, DDL, help.
 2. **Agent Mode flavours and tool rules.** `flavor` and `variant` parameters, tool-builder gating of `submit_final_response`, Salon wiring through the policy, one-shot loops pinned to research/assistant.
 3. **Sample prompts.** `MODERN_ROLEPLAY`, `MODERN_ASSISTANT`, retire `MODERN_GENERAL` with the built-in prune step, DeepSeek governor rewrites, the "Reacting to what happens" bullet across the relationship prompts, plugin version bump and build.
 4. **Generators.** The two new directions, wiring through `kindPolicy`, the Wizard and Summon choosing kind, the Optimizer's flattening signal.
@@ -195,7 +194,7 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 - **Tool rules:** snapshot of both variants; a test that every variant still contains the anti-narration rules (rules 1–5 and rule 6).
 - **Sample prompts:** a test that reads the shipped `.md` files and fails on the retired governor phrases ("main failure mode is escalation", "stays an annoying Tuesday", "Do not escalate"), so they cannot return; the seed-refresh test covers the new categories, the prune (a built-in row missing from the registry is removed, a non-built-in copy with the same name is kept), and the guard (an empty registry prunes nothing).
 - **Generators:** each of the five includes the policy's direction for each kind (string-contains tests on the assembled meta-prompt).
-- **Migration:** adds the column once, idempotent, existing rows read `roleplay`.
+- **Vault properties:** a pre-kind `properties.json` parses as `roleplay` and hollows nothing; an unrecognized value reads as `roleplay`; a `kind` patch writes only that key; an unrelated patch keeps an `assistant` kind; the scaffold seeds `roleplay`.
 - **Export round trip:** `kind` survives export → import; a bundle without it imports as `roleplay`.
 - **Live evaluation (V4test, never Friday):** rebuild the incident as a fixture with a doorkeeper, a staff coordinator and two household characters on DeepSeek V4 Flash and GLM 5.3 Flash, and an operator-driven armed intruder. Run once with today's prompts and once with `MODERN_ROLEPLAY`-derived prompts and the new Agent Mode/tool text. Pass criterion: at least one defending character shows fear or anger and at least one acts to stop the intruder, with no character demanding sign-offs from the operator's persona. Then rerun a quiet scene from the trust-safeguards eval to confirm small scenes stay small.
 
@@ -215,10 +214,8 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 
 ## 11. Touchpoints
 
-- `lib/characters/kind.ts` (new), `lib/schemas/character.types.ts`, `lib/database/repositories/characters.repository.ts`, `lib/services/character-resolver.ts`
-- `app/api/v1/characters/[id]/handlers/{post,put}.ts`, `app/api/v1/characters/handlers/get.ts`, `app/aurora/[id]/edit/*`, `app/aurora/[id]/view/*`
-- `migrations/scripts/add-character-kind-v1.ts`, `migrations/scripts/index.ts`, `lib/startup/prettify.ts`
-- `public/schemas/qtap-export.schema.json`, the `.qtap` exporter/importer, `lib/services/ai-import.service.ts`
+- Phase 1 (done): see §12.
+- `lib/services/ai-import.service.ts`, `character-wizard.service.ts` (phase 4: choosing kind)
 - `lib/services/chat-message/agent-mode-resolver.service.ts`, `turn-extras.ts`, `turn-tools.service.ts`, `orchestrator.service.ts`, `pseudo-tool.service.ts`
 - `lib/tools/native-tool-prompt.ts`, the text-block and simple-JSON instruction builders, `lib/tools/plugin-tool-builder.ts`
 - `lib/services/brahma-console/orchestrator.service.ts`, `lib/services/help-chat/orchestrator.service.ts`, `lib/services/agent-loop/one-shot-loop.ts`
@@ -227,3 +224,16 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 - `plugins/dist/qtap-plugin-default-system-prompts/prompts/*`, its `package.json` and `manifest.json`; `lib/database/repositories/prompt-templates.repository.ts` (prune step); `__tests__/unit/lib/database/repositories/prompt-templates-seed-refresh.test.ts`
 - `lib/tools/almanack/phase3-ledgers.ts` (if it reports character flags)
 - `docs/developer/DDL.md`, `docs/CHANGELOG.md`, `help/agent-mode.md`, `help/character-system-prompts.md`, `help/prompts.md`, `help/character-creation.md`, `help/character-editing.md`, `help/chat-multi-character.md`
+
+## 12. As built
+
+### Phase 1 — the kind flag (2026-11-04)
+
+- `lib/characters/kind.ts` (new): `CHARACTER_KINDS`, `DEFAULT_CHARACTER_KIND`, `characterKindOrDefault`, `resolveCharacterKind`, `isAssistantCharacter`. Client-safe.
+- `lib/schemas/character.types.ts`: `kind` on `CharacterSchema`, defaulting to `roleplay`.
+- Vault `properties.json`: `CharacterVaultPropertiesSchema` and `MANAGED_FIELDS` (`vault-overlay/schema.ts`), hydration (`vault-overlay/read-overlay.ts`), the snapshot, full-sync and patch writers (`vault-overlay/managed-fields.ts`, which logs a `debug` line when a patch writes the kind), and the new-vault scaffold (`lib/mount-index/character-scaffold.ts`).
+- API: `kind` accepted by `PUT /api/v1/characters/[id]`, returned by the character list `GET /api/v1/characters`; the item GET returns the hydrated character.
+- UI: `components/characters/CharacterKindPicker.tsx`, saved through `app/aurora/shared/save-character-kind.ts`, on the Details tab of the view and edit pages above the diagrams card; optimistic, re-fetches on failure.
+- `public/schemas/qtap-export.schema.json`, `docs/developer/DDL.md`, `help/character-editing.md`.
+- Tests: `__tests__/unit/lib/characters/kind.test.ts`, `kind-chokepoint.test.ts`, a `properties.json — character kind` block in `character-properties-overlay.test.ts`, and the scaffold and full-sync expectations updated.
+- Nothing reads the kind for behaviour yet. That starts in phase 2.

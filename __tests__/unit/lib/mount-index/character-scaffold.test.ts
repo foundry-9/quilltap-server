@@ -133,6 +133,7 @@ describe('scaffoldCharacterMount', () => {
       canChooseOutfit: false,
       canDrawDiagrams: false,
       diagramStyle: 'handDrawn',
+      kind: 'roleplay',
     });
   });
 
