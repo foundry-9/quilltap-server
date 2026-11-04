@@ -42,7 +42,7 @@
     "stop:docker": "docker stop quilltap && docker rm quilltap",
     "test": "cross-env LOG_LEVEL=error npm run test:all",
     "test:all": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js && cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js --config jest.integration.config.ts",
-    "test:coverage": "node --no-sparkplug node_modules/jest/bin/jest.js --coverage",
+    "test:coverage": "node --no-sparkplug --max-old-space-size=8192 node_modules/jest/bin/jest.js --coverage",
     "test:integration": "cross-env LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js --config jest.integration.config.ts",
     "test:unit": "cross-env NODE_ENV=test LOG_LEVEL=error node --no-sparkplug node_modules/jest/bin/jest.js",
     "test:watch": "node --no-sparkplug node_modules/jest/bin/jest.js --watch",

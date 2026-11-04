@@ -15,3 +15,7 @@
 - The retrospective mini-recap lists in-window chats that have no vault summary yet, from the `chats` table. `VaultConversationMatch.relativePath` is now nullable.
 - Undated searches and turns without a resolved time window are unchanged. No schema or export change.
 - Spec: `docs/developer/features/complete/search-window-first-and-honest-empty.md`.
+
+#### CI: coverage run heap
+
+- CI: the coverage run (`npm run test:coverage`) now gives the Jest parent process an 8 GB heap. With the v8 coverage provider, every worker ships the coverage, original source and transformed source of each module it loaded back to the parent, which holds all of it until the run ends; at ~1,300 test files that passed the default ~4 GB limit and the Test job died with "JavaScript heap out of memory" after the last suite.
