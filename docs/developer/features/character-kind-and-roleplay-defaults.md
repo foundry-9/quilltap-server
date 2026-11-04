@@ -1,6 +1,6 @@
 # Character Kind and Roleplay Defaults
 
-**Status:** In progress. Phases 1 (the kind flag), 2 (Agent Mode flavours and tool rules) and 3 (sample prompts) implemented 2026-11-04 — see §12 "As built". Phases 4–6 not started.
+**Status:** In progress. Phases 1 (the kind flag), 2 (Agent Mode flavours and tool rules), 3 (sample prompts) and 4 (generator directions) implemented 2026-11-04 — see §12 "As built". Phases 5–6 not started.
 **Scope:** quilltap-server. A new per-character `kind` flag (`roleplay` | `assistant`) and the one resolver that turns it into behaviour; two Agent Mode flavours; a kind-aware tool-rules preamble; a new default Roleplay sample prompt and an Assistant sample prompt in the `default-system-prompts` plugin, with the anti-escalation passages in the existing prompts rewritten; a kind-aware stakes direction for the five generators that write a system prompt; one new group-scene bullet; and a rewording of the inform header (decision D2, accepted 2026-11-04).
 **Non-scope:** users' own prompt copies (never touched, as before); the committee-flavoured memories already in instances (§9); the Brahma Console, Help chat, Scenario Builder and other one-shot loops (they are not characters and stay on the research flavour); per-family Roleplay variants (decision D4).
 **Related:** [prompt-trust-and-anti-committee.md](complete/prompt-trust-and-anti-committee.md) (the generator chokepoint and sample-prompt edit pattern this spec extends), [prompt-trust-the-probation.md](prompt-trust-the-probation.md), [salon-inform](complete/salon-inform.md) (the inform header, design of record), [prompt-person-consistency.md](complete/prompt-person-consistency.md) (identity-stack versioning rules).
@@ -105,7 +105,7 @@ Lyle, the one character told by informs to escalate, did escalate, on an abliter
   ```
 
   A missing or unknown value resolves to `roleplay`. A grep-test (`__tests__/unit/lib/characters/kind-chokepoint.test.ts`) fails on any comparison against a kind literal outside `lib/characters/kind.ts`.
-- **Who sets it:** the operator, on a "Kind of character" card on the Details tab of the character's view and edit pages (saved on change, through `PUT /api/v1/characters/[id]`); import and restore (the field rides on the character and in the vault). New characters start as `roleplay` from the vault scaffold; there is no picker in the create flow. In phase 4 the AI Wizard and Summon From Lore ask the model to choose, defaulting to `roleplay` when the material does not make the character a worker for {{user}}. Project and global settings do **not** set kind; it is a fact about the character.
+- **Who sets it:** the operator, on a "Kind of character" card on the Details tab of the character's view and edit pages (saved on change, through `PUT /api/v1/characters/[id]`); import and restore (the field rides on the character and in the vault). New characters start as `roleplay` from the vault scaffold; there is no picker in the create flow. *(Changed in phase 4: no generator guesses the kind. The first plan had the AI Wizard and Summon From Lore ask the model, but household staff — a doorkeeper, a staff coordinator — work for {{user}} and read as "assistants" to a model, which is the failure the kind exists to prevent. Generators read the stored kind; see D6.)* Project and global settings do **not** set kind; it is a fact about the character.
 
 ### 5.2 Agent Mode flavours
 
@@ -181,7 +181,7 @@ This still vouches and still does not instruct an action. It adds "in you", "how
 1. **Kind flag.** *(Done.)* Vault `properties.json` key, schema, resolver, grep-test, API, Aurora UI (a two-option card on the Details tab with a one-line explanation of each), export schema, DDL, help.
 2. **Agent Mode flavours and tool rules.** *(Done.)* `flavor` and `variant` parameters, tool-builder gating of `submit_final_response`, Salon wiring through the policy, one-shot loops pinned to research/assistant.
 3. **Sample prompts.** *(Done.)* `MODERN_ROLEPLAY`, `MODERN_ASSISTANT`, retire `MODERN_GENERAL` with the built-in prune step, DeepSeek governor rewrites, the "Reacting to what happens" bullet across the relationship prompts, plugin version bump and build.
-4. **Generators.** The two new directions, wiring through `kindPolicy`, the Wizard and Summon choosing kind, the Optimizer's flattening signal.
+4. **Generators.** *(Done.)* The two new directions, wiring through `kindPolicy`, the Optimizer's flattening signal. (The Wizard and Summon read the kind rather than choosing it; D6.)
 5. **Group discipline and inform header.** The new bullet and the new inform header.
 6. **Docs and evaluation.** Help docs, CHANGELOG, then the live evaluation in §8.
 
@@ -211,6 +211,7 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 - **D3 — Should kind be settable per project or globally?** Recommended: no. It describes the character.
 - **D4 — Per-family Roleplay variants?** Recommended: ship `MODERN_ROLEPLAY` only, evaluate on DeepSeek and GLM, and add family variants only where the evaluation shows the modern prompt failing on a family.
 - **D5 — Separate iteration cap for in-character agency?** Recommended: no; reuse `maxTurns` until a scene shows a need.
+- **D6 — Should a generator infer the kind from the source material?** Decided during phase 4 (2026-11-04): no. Staff who serve {{user}}'s household look like assistants to a model, so inference would put exactly the wrong characters on the assistant path. Generators use the stored kind (a new character is roleplay); the operator sets Assistant on the Details tab.
 
 ## 11. Touchpoints
 
@@ -258,4 +259,17 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 - Tests: `default-system-prompts-content.test.ts` (22 files; the two neutral files; the stakes rule everywhere but the assistant file; the retired governor phrases forbidden; the roleplay prompt's new sections; the assistant's honesty line), and three prune cases in `prompt-templates-seed-refresh.test.ts`.
 - Help: `help/prompts.md` (the new MODERN samples, "Matching the stakes", the 1.1.32 edition and retirement).
 - Not done here: `KindPolicy` has no `suggestedSamplePromptCategory` yet. Nothing would read it until the import dialog or a generator suggests a sample by kind; it is added with its first consumer.
+
+### Phase 4 — generator directions (2026-11-04)
+
+- `lib/characters/kind.ts`: `KindPolicy.generatorDirection` (`stakes` | `task`, type `GeneratorDirectionKey`).
+- `lib/services/character-field-semantics.ts`: `STAKES_AND_REACTION_DIRECTION` (match the stakes; a temperament is a default, never an absolute, with the forbidden "never tense" / "always calm" / "hostility makes you calmer" spelled out; a talker still feels the danger; any example with a threat shows it felt; the character holds their own view in a group; no invented violence), `ASSISTANT_TASK_DIRECTION` (do the task, one clarifying question at most, never invent facts, show the working, opinions once, no padding), `generatorDirectionFor(kind)` (the one table), `FLATTENING_DRIFT_SIGNAL` and `kindDriftSignalFor(kind)` (null for an assistant).
+- AI Wizard: the default-system-prompt meta-prompt is `buildSystemPromptFieldPrompt(kind)` (removed from `FIELD_PROMPTS`; `wizardFieldPrompt(field, kind)` routes it), the direction placed between the trust safeguards and the companion gate. The kind is `resolveWizardCharacterKind`: the stored kind of the character being edited (`request.characterId`), else the default; a vault that cannot be read falls back to the default with a `warn`.
+- Summon From Lore: `SYSTEM_PROMPTS_PROMPT` carries `generatorDirectionFor(DEFAULT_CHARACTER_KIND)` — a summoned character is created as a roleplay character.
+- External Prompt: `META_SYSTEM_PROMPT` is now `buildMetaSystemPrompt(kind)`, built from the loaded character's kind.
+- Character Optimizer: `getAnalysisPrompt(kind)` adds a "Flattening" look-for and the drift signal for a roleplay character; `getSystemPromptSuggestionPrompt(analysis, prompt, kind)` tells the refine pass to carry the kind's direction (adding it where missing) plus the flattening signal for a roleplay character; `getNewSystemPromptsSuggestionPrompt(analysis, kind)` carries the direction. The run resolves the kind once from the loaded character.
+- Each generator logs the kind it wrote for at `debug`.
+- The Wizard's system-prompt field gets its own completion budget, `wizardFieldMaxTokens('systemPrompt') = 2500` (was the 1000 shared with example dialogues and first message). Live check in V4test: on DeepSeek V4 Flash the 1000-token cap returned a 1,667-character prompt cut off mid-sentence before the stakes section (reasoning ate the budget); at 2500 it returned a complete 582-word prompt ending in the character's own stakes passage.
+- Tests: `character-field-semantics-stakes.test.ts` (new), the stakes/task cases in `character-wizard-prompts.test.ts`, `external-prompt-generator.test.ts`, `ai-import-system-prompts.test.ts` and `character-optimizer-helpers.test.ts`, and the policy key in `kind.test.ts`.
+- Help: `character-creation.md`, `ai-character-import.md`, `character-external-prompt.md`, `character-optimizer.md` ("Flattening Is Corrected, Too"). `CLAUDE.md`'s generator-directions line names the new helpers.
 

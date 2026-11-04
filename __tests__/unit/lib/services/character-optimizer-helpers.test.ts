@@ -20,6 +20,9 @@ import {
   TRUST_SAFEGUARDS_DIRECTION,
   COMPANION_TRUST_DISPOSITION,
   COMMITTEE_DRIFT_GUARDRAIL,
+  STAKES_AND_REACTION_DIRECTION,
+  ASSISTANT_TASK_DIRECTION,
+  FLATTENING_DRIFT_SIGNAL,
 } from '@/lib/services/character-field-semantics'
 import { createMockCharacter, createMockMemory } from '../fixtures/test-factories'
 import type { OptimizerAnalysis } from '@/lib/services/character-optimizer.service'
@@ -200,31 +203,31 @@ describe('buildMemoryContext', () => {
 
 describe('getAnalysisPrompt', () => {
   it('returns non-empty string', () => {
-    const result = getAnalysisPrompt()
+    const result = getAnalysisPrompt('roleplay')
     expect(typeof result).toBe('string')
     expect(result.length).toBeGreaterThan(0)
   })
 
   it('contains behavioral patterns', () => {
-    const result = getAnalysisPrompt()
+    const result = getAnalysisPrompt('roleplay')
     expect(result).toContain('behavioral pattern')
   })
 
   it('contains JSON structure guidance', () => {
-    const result = getAnalysisPrompt()
+    const result = getAnalysisPrompt('roleplay')
     expect(result).toContain('behavioralPatterns')
     expect(result).toContain('summary')
   })
 
   it('instructs on focus areas', () => {
-    const result = getAnalysisPrompt()
+    const result = getAnalysisPrompt('roleplay')
     expect(result).toContain('Speech habits')
     expect(result).toContain('Emotional tendencies')
     expect(result).toContain('Relationship dynamics')
   })
 
   it('includes vantage-point field labels for IDENTITY, DESCRIPTION, PERSONALITY', () => {
-    const result = getAnalysisPrompt()
+    const result = getAnalysisPrompt('roleplay')
     expect(result).toContain('IDENTITY')
     expect(result).toContain('DESCRIPTION')
     expect(result).toContain('PERSONALITY')
@@ -318,33 +321,33 @@ describe('per-item suggestion prompts', () => {
     }
 
     it('scopes to the provided prompt ID and name', () => {
-      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt, 'roleplay')
       expect(result).toContain('sp-1')
       expect(result).toContain('Default')
       expect(result).toContain('Roleplay with decorum and wit.')
     })
 
     it('instructs at most one suggestion', () => {
-      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt, 'roleplay')
       expect(result.toLowerCase()).toContain('at most one suggestion')
     })
 
     it('keeps the interaction-style, listening, and repetition guardrails', () => {
-      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt, 'roleplay')
       expect(result).toContain("Do NOT change the prompt's evident interaction style")
       expect(result).toContain("Never remove or weaken the prompt's direction about listening")
       expect(result).toContain('Do NOT codify repetition')
     })
 
     it('carries the trust safeguards and the committee guardrail', () => {
-      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt, 'roleplay')
       expect(result).toContain(TRUST_SAFEGUARDS_DIRECTION)
       expect(result).toContain(COMMITTEE_DRIFT_GUARDRAIL)
       expect(result).toContain("Never remove or weaken the prompt's trust safeguards")
     })
 
     it('gates the companion trust disposition on the prompt framing', () => {
-      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt, 'roleplay')
       const gate = result.indexOf('If the prompt under review frames the character as {{user}}')
       expect(gate).toBeGreaterThan(-1)
       expect(result.indexOf(COMPANION_TRUST_DISPOSITION)).toBeGreaterThan(gate)
@@ -361,19 +364,19 @@ describe('per-item suggestion prompts', () => {
 
     it('rides into every suggestion pass', () => {
       expect(getGeneralFieldsSuggestionsPrompt(mockAnalysis)).toContain(SUGGESTION_SCHEMA_PREAMBLE)
-      expect(getNewSystemPromptsSuggestionPrompt(mockAnalysis)).toContain(SUGGESTION_SCHEMA_PREAMBLE)
+      expect(getNewSystemPromptsSuggestionPrompt(mockAnalysis, 'roleplay')).toContain(SUGGESTION_SCHEMA_PREAMBLE)
     })
   })
 
   describe('committee drift in the analysis and new-prompt passes', () => {
     it('analysis prompt looks for committee drift and carries the guardrail', () => {
-      const result = getAnalysisPrompt()
+      const result = getAnalysisPrompt('roleplay')
       expect(result).toMatch(/Committee drift/)
       expect(result).toContain(COMMITTEE_DRIFT_GUARDRAIL)
     })
 
     it('new-prompt pass carries the trust safeguards and gated disposition', () => {
-      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
+      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis, 'roleplay')
       expect(result).toContain(TRUST_SAFEGUARDS_DIRECTION)
       const gate = result.indexOf('If the existing prompts frame the character as {{user}}')
       expect(gate).toBeGreaterThan(-1)
@@ -478,7 +481,7 @@ describe('per-item suggestion prompts', () => {
 
   describe('getNewSystemPromptsSuggestionPrompt', () => {
     it('includes the analysis and guides system-prompt additions only', () => {
-      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
+      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis, 'roleplay')
       expect(result).toContain(JSON.stringify(mockAnalysis, null, 2))
       expect(result.toLowerCase()).toContain('new')
       expect(result.toLowerCase()).toContain('additions only')
@@ -486,7 +489,7 @@ describe('per-item suggestion prompts', () => {
     })
 
     it('explicitly forbids proposing new scenarios', () => {
-      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
+      const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis, 'roleplay')
       expect(result.toLowerCase()).toContain('do not propose new scenarios')
     })
   })
@@ -537,3 +540,41 @@ describe('coerceSuggestionArray', () => {
     }
   })
 })
+
+describe('the character kind in the Optimizer', () => {
+  const analysis = { behavioralPatterns: [], summary: 'steady' } as unknown as OptimizerAnalysis
+  const prompt = {
+    id: 'sp-k',
+    name: 'Default',
+    content: 'You are calm.',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  } as unknown as CharacterSystemPrompt
+
+  it('analysis looks for flattening in a roleplay character, not in an assistant', () => {
+    expect(getAnalysisPrompt('roleplay')).toMatch(/- Flattening — /)
+    expect(getAnalysisPrompt('roleplay')).toContain(FLATTENING_DRIFT_SIGNAL)
+    expect(getAnalysisPrompt('assistant')).not.toMatch(/Flattening/)
+  })
+
+  it('refining a roleplay prompt carries the stakes direction and the flattening signal', () => {
+    const result = getSystemPromptSuggestionPrompt(analysis, prompt, 'roleplay')
+    expect(result).toContain(STAKES_AND_REACTION_DIRECTION)
+    expect(result).toContain(FLATTENING_DRIFT_SIGNAL)
+    expect(result).not.toContain(ASSISTANT_TASK_DIRECTION)
+  })
+
+  it('refining an assistant prompt carries the task direction and no flattening signal', () => {
+    const result = getSystemPromptSuggestionPrompt(analysis, prompt, 'assistant')
+    expect(result).toContain(ASSISTANT_TASK_DIRECTION)
+    expect(result).not.toContain(FLATTENING_DRIFT_SIGNAL)
+    expect(result).not.toContain(STAKES_AND_REACTION_DIRECTION)
+  })
+
+  it('a new prompt follows the kind', () => {
+    expect(getNewSystemPromptsSuggestionPrompt(analysis, 'roleplay')).toContain(STAKES_AND_REACTION_DIRECTION)
+    expect(getNewSystemPromptsSuggestionPrompt(analysis, 'assistant')).toContain(ASSISTANT_TASK_DIRECTION)
+  })
+})
+

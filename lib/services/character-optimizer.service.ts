@@ -30,7 +30,10 @@ import {
   COMPANION_TRUST_DISPOSITION,
   COMMITTEE_DRIFT_GUARDRAIL,
   EXAMPLE_DIALOGUE_COVERAGE,
+  generatorDirectionFor,
+  kindDriftSignalFor,
 } from '@/lib/services/character-field-semantics';
+import { resolveCharacterKind, type CharacterKind } from '@/lib/characters/kind';
 import { sanitizeGeneratedWardrobeItems, type GeneratedWardrobeItem } from '@/lib/wardrobe/generated-items';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { memoryIndex } from '@/lib/memory/index-store';
@@ -301,9 +304,15 @@ export function buildMemoryContext(memories: Array<{ memory: Memory }>): string 
 }
 
 /**
- * Get analysis prompt
+ * Get analysis prompt. A roleplay character's analysis also looks for
+ * flattening (`kindDriftSignalFor`); an assistant's does not.
  */
-export function getAnalysisPrompt(): string {
+export function getAnalysisPrompt(kind: CharacterKind): string {
+  const driftSignal = kindDriftSignalFor(kind);
+  const flatteningLookFor = driftSignal
+    ? `\n- Flattening — the character meeting danger, threat, loss, or outrage with the same even calm as small talk. Surface it as a pattern to CORRECT, labelled as such, never as a trait.`
+    : '';
+  const flatteningGuardrail = driftSignal ? `\n\n${driftSignal}` : '';
   return `${FULL_FIELD_SEMANTICS}
 
 Analyze this character's configuration alongside their most-reinforced memories. Identify 3-8 behavioral patterns that are established in the memories but not fully captured in the character's current configuration.
@@ -321,9 +330,9 @@ Look for:
 - Concrete physical/appearance details the memories establish — scars, hair, height (these inform the physical description, not behaviour)
 - Habitual garments, outfits, or accessories the memories establish — a signature coat, a locket always worn (these inform the WARDROBE, never the physical description)
 - Nicknames or alternate names other characters repeatedly use for this character (these inform the ALIASES property)
-- Committee drift — the character governing {{user}}'s persona (sign-offs, votes, conditions), contradicting narrated events, or treating silence as consent. Surface it as a pattern to CORRECT, labelled as such, never as a trait.
+- Committee drift — the character governing {{user}}'s persona (sign-offs, votes, conditions), contradicting narrated events, or treating silence as consent. Surface it as a pattern to CORRECT, labelled as such, never as a trait.${flatteningLookFor}
 
-${COMMITTEE_DRIFT_GUARDRAIL}
+${COMMITTEE_DRIFT_GUARDRAIL}${flatteningGuardrail}
 
 Respond with JSON:
 {
@@ -441,7 +450,9 @@ Respond with a JSON array of at most one suggestion.`;
 export function getSystemPromptSuggestionPrompt(
   analysis: OptimizerAnalysis,
   prompt: CharacterSystemPrompt,
+  kind: CharacterKind,
 ): string {
+  const driftSignal = kindDriftSignalFor(kind);
   return `Focus solely on the following system prompt. Decide whether its text should be refined to better reflect the demonstrated behavior below, while preserving the interaction style the prompt is clearly trying to achieve.
 
 === System Prompt Under Review ===
@@ -468,6 +479,8 @@ Additional rules specific to system-prompt refinement:
 - Never remove or weaken the prompt's trust safeguards (narration is fact, the conversation outranks notes, no invented setting facts, consent only in plain words, disagreement without procedure); add them in the prompt's own voice where they are missing:
 ${TRUST_SAFEGUARDS_DIRECTION}
 - ${COMMITTEE_DRIFT_GUARDRAIL}
+- Make sure the prompt carries this direction, in its own voice, adding it where it is missing:
+${generatorDirectionFor(kind)}${driftSignal ? `\n- ${driftSignal}` : ''}
 - If the prompt under review frames the character as {{user}}'s companion, partner, family, or crew, preserve or add the companion trust disposition; otherwise do not add it.
 ${COMPANION_TRUST_DISPOSITION}
 
@@ -607,7 +620,7 @@ Respond with a JSON array of suggestion objects (may be empty).`;
  * interaction styles the existing prompts don't already cover. New scenarios
  * are intentionally NOT proposed — only existing scenarios may be refined.
  */
-export function getNewSystemPromptsSuggestionPrompt(analysis: OptimizerAnalysis): string {
+export function getNewSystemPromptsSuggestionPrompt(analysis: OptimizerAnalysis, kind: CharacterKind): string {
   return `Review the character's existing system prompts (shown in the character context). Propose any NEW system prompts that are warranted by the behavioral patterns below but aren't already covered by the existing set. Do NOT propose edits to existing prompts here — this pass handles additions only. Do NOT propose new scenarios. If no new system prompt is warranted, respond with an empty JSON array.
 
 === Behavioural Analysis ===
@@ -620,6 +633,7 @@ Additional rules specific to this pass:
 - Be conservative: only propose a new prompt if there is a clear interaction style the existing set does not cover.
 - ${CONVERSATIONAL_VOICE_DIRECTION}
 - ${TRUST_SAFEGUARDS_DIRECTION}
+- ${generatorDirectionFor(kind)}
 - If the existing prompts frame the character as {{user}}'s companion, partner, family, or crew, the new prompt carries the companion trust disposition; otherwise do not add it.
 ${COMPANION_TRUST_DISPOSITION}
 
@@ -717,6 +731,11 @@ export async function runCharacterOptimizer(
     if (!character || character.userId !== userId) {
       throw new Error('Character not found');
     }
+
+    // The system-prompt passes follow the character's kind: stakes and
+    // flattening for a roleplay character, the work for an assistant.
+    const characterKind = resolveCharacterKind(character);
+    logger.debug('[CharacterOptimizer] Optimizing for the character\'s kind', { characterId, kind: characterKind });
 
     // Memory retrieval pipeline: search → date filter → rank → reinforcement filter → limit.
     //
@@ -848,7 +867,7 @@ export async function runCharacterOptimizer(
       profile.modelName,
       characterContext,
       memoryContext,
-      getAnalysisPrompt(),
+      getAnalysisPrompt(characterKind),
       { temperature: 0.5, maxTokens: 8000 },
       characterId,
       profileParams(profile)
@@ -1093,7 +1112,7 @@ export async function runCharacterOptimizer(
       await runSubStep(
         'systemPrompt',
         `System prompt: ${prompt.name}`,
-        getSystemPromptSuggestionPrompt(analysis, prompt),
+        getSystemPromptSuggestionPrompt(analysis, prompt, characterKind),
       );
     }
 
@@ -1118,7 +1137,7 @@ export async function runCharacterOptimizer(
     await runSubStep(
       'newSystemPrompts',
       'Proposed new system prompts',
-      getNewSystemPromptsSuggestionPrompt(analysis),
+      getNewSystemPromptsSuggestionPrompt(analysis, characterKind),
     );
 
     const suggestions = allSuggestions;

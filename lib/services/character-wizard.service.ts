@@ -29,6 +29,7 @@ import {
   CONVERSATIONAL_VOICE_DIRECTION,
   TRUST_SAFEGUARDS_DIRECTION,
   GATED_COMPANION_TRUST_DISPOSITION,
+  generatorDirectionFor,
   EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
@@ -39,6 +40,7 @@ import {
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { DEFAULT_CHARACTER_KIND, resolveCharacterKind, type CharacterKind } from '@/lib/characters/kind';
 
 // ============================================================================
 // Types
@@ -211,8 +213,16 @@ ${EXAMPLE_DIALOGUE_COVERAGE}`,
 - Refer to the person being addressed as {{user}} if a direct reference is needed.
 
 Respond with ONLY the message, no explanation.`,
+};
 
-  systemPrompt: `${PROMPT_SEMANTICS}
+/**
+ * The default-system-prompt meta-prompt, for a character of the given kind.
+ * The kind-specific direction (stakes for a roleplay character, the work for
+ * an assistant) comes from `generatorDirectionFor`, between the trust
+ * safeguards and the companion gate.
+ */
+export function buildSystemPromptFieldPrompt(kind: CharacterKind): string {
+  return `${PROMPT_SEMANTICS}
 
 Write a system prompt that instructs an AI how to roleplay as this character. This will serve as the default system prompt (characters can have multiple named system prompts for different interaction styles or different models, but this one should be a comprehensive general-purpose default).
 
@@ -230,10 +240,21 @@ ${CONVERSATIONAL_VOICE_DIRECTION}
 
 ${TRUST_SAFEGUARDS_DIRECTION}
 
+${generatorDirectionFor(kind)}
+
 ${GATED_COMPANION_TRUST_DISPOSITION}
 
-Keep it under 600 words but comprehensive.`,
-};
+Keep it under 600 words but comprehensive.`;
+}
+
+/**
+ * The meta-prompt for one Wizard field. `systemPrompt` depends on the
+ * character's kind; every other field is kind-free.
+ */
+export function wizardFieldPrompt(field: string, kind: CharacterKind): string {
+  return field === 'systemPrompt' ? buildSystemPromptFieldPrompt(kind) : FIELD_PROMPTS[field];
+}
+
 
 export const PROPERTIES_PROMPT = `${PROPERTIES_SEMANTICS}
 
@@ -702,6 +723,49 @@ export async function generateProperties(
 // ============================================================================
 
 /**
+ * The completion budget for one Wizard text field. A system prompt asks for up
+ * to 600 words across voice, listening, the trust safeguards and the kind's
+ * direction; at the old shared 1000-token cap a reasoning model spent part of
+ * the budget thinking and the prompt came back cut off mid-sentence.
+ */
+export function wizardFieldMaxTokens(field: string): number {
+  if (field === 'systemPrompt') return 2500;
+  if (field === 'exampleDialogues' || field === 'firstMessage') return 1000;
+  if (field === 'scenarios') return 4000;
+  return 500;
+}
+
+/**
+ * The kind of the character the Wizard is writing for: the stored kind of the
+ * character being edited, or the default (roleplay) for a new one. The Wizard
+ * never guesses a kind from the material — staff who serve the operator's
+ * household read as "assistants" to a model, and that is the failure the
+ * kind exists to prevent. A character whose vault cannot be read is written
+ * for the default, with a warning.
+ */
+async function resolveWizardCharacterKind(
+  request: WizardRequest,
+  repos: RepositoryContainer
+): Promise<CharacterKind> {
+  if (!request.characterId) {
+    logger.debug('[CharacterWizard] New character; writing for the default kind', { kind: DEFAULT_CHARACTER_KIND });
+    return DEFAULT_CHARACTER_KIND;
+  }
+  try {
+    const character = await repos.characters.findById(request.characterId);
+    const kind = resolveCharacterKind(character);
+    logger.debug('[CharacterWizard] Writing for the character\'s kind', { characterId: request.characterId, kind });
+    return kind;
+  } catch (error) {
+    logger.warn('[CharacterWizard] Could not read the character; writing for the default kind', {
+      characterId: request.characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return DEFAULT_CHARACTER_KIND;
+  }
+}
+
+/**
  * Run the AI character wizard
  */
 export async function runCharacterWizard(
@@ -850,6 +914,8 @@ export async function runCharacterWizard(
     documentContent
   );
 
+  const characterKind = await resolveWizardCharacterKind(request, repos);
+
   // Generate remaining fields (excluding 'name' which was already handled)
   for (const field of request.fieldsToGenerate) {
     if (field === 'name') continue; // Already handled above
@@ -889,11 +955,8 @@ export async function runCharacterWizard(
           profileParams(primaryProfile)
         );
       } else {
-        const fieldPrompt = FIELD_PROMPTS[field];
-        const maxTokens =
-          field === 'exampleDialogues' || field === 'systemPrompt' || field === 'firstMessage'
-            ? 1000
-            : field === 'scenarios' ? 4000 : 500;
+        const fieldPrompt = wizardFieldPrompt(field, characterKind);
+        const maxTokens = wizardFieldMaxTokens(field);
         const rawContent = await generateField(
           primaryProvider,
           primaryApiKey,
@@ -1117,6 +1180,8 @@ export async function runCharacterWizardStreaming(
       documentContent
     );
 
+    const characterKind = await resolveWizardCharacterKind(request, repos);
+
     // Generate remaining fields (excluding 'name' which was already handled)
     for (const field of request.fieldsToGenerate) {
       if (field === 'name') continue;
@@ -1168,11 +1233,8 @@ export async function runCharacterWizardStreaming(
             snippet: describeGeneratedProperties(props, 'no pronouns found'),
           });
         } else {
-          const fieldPrompt = FIELD_PROMPTS[field];
-          const maxTokens =
-            field === 'exampleDialogues' || field === 'systemPrompt' || field === 'firstMessage'
-              ? 1000
-              : field === 'scenarios' ? 4000 : 500;
+          const fieldPrompt = wizardFieldPrompt(field, characterKind);
+          const maxTokens = wizardFieldMaxTokens(field);
           const rawContent = await generateField(
             primaryProvider,
             primaryApiKey,

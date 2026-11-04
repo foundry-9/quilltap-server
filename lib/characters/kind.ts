@@ -66,16 +66,26 @@ export type AgentModeFlavor = 'research' | 'in-character'
  */
 export type ToolRulesVariant = 'assistant' | 'roleplay'
 
+/**
+ * Which extra direction a prompt generator (AI Wizard, Summon From Lore, the
+ * Character Optimizer, the External Prompt generator) adds for this kind.
+ * `stakes` is how a story character reacts when the story turns; `task` is
+ * how an assistant does the work. The prose lives server-side in
+ * `generatorDirectionFor` (`lib/services/character-field-semantics.ts`).
+ */
+export type GeneratorDirectionKey = 'stakes' | 'task'
+
 /** Everything a kind decides, derived in one place. */
 export interface KindPolicy {
   kind: CharacterKind
   agentFlavor: AgentModeFlavor
   toolRules: ToolRulesVariant
+  generatorDirection: GeneratorDirectionKey
 }
 
 const KIND_POLICIES: Readonly<Record<CharacterKind, KindPolicy>> = {
-  roleplay: { kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay' },
-  assistant: { kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant' },
+  roleplay: { kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay', generatorDirection: 'stakes' },
+  assistant: { kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant', generatorDirection: 'task' },
 }
 
 /** The behaviour a kind decides. The only place a kind turns into behaviour. */

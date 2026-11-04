@@ -12,6 +12,7 @@
 import { createLLMProvider } from '@/lib/llm';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { parseLLMJson } from '@/lib/llm/llm-json';
+import { DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
 import { describeGeneratedProperties, parseGeneratedProperties } from '@/lib/characters/generated-properties';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
@@ -27,6 +28,7 @@ import {
   CONVERSATIONAL_VOICE_DIRECTION,
   TRUST_SAFEGUARDS_DIRECTION,
   GATED_COMPANION_TRUST_DISPOSITION,
+  generatorDirectionFor,
   EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
@@ -199,6 +201,11 @@ Respond with JSON:
 
 For exampleDialogues: ${EXAMPLE_DIALOGUE_COVERAGE}`;
 
+/**
+ * Summon From Lore creates a new character, and a new character is a roleplay
+ * character (`DEFAULT_CHARACTER_KIND`); the operator can switch it to Assistant
+ * afterwards. The kind is never guessed from the source material.
+ */
 export const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
 
 Create system prompts that instruct an AI how to roleplay as this character.
@@ -217,6 +224,8 @@ The main prompt should capture the character's essence from the source material.
 ${CONVERSATIONAL_VOICE_DIRECTION}
 
 ${TRUST_SAFEGUARDS_DIRECTION}
+
+${generatorDirectionFor(DEFAULT_CHARACTER_KIND)}
 
 ${GATED_COMPANION_TRUST_DISPOSITION}
 Use the relationships array in the Prior Analysis, where one is given, as evidence for that decision.`;
