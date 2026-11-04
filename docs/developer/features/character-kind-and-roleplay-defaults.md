@@ -1,6 +1,6 @@
 # Character Kind and Roleplay Defaults
 
-**Status:** In progress. Phases 1 (the kind flag) and 2 (Agent Mode flavours and tool rules) implemented 2026-11-04 — see §12 "As built". Phases 3–6 not started.
+**Status:** In progress. Phases 1 (the kind flag), 2 (Agent Mode flavours and tool rules) and 3 (sample prompts) implemented 2026-11-04 — see §12 "As built". Phases 4–6 not started.
 **Scope:** quilltap-server. A new per-character `kind` flag (`roleplay` | `assistant`) and the one resolver that turns it into behaviour; two Agent Mode flavours; a kind-aware tool-rules preamble; a new default Roleplay sample prompt and an Assistant sample prompt in the `default-system-prompts` plugin, with the anti-escalation passages in the existing prompts rewritten; a kind-aware stakes direction for the five generators that write a system prompt; one new group-scene bullet; and a rewording of the inform header (decision D2, accepted 2026-11-04).
 **Non-scope:** users' own prompt copies (never touched, as before); the committee-flavoured memories already in instances (§9); the Brahma Console, Help chat, Scenario Builder and other one-shot loops (they are not characters and stay on the research flavour); per-family Roleplay variants (decision D4).
 **Related:** [prompt-trust-and-anti-committee.md](complete/prompt-trust-and-anti-committee.md) (the generator chokepoint and sample-prompt edit pattern this spec extends), [prompt-trust-the-probation.md](prompt-trust-the-probation.md), [salon-inform](complete/salon-inform.md) (the inform header, design of record), [prompt-person-consistency.md](complete/prompt-person-consistency.md) (identity-stack versioning rules).
@@ -143,7 +143,7 @@ Lyle, the one character told by informs to escalate, did escalate, on an abliter
 - **Anti-escalation rewrites:**
   - `DEEPSEEK_COMPANION`/`DEEPSEEK_ROMANTIC`: the "STYLE GOVERNOR — your main failure mode is escalation" section becomes "STYLE GOVERNOR — match the stakes". It keeps the real DeepSeek problem (purple prose, grand imagery, emotional swerves out of nowhere, metaphor budget) and drops "An annoying Tuesday stays an annoying Tuesday… No scene swerves into melodrama", replacing it with: an ordinary day stays ordinary; when the story brings real danger or loss, react at full size, in plain concrete words.
   - `MODERN_GENERAL.md:7` goes with the file; `MODERN_PLATONIC` and `MODERN_ROMANTIC` are checked for the same sentence during implementation.
-- Companion, Platonic and Romantic files gain one short "Reacting to what happens" bullet in each family's native structure, so a companion prompt does not leave a character unable to be frightened.
+- Companion, Platonic and Romantic files gain one short stakes passage in each family's native structure, so a companion prompt does not leave a character unable to be frightened. *(As built: a two-bullet "When the story turns" section just before "Whose story it is", and a single `## Do` bullet in the Ollama files.)*
 - Bump the plugin's patch version in `package.json` and `manifest.json` together, then `npm run build:plugins`.
 
 ### 5.5 Generator directions
@@ -180,7 +180,7 @@ This still vouches and still does not instruct an action. It adds "in you", "how
 
 1. **Kind flag.** *(Done.)* Vault `properties.json` key, schema, resolver, grep-test, API, Aurora UI (a two-option card on the Details tab with a one-line explanation of each), export schema, DDL, help.
 2. **Agent Mode flavours and tool rules.** *(Done.)* `flavor` and `variant` parameters, tool-builder gating of `submit_final_response`, Salon wiring through the policy, one-shot loops pinned to research/assistant.
-3. **Sample prompts.** `MODERN_ROLEPLAY`, `MODERN_ASSISTANT`, retire `MODERN_GENERAL` with the built-in prune step, DeepSeek governor rewrites, the "Reacting to what happens" bullet across the relationship prompts, plugin version bump and build.
+3. **Sample prompts.** *(Done.)* `MODERN_ROLEPLAY`, `MODERN_ASSISTANT`, retire `MODERN_GENERAL` with the built-in prune step, DeepSeek governor rewrites, the "Reacting to what happens" bullet across the relationship prompts, plugin version bump and build.
 4. **Generators.** The two new directions, wiring through `kindPolicy`, the Wizard and Summon choosing kind, the Optimizer's flattening signal.
 5. **Group discipline and inform header.** The new bullet and the new inform header.
 6. **Docs and evaluation.** Help docs, CHANGELOG, then the live evaluation in §8.
@@ -247,4 +247,15 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 - The Brahma Console, the Help chat and `runOneShotToolLoop` pass `research` and `assistant` explicitly.
 - Tests: `agent-mode-flavor.test.ts` (new), `native-tool-prompt.test.ts` (both variants, every rule, assistant text byte-identical), in-character cases in `native-tool-loop.service.test.ts`, the roleplay/assistant preamble and the submit switch in `turn-tools.test.ts`, `kindPolicy` in `kind.test.ts`.
 - Help: `help/agent-mode.md` (the two flavours), `help/character-editing.md`.
+
+### Phase 3 — sample prompts (2026-11-04)
+
+- `MODERN_ROLEPLAY.md` (new, category `ROLEPLAY`): everything `MODERN_GENERAL` did well, with "A person in a story" (relationships change gradually; events can arrive all at once and are met at their real size), "Reacting to what happens" (match the stakes; temperament is a starting point, not a vow; danger is not a conversation to manage; protect what the character would protect; consequences land), "In a scene with others" (one voice, not the moderator; the cast need not agree; object once, don't lecture or talk {{user}}'s decisive action down), the **Flattening** and **The mediator** failure modes, and a "danger, met at its real size" example.
+- `MODERN_ASSISTANT.md` (new, category `ASSISTANT`): the work first (one clarifying question at most, accuracy, never invent a fact, show the working, formatting when it serves), still a person (voice, opinions given once, sized replies, no padding), the universal "whose call it is" rules, and its own failure modes. Its usage note tells the operator to set the character's kind to Assistant.
+- `MODERN_GENERAL.md` removed. `PromptTemplatesRepository._doSeedSamplePrompts` now ends a successful registry seed with `pruneRetiredBuiltIns`: every `isBuiltIn` row whose name the registry no longer ships is deleted and logged. It never runs on the filesystem fallback or when the registry returned nothing, and it never touches non-built-in rows.
+- Every companion, romantic and platonic file gains a stakes passage ("When the story turns", in the family's header style and grammatical person; a `## Do` bullet in the Ollama files). DeepSeek's two style governors are retitled "match the stakes": they keep the limits on prose, metaphor and the pace of desire, and the companion governor's "an annoying Tuesday stays an annoying Tuesday / no scene swerves into melodrama" bullet is replaced with "an ordinary day stays ordinary … when the story itself brings danger, loss, or outrage, meet it at full size". Gemini's "an annoying Tuesday is not a tempest" (about not inflating small feelings) stays.
+- Plugin 1.1.32 (`package.json` and `manifest.json`), descriptions and README updated, `npm run build:plugins` run.
+- Tests: `default-system-prompts-content.test.ts` (22 files; the two neutral files; the stakes rule everywhere but the assistant file; the retired governor phrases forbidden; the roleplay prompt's new sections; the assistant's honesty line), and three prune cases in `prompt-templates-seed-refresh.test.ts`.
+- Help: `help/prompts.md` (the new MODERN samples, "Matching the stakes", the 1.1.32 edition and retirement).
+- Not done here: `KindPolicy` has no `suggestedSamplePromptCategory` yet. Nothing would read it until the import dialog or a generator suggests a sample by kind; it is added with its first consumer.
 

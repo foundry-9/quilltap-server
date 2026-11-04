@@ -1,7 +1,7 @@
 {
   "name": "qtap-plugin-default-system-prompts",
-  "version": "1.1.31",
-  "description": "Default system prompt templates for Quilltap - companion and romantic prompts for various LLM models",
+  "version": "1.1.32",
+  "description": "Default system prompt templates for Quilltap - roleplay, assistant, companion and romantic prompts for various LLM models",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9 LLC",

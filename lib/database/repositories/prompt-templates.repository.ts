@@ -58,6 +58,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
           for (const prompt of registryPrompts) {
             await this.upsertBuiltInPrompt(prompt, 'plugin');
           }
+          await this.pruneRetiredBuiltIns(new Set(registryPrompts.map((p) => p.name)));
           return;
         }
 
@@ -71,6 +72,38 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
       {},
       undefined
     );
+  }
+
+  /**
+   * Remove built-in rows whose prompt is no longer shipped.
+   *
+   * Built-ins cannot be edited, deleted or tagged by the user, and a row whose
+   * source file is gone would never refresh again, so a retired prompt (e.g.
+   * MODERN_GENERAL, replaced by MODERN_ROLEPLAY in 4.13) would otherwise sit on
+   * the shelf as an untouchable stale copy. Runs only after a successful
+   * registry seed with at least one prompt, so a plugin that failed to load
+   * can never empty the shelf. Copies the user imported into a character or
+   * made with "Copy as New" are not built-in rows and are never touched; no
+   * schema stores a prompt-template id.
+   */
+  private async pruneRetiredBuiltIns(shippedNames: ReadonlySet<string>): Promise<void> {
+    const collection = await this.getCollection();
+    const builtIns = await collection.find({ isBuiltIn: true } as TypedQueryFilter<PromptTemplate>);
+    let removed = 0;
+    for (const row of builtIns) {
+      if (shippedNames.has(row.name)) continue;
+      await collection.deleteOne({ id: row.id } as TypedQueryFilter<PromptTemplate>);
+      removed++;
+      logger.info('Retired built-in prompt template removed', {
+        templateId: row.id,
+        name: row.name,
+      });
+    }
+    logger.debug('Built-in prompt templates pruned', {
+      builtInCount: builtIns.length,
+      shippedCount: shippedNames.size,
+      removed,
+    });
   }
 
   /**

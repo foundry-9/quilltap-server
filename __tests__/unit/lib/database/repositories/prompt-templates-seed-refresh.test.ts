@@ -63,6 +63,17 @@ function makeCollection(rows: PromptTemplate[]) {
       Object.assign(row, update.$set);
       return { modifiedCount: 1 };
     }),
+    find: jest.fn(async (filter: Partial<PromptTemplate>) =>
+      rows.filter(r =>
+        Object.entries(filter).every(([k, v]) => r[k as keyof PromptTemplate] === v)
+      )
+    ),
+    deleteOne: jest.fn(async (filter: { id: string }) => {
+      const index = rows.findIndex(r => r.id === filter.id);
+      if (index === -1) return { deletedCount: 0 };
+      rows.splice(index, 1);
+      return { deletedCount: 1 };
+    }),
   };
   getDatabaseAsync.mockResolvedValue({ getCollection: () => collection });
   return collection;
@@ -127,5 +138,48 @@ describe('PromptTemplatesRepository built-in seeding', () => {
     expect(collection.insertOne).not.toHaveBeenCalled();
     expect(collection.updateOne).not.toHaveBeenCalled();
     expect(rows[0].updatedAt).toBe('2026-07-01T00:00:00.000Z');
+  });
+
+  describe('retired built-ins', () => {
+    const RETIRED_ID = '55555555-5555-4555-8555-555555555555';
+    const COPY_ID = '66666666-6666-4666-8666-666666666666';
+
+    function retiredRow(): PromptTemplate {
+      return { ...builtInRow('old general text'), id: RETIRED_ID, name: 'MODERN_RETIRED' };
+    }
+
+    it('removes a built-in row whose prompt is no longer shipped', async () => {
+      const rows = [builtInRow('same text'), retiredRow()];
+      const collection = makeCollection(rows);
+      shipped('same text');
+
+      await new PromptTemplatesRepository().seedSamplePrompts();
+
+      expect(collection.deleteOne).toHaveBeenCalledTimes(1);
+      expect(collection.deleteOne).toHaveBeenCalledWith({ id: RETIRED_ID });
+      expect(rows.map(r => r.id)).toEqual([ROW_ID]);
+    });
+
+    it('keeps a user copy that shares the retired name', async () => {
+      const copy: PromptTemplate = { ...retiredRow(), id: COPY_ID, isBuiltIn: false, userId: 'user-1' };
+      const rows = [builtInRow('same text'), retiredRow(), copy];
+      makeCollection(rows);
+      shipped('same text');
+
+      await new PromptTemplatesRepository().seedSamplePrompts();
+
+      expect(rows.map(r => r.id).sort()).toEqual([COPY_ID, ROW_ID].sort());
+    });
+
+    it('prunes nothing when the registry returned no prompts', async () => {
+      const rows = [builtInRow('same text'), retiredRow()];
+      const collection = makeCollection(rows);
+      systemPromptRegistry.getAll.mockReturnValue([]);
+
+      await new PromptTemplatesRepository().seedSamplePrompts();
+
+      expect(collection.deleteOne).not.toHaveBeenCalled();
+      expect(rows).toHaveLength(2);
+    });
   });
 });

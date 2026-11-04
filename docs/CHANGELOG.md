@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Feature: roleplay and assistant sample prompts; every story prompt matches the stakes
+
+- New sample prompts in the default-system-prompts plugin (1.1.32): **MODERN Roleplay**, the recommended default for roleplay characters (a person inside a story with stakes; adds sections on reacting to danger and on group scenes, and the "flattening" and "mediator" failure modes), and **MODERN Assistant**, for characters whose job is doing work for the user.
+- **MODERN General** is retired. Seeding now deletes built-in prompt rows the plugin no longer ships, but only after a registry seed that returned at least one prompt; user copies are never touched.
+- Every companion, romantic and platonic sample gains a short "match the stakes" passage: ordinary days stay ordinary, real danger gets real fear, anger or action, and a character's usual temperament is not a vow.
+- DeepSeek's style governors are now "match the stakes". They still limit purple prose and metaphor but no longer tell the character to keep the story small.
+- Phase 3 of `docs/developer/features/character-kind-and-roleplay-defaults.md`.
+
 #### Feature: Agent Mode and tool rules follow the character's kind
 
 - Agent Mode now has two flavors, chosen by the responding character's kind; the settings cascade still decides only whether it is on.
