@@ -73,6 +73,11 @@ export interface MemoryIndexSearchOptions {
   hotOnly: boolean
   /** Ids to leave out of the scan (they never take a top-K slot). */
   exclude?: ReadonlySet<string>
+  /**
+   * When present, only these ids are scored (a date window's rows, read by
+   * event time in SQL). Composes with `hotOnly` and `exclude`.
+   */
+  includeIds?: ReadonlySet<string>
 }
 
 /** What the index holds for a character, measured against a query's length. */
@@ -139,9 +144,12 @@ class ProcessMemoryIndex implements MemoryIndex {
   ): Promise<VectorSearchResult[]> {
     const store = await getVectorStoreManager().getStore(characterId)
     const exclude = opts.exclude && opts.exclude.size > 0 ? opts.exclude : undefined
-    const filter = opts.hotOnly || exclude
+    const include = opts.includeIds
+    const filter = opts.hotOnly || exclude || include
       ? (metadata: VectorMetadata) =>
-          (!exclude || !exclude.has(metadata.memoryId)) && (!opts.hotOnly || isHotVector(metadata))
+          (!include || include.has(metadata.memoryId)) &&
+          (!exclude || !exclude.has(metadata.memoryId)) &&
+          (!opts.hotOnly || isHotVector(metadata))
       : undefined
     return store.search(vector, opts.limit, filter)
   }

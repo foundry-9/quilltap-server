@@ -95,8 +95,9 @@ function prime(memories: Mem[], hits: Record<string, Mem[]> = {}) {
   contentHits = hits
   // An index that honors exclude / hotOnly, like the real one.
   vectorSearch = jest.fn(
-    (_c: string, _q: unknown, opts: { limit: number; hotOnly: boolean; exclude?: ReadonlySet<string> }) =>
+    (_c: string, _q: unknown, opts: { limit: number; hotOnly: boolean; exclude?: ReadonlySet<string>; includeIds?: ReadonlySet<string> }) =>
       corpus
+        .filter(m => !opts.includeIds || opts.includeIds.has(m.id))
         .filter(m => !opts.exclude?.has(m.id))
         .filter(m => !opts.hotOnly || (m as { tier?: string }).tier !== 'cold')
         .map(m => ({ id: m.id, score: m.embedding[0], metadata: { memoryId: m.id, characterId: 'char-1' } }))
@@ -108,6 +109,15 @@ function prime(memories: Mem[], hits: Record<string, Mem[]> = {}) {
   mockRepos.mockReturnValue({
     memories: {
       findByIds: jest.fn(async (ids: string[]) => corpus.filter(m => ids.includes(m.id))),
+      findIdsInEventWindow: jest.fn(async (_c: string, w: { from: string; to: string }, o: { hotOnly: boolean }) =>
+        corpus
+          .filter(m => !o.hotOnly || (m as { tier?: string }).tier !== 'cold')
+          .filter(m => {
+            const t = (m.occurredAt ?? m.createdAt) as string
+            return t >= w.from && t <= w.to
+          })
+          .map(m => m.id),
+      ),
       searchByContent: jest.fn(async (_c: string, phrase: string) => contentHits[phrase] ?? []),
     },
   })

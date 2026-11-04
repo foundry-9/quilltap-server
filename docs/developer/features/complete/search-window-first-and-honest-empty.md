@@ -1,6 +1,15 @@
 # Feature: Window-first search and honest empty results
 
-**Status:** Proposed (4.13-dev, 2026-11-04). Not started.
+**Status:** Implemented (4.12.1, 2026-11-04).
+
+Implementation notes, where the code departs from or adds to the text below:
+
+- `isNarrowToolWindow` (`lib/memory/recall/score.ts`) is the one test of "at most `TOOL_WINDOW_FLOOR_MAX_DAYS` wide"; the handler's conversation floor reads it too.
+- `searchConversationChunks` used `options.minScore || 0.3`, which turned an explicit 0 into 0.3; it is now `?? 0.3`.
+- Each census conversation also carries `date`, the local calendar date (memory calendar) it began on, which the formatter prints.
+- The census's memory count is its own `findIdsInEventWindow` read; `gather`'s read is inside `searchMemories` and is not shared.
+- On the Brahma Console the empty-window and footer wording drop the "you took part in" and memory clauses (`memoryCount: null`).
+- The character-kind work landed without touching `lib/tools/`, so the instruction sentence went in directly.
 
 Two changes to how a character finds a dated past:
 
@@ -240,7 +249,7 @@ Then `npx jest -u lib/tools/__tests__/tool-definitions-snapshot.test.ts` and rev
 
 Keep the two texts in step. Neither is part of `buildIdentityStack`, so no builder version bump.
 
-**Sequencing note (2026-11-04):** `native-tool-prompt.ts` and its test were being reworked by the character-kind / agent-mode work ([character-kind-and-roleplay-defaults.md](character-kind-and-roleplay-defaults.md)) when this spec was written. Land this sentence after that work is committed, and find the rule by its text ("Recalling past events"), not by line number.
+**Sequencing note (2026-11-04):** `native-tool-prompt.ts` and its test were being reworked by the character-kind / agent-mode work ([character-kind-and-roleplay-defaults.md](../character-kind-and-roleplay-defaults.md)) when this spec was written. Land this sentence after that work is committed, and find the rule by its text ("Recalling past events"), not by line number.
 
 ### 7. Per-turn recall: unsummarized chats in the retrospective mini-recap
 

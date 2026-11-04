@@ -118,6 +118,7 @@ beforeEach(() => {
     memories: {
       findByIds: jest.fn(async (ids: string[]) => corpus.filter(m => ids.includes(m.id))),
       searchByContent: jest.fn(async () => []),
+      findIdsInEventWindow: jest.fn(async () => []),
       findHotDigests: jest.fn(async (_holder: string, about: string) => (about === IRIS ? [digestB] : [])),
       findMostImportant: jest.fn(async () => [archived]),
       findKeystones: jest.fn(async () => []),
@@ -126,7 +127,11 @@ beforeEach(() => {
       updateAccessTimeBulk: jest.fn(async () => 0),
     },
     characters: { findNamesByIds: jest.fn(async () => new Map([[IRIS, 'Iris']])) },
-    chats: { update: jest.fn(async () => null), findRecentSummarizedByCharacter: jest.fn(async () => []) },
+    chats: {
+      update: jest.fn(async () => null),
+      findRecentSummarizedByCharacter: jest.fn(async () => []),
+      findByCharacterId: jest.fn(async () => []),
+    },
     groupCharacterMembers: { findByCharacterId: jest.fn(async () => []), findByGroupId: jest.fn(async () => []) },
     groups: { findByIdRaw: jest.fn(async () => null) },
   }
@@ -235,6 +240,59 @@ describe('assembleRecall', () => {
       query: 'They remember the lighthouse. — Lighthouse Point',
       precomputedEmbedding: null,
     }))
+  })
+
+  describe('unsummarized chats in the retrospective mini-recap', () => {
+    const window = { from: new Date(NOW - 2 * 86_400_000).toISOString(), to: new Date(NOW - 86_400_000).toISOString() }
+    const yesterday = new Date(NOW - 1.5 * 86_400_000).toISOString()
+    const unsummarized = { id: 'pool-night', title: 'No Quarter at the East Pool', createdAt: yesterday, updatedAt: yesterday, lastMessageAt: yesterday }
+
+    async function retroTurn(retrospective: boolean) {
+      const query = await buildRecallQuery({
+        userId: 'user-1',
+        text: 'w',
+        signals: { keywords: ['pool'], paraphrase: 'They remember the pool.', retrospective, entities: [], timeRange: window },
+      })
+      const ctx = buildTurnRecallContext({
+        chat: { id: 'chat-1' }, recallSettings: { scopePolicy: 'down-weight', expandRelated: false },
+        turnContext: null, turnTemporal: null, turnRetrospective: retrospective, nowMs: NOW,
+      })
+      const { candidates } = await searchRecall(LYRA, query, { limit: 30, recallContext: ctx })
+      return { query, candidates }
+    }
+
+    beforeEach(() => {
+      mockVault.mockResolvedValue([])
+      repos.chats.findByCharacterId.mockResolvedValue([unsummarized])
+    })
+
+    it('lists an in-window chat that has no vault summary yet', async () => {
+      const preRecall = await retroTurn(true)
+      const bundle = await assembleRecall(plan({
+        preRecall,
+        recallSettings: { scopePolicy: 'down-weight', expandRelated: false, perTurnConversationSummaries: false },
+      }))
+      expect(bundle.sections.retrospective).toContain('No Quarter at the East Pool')
+      expect(bundle.sections.retrospective).toContain('pool-night')
+      expect(bundle.trace.find(t => t.label === 'retrospective')?.detail).toMatchObject({ unsummarized: 1 })
+    })
+
+    it('does not list it on a turn that is not retrospective', async () => {
+      const bundle = await assembleRecall(plan({
+        preRecall: await retroTurn(false),
+        recallSettings: { scopePolicy: 'down-weight', expandRelated: false, perTurnConversationSummaries: false },
+      }))
+      expect(bundle.sections.retrospective).toBeUndefined()
+    })
+
+    it('does not repeat a chat the standing whisper already lists', async () => {
+      const bundle = await assembleRecall(plan({
+        preRecall: await retroTurn(true),
+        recallSettings: { scopePolicy: 'down-weight', expandRelated: false, perTurnConversationSummaries: false },
+        conversations: { maxContext: 32000, standingIds: async () => new Set(['pool-night']) },
+      }))
+      expect(bundle.sections.retrospective).toBeUndefined()
+    })
   })
 
   it('rides the turn’s vector for a mini-recap that names no one', async () => {

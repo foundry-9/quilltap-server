@@ -97,7 +97,7 @@ flowchart TD
     SP18 --> MEM["assembleRecall()<br/><i>lib/memory/recall/assemble.ts</i>"]
 
     MEM --> MEM1["buildRecallQuery()<br/>distil + embed ONCE"]
-    MEM1 --> MEM2["searchRecall()<br/>gather → hydrate → score → select"]
+    MEM1 --> MEM2["searchRecall()<br/>gather (top-K ∪ probes ∪ window rows ∪ anchors) → hydrate → score → select"]
     MEM2 --> MEM3["frozen archive → recap (chat start) → head → inter-character<br/>a row in at most one pool"]
     MEM3 --> MEM4["render.ts<br/>age · subject · words · keywords — no debug labels"]
     MEM4 --> DELIVER["deliverRecall()<br/>after compression + request assembly:<br/>stamp delivered lines, append ring, debug record"]

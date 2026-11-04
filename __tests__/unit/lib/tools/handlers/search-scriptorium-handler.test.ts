@@ -712,3 +712,181 @@ describe('search-scriptorium-handler', () => {
     expect(formatted).toContain('Participants: Ada, User')
   })
 })
+
+/**
+ * Window-first search and honest empty results
+ * (docs/developer/features/complete/search-window-first-and-honest-empty.md).
+ */
+describe('search-scriptorium-handler — dated searches', () => {
+  const context = { userId: 'user-1', characterId: 'character-1', embeddingProfileId: 'embed-1', chatId: 'current' }
+  const mockFindIdsInEventWindow = jest.fn<(...args: unknown[]) => Promise<string[]>>()
+  const mockFindChatsByCharacterId = jest.fn<(...args: unknown[]) => Promise<unknown[]>>()
+  const mockFindChatsByUserId = jest.fn<(...args: unknown[]) => Promise<unknown[]>>()
+  const mockFindChatById = jest.fn()
+
+  const chat = (id: string, day: string) => ({
+    id,
+    title: `Chat ${id}`,
+    createdAt: `${day}T22:40:00.000Z`,
+    updatedAt: `${day}T23:20:00.000Z`,
+    lastMessageAt: `${day}T23:20:00.000Z`,
+  })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockGetRepositories.mockReturnValue({
+      characters: { findById: mockFindCharacterById },
+      projects: { canCharacterParticipate: jest.fn<() => Promise<boolean>>().mockResolvedValue(true) },
+      projectDocMountLinks: { findByProjectId: mockFindProjectMountLinks },
+      chatSettings: { findAll: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([{ timezone: 'UTC' }]) },
+      memories: { findIdsInEventWindow: mockFindIdsInEventWindow },
+      chats: { findByCharacterId: mockFindChatsByCharacterId, findByUserId: mockFindChatsByUserId, findById: mockFindChatById },
+    })
+    mockFindCharacterById.mockResolvedValue({ id: 'character-1', userId: 'user-1', characterDocumentMountPointId: 'vault-mp-1' })
+    mockFindProjectMountLinks.mockResolvedValue([])
+    mockGetGeneralMountPointId.mockResolvedValue(null)
+    mockGenerateEmbeddingForUser.mockResolvedValue({ embedding: [0.1, 0.2, 0.3] })
+    mockSearchMemoriesSemantic.mockResolvedValue([])
+    mockSearchConversationChunks.mockResolvedValue([])
+    mockSearchDocumentChunks.mockResolvedValue([])
+    mockFindIdsInEventWindow.mockResolvedValue([])
+    mockFindChatsByCharacterId.mockResolvedValue([])
+    mockFindChatsByUserId.mockResolvedValue([])
+  })
+
+  it('a dated search with no sources leaves documents out and searches the window\'s chats whole', async () => {
+    mockFindChatsByCharacterId.mockResolvedValue([chat('pool', '2026-11-03'), chat('june', '2026-06-01')])
+
+    const result = await executeSearchScriptoriumTool({ query: 'pool', since: '2026-11-03', until: '2026-11-03' }, context)
+
+    expect(result.success).toBe(true)
+    expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
+    expect(mockSearchMemoriesSemantic).toHaveBeenCalled()
+    expect(mockSearchConversationChunks).toHaveBeenCalledWith(
+      [0.1, 0.2, 0.3],
+      expect.objectContaining({ chatIds: new Set(['pool']), minScore: 0 }),
+    )
+    // The old per-hit post-filter is gone.
+    expect(mockFindChatById).not.toHaveBeenCalled()
+  })
+
+  it('an explicit documents source is honoured with a date range', async () => {
+    await executeSearchScriptoriumTool({ query: 'pool', sources: ['documents'], since: '2026-11-03' }, context)
+    expect(mockSearchDocumentChunks).toHaveBeenCalled()
+  })
+
+  it('keeps the 0.3 conversation floor for a wide window', async () => {
+    mockFindChatsByCharacterId.mockResolvedValue([chat('pool', '2026-11-03')])
+    await executeSearchScriptoriumTool({ query: 'pool', since: '2026-09-01', until: '2026-11-04' }, context)
+    expect(mockSearchConversationChunks).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ minScore: 0.3 }),
+    )
+  })
+
+  it('skips the chunk search when no conversation falls in the window', async () => {
+    await executeSearchScriptoriumTool({ query: 'pool', since: '2026-11-03', until: '2026-11-03' }, context)
+    expect(mockSearchConversationChunks).not.toHaveBeenCalled()
+  })
+
+  it('an undated search is unchanged: every source, no chatIds, no census', async () => {
+    const result = await executeSearchScriptoriumTool({ query: 'pool' }, context)
+    expect(mockSearchDocumentChunks).toHaveBeenCalled()
+    const opts = mockSearchConversationChunks.mock.calls[0][1] as Record<string, unknown>
+    expect(opts.chatIds).toBeUndefined()
+    expect(opts.minScore).toBe(0.3)
+    expect(result.windowCensus).toBeUndefined()
+    expect(mockFindIdsInEventWindow).not.toHaveBeenCalled()
+  })
+
+  it('builds a census: memory count, newest chats first, the current chat left out, capped at ten', async () => {
+    const chats = [chat('current', '2026-11-03')]
+    for (let i = 1; i <= 12; i++) chats.push(chat(`c${String(i).padStart(2, '0')}`, `2026-10-${String(i).padStart(2, '0')}`))
+    mockFindChatsByCharacterId.mockResolvedValue(chats)
+    mockFindIdsInEventWindow.mockResolvedValue(['m1', 'm2', 'm3'])
+
+    const result = await executeSearchScriptoriumTool({ query: 'pool', since: '2026-10-01' }, context)
+
+    expect(mockFindIdsInEventWindow).toHaveBeenCalledWith('character-1', expect.any(Object), { hotOnly: false })
+    expect(result.windowCensus).toMatchObject({ since: '2026-10-01', until: null, memoryCount: 3, moreConversations: 2 })
+    const ids = result.windowCensus!.conversations.map(c => c.id)
+    expect(ids).toHaveLength(10)
+    expect(ids).not.toContain('current')
+    expect(ids[0]).toBe('c12')
+    expect(result.windowCensus!.conversations[0]).toMatchObject({ title: 'Chat c12', date: '2026-10-12' })
+  })
+
+  it('the operator surface has no memory count and reads the user\'s chats', async () => {
+    mockFindChatsByUserId.mockResolvedValue([chat('pool', '2026-11-03')])
+    const result = await executeSearchScriptoriumTool(
+      { query: 'pool', since: '2026-11-03' },
+      { userId: 'user-1', operatorSurface: true },
+    )
+    expect(mockFindChatsByUserId).toHaveBeenCalledWith('user-1')
+    expect(mockFindIdsInEventWindow).not.toHaveBeenCalled()
+    expect(mockSearchDocumentChunks).not.toHaveBeenCalled()
+    expect(result.windowCensus).toMatchObject({ memoryCount: null })
+    expect(result.windowCensus!.conversations.map(c => c.id)).toEqual(['pool'])
+  })
+})
+
+describe('formatSearchScriptoriumResults — what an empty search means', () => {
+  const census = (over: Record<string, unknown> = {}) => ({
+    since: '2026-11-02',
+    until: null,
+    memoryCount: 30,
+    conversations: [{
+      id: '057d2128-af40-4382-9e1e-873d5f1deba9',
+      title: 'No Quarter at the East Pool',
+      firstMessageAt: '2026-11-03T22:40:00.000Z',
+      lastMessageAt: '2026-11-03T23:20:00.000Z',
+      date: '2026-11-03',
+    }],
+    moreConversations: 0,
+    ...over,
+  })
+  const memoryResult = {
+    content: 'Lyle came through the French doors',
+    sourceType: 'memory' as const,
+    relevanceScore: 0.3,
+    metadata: { summary: 'Lyle at the pool', importance: 0.7 },
+  }
+
+  it('A: results with a census gain a footer naming the period\'s conversations', () => {
+    const text = formatSearchScriptoriumResults([memoryResult], { query: 'pool', windowCensus: census({ moreConversations: 3 }) })
+    expect(text).toContain('Found 1 results:')
+    expect(text).toContain('Conversations you took part in during this period:')
+    expect(text).toContain('- No Quarter at the East Pool (2026-11-03) — `057d2128-af40-4382-9e1e-873d5f1deba9`')
+    expect(text).toContain('- …and 3 more')
+    expect(text).toContain('Read any of them with read_conversation.')
+  })
+
+  it('A: no footer when the census lists no conversations', () => {
+    const text = formatSearchScriptoriumResults([memoryResult], { query: 'pool', windowCensus: census({ conversations: [] }) })
+    expect(text).not.toContain('during this period')
+  })
+
+  it('B: no results but a populated window says so, and lists what to read', () => {
+    const text = formatSearchScriptoriumResults([], { query: 'pool yesterday', windowCensus: census() })
+    expect(text).toContain('Nothing matched "pool yesterday" — but that is not the same as having no record of the period.')
+    expect(text).toContain('Between 2026-11-02 and today you hold 30 memories, and you took part in these conversations:')
+    expect(text).toContain('No Quarter at the East Pool (2026-11-03)')
+    expect(text).toContain('Read one with read_conversation')
+  })
+
+  it('C: no results and no window is not proof of nothing', () => {
+    const text = formatSearchScriptoriumResults([], { query: 'pool' })
+    expect(text).toBe('Nothing matched "pool". An empty search is not proof that nothing happened: try other words, or pass since/until if you are asking about a particular time.')
+  })
+
+  it('D: an empty window really is no record', () => {
+    const text = formatSearchScriptoriumResults([], { query: 'pool', windowCensus: census({ memoryCount: 0, conversations: [] }) })
+    expect(text).toBe('You hold no memories dated between 2026-11-02 and today, and took part in no conversations in that period.')
+  })
+
+  it('called without opts, results print exactly as before', () => {
+    const text = formatSearchScriptoriumResults([memoryResult])
+    expect(text.startsWith('Found 1 results:')).toBe(true)
+    expect(text).not.toContain('during this period')
+  })
+})
