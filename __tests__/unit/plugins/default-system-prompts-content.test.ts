@@ -164,6 +164,14 @@ describe('default-system-prompts shipped text — the stakes', () => {
         expect(text).toMatch(/not a vow/)
       }
     })
+
+    it('forbids a story character from inventing where {{user}} is or what they did off-screen', () => {
+      // Phase-6 evaluation: characters decided Sam had gone to the boathouse and
+      // planned around it for turns (character-kind-and-roleplay-defaults.md §12).
+      if (file === 'MODERN_ASSISTANT.md') return
+      expect(text).toMatch(/off-screen/)
+      expect(text).toMatch(/where \{\{user\}\} is/)
+    })
   })
 
   it('gives the roleplay default its stakes, ensemble and failure-mode sections', () => {
@@ -172,6 +180,8 @@ describe('default-system-prompts shipped text — the stakes', () => {
     expect(roleplay).toContain('## In a scene with others')
     expect(roleplay).toContain('**Flattening:**')
     expect(roleplay).toContain('**The mediator:**')
+    expect(roleplay).toContain('**The invented absence:**')
+    expect(roleplay).toContain("**Don't invent where {{user}} is or what they've been doing.**")
   })
 
   it('keeps the assistant honest about what it does not know', () => {

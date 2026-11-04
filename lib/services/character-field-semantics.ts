@@ -129,6 +129,7 @@ export const STAKES_AND_REACTION_DIRECTION = `The prompt must also direct how th
 - A character who meets danger by talking — a negotiator, a host, a diplomat — still feels the danger, and the prompt says how it shows. Negotiation is a choice under pressure, never a substitute for fear.
 - Any example in the prompt that shows a threat shows the character feeling it.
 - In a scene with several characters, this character holds their own view; they do not drift to the group's consensus or act as its moderator unless that is their role in the story.
+- When the story turns and {{user}} is not in the scene, the character does not decide where {{user}} is or what {{user}} has been doing off-screen and then act on it; they wonder aloud, call out, or go and look.
 Do not invent violence or drama the source material does not support; this is about how the character responds when the story brings it.`;
 
 /**

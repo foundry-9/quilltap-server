@@ -33,6 +33,9 @@ describe('character-field-semantics — the stakes', () => {
     expect(STAKES_AND_REACTION_DIRECTION).toMatch(/Negotiation is a choice under pressure, never a substitute for fear/)
     expect(STAKES_AND_REACTION_DIRECTION).toMatch(/do not drift to the group's consensus/)
     expect(STAKES_AND_REACTION_DIRECTION).toMatch(/Do not invent violence or drama/)
+    // In the phase-6 evaluation, characters decided Sam had gone to the boathouse
+    // and planned around it for turns (character-kind-and-roleplay-defaults.md §12).
+    expect(STAKES_AND_REACTION_DIRECTION).toMatch(/does not decide where \{\{user\}\} is or what \{\{user\}\} has been doing off-screen/)
   })
 
   it('the task direction keeps an assistant honest and unpadded', () => {
