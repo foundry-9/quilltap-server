@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### CI: restore the 8 GB heap for the coverage run
+
+- `test:coverage` again passes `--max-old-space-size=8192` to the Jest parent. 4.12.1 added the flag, but the merge back into main dropped it, and every CI test run since hit the default 4 GB heap and aborted (exit 134).
+
 #### Fix: story characters no longer invent where the user is
 
 - In the live evaluation, characters decided the operator's persona had gone to the boathouse and planned around it for several turns.
