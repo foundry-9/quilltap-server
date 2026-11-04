@@ -33,8 +33,12 @@ export interface VaultConversationMatch {
   conversationId: string
   /** Conversation title from frontmatter (for display). */
   conversationTitle: string
-  /** Vault-relative path of the summary file the match came from. */
-  relativePath: string
+  /**
+   * Vault-relative path of the summary file the match came from; null for a
+   * chat listed from the `chats` table because it has no summary yet (the
+   * retrospective mini-recap's unsummarized entries).
+   */
+  relativePath: string | null
   /** Best cosine score among this conversation's chunks. */
   score: number
   /** ISO timestamp of the conversation's first message (frontmatter), when recorded. */

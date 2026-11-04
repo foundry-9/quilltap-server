@@ -1061,6 +1061,47 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * The ids of a character's memories whose event time falls inside
+   * `[window.from, window.to]` (inclusive). Event time is
+   * `COALESCE(occurredAt, createdAt)` — the same rule `score.ts` applies in JS
+   * (`occurredAt ?? createdAt`); keep the two in step. Timestamps are ISO-8601
+   * `Z` strings, so the lexical comparison is the chronological one.
+   *
+   * Recall's window-first gather and the search tool's window census read
+   * this, so a dated question finds its period's rows before anything is cut.
+   */
+  async findIdsInEventWindow(
+    characterId: string,
+    window: { from: string; to: string },
+    opts: { hotOnly: boolean },
+  ): Promise<string[]> {
+    return this.safeQuery(
+      async () => {
+        const rows = await rawQuery<Array<{ id: string }>>(
+          `SELECT id FROM memories
+            WHERE characterId = ?
+              AND COALESCE(occurredAt, createdAt) >= ?
+              AND COALESCE(occurredAt, createdAt) <= ?${opts.hotOnly ? `
+              AND ${HOT_TIER_SQL}` : ''}`,
+          [characterId, window.from, window.to],
+        );
+        const ids = rows.map(r => r.id);
+        logger.debug('Found memories in event window', {
+          characterId,
+          from: window.from,
+          to: window.to,
+          hotOnly: opts.hotOnly,
+          count: ids.length,
+        });
+        return ids;
+      },
+      'Error finding memories in event window',
+      { characterId, from: window.from, to: window.to },
+      [],
+    );
+  }
+
+  /**
    * Every embedded memory of a character as the index holds it: id, vector and
    * tier, in one query. `memories.embedding` and `memories.tier` are the only
    * copy (the `vector_entries` mirror was retired in Phase B of the memory

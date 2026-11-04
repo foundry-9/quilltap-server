@@ -138,6 +138,12 @@ describe('buildSimpleJsonToolInstructions', () => {
     expect(prompt).not.toContain('- generate_image(')
   })
 
+  it('sends the model to the period\'s conversations before it says it does not recall', () => {
+    const prompt = buildSimpleJsonToolInstructions({ search: true })
+    expect(prompt).toContain('If the search lists conversations from that period, read the likeliest one with `read_conversation` before answering.')
+    expect(prompt).toContain("say you don't recall")
+  })
+
   it('teaches the model the <tool_call> shape and the stop rule', () => {
     const prompt = buildSimpleJsonToolInstructions({ search: true, rng: true })
     expect(prompt).toContain('<tool_call>')

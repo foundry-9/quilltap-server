@@ -9,7 +9,10 @@
  * The window is two-stage on the prompt paths (a recall context is present):
  * hard when at least `limit` hits fall inside it, otherwise the bounded
  * ×`occurredWithinWindow` boost on the whole pool — never fewer results than an
- * unwindowed search. Without a recall context (the tool) it is a plain filter.
+ * unwindowed search. Without a recall context (the tool) it is a plain filter,
+ * and a tool window at most {@link TOOL_WINDOW_FLOOR_MAX_DAYS} wide is its own
+ * relevance filter: an in-window row is eligible however loosely it matches
+ * (the caller named the period). The prompt paths keep the floor (R5, bug 202).
  *
  * @module memory/recall/score
  */
@@ -19,6 +22,21 @@ import { isLexicalEmbeddingProvider } from '@/lib/embedding/cosine-scale'
 import { recallTuningOf, type RecallContext } from './tags'
 import type { Gathered } from './gather'
 import { traceStage, type HydratedHit, type RecallCandidate, type RecallTrace } from './types'
+
+/** An explicit tool window at most this wide is its own relevance filter. */
+export const TOOL_WINDOW_FLOOR_MAX_DAYS = 14
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * True when an explicit tool window (ISO bounds) is narrow enough to stand in
+ * for the relevance floor. The conversation search reads it too, so the two
+ * sources agree on what "narrow" means.
+ */
+export function isNarrowToolWindow(window: { from: string; to: string } | null | undefined): boolean {
+  const parsed = parseWindow(window ?? null)
+  return !!parsed && parsed.to - parsed.from <= TOOL_WINDOW_FLOOR_MAX_DAYS * DAY_MS
+}
 
 export interface ScoreOptions {
   limit: number
@@ -55,8 +73,17 @@ export function score(
   trace: RecallTrace = [],
   label?: string,
 ): Scored {
+  const window = parseWindow(opts.window)
+  const inWindowAt = (memory: HydratedHit['memory']): boolean => {
+    if (!window) return false
+    const t = Date.parse(memory.occurredAt ?? memory.createdAt)
+    return Number.isFinite(t) && t >= window.from && t <= window.to
+  }
+  const relaxFloor = !opts.recallContext && !!window && window.to - window.from <= TOOL_WINDOW_FLOOR_MAX_DAYS * DAY_MS
   const floored = hydrated.filter(h =>
-    gathered.strategy === 'text' ? h.score > 0 : h.score >= gathered.minScore,
+    relaxFloor && inWindowAt(h.memory)
+      ? true
+      : gathered.strategy === 'text' ? h.score > 0 : h.score >= gathered.minScore,
   )
   const pool: RankInput[] = floored.map(h => ({
     memory: h.memory,
@@ -80,12 +107,8 @@ export function score(
   let outOfWindow: RankInput[] = []
   let windowMode: Scored['windowMode'] = 'none'
   let rankContext = context
-  const window = parseWindow(opts.window)
   if (window) {
-    const inWindow = (c: RankInput): boolean => {
-      const t = Date.parse(c.memory.occurredAt ?? c.memory.createdAt)
-      return Number.isFinite(t) && t >= window.from && t <= window.to
-    }
+    const inWindow = (c: RankInput): boolean => inWindowAt(c.memory)
     const hits = pool.filter(inWindow)
     if (!context) {
       candidates = hits
@@ -104,6 +127,7 @@ export function score(
   traceStage(trace, 'score', {
     floor: gathered.strategy === 'text' ? '>0' : gathered.minScore,
     floored: hydrated.length - floored.length,
+    ...(relaxFloor ? { floorRelaxed: true } : {}),
     bestCosine: Math.round(bestCosine * 1000) / 1000,
     window: windowMode,
     excluded: candidates.length - ranked.length,

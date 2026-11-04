@@ -5,14 +5,17 @@
  * (floor, window, multipliers, expansion, reservation) applies to both:
  *
  * - **vector** — the index's top-K for the query, unioned with each
- *   retrospective probe's top-K (a memory keeps its best cosine), then the
- *   literal hits: the whole query on the tool path, the turn's entity anchors
+ *   retrospective probe's top-K (a memory keeps its best cosine), then — when
+ *   the query names a period — the top-K of that period's rows alone (read by
+ *   event time in SQL, so a dated question is not lost behind months of
+ *   better-matching rows from other times), then the literal hits: the whole query on the tool path, the turn's entity anchors
  *   on the prompt paths (R4 picks the names that narrow the search). Anchor
  *   hits widen the pool only; they are scored at their raw cosine and face the
  *   floor like any row (R5, bug 202).
  * - **text** — when there is no usable vector (no embedding, or the index holds
  *   no vector of the query's length): phrase and word matches for the query
- *   and each probe, plus the anchors, scored by text match (bug 214).
+ *   and each probe, plus the anchors, scored by text match (bug 214); with a
+ *   window, the period's newest rows join at their text score (which may be 0).
  *
  * @module memory/recall/gather
  */
@@ -170,6 +173,32 @@ export async function gather(
     hits.push(...byId.values())
   }
 
+  // Window-first: the period's rows, scored by the same index restricted to
+  // them, join the pool before anything is cut. Gated on a window, so an
+  // undated search is unchanged.
+  let windowIds: number | null = null
+  let windowAdded = 0
+  if (query.window) {
+    const ids = await repos.memories.findIdsInEventWindow(characterId, query.window, { hotOnly: !includeCold })
+    windowIds = ids.length
+    const inWindow = new Set(ids.filter(id => !excluded?.has(id)))
+    if (inWindow.size > 0) {
+      const byId = new Map(hits.map(h => [h.id, h]))
+      for (const vr of await memoryIndex.search(characterId, embedding.embedding, { ...indexSearch, includeIds: inWindow })) {
+        const existing = byId.get(vr.id)
+        if (!existing) {
+          windowAdded++
+          byId.set(vr.id, { id: vr.id, score: vr.score, via: 'window' })
+        } else if (vr.score > existing.score) {
+          byId.set(vr.id, { ...existing, score: vr.score })
+        }
+      }
+      hits.length = 0
+      hits.push(...byId.values())
+    }
+    logger.debug('[Memory] Window-first gather', { characterId, window: query.window, inWindow: ids.length, windowAdded })
+  }
+
   // Literal hits: the whole query (tool path) and the turn's entity anchors.
   const literalPhrase = opts.literalPhrase ? getLiteralPhrase(query.text) : null
   const anchorPhrases: string[] = []
@@ -244,6 +273,7 @@ export async function gather(
     vector: vectorCount,
     probes: usableProbes.length,
     probeAdded,
+    ...(windowIds !== null ? { window: windowIds, windowAdded } : {}),
     anchors: chosenAnchors,
     anchorAdded,
     literal: !!literalPhrase,
@@ -287,11 +317,43 @@ async function gatherText(
 
   const hits: RawHit[] = [...pool.values()].map(memory => ({
     id: memory.id,
-    score: Math.max(...probes.map(probe => scoreTextMatch(memory, probe))),
+    score: probes.length > 0 ? Math.max(...probes.map(probe => scoreTextMatch(memory, probe))) : 0,
     via: 'text' as const,
     memory,
   }))
-  traceStage(trace, 'gather', { strategy: 'text', reason, probes: probes.length, anchors, pool: hits.length }, label)
+
+  // Window-first: the period's newest rows join at their text score (maybe 0).
+  let windowIds: number | null = null
+  let windowAdded = 0
+  if (query.window) {
+    const ids = (await repos.memories.findIdsInEventWindow(characterId, query.window, { hotOnly: !opts.includeCold }))
+      .filter(id => !pool.has(id) && !opts.excludeIds?.has(id))
+    windowIds = ids.length
+    if (ids.length > 0) {
+      const rows = (await repos.memories.findByIds(ids))
+        .filter(m => opts.includeCold || m.tier !== 'cold')
+        .sort((a, b) => Date.parse(b.occurredAt ?? b.createdAt) - Date.parse(a.occurredAt ?? a.createdAt))
+        .slice(0, opts.limit * 3)
+      for (const memory of rows) {
+        hits.push({
+          id: memory.id,
+          score: probes.length > 0 ? Math.max(...probes.map(probe => scoreTextMatch(memory, probe))) : 0,
+          via: 'window',
+          memory,
+        })
+        windowAdded++
+      }
+    }
+  }
+
+  traceStage(trace, 'gather', {
+    strategy: 'text',
+    reason,
+    probes: probes.length,
+    ...(windowIds !== null ? { window: windowIds, windowAdded } : {}),
+    anchors,
+    pool: hits.length,
+  }, label)
   return {
     strategy: 'text',
     hits,

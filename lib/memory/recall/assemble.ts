@@ -50,6 +50,7 @@ import {
   renderRelevantConversationsBlock,
   searchVaultConversationSummaries,
 } from './conversations'
+import { findChatsInWindow } from '@/lib/scriptorium/chat-window'
 import { parseRetroSignatures } from './history'
 import { buildRecallQuery, type RecallQuery } from './query'
 import { generateMemoryRecap, rampLimit } from './recap'
@@ -614,11 +615,37 @@ async function assembleConversations(plan: RecallPlan, bundle: RecallBundle, que
       const filtered = matches
         .filter(m => !standing.has(m.conversationId) && !listed.has(m.conversationId))
         .slice(0, RETRO_MINI_RECAP_MAX_ENTRIES)
+      // Chats from the window that the Librarian has not summarized yet: the
+      // summary search cannot see them, so they are listed from the chats
+      // table, newest first, after the summarized matches.
+      let unsummarized = 0
+      if (query.window && filtered.length < RETRO_MINI_RECAP_MAX_ENTRIES) {
+        const already = new Set(filtered.map(m => m.conversationId))
+        const inWindow = await findChatsInWindow({
+          characterId,
+          userId: plan.userId,
+          window: query.window,
+          excludeChatId: plan.chat.id,
+        })
+        for (const chat of inWindow) {
+          if (filtered.length >= RETRO_MINI_RECAP_MAX_ENTRIES) break
+          if (already.has(chat.id) || standing.has(chat.id) || listed.has(chat.id)) continue
+          filtered.push({
+            conversationId: chat.id,
+            conversationTitle: chat.title || 'Untitled',
+            relativePath: null,
+            score: 0,
+            firstMessageAt: chat.createdAt,
+            lastMessageAt: chat.lastMessageAt ?? null,
+          })
+          unsummarized++
+        }
+      }
       if (filtered.length > 0) {
         bundle.sections.retrospective = `${renderRelevantConversationsBlock(filtered)}\n\n${READ_CONVERSATION_CALL_NOTE}`
         bundle.retroSignature = signature
       }
-      traceStage(bundle.trace, 'assemble', { matched: matches.length, listed: filtered.length, signature, reusedQuery: reuse }, 'retrospective')
+      traceStage(bundle.trace, 'assemble', { matched: matches.length, listed: filtered.length, unsummarized, signature, reusedQuery: reuse }, 'retrospective')
     } catch (error) {
       logger.warn('[Recall] Retrospective mini-recap failed (non-fatal)', {
         chatId: plan.chat.id,

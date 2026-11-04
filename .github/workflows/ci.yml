@@ -86,6 +86,11 @@ jobs:
       - name: Install zsh (for the completion-template parse check)
         run: sudo apt-get update && sudo apt-get install -y zsh
 
+      # test:coverage raises the Jest *parent's* heap (--max-old-space-size).
+      # With the v8 provider every worker sends back each loaded module's
+      # coverage plus its original and transformed source, and the parent holds
+      # all of it until the run ends — at ~1,300 test files that outgrew the
+      # default ~4 GB. The runner has 16 GB; if this bites again, shard the run.
       - name: Run tests with coverage
         run: npm run test:coverage
 

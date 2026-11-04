@@ -22,6 +22,13 @@ describe('native-tool-prompt', () => {
       expect(result).toContain('tool_use content block')
     })
 
+    it('sends the model to the period\'s conversations before it says it does not recall', () => {
+      const result = buildNativeToolInstructions(true)
+
+      expect(result).toContain('If the search lists conversations from that period, read the likeliest one with `read_conversation` before answering.')
+      expect(result).toContain("say you don't recall")
+    })
+
     it('should return empty string when hasTools is false', () => {
       const result = buildNativeToolInstructions(false)
 

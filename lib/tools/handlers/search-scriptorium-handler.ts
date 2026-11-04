@@ -9,10 +9,12 @@
 import { searchMemories as searchCharacterMemories } from '@/lib/memory/recall/search'
 import { stampAccessed } from '@/lib/memory/recall/deliver'
 import { filterImportance, importanceBand, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
-import { zonedDayBoundsIso } from '@/lib/memory/time/calendar'
+import { zonedDateStamp, zonedDayBoundsIso } from '@/lib/memory/time/calendar'
 import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
+import { findChatsInWindow } from '@/lib/scriptorium/chat-window'
+import { isNarrowToolWindow } from '@/lib/memory/recall/score'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
 import { buildDocStoreUriResolver } from '@/lib/doc-edit/uri-producers'
 import { LITERAL_BOOST_GLOBAL } from '@/lib/embedding/literal-boost'
@@ -28,10 +30,19 @@ import {
   SearchScriptoriumToolInput,
   SearchScriptoriumToolOutput,
   SearchScriptoriumResult,
+  SearchWindowCensus,
   validateSearchScriptoriumInput,
 } from '../search-scriptorium-tool'
+import type { ChatMetadata } from '@/lib/schemas/types'
 
 const logger = createServiceLogger('SearchScriptoriumHandler')
+
+type SearchSource = NonNullable<SearchScriptoriumToolInput['sources']>[number]
+
+const ALL_SOURCES: SearchSource[] = ['memories', 'conversations', 'documents', 'knowledge']
+
+/** How many of the window's conversations the census lists by name. */
+const CENSUS_MAX_CONVERSATIONS = 10
 
 /**
  * Context required for search scriptorium execution
@@ -56,6 +67,8 @@ export interface SearchScriptoriumToolContext {
    * conversations are forced off. Never combined with `operatorSurface`.
    */
   mountPool?: TieredMountPool
+  /** The chat the search runs in — left out of the window census. */
+  chatId?: string
 }
 
 /**
@@ -85,7 +98,6 @@ export async function executeSearchScriptoriumTool(
 
     const {
       query,
-      sources = ['memories', 'conversations', 'documents', 'knowledge'],
       scope = 'all',
       limit = 10,
       minImportance = TOOL_MIN_IMPORTANCE,
@@ -115,6 +127,17 @@ export async function executeSearchScriptoriumTool(
 
     const repos = getRepositories()
 
+    // A dated search with no explicit sources leaves documents out: they carry
+    // no dates, and would crowd dated hits out of the cross-source cut. The
+    // Scenario Builder (pre-built pool) keeps its own default; the operator
+    // surface has no memories, so its dated default is conversations alone.
+    const dated = !!(since || until)
+    const defaultedSources = !parsed.sources && dated && !context.mountPool
+    const sources: SearchSource[] = parsed.sources
+      ?? (defaultedSources
+        ? (context.operatorSurface ? ['conversations'] : ['memories', 'conversations'])
+        : ALL_SOURCES)
+
     // Operator surface (Brahma Console): no character, no memories. Memory
     // search is forced off here defensively even if a caller somehow requests
     // it — the console never reads anyone's commonplace book.
@@ -127,6 +150,19 @@ export async function executeSearchScriptoriumTool(
     const searchConversations = sources.includes('conversations') && !prebuiltPool
     const searchDocuments = sources.includes('documents')
     const searchKnowledge = sources.includes('knowledge')
+
+    // Window-first: the period's conversations, read once, scope the chunk
+    // search and feed the census. A narrow window is its own relevance filter.
+    const narrowWindow = isNarrowToolWindow(timeWindow)
+    const windowChats: ChatMetadata[] | null =
+      timeWindow && (searchMemories || searchConversations)
+        ? await findChatsInWindow({
+            characterId: operatorWide ? undefined : context.characterId,
+            userId: context.userId,
+            window: timeWindow,
+          })
+        : null
+    let windowMemoryCount: number | null = null
 
     const results: SearchScriptoriumResult[] = []
 
@@ -220,6 +256,13 @@ export async function executeSearchScriptoriumTool(
         const character = await repos.characters.findById(characterId)
 
         if (character && character.userId === context.userId) {
+          // Census: every memory dated in the window, whatever the query or
+          // aboutCharacter matched (all tiers — the tool sees the archive).
+          if (timeWindow) {
+            windowMemoryCount = (await repos.memories.findIdsInEventWindow(characterId, timeWindow, { hotOnly: false })).length
+            logger.debug('Memories in search window', { characterId, count: windowMemoryCount, narrowWindow })
+          }
+
           // Optional about-character filter: resolve the name (or alias) to a
           // character id among the user's characters. An unresolvable name
           // returns no memory hits rather than silently ignoring the filter.
@@ -294,7 +337,10 @@ export async function executeSearchScriptoriumTool(
     }
 
     // Search conversations if requested
-    if (searchConversations) {
+    const windowChatIds = windowChats ? new Set(windowChats.map(c => c.id)) : null
+    if (searchConversations && windowChatIds && windowChatIds.size === 0) {
+      logger.debug('No conversations in search window; chunk search skipped', { characterId: context.characterId })
+    } else if (searchConversations) {
       try {
         // Generate embedding for the query
         const embeddingResult = await generateEmbeddingForUser(
@@ -311,46 +357,19 @@ export async function executeSearchScriptoriumTool(
             characterId: context.characterId,
             userId: context.userId,
             limit,
-            minScore: 0.3,
+            // The window's chats only, scored whole; within a narrow window
+            // every chunk is eligible however loosely it matches.
+            ...(windowChatIds ? { chatIds: windowChatIds } : {}),
+            minScore: narrowWindow ? 0 : 0.3,
             query,
             applyLiteralPhraseBoost: true,
           }
         )
-
-        // Time filter: keep conversations whose lifespan overlaps the window
-        // (chat createdAt..updatedAt). Resolved per distinct chat — the hit
-        // list is already capped at `limit`.
-        let filteredConversationResults = conversationResults
-        if (timeWindow) {
-          const from = Date.parse(timeWindow.from)
-          const to = Date.parse(timeWindow.to)
-          const spanByChat = new Map<string, { start: number; end: number } | null>()
-          for (const cr of conversationResults) {
-            if (spanByChat.has(cr.chatId)) continue
-            try {
-              const sourceChat = await repos.chats.findById(cr.chatId)
-              spanByChat.set(
-                cr.chatId,
-                sourceChat
-                  ? {
-                      start: Date.parse(sourceChat.createdAt),
-                      end: Date.parse(sourceChat.updatedAt ?? sourceChat.createdAt),
-                    }
-                  : null,
-              )
-            } catch {
-              spanByChat.set(cr.chatId, null)
-            }
-          }
-          filteredConversationResults = conversationResults.filter(cr => {
-            const span = spanByChat.get(cr.chatId)
-            if (!span || !Number.isFinite(span.start)) return false
-            const end = Number.isFinite(span.end) ? span.end : span.start
-            return span.start <= to && end >= from
-          })
+        if (windowChatIds) {
+          logger.debug('Window conversation search', { windowChats: windowChatIds.size, hits: conversationResults.length })
         }
 
-        for (const cr of filteredConversationResults) {
+        for (const cr of conversationResults) {
           results.push({
             content: cr.content.length > 500
               ? cr.content.substring(0, 500) + '...'
@@ -519,11 +538,25 @@ export async function executeSearchScriptoriumTool(
       stampAccessed(context.characterId, returnedMemoryIds)
     }
 
+    const windowCensus: SearchWindowCensus | undefined = windowChats
+      ? buildWindowCensus(windowChats, {
+          since: since ?? null,
+          until: until ?? null,
+          memoryCount: windowMemoryCount,
+          excludeChatId: context.chatId,
+          timeZone: memoryTimeZone,
+        })
+      : undefined
+
     logger.info('Search scriptorium completed', {
       context: 'search-scriptorium-handler',
       userId: context.userId,
       query: query.substring(0, 100),
       scope,
+      defaultedSources,
+      ...(windowCensus
+        ? { windowCensus: { memoryCount: windowCensus.memoryCount, conversations: windowCensus.conversations.length + windowCensus.moreConversations } }
+        : {}),
       totalFound: limitedResults.length,
       memorySources: limitedResults.filter(r => r.sourceType === 'memory').length,
       conversationSources: limitedResults.filter(r => r.sourceType === 'conversation').length,
@@ -540,6 +573,7 @@ export async function executeSearchScriptoriumTool(
       results: limitedResults,
       totalFound: limitedResults.length,
       query,
+      ...(windowCensus ? { windowCensus } : {}),
     }
   } catch (error) {
     logger.error('Search scriptorium tool execution failed', {
@@ -560,6 +594,42 @@ export async function executeSearchScriptoriumTool(
 }
 
 /**
+ * The window census from the period's chats (newest first): the current chat
+ * left out, the first {@link CENSUS_MAX_CONVERSATIONS} listed, the rest counted.
+ */
+export function buildWindowCensus(
+  windowChats: readonly ChatMetadata[],
+  opts: {
+    since: string | null
+    until: string | null
+    memoryCount: number | null
+    excludeChatId?: string
+    /** The memory calendar's zone; dates are UTC without it. */
+    timeZone?: string | null
+  },
+): SearchWindowCensus {
+  const localDate = (iso: string): string => {
+    const ms = Date.parse(iso)
+    if (!Number.isFinite(ms)) return iso.slice(0, 10)
+    return opts.timeZone ? zonedDateStamp(ms, opts.timeZone) : new Date(ms).toISOString().slice(0, 10)
+  }
+  const others = windowChats.filter(c => c.id !== opts.excludeChatId)
+  return {
+    since: opts.since,
+    until: opts.until,
+    memoryCount: opts.memoryCount,
+    conversations: others.slice(0, CENSUS_MAX_CONVERSATIONS).map(c => ({
+      id: c.id,
+      title: c.title || 'Untitled',
+      firstMessageAt: c.createdAt,
+      lastMessageAt: c.lastMessageAt ?? null,
+      date: localDate(c.createdAt),
+    })),
+    moreConversations: Math.max(0, others.length - CENSUS_MAX_CONVERSATIONS),
+  }
+}
+
+/**
  * Label for a cold-tier memory in `search` results: `(archived — superseded by
  * <digest id>)` when a digest replaced it, `(archived)` otherwise. Hot rows get
  * no label.
@@ -571,12 +641,73 @@ export function memoryArchivedLabel(memory: { tier?: string; supersededById?: st
     : '(archived)'
 }
 
+/** A bound as the caller gave it, shown as a calendar date. */
+function censusDate(bound: string | null, fallback: string): string {
+  return bound ? bound.slice(0, 10) : fallback
+}
+
+/** "between X and Y" for a census window, in plain words. */
+function censusPeriod(census: SearchWindowCensus): string {
+  if (census.since && census.until) {
+    return census.since.slice(0, 10) === census.until.slice(0, 10)
+      ? `on ${censusDate(census.since, '')}`
+      : `between ${censusDate(census.since, '')} and ${censusDate(census.until, '')}`
+  }
+  if (census.since) return `between ${censusDate(census.since, '')} and today`
+  return `up to ${censusDate(census.until, 'today')}`
+}
+
+/** The census's conversation list, one line each, with the overflow. */
+function censusConversationLines(census: SearchWindowCensus): string[] {
+  const lines = census.conversations.map(c => `- ${c.title} (${c.date}) — \`${c.id}\``)
+  if (census.moreConversations > 0) lines.push(`- …and ${census.moreConversations} more`)
+  return lines
+}
+
+/** What an empty search means, given the window census (or none). */
+function formatEmptySearch(query: string | undefined, census: SearchWindowCensus | undefined): string {
+  const quoted = query ? `"${query}"` : 'your search'
+  if (!census) {
+    return `Nothing matched ${quoted}. An empty search is not proof that nothing happened: try other words, or pass since/until if you are asking about a particular time.`
+  }
+  const period = censusPeriod(census)
+  const memories = census.memoryCount ?? 0
+  const hasConversations = census.conversations.length > 0 || census.moreConversations > 0
+  if (memories === 0 && !hasConversations) {
+    return census.memoryCount === null
+      ? `There are no conversations ${period}.`
+      : `You hold no memories dated ${period}, and took part in no conversations in that period.`
+  }
+  const lines = [`Nothing matched ${quoted} — but that is not the same as having no record of the period.`]
+  const memoryClause = census.memoryCount === null
+    ? null
+    : `you hold ${memories} ${memories === 1 ? 'memory' : 'memories'}`
+  const conversationClause = census.memoryCount === null ? 'these conversations took place' : 'you took part in these conversations'
+  const head = period.charAt(0).toUpperCase() + period.slice(1)
+  if (hasConversations) {
+    lines.push(`${head} ${memoryClause ? `${memoryClause}, and ` : ''}${conversationClause}:`)
+    lines.push(...censusConversationLines(census))
+    lines.push('Read one with read_conversation, or search again with broader words. The date range already narrows the search; the query does not need to name the time.')
+  } else {
+    lines.push(`${head} ${memoryClause}.`)
+    lines.push('Search again with broader words. The date range already narrows the search; the query does not need to name the time.')
+  }
+  return lines.join('\n')
+}
+
 /**
- * Format search scriptorium results for inclusion in conversation context
+ * Format search scriptorium results for inclusion in conversation context.
+ *
+ * With `opts.windowCensus`, a result list gains a footer naming the period's
+ * conversations, and an empty result says whether nothing matched the words
+ * or nothing happened in the period. Without opts, results print unchanged.
  */
-export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[]): string {
+export function formatSearchScriptoriumResults(
+  results: SearchScriptoriumResult[],
+  opts?: { query: string; windowCensus?: SearchWindowCensus },
+): string {
   if (results.length === 0) {
-    return 'No relevant results found.'
+    return formatEmptySearch(opts?.query, opts?.windowCensus)
   }
 
   const formatted = results.map((result, index) => {
@@ -623,5 +754,13 @@ Content: ${result.content}`
     }
   })
 
-  return `Found ${results.length} results:\n\n${formatted.join('\n\n')}`
+  const body = `Found ${results.length} results:\n\n${formatted.join('\n\n')}`
+  const census = opts?.windowCensus
+  if (!census || census.conversations.length === 0) return body
+  const footer = [
+    census.memoryCount === null ? 'Conversations during this period:' : 'Conversations you took part in during this period:',
+    ...censusConversationLines(census),
+    'Read any of them with read_conversation.',
+  ].join('\n')
+  return `${body}\n\n${footer}`
 }

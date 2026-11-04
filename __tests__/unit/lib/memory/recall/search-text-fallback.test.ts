@@ -91,6 +91,7 @@ function makeMemory(overrides: Partial<Record<string, unknown>> = {}) {
 describe('searchMemories — text-search fallback honours recall options (bug 214)', () => {
   let mockMemoriesRepo: {
     findByIds: jest.Mock
+    findIdsInEventWindow: jest.Mock
     searchByContent: jest.Mock
     updateAccessTimeBulk: jest.Mock
   }
@@ -106,7 +107,16 @@ describe('searchMemories — text-search fallback honours recall options (bug 21
   beforeEach(() => {
     jest.clearAllMocks()
     mockMemoriesRepo = {
-      findByIds: jest.fn(),
+      findByIds: jest.fn(async (ids: string[]) => corpus.filter(m => ids.includes(m.id))),
+      findIdsInEventWindow: jest.fn(async (_c: string, w: { from: string; to: string }, o: { hotOnly: boolean }) =>
+        corpus
+          .filter(m => !o.hotOnly || (m as { tier?: string }).tier !== 'cold')
+          .filter(m => {
+            const t = (m.occurredAt ?? m.createdAt) as string
+            return t >= w.from && t <= w.to
+          })
+          .map(m => m.id),
+      ),
       searchByContent: jest.fn(async (_characterId: string, phrase: string) =>
         corpus.filter(m =>
           m.content.toLowerCase().includes(phrase.toLowerCase()) ||
