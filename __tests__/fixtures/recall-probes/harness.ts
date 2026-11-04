@@ -127,12 +127,13 @@ export function probeWorld(fixture: ProbeFixture) {
     search: async (
       _characterId: string,
       vector: Float32Array,
-      opts: { limit: number; hotOnly: boolean; exclude?: ReadonlySet<string> },
+      opts: { limit: number; hotOnly: boolean; exclude?: ReadonlySet<string>; includeIds?: ReadonlySet<string> },
     ) => {
       return rows
         .filter(r => r.embedding.length === vector.length)
         .filter(r => !opts.hotOnly || r.tier !== 'cold')
         .filter(r => !opts.exclude || !opts.exclude.has(r.id))
+        .filter(r => !opts.includeIds || opts.includeIds.has(r.id))
         .map(r => ({ id: r.id, score: cosine(vector, r.embedding), metadata: { memoryId: r.id, characterId: r.characterId, tier: r.tier } }))
         .sort((a, b) => b.score - a.score)
         .slice(0, opts.limit)
@@ -146,6 +147,15 @@ export function probeWorld(fixture: ProbeFixture) {
 
   const memories = {
     findByIds: async (ids: string[]) => ids.map(id => byId.get(id)).filter(Boolean),
+    /** Event time `occurredAt ?? createdAt`, as the SQL's COALESCE reads it. */
+    findIdsInEventWindow: async (_characterId: string, window: { from: string; to: string }, opts: { hotOnly: boolean }) =>
+      rows
+        .filter(r => !opts.hotOnly || r.tier !== 'cold')
+        .filter(r => {
+          const t = (r.occurredAt ?? r.createdAt) as string
+          return t >= window.from && t <= window.to
+        })
+        .map(r => r.id),
     searchByContent: async (_characterId: string, phrase: string) => {
       const needle = phrase.toLowerCase()
       return rows.filter(r => r.content.toLowerCase().includes(needle) || r.summary.toLowerCase().includes(needle))

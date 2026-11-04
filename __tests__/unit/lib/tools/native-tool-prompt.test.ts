@@ -36,6 +36,13 @@ describe('native-tool-prompt', () => {
       expect(buildNativeToolInstructions(variant, false)).toBe('')
     })
 
+    it.each(VARIANTS)('the %s variant sends the model to the period\'s conversations before it says it does not recall', (variant) => {
+      const result = buildNativeToolInstructions(variant, true)
+
+      expect(result).toContain('If the search lists conversations from that period, read the likeliest one with `read_conversation` before answering.')
+      expect(result).toContain("say you don't recall")
+    })
+
     it.each(VARIANTS)('the %s variant keeps every anti-narration rule word for word', (variant) => {
       const result = buildNativeToolInstructions(variant, true)
 

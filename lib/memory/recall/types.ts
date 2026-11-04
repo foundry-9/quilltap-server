@@ -15,7 +15,7 @@
 import type { Memory } from '@/lib/schemas/types'
 
 /** How a raw hit entered the pool. */
-export type HitSource = 'vector' | 'probe' | 'anchor' | 'literal' | 'text'
+export type HitSource = 'vector' | 'probe' | 'window' | 'anchor' | 'literal' | 'text'
 
 /**
  * A candidate before hydration: an id and the score it entered with. For the

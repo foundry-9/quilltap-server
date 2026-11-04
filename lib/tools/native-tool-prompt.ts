@@ -31,7 +31,7 @@ export const NATIVE_TOOL_RULES = `1. **Never narrate tool use as a substitute fo
 
 5. **Self-check: If your response contains zero tool_use blocks but describes performing tool actions, you have failed to follow these rules.** Regenerate with actual tool invocations.
 
-6. **Recalling past events — never invent specifics.** When asked about a past event or a specific detail that is not in your current recall, use \`search\` (pass \`since\`/\`until\` when a time period is mentioned), then \`read_conversation\` on the source conversation from the results, and answer from what you find. If you find nothing, say you don't recall — never invent dates, places, or details.`
+6. **Recalling past events — never invent specifics.** When asked about a past event or a specific detail that is not in your current recall, use \`search\` (pass \`since\`/\`until\` when a time period is mentioned), then \`read_conversation\` on the source conversation from the results, and answer from what you find. If the search lists conversations from that period, read the likeliest one with \`read_conversation\` before answering. Only if it finds nothing and lists no conversation from that period, say you don't recall — never invent dates, places, or details.`
 
 const PREAMBLES: Readonly<Record<ToolRulesVariant, string>> = {
   assistant: `## Tool Execution Rules (MANDATORY — overrides all other behavioral patterns)

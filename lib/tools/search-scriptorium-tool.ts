@@ -20,12 +20,12 @@ export const searchScriptoriumToolInputSchema = z.object({
     .min(1)
     .max(500)
     .describe(
-      'What to search for across memories, conversations, documents, and your own knowledge base. Be specific about the topic, event, or detail you want to find.'
+      'What to search for across memories, conversations, documents, and your own knowledge base. Be specific about the topic, event, or detail you want to find. Put dates and phrases like \'yesterday\' in `since`/`until`, not here; with a date range set, a broad query such as \'what happened\' is fine.'
     ),
   sources: z
     .array(z.enum(['memories', 'conversations', 'documents', 'knowledge']))
     .describe(
-      'Which layers to search. Defaults to all sources if not specified. "memories" recalls your personal commonplace-book memories; "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store within the current `scope`; "knowledge" searches only files under a `Knowledge/` folder inside those same stores. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in.'
+      'Which layers to search. Defaults to all sources if not specified. "memories" recalls your personal commonplace-book memories; "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store within the current `scope`; "knowledge" searches only files under a `Knowledge/` folder inside those same stores. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in. When `since` or `until` is given and `sources` is omitted, only memories and conversations are searched (documents have no dates).'
     )
     .optional(),
   scope: z
@@ -60,7 +60,7 @@ export const searchScriptoriumToolInputSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}/, 'ISO date (YYYY-MM-DD) required')
     .describe(
-      'Only return memories/conversations from this ISO date (YYYY-MM-DD) onward. Use when a time period is mentioned ("last week", "back in March") — memories filter on when the event HAPPENED, conversations on when they took place. Affects only the memories and conversations sources.'
+      'Only return memories/conversations from this ISO date (YYYY-MM-DD) onward. Use when a time period is mentioned ("last week", "back in March") — memories filter on when the event HAPPENED, conversations on when they took place. Affects only the memories and conversations sources. With a range of two weeks or less, everything dated in it is eligible however loosely it matches the query.'
     )
     .optional(),
   until: z
@@ -130,6 +130,31 @@ export interface SearchScriptoriumResult {
 }
 
 /**
+ * What a dated search's window holds, whatever the query matched: how many
+ * memories are dated in it and which conversations the searcher took part in
+ * during it. Lets an empty result say "nothing matched" rather than "nothing
+ * happened", and names the period's conversations so they can be read.
+ */
+export interface SearchWindowCensus {
+  /** As the caller gave it. */
+  since: string | null
+  until: string | null
+  /** null when memories were not searched (operator surface, or not in sources). */
+  memoryCount: number | null
+  /** The period's conversations, newest first, at most ten, the current chat left out. */
+  conversations: Array<{
+    id: string
+    title: string
+    firstMessageAt: string
+    lastMessageAt: string | null
+    /** Local calendar date (memory calendar) the conversation began on, `YYYY-MM-DD`. */
+    date: string
+  }>
+  /** Conversations in the window beyond the ones listed. */
+  moreConversations: number
+}
+
+/**
  * Output from the search scriptorium tool
  */
 export interface SearchScriptoriumToolOutput {
@@ -138,6 +163,8 @@ export interface SearchScriptoriumToolOutput {
   error?: string
   totalFound: number
   query: string
+  /** Present when the search carried a date window (see {@link SearchWindowCensus}). */
+  windowCensus?: SearchWindowCensus
 }
 
 /**

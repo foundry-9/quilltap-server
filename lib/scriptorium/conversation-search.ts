@@ -53,6 +53,12 @@ export interface ConversationSearchOptions {
    * before minScore filtering and slicing.
    */
   applyLiteralPhraseBoost?: boolean
+  /**
+   * Restrict to these chats before scoring (intersected with the scope above).
+   * Set by a caller with a time window, so the period's chats are searched
+   * whole instead of filtered out of an all-time top-K.
+   */
+  chatIds?: ReadonlySet<string>
 }
 
 /**
@@ -68,7 +74,7 @@ export async function searchConversationChunks(
 ): Promise<ConversationSearchResult[]> {
   const repos = getRepositories()
   const limit = options.limit || 10
-  const minScore = options.minScore || 0.3
+  const minScore = options.minScore ?? 0.3
 
   // Resolve the set of chats to search. A characterId scopes to that
   // character's conversations; otherwise an operator-wide userId scopes to
@@ -78,7 +84,15 @@ export async function searchConversationChunks(
     : options.userId
       ? await repos.chats.findByUserId(options.userId)
       : []
-  const characterChatIds = new Set(characterChats.map(c => c.id))
+  const characterChatIds = new Set(
+    characterChats.map(c => c.id).filter(id => !options.chatIds || options.chatIds.has(id)),
+  )
+  if (options.chatIds) {
+    logger.debug('Conversation search restricted to window chats', {
+      requested: options.chatIds.size,
+      inScope: characterChatIds.size,
+    })
+  }
 
   if (characterChatIds.size === 0) {
     return []

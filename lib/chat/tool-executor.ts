@@ -1016,12 +1016,13 @@ export async function executeToolCallWithContext(
         projectId: context.projectId,
         operatorSurface: context.operatorSurface,
         mountPool: context.mountPool,
+        chatId: context.chatId,
       };
 
       const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
 
       const formattedResult = result.success && result.results
-        ? formatSearchScriptoriumResults(result.results)
+        ? formatSearchScriptoriumResults(result.results, { query: result.query, windowCensus: result.windowCensus })
         : result.error || 'No results found';
 
       return {
@@ -1032,6 +1033,7 @@ export async function executeToolCallWithContext(
           results: result.results,
           totalFound: result.totalFound,
           query: result.query,
+          ...(result.windowCensus ? { windowCensus: result.windowCensus } : {}),
         } : null,
         error: result.success ? undefined : result.error,
       };
