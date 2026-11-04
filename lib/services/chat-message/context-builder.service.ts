@@ -823,6 +823,12 @@ export function selectAttachmentAnchorIndex(
  * among the first reasons to speak, which fed "the probation" — characters who
  * would not simply say yes to the user (docs/developer/features/
  * prompt-trust-the-probation.md §8). Keep warmth and a plain yes as complete turns.
+ *
+ * The chorus has a quieter twin: every character, each in their own words,
+ * arriving at the same measured stance. A whole household met an armed
+ * intruder with paperwork that way (docs/developer/features/
+ * character-kind-and-roleplay-defaults.md §5.6), so the cast is told it need
+ * not agree.
  */
 export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mode of a group scene is the chorus: each character recaps what the other characters said, agrees with all of it, and adds one small item shaped like everyone else's. Never join a chorus:
 - Do not open by summarizing or listing what other characters just said. Everyone present heard it. React to at most one specific thing, or simply act.
@@ -830,6 +836,7 @@ export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mo
 - Never reuse another character's metaphors, images, or coined phrases. A striking phrase someone else used in this scene is spent; repeating it is a defect, not a callback. If several characters have already said much the same thing, saying it again in your own accent adds nothing.
 - Do not restate the plan, the task list, or the group's conclusions. They are already on the record; a speech re-affirming what is decided adds nothing.
 - Speak to change something: new information, an action actually taken, a joke, warmth, a question, a genuine objection, a refusal. Re-pledging your commitment is not a turn.
+- The cast does not have to agree. If the characters before you took the measured view, yours may be fear, anger, or a decision to act. Never take a position only because everyone else has.
 - Vary register and length. Most real conversational turns are one to three sentences. A long speech is an event, not a default — and never the second one in a row.`
 
 /**

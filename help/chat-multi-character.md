@@ -105,6 +105,8 @@ The subtler hazard of a crowded room is not a model that writes everyone's turn 
 
 Quilltap now serves every speaker in a group scene a standing set of house rules against exactly this. A character is told not to open by summarizing the others (everyone present heard them), not to agree-and-append, not to borrow a phrase another character has already coined, not to re-read the plan into the record, and to speak only when speaking would *change* something — an objection, a question, a joke, an action, a refusal. Real conversational turns run a sentence or three; the long speech is reserved for occasions that have earned one.
 
+There is a quieter cousin of the chorus, and the house rules name it too: the room where every character, each in their own excellent prose, arrives at precisely the same sensible position. A stranger forces the door with a pistol in his hand, and one after another the household offers him a chair, a folder, and an appointment for Tuesday. So each speaker is also told that **the cast does not have to agree**: if everyone before them took the measured view, theirs may be fear, anger, or a decision to act, and no one should take a position merely because the others already have.
+
 The rules are strongest paired with [turn skipping](turn-skipping.md), which gives a character with nothing new to offer a graceful exit instead of an obligation to perform. Stronger models take the instruction more faithfully than budget ones — if a scene still sounds like a chorus, the speaking characters' connection profiles are the next place to look.
 
 ### Your Narration Stands

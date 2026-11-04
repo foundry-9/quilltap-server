@@ -50,6 +50,21 @@ function makeRepos(pending: unknown[] = [], consumed: unknown[] = []) {
   } as never
 }
 
+describe('INFORM_BLOCK_HEADER', () => {
+  it('vouches for feelings and resolve as well as facts, and outranks the usual temperament', () => {
+    // "You are very alarmed" was filed as information under a facts-only header,
+    // and the character stayed calm (character-kind-and-roleplay-defaults.md §5.7).
+    expect(INFORM_BLOCK_HEADER).toContain('true in this story and in you')
+    expect(INFORM_BLOCK_HEADER).toContain('how you feel or what you have resolved')
+    expect(INFORM_BLOCK_HEADER).toContain('your usual temperament')
+    expect(INFORM_BLOCK_HEADER).toMatch(/this is the current truth:$/)
+  })
+
+  it('still tells the character nothing about what to do or whether to mention it', () => {
+    expect(INFORM_BLOCK_HEADER).not.toMatch(/do not mention|don't mention|you must|you should/i)
+  })
+})
+
 describe('buildInformBlock', () => {
   it('returns the pending passage verbatim under the one vouching header', async () => {
     const repos = makeRepos([row()])

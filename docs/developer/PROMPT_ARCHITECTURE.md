@@ -162,7 +162,7 @@ Sections are appended to the new user message in this order, separated by `---`:
 3. Suparṇā mail
 4. Character progressions
 5. Inventory
-6. Inform block (`INFORM_BLOCK_HEADER` + the operator's passages, standing first) — after recall on purpose, so an inform outranks a recalled memory that contradicts it
+6. Inform block (`INFORM_BLOCK_HEADER` + the operator's passages, standing first) — after recall on purpose, so an inform outranks a recalled memory that contradicts it. Since 4.13 the header vouches for feelings and resolve as well as facts and outranks the character's usual temperament
 6a. Established-fact reminder (`buildEstablishedFactReminder`, `lib/chat/context/established-fact-reminder.ts`) — every established fact (both kinds) posted since this seat last spoke (`findLastOwnTurnMs`), in posting order under `ESTABLISHED_FACT_REMINDER_HEADER`, seat lines name-prefixed, capped at 8,000 characters (oldest dropped). Right after the inform block, so the operator's vouched words travel together. Reads only; a swipe measures "last spoke" on the history the original saw. Empty-is-absent.
 7. Referent ledger, "Who is being spoken of" (`buildReferentLedger`, `lib/chat/context/referent-ledger.ts`) — everyone named in the last 6 spoken lines, most recent first, with pronouns, in the room or not, who last named them and the sentence; then the card of each listed person not in the room. Leaves out the responder and the latest line's author. Empty-is-absent.
 8. Closing echo, "The line you are answering" (`buildClosingEcho`) — the new user message repeated (its closing paragraphs past 1,500 characters), so the last thing the model reads about the conversation is what it is answering. New-user-message turns only.

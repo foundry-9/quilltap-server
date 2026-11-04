@@ -107,6 +107,13 @@ describe('applyMultiCharacterTurnAnchor — prose route', () => {
     expect(speakLine!.indexOf('an action actually taken')).toBeLessThan(speakLine!.indexOf('objection'))
   })
 
+  it('tells the cast it does not have to agree', () => {
+    // A whole household met an armed intruder with paperwork, each character in
+    // their own words (docs/developer/features/character-kind-and-roleplay-defaults.md §5.6).
+    expect(GROUP_SCENE_DISCIPLINE).toContain('- The cast does not have to agree.')
+    expect(GROUP_SCENE_DISCIPLINE).toMatch(/Never take a position only because everyone else has/)
+  })
+
   it('keeps the discipline block free of anything a weaker model could parrot as a speaker tag', () => {
     expect(GROUP_SCENE_DISCIPLINE).not.toMatch(/\[[A-Z][a-z]+\]/)
   })

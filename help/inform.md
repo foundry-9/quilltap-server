@@ -20,7 +20,7 @@ Three properties are worth committing to memory, because everything else follows
 
 **It is never spoken.** The passage goes to the model as a private note, not as a line in the scene. Nobody hears it. Nobody can quote it. It is not a message and it never becomes one.
 
-**It is verbatim, and it is vouched for.** Your words arrive untouched. The House sets exactly one line above them, and that line says only this: *these things are true, you already know them, and where they quarrel with an older memory or something in your records, they win.* There is no anxious little rider about not mentioning it to the others, and no Staff member clears their throat. The vouching line is there because a bare sentence, however true, is easily out-argued — a character who has just recalled forty memories to the contrary will otherwise trust the forty. What you typed is still what arrives, which is why *how* you write it matters rather more than usual. See the next section.
+**It is verbatim, and it is vouched for.** Your words arrive untouched. The House sets exactly one line above them, and that line says only this: *these things are now true in the story and in you — what has happened, what you know, how you feel or what you have resolved — and where they quarrel with an older memory, your records, or your usual temperament, they win.* There is no anxious little rider about not mentioning it to the others, and no Staff member clears their throat. The vouching line is there because a bare sentence, however true, is easily out-argued — a character who has just recalled forty memories to the contrary will otherwise trust the forty. What you typed is still what arrives, which is why *how* you write it matters rather more than usual. See the next section.
 
 **It is consumed, not standing — unless you say otherwise.** Once a character has actually taken their turn, the note is gone from their next one. An inform steers a moment; it does not become a house rule. If you want something to stay, tick the box described below, and it will stay — but only in this conversation.
 
@@ -35,6 +35,8 @@ The passage is delivered inside the character's own prompt, at the tail of it, w
 Not *"Tell Alice about the letter"* — that is an instruction to a machine, and it will be followed like one. Not *"Alice slipped the letter into her sleeve"* — a bare third-person statement sits ambiguously between narration and stage direction, and a model asked to interpret it may simply narrate it back at you.
 
 If the news overturns something the character firmly believes, say so outright rather than leaving them to reconcile it. *"You and Charlie found a way to make more Tessarium; the old 'last ingot' limit no longer holds"* carries the day where *"The hull will be re-plated in Tessarium"* may be met with polite, well-sourced disbelief. And if the fact is meant to outlive this conversation, it belongs in the Commonplace Book as a memory, not only on the mantelpiece.
+
+An inform may carry a feeling or a resolve as readily as a fact. *"You are badly frightened, and you will not let that man past the hall"* is believed about the fright and the resolve alike, even in a character whose temper is ordinarily as level as a billiard table; the House tells them it outranks their usual temperament for exactly this reason.
 
 And be mindful when you inform several characters at once. Everyone you tick receives the **identical words**. If the passage is true from Alice's chair but nonsense from Bob's, you want two informs, not one.
 

@@ -1,6 +1,6 @@
 # Character Kind and Roleplay Defaults
 
-**Status:** In progress. Phases 1 (the kind flag), 2 (Agent Mode flavours and tool rules), 3 (sample prompts) and 4 (generator directions) implemented 2026-11-04 — see §12 "As built". Phases 5–6 not started.
+**Status:** In progress. Phases 1 (the kind flag), 2 (Agent Mode flavours and tool rules), 3 (sample prompts), 4 (generator directions) and 5 (group scenes and the inform header) implemented 2026-11-04 — see §12 "As built". Phase 6 (the live evaluation) not started.
 **Scope:** quilltap-server. A new per-character `kind` flag (`roleplay` | `assistant`) and the one resolver that turns it into behaviour; two Agent Mode flavours; a kind-aware tool-rules preamble; a new default Roleplay sample prompt and an Assistant sample prompt in the `default-system-prompts` plugin, with the anti-escalation passages in the existing prompts rewritten; a kind-aware stakes direction for the five generators that write a system prompt; one new group-scene bullet; and a rewording of the inform header (decision D2, accepted 2026-11-04).
 **Non-scope:** users' own prompt copies (never touched, as before); the committee-flavoured memories already in instances (§9); the Brahma Console, Help chat, Scenario Builder and other one-shot loops (they are not characters and stay on the research flavour); per-family Roleplay variants (decision D4).
 **Related:** [prompt-trust-and-anti-committee.md](complete/prompt-trust-and-anti-committee.md) (the generator chokepoint and sample-prompt edit pattern this spec extends), [prompt-trust-the-probation.md](prompt-trust-the-probation.md), [salon-inform](complete/salon-inform.md) (the inform header, design of record), [prompt-person-consistency.md](complete/prompt-person-consistency.md) (identity-stack versioning rules).
@@ -182,7 +182,7 @@ This still vouches and still does not instruct an action. It adds "in you", "how
 2. **Agent Mode flavours and tool rules.** *(Done.)* `flavor` and `variant` parameters, tool-builder gating of `submit_final_response`, Salon wiring through the policy, one-shot loops pinned to research/assistant.
 3. **Sample prompts.** *(Done.)* `MODERN_ROLEPLAY`, `MODERN_ASSISTANT`, retire `MODERN_GENERAL` with the built-in prune step, DeepSeek governor rewrites, the "Reacting to what happens" bullet across the relationship prompts, plugin version bump and build.
 4. **Generators.** *(Done.)* The two new directions, wiring through `kindPolicy`, the Optimizer's flattening signal. (The Wizard and Summon read the kind rather than choosing it; D6.)
-5. **Group discipline and inform header.** The new bullet and the new inform header.
+5. **Group discipline and inform header.** *(Done.)* The new bullet and the new inform header.
 6. **Docs and evaluation.** Help docs, CHANGELOG, then the live evaluation in §8.
 
 Phases 1 and 2 must land together or in order; 3 and 4 depend only on the constant names from 1.
@@ -272,4 +272,11 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 - The Wizard's system-prompt field gets its own completion budget, `wizardFieldMaxTokens('systemPrompt') = 2500` (was the 1000 shared with example dialogues and first message). Live check in V4test: on DeepSeek V4 Flash the 1000-token cap returned a 1,667-character prompt cut off mid-sentence before the stakes section (reasoning ate the budget); at 2500 it returned a complete 582-word prompt ending in the character's own stakes passage.
 - Tests: `character-field-semantics-stakes.test.ts` (new), the stakes/task cases in `character-wizard-prompts.test.ts`, `external-prompt-generator.test.ts`, `ai-import-system-prompts.test.ts` and `character-optimizer-helpers.test.ts`, and the policy key in `kind.test.ts`.
 - Help: `character-creation.md`, `ai-character-import.md`, `character-external-prompt.md`, `character-optimizer.md` ("Flattening Is Corrected, Too"). `CLAUDE.md`'s generator-directions line names the new helpers.
+
+### Phase 5 — group scenes and the inform header (2026-11-04)
+
+- `GROUP_SCENE_DISCIPLINE` (`context-builder.service.ts`) gains "- The cast does not have to agree. If the characters before you took the measured view, yours may be fear, anger, or a decision to act. Never take a position only because everyone else has.", after "Speak to change something". Applies to both kinds; it sits in the system message, so the change costs one prefix-cache miss per seat and nothing else.
+- `INFORM_BLOCK_HEADER` (`inform-block.ts`) is the §5.7 text, word for word, split across three string literals. The module comment records why. Amendment note added to `complete/salon-inform.md`; `CLAUDE.md`'s inform rule and `PROMPT_ARCHITECTURE.md` §2 item 6 updated.
+- Tests: the header's new clauses and its continued silence about what to do (`inform-block.test.ts`); the new bullet (`multi-character-turn-anchor.test.ts`). Every other inform test reads the constant, so none needed rewriting.
+- Help: `help/inform.md` (the header's new wording, and that an inform may carry a feeling or resolve), `help/chat-multi-character.md` (the cast need not agree).
 
