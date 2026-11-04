@@ -1,6 +1,6 @@
 # Character Kind and Roleplay Defaults
 
-**Status:** In progress. Phase 1 (the kind flag) implemented 2026-11-04 — see §12 "As built". Phases 2–6 not started.
+**Status:** In progress. Phases 1 (the kind flag) and 2 (Agent Mode flavours and tool rules) implemented 2026-11-04 — see §12 "As built". Phases 3–6 not started.
 **Scope:** quilltap-server. A new per-character `kind` flag (`roleplay` | `assistant`) and the one resolver that turns it into behaviour; two Agent Mode flavours; a kind-aware tool-rules preamble; a new default Roleplay sample prompt and an Assistant sample prompt in the `default-system-prompts` plugin, with the anti-escalation passages in the existing prompts rewritten; a kind-aware stakes direction for the five generators that write a system prompt; one new group-scene bullet; and a rewording of the inform header (decision D2, accepted 2026-11-04).
 **Non-scope:** users' own prompt copies (never touched, as before); the committee-flavoured memories already in instances (§9); the Brahma Console, Help chat, Scenario Builder and other one-shot loops (they are not characters and stay on the research flavour); per-family Roleplay variants (decision D4).
 **Related:** [prompt-trust-and-anti-committee.md](complete/prompt-trust-and-anti-committee.md) (the generator chokepoint and sample-prompt edit pattern this spec extends), [prompt-trust-the-probation.md](prompt-trust-the-probation.md), [salon-inform](complete/salon-inform.md) (the inform header, design of record), [prompt-person-consistency.md](complete/prompt-person-consistency.md) (identity-stack versioning rules).
@@ -92,7 +92,7 @@ Lyle, the one character told by informs to escalate, did escalate, on an abliter
 ### 5.1 The kind flag and its resolver
 
 - **Storage:** a `kind` key in the character vault's `properties.json`, `'roleplay'` or `'assistant'`, lenient like `diagramStyle`: absent (every vault written before kinds) or unrecognized reads as `'roleplay'` rather than failing the parse. On `Character` it is `kind: z.enum(CHARACTER_KINDS).default('roleplay')`. An enum rather than `assistant: boolean` so a third kind is one more literal. *(Changed during phase 1 from the DB column first proposed here: kind is a fact about the character, so it belongs with the vault-backed settings that travel with it. No migration.)* A character read without its vault (a raw row) resolves to `'roleplay'`.
-- **Resolver:** `lib/characters/kind.ts` (client-safe) exports `CHARACTER_KINDS`, `DEFAULT_CHARACTER_KIND`, `characterKindOrDefault`, `resolveCharacterKind(character)` and `isAssistantCharacter(character)`. Phase 2 adds `kindPolicy(kind)` there once its first consumers exist; the policy is then the only place behaviour is derived:
+- **Resolver:** `lib/characters/kind.ts` (client-safe) exports `CHARACTER_KINDS`, `DEFAULT_CHARACTER_KIND`, `characterKindOrDefault`, `resolveCharacterKind(character)`, `isAssistantCharacter(character)`, and (phase 2) `kindPolicy(kind)` / `characterKindPolicy(character)`. The policy is the only place behaviour is derived; phase 2 shipped `agentFlavor` and `toolRules`, and later phases add their fields as their consumers arrive:
 
   ```ts
   interface KindPolicy {
@@ -122,7 +122,7 @@ Lyle, the one character told by informs to escalate, did escalate, on an abliter
 
 ### 5.3 Tool rules preamble
 
-- `buildNativeToolInstructions(hasTools, variant)`, with `variant` required; the text-block and simple-JSON builders get the same parameter.
+- `buildNativeToolInstructions(variant, hasTools = true)`, with `variant` required. *(As built: the text-block and simple-JSON builders are left alone. Their instructions only explain the call format and claim nothing about overriding the character, so a variant parameter would change no text.)*
 - **`assistant`** keeps today's header and rules.
 - **`roleplay`** changes the header to "## Using tools" and opens with one sentence: "Tool calls are things {{char}} does; making one does not change who {{char}} is or how {{char}} speaks." Rules 1–6 stay, reworded only where they say "the user needs" or similar task language. Rule 6 (never invent past specifics, search instead) stays verbatim.
 - One-shot loops pass `assistant`.
@@ -179,7 +179,7 @@ This still vouches and still does not instruct an action. It adds "in you", "how
 ## 7. Phases
 
 1. **Kind flag.** *(Done.)* Vault `properties.json` key, schema, resolver, grep-test, API, Aurora UI (a two-option card on the Details tab with a one-line explanation of each), export schema, DDL, help.
-2. **Agent Mode flavours and tool rules.** `flavor` and `variant` parameters, tool-builder gating of `submit_final_response`, Salon wiring through the policy, one-shot loops pinned to research/assistant.
+2. **Agent Mode flavours and tool rules.** *(Done.)* `flavor` and `variant` parameters, tool-builder gating of `submit_final_response`, Salon wiring through the policy, one-shot loops pinned to research/assistant.
 3. **Sample prompts.** `MODERN_ROLEPLAY`, `MODERN_ASSISTANT`, retire `MODERN_GENERAL` with the built-in prune step, DeepSeek governor rewrites, the "Reacting to what happens" bullet across the relationship prompts, plugin version bump and build.
 4. **Generators.** The two new directions, wiring through `kindPolicy`, the Wizard and Summon choosing kind, the Optimizer's flattening signal.
 5. **Group discipline and inform header.** The new bullet and the new inform header.
@@ -237,3 +237,14 @@ Phases 1 and 2 must land together or in order; 3 and 4 depend only on the consta
 - `public/schemas/qtap-export.schema.json`, `docs/developer/DDL.md`, `help/character-editing.md`.
 - Tests: `__tests__/unit/lib/characters/kind.test.ts`, `kind-chokepoint.test.ts`, a `properties.json — character kind` block in `character-properties-overlay.test.ts`, and the scaffold and full-sync expectations updated.
 - Nothing reads the kind for behaviour yet. That starts in phase 2.
+
+### Phase 2 — Agent Mode flavours and tool rules (2026-11-04)
+
+- `lib/characters/kind.ts`: `AgentModeFlavor` (`research` | `in-character`), `ToolRulesVariant` (`assistant` | `roleplay`), `KindPolicy`, `kindPolicy`, `characterKindPolicy`. Roleplay → in-character / roleplay; assistant → research / assistant.
+- `agent-mode-resolver.service.ts`: `ResolvedAgentMode.flavor`, from the responding character's kind (the cascade still decides only `enabled`). `buildAgentModeInstructions(maxTurns, flavor)` and `buildForceFinalMessage(flavor)` take a required flavour; the research text is unchanged byte for byte, and the in-character text is "## Acting in the scene" (§5.2) with an in-character limit message that names no tool.
+- Salon wiring: `collectTurnExtras` passes the flavour; the orchestrator passes `offerSubmitFinalResponse` (Agent Mode on *and* research) to `resolveTurnToolSlate`, which hands it to `buildTools` as its submit switch, so an in-character turn is never offered `submit_final_response`. `native-tool-loop.service.ts` treats `submit_final_response` as terminal, and promotes a force-final payload, only when research; in-character, a stray submit call runs through the executor like any unknown call and replaces nothing. The flavour is logged with the resolved mode, the injected instructions and the force-final.
+- `lib/tools/native-tool-prompt.ts`: `buildNativeToolInstructions(variant, hasTools = true)`; the six rules are one shared constant, `NATIVE_TOOL_RULES`. `assistant` keeps the old preamble byte for byte; `roleplay` is "## Using tools" ("A tool call is something you do; making one does not change who you are or how you speak"). `buildNativeToolSystemInstructions(variant)` passes it through; the Salon gives it `characterKindPolicy(character).toolRules`.
+- The Brahma Console, the Help chat and `runOneShotToolLoop` pass `research` and `assistant` explicitly.
+- Tests: `agent-mode-flavor.test.ts` (new), `native-tool-prompt.test.ts` (both variants, every rule, assistant text byte-identical), in-character cases in `native-tool-loop.service.test.ts`, the roleplay/assistant preamble and the submit switch in `turn-tools.test.ts`, `kindPolicy` in `kind.test.ts`.
+- Help: `help/agent-mode.md` (the two flavours), `help/character-editing.md`.
+

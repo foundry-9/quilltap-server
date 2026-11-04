@@ -41,7 +41,7 @@ function params(over: Partial<TurnToolSlateParams> = {}): TurnToolSlateParams {
     imageProfileId: null,
     imageProfile: null,
     compressionEnabled: true,
-    agentModeEnabled: false,
+    offerSubmitFinalResponse: false,
     isMultiCharacter: true,
     ...over,
   }
@@ -108,6 +108,24 @@ describe('resolveTurnToolSlate', () => {
     expect(slate.useTextBlockTools).toBe(false)
     expect(slate.toolInstructions).toEqual(expect.any(String))
     expect(slate.stopSequences).toBeUndefined()
+  })
+
+  it('native: a roleplay character hears the roleplay tool-rules preamble', async () => {
+    const slate = await resolveTurnToolSlate(params())
+    expect(slate.toolInstructions).toContain('## Using tools')
+    expect(slate.toolInstructions).not.toContain('MANDATORY')
+  })
+
+  it('native: an assistant character hears the assistant tool-rules preamble', async () => {
+    const slate = await resolveTurnToolSlate(
+      params({ character: { id: 'char-1', name: 'Riya', kind: 'assistant' } as never }),
+    )
+    expect(slate.toolInstructions).toContain('## Tool Execution Rules (MANDATORY')
+  })
+
+  it.each([true, false])('passes offerSubmitFinalResponse=%s to buildTools as its submit switch', async (offer) => {
+    await resolveTurnToolSlate(params({ offerSubmitFinalResponse: offer }))
+    expect(jest.mocked(buildTools).mock.calls[0][0]).toMatchObject({ agentModeEnabled: offer })
   })
 
   it('simple-json: no native tools, its instructions, and its stop sequences', async () => {

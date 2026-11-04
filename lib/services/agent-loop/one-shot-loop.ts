@@ -112,10 +112,10 @@ export function buildOneShotToolInstructions(opts: {
   if (useTextBlockTools && built.tools.length > 0) {
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (built.tools.length > 0) {
-    toolInstructions = buildNativeToolSystemInstructions()
+    toolInstructions = buildNativeToolSystemInstructions('assistant')
   }
 
-  const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
+  const agentInstructions = buildAgentModeInstructions(maxAgentTurns, 'research')
   return toolInstructions ? `${toolInstructions}\n\n${agentInstructions}` : agentInstructions
 }
 
@@ -210,7 +210,7 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
     agentTurnCount++
 
     if (agentTurnCount === maxAgentTurns) {
-      conversationMessages.push({ role: 'user', content: buildForceFinalMessage() })
+      conversationMessages.push({ role: 'user', content: buildForceFinalMessage('research') })
     }
 
     let currentResponse = ''

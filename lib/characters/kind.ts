@@ -50,3 +50,40 @@ export function resolveCharacterKind(
 export function isAssistantCharacter(character: { kind?: unknown } | null | undefined): boolean {
   return resolveCharacterKind(character) === 'assistant'
 }
+
+/**
+ * What Agent Mode means for a character. `research` is the assistant's loop:
+ * iterate, verify, and finish with a structured `submit_final_response`.
+ * `in-character` makes tools the character's hands in the scene: act, then
+ * write the turn in prose, with no summary and no `submit_final_response`.
+ */
+export type AgentModeFlavor = 'research' | 'in-character'
+
+/**
+ * Which tool-rules preamble a character hears. Both keep every rule against
+ * narrating a tool call instead of making it; `roleplay` drops the claim that
+ * the rules override the character.
+ */
+export type ToolRulesVariant = 'assistant' | 'roleplay'
+
+/** Everything a kind decides, derived in one place. */
+export interface KindPolicy {
+  kind: CharacterKind
+  agentFlavor: AgentModeFlavor
+  toolRules: ToolRulesVariant
+}
+
+const KIND_POLICIES: Readonly<Record<CharacterKind, KindPolicy>> = {
+  roleplay: { kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay' },
+  assistant: { kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant' },
+}
+
+/** The behaviour a kind decides. The only place a kind turns into behaviour. */
+export function kindPolicy(kind: CharacterKind): KindPolicy {
+  return KIND_POLICIES[characterKindOrDefault(kind)]
+}
+
+/** The behaviour a character's kind decides. */
+export function characterKindPolicy(character: { kind?: unknown } | null | undefined): KindPolicy {
+  return kindPolicy(resolveCharacterKind(character))
+}

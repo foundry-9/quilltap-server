@@ -128,6 +128,7 @@ The assembled system prompt addresses the character directly throughout, and eac
 - **Roleplay character** (the default) is a player in the drama: a person inside the story, with stakes of their own, who feels what happens and acts on it
 - **Assistant** is a member of the staff: a capable aide whose business is doing work for you, such as research, drafting or keeping the books
 - The choice is about how the character is *performed*, not what they are in the story. A ship's mind or a household automaton who lives in the scene is still a roleplay character
+- With [Agent Mode](agent-mode.md) on, a roleplay character uses their tools as things they do in the scene and still answers in prose; an assistant researches, verifies and delivers a finished report
 - Every character begins as a roleplay character, including every character made before the choice existed
 - The same card appears on the character's view page
 

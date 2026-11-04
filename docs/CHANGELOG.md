@@ -4,12 +4,22 @@
 
 ### 4.13-dev
 
+#### Feature: Agent Mode and tool rules follow the character's kind
+
+- Agent Mode now has two flavors, chosen by the responding character's kind; the settings cascade still decides only whether it is on.
+  - Roleplay characters get "in-character" Agent Mode: tools are things they do in the scene, the turn is still written in character as prose, and they are never offered `submit_final_response`. At the step limit they are told to stop using tools and write the turn.
+  - Assistant characters get the existing research loop, unchanged.
+- The native tool-rules preamble follows the kind too. Roleplay characters get "## Using tools", which no longer claims to override the character; assistants keep "Tool Execution Rules (MANDATORY — overrides all other behavioral patterns)". The six rules are identical in both.
+- The Brahma Console, Help chat and one-shot loops always use the research flavor and the assistant preamble.
+- Text-block and simple-JSON tool instructions are unchanged.
+- Phase 2 of `docs/developer/features/character-kind-and-roleplay-defaults.md`.
+
 #### Feature: character kind (roleplay or assistant)
 
 - Every character now has a kind: `roleplay` (default) or `assistant`. Stored as `kind` in the character vault's `properties.json`; an absent or unrecognized value reads as `roleplay`, so existing characters need no migration.
 - Set on a new "Kind of character" card on the Details tab of the character view and edit pages, saved on change. Accepted by `PUT /api/v1/characters/[id]` and returned by `GET /api/v1/characters`. Documented in `qtap-export.schema.json`; export and import carry it with the character.
 - Read only through `lib/characters/kind.ts`; a grep-test fails on hand comparisons against a kind literal elsewhere.
-- Nothing changes behaviour on the kind yet. Phase 1 of `docs/developer/features/character-kind-and-roleplay-defaults.md`; the spec now stores kind in the vault instead of the DB column it first proposed.
+- Phase 1 of `docs/developer/features/character-kind-and-roleplay-defaults.md`; the spec now stores kind in the vault instead of the DB column it first proposed.
 
 #### Docs: design spec for character kind and roleplay defaults
 

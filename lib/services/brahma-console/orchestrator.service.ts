@@ -254,14 +254,14 @@ async function processBrahmaResponse(
     }
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (tools.length > 0) {
-    toolInstructions = buildNativeToolSystemInstructions()
+    toolInstructions = buildNativeToolSystemInstructions('assistant')
   }
 
   // Agent mode instructions (always enabled). The turn budget is operator-set
   // (Settings → Chat → Brahma Console); the stuck-loop guard below still stops
   // a repeating loop well before this cap.
   const maxAgentTurns = await resolveBrahmaMaxAgentTurns()
-  const agentInstructions = buildAgentModeInstructions(maxAgentTurns)
+  const agentInstructions = buildAgentModeInstructions(maxAgentTurns, 'research')
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`
     : agentInstructions
@@ -328,7 +328,7 @@ async function processBrahmaResponse(
     agentTurnCount++
 
     if (agentTurnCount === maxAgentTurns) {
-      conversationMessages.push({ role: 'user', content: buildForceFinalMessage() })
+      conversationMessages.push({ role: 'user', content: buildForceFinalMessage('research') })
     }
 
     let currentResponse = ''

@@ -41,6 +41,7 @@ import { createToolContext } from './tool-execution.service'
 import { runTextToolPass, type RunTextToolPassOptions, type TextToolStrategy } from './text-tool-loop.service'
 import { getProvider } from '@/lib/plugins/provider-registry'
 import { hasTextBlockMarkers } from '@/lib/tools'
+import { characterKindPolicy } from '@/lib/characters/kind'
 
 const logger = createServiceLogger('TurnTools')
 
@@ -79,7 +80,11 @@ export interface TurnToolSlateParams {
   imageProfileId: string | null
   imageProfile: ImageProfile | null
   compressionEnabled: boolean
-  agentModeEnabled: boolean
+  /**
+   * Offer `submit_final_response`: Agent Mode is on in its research flavour
+   * (an assistant character). An in-character turn is never offered it.
+   */
+  offerSubmitFinalResponse: boolean
   isMultiCharacter: boolean
   /** A storyteller turn starts at its bid's tier. */
   storytellerCeiling?: ToolEffect
@@ -145,7 +150,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     requestFullContext: params.compressionEnabled,
     disabledTools,
     disabledToolGroups: chat.disabledToolGroups ?? [],
-    agentModeEnabled: params.agentModeEnabled,
+    agentModeEnabled: params.offerSubmitFinalResponse,
     isMultiCharacter: params.isMultiCharacter,
     helpToolsEnabled,
     canDressThemselves,
@@ -182,7 +187,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
       logTextBlockToolUsage(profile.provider, profile.modelName, textOptions)
     }
   } else if (actualTools.length > 0) {
-    toolInstructions = buildNativeToolSystemInstructions()
+    toolInstructions = buildNativeToolSystemInstructions(characterKindPolicy(character).toolRules)
   }
 
   logger.debug('[TurnTools] Tool slate resolved', {

@@ -33,21 +33,24 @@ describe('tool-support.service', () => {
   })
 
   describe('buildNativeToolSystemInstructions', () => {
-    it('should call buildNativeToolInstructions with hasTools=true', () => {
-      const nativeInstructions = '## Tool Execution Rules\nNever narrate tool use.'
-      mockedBuildNativeToolInstructions.mockReturnValue(nativeInstructions)
+    it.each(['assistant', 'roleplay'] as const)(
+      'should call buildNativeToolInstructions with the %s variant and hasTools=true',
+      (variant) => {
+        const nativeInstructions = '## Tool Execution Rules\nNever narrate tool use.'
+        mockedBuildNativeToolInstructions.mockReturnValue(nativeInstructions)
 
-      const result = buildNativeToolSystemInstructions()
+        const result = buildNativeToolSystemInstructions(variant)
 
-      expect(mockedBuildNativeToolInstructions).toHaveBeenCalledWith(true)
-      expect(result).toBe(nativeInstructions)
-    })
+        expect(mockedBuildNativeToolInstructions).toHaveBeenCalledWith(variant, true)
+        expect(result).toBe(nativeInstructions)
+      },
+    )
 
     it('should return the value from buildNativeToolInstructions', () => {
       const expected = 'Tool rules content here'
       mockedBuildNativeToolInstructions.mockReturnValue(expected)
 
-      const result = buildNativeToolSystemInstructions()
+      const result = buildNativeToolSystemInstructions('assistant')
 
       expect(result).toBe(expected)
     })

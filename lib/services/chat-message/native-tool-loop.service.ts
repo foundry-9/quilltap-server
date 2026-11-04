@@ -6,7 +6,8 @@
  *
  *   1. Each iteration inspects `currentRawResponse` for provider-native tool
  *      calls (function-calling tool-use blocks, etc.). Zero calls → exit.
- *   2. In agent mode, `submit_final_response` is special: it terminates the
+ *   2. In research-flavoured agent mode (an assistant character), the only
+ *      flavour offered it, `submit_final_response` is special: it terminates the
  *      loop and stamps `streaming.fullResponse` with the model's structured
  *      final answer. The **ghost-wrap guardrail** rejects an iteration-0,
  *      sole-tool-call `submit_final_response` with no prose — almost always
@@ -21,8 +22,10 @@
  *      `streaming.fullResponse`.
  *   4. After the loop, if iterations hit `effectiveMaxTurns` without
  *      `submit_final_response` succeeding, agent mode runs a single
- *      force-final pass that may overwrite `streaming.fullResponse` from a
- *      submit_final_response in the force-final response. Non-agent mode
+ *      force-final pass. For research it may overwrite
+ *      `streaming.fullResponse` from a submit_final_response in the
+ *      force-final response; for in-character (a roleplay character) it
+ *      asks for the turn in prose with no further tools. Non-agent mode
  *      just logs the cap.
  *
  * Mutations: `streaming.fullResponse`, `streaming.usage`, `streaming.cacheUsage`,
@@ -137,6 +140,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
   // and keeps wrapping every other turn even when it's purely roleplay.
   let realWorkIterations = 0
   let agentModeCompleted = false
+  // Only the research flavour is offered submit_final_response; an
+  // in-character turn ends when the model stops calling tools.
+  const submitOffered = agentMode.enabled && agentMode.flavor === 'research'
 
   while (currentRawResponse && toolIterations < effectiveMaxTurns) {
     // The operator's hard stop: tools already run stay run, but no further
@@ -162,7 +168,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
     // re-prompt the model to make a smaller call.
     const truncated = isTruncatedFinishReason(extractFinishReason(currentRawResponse))
 
-    const submitFinalCall = agentMode.enabled
+    const submitFinalCall = submitOffered
       ? toolCalls.find(tc => tc.name === 'submit_final_response')
       : undefined
     const nonSubmitToolCalls = submitFinalCall
@@ -408,6 +414,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         chatId,
         iterations: toolIterations,
         maxTurns: effectiveMaxTurns,
+        flavor: agentMode.flavor,
       })
 
       safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -417,7 +424,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         characterId: character.id,
       }))
 
-      const forceFinalMessage = buildForceFinalMessage()
+      const forceFinalMessage = buildForceFinalMessage(agentMode.flavor)
       currentMessages = [
         ...currentMessages,
         { role: 'assistant' as const, content: currentResponse, thoughtSignature: streaming.thoughtSignature, reasoningContent: streaming.reasoningContent, name: undefined },
@@ -455,7 +462,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
 
             // If the force-final call still contains submit_final_response,
             // promote its `response` arg over whatever streamed.
-            if (chunk.rawResponse) {
+            if (submitOffered && chunk.rawResponse) {
               const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streaming.effectiveProfile.provider)
               const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
               if (submitCall) {

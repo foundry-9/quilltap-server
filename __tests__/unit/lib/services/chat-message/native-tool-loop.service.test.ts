@@ -67,7 +67,7 @@ jest.mock('@/lib/services/chat-message/tool-execution.service', () => ({
 }))
 
 jest.mock('@/lib/services/chat-message/agent-mode-resolver.service', () => ({
-  buildForceFinalMessage: () => 'FORCE_FINAL_MARKER',
+  buildForceFinalMessage: (flavor: string) => `FORCE_FINAL_MARKER:${flavor}`,
   generateIterationSummary: (n: number, names: string[]) => `iter-${n}-${names.join('+')}`,
 }))
 
@@ -98,7 +98,7 @@ function makeBaseOpts(overrides: Partial<Record<string, unknown>> = {}) {
     character: { id: 'char-1', name: 'Alice', aliases: [] } as any,
     characterParticipant: { id: 'cp-1' } as any,
     preGeneratedAssistantMessageId: 'pre-msg-1',
-    agentMode: { enabled: false, maxTurns: 5, enabledSource: 'default' } as any,
+    agentMode: { enabled: false, maxTurns: 5, enabledSource: 'default', flavor: 'research' } as any,
     formattedMessages: [{ role: 'user', content: 'Hi' }] as any,
     modelParams: { temperature: 0.7 },
     actualTools: [{ name: 'doc_open_file' }],
@@ -220,7 +220,7 @@ describe('native-tool-loop.service', () => {
     nextStreamMessageBehaviours = ['happy']
 
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat', flavor: 'research' } as any,
       streaming: makeStreaming({ fullResponse: 'pre-content ' }),
     })
     await runNativeToolLoop(opts as any)
@@ -243,7 +243,7 @@ describe('native-tool-loop.service', () => {
     nextStreamMessageBehaviours = ['happy']
 
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat', flavor: 'research' } as any,
       streaming: makeStreaming({ fullResponse: '' }),
     })
     await runNativeToolLoop(opts as any)
@@ -272,7 +272,7 @@ describe('native-tool-loop.service', () => {
       generatedImagePaths: [],
     })
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat', flavor: 'research' } as any,
       streaming: makeStreaming({ fullResponse: '' }),
     })
     await runNativeToolLoop(opts as any)
@@ -296,7 +296,7 @@ describe('native-tool-loop.service', () => {
       { name: 'submit_final_response', arguments: { response: 'I have successfully completed the task...' }, callId: 'tc-final' },
     ])
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat', flavor: 'research' } as any,
       streaming: makeStreaming({ fullResponse: '*Amy leans into the embrace, the warm light catching her hair.*' }),
     })
     await runNativeToolLoop(opts as any)
@@ -313,7 +313,7 @@ describe('native-tool-loop.service', () => {
       { name: 'submit_final_response', arguments: {}, callId: 'tc-final' },
     ])
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat', flavor: 'research' } as any,
       streaming: makeStreaming({ fullResponse: 'already-streamed' }),
     })
     await runNativeToolLoop(opts as any)
@@ -348,7 +348,7 @@ describe('native-tool-loop.service', () => {
     ])
 
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat', flavor: 'research' } as any,
     })
     await runNativeToolLoop(opts as any)
 
@@ -357,10 +357,72 @@ describe('native-tool-loop.service', () => {
     expect(opts.streaming.fullResponse).toBe('forced-final-answer')
     expect(mockRepoChatsUpdate).toHaveBeenCalledTimes(5)
 
-    // Force-final slate ends with the FORCE_FINAL_MARKER user message.
+    // Force-final slate ends with the research FORCE_FINAL_MARKER user message.
     const forceSent = streamMessageCalls[5]!
     const messages = forceSent.messages as Array<{ role: string; content?: string }>
-    expect(messages[messages.length - 1]).toMatchObject({ role: 'user', content: 'FORCE_FINAL_MARKER' })
+    expect(messages[messages.length - 1]).toMatchObject({ role: 'user', content: 'FORCE_FINAL_MARKER:research' })
+  })
+
+  it('in-character agent mode: submit_final_response is not special — it runs as an ordinary call and replaces nothing', async () => {
+    mockDetectToolCalls
+      .mockReturnValueOnce([{ name: 'doc_open_file', arguments: {}, callId: 'tc-1' }])
+      .mockReturnValueOnce([{ name: 'submit_final_response', arguments: { response: 'a report' }, callId: 'tc-final' }])
+      .mockReturnValueOnce([])
+    mockProcessToolCalls.mockResolvedValue({
+      toolMessages: [{ toolName: 'doc_open_file', content: 'ok', callId: 'cb', success: true }],
+      generatedImagePaths: [],
+    })
+    nextStreamMessageScripts = [
+      [{ content: 'she reads the ledger ' }, { done: true, usage: null, cacheUsage: null, rawResponse: { id: 'r1' } }],
+      [{ content: 'and shuts it.' }, { done: true, usage: null, cacheUsage: null, rawResponse: { id: 'r2' } }],
+    ]
+    nextStreamMessageBehaviours = ['happy', 'happy']
+
+    const opts = makeBaseOpts({
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'global', flavor: 'in-character' } as any,
+      streaming: makeStreaming({ fullResponse: 'Marion ' }),
+    })
+    await runNativeToolLoop(opts as any)
+
+    expect(opts.streaming.fullResponse).toBe('Marion she reads the ledger and shuts it.')
+    expect(opts.streaming.fullResponse).not.toContain('a report')
+    // Both batches went to the executor; the second carried the stray submit call.
+    expect(mockProcessToolCalls).toHaveBeenCalledTimes(2)
+    const secondBatch = (mockProcessToolCalls.mock.calls[1] as unknown[])[0] as Array<{ name: string }>
+    expect(secondBatch.map((c) => c.name)).toEqual(['submit_final_response'])
+  })
+
+  it('in-character agent mode max-turns: the force-final asks for the turn in prose and never promotes a submit payload', async () => {
+    for (let i = 0; i < 2; i++) {
+      mockDetectToolCalls.mockReturnValueOnce([{ name: 'doc_open_file', arguments: { i }, callId: `tc-${i}` }])
+    }
+    mockProcessToolCalls.mockResolvedValue({
+      toolMessages: [{ toolName: 'doc_open_file', content: 'ok', callId: 'cb', success: true }],
+      generatedImagePaths: [],
+    })
+    for (let i = 0; i < 2; i++) {
+      nextStreamMessageScripts.push([{ done: true, usage: null, cacheUsage: null, rawResponse: { id: `raw-${i}` } }])
+      nextStreamMessageBehaviours.push('happy')
+    }
+    nextStreamMessageScripts.push([
+      { content: 'Glenn sets the radio down.' },
+      { done: true, usage: null, cacheUsage: null, rawResponse: { id: 'force-raw' } },
+    ])
+    nextStreamMessageBehaviours.push('happy')
+    mockDetectToolCalls.mockReturnValueOnce([
+      { name: 'submit_final_response', arguments: { response: 'Summary of actions taken' }, callId: 'tc-force' },
+    ])
+
+    const opts = makeBaseOpts({
+      agentMode: { enabled: true, maxTurns: 2, enabledSource: 'global', flavor: 'in-character' } as any,
+    })
+    await runNativeToolLoop(opts as any)
+
+    expect(streamMessageCalls).toHaveLength(3)
+    const forceSent = streamMessageCalls[2]!
+    const messages = forceSent.messages as Array<{ role: string; content?: string }>
+    expect(messages[messages.length - 1]).toMatchObject({ role: 'user', content: 'FORCE_FINAL_MARKER:in-character' })
+    expect(opts.streaming.fullResponse).toBe('Glenn sets the radio down.')
   })
 
   it('agent mode max-turns: when force-final response has NO submit_final_response, the streamed content is kept', async () => {
@@ -385,7 +447,7 @@ describe('native-tool-loop.service', () => {
     mockDetectToolCalls.mockReturnValueOnce([])
 
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 3, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 3, enabledSource: 'chat', flavor: 'research' } as any,
     })
     await runNativeToolLoop(opts as any)
 
@@ -469,7 +531,7 @@ describe('native-tool-loop.service', () => {
     nextStreamMessageBehaviours = ['happy']
 
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 5, enabledSource: 'chat', flavor: 'research' } as any,
       // Non-empty prose so this isn't classified as a ghost-wrap; we want to
       // prove the *truncation* gate (not the ghost-wrap gate) does the work.
       streaming: makeStreaming({ fullResponse: 'I will finish now. ', rawResponse: { stop_reason: 'max_tokens' } }),
@@ -521,7 +583,7 @@ describe('native-tool-loop.service', () => {
     nextStreamMessageErrors[2] = new Error('force-final-died')
 
     const opts = makeBaseOpts({
-      agentMode: { enabled: true, maxTurns: 2, enabledSource: 'chat' } as any,
+      agentMode: { enabled: true, maxTurns: 2, enabledSource: 'chat', flavor: 'research' } as any,
     })
     await expect(runNativeToolLoop(opts as any)).rejects.toThrow('force-final-died')
     expect(opts.preservePartialOnError).toHaveBeenCalledTimes(1)

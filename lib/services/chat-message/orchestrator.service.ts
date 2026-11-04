@@ -686,7 +686,7 @@ async function processMessage(
     imageProfileId,
     imageProfile,
     compressionEnabled,
-    agentModeEnabled: agentMode.enabled,
+    offerSubmitFinalResponse: agentMode.enabled && agentMode.flavor === 'research',
     isMultiCharacter,
     storytellerCeiling: storytellerTurn?.effectCeiling,
   })
@@ -865,6 +865,7 @@ async function processMessage(
       chatId,
       maxTurns: agentMode.maxTurns,
       enabledSource: agentMode.enabledSource,
+      flavor: agentMode.flavor,
     })
   }
 

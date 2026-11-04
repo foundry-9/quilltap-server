@@ -6,6 +6,8 @@
 
 import {
   CHARACTER_KINDS,
+  characterKindPolicy,
+  kindPolicy,
   DEFAULT_CHARACTER_KIND,
   characterKindOrDefault,
   isAssistantCharacter,
@@ -47,5 +49,16 @@ describe('character kind', () => {
     expect(isAssistantCharacter({ kind: 'roleplay' })).toBe(false)
     expect(isAssistantCharacter({ kind: 'wizard' })).toBe(false)
     expect(isAssistantCharacter(null)).toBe(false)
+  })
+
+  it('derives the policy for each kind', () => {
+    expect(kindPolicy('roleplay')).toEqual({ kind: 'roleplay', agentFlavor: 'in-character', toolRules: 'roleplay' })
+    expect(kindPolicy('assistant')).toEqual({ kind: 'assistant', agentFlavor: 'research', toolRules: 'assistant' })
+  })
+
+  it('derives a character\'s policy, defaulting to roleplay', () => {
+    expect(characterKindPolicy({ kind: 'assistant' }).agentFlavor).toBe('research')
+    expect(characterKindPolicy({}).agentFlavor).toBe('in-character')
+    expect(characterKindPolicy(null).toolRules).toBe('roleplay')
   })
 })
