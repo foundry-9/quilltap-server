@@ -5,6 +5,11 @@
  * Accepts a base64-encoded image and optional guidance text,
  * analyzes it using a vision-capable LLM, and returns proposed wardrobe items
  * plus an optional proposed name for the ensemble they make together.
+ * An optional `profileId` names the vision profile to read it with.
+ *
+ * GET /api/v1/wardrobe/analyze-image
+ * The vision profiles the dialog may offer (every profile that can genuinely
+ * receive an image) and the one the analysis would use if none is chosen.
  */
 
 import { createContextHandler } from '@/lib/api/middleware'
@@ -12,6 +17,7 @@ import { logger } from '@/lib/logger'
 import { z } from 'zod'
 import { successResponse, badRequest, serverError } from '@/lib/api/responses'
 import { analyzeImageForWardrobeItems } from '@/lib/wardrobe/image-analysis'
+import { listVisionProfiles, resolveVisionProfile } from '@/lib/llm/vision-request'
 
 const analyzeImageSchema = z.object({
   image: z.string().min(1, 'Image data is required'),
@@ -19,6 +25,31 @@ const analyzeImageSchema = z.object({
     error: 'Unsupported image format. Use JPEG, PNG, WebP, or GIF.',
   }),
   guidance: z.string().max(2000).optional(),
+  profileId: z.uuid().optional(),
+})
+
+// GET /api/v1/wardrobe/analyze-image
+export const GET = createContextHandler(async (_req, { repos, user }) => {
+  const [profiles, defaultProfile] = await Promise.all([
+    listVisionProfiles(repos, user.id),
+    // The same resolution the POST uses when no profile is chosen.
+    resolveVisionProfile(repos, user.id, { prefer: 'capable', configured: 'skip-incapable' }),
+  ])
+
+  logger.debug('[Wardrobe Image Analysis API] Listed vision profiles', {
+    count: profiles.length,
+    defaultProfileId: defaultProfile?.id ?? null,
+  })
+
+  return successResponse({
+    profiles: profiles.map(p => ({
+      id: p.id,
+      name: p.name,
+      provider: p.provider,
+      modelName: p.modelName,
+    })),
+    defaultProfileId: defaultProfile?.id ?? null,
+  })
 })
 
 // POST /api/v1/wardrobe/analyze-image
@@ -38,6 +69,7 @@ export const POST = createContextHandler(async (req, { repos, user }) => {
         image: validated.image,
         mimeType: validated.mimeType,
         guidance: validated.guidance,
+        profileId: validated.profileId,
       },
       repos,
       user.id

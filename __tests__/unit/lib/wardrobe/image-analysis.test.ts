@@ -6,7 +6,7 @@
  * network, no vision model.
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals'
+import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals'
 
 jest.mock('@/lib/logger', () => {
   const makeLogger = (): any => ({
@@ -228,5 +228,42 @@ describe('wardrobe image analysis — the shared vision path (bug 197)', () => {
       'user-1',
     )
     expect(result.provider).toBe('ANTHROPIC')
+  })
+})
+
+describe('wardrobe image analysis — a profile chosen in the dialog', () => {
+  const SECOND = { ...PROFILE, id: 'p2', provider: 'OPENAI', modelName: 'gpt-4o', isDefault: false }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    repos.chatSettings.findByUserId.mockResolvedValue(null)
+    repos.connections.findById.mockResolvedValue(null)
+    repos.connections.findByUserId.mockResolvedValue([PROFILE, SECOND])
+    mockSendMessage.mockResolvedValue({ content: JSON.stringify({ items: [] }) })
+  })
+
+  afterAll(() => {
+    repos.connections.findByUserId.mockResolvedValue([PROFILE])
+  })
+
+  it('reads the photograph with the chosen profile, not the auto-pick', async () => {
+    const result = await analyzeImageForWardrobeItems(
+      { image: 'AAAA', mimeType: 'image/png', profileId: 'p2' },
+      repos as never,
+      'user-1',
+    )
+    expect(result.provider).toBe('OPENAI')
+    expect(result.model).toBe('gpt-4o')
+  })
+
+  it('refuses a chosen profile it cannot use rather than quietly picking another', async () => {
+    await expect(
+      analyzeImageForWardrobeItems(
+        { image: 'AAAA', mimeType: 'image/png', profileId: 'not-mine' },
+        repos as never,
+        'user-1',
+      ),
+    ).rejects.toThrow(/chosen profile/)
+    expect(mockSendMessage).not.toHaveBeenCalled()
   })
 })

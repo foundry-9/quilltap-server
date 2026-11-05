@@ -4,7 +4,8 @@
  * Import From Image Modal
  *
  * A three-state modal for importing wardrobe items from a reference image:
- * 1. Upload state — file picker, optional guidance notes, "Analyze" button
+ * 1. Upload state — file picker, the vision profile to read it with (preset
+ *    to the one the server would pick), optional guidance notes, "Analyze" button
  * 2. Analyzing state — loading spinner while LLM processes the image
  * 3. Review state — editable item cards with select/deselect, "Import Selected" button,
  *    plus an optional ensemble card that bundles the imported pieces into one
@@ -20,7 +21,10 @@
  * @module components/wardrobe/import-from-image-modal
  */
 
-import { useState, useRef, useCallback, useId } from 'react'
+import { useState, useRef, useCallback, useId, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
@@ -65,6 +69,19 @@ interface OutfitDraft extends ProposedOutfit {
 
 type ModalState = 'upload' | 'analyzing' | 'review'
 
+interface VisionProfileOption {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+}
+
+interface VisionProfilesResponse {
+  profiles: VisionProfileOption[]
+  /** What the analysis uses when nothing is chosen; null when no profile can see. */
+  defaultProfileId: string | null
+}
+
 /** An ensemble needs at least two pieces to be worth bundling. */
 const MIN_OUTFIT_PIECES = 2
 
@@ -99,6 +116,16 @@ export function ImportFromImageModal({
   /** Keep the photograph as each created piece's first picture. */
   const [keepPhotograph, setKeepPhotograph] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** The operator's pick; null means "whatever the server would choose". */
+  const [chosenProfileId, setChosenProfileId] = useState<string | null>(null)
+  /** Which model read the photograph, shown on the review screen. */
+  const [analyzedBy, setAnalyzedBy] = useState<string | null>(null)
+  const visionProfilesQuery = useQuery({
+    queryKey: queryKeys.wardrobe.visionProfiles,
+    queryFn: ({ signal }) => apiFetch<VisionProfilesResponse>('/api/v1/wardrobe/analyze-image', { signal }),
+  })
+  const visionProfiles = useMemo(() => visionProfilesQuery.data?.profiles ?? [], [visionProfilesQuery.data])
+  const selectedProfileId = chosenProfileId ?? visionProfilesQuery.data?.defaultProfileId ?? ''
   const fileInputRef = useRef<HTMLInputElement>(null)
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -180,6 +207,7 @@ export function ImportFromImageModal({
           image: base64,
           mimeType: selectedFile.type,
           guidance: guidance.trim() || undefined,
+          profileId: selectedProfileId || undefined,
         }),
       })
 
@@ -194,6 +222,8 @@ export function ImportFromImageModal({
         return
       }
 
+      const reader = visionProfiles.find(p => p.id === selectedProfileId)
+      setAnalyzedBy(reader ? `${reader.name} (${reader.provider} • ${reader.modelName})` : `${result.data.provider} • ${result.data.model}`)
       setProposedItems(items.map(item => ({ ...item, selected: true })))
       const proposedOutfit = result.data.proposedOutfit
       setOutfit(
@@ -207,7 +237,7 @@ export function ImportFromImageModal({
       setError(message)
       setState('upload')
     }
-  }, [selectedFile, guidance])
+  }, [selectedFile, guidance, selectedProfileId, visionProfiles])
 
   // ── Item Editing ────────────────────────────────────────────────────────
 
@@ -466,6 +496,34 @@ export function ImportFromImageModal({
                   className="hidden"
                 />
 
+                {/* Which vision model reads the photograph */}
+                <div>
+                  <label htmlFor={`${id}-vision-profile`} className="qt-label mb-1">
+                    Reading the photograph
+                  </label>
+                  <select
+                    id={`${id}-vision-profile`}
+                    value={selectedProfileId}
+                    onChange={(e) => setChosenProfileId(e.target.value || null)}
+                    disabled={state === 'analyzing' || visionProfilesQuery.isLoading || visionProfiles.length === 0}
+                    className="qt-select text-sm w-full"
+                  >
+                    {visionProfilesQuery.isLoading && <option value="">Consulting the roster of keen-eyed models…</option>}
+                    {!visionProfilesQuery.isLoading && visionProfiles.length === 0 && (
+                      <option value="">No profile can see pictures</option>
+                    )}
+                    {visionProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name} ({profile.provider} • {profile.modelName})
+                        {profile.id === visionProfilesQuery.data?.defaultProfileId ? ' — the usual choice' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs qt-text-secondary mt-1">
+                    Only profiles whose model reads images and whose provider will actually deliver one are listed.
+                  </p>
+                </div>
+
                 {/* Guidance notes */}
                 <div>
                   <label htmlFor="wardrobe-image-guidance" className="qt-label mb-1">
@@ -513,6 +571,9 @@ export function ImportFromImageModal({
                       <p className="text-sm text-foreground">
                         {proposedItems.length} item{proposedItems.length !== 1 ? 's' : ''} identified
                       </p>
+                      {analyzedBy && (
+                        <p className="text-xs qt-text-secondary mt-1">Read by {analyzedBy}</p>
+                      )}
                       <p className="text-xs qt-text-secondary mt-1">
                         Edit any field below before importing. Deselect items you don&apos;t want.
                       </p>

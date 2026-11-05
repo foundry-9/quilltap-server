@@ -12,7 +12,7 @@
  */
 
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
-import { resolveVisionProfile, sendVisionRequest } from '@/lib/llm/vision-request'
+import { resolveChosenVisionProfile, resolveVisionProfile, sendVisionRequest } from '@/lib/llm/vision-request'
 import { logger } from '@/lib/logger'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
@@ -66,6 +66,11 @@ export interface ImageAnalysisParams {
   mimeType: string
   /** Optional user guidance text */
   guidance?: string
+  /**
+   * A vision profile the operator picked in the dialog. Absent means the
+   * usual resolution (the Image Description profile, else an auto-pick).
+   */
+  profileId?: string
 }
 
 // ============================================================================
@@ -242,6 +247,10 @@ const ANALYSIS_TIMEOUT_MS = 120_000
 const ANALYSIS_TEMPERATURE = 0.5
 const ANALYSIS_MAX_TOKENS = 4000
 
+const CHOSEN_PROFILE_UNUSABLE_MESSAGE =
+  'No vision-capable provider can use the chosen profile: it is gone, or its model or plugin cannot ' +
+  'receive an image. Pick another from the list.'
+
 const NO_VISION_PROFILE_MESSAGE =
   'No vision-capable provider is configured. This feature requires a provider that supports ' +
   'image analysis (e.g., Anthropic Claude, OpenAI GPT-4o, Google Gemini). ' +
@@ -256,17 +265,22 @@ async function runAnalyzeImageForWardrobeItems(
     mimeType: params.mimeType,
     imageSize: params.image.length,
     hasGuidance: !!params.guidance,
+    chosenProfileId: params.profileId ?? null,
   })
 
   // 1. The shared vision resolver: the configured Image Description profile
   // when it can actually receive an image (bug 91's predicate), else any
   // profile that can, a non-cheap one first — quality is the point here.
-  const profile = await resolveVisionProfile(repos, userId, {
-    prefer: 'capable',
-    configured: 'skip-incapable',
-  })
+  // A hand-picked profile from the dialog wins, but only one that can
+  // genuinely receive the picture — never a silent fallback to another.
+  const profile = params.profileId
+    ? await resolveChosenVisionProfile(repos, userId, params.profileId)
+    : await resolveVisionProfile(repos, userId, {
+        prefer: 'capable',
+        configured: 'skip-incapable',
+      })
   if (!profile) {
-    throw new Error(NO_VISION_PROFILE_MESSAGE)
+    throw new Error(params.profileId ? CHOSEN_PROFILE_UNUSABLE_MESSAGE : NO_VISION_PROFILE_MESSAGE)
   }
 
   const userContent = buildUserPrompt(params.guidance)

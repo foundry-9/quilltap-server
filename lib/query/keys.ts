@@ -330,6 +330,8 @@ export const queryKeys = {
     folderLists: ['wardrobe', 'folders'] as const,
     /** One wardrobe container's folder tree (`?action=folders`), by `wardrobeTierKey`. */
     folders: (tierKey: string) => ['wardrobe', 'folders', tierKey] as const,
+    /** The vision profiles Import from image may read a photograph with (GET analyze-image). */
+    visionProfiles: ['wardrobe', 'vision-profiles'] as const,
     /**
      * What every character in one chat is wearing (`?action=outfit`). Under
      * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.

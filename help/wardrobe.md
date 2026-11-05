@@ -85,10 +85,11 @@ To use this feature:
 1. Open the **Wardrobe** dialog (the clothes-hanger icon on the left sidebar) and select the character
 2. Click **Import from image** (it sits beside **+ New Item** at the foot of the wardrobe list)
 3. Drop an image file into the upload zone, or click to browse (JPEG, PNG, WebP, or GIF, up to 10 MB)
-4. Optionally provide **guidance notes** --- free-text hints to steer the analysis (e.g., "this is a medieval fantasy setting," "focus on the woman on the left," "ignore the background characters")
-5. Click **Analyze Image**
+4. Choose who reads it under **Reading the photograph** --- a list of every connection profile whose model reads pictures *and* whose provider will actually deliver one, preset to the profile the dialog would have chosen for you
+5. Optionally provide **guidance notes** --- free-text hints to steer the analysis (e.g., "this is a medieval fantasy setting," "focus on the woman on the left," "ignore the background characters")
+6. Click **Analyze Image**
 
-The analyst is the profile you have named for image descriptions, provided it can actually receive a picture; failing that, the first profile that can. The photograph is trimmed to a sensible size before it travels, and should the model answer without ever having laid eyes on it --- a provider that quietly drops the picture --- the dialog says so rather than offering you garments it invented. A model that dawdles past two minutes is likewise given up on.
+Unless you choose otherwise, the analyst is the profile you have named for image descriptions, provided it can actually receive a picture; failing that, the first profile that can. Should one model squint, simply pick another from the list and analyze again --- the review screen notes which profile did the reading. The photograph is trimmed to a sensible size before it travels, and should the model answer without ever having laid eyes on it --- a provider that quietly drops the picture --- the dialog says so rather than offering you garments it invented. A model that dawdles past two minutes is likewise given up on.
 
 A vision-capable LLM will examine the image and return a list of proposed wardrobe items, each with a suggested title, description, slot type(s), and appropriateness tags. You are then presented with a review screen where you may:
 

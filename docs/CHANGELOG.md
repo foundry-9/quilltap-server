@@ -4,6 +4,17 @@
 
 ### 4.13-dev
 
+#### Fix: image-arrival check rejected Gemini answers on long prompts
+
+- `verifyImageReachedModel` (bug 116) judged a vision call imageless when its prompt tokens were at or below `text / 2.5`. That slack grows with the prompt: Import from image's ~2,400-character prompt allowed 951 tokens, more than Gemini bills for a whole image (258). On Friday, NanoGPT `gemini-2.5-flash` saw the photograph three times (844 tokens; all three answers described the same garments) and every answer was discarded as "accepted and discarded".
+- `textOnlyTokenCeiling` now takes the lower of `text / 2.5` and `text / 4 + 85` (typical text cost plus the cheapest image tier). Short instructions keep the old bound, so bug 116's case is still caught. Affects the describe-fallback too.
+
+#### Feature: choose the vision profile in Import from image
+
+- The Import from image dialog's first screen now has a **Reading the photograph** dropdown listing every profile that can receive an image (model reads images and the plugin transports them, per `profileCanReceiveAttachment`). It is preset to the profile the analysis would have auto-picked; the review screen shows which profile did the reading.
+- `GET /api/v1/wardrobe/analyze-image` returns the eligible profiles and the default pick; `POST` accepts an optional `profileId`. A chosen profile that is unknown or cannot receive images is refused (400) rather than replaced by another.
+- `listVisionProfiles` and `resolveChosenVisionProfile` in `lib/llm/vision-request.ts`; `resolveVisionProfile` now uses the former.
+
 #### Fix: Character Optimizer prompt caching and usage logging
 
 - Every optimizer pass sent one user message: character context, source context (memories and/or instructions), then that pass's instruction. The passes share everything but the instruction, but with the instruction at the end no pass could reuse another's cache.
