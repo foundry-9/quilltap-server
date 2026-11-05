@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Fix: OpenAI model fetch lists GPT-6 and later
+
+- Fetch Models for OpenAI kept only IDs starting `gpt-4`, `gpt-5`, `o1`, `o3`, `o4`, so the gpt-6.x models never appeared. The reasoning-model and 24h cache-retention checks had the same hard-coded lists, so a hand-entered gpt-6 model would also have been sent `temperature` / `top_p`.
+- The OpenAI plugin (1.0.69) now decides by family and version in `model-families.ts`: chat models are gpt-4 and later plus every o-series (gpt-3.5 drops out); reasoning models are gpt-5 and later plus every o-series; 24h retention is gpt-5.1 / 5.2 / 5.5 and every gpt-6+ model except `-chat-latest` aliases.
+- Retention for unreleased models is a guess, so a 400 naming `prompt_cache_retention` is retried once without it instead of failing the turn.
+
 #### Feature: Refine from Memories & Instructions
 
 - The Character Optimizer ("Refine from Memories") is now "Refine from Memories & Instructions". The preflight form has an optional instructions textarea (up to 8,000 characters) and a "Consult the Commonplace Book" checkbox. A run can use memories, instructions, or both; it needs at least one.

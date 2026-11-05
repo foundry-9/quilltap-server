@@ -12,6 +12,12 @@
 import OpenAI from 'openai';
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage } from './types';
 import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import {
+  isCacheRetentionRejection,
+  isOpenAIChatModel,
+  isOpenAIReasoningModel,
+  supportsOpenAIExtendedCacheRetention,
+} from './model-families';
 
 const logger = createPluginLogger('qtap-plugin-openai');
 
@@ -22,25 +28,6 @@ const OPENAI_SUPPORTED_MIME_TYPES = [
   'image/gif',
   'image/webp',
 ];
-
-// Reasoning models don't support temperature, top_p, and other sampling parameters
-// See: https://platform.openai.com/docs/guides/reasoning
-const REASONING_MODEL_PREFIXES = ['o1', 'o3', 'o4', 'gpt-5'];
-
-function isReasoningModel(model: string): boolean {
-  const modelLower = model.toLowerCase();
-  return REASONING_MODEL_PREFIXES.some(prefix => modelLower.startsWith(prefix));
-}
-
-// Models that support extended (24h) prompt-cache retention. gpt-5.3-chat-latest
-// is intentionally NOT in this list — extended retention is unsupported there
-// per the OpenAI docs. Adding it would yield a runtime API error.
-const EXTENDED_RETENTION_MODEL_PREFIXES = ['gpt-5.1', 'gpt-5.2', 'gpt-5.5'];
-
-function supportsExtendedCacheRetention(model: string): boolean {
-  const modelLower = model.toLowerCase();
-  return EXTENDED_RETENTION_MODEL_PREFIXES.some(prefix => modelLower.startsWith(prefix));
-}
 
 // SDK types for the Responses API
 type ResponsesInputItem = OpenAI.Responses.ResponseInputItem;
@@ -331,7 +318,7 @@ export class OpenAIProvider implements TextProvider {
     input: ResponsesInputItem[],
     instructions: string | undefined,
   ): Omit<OpenAI.Responses.ResponseCreateParamsNonStreaming, 'stream'> {
-    const isReasoning = isReasoningModel(params.model);
+    const isReasoning = isOpenAIReasoningModel(params.model);
 
     const requestParams: Record<string, unknown> = {
       model: params.model,
@@ -407,7 +394,7 @@ export class OpenAIProvider implements TextProvider {
     // builds a per-character key in lib/llm/cache-key.ts.
     if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
       requestParams.prompt_cache_key = params.cacheKey;
-      if (supportsExtendedCacheRetention(params.model)) {
+      if (supportsOpenAIExtendedCacheRetention(params.model)) {
         requestParams.prompt_cache_retention = '24h';
       }
     }
@@ -468,6 +455,41 @@ export class OpenAIProvider implements TextProvider {
     };
   }
 
+  /**
+   * `client.responses.create`, retried once without `prompt_cache_retention`
+   * if the API rejects it. Retention support for a new model is inferred from
+   * its generation (model-families.ts); this keeps a wrong inference from
+   * failing the turn.
+   */
+  private async createResponse(
+    client: OpenAI,
+    requestParams: OpenAI.Responses.ResponseCreateParamsNonStreaming,
+  ): Promise<OpenAI.Responses.Response>;
+  private async createResponse(
+    client: OpenAI,
+    requestParams: OpenAI.Responses.ResponseCreateParamsStreaming,
+  ): Promise<AsyncIterable<ResponsesStreamEvent>>;
+  private async createResponse(
+    client: OpenAI,
+    requestParams: OpenAI.Responses.ResponseCreateParams,
+  ): Promise<unknown> {
+    try {
+      return await client.responses.create(requestParams as any);
+    } catch (error) {
+      const withRetention = requestParams as { prompt_cache_retention?: unknown };
+      if (withRetention.prompt_cache_retention === undefined || !isCacheRetentionRejection(error)) {
+        throw error;
+      }
+      logger.warn('Model rejected prompt_cache_retention; retrying without it', {
+        context: 'OpenAIProvider.createResponse',
+        model: requestParams.model,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const { prompt_cache_retention: _dropped, ...withoutRetention } = withRetention as Record<string, unknown>;
+      return await client.responses.create(withoutRetention as any);
+    }
+  }
+
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const client = new OpenAI({
       apiKey,
@@ -492,7 +514,7 @@ export class OpenAIProvider implements TextProvider {
           stream: false,
         };
 
-        const response = await client.responses.create(chainedParams);
+        const response = await this.createResponse(client, chainedParams);
 
         if (response.error) {
           throw new Error(`OpenAI API error: ${response.error.message}`);
@@ -515,7 +537,7 @@ export class OpenAIProvider implements TextProvider {
       stream: false,
     };
 
-    const response = await client.responses.create(requestParams);
+    const response = await this.createResponse(client, requestParams);
 
     if (response.error) {
       logger.error('Responses API returned error', {
@@ -555,7 +577,7 @@ export class OpenAIProvider implements TextProvider {
           stream: true,
         };
 
-        stream = await client.responses.create(chainedParams) as AsyncIterable<ResponsesStreamEvent>;
+        stream = await this.createResponse(client, chainedParams) as AsyncIterable<ResponsesStreamEvent>;
       } catch (error) {
         logger.warn('Streaming conversation chaining failed, falling back to full input', {
           context: 'OpenAIProvider.streamMessage',
@@ -573,7 +595,7 @@ export class OpenAIProvider implements TextProvider {
         stream: true,
       };
 
-      stream = await client.responses.create(requestParams) as AsyncIterable<ResponsesStreamEvent>;
+      stream = await this.createResponse(client, requestParams) as AsyncIterable<ResponsesStreamEvent>;
     }
 
     let finalResponse: ResponsesResponse | null = null;
@@ -657,10 +679,10 @@ export class OpenAIProvider implements TextProvider {
         defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
       });
       const models = await client.models.list();
-      // Filter for Responses API-compatible chat models
-      const chatModelPrefixes = ['gpt-4', 'gpt-5', 'o1', 'o3', 'o4'];
+      // Responses API-compatible chat models, by family and version (gpt-4 and
+      // later, every o-series) so a new generation lists without a code change.
       const chatModels = models.data
-        .filter((m) => chatModelPrefixes.some(prefix => m.id.startsWith(prefix)))
+        .filter((m) => isOpenAIChatModel(m.id))
         .map((m) => m.id)
         .sort();
       return chatModels;

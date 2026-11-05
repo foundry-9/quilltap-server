@@ -211,14 +211,14 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 
 ## Provider-Specific Notes
 
-### OpenAI (GPT-4, GPT-3.5, etc.)
+### OpenAI (GPT-4 and later, the o-series)
 
-- Models update frequently — use "Fetch Models" to see current options
+- Models update frequently — use "Fetch Models" to see current options. The list admits every GPT from 4 onward and every o-series model by the number on the tin rather than by a guest list, so a new generation (GPT-6, and whatever follows it up the stairs) is shown the moment OpenAI announces it, with no need to wait for Quilltap to be told. GPT-3.5 is no longer offered.
 - Temperature: 0-2 (default 1)
 - Supports vision (image) context
 - Token limits vary by model
 - **Verbosity** *(GPT-5 and newer)* — sets how concise or expansive the answer is, on a Low / Medium / High scale. Leaving it at *(model default)* omits the parameter entirely; older models that don't recognise it are unaffected either way.
-- **Reasoning Effort** *(o-series and GPT-5 reasoning models)* — picks how much hidden thinking the model does before it speaks: Minimal, Low, Medium, or High. Non-reasoning models ignore the setting. Background tasks like summarisation are pinned to *Low* regardless of this choice, so a profile set to *High* still won't burn its whole token budget on chores.
+- **Reasoning Effort** *(o-series, and GPT-5 and every later generation)* — picks how much hidden thinking the model does before it speaks: Minimal, Low, Medium, or High. Non-reasoning models ignore the setting. Background tasks like summarisation are pinned to *Low* regardless of this choice, so a profile set to *High* still won't burn its whole token budget on chores.
 
 ### Anthropic (Claude)
 
