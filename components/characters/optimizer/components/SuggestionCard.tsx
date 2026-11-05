@@ -5,7 +5,7 @@
  *
  * Presents a single proposed refinement to the character for review.
  * The discerning author may accept, reject, or amend each suggestion
- * as they see fit, guided by excerpts from the character's own memoirs.
+ * as they see fit, guided by excerpts from the character's own memoirs or the author's instructions.
  */
 
 import { useId, useState } from 'react';
@@ -73,7 +73,7 @@ function MemoryExcerpts({ excerpts }: { excerpts: string[] }) {
       >
         <Icon name="chevron-right" className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} />
         <span>
-          {expanded ? 'Conceal' : 'Consult'} the memoirs ({excerpts.length}{' '}
+          {expanded ? 'Conceal' : 'Consult'} the evidence ({excerpts.length}{' '}
           {excerpts.length === 1 ? 'excerpt' : 'excerpts'})
         </span>
       </button>

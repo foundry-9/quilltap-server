@@ -73,4 +73,4 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Character System Prompts](character-system-prompts.md) — managing multiple system prompts per character
 - [Character Import & Export](character-import-export.md) — other ways to move characters between systems
-- [Refine from Memories](character-optimizer.md) — improving character data before generating an external prompt
+- [Refine from Memories & Instructions](character-optimizer.md) — improving character data before generating an external prompt

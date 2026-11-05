@@ -1,10 +1,11 @@
 /**
- * Character Optimizer Service
+ * Character Optimizer Service ("Refine from Memories & Instructions")
  *
- * Analyzes a character's reinforced memories to identify behavioral patterns
- * that should be reflected in their configuration. Provides suggestions for
- * updating character fields (description, personality, scenario, etc.) based
- * on demonstrated behavior across interactions.
+ * Proposes changes to a character's core configuration from two sources,
+ * either or both: their reinforced memories (behaviour demonstrated across
+ * interactions) and free-text instructions from the author. Provides
+ * suggestions for updating character fields (description, personality,
+ * scenarios, system prompts, etc.) one focused pass at a time.
  *
  * Follows the same LLM orchestration pattern as ai-import.service.ts with
  * streaming progress updates and structured JSON responses.
@@ -135,13 +136,25 @@ export interface OptimizerOptions {
   sinceDate?: string | null;
   beforeDate?: string | null;
   outputMode?: OptimizerOutputMode;
+  /** Consult the Commonplace Book. Defaults to true. */
+  useMemories?: boolean;
+  /** The author's free-text direction for this refinement. */
+  instructions?: string;
 }
+
+/** Which grounds a refinement run is working from. */
+export interface OptimizerSources {
+  hasMemories: boolean;
+  hasInstructions: boolean;
+}
+
+const MEMORIES_ONLY: OptimizerSources = { hasMemories: true, hasInstructions: false };
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const SYSTEM_MESSAGE = `You are a character analysis assistant for Quilltap, a creative writing and roleplay platform. Your job is to analyze a character's accumulated memories and identify behavioral patterns that should be reflected in their configuration.
+const SYSTEM_MESSAGE = `You are a character analysis assistant for Quilltap, a creative writing and roleplay platform. Your job is to read a character's accumulated memories, their author's instructions, or both, and identify the changes that should be reflected in their configuration.
 
 Key concepts:
 - Characters can have MULTIPLE named scenarios. A scenario is a setting for a chat — it describes the environment, circumstances, and context in which an interaction takes place. Scenarios set the stage but do not fundamentally change the character's personality, voice, or behavior. Think of them as different locations or situations where the character might be encountered.
@@ -304,18 +317,94 @@ export function buildMemoryContext(memories: Array<{ memory: Memory }>): string 
 }
 
 /**
- * Get analysis prompt. A roleplay character's analysis also looks for
- * flattening (`kindDriftSignalFor`); an assistant's does not.
+ * Stand-in for the memory context when a run consults no memories, so every
+ * pass is told plainly that it has none rather than seeing an empty block.
  */
-export function getAnalysisPrompt(kind: CharacterKind): string {
+export function buildNoMemoriesContext(): string {
+  return `=== Memories ===
+No memories were consulted for this refinement.`;
+}
+
+/**
+ * The author's instructions, as every pass of the run sees them. They ride in
+ * the shared context (beside the memories) rather than in each pass's own
+ * prompt, so the scenario, system-prompt, appearance, wardrobe and alias
+ * passes all read the same direction. The closing rules settle how the
+ * instructions sit against the memories and against the field rules, and
+ * re-read each pass's "what the memories establish" wording to include them.
+ */
+export function buildInstructionsContext(instructions: string, hasMemories: boolean): string {
+  const groundsRules = hasMemories
+    ? `- Where the instructions and the memories disagree, the instructions win. The memories remain the evidence for everything the instructions leave alone.
+- Wherever a pass below speaks of what "the memories" establish or support, read it as what the memories or these instructions establish. When an instruction is the grounds for a suggestion, quote the phrase of it you are following in memoryExcerpts.`
+    : `- No memories were consulted for this refinement; these instructions are the only grounds for change. Wherever a pass below speaks of what "the memories" establish or support, read it as what these instructions establish, and put the phrase of the instructions you are following in memoryExcerpts.
+- Leave untouched anything the instructions do not bear on — an empty answer is right for a pass they do not reach.`;
+  return `=== The Author's Instructions ===
+The character's author has given the following direction for this refinement:
+
+<<<
+${instructions}
+>>>
+
+How to honour these instructions:
+- They are the author's own direction for their character. Apply them wherever they reach — every field, scenario, system prompt, the physical description, the wardrobe and the aliases they bear on — not only the field they happen to name. A rewrite they call for may be thorough; the proposed value is always the complete new text.
+- A change the instructions require is significant: give it a significance of at least 0.6.
+${groundsRules}
+- The instructions never suspend the field rules: each field keeps its vantage point and its form of address, every system prompt keeps its trust safeguards, and nothing may constrain what {{user}}'s persona does or require it to be approved.`;
+}
+
+/**
+ * The run's grounds, as one block for the shared context: the memories (or a
+ * note that there are none) and, when given, the author's instructions.
+ */
+export function buildSourceContext(memoryContext: string | null, instructions: string): string {
+  const parts = [memoryContext ?? buildNoMemoriesContext()];
+  if (instructions) parts.push(buildInstructionsContext(instructions, memoryContext !== null));
+  return parts.join('\n\n---\n\n');
+}
+
+/**
+ * Get analysis prompt. A roleplay character's analysis also looks for
+ * flattening (`kindDriftSignalFor`); an assistant's does not. `sources` says
+ * what the run is working from: memories, the author's instructions, or both.
+ * With no memories, the analysis is a reading of the instructions against the
+ * current configuration, and the memory-hunting checklist is left out.
+ */
+export function getAnalysisPrompt(kind: CharacterKind, sources: OptimizerSources = MEMORIES_ONLY): string {
   const driftSignal = kindDriftSignalFor(kind);
+  const flatteningGuardrail = driftSignal ? `\n\n${driftSignal}` : '';
+
+  if (!sources.hasMemories) {
+    return `${FULL_FIELD_SEMANTICS}
+
+Read this character's current configuration against the author's instructions. Identify each distinct change the instructions call for — as many as they genuinely contain, up to 8 — and what in the current configuration it touches.
+
+For every change, decide which fields it reaches, using the vantage-point rule above: what an interlocutor would observe → DESCRIPTION; the character's self-knowledge and inner drivers → PERSONALITY; public facts a stranger could know → IDENTITY; the load-bearing truths → MANIFESTO; setting → scenarios; how the character looks → the physical description; what they wear → the wardrobe; what others call them → the aliases; how the character is to be played → the system prompts.
+
+${COMMITTEE_DRIFT_GUARDRAIL}${flatteningGuardrail}
+
+Respond with JSON:
+{
+  "behavioralPatterns": [
+    {
+      "pattern": "The change the instructions call for, stated plainly",
+      "evidence": "The phrase of the instructions that asks for it, and the current text it bears on",
+      "frequency": "Author's instruction"
+    }
+  ],
+  "summary": "A 2-3 sentence overview of what the instructions ask of this character and which parts of the configuration they reach."
+}`;
+  }
+
   const flatteningLookFor = driftSignal
     ? `\n- Flattening — the character meeting danger, threat, loss, or outrage with the same even calm as small talk. Surface it as a pattern to CORRECT, labelled as such, never as a trait.`
     : '';
-  const flatteningGuardrail = driftSignal ? `\n\n${driftSignal}` : '';
+  const instructionsTask = sources.hasInstructions
+    ? `\n\nThe author has also given instructions for this refinement (shown above). List each distinct change they call for as its own entry, with the phrase of the instructions as its evidence and "Author's instruction" as its frequency. These entries come in addition to the memory patterns and do not count toward the 3-8.`
+    : '';
   return `${FULL_FIELD_SEMANTICS}
 
-Analyze this character's configuration alongside their most-reinforced memories. Identify 3-8 behavioral patterns that are established in the memories but not fully captured in the character's current configuration.
+Analyze this character's configuration alongside their most-reinforced memories. Identify 3-8 behavioral patterns that are established in the memories but not fully captured in the character's current configuration.${instructionsTask}
 
 For every pattern you identify, decide which of the three editable fields (IDENTITY, DESCRIPTION, PERSONALITY) it is evidence for, using the vantage-point rule above. Patterns that demonstrate behavior visible to interlocutors → DESCRIPTION. Patterns that reveal the character's self-knowledge or inner drivers → PERSONALITY. Public-knowledge facts strangers could know on sight → IDENTITY. Patterns that don't fit any of these (e.g. environment) belong to scenarios and should still be surfaced.
 
@@ -343,7 +432,7 @@ Respond with JSON:
       "frequency": "How often this appears across the memories"
     }
   ],
-  "summary": "A 2-3 sentence overview of how the character has evolved through their interactions, highlighting the gap between their current configuration and their demonstrated behavior."
+  "summary": "A 2-3 sentence overview of how the character has evolved through their interactions, highlighting the gap between their current configuration and their demonstrated behavior.${sources.hasInstructions ? ' Mention what the author\'s instructions ask for.' : ''}"
 }`;
 }
 
@@ -650,7 +739,7 @@ async function callOptimizerLLM(
   apiKey: string,
   modelName: string,
   characterContext: string,
-  memoryContext: string,
+  sourceContext: string,
   instruction: string,
   options: {
     temperature: number;
@@ -661,7 +750,7 @@ async function callOptimizerLLM(
 ): Promise<string> {
   const messages = [
     { role: 'system' as const, content: SYSTEM_MESSAGE },
-    { role: 'user' as const, content: `${characterContext}\n\n---\n\n${memoryContext}\n\n---\n\n${instruction}` },
+    { role: 'user' as const, content: `${characterContext}\n\n---\n\n${sourceContext}\n\n---\n\n${instruction}` },
   ];
 
   const startTime = Date.now();
@@ -709,6 +798,8 @@ export async function runCharacterOptimizer(
   const useSemanticSearch = options?.useSemanticSearch ?? true;
   const sinceDate = options?.sinceDate ?? null;
   const beforeDate = options?.beforeDate ?? null;
+  const useMemories = options?.useMemories ?? true;
+  const instructions = options?.instructions?.trim() ?? '';
 
   logger.info('[CharacterOptimizer] Starting character optimization', {
     userId,
@@ -719,11 +810,17 @@ export async function runCharacterOptimizer(
     useSemanticSearch,
     sinceDate,
     beforeDate,
+    useMemories,
+    instructionsLength: instructions.length,
   });
 
   onProgress({ type: 'start' });
 
   try {
+    if (!useMemories && !instructions) {
+      throw new Error('A refinement needs memories to consult, instructions to follow, or both.');
+    }
+
     // Step 1: Load character and memories
     onProgress({ type: 'step_start', step: 'loading' });
 
@@ -738,92 +835,108 @@ export async function runCharacterOptimizer(
     logger.debug('[CharacterOptimizer] Optimizing for the character\'s kind', { characterId, kind: characterKind });
 
     // Memory retrieval pipeline: search → date filter → rank → reinforcement filter → limit.
-    //
-    // The optimizer only learns from memories ABOUT the character (self-references:
-    // aboutCharacterId === characterId). Inter-character memories the character holds
-    // about other participants would skew behavioral-pattern analysis toward those
-    // others' habits. Legacy null-aboutCharacterId rows are excluded by design — the
-    // post-attribution-overhaul pipeline collapses self-references to characterId, so
-    // the null pile is genuinely unattributed and not a fallback for "self".
-    let candidateMemories: Memory[] = [];
+    // Skipped entirely when the author asked for an instructions-only run.
+    let qualifyingMemories: Array<{ memory: Memory }> = [];
+    let filteredCount = 0;
+    if (useMemories) {
+      // The optimizer only learns from memories ABOUT the character (self-references:
+      // aboutCharacterId === characterId). Inter-character memories the character holds
+      // about other participants would skew behavioral-pattern analysis toward those
+      // others' habits. Legacy null-aboutCharacterId rows are excluded by design — the
+      // post-attribution-overhaul pipeline collapses self-references to characterId, so
+      // the null pile is genuinely unattributed and not a fallback for "self".
+      let candidateMemories: Memory[] = [];
 
-    if (searchQuery) {
-      if (useSemanticSearch) {
-        // Try semantic search first, fall back to text search
-        let usedSemantic = false;
-        try {
-          const embeddingAvailable = await isEmbeddingAvailable(userId);
-          if (embeddingAvailable) {
-            const embeddingResult = await generateEmbeddingForUser(searchQuery, userId, undefined, { priority: 'background' });
-            const results = await memoryIndex.search(characterId, embeddingResult.embedding, { limit: 500, hotOnly: true });
-            const matchedIds = new Set(results.map(r => r.id));
-            const aboutSelf = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
-            candidateMemories = aboutSelf.filter(m => matchedIds.has(m.id));
-            usedSemantic = true;
+      if (searchQuery) {
+        if (useSemanticSearch) {
+          // Try semantic search first, fall back to text search
+          let usedSemantic = false;
+          try {
+            const embeddingAvailable = await isEmbeddingAvailable(userId);
+            if (embeddingAvailable) {
+              const embeddingResult = await generateEmbeddingForUser(searchQuery, userId, undefined, { priority: 'background' });
+              const results = await memoryIndex.search(characterId, embeddingResult.embedding, { limit: 500, hotOnly: true });
+              const matchedIds = new Set(results.map(r => r.id));
+              const aboutSelf = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
+              candidateMemories = aboutSelf.filter(m => matchedIds.has(m.id));
+              usedSemantic = true;
+            }
+          } catch (err) {
+            logger.warn('[CharacterOptimizer] Semantic search failed, falling back to text search', {
+              characterId,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
-        } catch (err) {
-          logger.warn('[CharacterOptimizer] Semantic search failed, falling back to text search', {
-            characterId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-        if (!usedSemantic) {
+          if (!usedSemantic) {
+            candidateMemories = await repos.memories.searchByContentAboutCharacter(characterId, characterId, searchQuery);
+          }
+        } else {
+          // Text search only
           candidateMemories = await repos.memories.searchByContentAboutCharacter(characterId, characterId, searchQuery);
         }
       } else {
-        // Text search only
-        candidateMemories = await repos.memories.searchByContentAboutCharacter(characterId, characterId, searchQuery);
+        // No search query — load all about-self memories
+        candidateMemories = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
       }
-    } else {
-      // No search query — load all about-self memories
-      candidateMemories = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
+
+      // Hot tier only: archived shards were folded into digests.
+      candidateMemories = candidateMemories.filter(m => m.tier !== 'cold');
+
+      // Apply date filters
+      if (sinceDate) {
+        const sinceTimestamp = new Date(`${sinceDate}T00:00:00.000Z`).getTime();
+        candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() >= sinceTimestamp);
+      }
+      if (beforeDate) {
+        const beforeTimestamp = new Date(`${beforeDate}T00:00:00.000Z`).getTime();
+        candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() < beforeTimestamp);
+      }
+
+      // Rank by salience (reinforced importance × time decay) and filter by reinforcement
+      const ranked = sortBySalience(candidateMemories).map(memory => ({ memory }));
+      const reinforced = ranked.filter(({ memory }) => memory.reinforcementCount >= MIN_REINFORCED_MEMORIES);
+      filteredCount = reinforced.length;
+      qualifyingMemories = reinforced.slice(0, maxMemories);
     }
 
-    // Hot tier only: archived shards were folded into digests.
-    candidateMemories = candidateMemories.filter(m => m.tier !== 'cold');
-
-    // Apply date filters
-    if (sinceDate) {
-      const sinceTimestamp = new Date(`${sinceDate}T00:00:00.000Z`).getTime();
-      candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() >= sinceTimestamp);
-    }
-    if (beforeDate) {
-      const beforeTimestamp = new Date(`${beforeDate}T00:00:00.000Z`).getTime();
-      candidateMemories = candidateMemories.filter(m => new Date(m.createdAt).getTime() < beforeTimestamp);
-    }
-
-    // Rank by salience (reinforced importance × time decay) and filter by reinforcement
-    const ranked = sortBySalience(candidateMemories).map(memory => ({ memory }));
-    const reinforced = ranked.filter(({ memory }) => memory.reinforcementCount >= MIN_REINFORCED_MEMORIES);
-    const filteredCount = reinforced.length;
-    const qualifyingMemories = reinforced.slice(0, maxMemories);
-
+    // Too few reinforced memories: an instructions run carries on without
+    // them; a memories-only run has nothing to work from.
+    const hasMemories = qualifyingMemories.length >= MIN_REINFORCED_MEMORIES;
 
     onProgress({
       type: 'step_complete',
       step: 'loading',
-      memoryCount: qualifyingMemories.length,
+      // An instructions run that found too few memories consults none.
+      memoryCount: hasMemories || !instructions ? qualifyingMemories.length : 0,
       filteredCount,
     });
-
-    // Check if we have enough memories
-    if (qualifyingMemories.length < MIN_REINFORCED_MEMORIES) {
+    if (useMemories && !hasMemories) {
       logger.info('[CharacterOptimizer] Not enough reinforced memories for analysis', {
         characterId,
         found: qualifyingMemories.length,
         required: MIN_REINFORCED_MEMORIES,
+        continuingOnInstructions: Boolean(instructions),
       });
 
-      onProgress({
-        type: 'done',
-        analysis: {
-          behavioralPatterns: [],
-          summary: 'Not enough reinforced memories to analyze.',
-        },
-        suggestions: [],
-      });
-      return;
+      if (!instructions) {
+        onProgress({
+          type: 'done',
+          analysis: {
+            behavioralPatterns: [],
+            summary: 'Not enough reinforced memories to analyze.',
+          },
+          suggestions: [],
+        });
+        return;
+      }
     }
+    const sources: OptimizerSources = { hasMemories, hasInstructions: Boolean(instructions) };
+    const consultedMemories = hasMemories ? qualifyingMemories : [];
+    logger.debug('[CharacterOptimizer] Refinement grounds settled', {
+      characterId,
+      ...sources,
+      memoryCount: consultedMemories.length,
+    });
 
     // Step 2: Perform analysis
     onProgress({ type: 'step_start', step: 'analyzing' });
@@ -857,7 +970,10 @@ export async function runCharacterOptimizer(
     // the character already owns and wears)
     const wardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
     const characterContext = buildCharacterContext(character, wardrobeItems);
-    const memoryContext = buildMemoryContext(qualifyingMemories);
+    const sourceContext = buildSourceContext(
+      hasMemories ? buildMemoryContext(consultedMemories) : null,
+      instructions,
+    );
 
     // Call LLM for analysis
     const analysisStartedAt = Date.now();
@@ -866,8 +982,8 @@ export async function runCharacterOptimizer(
       apiKey,
       profile.modelName,
       characterContext,
-      memoryContext,
-      getAnalysisPrompt(characterKind),
+      sourceContext,
+      getAnalysisPrompt(characterKind, sources),
       { temperature: 0.5, maxTokens: 8000 },
       characterId,
       profileParams(profile)
@@ -898,7 +1014,7 @@ export async function runCharacterOptimizer(
       request: {
         messages: [
           { role: 'system', content: SYSTEM_MESSAGE },
-          { role: 'user', content: `[character context + memory context + analysis instruction]` },
+          { role: 'user', content: `[character context + source context + analysis instruction]` },
         ],
         temperature: 0.5,
         maxTokens: 8000,
@@ -967,7 +1083,7 @@ export async function runCharacterOptimizer(
           apiKey,
           profile.modelName,
           characterContext,
-          memoryContext,
+          sourceContext,
           instruction,
           { temperature: 0.7, maxTokens: 6000 },
           characterId,
@@ -1045,7 +1161,7 @@ export async function runCharacterOptimizer(
         request: {
           messages: [
             { role: 'system', content: SYSTEM_MESSAGE },
-            { role: 'user', content: `[character context + memory context + ${label} instruction]` },
+            { role: 'user', content: `[character context + source context + ${label} instruction]` },
           ],
           temperature: 0.7,
           maxTokens: 6000,
@@ -1162,8 +1278,9 @@ export async function runCharacterOptimizer(
         character,
         analysis,
         suggestions,
-        qualifyingMemories.length,
+        consultedMemories.length,
         profile.modelName,
+        instructions,
       );
       onProgress({
         type: 'suggestions_file_written',
@@ -1222,6 +1339,7 @@ async function writeSuggestionsFileToVault(
   suggestions: OptimizerSuggestion[],
   memoryCount: number,
   modelName: string,
+  instructions: string,
 ): Promise<string> {
   const now = new Date();
   const stampIso = now.toISOString();
@@ -1235,6 +1353,7 @@ async function writeSuggestionsFileToVault(
     memoryCount,
     modelName,
     stampIso,
+    instructions,
   );
 
   await writeDatabaseDocument(mountPointId, relativePath, content);
@@ -1256,6 +1375,7 @@ function renderSuggestionsMarkdown(
   memoryCount: number,
   modelName: string,
   generatedAt: string,
+  instructions: string,
 ): string {
   const lines: string[] = [];
   lines.push('---');
@@ -1265,15 +1385,28 @@ function renderSuggestionsMarkdown(
   lines.push(`characterName: ${yamlString(character.name)}`);
   lines.push(`model: ${yamlString(modelName)}`);
   lines.push(`memoryCount: ${memoryCount}`);
+  lines.push(`authorInstructions: ${instructions ? 'true' : 'false'}`);
   lines.push(`suggestionCount: ${suggestions.length}`);
   lines.push('---');
   lines.push('');
   lines.push(`# Refinement Suggestions — ${generatedAt.slice(0, 10)}`);
   lines.push('');
+  const memoirsPhrase = `${memoryCount} memoir${memoryCount === 1 ? '' : 's'} from ${character.name}'s Commonplace Book`;
+  const groundsPhrase = memoryCount > 0 && instructions
+    ? `consulted ${memoirsPhrase}, weighed them against the author's instructions,`
+    : memoryCount > 0
+      ? `consulted ${memoirsPhrase}`
+      : `studied the author's instructions for ${character.name}`;
   lines.push(
-    `The automata have consulted ${memoryCount} memoir${memoryCount === 1 ? '' : 's'} from ${character.name}'s Commonplace Book and offer the following proposals for the consideration of author and character alike. Nothing herein has been applied — treat this as an itinerary of possible refinements, to be debated, amended, rejected, or commissioned at your leisure.`,
+    `The automata have ${groundsPhrase} and offer the following proposals for the consideration of author and character alike. Nothing herein has been applied — treat this as an itinerary of possible refinements, to be debated, amended, rejected, or commissioned at your leisure.`,
   );
   lines.push('');
+  if (instructions) {
+    lines.push('## The Author\'s Instructions');
+    lines.push('');
+    lines.push(`> ${instructions.replace(/\n/g, '\n> ')}`);
+    lines.push('');
+  }
   lines.push('## Summary');
   lines.push('');
   lines.push(analysis.summary || '_(no summary provided)_');
@@ -1320,7 +1453,7 @@ function renderSuggestionsMarkdown(
         lines.push(fenceOrEmpty(s.proposedValue));
         lines.push('');
         if (s.memoryExcerpts && s.memoryExcerpts.length > 0) {
-          lines.push('**Supporting memoirs:**');
+          lines.push(memoryCount > 0 ? '**Supporting memoirs:**' : '**Supporting instructions:**');
           lines.push('');
           for (const excerpt of s.memoryExcerpts) {
             lines.push(`> ${excerpt.replace(/\n/g, '\n> ')}`);

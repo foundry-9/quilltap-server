@@ -3,10 +3,11 @@
 /**
  * CharacterOptimizerModal
  *
- * The grand orchestrator of the "Refine from Memories" feature. Guides
- * the author through four distinct phases: Preflight, Progress, Review,
- * and Apply — transforming accumulated memories into character refinements
- * with all the ceremony the occasion demands.
+ * The grand orchestrator of the "Refine from Memories & Instructions"
+ * feature. Guides the author through four distinct phases: Preflight,
+ * Progress, Review, and Apply — turning accumulated memories, the author's
+ * own instructions, or both into character refinements with all the
+ * ceremony the occasion demands.
  */
 
 import { useEffect, useId, useRef, useState } from 'react';
@@ -14,18 +15,31 @@ import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { Icon } from '@/components/ui/icon';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { createPortal } from 'react-dom';
-import type { CharacterOptimizerModalProps, OptimizerFilterOptions, OptimizerOutputMode } from './types';
+import type {
+  CharacterOptimizerModalProps,
+  OptimizerFilterOptions,
+  OptimizerOutputMode,
+  OptimizerSourceOptions,
+} from './types';
+import { OPTIMIZER_INSTRUCTIONS_MAX_LENGTH } from '@/lib/characters/optimizer-limits';
 import { useCharacterOptimizer } from './hooks/useCharacterOptimizer';
 import { AnalysisSummary } from './components/AnalysisSummary';
 import { SuggestionCard } from './components/SuggestionCard';
 import { ApplyConfirmation } from './components/ApplyConfirmation';
 import { ProgressBar } from './components/ProgressBar';
 
-const STEP_LABELS: Record<string, string> = {
-  loading: 'Retrieving the Commonplace Book…',
-  analyzing: 'Analysing the memoirs for behavioural patterns…',
-  generating: 'Composing suggested refinements…',
-};
+/** Progress labels, worded for what the run is working from. */
+function stepLabelsFor(useMemories: boolean, hasInstructions: boolean): Record<string, string> {
+  return {
+    loading: useMemories ? 'Retrieving the Commonplace Book…' : 'Fetching the character\u2019s dossier…',
+    analyzing: !useMemories
+      ? 'Studying your instructions…'
+      : hasInstructions
+        ? 'Weighing the memoirs against your instructions…'
+        : 'Analysing the memoirs for behavioural patterns…',
+    generating: 'Composing suggested refinements…',
+  };
+}
 
 function ProgressStep({
   stepKey,
@@ -80,6 +94,11 @@ export function CharacterOptimizerModal({
   const [sinceDate, setSinceDate] = useState('');
   const [beforeDate, setBeforeDate] = useState('');
   const [saveToVault, setSaveToVault] = useState(false);
+  const [useMemories, setUseMemories] = useState(true);
+  const [instructions, setInstructions] = useState('');
+  const hasInstructions = instructions.trim().length > 0;
+  const canStart = Boolean(selectedProfileId) && profiles.length > 0 && (useMemories || hasInstructions);
+  const stepLabels = stepLabelsFor(useMemories, hasInstructions);
 
   useEscapeKey(onClose, !optimizer.loading && !optimizer.applying);
   const titleId = useId();
@@ -93,7 +112,7 @@ export function CharacterOptimizerModal({
   };
 
   const handleStart = async () => {
-    if (!selectedProfileId) return;
+    if (!canStart) return;
     const filterOptions: OptimizerFilterOptions = {
       maxMemories,
       searchQuery,
@@ -103,7 +122,8 @@ export function CharacterOptimizerModal({
     };
     const outputMode: OptimizerOutputMode =
       vaultAvailable && saveToVault ? 'suggestions-file' : 'apply';
-    await optimizer.startOptimization(characterId, selectedProfileId, filterOptions, outputMode);
+    const sourceOptions: OptimizerSourceOptions = { useMemories, instructions: instructions.trim() };
+    await optimizer.startOptimization(characterId, selectedProfileId, filterOptions, outputMode, sourceOptions);
   };
 
   const handleApply = async () => {
@@ -140,12 +160,12 @@ export function CharacterOptimizerModal({
           <div className="flex flex-col gap-0.5">
             <h2 id={titleId} className="qt-dialog-title flex items-center gap-2">
               <Icon name="book" className="w-5 h-5 text-primary" />
-              Refine from Memories
+              Refine from Memories &amp; Instructions
             </h2>
             <p className="qt-dialog-description">
               {characterName} &mdash;{' '}
               {optimizer.phase === 'preflight' && 'Configure & commence the refinement proceedings'}
-              {optimizer.phase === 'progress' && 'The automata are consulting the memoirs…'}
+              {optimizer.phase === 'progress' && (useMemories ? 'The automata are consulting the memoirs…' : 'The automata are studying your instructions…')}
               {optimizer.phase === 'review' && `Review ${optimizer.suggestions.length} proposed ${optimizer.suggestions.length === 1 ? 'amendment' : 'amendments'}`}
               {optimizer.phase === 'apply' && 'Confirm amendments for commission'}
               {optimizer.phase === 'suggestions-file-written' && 'Suggestions inscribed in the vault'}
@@ -170,10 +190,11 @@ export function CharacterOptimizerModal({
             <div className="flex flex-col gap-5">
               <div className="qt-card p-4">
                 <p className="qt-body text-sm leading-relaxed">
-                  This instrument shall consult the character&rsquo;s Commonplace Book — their accumulated
-                  memoirs — and propose refinements to their profile based upon the patterns of behaviour
-                  and personality therein observed. You shall review each proposal and accept, reject,
-                  or amend it as your editorial judgement sees fit.
+                  This instrument shall propose refinements to every corner of the character&rsquo;s
+                  profile &mdash; fields, scenarios, system prompts, appearance, wardrobe and aliases
+                  &mdash; upon whichever grounds you furnish: the patterns of behaviour recorded in their
+                  Commonplace Book, your own written instructions, or both together. You shall review
+                  each proposal and accept, reject, or amend it as your editorial judgement sees fit.
                 </p>
               </div>
 
@@ -212,8 +233,61 @@ export function CharacterOptimizerModal({
                 </div>
               )}
 
-              {/* Memory count slider */}
+              {/* The author's instructions */}
               {profiles.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <label className="qt-label" htmlFor="optimizer-instructions">
+                    Your Instructions <span className="qt-text-secondary font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    id="optimizer-instructions"
+                    className="qt-textarea min-h-[7rem]"
+                    rows={5}
+                    placeholder="e.g. &ldquo;She has left the navy and now runs a bookshop in Bath; rewrite everything to suit, and soften her temper considerably.&rdquo;"
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    maxLength={OPTIMIZER_INSTRUCTIONS_MAX_LENGTH}
+                    aria-describedby="optimizer-instructions-help"
+                  />
+                  <div className="flex justify-between gap-3">
+                    <p id="optimizer-instructions-help" className="qt-helper">
+                      Direction the automata shall apply across every core file it touches. Where your
+                      instructions and the memoirs disagree, your instructions carry the day.
+                    </p>
+                    <span className="qt-helper flex-shrink-0 tabular-nums">
+                      {instructions.length}/{OPTIMIZER_INSTRUCTIONS_MAX_LENGTH}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Consult the Commonplace Book */}
+              {profiles.length > 0 && (
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="qt-checkbox mt-0.5"
+                    checked={useMemories}
+                    onChange={(e) => setUseMemories(e.target.checked)}
+                  />
+                  <span className="flex flex-col gap-1">
+                    <span className="qt-label text-sm">Consult the Commonplace Book</span>
+                    <span className="qt-helper">
+                      Draw upon the character&rsquo;s most-reinforced memories as well. Untick to refine
+                      from your instructions alone.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              {profiles.length > 0 && !useMemories && !hasInstructions && (
+                <p className="qt-helper qt-text-warning" role="status">
+                  With the Commonplace Book closed, the automata require instructions to proceed.
+                </p>
+              )}
+
+              {/* Memory count slider */}
+              {profiles.length > 0 && useMemories && (
                 <div className="flex flex-col gap-2">
                   <label className="qt-label" htmlFor="optimizer-max-memories">
                     Maximum Memories to Analyse: <span className="text-primary font-semibold">{maxMemories}</span>
@@ -236,7 +310,7 @@ export function CharacterOptimizerModal({
               )}
 
               {/* Filter section */}
-              {profiles.length > 0 && (
+              {profiles.length > 0 && useMemories && (
                 <details className="qt-card">
                   <summary className="px-4 py-3 cursor-pointer qt-label select-none">
                     Filter Memories
@@ -329,7 +403,9 @@ export function CharacterOptimizerModal({
           {optimizer.phase === 'progress' && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <h3 className="qt-section-title text-sm">Consulting the Memoirs</h3>
+                <h3 className="qt-section-title text-sm">
+                  {useMemories ? 'Consulting the Memoirs' : 'Studying Your Instructions'}
+                </h3>
                 <p className="qt-section-subtitle text-xs">
                   The automata are at their labours. Please stand by.
                 </p>
@@ -339,7 +415,7 @@ export function CharacterOptimizerModal({
               <ProgressBar currentStep={optimizer.progressStep} startedAt={optimizer.startedAt} />
 
               <div className="flex flex-col gap-1 qt-card p-3">
-                {Object.entries(STEP_LABELS).map(([key, label]) => (
+                {Object.entries(stepLabels).map(([key, label]) => (
                   <ProgressStep
                     key={key}
                     stepKey={key}
@@ -370,7 +446,11 @@ export function CharacterOptimizerModal({
 
               {/* Show analysis summary once available */}
               {optimizer.analysis && (
-                <AnalysisSummary analysis={optimizer.analysis} memoryCount={optimizer.memoryCount} />
+                <AnalysisSummary
+                  analysis={optimizer.analysis}
+                  memoryCount={optimizer.memoryCount}
+                  instructionsGiven={hasInstructions}
+                />
               )}
 
               {optimizer.noSuggestionsMessage && !optimizer.loading && (
@@ -525,7 +605,7 @@ export function CharacterOptimizerModal({
             <button
               type="button"
               onClick={handleStart}
-              disabled={!selectedProfileId || profiles.length === 0}
+              disabled={!canStart}
               className="qt-button-primary disabled:opacity-50"
             >
               <Icon name="book" className="w-4 h-4" />

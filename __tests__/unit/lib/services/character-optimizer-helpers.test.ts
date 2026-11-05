@@ -14,6 +14,9 @@ import {
   getPropertiesSuggestionPrompt,
   getNewSystemPromptsSuggestionPrompt,
   coerceSuggestionArray,
+  buildInstructionsContext,
+  buildNoMemoriesContext,
+  buildSourceContext,
   SUGGESTION_SCHEMA_PREAMBLE,
 } from '@/lib/services/character-optimizer.service'
 import {
@@ -231,6 +234,72 @@ describe('getAnalysisPrompt', () => {
     expect(result).toContain('IDENTITY')
     expect(result).toContain('DESCRIPTION')
     expect(result).toContain('PERSONALITY')
+  })
+})
+
+describe('getAnalysisPrompt with author instructions', () => {
+  it('defaults to the memories-only prompt', () => {
+    expect(getAnalysisPrompt('roleplay')).toBe(
+      getAnalysisPrompt('roleplay', { hasMemories: true, hasInstructions: false }),
+    )
+    expect(getAnalysisPrompt('roleplay')).not.toContain("Author's instruction")
+  })
+
+  it('asks for the instructed changes alongside the memory patterns when both are present', () => {
+    const result = getAnalysisPrompt('roleplay', { hasMemories: true, hasInstructions: true })
+    expect(result).toContain('most-reinforced memories')
+    expect(result).toContain("\"Author's instruction\" as its frequency")
+    expect(result).toContain('Speech habits')
+  })
+
+  it('reads only the instructions when no memories are consulted', () => {
+    const result = getAnalysisPrompt('roleplay', { hasMemories: false, hasInstructions: true })
+    expect(result).not.toContain('most-reinforced memories')
+    expect(result).not.toContain('Speech habits')
+    expect(result).toContain("against the author's instructions")
+    expect(result).toContain('behavioralPatterns')
+    expect(result).toContain(COMMITTEE_DRIFT_GUARDRAIL)
+    expect(result).toContain(FLATTENING_DRIFT_SIGNAL)
+  })
+
+  it('leaves flattening out of an assistant\'s instructions-only analysis', () => {
+    expect(getAnalysisPrompt('assistant', { hasMemories: false, hasInstructions: true })).not.toMatch(/Flattening|flattening/)
+  })
+})
+
+describe('author instructions context', () => {
+  it('carries the instructions verbatim and keeps the field rules in force', () => {
+    const result = buildInstructionsContext('She now runs a bookshop in Bath.', true)
+    expect(result).toContain("=== The Author's Instructions ===")
+    expect(result).toContain('She now runs a bookshop in Bath.')
+    expect(result).toContain('significance of at least 0.6')
+    expect(result).toContain('never suspend the field rules')
+  })
+
+  it('ranks instructions above conflicting memories when both are present', () => {
+    const result = buildInstructionsContext('x', true)
+    expect(result).toContain('the instructions win')
+    expect(result).not.toContain('No memories were consulted')
+  })
+
+  it('makes the instructions the only grounds when no memories are consulted', () => {
+    const result = buildInstructionsContext('x', false)
+    expect(result).toContain('No memories were consulted')
+    expect(result).not.toContain('the instructions win')
+  })
+
+  it('builds the source context from memories, instructions, or both', () => {
+    const memoryBlock = buildMemoryContext([{ memory: createMockMemory({ content: 'Rides at dawn' }) }])
+    expect(buildSourceContext(memoryBlock, '')).toBe(memoryBlock)
+
+    const both = buildSourceContext(memoryBlock, 'Make her kinder.')
+    expect(both).toContain('Rides at dawn')
+    expect(both).toContain('Make her kinder.')
+    expect(both.indexOf('Rides at dawn')).toBeLessThan(both.indexOf('Make her kinder.'))
+
+    const instructionsOnly = buildSourceContext(null, 'Make her kinder.')
+    expect(instructionsOnly).toContain(buildNoMemoriesContext())
+    expect(instructionsOnly).toContain('Make her kinder.')
   })
 })
 

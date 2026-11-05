@@ -2,11 +2,13 @@
 url: /aurora
 ---
 
-# Refine from Memories
+# Refine from Memories & Instructions
 
-> **[Open this page in Quilltap](/aurora)** — then select a character and click **Refine from Memories**
+> **[Open this page in Quilltap](/aurora)** — then select a character and click **Refine from Memories & Instructions**
 
-The Character Optimizer — known in polite society as **Refine from Memories** — is rather like hiring a particularly astute biographer to read through your character's accumulated experiences and suggest how their official dossier might better reflect who they've actually become. Characters, you see, have a habit of growing beyond their original descriptions, and this tool ensures the paperwork catches up with the personality.
+The Character Optimizer — known in polite society as **Refine from Memories & Instructions** — is rather like hiring a particularly astute biographer to read through your character's accumulated experiences and suggest how their official dossier might better reflect who they've actually become. Characters, you see, have a habit of growing beyond their original descriptions, and this tool ensures the paperwork catches up with the personality.
+
+The biographer also takes dictation. Write a few lines of your own — *"She has left the navy and keeps a bookshop in Bath now; rewrite everything to suit"* — and the optimizer will carry that direction through every core file it touches: the fields, the scenarios, the system prompts, the appearance, the wardrobe, the aliases. You may refine from the memories alone, from your instructions alone, or from both at once.
 
 ## How It Works
 
@@ -14,16 +16,19 @@ Over the course of many conversations, a character's Commonplace Book fills with
 
 The optimizer reads these heavily-reinforced memories alongside the character's current configuration and, with the assistance of an AI analysis, identifies behavioral patterns that aren't yet captured in the character's fields. It then proposes specific, concrete modifications — not vague suggestions, but actual text changes — that you review one at a time.
 
+When you supply **instructions**, every pass of the optimizer reads them too. Each change they call for is listed in the analysis beside (or, without memories, instead of) the observed patterns, and every subject the instructions bear on is rewritten to suit — not merely the field they happen to name. Where your instructions and the memories disagree, your instructions win; the memories remain the evidence for everything your instructions leave alone. The usual rules of good conduct still hold, however hard you press: each field keeps its vantage point and voice, system prompts keep their safeguards, and nothing will be written that governs what your own persona may do.
+
 ## Accessing the Optimizer
 
 1. Navigate to the **Aurora** page (`/aurora`)
 2. Select the character you wish to refine
-3. In the character header, click the **Refine from Memories** button (the lightbulb icon)
+3. In the character header, click the **Refine from Memories & Instructions** button (the book icon)
 4. The optimizer opens in a full-screen overlay
 
 ## Prerequisites
 
-- The character must have at least **2 memories** that have been **reinforced 2 or more times**. Characters with thin dossiers in their Commonplace Book will be politely informed that there isn't yet enough material to work with.
+- To refine from memories, the character must have at least **2 memories** that have been **reinforced 2 or more times**. A memories-only run on a thin dossier will be politely informed that there isn't yet enough material to work with; a run that also carries instructions simply proceeds on the instructions alone.
+- To refine from instructions alone, no memories are needed at all — untick **Consult the Commonplace Book** and write what you want.
 - You must have at least one **connection profile** configured. The optimizer uses a capable model for its analytical work — this is not a job for the office intern.
 
 ## The Four Phases
@@ -33,6 +38,14 @@ The optimizer reads these heavily-reinforced memories alongside the character's 
 Before the analysis begins, you'll see a summary of the character and a dropdown to select which connection profile (and thus which AI model) should perform the analysis. The character's default profile is pre-selected, but you may choose another if you prefer a different analytical temperament.
 
 Click **Commence Refinement** when ready.
+
+#### Your Instructions
+
+A text box (optional, up to 8,000 characters) for your own direction. Describe the change you want — a new situation, a softened temper, a different manner of speech, a thorough rewrite — and the optimizer applies it wherever it reaches. Leave it empty for a memories-only refinement.
+
+#### Consult the Commonplace Book
+
+Ticked by default. Untick it to refine from your instructions alone; the memory slider and filters are then hidden, and **Commence Refinement** waits until you have written some instructions.
 
 #### Memory Count
 
@@ -51,8 +64,8 @@ Filters are applied before the memory count limit, so if 142 memories match your
 
 The optimizer works through three stages, each reported with an animated progress bar and elapsed timer:
 
-1. **Loading** — Retrieves the character's configuration and their most significant memories (filtered to those reinforced at least twice, limited by your slider setting)
-2. **Analyzing** — The AI reads through the character data and memories, identifying 3–8 behavioral patterns not fully reflected in the current configuration
+1. **Loading** — Retrieves the character's configuration and, when consulting the Commonplace Book, their most significant memories (filtered to those reinforced at least twice, limited by your slider setting)
+2. **Analyzing** — The AI reads through the character data and memories, identifying 3–8 behavioral patterns not fully reflected in the current configuration, and lists each change your instructions call for (marked "Author's instruction"). An instructions-only run lists just the latter, under **Changes Called For**.
 3. **Generating** — Based on the analysis, the AI proposes concrete field modifications with significance scores
 
 The progress bar shows three segments — one per stage — that fill as each proceeds. An elapsed timer counts up below. When filters narrow the results, you'll see a message such as "142 memoirs matched; top 30 selected for analysis."
@@ -68,7 +81,7 @@ Suggestions are presented one at a time, each showing:
 - **Field badge** — Which field would be modified (description, personality, system prompt, etc.)
 - **Current vs. proposed text** — A clear comparison of what exists and what's suggested. Empty fields are marked as additions rather than changes.
 - **Rationale** — Why the change is recommended, referencing specific behavioral patterns
-- **Memory excerpts** — The actual memories that support the suggestion
+- **Evidence** — The memory excerpts, or the phrases of your instructions, that support the suggestion
 - **Significance indicator** — How substantial the change would be (low, medium, or high)
 
 For each suggestion, you may:
@@ -93,7 +106,7 @@ For characters that have a linked document-store vault, a second output mode is 
 Suggestions/refinement-<YYYYMMDD-HHMMSS>.md
 ```
 
-inside the character's vault. The dossier opens with YAML frontmatter identifying the run, then carries the analysis summary, the observed behavioural patterns, and each proposed change as its own section — grouped as General Fields, Scenario Refinements, Physical Description, Wardrobe, Aliases, System Prompt Refinements, and Proposed New System Prompts. Each proposal shows the current and proposed text in fenced blocks, its significance score, the rationale, and the supporting memoir excerpts.
+inside the character's vault. The dossier opens with YAML frontmatter identifying the run, then carries your instructions (when you gave any), the analysis summary, the observed behavioural patterns, and each proposed change as its own section — grouped as General Fields, Scenario Refinements, Physical Description, Wardrobe, Aliases, System Prompt Refinements, and Proposed New System Prompts. Each proposal shows the current and proposed text in fenced blocks, its significance score, the rationale, and the supporting memoir excerpts.
 
 Nothing is applied to the character in this mode — the dossier exists for the author and the character to read together (or for the character to consult via `doc_read_file` in-chat) and then commission piecemeal at leisure. To actually commission a proposal, edit the relevant vault file (or re-run the optimizer in its default apply-and-review mode with the proposal as your guide). The checkbox only appears when the character is vault-backed; it has no effect on characters whose properties live solely in the database.
 
@@ -145,6 +158,8 @@ The optimizer only learns from memories *about the character themselves* — sel
 - **Date ranges help with arcs.** If a character went through a significant shift in recent sessions, narrow the date range to focus on that period.
 - **Increase the memory count for broad analysis.** The default 30 is good for most characters, but long-running characters with hundreds of reinforced memories may benefit from 100 or more.
 - **Run it periodically.** As a character accumulates more memories from new conversations, running the optimizer again may reveal new patterns.
+- **Say what, not where.** Instructions work best as a description of the change you want ("he has lost his fortune and is bitter about it") rather than a list of fields to edit — the optimizer will find every place the change belongs.
+- **Instructions for a rewrite, memories for a polish.** A sweeping change of circumstance is best given as instructions alone; leave the Commonplace Book ticked when you want the character's lived history to colour the result as well.
 
 ## In-Chat Navigation
 

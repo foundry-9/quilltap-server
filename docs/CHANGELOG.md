@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Feature: Refine from Memories & Instructions
+
+- The Character Optimizer ("Refine from Memories") is now "Refine from Memories & Instructions". The preflight form has an optional instructions textarea (up to 8,000 characters) and a "Consult the Commonplace Book" checkbox. A run can use memories, instructions, or both; it needs at least one.
+- Instructions ride in the shared context of every pass (general fields, each scenario, each system prompt, physical description, wardrobe, aliases, new system prompts), so a requested change is applied wherever it applies. They win over conflicting memories, get significance ≥ 0.6, and never override the field vantage-point, form-of-address, trust-safeguard, or committee-drift rules.
+- The analysis lists each change the instructions call for ("Author's instruction"). With no memories it is an instructions-only reading of the configuration.
+- A run with instructions and too few reinforced memories continues on the instructions alone instead of stopping.
+- `?action=optimize-stream` accepts `useMemories` (default true) and `instructions`. The vault suggestions file records the instructions and an `authorInstructions` frontmatter flag.
+
 #### CI: restore the 8 GB heap for the coverage run
 
 - `test:coverage` again passes `--max-old-space-size=8192` to the Jest parent. 4.12.1 added the flag, but the merge back into main dropped it, and every CI test run since hit the default 4 GB heap and aborted (exit 134).

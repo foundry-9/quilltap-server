@@ -307,10 +307,10 @@ export function CharacterHeader({
           <button
             onClick={onOptimize}
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
-            title="Analyze memories and suggest character refinements"
+            title="Refine the character from their memories, your instructions, or both"
           >
             <Icon name="book" className="w-4 h-4" />
-            Refine from Memories
+            Refine from Memories &amp; Instructions
           </button>
         )}
         {onSearchReplace && (

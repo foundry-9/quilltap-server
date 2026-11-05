@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
+import { OPTIMIZER_INSTRUCTIONS_MAX_LENGTH } from '@/lib/characters/optimizer-limits';
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
@@ -65,6 +66,11 @@ const optimizeStreamSchema = z.object({
   sinceDate: z.string().nullable().optional().default(null),
   beforeDate: z.string().nullable().optional().default(null),
   outputMode: z.enum(['apply', 'suggestions-file']).optional().default('apply'),
+  useMemories: z.boolean().optional().default(true),
+  instructions: z.string().max(OPTIMIZER_INSTRUCTIONS_MAX_LENGTH).optional().default(''),
+}).refine((v) => v.useMemories || v.instructions.trim().length > 0, {
+  message: 'A refinement needs memories to consult, instructions to follow, or both.',
+  path: ['instructions'],
 });
 
 const generateExternalPromptSchema = z.object({
@@ -94,7 +100,10 @@ async function handleOptimizeStream(
   characterId: string
 ): Promise<NextResponse> {
   const body = await req.json();
-  const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode } = optimizeStreamSchema.parse(body);
+  const {
+    connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode,
+    useMemories, instructions,
+  } = optimizeStreamSchema.parse(body);
 
   logger.info('[Characters v1] Character optimizer starting (streaming)', {
     userId: user.id,
@@ -106,10 +115,14 @@ async function handleOptimizeStream(
     sinceDate,
     beforeDate,
     outputMode,
+    useMemories,
+    instructionsLength: instructions.trim().length,
   });
 
   const encoder = new TextEncoder();
-  const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode };
+  const optimizerOptions = {
+    maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode, useMemories, instructions,
+  };
 
   const stream = new ReadableStream({
     async start(controller) {

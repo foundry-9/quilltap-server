@@ -3,8 +3,8 @@
 /**
  * AnalysisSummary
  *
- * Displays the behavioral pattern analysis derived from a character's
- * accumulated memories. Presents the AI's findings in a readable,
+ * Displays the analysis derived from a character's accumulated memories,
+ * the author's instructions, or both. Presents the AI's findings in a readable,
  * structured format before the suggestion review commences.
  */
 
@@ -14,6 +14,8 @@ import type { OptimizerAnalysis, BehavioralPattern } from '../types';
 interface AnalysisSummaryProps {
   analysis: OptimizerAnalysis;
   memoryCount: number;
+  /** True when the author supplied instructions for this run. */
+  instructionsGiven?: boolean;
 }
 
 function FrequencyBadge({ frequency }: { frequency: string }) {
@@ -47,7 +49,7 @@ function PatternEntry({ pattern }: { pattern: BehavioralPattern }) {
   );
 }
 
-export function AnalysisSummary({ analysis, memoryCount }: AnalysisSummaryProps) {
+export function AnalysisSummary({ analysis, memoryCount, instructionsGiven = false }: AnalysisSummaryProps) {
   return (
     <div className="flex flex-col gap-4">
       {/* Header card */}
@@ -55,8 +57,13 @@ export function AnalysisSummary({ analysis, memoryCount }: AnalysisSummaryProps)
         <div className="flex items-center gap-2 mb-2">
           <Icon name="shield" className="w-4 h-4 text-primary flex-shrink-0" />
           <h3 className="qt-section-title text-sm">Analysis Complete</h3>
-          <span className="qt-badge-info ml-auto">
-            {memoryCount} {memoryCount === 1 ? 'memory' : 'memories'} consulted
+          <span className="ml-auto flex flex-wrap justify-end gap-1.5">
+            {memoryCount > 0 && (
+              <span className="qt-badge-info">
+                {memoryCount} {memoryCount === 1 ? 'memory' : 'memories'} consulted
+              </span>
+            )}
+            {instructionsGiven && <span className="qt-badge-info">Your instructions</span>}
           </span>
         </div>
         <p className="qt-body text-sm leading-relaxed">{analysis.summary}</p>
@@ -66,7 +73,7 @@ export function AnalysisSummary({ analysis, memoryCount }: AnalysisSummaryProps)
       {analysis.behavioralPatterns.length > 0 && (
         <div className="flex flex-col gap-2">
           <h4 className="qt-label text-xs uppercase tracking-wider qt-text-secondary">
-            Observed Behavioural Tendencies
+            {memoryCount > 0 ? 'Observed Behavioural Tendencies' : 'Changes Called For'}
           </h4>
           <div className="flex flex-col gap-2">
             {analysis.behavioralPatterns.map((pattern, idx) => (

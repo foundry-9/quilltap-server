@@ -6,7 +6,7 @@
  * and the single physicalDescription object, but it *strips* `systemPrompts`
  * (the schema has no such key). System prompts therefore have to persist
  * through their own dedicated endpoints. This helper centralises that fan-out so
- * every caller (the character optimizer's "Refine from Memories" apply step and
+ * every caller (the character optimizer's "Refine from Memories & Instructions" apply step and
  * the view-details `{{char}}`/`{{user}}` template buttons) routes updates the
  * same way with consistent partial-failure handling.
  *

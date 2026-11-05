@@ -3,7 +3,8 @@
 /**
  * useCharacterOptimizer Hook
  *
- * State management for the Character Optimizer "Refine from Memories" feature.
+ * State management for the Character Optimizer ("Refine from Memories &
+ * Instructions").
  * Handles SSE streaming from the optimize-stream endpoint, suggestion review,
  * and applying accepted changes back to the character.
  */
@@ -18,6 +19,7 @@ import type {
   OptimizerSuggestion,
   OptimizerFilterOptions,
   OptimizerOutputMode,
+  OptimizerSourceOptions,
   OptimizerSubStep,
 } from '../types';
 
@@ -46,6 +48,7 @@ interface UseCharacterOptimizerReturn {
     connectionProfileId: string,
     filterOptions?: OptimizerFilterOptions,
     outputMode?: OptimizerOutputMode,
+    sourceOptions?: OptimizerSourceOptions,
   ) => Promise<void>;
   decideSuggestion: (id: string, decision: SuggestionDecision) => void;
   editSuggestion: (id: string, newValue: string) => void;
@@ -86,6 +89,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
       connectionProfileId: string,
       filterOptions?: OptimizerFilterOptions,
       outputMode: OptimizerOutputMode = 'apply',
+      sourceOptions?: OptimizerSourceOptions,
     ) => {
     outputModeRef.current = outputMode;
     setLoading(true);
@@ -112,6 +116,10 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         requestBody.useSemanticSearch = filterOptions.useSemanticSearch;
         requestBody.sinceDate = filterOptions.sinceDate;
         requestBody.beforeDate = filterOptions.beforeDate;
+      }
+      if (sourceOptions) {
+        requestBody.useMemories = sourceOptions.useMemories;
+        requestBody.instructions = sourceOptions.instructions;
       }
 
       const response = await fetch(`/api/v1/characters/${characterId}?action=optimize-stream`, {
@@ -211,7 +219,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
                     setPhase('review');
                   } else {
                     setNoSuggestionsMessage(
-                      'The memoirs have been consulted most thoroughly, yet your character appears already quite splendidly rendered. No refinements were deemed necessary by our panel of discerning automata.'
+                      'The dossier has been consulted most thoroughly, yet your character appears already quite splendidly rendered. No refinements were deemed necessary by our panel of discerning automata.'
                     );
                   }
                   break;
