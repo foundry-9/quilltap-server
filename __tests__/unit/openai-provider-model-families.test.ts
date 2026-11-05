@@ -1,8 +1,9 @@
 import {
-  isCacheRetentionRejection,
   isOpenAIChatModel,
   isOpenAIReasoningModel,
+  isPromptCacheControlRejection,
   parseOpenAIModelFamily,
+  supportsOpenAIExplicitCacheBreakpoints,
   supportsOpenAIExtendedCacheRetention,
 } from '@/plugins/dist/qtap-plugin-openai/model-families';
 import { OpenAIProvider } from '@/plugins/dist/qtap-plugin-openai/provider';
@@ -54,12 +55,23 @@ describe('OpenAI model families', () => {
     expect(supportsOpenAIExtendedCacheRetention('o3')).toBe(false);
   });
 
-  it('recognises a retention rejection only for that parameter', () => {
-    const rejection = Object.assign(new Error("400 Unsupported parameter: 'prompt_cache_retention'"), { status: 400 });
-    expect(isCacheRetentionRejection(rejection)).toBe(true);
-    expect(isCacheRetentionRejection({ status: 400, param: 'prompt_cache_retention', message: 'nope' })).toBe(true);
-    expect(isCacheRetentionRejection(Object.assign(new Error('400 bad temperature'), { status: 400 }))).toBe(false);
-    expect(isCacheRetentionRejection(Object.assign(new Error('prompt_cache_retention'), { status: 500 }))).toBe(false);
+  it('takes explicit cache breakpoints from gpt-5.6 on', () => {
+    for (const id of ['gpt-5.6', 'gpt-5.6-mini', 'gpt-5.9', 'gpt-6', 'gpt-6.1-sol', 'gpt-6.1-chat-latest', 'gpt-7']) {
+      expect(supportsOpenAIExplicitCacheBreakpoints(id)).toBe(true);
+    }
+    for (const id of ['gpt-5', 'gpt-5.5', 'gpt-5.5-pro', 'gpt-4.1', 'o3', 'o4-mini', 'gpt-image-1']) {
+      expect(supportsOpenAIExplicitCacheBreakpoints(id)).toBe(false);
+    }
+  });
+
+  it('recognises a rejection of any prompt-cache control, and nothing else', () => {
+    const retention = Object.assign(new Error("400 Unsupported parameter: 'prompt_cache_retention'"), { status: 400 });
+    expect(isPromptCacheControlRejection(retention)).toBe(true);
+    expect(isPromptCacheControlRejection({ status: 400, param: 'prompt_cache_retention', message: 'nope' })).toBe(true);
+    expect(isPromptCacheControlRejection({ status: 400, param: 'prompt_cache_options.mode', message: 'nope' })).toBe(true);
+    expect(isPromptCacheControlRejection(Object.assign(new Error('400 Unknown parameter: input[3].content[0].prompt_cache_breakpoint'), { status: 400 }))).toBe(true);
+    expect(isPromptCacheControlRejection(Object.assign(new Error('400 bad temperature'), { status: 400 }))).toBe(false);
+    expect(isPromptCacheControlRejection(Object.assign(new Error('prompt_cache_retention'), { status: 500 }))).toBe(false);
   });
 });
 
@@ -92,7 +104,7 @@ describe('OpenAIProvider', () => {
     MockOpenAI.mockImplementation(() => ({ responses: { create } }));
 
     const response = await new OpenAIProvider().sendMessage(
-      { model: 'gpt-6.1', messages: [{ role: 'user', content: 'hi' }], cacheKey: 'char-1' } as any,
+      { model: 'gpt-5.5', messages: [{ role: 'user', content: 'hi' }], cacheKey: 'char-1' } as any,
       'key',
     );
 
@@ -101,7 +113,7 @@ describe('OpenAIProvider', () => {
     expect(create.mock.calls[0][0]).toMatchObject({ prompt_cache_retention: '24h', prompt_cache_key: 'char-1' });
     expect(create.mock.calls[1][0]).not.toHaveProperty('prompt_cache_retention');
     expect(create.mock.calls[1][0]).toMatchObject({ prompt_cache_key: 'char-1' });
-    // gpt-6 is a reasoning model: no sampling parameters
+    // gpt-5 and later are reasoning models: no sampling parameters
     expect(create.mock.calls[0][0]).not.toHaveProperty('temperature');
     expect(create.mock.calls[0][0]).not.toHaveProperty('top_p');
   });

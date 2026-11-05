@@ -4,7 +4,7 @@
  * Provides chat completion functionality using OpenAI's Responses API
  * Supports GPT models with multimodal capabilities (text + images)
  * Uses server-side tools for web search (web_search_preview)
- * Supports conversation chaining via previous_response_id for cache optimization
+ * Places explicit prompt-cache breakpoints on gpt-5.6+ (cache-breakpoints.ts)
  * Migrated from Chat Completions API to Responses API for better
  * cache utilization, reasoning model support, and future-proofing.
  */
@@ -13,11 +13,13 @@ import OpenAI from 'openai';
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage } from './types';
 import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import {
-  isCacheRetentionRejection,
   isOpenAIChatModel,
   isOpenAIReasoningModel,
+  isPromptCacheControlRejection,
+  supportsOpenAIExplicitCacheBreakpoints,
   supportsOpenAIExtendedCacheRetention,
 } from './model-families';
+import { applyOpenAICacheBreakpoints, stripPromptCacheControls } from './cache-breakpoints';
 
 const logger = createPluginLogger('qtap-plugin-openai');
 
@@ -162,22 +164,6 @@ export class OpenAIProvider implements TextProvider {
     }
 
     return { input, instructions, attachmentResults: { sent, failed } };
-  }
-
-  /**
-   * Extract only the last user message from the input for use with previous_response_id.
-   * When chaining, OpenAI reconstructs the conversation from the previous response,
-   * so we only need to send the new user message.
-   */
-  private extractLastUserMessage(input: ResponsesInputItem[]): ResponsesInputItem[] {
-    for (let i = input.length - 1; i >= 0; i--) {
-      const item = input[i];
-      if ('role' in item && item.role === 'user') {
-        return [item];
-      }
-    }
-    // Fallback: return the last item regardless of type
-    return input.length > 0 ? [input[input.length - 1]] : [];
   }
 
   /**
@@ -392,11 +378,29 @@ export class OpenAIProvider implements TextProvider {
     // Pin sticky cache routing. Without prompt_cache_key, requests above
     // ~15 RPM/key shard across machines and degrade hit rate. Quilltap
     // builds a per-character key in lib/llm/cache-key.ts.
-    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
+    const hasCacheKey = typeof params.cacheKey === 'string' && params.cacheKey.length > 0;
+    if (hasCacheKey) {
       requestParams.prompt_cache_key = params.cacheKey;
-      if (supportsOpenAIExtendedCacheRetention(params.model)) {
-        requestParams.prompt_cache_retention = '24h';
+    }
+
+    if (supportsOpenAIExplicitCacheBreakpoints(params.model)) {
+      // gpt-5.6+ reuses a prefix only at a cache boundary; the implicit one
+      // lands after the turn-variable final message and is never read back.
+      // Place the boundaries ourselves and switch the implicit one off. The
+      // 30-minute default TTL is kept (`prompt_cache_retention` is deprecated
+      // for these models).
+      const placed = applyOpenAICacheBreakpoints(input);
+      if (placed > 0) {
+        requestParams.prompt_cache_options = { mode: 'explicit' };
       }
+      logger.debug('Placed explicit prompt-cache breakpoints', {
+        context: 'OpenAIProvider.buildBaseRequestParams',
+        model: params.model,
+        breakpoints: placed,
+        inputItems: input.length,
+      });
+    } else if (hasCacheKey && supportsOpenAIExtendedCacheRetention(params.model)) {
+      requestParams.prompt_cache_retention = '24h';
     }
 
     if (params.stop) {
@@ -456,10 +460,10 @@ export class OpenAIProvider implements TextProvider {
   }
 
   /**
-   * `client.responses.create`, retried once without `prompt_cache_retention`
-   * if the API rejects it. Retention support for a new model is inferred from
-   * its generation (model-families.ts); this keeps a wrong inference from
-   * failing the turn.
+   * `client.responses.create`, retried once without any prompt-cache control
+   * (`prompt_cache_retention`, `prompt_cache_options`, breakpoints) if the API
+   * rejects one. Support for a new model is inferred from its generation
+   * (model-families.ts); this keeps a wrong inference from failing the turn.
    */
   private async createResponse(
     client: OpenAI,
@@ -476,17 +480,17 @@ export class OpenAIProvider implements TextProvider {
     try {
       return await client.responses.create(requestParams as any);
     } catch (error) {
-      const withRetention = requestParams as { prompt_cache_retention?: unknown };
-      if (withRetention.prompt_cache_retention === undefined || !isCacheRetentionRejection(error)) {
+      const withControls = requestParams as { prompt_cache_retention?: unknown; prompt_cache_options?: unknown };
+      const hasControls = withControls.prompt_cache_retention !== undefined || withControls.prompt_cache_options !== undefined;
+      if (!hasControls || !isPromptCacheControlRejection(error)) {
         throw error;
       }
-      logger.warn('Model rejected prompt_cache_retention; retrying without it', {
+      logger.warn('Model rejected a prompt-cache control; retrying without cache controls', {
         context: 'OpenAIProvider.createResponse',
         model: requestParams.model,
         error: error instanceof Error ? error.message : String(error),
       });
-      const { prompt_cache_retention: _dropped, ...withoutRetention } = withRetention as Record<string, unknown>;
-      return await client.responses.create(withoutRetention as any);
+      return await client.responses.create(stripPromptCacheControls(requestParams) as any);
     }
   }
 
@@ -503,35 +507,9 @@ export class OpenAIProvider implements TextProvider {
 
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
 
-    // Try with conversation chaining if we have a previous response ID
-    if (params.previousResponseId) {
-      try {
-        const chainedInput = this.extractLastUserMessage(input);
-        const chainedParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
-          ...baseParams,
-          input: chainedInput,
-          previous_response_id: params.previousResponseId,
-          stream: false,
-        };
-
-        const response = await this.createResponse(client, chainedParams);
-
-        if (response.error) {
-          throw new Error(`OpenAI API error: ${response.error.message}`);
-        }
-
-        return this.buildLLMResponse(response, attachmentResults);
-      } catch (error) {
-        logger.warn('Conversation chaining failed, falling back to full input', {
-          context: 'OpenAIProvider.sendMessage',
-          previousResponseId: params.previousResponseId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Fall through to full input request below
-      }
-    }
-
-    // Standard request with full input (no chaining or chaining fallback)
+    // No previous_response_id chaining: requests are sent with `store: false`,
+    // so there is never a stored response to chain from. Prompt caching does
+    // the work chaining was meant to (see cache-breakpoints.ts).
     const requestParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
       ...baseParams,
       stream: false,
@@ -563,40 +541,12 @@ export class OpenAIProvider implements TextProvider {
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
 
-    // Determine whether to use conversation chaining
-    let useChaining = !!params.previousResponseId;
-    let stream: AsyncIterable<ResponsesStreamEvent> | null = null;
-
-    if (useChaining) {
-      try {
-        const chainedInput = this.extractLastUserMessage(input);
-        const chainedParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
-          ...baseParams,
-          input: chainedInput,
-          previous_response_id: params.previousResponseId,
-          stream: true,
-        };
-
-        stream = await this.createResponse(client, chainedParams) as AsyncIterable<ResponsesStreamEvent>;
-      } catch (error) {
-        logger.warn('Streaming conversation chaining failed, falling back to full input', {
-          context: 'OpenAIProvider.streamMessage',
-          previousResponseId: params.previousResponseId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        useChaining = false;
-      }
-    }
-
-    // Fall back to standard request if chaining wasn't used or failed
-    if (!stream) {
-      const requestParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
-        ...baseParams,
-        stream: true,
-      };
-
-      stream = await this.createResponse(client, requestParams) as AsyncIterable<ResponsesStreamEvent>;
-    }
+    // No previous_response_id chaining (see sendMessage).
+    const requestParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
+      ...baseParams,
+      stream: true,
+    };
+    const stream = await this.createResponse(client, requestParams) as AsyncIterable<ResponsesStreamEvent>;
 
     let finalResponse: ResponsesResponse | null = null;
     let streamReasoning = '';

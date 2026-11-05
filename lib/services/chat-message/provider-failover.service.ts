@@ -654,10 +654,6 @@ export interface RestreamOptions {
    * the empty-response callers above keep their existing behaviour; the
    * hard-error failover path passes the primary call's sequences so a
    * pseudo-tool profile's framing survives the swap.
-   *
-   * Note there is deliberately no `previousResponseId` here: it is an OpenAI
-   * Responses-API chaining token, and handing it to a different account —
-   * never mind a different provider — is meaningless at best.
    */
   stop?: string[]
 }

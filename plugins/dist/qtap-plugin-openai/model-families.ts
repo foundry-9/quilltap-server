@@ -2,7 +2,8 @@
  * OpenAI model-family rules.
  *
  * Every family decision the provider makes (which models the fetch lists,
- * which are reasoning models, which get 24h prompt-cache retention) is made
+ * which are reasoning models, which take explicit prompt-cache breakpoints and
+ * which get 24h prompt-cache retention) is made
  * here from the model ID's family and version number, never from a list of
  * literal prefixes. A literal list goes stale the day OpenAI ships a new
  * generation: `['gpt-4', 'gpt-5']` silently dropped every gpt-6.x model from
@@ -53,6 +54,8 @@ const FIRST_REASONING_GPT_MAJOR = 5;
 const FIRST_RETENTION_GPT_MAJOR = 6;
 /** gpt-5 minors documented to support 24h retention (gpt-5.3-chat-latest does not). */
 const GPT5_RETENTION_MINORS = new Set([1, 2, 5]);
+/** First gpt-5 minor with `prompt_cache_options` and explicit breakpoints (gpt-5.6). */
+const FIRST_EXPLICIT_CACHE_GPT5_MINOR = 6;
 
 /**
  * Is this a chat model the model fetch should list? Any GPT generation from
@@ -77,6 +80,23 @@ export function isOpenAIReasoningModel(model: string): boolean {
 }
 
 /**
+ * Does this model take `prompt_cache_options` and `prompt_cache_breakpoint`?
+ * gpt-5.6 and every later GPT. These models reuse a cached prefix only at a
+ * cache boundary, so the provider places explicit breakpoints for them
+ * (cache-breakpoints.ts) instead of the deprecated `prompt_cache_retention`.
+ * A model that turns out not to accept them is caught by the provider's retry
+ * without cache controls.
+ */
+export function supportsOpenAIExplicitCacheBreakpoints(model: string): boolean {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed || parsed.family !== 'gpt') return false;
+  if (parsed.major === 5) {
+    return parsed.minor !== undefined && parsed.minor >= FIRST_EXPLICIT_CACHE_GPT5_MINOR;
+  }
+  return parsed.major > 5;
+}
+
+/**
  * Does this model accept `prompt_cache_retention: '24h'`? The documented gpt-5
  * minors (5.1, 5.2, 5.5), and every later generation except the
  * `-chat-latest` aliases, which OpenAI has so far left out (gpt-5.3-chat-latest).
@@ -93,14 +113,16 @@ export function supportsOpenAIExtendedCacheRetention(model: string): boolean {
 }
 
 /**
- * Did the API reject the request because of `prompt_cache_retention`? Used to
- * retry once without it.
+ * Did the API reject the request because of a prompt-cache control
+ * (`prompt_cache_retention`, `prompt_cache_options` or a
+ * `prompt_cache_breakpoint`)? Used to retry once without them.
  */
-export function isCacheRetentionRejection(error: unknown): boolean {
+export function isPromptCacheControlRejection(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const status = (error as { status?: unknown }).status;
   if (status !== undefined && status !== 400) return false;
   const message = error instanceof Error ? error.message : String((error as { message?: unknown }).message ?? '');
   const param = (error as { param?: unknown }).param;
-  return param === 'prompt_cache_retention' || /prompt_cache_retention/i.test(message);
+  const pattern = /prompt_cache_(retention|options|breakpoint)/i;
+  return (typeof param === 'string' && pattern.test(param)) || pattern.test(message);
 }

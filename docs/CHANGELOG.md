@@ -4,6 +4,14 @@
 
 ### 4.12.2
 
+#### Fix: OpenAI prompt-cache hit rate on GPT-5.6 and later
+
+- From gpt-5.6 on, OpenAI reuses a cached prefix only at a cache boundary, not at any matching token. With no explicit breakpoints a request wrote one entry after the leading developer block and one after the latest user message. In the Salon that message carries the turn's trailing sections, so the second entry was never read and the history between them was never cached. On Friday, gpt-6.1-sol read exactly 26,369 tokens (tools plus the three system blocks) on every turn and wrote 14–20k tokens per turn that were never read.
+- OpenAI plugin 1.0.70 sends `prompt_cache_options: { mode: 'explicit' }` on gpt-5.6+ and marks every stable boundary (`cache-breakpoints.ts`): the end of the leading developer block and every later user/developer message and `function_call_output`, capped at the latest 48. The latest user message, which carries the turn's trailing sections, is marked only when a tool call follows it. OpenAI looks a prefix up only at boundaries marked in the current request and writes only the latest four, so marking every boundary is what lets each request find the previous one's entry. Developer messages and tool outputs are always sent as `input_text` lists so they render the same marked or not. `prompt_cache_retention`, deprecated for these models, is no longer sent to them; older models keep it.
+- In V4test (gpt-6.1-sol) a plain turn read 24,022 of 25,700 input tokens and wrote 30; the remaining 1,648 were the uncached trailing message. In a tool loop each step read exactly what the previous step had cached (14,419, then 17,716).
+- A model that rejects any cache control is retried once without all of them (`isPromptCacheControlRejection`, `stripPromptCacheControls`); this replaces the retention-only retry.
+- Removed `previous_response_id` chaining. Requests go out with `store: false`, so the chained call always failed with "Previous response … not found" and fell back to the full request, costing a wasted round trip on every OpenAI turn after the first. `findPreviousResponseId` and the `previousResponseId` plumbing through the orchestrator, primary stream and streaming service are gone; the optional field stays in `@quilltap/plugin-types`.
+
 #### Fix: Character Optimizer prompt caching and usage logging
 
 - Every optimizer pass sent one user message: character context, memory context, then that pass's instruction. The passes share everything but the instruction, but with the instruction at the end no pass could reuse another's cache.

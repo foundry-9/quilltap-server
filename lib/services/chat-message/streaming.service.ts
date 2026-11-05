@@ -69,8 +69,6 @@ export interface StreamOptions {
   messageId?: string
   chatId?: string
   characterId?: string
-  /** Previous response ID for conversation chaining (OpenAI Responses API) */
-  previousResponseId?: string
   /** Optional provider stop sequences. Mapped per-provider into the SDK's
    * native equivalent (OpenAI/Ollama/OpenRouter: `stop`, Anthropic:
    * `stop_sequences`, Google: `stopSequences`). Pseudo-tool strategies that
@@ -504,7 +502,7 @@ export async function* streamMessage(
   thoughtSignature?: string
   reasoningContent?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop, logType = 'CHAT_MESSAGE', toolChoice } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, stop, logType = 'CHAT_MESSAGE', toolChoice } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -606,7 +604,6 @@ export async function* streamMessage(
           webSearchEnabled: useNativeWebSearch,
           profileParameters: modelParams,
           cacheKey,
-          previousResponseId,
           stop,
         },
         apiKey
