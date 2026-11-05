@@ -68,6 +68,7 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
+import { profileParams } from '@/lib/llm/cheap-llm'
 
 const logger = createServiceLogger('BrahmaConsoleOrchestrator')
 
@@ -344,7 +345,10 @@ async function processBrahmaResponse(
       messages: conversationMessages,
       connectionProfile,
       apiKey,
-      modelParams: {},
+      // The profile's own parameters (prompt-cache breakpoints, thinking,
+      // max tokens) — an empty object here left every Anthropic call in this
+      // loop uncached.
+      modelParams: profileParams(connectionProfile) ?? {},
       tools: effectiveTools,
       useNativeWebSearch: false,
       userId,
