@@ -4,6 +4,13 @@
 
 ### 4.12.2
 
+#### Fix: Green Room opening outfits repeat chat after chat
+
+- `llm_choose` picked each opening outfit with no knowledge of earlier ones, at the cheap-LLM default temperature of 0.3, from the same alphabetical item list. On Friday (52 calls since September) Friday, Laura and Abigail opened most clothed chats in one or two outfits across 7–10 different scenarios.
+- The outfit prompt now lists the character's last five opening outfits (`loadRecentOpenings`, `lib/wardrobe/recent-openings.ts`, over the new `ChatWardrobeHistoryRepository.findRecentOpenings`: entry 0 of `chat-start` / `participant-added` timelines, never `seeded`, excluding the chat being dressed) and tells the model not to repeat them. Signature pieces (a ring, a pendant) may stay, and the rule does not change whether the character is clothed. Soft-fails to no history.
+- The wardrobe list is shuffled on every call.
+- `CheapLLMTaskOptions.temperature` lets a task set its own temperature (default `DEFAULT_CHEAP_LLM_TEMPERATURE`, 0.3, unchanged for all other tasks); outfit selection uses 0.8 (`OUTFIT_SELECTION_TEMPERATURE`). It also applies to the fallback stand-ins.
+
 #### Fix: OpenAI prompt-cache hit rate on GPT-5.6 and later
 
 - From gpt-5.6 on, OpenAI reuses a cached prefix only at a cache boundary, not at any matching token. With no explicit breakpoints a request wrote one entry after the leading developer block and one after the latest user message. In the Salon that message carries the turn's trailing sections, so the second entry was never read and the history between them was never cached. On Friday, gpt-6.1-sol read exactly 26,369 tokens (tools plus the three system blocks) on every turn and wrote 14–20k tokens per turn that were never read.

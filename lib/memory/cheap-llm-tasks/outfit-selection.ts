@@ -16,7 +16,15 @@ import { stripCodeFences } from '@/lib/llm/llm-json'
 import { executeCheapLLMTask } from './core-execution'
 import type { CheapLLMTaskResult } from './types'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
+import type { RecentOpening } from '@/lib/wardrobe/recent-openings'
 import { logger } from '@/lib/logger'
+
+/**
+ * The green room's sampling temperature. Cheap tasks default to 0.3 for
+ * repeatable extraction; an opening outfit is the opposite case — the same
+ * inputs should *not* produce the same answer every chat.
+ */
+export const OUTFIT_SELECTION_TEMPERATURE = 0.8
 
 const OUTFIT_SELECTION_PROMPT = `You are a wardrobe assistant for a roleplay character. Your job is to choose what a character should wear at the start of a scene, based on:
 - The character's available wardrobe items
@@ -24,8 +32,11 @@ const OUTFIT_SELECTION_PROMPT = `You are a wardrobe assistant for a roleplay cha
 - The character's personality
 - The character's own dressing instructions, when provided — these describe what the character prefers to wear and under what circumstances; weigh them heavily, above general appropriateness guesses
 - Any additional instructions in play for this scene, when provided — smaller standing directions the character is following in this particular conversation; honour anything in them that bears on dress
+- What the character arrived in at the start of their recent conversations, when provided
 
 Choose items that are contextually appropriate. For example, formal wear for a business meeting, casual clothes for relaxing at home, or era-appropriate costume for a historical setting.
+
+Vary the outfit. Real people do not wear the same clothes every day, and the wardrobe is large for a reason. When recent openings are listed, do not repeat any of them: change the main garments (top, bottom, outerwear, footwear), not just an accessory, and look past the first items that fit — several outfits usually suit a scene. Signature pieces the character always wears (a wedding ring, a pendant they never take off) should stay. Repeat an earlier outfit only when the dressing instructions or the scenario require that exact outfit. This rule is about which clothes to choose; it never decides whether the scene calls for clothes at all.
 
 You MUST respond with ONLY a JSON object mapping slot names to ARRAYS of wardrobe item IDs. Valid slots are: "top", "bottom", "footwear", "accessories", "hair". Use an empty array [] for any slot you want to leave empty. The "hair" slot holds a hairstyle or hairdo (braided, permed, elegantly coiffed, a wig) — not the hair itself. Leave "hair" empty for the character's natural, unstyled hair.
 
@@ -61,6 +72,17 @@ export interface LLMOutfitChoice {
   deliberatelyUnclothed: boolean
 }
 
+/** The trailing, optional inputs to {@link chooseLLMOutfit}. */
+export interface ChooseLLMOutfitOptions {
+  /**
+   * What the character arrived in at the start of recent chats, newest first
+   * (`loadRecentOpenings`). Shown so the model stops repeating one favourite.
+   */
+  recentOpenings?: readonly RecentOpening[]
+  /** Source of randomness for the wardrobe-list shuffle. Tests inject one. */
+  random?: () => number
+}
+
 /**
  * Ask an LLM to choose an outfit for a character based on context.
  *
@@ -79,6 +101,8 @@ export interface LLMOutfitChoice {
  * @param subprompts The character's subprompts in play for this chat (second
  *   person, like the dressing instructions) — surfaced so a standing
  *   direction that bears on dress reaches the green room too
+ * @param options Recent openings to steer away from, and the shuffle's
+ *   randomness source
  * @returns Equipped slots chosen by the LLM, or failure result
  */
 export async function chooseLLMOutfit(
@@ -94,6 +118,7 @@ export async function chooseLLMOutfit(
   chatId?: string,
   characterId?: string,
   subprompts?: readonly SubpromptForPrompt[] | null,
+  options: ChooseLLMOutfitOptions = {},
 ): Promise<CheapLLMTaskResult<LLMOutfitChoice>> {
   if (wardrobeItems.length === 0) {
     return {
@@ -105,10 +130,12 @@ export async function chooseLLMOutfit(
     }
   }
 
-  // Build wardrobe listing for the LLM. Composite items (those that bundle
-  // other wardrobe items) get a marker so the LLM knows they cover their
-  // listed slots in one pick.
-  const wardrobeSection = wardrobeItems.map(item => {
+  // Build wardrobe listing for the LLM, in a fresh order each call: a long
+  // list in the same (alphabetical) order every time lets a small model settle
+  // on the first items that fit. Composite items (those that bundle other
+  // wardrobe items) get a marker so the LLM knows they cover their listed
+  // slots in one pick.
+  const wardrobeSection = shuffled(wardrobeItems, options.random ?? Math.random).map(item => {
     const types = item.types.join(', ')
     const appropriateness = item.appropriateness ? ` [appropriate for: ${item.appropriateness}]` : ''
     const desc = item.description ? ` — ${item.description}` : ''
@@ -144,6 +171,17 @@ export async function chooseLLMOutfit(
       subprompts.map((s) => `### ${s.title}\n${s.content.trim()}`).join('\n\n')
     : ''
 
+  const recentOpenings = options.recentOpenings ?? []
+  const recentOpeningsNote = recentOpenings.length > 0
+    ? `\nRecent Openings (what ${characterName} arrived in at the start of their last few conversations, newest first — choose something different):\n` +
+      recentOpenings.map((opening, i) => {
+        const worn = opening.unclothed
+          ? `nothing${opening.titles.length > 0 ? ` but ${opening.titles.join(', ')}` : ''} (unclothed)`
+          : opening.titles.join(', ')
+        return `  ${i + 1}. (${opening.when}) ${worn}`
+      }).join('\n')
+    : ''
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -151,7 +189,7 @@ export async function chooseLLMOutfit(
     },
     {
       role: 'user',
-      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}${instructionsNote}${subpromptsNote}
+      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}${instructionsNote}${subpromptsNote}${recentOpeningsNote}
 
 Available Wardrobe Items:
 ${wardrobeSection}
@@ -239,5 +277,16 @@ Choose what ${characterName} should wear for this scene:`,
     undefined,
     undefined,
     characterId,
+    { temperature: OUTFIT_SELECTION_TEMPERATURE },
   )
+}
+
+/** A Fisher–Yates shuffle into a new array; the input is left alone. */
+function shuffled<T>(items: readonly T[], random: () => number): T[] {
+  const result = items.slice()
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
 }

@@ -26,5 +26,6 @@ export function ledgerOver(chats: {
 export function historyDouble() {
   return {
     settle: jest.fn(async () => ({ kind: 'appended', entryIndex: 0, seeded: false })),
+    findRecentOpenings: jest.fn(async () => []),
   }
 }
