@@ -72,7 +72,7 @@ import { triggerAfterTurnsHousekeeping } from './memory-trigger.service'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { runPreContextPreCompute } from './pre-compute.service'
-import { findPreviousResponseId, makePreservePartialOnError, runPrimaryStream } from './primary-stream.service'
+import { makePreservePartialOnError, runPrimaryStream } from './primary-stream.service'
 import { runNativeToolLoop } from './native-tool-loop.service'
 import { resolveAgentModeSetting } from './agent-mode-resolver.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
@@ -943,10 +943,6 @@ async function processMessage(
     modelParams,
     actualTools: slate.actualTools,
     useNativeWebSearch: slate.useNativeWebSearch,
-    previousResponseId: findPreviousResponseId(
-      streamingState.effectiveProfile.provider,
-      existingMessages as MessageEvent[]
-    ),
     stop: slate.stopSequences,
     preGeneratedAssistantMessageId,
     attachedFiles: fileProcessing.attachedFiles,
