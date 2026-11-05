@@ -11,10 +11,12 @@ import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.
 import { createLLMProvider } from '@/lib/llm';
 import { isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { createMockCharacter, createMockMemory } from '../fixtures/test-factories';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 
 jest.mock('@/lib/llm', () => ({ createLLMProvider: jest.fn() }));
+jest.mock('@/lib/services/llm-logging.service', () => ({ logLLMCall: jest.fn(() => Promise.resolve(null)) }));
 jest.mock('@/lib/startup', () => ({ initializePlugins: jest.fn(), isPluginSystemInitialized: jest.fn() }));
 jest.mock('@/lib/plugins/provider-registry', () => ({ providerRegistry: { isInitialized: jest.fn() } }));
 jest.mock('@/lib/embedding/embedding-service', () => ({
@@ -66,9 +68,15 @@ describe('runCharacterOptimizer — memories and instructions', () => {
   let sendMessage: jest.Mock;
 
   beforeEach(() => {
+    jest.mocked(logLLMCall).mockClear();
     sendMessage = jest.fn(async (req: { messages: Array<{ content: string }> }) => {
-      const user = req.messages[1].content;
-      return { content: user.includes('"behavioralPatterns"') ? ANALYSIS_JSON : '[]' };
+      const instruction = req.messages[2].content;
+      return {
+        content: instruction.includes('"behavioralPatterns"') ? ANALYSIS_JSON : '[]',
+        usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+        cacheUsage: { cacheCreationInputTokens: 0, cacheReadInputTokens: 5000 },
+        raw: { usage: { input_tokens: 100, cache_read_input_tokens: 5000, output_tokens: 20 } },
+      };
     });
     jest.mocked(createLLMProvider).mockResolvedValue({ sendMessage } as never);
     jest.mocked(isPluginSystemInitialized).mockReturnValue(true);
@@ -101,7 +109,7 @@ describe('runCharacterOptimizer — memories and instructions', () => {
       expect(user).toContain('No memories were consulted for this refinement.');
     }
     // The analysis is the instructions-only reading.
-    expect(sendMessage.mock.calls[0][0].messages[1].content).toContain("against the author's instructions");
+    expect(sendMessage.mock.calls[0][0].messages[2].content).toContain("against the author's instructions");
   });
 
   it('a memories-only run with too few reinforced memories still stops early', async () => {
@@ -119,6 +127,32 @@ describe('runCharacterOptimizer — memories and instructions', () => {
     expect(firstUser).toContain('Soften her temper.');
     expect(firstUser).not.toContain('Memory 0');
     expect(events.at(-1)?.type).toBe('done');
+  });
+
+  it('sends the shared context as one unchanging message ahead of each pass instruction', async () => {
+    await run(makeRepos(reinforced(4)), { useMemories: true, instructions: 'Soften her temper.' });
+    const calls = sendMessage.mock.calls.map(([req]) => req.messages as Array<{ role: string; content: string }>);
+    expect(calls.length).toBeGreaterThan(2);
+    const shared = calls[0][1].content;
+    for (const messages of calls) {
+      expect(messages.map((m) => m.role)).toEqual(['system', 'user', 'user']);
+      // Byte-identical across the run, so a prompt cache can hold it.
+      expect(messages[1].content).toBe(shared);
+      expect(messages[2].content).not.toContain('Memory 0');
+    }
+    expect(new Set(calls.map((m) => m[2].content)).size).toBe(calls.length);
+  });
+
+  it('logs each call with the provider usage and cache figures', async () => {
+    await run(makeRepos(reinforced(4)), { useMemories: true });
+    const logged = jest.mocked(logLLMCall).mock.calls.map(([params]) => params);
+    expect(logged.length).toBe(sendMessage.mock.calls.length);
+    for (const params of logged) {
+      expect(params.type).toBe('CHARACTER_OPTIMIZER');
+      expect(params.usage).toEqual({ promptTokens: 100, completionTokens: 20, totalTokens: 120 });
+      expect(params.cacheUsage).toEqual({ cacheCreationInputTokens: 0, cacheReadInputTokens: 5000 });
+      expect(params.rawProviderUsage).toEqual({ input_tokens: 100, cache_read_input_tokens: 5000, output_tokens: 20 });
+    }
   });
 
   it('memories and instructions together put both in front of the model', async () => {

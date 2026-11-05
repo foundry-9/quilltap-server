@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Fix: Character Optimizer prompt caching and usage logging
+
+- Every optimizer pass sent one user message: character context, source context (memories and/or instructions), then that pass's instruction. The passes share everything but the instruction, but with the instruction at the end no pass could reuse another's cache.
+- The shared context and the instruction are now separate user messages, so the shared message is byte-identical across a run. With the Anthropic plugin's breakpoint on the message before the final one, the analysis pass writes it and every sub-step reads it. In V4test each sub-step read back the 2,488-token shared context.
+- Optimizer log rows recorded no token usage at all. They now carry usage, cache usage and the provider's raw usage.
+
 #### Feature: per-profile tool-result elision window
 
 - Tool results in the history were elided to a one-line stub after 3 assistant messages for every provider. Each elision changes a message partway up the history, which forces Anthropic to re-write its prompt cache from that point; on Friday one Opus chat wrote about 200k cache tokens twice from this alone.

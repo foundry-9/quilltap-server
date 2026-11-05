@@ -731,8 +731,35 @@ Respond with a JSON array of suggestion objects (may be empty).`;
 
 type LLMProvider = Awaited<ReturnType<typeof createLLMProvider>>;
 
+/** What one optimizer call produced, with the figures the LLM log records. */
+interface OptimizerLLMResult {
+  content: string;
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+  cacheUsage?: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number };
+  rawProviderUsage?: Record<string, unknown> | null;
+}
+
 /**
- * Make an LLM call for the optimizer
+ * The provider-shape `usage` object from a raw response, when it has one —
+ * kept beside the normalized figures so the log shows what the provider
+ * actually billed (cache writes and reads included).
+ */
+function rawUsageOf(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const usage = (raw as { usage?: unknown }).usage;
+  return usage && typeof usage === 'object' ? (usage as Record<string, unknown>) : null;
+}
+
+/**
+ * Make an LLM call for the optimizer.
+ *
+ * Every pass of a run (the analysis and each sub-step) shares the character
+ * and source context and differs only in its instruction, so the two travel
+ * as separate user messages: shared context first, instruction last. A
+ * provider prompt cache then holds the shared message across the run — the
+ * Anthropic plugin puts its breakpoint on the message before the final one,
+ * and prefix-caching providers match it as a stable prefix. In one message,
+ * the instruction at its end made every pass a cache miss.
  */
 async function callOptimizerLLM(
   provider: LLMProvider,
@@ -747,10 +774,11 @@ async function callOptimizerLLM(
   },
   characterId?: string,
   profileParameters?: Record<string, unknown>
-): Promise<string> {
+): Promise<OptimizerLLMResult> {
   const messages = [
     { role: 'system' as const, content: SYSTEM_MESSAGE },
-    { role: 'user' as const, content: `${characterContext}\n\n---\n\n${sourceContext}\n\n---\n\n${instruction}` },
+    { role: 'user' as const, content: `${characterContext}\n\n---\n\n${sourceContext}` },
+    { role: 'user' as const, content: instruction },
   ];
 
   const startTime = Date.now();
@@ -773,7 +801,29 @@ async function callOptimizerLLM(
     throw new Error('No response from model');
   }
 
-  return response.content.trim();
+  logger.debug('[CharacterOptimizer] LLM call complete', {
+    characterId,
+    durationMs,
+    promptTokens: response.usage?.promptTokens,
+    cacheCreationInputTokens: response.cacheUsage?.cacheCreationInputTokens,
+    cacheReadInputTokens: response.cacheUsage?.cacheReadInputTokens,
+  });
+
+  return {
+    content: response.content.trim(),
+    usage: response.usage,
+    cacheUsage: response.cacheUsage,
+    rawProviderUsage: rawUsageOf(response.raw),
+  };
+}
+
+/** The placeholder request the log records for an optimizer call (bodies omitted). */
+function optimizerLogMessages(instructionLabel: string) {
+  return [
+    { role: 'system' as const, content: SYSTEM_MESSAGE },
+    { role: 'user' as const, content: '[character context + source context]' },
+    { role: 'user' as const, content: `[${instructionLabel} instruction]` },
+  ];
 }
 
 // ============================================================================
@@ -977,7 +1027,7 @@ export async function runCharacterOptimizer(
 
     // Call LLM for analysis
     const analysisStartedAt = Date.now();
-    const analysisRaw = await callOptimizerLLM(
+    const analysisResult = await callOptimizerLLM(
       provider,
       apiKey,
       profile.modelName,
@@ -989,6 +1039,7 @@ export async function runCharacterOptimizer(
       profileParams(profile)
     );
     const analysisDurationMs = Date.now() - analysisStartedAt;
+    const analysisRaw = analysisResult.content;
 
     let analysis: OptimizerAnalysis;
     try {
@@ -1012,10 +1063,7 @@ export async function runCharacterOptimizer(
       modelName: profile.modelName,
       connectionProfileId: profile.id,
       request: {
-        messages: [
-          { role: 'system', content: SYSTEM_MESSAGE },
-          { role: 'user', content: `[character context + source context + analysis instruction]` },
-        ],
+        messages: optimizerLogMessages('analysis'),
         temperature: 0.5,
         maxTokens: 8000,
       },
@@ -1023,6 +1071,9 @@ export async function runCharacterOptimizer(
         content: analysisRaw.substring(0, 500),
         error: undefined,
       },
+      usage: analysisResult.usage,
+      cacheUsage: analysisResult.cacheUsage,
+      rawProviderUsage: analysisResult.rawProviderUsage,
       durationMs: analysisDurationMs,
     }).catch(err => {
       logger.warn('[CharacterOptimizer] Failed to log analysis LLM call', {
@@ -1075,10 +1126,11 @@ export async function runCharacterOptimizer(
       onProgress({ type: 'substep_start', step: 'generating', subStep });
 
       let raw: string;
+      let subStepResult: OptimizerLLMResult;
       let subStepDurationMs = 0;
       const subStepStartedAt = Date.now();
       try {
-        raw = await callOptimizerLLM(
+        subStepResult = await callOptimizerLLM(
           provider,
           apiKey,
           profile.modelName,
@@ -1090,6 +1142,7 @@ export async function runCharacterOptimizer(
           profileParams(profile),
         );
         subStepDurationMs = Date.now() - subStepStartedAt;
+        raw = subStepResult.content;
       } catch (callError) {
         logger.warn('[CharacterOptimizer] Sub-step LLM call failed; continuing', {
           characterId,
@@ -1159,10 +1212,7 @@ export async function runCharacterOptimizer(
         modelName: profile.modelName,
         connectionProfileId: profile.id,
         request: {
-          messages: [
-            { role: 'system', content: SYSTEM_MESSAGE },
-            { role: 'user', content: `[character context + source context + ${label} instruction]` },
-          ],
+          messages: optimizerLogMessages(label),
           temperature: 0.7,
           maxTokens: 6000,
         },
@@ -1170,6 +1220,9 @@ export async function runCharacterOptimizer(
           content: raw.substring(0, 500),
           error: undefined,
         },
+        usage: subStepResult.usage,
+        cacheUsage: subStepResult.cacheUsage,
+        rawProviderUsage: subStepResult.rawProviderUsage,
         durationMs: subStepDurationMs,
       }).catch((err) => {
         logger.warn('[CharacterOptimizer] Failed to log sub-step LLM call', {
