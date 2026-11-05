@@ -24025,6 +24025,57 @@ function buildSdkClientOptions(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
 }
 var rewriteLogger = createPluginLogger("host-rewrite");
 
+// model-families.ts
+var GPT_RE = /^gpt-(\d+)(?:\.(\d+))?(?![\d.])/;
+var O_SERIES_RE = /^o(\d+)(?![\d.])/;
+function parseOpenAIModelFamily(model) {
+  const id = (model ?? "").toLowerCase();
+  const gpt = GPT_RE.exec(id);
+  if (gpt) {
+    return {
+      family: "gpt",
+      major: Number(gpt[1]),
+      minor: gpt[2] !== void 0 ? Number(gpt[2]) : void 0,
+      id
+    };
+  }
+  const o = O_SERIES_RE.exec(id);
+  if (o) {
+    return { family: "o", major: Number(o[1]), id };
+  }
+  return null;
+}
+var MIN_CHAT_GPT_MAJOR = 4;
+var FIRST_REASONING_GPT_MAJOR = 5;
+var FIRST_RETENTION_GPT_MAJOR = 6;
+var GPT5_RETENTION_MINORS = /* @__PURE__ */ new Set([1, 2, 5]);
+function isOpenAIChatModel(model) {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed) return false;
+  return parsed.family === "o" || parsed.major >= MIN_CHAT_GPT_MAJOR;
+}
+function isOpenAIReasoningModel(model) {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed) return false;
+  return parsed.family === "o" || parsed.major >= FIRST_REASONING_GPT_MAJOR;
+}
+function supportsOpenAIExtendedCacheRetention(model) {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed || parsed.family !== "gpt") return false;
+  if (parsed.major === 5) {
+    return parsed.minor !== void 0 && GPT5_RETENTION_MINORS.has(parsed.minor);
+  }
+  return parsed.major >= FIRST_RETENTION_GPT_MAJOR && !parsed.id.includes("chat-latest");
+}
+function isCacheRetentionRejection(error) {
+  if (!error || typeof error !== "object") return false;
+  const status = error.status;
+  if (status !== void 0 && status !== 400) return false;
+  const message = error instanceof Error ? error.message : String(error.message ?? "");
+  const param = error.param;
+  return param === "prompt_cache_retention" || /prompt_cache_retention/i.test(message);
+}
+
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-openai");
 var OPENAI_SUPPORTED_MIME_TYPES = [
@@ -24033,16 +24084,6 @@ var OPENAI_SUPPORTED_MIME_TYPES = [
   "image/gif",
   "image/webp"
 ];
-var REASONING_MODEL_PREFIXES = ["o1", "o3", "o4", "gpt-5"];
-function isReasoningModel(model) {
-  const modelLower = model.toLowerCase();
-  return REASONING_MODEL_PREFIXES.some((prefix) => modelLower.startsWith(prefix));
-}
-var EXTENDED_RETENTION_MODEL_PREFIXES = ["gpt-5.1", "gpt-5.2", "gpt-5.5"];
-function supportsExtendedCacheRetention(model) {
-  const modelLower = model.toLowerCase();
-  return EXTENDED_RETENTION_MODEL_PREFIXES.some((prefix) => modelLower.startsWith(prefix));
-}
 var OpenAIProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
@@ -24274,7 +24315,7 @@ var OpenAIProvider = class {
    * Build the common request parameters shared between sendMessage and streamMessage
    */
   buildBaseRequestParams(params, input, instructions) {
-    const isReasoning = isReasoningModel(params.model);
+    const isReasoning = isOpenAIReasoningModel(params.model);
     const requestParams = {
       model: params.model,
       input,
@@ -24327,7 +24368,7 @@ var OpenAIProvider = class {
     }
     if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
       requestParams.prompt_cache_key = params.cacheKey;
-      if (supportsExtendedCacheRetention(params.model)) {
+      if (supportsOpenAIExtendedCacheRetention(params.model)) {
         requestParams.prompt_cache_retention = "24h";
       }
     }
@@ -24375,6 +24416,23 @@ var OpenAIProvider = class {
       ...reasoningContent ? { reasoningContent } : {}
     };
   }
+  async createResponse(client, requestParams) {
+    try {
+      return await client.responses.create(requestParams);
+    } catch (error) {
+      const withRetention = requestParams;
+      if (withRetention.prompt_cache_retention === void 0 || !isCacheRetentionRejection(error)) {
+        throw error;
+      }
+      logger.warn("Model rejected prompt_cache_retention; retrying without it", {
+        context: "OpenAIProvider.createResponse",
+        model: requestParams.model,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      const { prompt_cache_retention: _dropped, ...withoutRetention } = withRetention;
+      return await client.responses.create(withoutRetention);
+    }
+  }
   async sendMessage(params, apiKey) {
     const client = new OpenAI({
       apiKey,
@@ -24395,7 +24453,7 @@ var OpenAIProvider = class {
           previous_response_id: params.previousResponseId,
           stream: false
         };
-        const response2 = await client.responses.create(chainedParams);
+        const response2 = await this.createResponse(client, chainedParams);
         if (response2.error) {
           throw new Error(`OpenAI API error: ${response2.error.message}`);
         }
@@ -24412,7 +24470,7 @@ var OpenAIProvider = class {
       ...baseParams,
       stream: false
     };
-    const response = await client.responses.create(requestParams);
+    const response = await this.createResponse(client, requestParams);
     if (response.error) {
       logger.error("Responses API returned error", {
         context: "OpenAIProvider.sendMessage",
@@ -24445,7 +24503,7 @@ var OpenAIProvider = class {
           previous_response_id: params.previousResponseId,
           stream: true
         };
-        stream = await client.responses.create(chainedParams);
+        stream = await this.createResponse(client, chainedParams);
       } catch (error) {
         logger.warn("Streaming conversation chaining failed, falling back to full input", {
           context: "OpenAIProvider.streamMessage",
@@ -24460,7 +24518,7 @@ var OpenAIProvider = class {
         ...baseParams,
         stream: true
       };
-      stream = await client.responses.create(requestParams);
+      stream = await this.createResponse(client, requestParams);
     }
     let finalResponse = null;
     let streamReasoning = "";
@@ -24532,8 +24590,7 @@ var OpenAIProvider = class {
         defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       const models = await client.models.list();
-      const chatModelPrefixes = ["gpt-4", "gpt-5", "o1", "o3", "o4"];
-      const chatModels = models.data.filter((m) => chatModelPrefixes.some((prefix) => m.id.startsWith(prefix))).map((m) => m.id).sort();
+      const chatModels = models.data.filter((m) => isOpenAIChatModel(m.id)).map((m) => m.id).sort();
       return chatModels;
     } catch (error) {
       logger.error("Failed to fetch OpenAI models", { context: "OpenAIProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
