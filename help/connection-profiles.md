@@ -370,6 +370,18 @@ The Simple JSON surface was designed for smaller and local models that lack nati
 
 When in doubt, leave the setting on **Auto**. The keeper of the keys can always rearrange the silverware later.
 
+### Keep tool results in full for (turns)
+
+Beneath the Tool format selector sits a small numeric field, **Keep tool results in full for (turns)**, which arrives set to **3**. A search, a reading of a document, a rummage through the Commonplace Book — each comes back as a report, and some reports run to many pages. Rather than carry every page forward forever, Quilltap folds a report down to a single line once that many turns have passed since it arrived: the tool's name, what was asked of it, and a polite note that the model may ask again if it wishes to see the rest. (The fold happens only on the way to the model; the full report stays in the transcript, and the Salon shows it as it always did.)
+
+Folding keeps a long conversation lean, and for a model that pays full freight on every word it is usually the right economy. But it has a cost of its own with a model that offers a **prompt cache** — Anthropic, chiefly, when *Enable Prompt Caching* is ticked. A cache only helps when the conversation reads exactly as it did last time up to some point, and each fold alters a passage partway up the history; everything after that passage must be cached afresh, at a premium. A busy, tool-happy chat can fold something nearly every turn and so pay that premium nearly every turn.
+
+- **0** keeps every report in full, forever. Kindest to a cached model, provided your reports are not enormous; the cached copy is read back at a tenth of the price.
+- **A larger number** (ten, say, or twenty) folds less often, which keeps most of the cache's savings while still retiring truly ancient reports.
+- **The default of 3** suits models without a cache, where every carried word is paid in full on every turn.
+
+The count is in the model's own replies, so in a crowded room with several characters speaking it passes faster than your own turns do. Each character's history is built with their own profile's figure. A turn that fails over to an understudy profile keeps the history its first profile assembled.
+
 ## Announcing the Speaker in Multi-Character Scenes
 
 When several characters share a room, each reply must be pinned to exactly one of them, or the model will cheerfully write the whole cast's evening for you. Quilltap has two ways of pinning it, and the **Announce the speaker in multi-character scenes ([Name] prefill)** checkbox decides which one this profile uses.

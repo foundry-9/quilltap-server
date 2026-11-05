@@ -44,6 +44,8 @@ import type {
 import type { AttachedFile } from './types'
 import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 import { countEstablishedFacts, frameEstablishedFacts, isEstablishedFact } from '@/lib/chat/established-fact';
+import { resolveToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils'
+import { DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
 
 const logger = createServiceLogger('ContextBuilderService')
 
@@ -574,29 +576,28 @@ export async function rehydrateUserAttachments(args: {
 }
 
 /**
- * Number of ASSISTANT messages that must appear *after* a TOOL message before
- * its result body is elided from the outgoing LLM context. At 3 turns the raw
- * payload is replaced with a compact stub; within the last 3 turns it is sent
- * verbatim. Counting ASSISTANT messages is the turn proxy agreed for both
- * interactive (≈1 per turn) and autonomous (all-ASSISTANT) rooms.
- */
-const TOOL_RESULT_VERBATIM_TURNS = 3
-
-/**
  * Render the content string for a single TOOL message in the outgoing context.
+ *
+ * A TOOL message's result body is elided once `verbatimTurns` ASSISTANT
+ * messages follow it: the raw payload becomes a compact stub. Counting
+ * ASSISTANT messages is the turn proxy agreed for both interactive (≈1 per
+ * turn) and autonomous (all-ASSISTANT) rooms. The window is the responding
+ * profile's `toolResultVerbatimTurns` (resolved by the caller through
+ * `resolveToolResultVerbatimTurns`); `0` never elides.
  *
  * @param toolData   Parsed tool payload ({ toolName|tool, result, arguments, … })
  * @param assistantAfter  Number of ASSISTANT messages that follow this TOOL msg
- *                         in the filtered sequence. When ≥ TOOL_RESULT_VERBATIM_TURNS
- *                         the result body is replaced with a compact stub.
+ *                         in the filtered sequence.
+ * @param verbatimTurns   Turns a result stays in full; 0 = never elide.
  * @returns          Formatted content string, role will be USER in the output.
  */
 function renderToolResultContent(
   toolData: { toolName?: string; tool?: string; result?: unknown; arguments?: unknown },
   assistantAfter: number,
+  verbatimTurns: number,
 ): string {
   const toolName = toolData.toolName || toolData.tool || 'Unknown'
-  if (assistantAfter >= TOOL_RESULT_VERBATIM_TURNS) {
+  if (verbatimTurns > 0 && assistantAfter >= verbatimTurns) {
     // Elide: include compact argument summary so context is not opaque.
     let compactArgs = ''
     if (toolData.arguments !== undefined && toolData.arguments !== null) {
@@ -607,7 +608,7 @@ function renderToolResultContent(
         compactArgs = String(toolData.arguments).slice(0, 200)
       }
     }
-    return `[Tool Result: ${toolName}] (args: ${compactArgs}) — result elided (>3 turns old); call again to re-read.`
+    return `[Tool Result: ${toolName}] (args: ${compactArgs}) — result elided (>${verbatimTurns} turns old); call again to re-read.`
   }
   const resultText = toolData.result !== undefined && toolData.result !== null && toolData.result !== ''
     ? String(toolData.result)
@@ -616,11 +617,17 @@ function renderToolResultContent(
 }
 
 /**
- * Build conversation messages for context
+ * Build conversation messages for context.
+ *
+ * `toolResultVerbatimTurns` is how many turns a tool result is sent in full
+ * before it is elided (0 = never); callers pass the responding profile's
+ * value from `resolveToolResultVerbatimTurns`, and it defaults to the
+ * documented default when omitted.
  */
 export function buildConversationMessages(
   existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
-  isMultiCharacter: boolean
+  isMultiCharacter: boolean,
+  toolResultVerbatimTurns: number = DEFAULT_TOOL_RESULT_VERBATIM_TURNS,
 ): {
   conversationMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
   messagesWithParticipants?: MessageWithParticipant[]
@@ -651,7 +658,7 @@ export function buildConversationMessages(
           const toolData = JSON.parse(msg.content || '{}')
           return {
             role: 'USER' as const,
-            content: renderToolResultContent(toolData, assistantAfter[i]),
+            content: renderToolResultContent(toolData, assistantAfter[i], toolResultVerbatimTurns),
             id: msg.id,
           }
         } catch {
@@ -679,7 +686,7 @@ export function buildConversationMessages(
             const toolData = JSON.parse(msg.content || '{}')
             return {
               role: 'USER' as const,
-              content: renderToolResultContent(toolData, assistantAfter[i]),
+              content: renderToolResultContent(toolData, assistantAfter[i], toolResultVerbatimTurns),
               id: msg.id,
               createdAt: msg.createdAt,
               participantId: null,
@@ -1139,9 +1146,16 @@ export async function buildMessageContext(
     : filteredExistingMessages
 
   // Build conversation messages
+  const toolResultVerbatimTurns = resolveToolResultVerbatimTurns(connectionProfile)
+  logger.debug('Building conversation history', {
+    chatId: chat.id,
+    profileId: connectionProfile.id,
+    toolResultVerbatimTurns,
+  })
   const { conversationMessages, messagesWithParticipants: builtWithParticipants } = buildConversationMessages(
     messagesForConversation,
-    isMultiCharacter
+    isMultiCharacter,
+    toolResultVerbatimTurns,
   )
   // Mark fact rows on the multi-character sequence: everybody knows an
   // established fact, so the history-access cut must not hide one from a seat

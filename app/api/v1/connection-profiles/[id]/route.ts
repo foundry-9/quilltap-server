@@ -19,8 +19,8 @@ import { notFound, forbidden, badRequest, serverError, conflict, successResponse
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
-import { parseMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils';
-import { MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types';
+import { parseMaxImagesPerRequest, parseToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils';
+import { MAX_IMAGES_PER_REQUEST_CEILING, TOOL_RESULT_VERBATIM_TURNS_CEILING } from '@/lib/schemas/profile.types';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -140,6 +140,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         fallbackProfileId,
         allowTierFallback,
         maxImagesPerRequest,
+        toolResultVerbatimTurns,
       } = body;
 
       // Build update data
@@ -388,6 +389,14 @@ export const PUT = createContextParamsHandler<{ id: string }>(
           return badRequest(`maxImagesPerRequest must be a whole number from 1 to ${MAX_IMAGES_PER_REQUEST_CEILING}`);
         }
         updateData.maxImagesPerRequest = parsedMaxImages;
+      }
+
+      if (toolResultVerbatimTurns !== undefined) {
+        const parsedVerbatimTurns = parseToolResultVerbatimTurns(toolResultVerbatimTurns);
+        if (parsedVerbatimTurns === null) {
+          return badRequest(`toolResultVerbatimTurns must be a whole number from 0 to ${TOOL_RESULT_VERBATIM_TURNS_CEILING}`);
+        }
+        updateData.toolResultVerbatimTurns = parsedVerbatimTurns;
       }
 
       // Update the profile

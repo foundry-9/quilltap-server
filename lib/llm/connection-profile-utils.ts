@@ -12,7 +12,9 @@
 import { ConnectionProfile } from '@/lib/schemas/types'
 import {
   DEFAULT_MAX_IMAGES_PER_REQUEST,
+  DEFAULT_TOOL_RESULT_VERBATIM_TURNS,
   MAX_IMAGES_PER_REQUEST_CEILING,
+  TOOL_RESULT_VERBATIM_TURNS_CEILING,
 } from '@/lib/schemas/profile.types'
 import {
   getSupportedMimeTypes,
@@ -170,6 +172,36 @@ export function parseMaxImagesPerRequest(value: unknown): number | null {
   const parsed = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
   if (typeof parsed !== 'number' || !Number.isInteger(parsed)) return null
   if (parsed < 1 || parsed > MAX_IMAGES_PER_REQUEST_CEILING) return null
+  return parsed
+}
+
+/**
+ * How many turns a tool result stays verbatim in the history sent to a
+ * profile before it is elided to a stub. `0` means never elide.
+ *
+ * The one reader of `toolResultVerbatimTurns`: a missing, non-integer or
+ * out-of-range value (a row or bundle older than the column, a hand-edited
+ * archive) resolves to `DEFAULT_TOOL_RESULT_VERBATIM_TURNS`.
+ */
+export function resolveToolResultVerbatimTurns(
+  profile: { toolResultVerbatimTurns?: number | null } | null | undefined
+): number {
+  const raw = profile?.toolResultVerbatimTurns
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 && raw <= TOOL_RESULT_VERBATIM_TURNS_CEILING) {
+    return raw
+  }
+  return DEFAULT_TOOL_RESULT_VERBATIM_TURNS
+}
+
+/**
+ * Validate a `toolResultVerbatimTurns` value from a request body. Accepts an
+ * integer or a numeric string; returns null for anything that isn't a whole
+ * number between 0 and `TOOL_RESULT_VERBATIM_TURNS_CEILING`.
+ */
+export function parseToolResultVerbatimTurns(value: unknown): number | null {
+  const parsed = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
+  if (typeof parsed !== 'number' || !Number.isInteger(parsed)) return null
+  if (parsed < 0 || parsed > TOOL_RESULT_VERBATIM_TURNS_CEILING) return null
   return parsed
 }
 

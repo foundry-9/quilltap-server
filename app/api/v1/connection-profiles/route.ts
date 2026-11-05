@@ -25,8 +25,13 @@ import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill';
 import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
-import { parseMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils';
-import { DEFAULT_MAX_IMAGES_PER_REQUEST, MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types';
+import { parseMaxImagesPerRequest, parseToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils';
+import {
+  DEFAULT_MAX_IMAGES_PER_REQUEST,
+  DEFAULT_TOOL_RESULT_VERBATIM_TURNS,
+  MAX_IMAGES_PER_REQUEST_CEILING,
+  TOOL_RESULT_VERBATIM_TURNS_CEILING,
+} from '@/lib/schemas/profile.types';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -169,6 +174,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       fallbackProfileId = null,
       allowTierFallback = false,
       maxImagesPerRequest,
+      toolResultVerbatimTurns,
     } = body;
 
     if (transport !== 'api' && transport !== 'courier') {
@@ -191,6 +197,15 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
         return badRequest(`maxImagesPerRequest must be a whole number from 1 to ${MAX_IMAGES_PER_REQUEST_CEILING}`);
       }
       resolvedMaxImagesPerRequest = parsedMaxImages;
+    }
+
+    let resolvedToolResultVerbatimTurns = DEFAULT_TOOL_RESULT_VERBATIM_TURNS;
+    if (toolResultVerbatimTurns !== undefined && toolResultVerbatimTurns !== null) {
+      const parsedVerbatimTurns = parseToolResultVerbatimTurns(toolResultVerbatimTurns);
+      if (parsedVerbatimTurns === null) {
+        return badRequest(`toolResultVerbatimTurns must be a whole number from 0 to ${TOOL_RESULT_VERBATIM_TURNS_CEILING}`);
+      }
+      resolvedToolResultVerbatimTurns = parsedVerbatimTurns;
     }
 
     // The fallback chain's named understudy. A brand-new profile has no id
@@ -337,6 +352,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
       supportsImageUpload: isCourier ? false : resolvedSupportsImageUpload,
       maxImagesPerRequest: resolvedMaxImagesPerRequest,
+      toolResultVerbatimTurns: resolvedToolResultVerbatimTurns,
       tags: [],
       sortIndex: maxSortIndex + 1,
       totalTokens: 0,

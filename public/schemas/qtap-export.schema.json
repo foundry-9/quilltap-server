@@ -1340,6 +1340,12 @@
           "maximum": 50,
           "description": "The most images sent to this profile in one request. Images past the cap are described in text instead. Defaults to 4; absent in older bundles, which import with the default."
         },
+        "toolResultVerbatimTurns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "How many turns a tool result is sent to this profile in full before it is elided to a one-line stub in the history. 0 keeps every result in full. Defaults to 3; absent in older bundles, which import with the default."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_apiKeyLabel": {

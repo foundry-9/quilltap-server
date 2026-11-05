@@ -465,6 +465,8 @@ import { reindexChatMessageFtsCharacterOnlyMigration } from './reindex-chat-mess
 import { addEstablishedFactFieldMigration } from './add-established-fact-field-v1';
 // Vision input cap: connection_profiles.maxImagesPerRequest
 import { addProfileMaxImagesPerRequestMigration } from './add-profile-max-images-per-request-v1';
+// Tool-result elision window: connection_profiles.toolResultVerbatimTurns
+import { addProfileToolResultVerbatimTurnsMigration } from './add-profile-tool-result-verbatim-turns-v1';
 
 /**
  * All available migrations.
@@ -958,6 +960,8 @@ export const migrations: Migration[] = [
   addEstablishedFactFieldMigration,
   // Vision input cap: connection_profiles.maxImagesPerRequest (most images sent in one request)
   addProfileMaxImagesPerRequestMigration,
+  // Tool-result elision window: connection_profiles.toolResultVerbatimTurns (turns a result stays in full)
+  addProfileToolResultVerbatimTurnsMigration,
 ];
 
 export {
@@ -1423,5 +1427,6 @@ export {
   reindexChatMessageFtsCharacterOnlyMigration,
   addEstablishedFactFieldMigration,
   addProfileMaxImagesPerRequestMigration,
+  addProfileToolResultVerbatimTurnsMigration,
 };
 

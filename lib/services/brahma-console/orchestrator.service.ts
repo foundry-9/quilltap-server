@@ -69,6 +69,7 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-builder'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 import { profileParams } from '@/lib/llm/cheap-llm'
+import { resolveToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils'
 
 const logger = createServiceLogger('BrahmaConsoleOrchestrator')
 
@@ -278,11 +279,16 @@ async function processBrahmaResponse(
   // Load conversation history (full transcript, no compression) and thread it
   // through the SAME builder the Salon uses, so a prior turn's tool activity is
   // replayed in a form the model can actually follow: each stored TOOL message
-  // becomes a `[Tool Result: …]` user message (with the 3-turn elision), rather
+  // becomes a `[Tool Result: …]` user message (elided after the profile's
+  // toolResultVerbatimTurns), rather
   // than a bare `tool`-role message bound to no call. Without this the model
   // can't tell it already ran a query and re-runs it — the console's loop bug.
   const messages = await repos.chats.getMessages(chatId)
-  const { conversationMessages: history } = buildConversationMessages(messages, false)
+  const { conversationMessages: history } = buildConversationMessages(
+    messages,
+    false,
+    resolveToolResultVerbatimTurns(connectionProfile),
+  )
 
   const conversationMessages: ThreadedMessage[] = [
     { role: 'system', content: systemPrompt },

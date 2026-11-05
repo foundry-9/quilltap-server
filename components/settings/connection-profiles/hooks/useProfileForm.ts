@@ -8,8 +8,13 @@ import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { providerAcceptsApiKey, providerRequiresApiKey } from '@/lib/llm/api-key-support'
 import type { ApiKey, ProfileFormData, ConnectionProfile, ProviderConfig } from '../types'
 import { initialFormState } from '../types'
-import { parseMaxImagesPerRequest, resolveMaxImagesPerRequest } from '@/lib/llm/connection-profile-utils'
-import { DEFAULT_MAX_IMAGES_PER_REQUEST } from '@/lib/schemas/profile.types'
+import {
+  parseMaxImagesPerRequest,
+  parseToolResultVerbatimTurns,
+  resolveMaxImagesPerRequest,
+  resolveToolResultVerbatimTurns,
+} from '@/lib/llm/connection-profile-utils'
+import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types'
 
 /**
  * Hook for managing profile form state and operations
@@ -171,6 +176,7 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
           profile.multiCharacterPrefill ?? defaultMultiCharacterPrefill(profile.provider),
         supportsImageUpload: profile.supportsImageUpload ?? false,
         maxImagesPerRequest: String(resolveMaxImagesPerRequest(profile)),
+        toolResultVerbatimTurns: String(resolveToolResultVerbatimTurns(profile)),
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
         modelClass: profile.modelClass ?? '',
@@ -241,6 +247,8 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
       supportsImageUpload: form.formData.supportsImageUpload,
       maxImagesPerRequest:
         parseMaxImagesPerRequest(form.formData.maxImagesPerRequest) ?? DEFAULT_MAX_IMAGES_PER_REQUEST,
+      toolResultVerbatimTurns:
+        parseToolResultVerbatimTurns(form.formData.toolResultVerbatimTurns) ?? DEFAULT_TOOL_RESULT_VERBATIM_TURNS,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
       modelClass: form.formData.modelClass || null,

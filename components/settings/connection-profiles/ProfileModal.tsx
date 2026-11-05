@@ -14,7 +14,7 @@ import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connectio
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
 import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
-import { MAX_IMAGES_PER_REQUEST_CEILING } from '@/lib/schemas/profile.types'
+import { MAX_IMAGES_PER_REQUEST_CEILING, TOOL_RESULT_VERBATIM_TURNS_CEILING } from '@/lib/schemas/profile.types'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -899,6 +899,27 @@ export function ProfileModal({
                   </select>
                   <p className="qt-text-xs mt-1">
                     Auto: native for capable models, otherwise simple JSON. Override only if your model needs a particular dialect.
+                  </p>
+                  <label htmlFor="toolResultVerbatimTurns" className="qt-text-label mt-3">
+                    Keep tool results in full for (turns)
+                  </label>
+                  <input
+                    type="number"
+                    id="toolResultVerbatimTurns"
+                    name="toolResultVerbatimTurns"
+                    value={form.formData.toolResultVerbatimTurns}
+                    onChange={(e) => form.setField('toolResultVerbatimTurns', e.target.value)}
+                    min="0"
+                    max={TOOL_RESULT_VERBATIM_TURNS_CEILING}
+                    step="1"
+                    className="qt-input w-full max-w-xs"
+                    aria-describedby="toolResultVerbatimTurns-hint"
+                  />
+                  <p id="toolResultVerbatimTurns-hint" className="qt-text-xs mt-1">
+                    After this many turns, an old search or reading is folded down to a one-line note
+                    and the model must ask again to see it. Fewer turns keep the conversation lean; but
+                    each fold rewrites the history behind it, which spoils a prompt cache from that
+                    point. Set 0 to keep every result in full — kindest to a cached model.
                   </p>
                 </div>
               )}

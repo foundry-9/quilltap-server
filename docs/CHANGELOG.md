@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Feature: per-profile tool-result elision window
+
+- Tool results in the history were elided to a one-line stub after 3 assistant messages for every provider. Each elision changes a message partway up the history, which forces Anthropic to re-write its prompt cache from that point; on Friday one Opus chat wrote about 200k cache tokens twice from this alone.
+- New `connection_profiles.toolResultVerbatimTurns` (INTEGER DEFAULT 3, migration `add-profile-tool-result-verbatim-turns-v1`), read only through `resolveToolResultVerbatimTurns`. `0` never elides. Existing profiles keep 3.
+- `buildConversationMessages` takes the window; the Salon context build passes the responding character's profile and the Brahma Console its own. The stub names the actual window (`>N turns old`).
+- Profile editor field under Tool format, create/update route validation (0–1000), restore and `.qtap` import seeding, export schema, DDL and help.
+
 #### Fix: Anthropic prompt-cache hit rate
 
 - The Brahma Console, `@Brahma`, the Scenario Builder (via `runOneShotToolLoop`) and help chat passed `modelParams: {}` to `streamMessage`, so the profile's `enableCacheBreakpoints`, thinking and max-tokens settings never reached the provider. Every Anthropic call on those paths was sent uncached; on Friday that was about 6.5M input tokens over a week. They now pass `profileParams(connectionProfile)`, like the Salon.

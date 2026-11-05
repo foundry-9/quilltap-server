@@ -1243,7 +1243,13 @@ CREATE TABLE "connection_profiles" (
   -- models refuse a request carrying more than four. A Salon turn keeps the
   -- newest and describes the rest in text. Read it only through
   -- resolveMaxImagesPerRequest() (lib/llm/connection-profile-utils.ts).
-  "maxImagesPerRequest" INTEGER DEFAULT 4
+  "maxImagesPerRequest" INTEGER DEFAULT 4,
+  -- How many turns (assistant messages after it) a tool result is sent to
+  -- this profile in full before its body becomes a one-line stub in the
+  -- history. 0 = never elide. Eliding rewrites the history part-way up, which
+  -- re-writes a provider prompt cache from that point. Read it only through
+  -- resolveToolResultVerbatimTurns() (lib/llm/connection-profile-utils.ts).
+  "toolResultVerbatimTurns" INTEGER DEFAULT 3
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
