@@ -57,6 +57,7 @@ import {
 // The duplicate-call signature is the streaming Brahma console's; one rule for both loops.
 import { normalizeToolCallSignature } from '@/lib/services/brahma-console/orchestrator.service'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
+import { profileParams } from '@/lib/llm/cheap-llm'
 
 const logger = createServiceLogger('OneShotToolLoop')
 
@@ -223,7 +224,10 @@ export async function runOneShotToolLoop(opts: RunOneShotToolLoopOptions): Promi
       messages: conversationMessages,
       connectionProfile,
       apiKey,
-      modelParams: {},
+      // The profile's own parameters (prompt-cache breakpoints, thinking,
+      // max tokens) — an empty object here left every Anthropic call in this
+      // loop uncached.
+      modelParams: profileParams(connectionProfile) ?? {},
       tools: effectiveTools,
       useNativeWebSearch: false,
       userId,

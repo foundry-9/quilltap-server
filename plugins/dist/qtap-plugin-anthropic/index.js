@@ -53034,44 +53034,99 @@ var AnthropicProvider = class _AnthropicProvider {
     }
     return { type: "ephemeral" };
   }
+  static {
+    /**
+     * Anthropic refuses a request carrying more than four `cache_control`
+     * breakpoints across tools, system and messages.
+     */
+    this.MAX_CACHE_BREAKPOINTS = 4;
+  }
   /**
-   * Place a second cache_control breakpoint mid-history when the conversation
-   * is long enough that the last-user-message breakpoint can fall outside
-   * Anthropic's 20-block lookback. The mid-history index is rounded down to
-   * the nearest multiple of MID_BREAKPOINT_STEP so the breakpoint stays at the
-   * same content block for several turns, avoiding cache rewrites every turn.
-   *
-   * Stepping at K=15: between 20–34 messages the breakpoint sits at index 0,
-   * between 35–49 at index 15, between 50–64 at index 30, etc.
+   * Mark the last cacheable content block of `messages[index]` with a
+   * `cache_control` breakpoint, lifting string content to a single text block
+   * (Anthropic tokenizes the two forms identically, so the lift does not move
+   * the cached prefix). Returns false when the message has nothing to mark.
    */
-  applyMidHistoryBreakpoint(messages, ttl) {
-    const MIN_MESSAGES_FOR_MID_BREAKPOINT = 20;
-    const MID_BREAKPOINT_STEP = 15;
-    if (messages.length < MIN_MESSAGES_FOR_MID_BREAKPOINT) return;
-    const offsetFromTail = MID_BREAKPOINT_STEP;
-    const rawIndex = messages.length - offsetFromTail;
-    const steppedIndex = Math.floor(rawIndex / MID_BREAKPOINT_STEP) * MID_BREAKPOINT_STEP;
-    if (steppedIndex < 0 || steppedIndex >= messages.length) return;
-    const target = messages[steppedIndex];
+  markBreakpoint(messages, index, ttl) {
+    const target = messages[index];
+    if (!target) return false;
     const targetContent = target.content;
     if (typeof targetContent === "string") {
-      messages[steppedIndex] = {
+      if (targetContent.length === 0) return false;
+      messages[index] = {
         role: target.role,
-        content: [{
-          type: "text",
-          text: targetContent,
-          cache_control: this.buildCacheControl(ttl)
-        }]
+        content: [{ type: "text", text: targetContent, cache_control: this.buildCacheControl(ttl) }]
       };
-    } else if (Array.isArray(targetContent) && targetContent.length > 0) {
+      return true;
+    }
+    if (Array.isArray(targetContent) && targetContent.length > 0) {
       const lastBlock = targetContent[targetContent.length - 1];
+      if (lastBlock.cache_control) return true;
       const updatedContent = [...targetContent];
       updatedContent[updatedContent.length - 1] = {
         ...lastBlock,
         cache_control: this.buildCacheControl(ttl)
       };
-      messages[steppedIndex] = { ...target, content: updatedContent };
+      messages[index] = { ...target, content: updatedContent };
+      return true;
     }
+    return false;
+  }
+  /** Count the breakpoints already placed in the message array. */
+  countMessageBreakpoints(messages) {
+    let count = 0;
+    for (const m of messages) {
+      if (Array.isArray(m.content)) {
+        for (const block of m.content) {
+          if (block.cache_control) count++;
+        }
+      }
+    }
+    return count;
+  }
+  /**
+   * Place the conversation breakpoints for `system_and_long_context`.
+   *
+   * **Tail breakpoint.** The final message of a Salon turn is the operator's
+   * line *plus* that turn's trailing context sections (recall, Core whisper,
+   * the line being answered, …) — thousands of tokens that are gone from the
+   * next turn's copy of the same message. A breakpoint on it writes a cache
+   * entry no later request can ever match. So the breakpoint goes on the
+   * message *before* the final one: everything up to it is history that the
+   * next turn sends again byte-for-byte, and the next turn reads it back. In a
+   * tool loop the same rule caches each step's prefix for the step after it.
+   * A single-message request keeps its breakpoint on that message.
+   *
+   * **Mid-history breakpoint.** On a long array the previous turn's tail can
+   * fall outside Anthropic's 20-block lookback from the new tail, so a second
+   * breakpoint sits mid-history. Its index is rounded down to a multiple of
+   * MID_BREAKPOINT_STEP so it stays on the same block for several turns.
+   * Stepping at K=15: between 20–34 messages it sits at index 0, between
+   * 35–49 at index 15, between 50–64 at index 30, etc. It is placed only when
+   * the four-breakpoint budget allows (tools and system take theirs first).
+   */
+  applyHistoryBreakpoints(messages, opts) {
+    if (opts.strategy !== "system_and_long_context" || messages.length === 0) return;
+    const budget = _AnthropicProvider.MAX_CACHE_BREAKPOINTS - opts.reservedBreakpoints;
+    const tailIndex = messages.length >= 2 ? messages.length - 2 : messages.length - 1;
+    if (this.countMessageBreakpoints(messages) < budget) {
+      this.markBreakpoint(messages, tailIndex, opts.ttl);
+    }
+    const MIN_MESSAGES_FOR_MID_BREAKPOINT = 20;
+    const MID_BREAKPOINT_STEP = 15;
+    if (messages.length < MIN_MESSAGES_FOR_MID_BREAKPOINT) return;
+    const rawIndex = messages.length - MID_BREAKPOINT_STEP;
+    const steppedIndex = Math.floor(rawIndex / MID_BREAKPOINT_STEP) * MID_BREAKPOINT_STEP;
+    if (steppedIndex < 0 || steppedIndex >= tailIndex) return;
+    if (this.countMessageBreakpoints(messages) >= budget) {
+      logger.debug("Anthropic cache breakpoint budget spent; skipping mid-history breakpoint", {
+        context: "AnthropicProvider.applyHistoryBreakpoints",
+        reservedBreakpoints: opts.reservedBreakpoints,
+        messageCount: messages.length
+      });
+      return;
+    }
+    this.markBreakpoint(messages, steppedIndex, opts.ttl);
   }
   formatMessagesWithAttachments(messages, cacheOptions) {
     const sent = [];
@@ -53081,7 +53136,6 @@ var AnthropicProvider = class _AnthropicProvider {
       if (m.role === "tool" && !m.toolCallId) return false;
       return true;
     });
-    const lastUserMessageIndex = cacheOptions?.enableCaching && cacheOptions.strategy === "system_and_long_context" ? nonSystemMessages.findLastIndex((m) => m.role === "user") : -1;
     const formattedMessages = [];
     for (let i = 0; i < nonSystemMessages.length; i++) {
       const msg = nonSystemMessages[i];
@@ -53128,10 +53182,9 @@ var AnthropicProvider = class _AnthropicProvider {
         continue;
       }
       const role = msg.role === "user" ? "user" : "assistant";
-      const isLastUserMessage = i === lastUserMessageIndex;
       const honorMsgCacheControl = cacheOptions?.enableCaching === true && msg.cacheControl?.type === "ephemeral";
       if (!msg.attachments || msg.attachments.length === 0) {
-        if (isLastUserMessage || honorMsgCacheControl) {
+        if (honorMsgCacheControl) {
           formattedMessages.push({
             role,
             content: [{
@@ -53214,7 +53267,7 @@ var AnthropicProvider = class _AnthropicProvider {
           content.push(...kept);
         }
       }
-      if ((isLastUserMessage || honorMsgCacheControl) && content.length > 0) {
+      if (honorMsgCacheControl && content.length > 0) {
         const lastBlock = content[content.length - 1];
         content[content.length - 1] = {
           ...lastBlock,
@@ -53253,7 +53306,11 @@ var AnthropicProvider = class _AnthropicProvider {
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
     );
     if (cachingEnabled) {
-      this.applyMidHistoryBreakpoint(messages, cacheTTL);
+      this.applyHistoryBreakpoints(messages, {
+        strategy: cacheStrategy,
+        ttl: cacheTTL,
+        reservedBreakpoints: (params.tools && params.tools.length > 0 ? 1 : 0) + (systemMessages.length > 0 ? 1 : 0)
+      });
     }
     const baseMaxTokens = params.maxTokens ?? 4096;
     const effectiveMaxTokens = thinkingEnabled ? Math.max(baseMaxTokens, thinkingBudget + 1024) : baseMaxTokens;
@@ -53357,7 +53414,11 @@ var AnthropicProvider = class _AnthropicProvider {
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
     );
     if (cachingEnabled) {
-      this.applyMidHistoryBreakpoint(messages, cacheTTL);
+      this.applyHistoryBreakpoints(messages, {
+        strategy: cacheStrategy,
+        ttl: cacheTTL,
+        reservedBreakpoints: (params.tools && params.tools.length > 0 ? 1 : 0) + (systemMessages.length > 0 ? 1 : 0)
+      });
     }
     const streamBaseMaxTokens = params.maxTokens ?? 4096;
     const streamEffectiveMaxTokens = streamThinkingEnabled ? Math.max(streamBaseMaxTokens, streamThinkingBudget + 1024) : streamBaseMaxTokens;

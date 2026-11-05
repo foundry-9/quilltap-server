@@ -120,6 +120,7 @@ Two independent mechanisms:
 
 - **Cache key** (`lib/llm/cache-key.ts`) — `quilltap:char:<characterId>:v<N>`, keyed per **character**, not per chat, because the persona block is what forms the prefix. Providers apply it differently: `prompt_cache_key` (OpenAI, Grok), `user_id` (DeepSeek's real KV isolation), `user` (OpenAI-compatible, Z.AI, OpenRouter), ignored (Anthropic, Ollama, Curl). Bump `PROMPT_CACHE_STRUCTURE_VERSION` when the *structure* changes — tool-schema shape, system-prompt layout, persona-block format — not for wording edits. Design: [per-character-prompt-caching.md](features/complete/per-character-prompt-caching.md).
 - **Content breakpoints** (Anthropic) — `ContextMessage.cacheControl` marks the first surviving Librarian summary whisper in the selected history, so system + tools stay hot across summary folds and only the summary-and-after re-prefills.
+- **Conversation breakpoints** (Anthropic plugin, `applyHistoryBreakpoints`) — with the `system_and_long_context` strategy the tail breakpoint goes on the message *before* the final one, never on the final message: block 6 carries that turn's trailing sections, which the next turn's copy of the same message no longer has, so a breakpoint there writes an entry no request can read. In a tool loop the same rule caches each step for the next. Arrays of 20+ messages also get a stepped mid-history breakpoint, placed only if the four-breakpoint limit allows after tools, system and the summary head.
 
 ## 8. Where the dynamic content went
 
