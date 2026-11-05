@@ -52,6 +52,7 @@ import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipp
 import { createSharedTierLoader, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
 import { filterByPronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
+import { loadRecentOpenings } from '@/lib/wardrobe/recent-openings';
 import type {
   CreationProgressEmitter,
   OutfitPreviewSlots,
@@ -421,6 +422,13 @@ export async function applyOutfitSelections(
                   });
                 }
 
+                // What they arrived in lately, so the green room can steer
+                // away from opening every chat in the same favourite.
+                // Soft-fails to none.
+                const recentOpenings = await loadRecentOpenings(repos, characterId, pool.byId, {
+                  excludeChatId: chatId,
+                });
+
                 const startedAt = Date.now();
                 const result = await withTimeout(
                   chooseLLMOutfit(
@@ -436,6 +444,7 @@ export async function applyOutfitSelections(
                     chatId,
                     characterId,
                     subprompts,
+                    { recentOpenings },
                   ),
                   OUTFIT_LLM_TIMEOUT_MS,
                 );
