@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Fix: Green Room could dress a character in two whole outfits
+
+- The model could list an outfit set under one slot it happens to cover beside a full outfit. On Friday, Amy got "Summer Travel Look — Peacock & Olive Linen" (top, bottom, footwear) plus "Gothic Victorian Enchantress Attire" (top, bottom, accessories, hair) listed only under `hair`. Dissolving and spreading put every piece of both on.
+- New `dropOverlappingEnsembles` (`lib/wardrobe/slot-ops.ts`) runs on the green room pick before dissolving. Two picks conflict when both span more than one slot, at least one is a composite, and they share a top or bottom slot. The one listed in more slots is kept (ties go to the first in slot order) and the other is dropped. Single-slot items and two plain multi-slot garments (slip under a dress) are left alone as layering.
+- The outfit prompt now says to pick at most one outfit set for top and bottom and not to list a composite under one slot for a single piece of it.
+
 #### Fix: Green Room opening outfits repeat chat after chat
 
 - `llm_choose` picked each opening outfit with no knowledge of earlier ones, at the cheap-LLM default temperature of 0.3, from the same alphabetical item list. On Friday (52 calls since September) Friday, Laura and Abigail opened most clothed chats in one or two outfits across 7–10 different scenarios.

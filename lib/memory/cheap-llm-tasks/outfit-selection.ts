@@ -44,7 +44,7 @@ An item that covers more than one slot (its "covers" list names several — a dr
 
 You may put multiple items in the same slot to layer them (e.g. a t-shirt under a sweater); list them inner-to-outer.
 
-If the available wardrobe contains a composite item (its description mentions it bundles other items, or its title implies an outfit set), you may pick that composite directly — equipping it places it in all the slots it covers.
+If the available wardrobe contains a composite item (its description mentions it bundles other items, or its title implies an outfit set), you may pick that composite directly — equipping it places it in all the slots it covers. Choose at most one outfit set for the top and bottom: never combine two composites (or a composite and a dress, jumpsuit or other multi-slot garment) that both cover the top or bottom. Do not list a composite under one slot for a single piece of it — it brings every piece it bundles.
 
 Example response:
 {"top": ["uuid-tshirt", "uuid-sweater"], "bottom": ["uuid-jeans"], "footwear": ["uuid-boots"], "accessories": [], "hair": []}

@@ -24,6 +24,7 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   dissolveCompositeToLeaves,
   dissolveCompositesInSlots,
+  dropOverlappingEnsembles,
   spreadAcrossCoveredSlots,
 } from '@/lib/wardrobe/slot-ops';
 import type { EquipSource } from '@/lib/database/repositories/wardrobe-wear.repository';
@@ -476,7 +477,18 @@ export async function applyOutfitSelections(
                     // Then make each garment occupy every slot it covers:
                     // the model often lists a dress only under "top", which
                     // left the bottom slot reading as bare.
-                    const dissolved = dissolveCompositesInSlots(result.result.slots, pool.byId);
+                    // First, one outfit at a time: a second outfit set the
+                    // model slipped in under one of its slots (a gown listed
+                    // only under "hair") would otherwise go on whole.
+                    const single = dropOverlappingEnsembles(result.result.slots, pool.byId);
+                    if (single.droppedIds.length > 0) {
+                      logger.info('[applyOutfitSelections] Dropped a second outfit from the green room pick', {
+                        chatId,
+                        characterId,
+                        droppedIds: single.droppedIds,
+                      });
+                    }
+                    const dissolved = dissolveCompositesInSlots(single.slots, pool.byId);
                     const spread = spreadAcrossCoveredSlots(dissolved.slots, pool.byId);
                     if (outfitSlotCount(spread) !== outfitSlotCount(dissolved.slots)) {
                       logger.debug('[applyOutfitSelections] Spread multi-slot picks across every slot they cover', {
