@@ -1,5 +1,5 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id?section=abilities
 ---
 
 # Diagrams
@@ -10,14 +10,14 @@ Some explanations are simply better drawn than told. A family tree of feuding co
 
 ## Granting the Pen
 
-Drawing is an ability a character either has or hasn't, and you decide which. On the character's page in Aurora — the **Details** tab, whether you are viewing the character or editing them — you will find a card marked **Draws diagrams**:
+Drawing is an ability a character either has or hasn't, and you decide which. On the character's page in Aurora — the **Abilities** section, in the **Tools & talents** card — you will find **Draws diagrams**:
 
 - **Draws diagrams** — tick it, and the character is told that diagrams are within their gift and how to write one. Untick it, and they hear nothing whatsoever about the matter. The change takes effect on the character's very next turn, mid-conversation or otherwise.
 - **Drawing style** — directly beneath, a choice of two hands:
   - **Hand-drawn** — sketched in ink, a touch wobbly, lettered in a hand rather than a typeface. This is the default.
   - **Clean** — ruled lines and tidy type, exactly as the drawing engine laid them out.
 
-The style is greyed out while the pen is withheld, but it keeps its setting, so switching the ability off and on again forgets nothing. Both settings save the moment you change them; there is no need to press **Save**.
+The style is greyed out while the pen is withheld, but it keeps its setting, so switching the ability off and on again forgets nothing. Both settings save the moment you change them, as everything on the character's page does.
 
 The toggle merely *permits* a character to draw. It does not make them prolific. Should you want a character who reaches for the pen at every opportunity, say so in their prompt or manifesto — something along the lines of *"You often sketch diagrams to explain things"* — and they will take the hint.
 
@@ -122,11 +122,11 @@ For now, diagrams render in **the Salon** only. Elsewhere — help pages, file p
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id?section=abilities")`
 
 ## Related Pages
 
-- [Editing Characters](character-editing.md) — The Details tab, where the pen is granted
+- [Editing Characters](character-editing.md) — The Abilities section, where the pen is granted
 - [Mathematical Notation](math-notation.md) — The Salon's other typesetting trick
 - [Quick-Hide](quick-hide.md) — Filters for what the Salon shows
 - [Chats Overview](chats.md) — The Salon and its workings

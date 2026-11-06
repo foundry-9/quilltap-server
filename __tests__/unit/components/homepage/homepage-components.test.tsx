@@ -1037,11 +1037,11 @@ describe('CharacterCard', () => {
     expect(screen.getByTestId('avatar')).toBeInTheDocument()
   })
 
-  it('links to character view page', () => {
+  it('links to the character page', () => {
     const character = createMockCharacter({ id: 'char-123' })
     render(<CharacterCard character={character} />)
     const link = screen.getByRole('link', { name: /Test Character/i })
-    expect(link).toHaveAttribute('href', '/aurora/char-123/view')
+    expect(link).toHaveAttribute('href', '/aurora/char-123')
   })
 
   it('renders chat button', () => {

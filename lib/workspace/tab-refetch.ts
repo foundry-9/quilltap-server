@@ -13,16 +13,17 @@
  *  - `salon` / `terminal` / `document` — live surfaces fed by SSE/PTY; a
  *    blanket invalidation risks disturbing an in-flight stream (the Salon's
  *    streaming transport is out of bounds per the TanStack migration spec).
- *  - `character-edit`, `character-new`, `document-standalone`,
- *    `settings-wizard` — editors holding unsaved user state; refreshing under
- *    the user's feet could clobber work in progress.
+ *  - `character-new`, `document-standalone`, `settings-wizard` — editors
+ *    holding unsaved user state; refreshing under the user's feet could
+ *    clobber work in progress. (The character page is not among them: it
+ *    autosaves, and its fields keep a focused or unsent draft over a refetch.)
  *  - `brahma` — a console chat, live by nature.
  *  - `about` — static.
  *  - `scenarios` / `wardrobe` — their views fetch outside TanStack Query and
  *    re-run their own loads via `useOnTabActivated`.
  *
  * Views that still fetch outside TanStack Query (Prospero, the Scriptorium,
- * Photos, the character detail, FileBrowser, …) additionally re-run their own
+ * Photos, FileBrowser, …) additionally re-run their own
  * loads via `useOnTabActivated` (see
  * `components/workspace/workspace-tab-context.tsx`); the entries here cover
  * their TanStack-side reads and keep working as those views migrate.
@@ -32,7 +33,7 @@
 
 import { queryKeys } from '@/lib/query/keys'
 import { queryKeysForTopic } from '@/lib/realtime/topic-map'
-import type { CharacterViewTabPayload, WorkspaceTab } from './types'
+import type { CharacterTabPayload, WorkspaceTab } from './types'
 
 type QueryKeyPrefix = readonly unknown[]
 
@@ -62,8 +63,8 @@ export function tabActivationQueryKeys(tab: WorkspaceTab): QueryKeyPrefix[] {
       ]
     case 'aurora':
       return [queryKeys.characters.all, queryKeys.groups.all, queryKeys.tags.all]
-    case 'character-view': {
-      const payload = tab.payload as CharacterViewTabPayload | undefined
+    case 'character': {
+      const payload = tab.payload as CharacterTabPayload | undefined
       if (!payload?.characterId) return []
       // The realtime topic map already owns the row-scoped character keys
       // (detail/prompts/photos); reuse it rather than restating the triple.

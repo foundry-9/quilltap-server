@@ -183,7 +183,7 @@ function BreadcrumbRow({
                 character.name,
                 'Click to open character',
                 <a
-                  href={`/aurora/${character.id}/view?tab=conversations`}
+                  href={`/aurora/${character.id}?section=history`}
                   className={linkClass}
                   aria-label={compact ? character.name : undefined}
                   tabIndex={tabIndex}

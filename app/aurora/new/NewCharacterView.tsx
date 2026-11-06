@@ -1,17 +1,54 @@
 'use client'
 
+/**
+ * Create a character.
+ *
+ * The one form in Aurora with a Create button, because there is no row to
+ * autosave against until there is one. Its field blocks are the character
+ * page's own (`components/characters/fields/`), bound to local state instead
+ * of autosave — one set of field components for create and edit.
+ *
+ * What the character POST takes goes in its body; the System Prompt and the
+ * opening Scenario become a named prompt and a named scenario (the POST has no
+ * scalar for either, and used to drop them — #146); the vault-kept facts
+ * (aliases, pronouns, birthday, kind) and the AI Wizard's extras follow in
+ * writes against the new id. Then the new character's page opens.
+ *
+ * @module app/aurora/new/NewCharacterView
+ */
+
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, type GeneratedProperties, type GeneratedWardrobeItem, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
+import {
+  AIWizardModal,
+  type GeneratedCharacterData,
+  type GeneratedPhysicalDescription,
+  type GeneratedWardrobeItem,
+  normalizeGeneratedScenarios,
+} from '@/components/characters/ai-wizard'
 import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
 import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
-import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
-import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { CharacterKindPicker } from '@/components/characters/CharacterKindPicker'
+import { CharacterFactsFields } from '@/components/characters/fields/CharacterFactsFields'
+import { CharacterDossierFields } from '@/components/characters/fields/CharacterDossierFields'
+import { MarkdownField } from '@/components/characters/fields/MarkdownField'
+import {
+  DOSSIER_FIELDS,
+  type DossierField,
+  type MarkdownFieldBinding,
+  type Pronouns,
+} from '@/components/characters/fields/types'
 import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
-import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
+import { DEFAULT_CHARACTER_KIND, type CharacterKind } from '@/lib/characters/kind'
+import {
+  buildWizardCurrentData,
+  generatedSystemPrompt,
+  getGeneratedCharacterTextEntries,
+  systemPromptsForCreate,
+} from '../shared/wizard-text-fields'
 import { saveGeneratedWardrobeItems } from '../shared/save-generated-wardrobe'
 import { saveGeneratedPhysicalDescription } from '../shared/save-generated-physical-description'
 import { saveGeneratedScenarios } from '../shared/save-generated-scenarios'
@@ -19,11 +56,27 @@ import { Icon } from '@/components/ui/icon'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 
+type Prose = Record<DossierField | 'systemPrompt' | 'scenario', string>
+
+const EMPTY_PROSE: Prose = {
+  identity: '',
+  description: '',
+  manifesto: '',
+  personality: '',
+  firstMessage: '',
+  exampleDialogues: '',
+  systemPrompt: '',
+  scenario: '',
+}
+
+/** The name a create-form opening scenario is saved under. */
+const FIRST_SCENARIO_TITLE = 'Opening scene'
+
 export function NewCharacterView() {
   const router = useRouter()
-  // Keep-alive-safe: inside the workspace, finishing creation returns to the
-  // (kept-alive) Aurora tab — where the new character now appears — and closes
-  // this create tab; outside it pushes to the new character's page as before.
+  // Keep-alive-safe: inside the workspace, finishing creation opens the new
+  // character's page as a tab and closes this create tab; outside it pushes
+  // to the page.
   const navigate = useWorkspaceNavigate()
   const closeSelf = useCloseSelfTab()
   const [loading, setLoading] = useState(false)
@@ -33,60 +86,55 @@ export function NewCharacterView() {
   const [showTemplateImport, setShowTemplateImport] = useState(false)
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
-  // Bumped whenever formData fields are replaced externally (AI wizard apply,
-  // template import) so the markdown editors remount and re-parse the new
-  // values. Without this, MarkdownBridgePlugin's one-shot init keeps the
-  // editor showing whatever was on screen before the external write.
+  // Bumped whenever fields are replaced from outside (wizard, template import)
+  // so the editors remount and re-parse the new values.
   const [externalUpdateCount, setExternalUpdateCount] = useState(0)
-  // Store pending physical description from wizard to save after character creation
-  const pendingPhysicalDescription = useRef<GeneratedPhysicalDescription | null>(null)
-  // Store pending scenarios from wizard to save after character creation
-  const pendingScenarios = useRef<Array<{ title: string; content: string }> | null>(null)
-  // Store pending wardrobe items from wizard to save after character creation
-  const pendingWardrobeItems = useRef<GeneratedWardrobeItem[] | null>(null)
-  // Store pending properties (pronouns + aliases) from wizard to save after character creation
-  const pendingProperties = useRef<GeneratedProperties | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    title: '',
-    identity: '',
-    description: '',
-    manifesto: '',
-    personality: '',
-    scenario: '',
-    firstMessage: '',
-    exampleDialogues: '',
-    systemPrompt: '',
-    avatarUrl: '',
-    defaultConnectionProfileId: '',
-  })
 
-  // Handle applying wizard-generated data
+  const [name, setName] = useState('')
+  const [title, setTitle] = useState('')
+  const [aliases, setAliases] = useState<string[]>([])
+  const [pronouns, setPronouns] = useState<Pronouns | null>(null)
+  const [birthday, setBirthday] = useState<string | null>(null)
+  const [kind, setKind] = useState<CharacterKind>(DEFAULT_CHARACTER_KIND)
+  const [prose, setProse] = useState<Prose>(EMPTY_PROSE)
+  const [defaultConnectionProfileId, setDefaultConnectionProfileId] = useState('')
+  const [nameError, setNameError] = useState<string | null>(null)
+
+  // The wizard's extras, written once the character exists.
+  const pendingPhysicalDescription = useRef<GeneratedPhysicalDescription | null>(null)
+  const pendingScenarios = useRef<Array<{ title: string; content: string }> | null>(null)
+  const pendingWardrobeItems = useRef<GeneratedWardrobeItem[] | null>(null)
+
+  const proseBinding = (field: keyof Prose): MarkdownFieldBinding => ({
+    value: prose[field],
+    onChange: (value) => setProse((prev) => ({ ...prev, [field]: value })),
+    remountKey: externalUpdateCount,
+  })
+  const dossierBindings = Object.fromEntries(
+    DOSSIER_FIELDS.map((field) => [field, proseBinding(field)]),
+  ) as Record<DossierField, MarkdownFieldBinding>
+
   const handleWizardApply = (data: GeneratedCharacterData) => {
-    setFormData((prev) => {
-      const next = { ...prev }
-      for (const entry of getGeneratedCharacterTextEntries(data)) {
-        next[entry.field] = entry.value
-      }
-      return next
-    })
-    // Store physical description to save after character creation
-    if (data.physicalDescription) {
-      pendingPhysicalDescription.current = data.physicalDescription
+    const updates: Partial<Prose> = {}
+    for (const entry of getGeneratedCharacterTextEntries(data)) {
+      if (entry.field === 'name') setName(entry.value)
+      else if (entry.field === 'title') setTitle(entry.value)
+      else updates[entry.field] = entry.value
     }
-    // Store scenarios to save after character creation
-    const normalizedScenarios = normalizeGeneratedScenarios(data.scenarios)
-    if (normalizedScenarios.length > 0) {
-      pendingScenarios.current = normalizedScenarios
+    const systemPrompt = generatedSystemPrompt(data)
+    if (systemPrompt) updates.systemPrompt = systemPrompt
+    setProse((prev) => ({ ...prev, ...updates }))
+    if (data.properties?.pronouns && !pronouns) setPronouns(data.properties.pronouns)
+    if (data.properties && data.properties.aliases.length > 0) {
+      setAliases((prev) => {
+        const lower = new Set(prev.map((a) => a.toLowerCase()))
+        return [...prev, ...data.properties!.aliases.filter((a) => !lower.has(a.toLowerCase()))]
+      })
     }
-    // Store wardrobe items to save after character creation
-    if (data.wardrobeItems && data.wardrobeItems.length > 0) {
-      pendingWardrobeItems.current = data.wardrobeItems
-    }
-    // Store properties (pronouns + aliases) to save after character creation
-    if (data.properties && (data.properties.pronouns || data.properties.aliases.length > 0)) {
-      pendingProperties.current = data.properties
-    }
+    if (data.physicalDescription) pendingPhysicalDescription.current = data.physicalDescription
+    const scenarios = normalizeGeneratedScenarios(data.scenarios)
+    if (scenarios.length > 0) pendingScenarios.current = scenarios
+    if (data.wardrobeItems && data.wardrobeItems.length > 0) pendingWardrobeItems.current = data.wardrobeItems
     setExternalUpdateCount((n) => n + 1)
   }
 
@@ -108,80 +156,82 @@ export function NewCharacterView() {
     }
   }
 
-  const handleTemplateImport = (content: string, _suggestedName: string) => {
-    setFormData(prev => ({ ...prev, systemPrompt: content }))
+  const handleTemplateImport = (content: string) => {
+    setProse((prev) => ({ ...prev, systemPrompt: content }))
     setExternalUpdateCount((n) => n + 1)
     setShowTemplateImport(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!name.trim()) {
+      setNameError('A character must have a name.')
+      return
+    }
     setLoading(true)
     setError(null)
 
     try {
-      // Filter out empty strings for optional UUID fields
-      const submitData = {
-        ...formData,
-        defaultConnectionProfileId: formData.defaultConnectionProfileId || undefined,
-        avatarUrl: formData.avatarUrl || undefined,
+      const now = new Date().toISOString()
+      const opening = prose.scenario.trim()
+      const body = {
+        name: name.trim(),
+        title: title.trim() || undefined,
+        identity: prose.identity,
+        description: prose.description,
+        manifesto: prose.manifesto,
+        personality: prose.personality,
+        firstMessage: prose.firstMessage,
+        exampleDialogues: prose.exampleDialogues,
+        defaultConnectionProfileId: defaultConnectionProfileId || undefined,
+        systemPrompts: systemPromptsForCreate(prose.systemPrompt, now),
+        scenarios: opening ? [{ title: FIRST_SCENARIO_TITLE, content: opening }] : undefined,
       }
+      console.debug('[NewCharacter] creating', {
+        hasSystemPrompt: body.systemPrompts.length > 0,
+        hasScenario: Boolean(opening),
+      })
 
       const res = await fetch('/api/v1/characters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submitData),
+        body: JSON.stringify(body),
       })
-
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to create character')
       }
-
       const data = await res.json()
-      const characterId = data.character.id
+      const characterId = data.character.id as string
 
-      // Save pending scenarios if any (from wizard)
+      // The vault-kept facts the POST does not take.
+      const facts: Record<string, unknown> = {}
+      if (aliases.length > 0) facts.aliases = aliases
+      if (pronouns) facts.pronouns = pronouns
+      if (birthday) facts.birthday = birthday
+      if (kind !== DEFAULT_CHARACTER_KIND) facts.kind = kind
+      if (Object.keys(facts).length > 0) {
+        const factsRes = await fetch(`/api/v1/characters/${characterId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(facts),
+        })
+        if (!factsRes.ok) {
+          console.error('Failed to save the new character’s facts', { status: factsRes.status })
+          showErrorToast('Character created, but their aliases, pronouns, birthday or kind did not save')
+        }
+      }
+
       if (pendingScenarios.current && pendingScenarios.current.length > 0) {
         await saveGeneratedScenarios(characterId, pendingScenarios.current)
         pendingScenarios.current = null
       }
-
-      // Save pending physical description if any. The cutover collapsed the
-      // multi-record array to a single record on the character row; PATCH the
-      // character directly and the repository routes it into the vault.
       if (pendingPhysicalDescription.current) {
         await saveGeneratedPhysicalDescription(characterId, pendingPhysicalDescription.current, {
           failureMessage: 'Character created, but physical description failed to save',
         })
+        pendingPhysicalDescription.current = null
       }
-
-      // Save pending properties (pronouns + aliases) if any (from wizard)
-      if (pendingProperties.current) {
-        try {
-          const propsBody: Record<string, unknown> = {}
-          if (pendingProperties.current.pronouns) propsBody.pronouns = pendingProperties.current.pronouns
-          if (pendingProperties.current.aliases.length > 0) propsBody.aliases = pendingProperties.current.aliases
-          if (Object.keys(propsBody).length > 0) {
-            const propsRes = await fetch(`/api/v1/characters/${characterId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(propsBody),
-            })
-            if (!propsRes.ok) {
-              console.error('Failed to save generated properties', { status: propsRes.status })
-              showErrorToast('Character created, but pronouns/aliases failed to save')
-            }
-          }
-        } catch (propsErr) {
-          console.error('Error saving generated properties', propsErr instanceof Error ? propsErr.message : String(propsErr))
-          showErrorToast('Character created, but pronouns/aliases failed to save')
-        }
-        pendingProperties.current = null
-      }
-
-      // Save pending wardrobe items if any (from wizard) — leaf garments
-      // first, then composites with their component titles resolved to ids.
       if (pendingWardrobeItems.current && pendingWardrobeItems.current.length > 0) {
         const { saved, outfits } = await saveGeneratedWardrobeItems(characterId, pendingWardrobeItems.current)
         if (saved > 0) {
@@ -192,7 +242,7 @@ export function NewCharacterView() {
       }
 
       if (closeSelf()) {
-        navigate('/aurora')
+        navigate(`/aurora/${characterId}`)
       } else {
         router.push(`/aurora/${characterId}`)
       }
@@ -203,27 +253,10 @@ export function NewCharacterView() {
     }
   }
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-  }
-
-  // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
-  // handleChange's event-based shape (same pattern as the edit page).
-  const handleMarkdownFieldChange = (name: string) => (value: string) => {
-    handleChange({
-      target: { name, value },
-    } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
-  }
-
   return (
     <div className="qt-page-container">
       <div className="mb-8">
-        <Link
-          href="/aurora"
-          className="qt-link mb-4 inline-block"
-        >
+        <Link href="/aurora" className="qt-link mb-4 inline-block">
           ← Back to Characters
         </Link>
         <div className="flex items-center justify-between">
@@ -240,208 +273,104 @@ export function NewCharacterView() {
         </div>
       </div>
 
-      {error && (
-        <div className="qt-alert-error mb-4">
-          {error}
-        </div>
-      )}
+      {error && <div className="qt-alert-error mb-4">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label htmlFor="name" className="block qt-label mb-2 text-foreground">
-            Name *
-          </label>
-          <input
-            type="text"
-            id="name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-            className="qt-input"
+      <form onSubmit={handleSubmit} className="space-y-8">
+        <section className="qt-card space-y-4" aria-labelledby="new-character-facts">
+          <h2 id="new-character-facts" className="qt-heading-4">
+            Facts
+          </h2>
+          <CharacterFactsFields
+            name={{
+              value: name,
+              onChange: (value) => {
+                setName(value)
+                if (value.trim()) setNameError(null)
+              },
+              error: nameError,
+            }}
+            title={{ value: title, onChange: setTitle }}
+            aliases={{ value: aliases, onChange: setAliases }}
+            pronouns={{ value: pronouns, onChange: setPronouns }}
+            birthday={{ value: birthday, onChange: setBirthday }}
+            kindSlot={<CharacterKindPicker kind={kind} saving={false} disabled={false} onChange={setKind} />}
           />
-        </div>
+        </section>
 
-        <div>
-          <label htmlFor="title" className="block qt-label mb-2 text-foreground">
-            Title (Optional)
-          </label>
-          <input
-            type="text"
-            id="title"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            className="qt-input"
-            placeholder="Your private label for this character — e.g., the protagonist, the rival, the love interest. Not how strangers refer to them."
+        <section className="qt-card space-y-4" aria-labelledby="new-character-dossier">
+          <h2 id="new-character-dossier" className="qt-heading-4">
+            Dossier
+          </h2>
+          <CharacterDossierFields
+            bindings={dossierBindings}
+            namespace="NewCharacter.dossier"
+            templateHighlight={{ characterName: name || null }}
           />
-        </div>
+        </section>
 
-        <div>
-          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.identity} optional htmlFor="identity" />
-          <MarkdownLexicalEditor
-            value={formData.identity}
-            onChange={handleMarkdownFieldChange('identity')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.identity"
-            ariaLabel="Identity"
-            minHeight="6rem"
-          />
-        </div>
-
-        <div>
-          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.description} optional htmlFor="description" />
-          <MarkdownLexicalEditor
-            value={formData.description}
-            onChange={handleMarkdownFieldChange('description')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.description"
-            ariaLabel="Description"
-            minHeight="8rem"
-          />
-        </div>
-
-        <div>
-          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.manifesto} optional htmlFor="manifesto" />
-          <MarkdownLexicalEditor
-            value={formData.manifesto}
-            onChange={handleMarkdownFieldChange('manifesto')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.manifesto"
-            ariaLabel="Manifesto"
-            minHeight="8rem"
-          />
-        </div>
-
-        <div>
-          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.personality} optional htmlFor="personality" />
-          <MarkdownLexicalEditor
-            value={formData.personality}
-            onChange={handleMarkdownFieldChange('personality')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.personality"
-            ariaLabel="Personality"
-            minHeight="8rem"
-          />
-        </div>
-
-        <div>
-          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.scenario} optional htmlFor="scenario" />
-          <MarkdownLexicalEditor
-            value={formData.scenario}
-            onChange={handleMarkdownFieldChange('scenario')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.scenario"
-            ariaLabel="Scenario"
-            minHeight="8rem"
-          />
-        </div>
-
-        <div>
-          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.firstMessage} optional htmlFor="firstMessage" />
-          <MarkdownLexicalEditor
-            value={formData.firstMessage}
-            onChange={handleMarkdownFieldChange('firstMessage')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.firstMessage"
-            ariaLabel="First message"
-            minHeight="6rem"
-          />
-        </div>
-
-        <div>
-          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.exampleDialogues} optional htmlFor="exampleDialogues" />
-          <MarkdownLexicalEditor
-            value={formData.exampleDialogues}
-            onChange={handleMarkdownFieldChange('exampleDialogues')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.exampleDialogues"
-            ariaLabel="Example dialogues"
-            minHeight="12rem"
-          />
-        </div>
-
-        <div>
-          <PromptFieldLabel
-            hint={PROMPT_FIELD_HINTS.systemPrompt}
-            optional
-            htmlFor="systemPrompt"
-            actions={
-              <button
-                type="button"
-                onClick={openTemplateImport}
-                className="qt-button-secondary text-xs px-2 py-1"
-              >
+        <section className="qt-card space-y-4" aria-labelledby="new-character-start">
+          <h2 id="new-character-start" className="qt-heading-4">
+            How a chat begins
+          </h2>
+          <div className="space-y-1">
+            <div className="flex justify-end">
+              <button type="button" onClick={openTemplateImport} className="qt-button-secondary text-xs px-2 py-1">
                 Import Template
               </button>
-            }
-          />
-          <MarkdownLexicalEditor
-            value={formData.systemPrompt}
-            onChange={handleMarkdownFieldChange('systemPrompt')}
-            remountKey={externalUpdateCount}
-            namespace="NewCharacter.systemPrompt"
-            ariaLabel="System prompt"
-            minHeight="8rem"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="avatarUrl" className="block qt-label mb-2 text-foreground">
-            Avatar URL (Optional)
-          </label>
-          <input
-            type="url"
-            id="avatarUrl"
-            name="avatarUrl"
-            value={formData.avatarUrl}
-            onChange={handleChange}
-            className="qt-input"
-            placeholder="https://example.com/avatar.png"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="defaultConnectionProfileId" className="block qt-label mb-2 text-foreground">
-            Default Connection Profile (Optional)
-          </label>
-          <select
-            id="defaultConnectionProfileId"
-            name="defaultConnectionProfileId"
-            value={formData.defaultConnectionProfileId}
-            onChange={handleChange}
-            className="qt-select"
-          >
-            <option value="">No default profile</option>
-            {profiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 qt-text-xs">
-            Can be overridden for individual chats
-          </p>
-        </div>
+            </div>
+            <MarkdownField
+              binding={proseBinding('systemPrompt')}
+              hint={PROMPT_FIELD_HINTS.systemPrompt}
+              namespace="NewCharacter.systemPrompt"
+              minHeight="8rem"
+            />
+            <p className="qt-text-xs">
+              Saved as their first named system prompt, &ldquo;Default&rdquo;. More can be added on their page.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <MarkdownField
+              binding={proseBinding('scenario')}
+              hint={PROMPT_FIELD_HINTS.scenario}
+              namespace="NewCharacter.scenario"
+              minHeight="6rem"
+            />
+            <p className="qt-text-xs">
+              Saved as their first scenario, &ldquo;{FIRST_SCENARIO_TITLE}&rdquo;. Rename it, or add others, on their
+              page.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="defaultConnectionProfileId" className="block qt-label mb-2 text-foreground">
+              Default connection profile
+            </label>
+            <select
+              id="defaultConnectionProfileId"
+              value={defaultConnectionProfileId}
+              onChange={(e) => setDefaultConnectionProfileId(e.target.value)}
+              className="qt-select"
+            >
+              <option value="">No default profile</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 qt-text-xs">Can be overridden for individual chats.</p>
+          </div>
+        </section>
 
         <div className="flex gap-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className="qt-button flex-1 qt-button-primary"
-          >
+          <button type="submit" disabled={loading} className="qt-button flex-1 qt-button-primary">
             {loading ? 'Creating...' : 'Create Character'}
           </button>
-          <Link
-            href="/aurora"
-            className="qt-button px-6 py-3 qt-button-secondary text-center"
-          >
+          <Link href="/aurora" className="qt-button px-6 py-3 qt-button-secondary text-center">
             Cancel
           </Link>
         </div>
       </form>
 
-      {/* Import Template Modal */}
       <ImportModal
         isOpen={showTemplateImport}
         loading={loadingTemplates}
@@ -450,12 +379,22 @@ export function NewCharacterView() {
         onImport={handleTemplateImport}
       />
 
-      {/* AI Wizard Modal */}
       <AIWizardModal
         isOpen={showWizard}
         onClose={() => setShowWizard(false)}
-        characterName={formData.name}
-        currentData={buildWizardCurrentData(formData)}
+        characterName={name}
+        currentData={buildWizardCurrentData({
+          title,
+          identity: prose.identity,
+          description: prose.description,
+          manifesto: prose.manifesto,
+          personality: prose.personality,
+          firstMessage: prose.firstMessage,
+          exampleDialogues: prose.exampleDialogues,
+          systemPrompt: prose.systemPrompt,
+          pronouns,
+          aliases,
+        })}
         onApply={handleWizardApply}
       />
     </div>

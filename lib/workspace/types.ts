@@ -39,8 +39,7 @@ export type TabKind =
   | 'generate-image' // standalone (chat-less) image generation
   | 'document-standalone' // standalone (chat-less) Document Mode editor — payload: DocumentStandaloneTabPayload
   | 'character-new' // the create-a-character form
-  | 'character-edit' // payload: { characterId: string; tab?: string }
-  | 'character-view' // payload: { characterId: string; tab?: string } — the read-only character detail page
+  | 'character' // payload: CharacterTabPayload — the one character page (`/aurora/[id]`)
   | 'settings-wizard' // the provider setup wizard, re-entered from Settings
   | 'custom-tools' // Pascal's Workbench — payload: CustomToolsTabPayload (absent = library view)
 
@@ -73,8 +72,7 @@ export const TAB_KINDS = [
   'generate-image',
   'document-standalone',
   'character-new',
-  'character-edit',
-  'character-view',
+  'character',
   'settings-wizard',
   'custom-tools',
 ] as const satisfies readonly TabKind[]
@@ -170,20 +168,19 @@ export interface InventoryTabPayload {
   characterId?: string
   projectId?: string
 }
-export interface CharacterEditTabPayload {
+/**
+ * The one character page. `section` deep-links one of its six sections
+ * (`lib/characters/page-sections.ts`). A `?action=chat` deep link is not
+ * carried here — it opens the New Chat modal once, beside the tab.
+ */
+export interface CharacterTabPayload {
   characterId: string
-  /** Deep-link target sub-tab (e.g. `system-prompts`). */
-  tab?: string
-}
-export interface CharacterViewTabPayload {
-  characterId: string
-  /** Deep-link target sub-tab (e.g. `conversations`). */
-  tab?: string
+  section?: string
 }
 /**
  * Pascal's Workbench. No payload = the library view. A `mountPointId` + `path`
  * pair opens one definition in the builder (one tab per open definition, like
- * `character-edit`); `create` opens the builder on a fresh draft, with
+ * the character page); `create` opens the builder on a fresh draft, with
  * `mountPointId` preselecting the destination.
  */
 export interface CustomToolsTabPayload {

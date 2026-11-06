@@ -30,6 +30,8 @@ export const queryKeys = {
     prompts: (id: string) => ['characters', id, 'prompts'] as const,
     subprompts: (id: string) => ['characters', id, 'subprompts'] as const,
     photos: (id: string) => ['characters', id, 'photos'] as const,
+    /** The character page header's counts, groups and vault summary (`?action=stats`). */
+    stats: (id: string) => ['characters', id, 'stats'] as const,
     /**
      * Avatar rolls — the plates the avatar configuration cache holds for this
      * character. A separate key from `photos` because they are a separate

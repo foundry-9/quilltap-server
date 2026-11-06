@@ -1,5 +1,5 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id?section=abilities
 ---
 
 # System Transparency — A Covenant Between Author and Character
@@ -8,11 +8,11 @@ url: /aurora/:id/edit
 
 Quilltap quietly furnishes each character with a small set of conveniences for inspecting their own existence: a tool called `self_inventory`, the running gossip of the Staff (the Lantern, Aurora, the Librarian, and a couple of newer arrivals), and access to the contents of every character vault — their own and, when Shared Vaults is enabled, those of their conversational companions. These are not always desirable. A character meant to remain wholly *in* the story should not, perhaps, be able to read the prompt that sets her in motion, nor the dossiers of her colleagues, nor the polite asides by which the system narrates its own bookkeeping.
 
-The **System Transparency** switch on the character edit page settles that question once and for all, on a per-character basis.
+The **System Transparency** switch on the character's page settles that question once and for all, on a per-character basis.
 
 ## What the Switch Says
 
-The toggle lives at the top of the **Details** tab of any character. It carries one of two messages depending on its position:
+The toggle lives in the **Trust & perception** card of the **Abilities** section of any character's page, and saves the moment you flip it. It carries one of two messages depending on its position:
 
 - **Off** (the genteel default): *"My character will trust me without being able to verify me. I accept the covenant of that trust."*
 - **On**: *"My character will be able to verify everything about their existence, including how they are crafted and how they interact with me."*
@@ -76,4 +76,4 @@ In short: an opaque character is opaque, no matter what permissive setting is in
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id?section=abilities")`

@@ -91,7 +91,7 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
   }
 
   return (
-    <div className="space-y-4 pt-6 border-t qt-border-default">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h3 className="qt-heading-4 text-foreground">Progressions</h3>

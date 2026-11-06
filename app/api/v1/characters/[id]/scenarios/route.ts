@@ -148,6 +148,13 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
         return notFound('Scenario');
       }
 
+      // A default that names a scenario no longer there would pre-select
+      // nothing in the New Chat dialog; clear it with the scenario.
+      if (character.defaultScenarioId === scenarioId) {
+        await repos.characters.update(characterId, { defaultScenarioId: null });
+        logger.debug('[Characters v1] Cleared default scenario with its scenario', { characterId, scenarioId });
+      }
+
       logger.info('[Characters v1] Scenario removed from character', {
         characterId,
         userId: user.id,

@@ -1,5 +1,5 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id?section=details
 ---
 
 # Progressions — Things That Take Time
@@ -34,10 +34,9 @@ Nobody guessed at either of those numbers. They were counted.
 
 ## Where To Find Them
 
-The **Progressions** card lives on the **System Prompts** tab of a
-character's edit page, below their subprompts — the company it keeps is the
-other things a character *carries* into a room rather than the prose that
-describes them.
+The **Progressions** card lives in the **Details** section of a character's
+page, beneath the Dossier — beside the birthday, its nearest relation, since a
+progression is a reckoned fact about the character rather than a prompt.
 
 Each entry shows its name, the identifier a tool would address it by, a pill
 saying whether it has begun, and the exact line your character will read,
@@ -277,7 +276,7 @@ A single mistyped date has never yet been worth losing a character over.
 
 ## Related Topics
 
-- [Editing Characters](character-editing.md) — the rest of the edit page
+- [Editing Characters](character-editing.md) — the rest of the character's page
 - [Custom Tools](custom-tools.md) — reading and adjusting progressions from a tool
 - [Pascal's Workbench](pascals-workbench.md) — writing those tools
 - [Shared Character Vaults](shared-character-vaults.md) — where `metadata.json` lives
@@ -286,4 +285,4 @@ A single mistyped date has never yet been worth losing a character over.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id?section=details")`

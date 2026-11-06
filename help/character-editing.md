@@ -1,48 +1,71 @@
 ---
-url: /aurora/:id/edit
+url: /aurora/:id
 ---
 
 # Editing Characters
 
-> **[Open this page in Quilltap](/aurora)**
+> **[Open this page in Quilltap](/aurora)** — then choose a character
 
-This guide covers how to modify and refine your existing characters in Quilltap.
+Every character in Quilltap keeps a single residence: one page, reached by clicking the character anywhere in Aurora, on which they may be both admired and amended. There is no separate "view" and "edit", no mode to enter, no grand **Save** button to remember at the end of the evening. You simply change a thing, and the thing stays changed — rather like a well-run household, in which the staff tidy up after you before you have quite finished making the mess.
 
-## Accessing Character Editing
+## Reaching the Page
 
-### Ways to Edit a Character
+- From **Aurora** (`/aurora`), click any character's card or row
+- From anywhere else that mentions a character — a group's roster, the home page, a search result — follow the link
 
-**From Characters List:**
+Old bookmarks to a character's "view" or "edit" page still work; they are quietly redirected to the right section of the one page.
 
-1. Go to **Characters** page
-2. Find character in list
-3. Click character row or hover menu
-4. Click **Edit** button or pencil icon
+## The Header
 
-**From Character View:**
+Across the top, holding its place as you scroll, sits the character's calling card:
 
-1. Click character to view details
-2. Click **Edit** button at top
-3. Directed to edit interface
+- **The avatar** is a menu: **Choose from photos…** (pick from the character's gallery), **Upload…**, or **Generate portrait…** (which opens the [Wardrobe](wardrobe.md) dialog, where portraits are painted in whatever the character happens to be wearing).
+- **The name**, and beneath it the **title**, **pronouns**, **age** (when they have a birthday), a **Roleplay** or **Assistant** badge, and badges for **NPC**, **User-controlled**, **Carina** and **Archived** when any of those is so.
+- **Alias chips** and **group chips**. Group membership is arranged on the group's own page; each chip carries a **Manage ↗** link there.
+- **A line of figures** — memories, conversations, wardrobe items, photos, scenarios, knowledge, core files, character files — every one of them a link to the place it counts. Memories and conversations lead to **History**; wardrobe opens the Wardrobe; photos lead to **Appearance**; scenarios to **Prompts**; knowledge and core open the vault in the Scriptorium; character files lead to the **Vault** card on **Details**.
+- **Start Chat** — the one primary button.
+- **Generate ▾** — the three errands that write *into* the character with an LLM: **AI Wizard…**, **Refine from memories & instructions…** (the [Character Optimizer](character-optimizer.md)), and **Non-Quilltap prompt…** (the [external prompt generator](character-external-prompt.md)).
+- **⋯** — the matters of life and estate: **Export…**, **Convert to NPC** (or **Convert to character**), **Archive…**, **Delete…**.
+- **⭐** — marks the character a favourite in the lists.
+- **The save chip** — the one place that reports how your edits are faring (see [How Saving Works](#how-saving-works)).
 
-**Quick Edit:** Some fields can be edited directly from the character list depending on your view settings.
+An **archived** character's page is shown read-only, with **Rehydrate** standing where **Start Chat** would be. Nothing may be changed until they are brought back.
 
-## Character Edit Interface
+## The Six Sections
 
-The edit interface has multiple tabs for different aspects of character:
+Beneath the header lie six sections, each a tab. Every one has its own address, so you may bookmark or share a link straight to it: `/aurora/<id>?section=details`, and so forth.
 
-### Edit Tabs Overview
+| Section | The question it answers | What lives there |
+|---|---|---|
+| **Details** | Who are they? | Facts, the Dossier (with Template tools), Progressions, the Vault |
+| **Prompts** | What are they told, and on what stage? | System prompts, Subprompts, Scenarios |
+| **Appearance** | What do they look like, and what do they wear? | Photos, Physical description, Depiction guidelines, Wardrobe, Inventory |
+| **Abilities** | What may they do, see and be? | Trust & perception, Tools & talents, Wardrobe & inventory, Control |
+| **Chat Defaults** | How does a new chat with them begin? | Connection profile, partner, image profile, timestamps, agent mode, help tools |
+| **History** | What has happened to them? | Conversations, Memories, Bulk edits, LLM logs |
 
-| Tab | Purpose | When to Use |
-|-----|---------|-----------|
-| **Details** | Name, description, personality, scenarios, first message, what kind of character they are, whether they draw diagrams | Modify core character info |
-| **System Prompts** | AI instructions and behaviors | Fine-tune how character acts |
-| **Appearance** | Physical descriptions and clothing records | Add visual and outfit information |
-| **Rename/Replace** | Bulk rename or replace content | Reorganize or rebrand character |
+## How Saving Works
 
-## Editing Character Details
+The rule of the house is short: **a control saves itself, and only a dialog has a Save button.**
 
-The Details tab contains all basic character information.
+- **Selects, toggles, stars and tag chips** save the moment you change them.
+- **Short text** — name, title, an alias, pronouns, birthday — saves when you leave the field or press **Enter**.
+- **Prose** — the Dossier fields and the physical description — saves after about a second and a half of quiet while you type, and again when you leave the field. It never saves on every keystroke.
+- **Anything still pending** is sent when you switch to another tab or leave the page.
+- **Dialogs** — a system prompt, a subprompt, a scenario, a progression, a memory — keep their own **Save** buttons, as dialogs should.
+
+There is no edit mode, no **Save Character** button, and no **Cancel**. The chip in the header keeps you informed:
+
+- **All changes saved** — the ledger balances.
+- **Editing — saved when you leave the field** — you are mid-sentence; nothing is lost.
+- **Saving…** — the clerk is at the counter.
+- **Could not save *Field* — Retry** — something went amiss. Your text stays exactly where you left it, the field is outlined, and **Retry** sends it again. Quilltap never quietly throws your words away.
+
+**The name is required.** Empty the Name field and it is not saved; it shows an error until you give the character something to be called.
+
+**Undoing a slip.** While you are still in a field, your editor's ordinary undo (Cmd+Z or Ctrl+Z) works as you would expect. Once a change has been saved there is no version history, so for a major rewrite it is prudent to copy the old text somewhere safe first — or to remember that every field is also a file in the character's vault, which you may keep under your own version control if you are that sort of person.
+
+## Details
 
 ### Who Is Being Spoken To
 
@@ -54,22 +77,52 @@ Before putting pen to any field, pause for one question of etiquette: *who will 
 - **Scenarios** are scene text, addressed to nobody — a stage set, not a letter. Written as: *The reading room is empty at this hour, rain against the high windows.*
 - **Example Dialogues** need no such fuss — the `{{char}}:` / `{{user}}:` format carries the shape on its own.
 
-The assembled system prompt addresses the character directly throughout, and each field's wrapper makes its vantage point plain — so text written for the right reader lands exactly where it should. The editor shows a "Written as:" worked example beneath each field as a reminder.
+The assembled system prompt addresses the character directly throughout, and each field's wrapper makes its vantage point plain — so text written for the right reader lands exactly where it should. An empty field shows its hint and a "Written as:" worked example as a placeholder, so the reminder is right where you are about to write.
 
-### Field-by-Field Editing
+### The Facts Card
 
 **Name**
 
-- Click on name field
-- Rename character
-- Used everywhere system references character
-- Examples: "Alice" → "Older Alice", "Detective Jones" → "Detective Sarah Jones"
+- Required. Used everywhere the system refers to the character
+- Saved when you leave the field; an empty name is refused with an error rather than saved
+- For a rename that should also sweep through memories and old conversations, use **Rename / Replace** on **History** instead (see [Bulk Edits](#bulk-edits))
 
 **Title**
 
 - Your private label for the character — your own framing, not a public title. Think "the protagonist", "the rival", "the one who keeps borrowing the cat"
 - Optional, never shown to other characters
-- Examples: "the love interest", "the antagonist", "Aunt Edith's troublesome ward"
+
+**Aliases**
+
+- Other names the character answers to, added as chips. They appear beneath the name in the header
+
+**Pronouns**
+
+- Choose a preset or enter your own. When set, they are included in system prompts so the LLM uses them correctly, and shown in the header
+
+**Birthday**
+
+- Optional. A real date of birth, chosen from the date picker and kept as `YYYY-MM-DD`
+- Set one and the character has a definite age, reckoned afresh every day — a year older on each birthday, with nobody lifting a finger. The card shows the age beside the picker, and the header shows it beside their pronouns
+- Leave it empty and their age is whatever the prose says, as it always was
+- Counted on the wall clock and the instance calendar, never a chat's story date: a birthday belongs to the character in every room at once. Someone born on 29 February turns a year older on 1 March in ordinary years
+- Clear it with the **Clear** button beside the picker
+
+**Kind of character**
+
+- **Roleplay character** (the default) is a player in the drama: a person inside the story, with stakes of their own, who feels what happens and acts on it
+- **Assistant** is a member of the staff: a capable aide whose business is doing work for you, such as research, drafting or keeping the books
+- The choice is about how the character is *performed*, not what they are in the story. A ship's mind or a household automaton who lives in the scene is still a roleplay character
+- With [Agent Mode](agent-mode.md) on, a roleplay character uses their tools as things they do in the scene and still answers in prose; an assistant researches, verifies and delivers a finished report
+- Every character begins as a roleplay character, including every character made before the choice existed
+
+**Tags**
+
+- Add or remove tags as chips; each change saves at once. See [Tags](tags.md)
+
+### The Dossier Card
+
+Six Markdown editors, and the editors *are* the view: a filled field reads as handsome prose, an empty one shows its hint as an invitation. Inside them, `{{char}}` and `{{user}}` tokens — and the character's own name and their default partner's — are tinted, so you can see at a glance where a token stands or might stand.
 
 **Identity**
 
@@ -78,26 +131,18 @@ The assembled system prompt addresses the character directly throughout, and eac
 - Examples: "Detective Sarah Jones, of the Yard, known for closing unclosable cases"; "Old Tom the baker, three doors down, makes the best cinnamon buns in Whitechapel"
 - Wherever others are given the character's identity — the Host's introduction when they join a room, the card for someone mentioned but absent, Carina's answerer, and the identity a tool looks up — Quilltap first sets down what it already knows for certain: their **age** (when they have a birthday), their **public progressions**, and their **pronouns**. Your Identity text follows. There is no need to repeat those facts in the prose, and every reason not to: the prose will not age, and the reckoned figures will
 
-**Birthday**
-
-- Optional. A real date of birth, chosen from the date picker and kept as `YYYY-MM-DD`
-- Set one and the character has a definite age, reckoned afresh every day — a year older on each birthday, with nobody lifting a finger. The editor shows the age beside the picker, and the character's page shows it beside their pronouns
-- Leave it empty and their age is whatever the prose says, as it always was
-- Counted on the wall clock and the instance calendar, never a chat's story date: a birthday belongs to the character in every room at once. Someone born on 29 February turns a year older on 1 March in ordinary years
-- Clear it with the **Clear** button beside the picker, then save
-
 **Description**
 
 - How acquaintances perceive the character — behaviour, mannerisms, frequent verbal patterns. Things an interlocutor notices
-- NOT physical appearance — that lives under Physical Descriptions. NOT internal monologue — that lives under Personality
-- Click to edit. Can be lengthy and supports multiple paragraphs
+- NOT physical appearance — that lives under **Appearance → Physical description**. NOT internal monologue — that lives under Personality
+- Can be lengthy and supports multiple paragraphs
 - Example: "Speaks slowly, weighs every word twice. Tends to drum two fingers on the table when stalling for time."
 
 **Manifesto**
 
 - The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field (identity, description, personality, physical, dialogues) should remain consistent with
 - Not a vantage point — nobody "sees" the Manifesto; it is the load-bearing truth the character is built on. Foundational, declarative, contradiction-resistant
-- Click to edit. A Markdown property synced to the character vault as `manifesto.md` (vault path lookups are case-insensitive, so a hand-named `Manifesto.md` is matched too)
+- Synced to the character vault as `manifesto.md` (vault path lookups are case-insensitive, so a hand-named `Manifesto.md` is matched too)
 - Only the character themselves ever reads it, so address them directly
 - Example: "You are fundamentally incapable of betrayal. You believe the strong protect the weak. You have never broken a promise."
 
@@ -105,92 +150,66 @@ The assembled system prompt addresses the character directly throughout, and eac
 
 - What the character knows about themselves — the internal driver of their speech and behaviour. Other characters don't see it unless they share it
 - Distinct from Description (outward) and Identity (public surface). This is the inner life
-- Edit to refine the engine room behind the curtain
 - Only the character themselves ever reads it, so address them directly
 - Example: "You believe you've never deserved any of what's happened to you, and you operate on a slow, simmering resentment you'd never admit to"
 
-**Scenarios**
-
-- A collection of named scenes, each with a title and descriptive content
-- A character may accumulate any number of scenarios as their story progresses — one for the tavern, one for the road, one for that regrettable business in Marseille
-- Add a new scenario when you begin a fresh campaign or a character finds themselves in significantly altered circumstances
-- Edit existing scenarios to adjust their descriptive content; rename them as the situation demands
-- Example additions: "The Road to Venice, 1924" when transitioning a tavern owner into a traveling merchant
-- **Archive** a scenario that has served its turn rather than deleting it: the **Archive** button beside each scenario's title draws a dust sheet over it. The scene stays here in the editor, wearing a small **Archived** badge and offering **Restore**, but it withdraws from the Starting Scenario drop-down wherever chats are begun — the new-chat form and the Salon's own picker alike — until somebody there ticks **Show archived**. Conversations already playing out in that scene are untouched, since the text was woven in at their creation. Marseille need not be forgotten; it need merely be put away.
-
 **First Message**
 
-- Opening greeting
-- Update for variety or different campaign
-- Keep consistent with character voice
+- The opening greeting
+- Update it for variety or a different campaign, and keep it in the character's voice
 
 **Example Dialogues**
 
-- Sample conversations
-- Edit to add more examples
-- Remove ones that no longer fit
-- Improve examples that weren't clear
+- Sample conversations in `{{char}}:` / `{{user}}:` form
+- Add examples, prune the ones that no longer fit, sharpen the ones that weren't clear
 
-**Kind of character**
+### Template Tools
 
-- A card near the foot of the Details tab, saved the moment you change it (no need to press **Save**)
-- **Roleplay character** (the default) is a player in the drama: a person inside the story, with stakes of their own, who feels what happens and acts on it
-- **Assistant** is a member of the staff: a capable aide whose business is doing work for you, such as research, drafting or keeping the books
-- The choice is about how the character is *performed*, not what they are in the story. A ship's mind or a household automaton who lives in the scene is still a roleplay character
-- With [Agent Mode](agent-mode.md) on, a roleplay character uses their tools as things they do in the scene and still answers in prose; an assistant researches, verifies and delivers a finished report
-- Every character begins as a roleplay character, including every character made before the choice existed
-- The same card appears on the character's view page
+Quilltap's roleplay machinery understands two travelling tokens — `{{char}}`, which stands in for whichever character is speaking, and `{{user}}`, which stands in for the person they are addressing. A character authored with these tokens rather than hard-coded names travels gracefully: lend them to a new conversation partner and they greet the newcomer by the correct name without a word of editing.
 
-**Draws diagrams**
+The Dossier card carries a small **Template tools** bar. Each button appears only when it has honest work to do, with the number of affected occurrences in parentheses:
 
-- A card at the foot of the Details tab, saved the moment you change it (no need to press **Save**)
-- Tick **Draws diagrams** and the character is told they may sketch flowcharts, graphs and freeform drawings into the conversation; untick it and they hear nothing of the sort
-- **Drawing style** beneath it chooses **Hand-drawn** (the default) or **Clean** for their diagrams; it is greyed out, but remembered, while the pen is withheld
-- The same card appears on the character's view page. See [Diagrams](diagrams.md) for the particulars
+- **Name → `{{char}}`** — swaps every literal occurrence of the character's *own name* for the `{{char}}` token.
+- **Partner → `{{user}}`** — does the same for the name of the character's **default conversation partner**. It keeps its peace unless a partner has been appointed on **Chat Defaults**.
+- **`{{char}}` → Name** — the reverse errand: bakes the character's own name back into the prose wherever `{{char}}` appears.
+- **`{{user}}` → name…** — opens a small dialog bearing a dropdown of your **user-controlled characters**. Choose one, and every `{{user}}` token is replaced with that character's name. (The character you are looking at is, sensibly, kept off its own list.)
 
-### Making Bulk Changes
+Every one of these sweeps reaches the *entire* dossier — identity, description, manifesto, personality, every scenario, the first message, the example dialogues, all of the character's system prompts, and the physical-description prose and image prompts. The work is saved at once and the page refreshed, so the counts and buttons settle to reflect the new state of affairs.
 
-Want to change multiple characters at once? Use Rename/Replace tab (see below).
+### Progressions
+
+Timed spans the character carries — a gestation, a recharging weapon, a sentence being served — each with its own card and dialog. See [Progressions](character-progressions.md).
+
+### The Vault Card
+
+A read-only card, and the first door from the character's page into their vault. It names the vault (a link into the Scriptorium), counts what sits in its **Core**, **Knowledge**, **Scenarios**, **Subprompts** and **Mail** folders, and reports how many of the character's managed files are present — naming any that have gone missing. Nothing on this card writes; it is there so that you know where everything lives.
 
 ### Living Properties from the Scriptorium
 
-Each character carries a private vault in the Scriptorium — a small database-backed document store seeded at creation with your character's identity, personality, wardrobe, and a small, tidy cluster of files that mirror the fields the Aurora editor knows by heart. When the overlay switch is thrown, Quilltap treats those files as the living authority for reads: the character you see in chats, on the roster, in image prompts, and in every other corner of the application comes straight from the vault.
+Each character carries a private vault in the Scriptorium — a small database-backed document store seeded at creation with your character's identity, personality, wardrobe, and a small, tidy cluster of files that mirror the fields on the character's page. Those files are the character: the version you see in chats, on the roster, in image prompts, and in every other corner of the application comes straight from the vault, and every save from the page — or from an import, an API call, or the Optimizer — is written back into the matching file.
 
-**The overlaid files and what each one governs:**
+**The files and what each one governs:**
 
-| Vault file | What it replaces |
+| Vault file | What it holds |
 |---|---|
 | `properties.json` | **pronouns**, **birthday**, **aliases**, **title**, **first message**, **talkativeness**, **kind** (`roleplay` or `assistant`), and the outfit and diagram settings |
-| `metadata.json` | The character's **fact sheet** — a flat object of keys you invent yourself, answering to no field in the editor. See the note below. |
+| `metadata.json` | The character's **fact sheet** — a flat object of keys you invent yourself, answering to no field on the page. See the note below. |
 | `identity.md` | **Identity** (the surface, outside-view prose field) |
 | `description.md` | **Description** (the acquaintance-view prose field) |
 | `manifesto.md` | **Manifesto** (the axiomatic-core, load-bearing-truth prose field) |
 | `personality.md` | **Personality** (the inward, self-knowledge prose field) |
 | `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
-| `physical-description.md` | The **Full Description** of the character's first (default) physical description |
-| `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the first (default) physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys), plus the **Humanoid** setting as `humanoid` (`true` or `false`; absent reads as `true`) |
+| `physical-description.md` | The **Full Description** of the character's physical description |
+| `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys), plus the **Humanoid** setting as `humanoid` (`true` or `false`; absent reads as `true`) |
 | `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
 | `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context. An optional YAML frontmatter block above the heading may carry `description` and `archived: true`; both are omitted for an ordinary, in-circulation scene |
 | `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, an optional `imagePrompt`, an optional `componentItems` list (for a composite ensemble), `appropriateness`, the `default` and `replace` flags, and timestamps; the body beneath is the freeform description |
 
-By default, every one of these is read from the character's database row — the ordinary state of affairs, in which the editor is the single source of truth. Flip the switch marked **Read this character's core fields from the Scriptorium vault** at the top of the Aurora edit page, however, and henceforth Quilltap will consult the vault for all of the above every time any part of the application reads your character — the roster on the home page, the system prompt for a chat, the image-generation pipeline's appearance prompts, the scene state tracker, the turn manager's talkativeness roll, all of it.
+Edit any of these files in the Scriptorium, save, reload the character, and the new values appear throughout the app without any further ceremony. Should `properties.json` — the keystone — go missing or turn unreadable, the character cannot be loaded until it is repaired, and a warning in the log says so; Quilltap would rather tell you than quietly present a hollow likeness.
 
-**What the switch changes:**
+**A note on `Prompts/` and `Scenarios/`.** Each directory is read as a whole set. Prompt files require YAML frontmatter naming them; a file that lacks frontmatter (or a `name` field) is quietly skipped while its siblings carry on. Scenario files want a `# Scenario Title` at the top, though if one is missing Quilltap will use the filename (without the `.md`) rather than drop the file entirely. Identifiers for prompts and scenarios are derived deterministically from the vault and the file's relative path, so a chat's selected prompt or default scenario keeps its reference across reads as long as the filename doesn't change.
 
-- **Reads:** the overlaid fields come live from the vault files. Edit any file in the Scriptorium, save, reload the character, and the new values appear throughout the app without any further ceremony.
-- **Writes:** every save to an overlaid field — whether it comes from the Aurora editor, an import, an API call, or the optimizer — is routed to the matching vault file rather than the database column. The form remains entirely editable while the switch is on, because the engine underneath knows where each field properly lives and routes accordingly. The character's database row, meanwhile, is left frozen at the values it carried the moment the switch was first thrown, standing by as a quiet understudy should the overlay later be dismissed.
-- **Per-file fallback:** should a particular file go missing or fail to parse cleanly, Quilltap does not panic. Only that file's fields fall back to their database values (all-or-nothing within a file), and a warning is written to the log so you may investigate at your leisure. The other overlay files remain in effect.
-
-**Copying between the two.** Whenever a character has a linked vault — switch on or switch off — a small pair of buttons sits beneath the overlay switch, offering to carry state from one ledger to the other:
-
-- **Copy vault → database.** Reads the vault's current files and writes their values straight into the character's database row, bringing the understudy up to speed with whatever the vault has lately become. Fields whose vault files are missing or invalid are left alone; the rest are written. The wardrobe is exempt from this errand: its items reside only in the vault's `Wardrobe/` folder, there being no longer any database ledger to copy them into. Do this before flipping the overlay switch off if you want the database to remember the vault's current state; otherwise, turning the overlay off reveals whatever values the database has been quietly holding all along.
-- **Copy database → vault.** The reverse errand: reads the character's database row and projects every one of those fields out into the matching vault files, replacing whatever was there before. Useful when you've been editing a character with the overlay switch *off* and would like the vault to catch up, or when you've just linked a new vault and want it seeded with the database's current values. Prompts and scenarios are reprojected wholesale — any `.md` files in the vault's `Prompts/` or `Scenarios/` folders that don't correspond to a database entry are removed so the folder listings match the database state exactly. The wardrobe is left untouched here, dwelling in the vault alone. The physical-description files are written from the character's first (default) physical description; if the character has none, the `physical-description.md` and `physical-prompts.json` files are skipped rather than written empty.
-
-**A note on physical descriptions.** The `physical-description.md` and `physical-prompts.json` overlays target the **first** physical description (the one at index 0 — typically your character's default). Subsequent descriptions remain database-canonical. The overlay requires at least one physical description already present in the database; if your character has none, populate the first description the usual way in the Descriptions tab before filling in the vault files.
-
-**A note on `Prompts/` and `Scenarios/`.** Each directory is read as a whole set — when the overlay is on and the folder holds at least one parseable file, the vault listing entirely replaces the character's database-backed array. An empty or malformed folder falls back to the database. Prompt files require YAML frontmatter naming them; a file that lacks frontmatter (or a `name` field) is quietly skipped while its siblings carry on. Scenario files want a `# Scenario Title` at the top, though if one is missing Quilltap will use the filename (without the `.md`) rather than drop the file entirely. Identifiers for synthesized prompts and scenarios are derived deterministically from the mount point and the file's relative path, so a chat's selected prompt or default scenario keeps its reference across reads as long as the filename doesn't change.
-
-**A note on `metadata.json` — the fact sheet.** Every other file in the vault answers to some field the Aurora editor already knows about. `metadata.json` answers to nothing at all: it is a single JSON object of whatever keys you care to invent, and Quilltap has not the faintest opinion about any of them.
+**A note on `metadata.json` — the fact sheet.** Every other file in the vault answers to some field on the character's page. `metadata.json` answers to nothing at all: it is a single JSON object of whatever keys you care to invent, and Quilltap has not the faintest opinion about any of them.
 
 ```json
 {
@@ -217,56 +236,47 @@ A few points of etiquette worth knowing:
 - **It is an ordinary vault file for all that.** A character with **system transparency** enabled may read — and edit — `metadata.json` through the `doc_*` tools, their own and their tablemates', exactly as with any other document in the vault. An opaque character cannot see it at all. No new permissions, no special cases.
 - **Its absence is not a fault.** Characters created before the fact sheet existed simply have no such file, and Quilltap reads that as an empty sheet rather than a broken vault. New characters are seeded with `{}`. Should the file ever fail to parse — a comma out of place at midnight — the sheet reads as empty for that reading and a warning goes to the log; the rest of your character is entirely undisturbed.
 - **Saving through the API replaces the whole object.** The file is one field's property, so a `metadata` write is the new sheet entire, not a merge into the old one. Editing the file by hand, of course, does exactly what you'd expect.
-
-- **The editing desk depends on the key.** Progressions have their own card on the **System Prompts** tab, described in [Progressions](character-progressions.md). Everything else is edited by opening the character's vault in the Scriptorium and writing the JSON directly.
+- **The editing desk depends on the key.** Progressions have their own card on **Details**, described in [Progressions](character-progressions.md). Everything else is edited by opening the character's vault in the Scriptorium (the **Vault** card's link will take you there) and writing the JSON directly.
 
 **What it is for.** The fact sheet exists so that [custom tools](custom-tools.md) may consult it: an outcome table can branch on `hasAnsibleAccess`, so the same lock opens for the character carrying the key and stays shut for everyone else. Anything else you file there is yours to use as you see fit.
 
-**A note on example dialogues.** An *empty* `example-dialogues.md` is a perfectly valid state — it means "no examples," and Quilltap treats it accordingly rather than falling back to the database. If you genuinely want the database value to show through, delete the file entirely; presence of the file (even at zero bytes) is what tells the overlay to take over.
+**A note on example dialogues.** An *empty* `example-dialogues.md` is a perfectly valid state — it means "no examples," and Quilltap treats it accordingly.
 
-**A note on the wardrobe.** The whole of the character's wardrobe now keeps to a single folder, `Wardrobe/`, which holds one Markdown file per item — garments and grand ensembles alike. The frontmatter carries the `title`, the `types` list (one or more of `top`, `bottom`, `footwear`, `accessories`, `hair`), an optional `imagePrompt` (the Portrait Cue: a short, literal phrase whispered to the portraitist and the Lantern *in place of* the title, since the prose description below is written for human eyes and never reaches the easel), an optional `appropriateness` tag, the `default` flag, and the timestamps; the body of the file is the freeform description, written however you please. A `hair` item is a *hairdo* — a braid, an updo, a wig — and not the hair itself, whose colour and length belong to the physical description.
+**A note on the wardrobe.** The whole of the character's wardrobe keeps to a single folder, `Wardrobe/`, which holds one Markdown file per item — garments and grand ensembles alike. The frontmatter carries the `title`, the `types` list (one or more of `top`, `bottom`, `footwear`, `accessories`, `hair`), an optional `imagePrompt` (the Portrait Cue: a short, literal phrase whispered to the portraitist and the Lantern *in place of* the title, since the prose description below is written for human eyes and never reaches the easel), an optional `appropriateness` tag, the `default` flag, and the timestamps; the body of the file is the freeform description, written however you please. A `hair` item is a *hairdo* — a braid, an updo, a wig — and not the hair itself, whose colour and length belong to the physical description.
 
 A **composite** — an ensemble bundling other items, such as a "Rain Outfit" of raincoat, jeans, and boots — is an ordinary wardrobe file with one addition: a `componentItems` list naming its pieces, where each entry is an item *slug* (the kebab-cased title, e.g. `blue-tweed-jacket`) and a raw UUID is accepted as a fallback for pieces the slug map can't place. A composite may also carry `replace: true`, meaning that donning it first empties the slots it designates rather than layering atop what is already worn. Should you contrive a circular bundle — an ensemble that, by some route, contains itself — Quilltap declines to chase its own tail: the offending item's component list is emptied and a note goes to the log, though the item itself survives unharmed, your hand-edits being too precious to discard wholesale. A component naming something that isn't in the vault is likewise dropped from that one list, with a warning, and the rest of the bundle proceeds undisturbed.
 
-The old `Outfits/` folder of saved presets is **retired**. Composites do that work now, and Quilltap no longer reads that folder at all — any stale `Outfits/*.md` files still lying about are simply ignored, their former ensembles having been folded into composite items on your behalf.
+The old `Outfits/` folder of saved presets is **retired**. Composites do that work now, and Quilltap no longer reads that folder at all — any stale `Outfits/*.md` files still lying about are simply ignored.
 
-Adding a new item, then, is as easy as dropping a fresh `.md` file into `Wardrobe/` with `title:` and `types:` in the frontmatter; the system fills in the `id` and timestamps on its next sync. Items marked with `archived: true` (or carrying a non-null `archivedAt`) are filtered out of the normal list the same way they are in the database. When the overlay is on, the Salon sidebar, the wardrobe tools the LLM reaches for, and every other consumer read their lists from this folder. The first time Quilltap boots after the folder format ships, a one-time sweep projects every existing character's wardrobe from the database into the new layout and tidies away the legacy `wardrobe.json` — so stale snapshots from earlier vault provisioning don't mislead anyone the moment the switch is flipped on.
+Adding a new item, then, is as easy as dropping a fresh `.md` file into `Wardrobe/` with `title:` and `types:` in the frontmatter; the system fills in the `id` and timestamps on its next sync. Items marked with `archived: true` (or carrying a non-null `archivedAt`) are filtered out of the normal list. The Salon sidebar, the wardrobe tools the LLM reaches for, and every other consumer read their lists from this folder.
 
-**When to use it.** Reach for this switch when you would rather author your character's prose fields as plain Markdown — version-controlled in your own tooling, perhaps, or edited alongside the character's narrative notes — and have the rest of Quilltap treat those files as the current truth. Leave the switch off for the conventional editor-as-source-of-truth workflow, which remains the default and entirely sensible choice.
+## Prompts
 
-**Prerequisite.** The switch requires a linked Scriptorium vault. Quilltap creates one for each character automatically (on character creation, or by the startup backfill), so this is almost always already in place; if for some reason it isn't, the toggle will disable itself with a note explaining why.
+### System Prompts
 
-## Editing System Prompts
-
-System Prompts tab contains detailed AI instructions.
-
-### Understanding System Prompts
-
-System prompts tell the AI exactly how to behave:
+System prompts tell the AI exactly how to behave. A character may keep several, each with its own name, and each opened, previewed, imported, edited or deleted from the **System prompts** card. The **★ star** beside a prompt is the one and only control for which prompt is the default — click another prompt's star and the honour passes to it at once. See [Character System Prompts](character-system-prompts.md) for the full particulars.
 
 **Example:**
 
 ```
-You are Captain Vex, a hardened pirate captain with a hidden code of honor. 
-You speak with a pirate dialect, dropping g's (talkin', fightin'). You're 
-strategic and cunning but never harm innocents. You're intensely loyal to 
-your crew. Respond always in character as Captain Vex, maintaining this 
+You are Captain Vex, a hardened pirate captain with a hidden code of honor.
+You speak with a pirate dialect, dropping g's (talkin', fightin'). You're
+strategic and cunning but never harm innocents. You're intensely loyal to
+your crew. Respond always in character as Captain Vex, maintaining this
 perspective and personality.
 ```
 
-### Editing System Prompts
+**Editing one:**
 
-1. Click **System Prompts** tab
-2. See current system prompt
-3. Click **Edit** or inline edit the text
-4. Modify prompt
-5. Click **Save**
+1. Open **Prompts**
+2. Click the prompt's pencil to open its dialog
+3. Make your changes
+4. Click **Save** in the dialog
 
 **Tips:**
 
-- Start with existing prompt
-- Enhance rather than replace
-- Keep focused on key behaviors
+- Start with the existing prompt; enhance rather than replace
+- Keep it focused on key behaviours
 - Be specific about communication style
 - Avoid contradictions
 
@@ -299,53 +309,41 @@ You are a detective. Act like a detective.
 **Refined (better):**
 
 ```
-You are Detective Sarah Chen, a 15-year veteran homicide detective. 
-You're analytical and detail-oriented. You speak directly, no nonsense. 
-You care deeply about victims but hide it behind professionalism. 
-You have dark humor about your work. You ask probing questions and 
+You are Detective Sarah Chen, a 15-year veteran homicide detective.
+You're analytical and detail-oriented. You speak directly, no nonsense.
+You care deeply about victims but hide it behind professionalism.
+You have dark humor about your work. You ask probing questions and
 notice small details others miss. Stay in character as Sarah always.
 ```
 
 ### Multiple System Prompts
 
-If your character has different modes:
+If your character has different modes, create a prompt for each — "When speaking to allies…", "When speaking to enemies…", "When alone…". You can switch between them in a chat from the participant card, and the starred one is used whenever nobody says otherwise.
 
-**Create prompt for each:**
+### Subprompts
 
-- Character mode A: "When speaking to allies..."
-- Character mode B: "When speaking to enemies..."
-- Character mode C: "When alone..."
+Smaller, per-chat instructions kept on their own card. See [Subprompts](character-subprompts.md).
 
-You can switch between prompts in chat settings.
+### Scenarios
 
-### When to Edit System Prompts
+- A collection of named scenes, each with a title and descriptive content
+- A character may accumulate any number of scenarios as their story progresses — one for the tavern, one for the road, one for that regrettable business in Marseille
+- **+ Add Scenario** opens a dialog with a title and a Markdown body; the pencil on a row opens the same dialog, filled in; the bin removes the scenario for good
+- The **★ star** on a row makes that scenario the default — the one a new chat with this character opens on unless you pick another. Click the star again to withdraw the honour
+- **Archive** a scenario that has served its turn rather than deleting it. It stays on the card, wearing a small **Archived** badge and offering **Restore**, but it withdraws from the Starting Scenario drop-down wherever chats are begun — the new-chat form and the Salon's own picker alike — until somebody there ticks **Show archived**. Conversations already playing out in that scene are untouched, since the text was woven in at their creation. Marseille need not be forgotten; it need merely be put away
+- Deleting the default scenario leaves the character with no default, rather than pointing at a scene that no longer exists
 
-- Character not behaving as expected
-- Want different personality for new campaign
-- Adding new dimensions to character
-- Fixing specific problematic behaviors
-- Improving response quality after testing
+## Appearance
 
-## Editing Physical Descriptions
+### Photos
 
-The Appearance tab contains visual information about characters, including physical descriptions and clothing records.
+The character's photo gallery: upload pictures, browse them, set one as the avatar, delete what you no longer want. See [Character Gallery](character-gallery.md).
 
-### What Physical Descriptions Do
+### Physical Description
 
-Physical descriptions help:
+Physical descriptions help the AI understand the character's appearance, keep it consistent across conversations, and give the image generators something accurate to paint from. There is no **Save** button on this card: each text field saves itself as the Dossier fields do, and **Humanoid** saves the moment you tick or untick it. **Clear** (behind a confirmation) removes the description entirely.
 
-- AI understand character appearance
-- Image generation tools create accurate images
-- Consistency across conversations
-- Detailed descriptions in roleplay
-
-### Editing Physical Description
-
-1. Click **Appearance** tab
-2. See current descriptions (different lengths)
-3. Edit manually or use AI to regenerate
-
-### Humanoid, or Otherwise
+**Humanoid, or Otherwise**
 
 Above the prompts sits a **Humanoid** checkbox, ticked by default. Untick it for a character who has no body to speak of — no head, no shoulders, no limbs — such as a clockwork of interlocking spheres or a drifting lattice of light. Once it is unticked:
 
@@ -358,7 +356,7 @@ Above the prompts sits a **Humanoid** checkbox, ticked by default. Untick it for
 
 The setting lives in the vault's `physical-prompts.json` as `"humanoid": false`; a file without the key reads as humanoid. Regenerating the descriptions with the AI Wizard or the Optimizer leaves the setting as you left it.
 
-### Physical Description Types
+**The prompt variants**
 
 **Head & Shoulders** (used for avatars)
 
@@ -368,271 +366,147 @@ The setting lives in the vault's `physical-prompts.json` as `"humanoid": false`;
 - Keeping it above the collar also keeps image-provider moderation from balking at a portrait it would otherwise refuse
 - Example: "Young woman, glossy jet-black wavy hair from a center part, deep brown almond eyes, warm wheatish skin, high cheekbones, a warm closed-lipped smile, pearl stud earrings, open collar of a deep-wine field shirt"
 
-**Short Description** (1 sentence)
+**Short Description** (1 sentence) — a quick visual reference. Example: "Tall woman with dark red hair and green eyes"
 
-- Quick visual reference
-- Good for status bars
-- Example: "Tall woman with dark red hair and green eyes"
+**Medium Description** (2–3 sentences) — balanced detail. Example: "Tall woman with long dark red hair, sharp green eyes, pale skin. Wears practical leather clothing." (The braid she usually wears it in is a wardrobe Hair item, not part of her person.)
 
-**Medium Description** (2-3 sentences)
+**Long Description** (1 paragraph) — detailed, good for image generation.
 
-- Balanced detail
-- Good for quick lookups
-- Example: "Tall woman with long dark red hair, sharp green eyes,
-pale skin. Wears practical leather clothing." (The braid she usually
-wears it in is a wardrobe Hair item, not part of her person.)
+**Complete Description** (2–3 paragraphs) — very detailed, for generating many variations.
 
-**Long Description** (1 paragraph)
+**Full Description** (extensive) — the complete freeform account, from which the shorter prompts above may be written.
 
-- Detailed information
-- Good for image generation
-- Example: "Tall woman (5'9") with waist-length dark red hair.
-Sharp green eyes, pale skin.
-Thin face with high cheekbones. Usually wears practical leather
-armor from her military days..."
+**Usage Context**
 
-**Complete Description** (2-3 paragraphs)
+An optional short note (up to 200 characters) describing when this appearance is most appropriate — "at work in a professional capacity", "relaxing at the pool", "attending a formal gala". In chat, it helps the AI decide how the character looks in the present scene; in image generation, it is passed to the prompt-crafting system to help it pick scene-appropriate details.
 
-- Very detailed
-- Good for AI generating multiple variations
-- Includes mannerisms, clothing, accessories
+### Depiction Guidelines
 
-**Full Description** (extensive)
+The Ariel Clause: the character's standing conditions on how they may be shown, kept as `depiction-guidelines.md` in their vault and saved as you write. See [Image Aesthetics](image-aesthetics.md).
 
-- Maximum detail
-- Best for detailed image generation
-- Includes all visual elements, personality reflected in appearance
+### Wardrobe
 
-### Usage Context
+**Open wardrobe** brings up the [Wardrobe](wardrobe.md) dialog, where items are made, worn and painted. The card also holds the character's **wardrobe instructions** and a summary of what is within their reach — their own items, their groups', and Quilltap General's. Whether they dress themselves, create outfits, or choose their own opening outfit is settled on **Abilities**.
 
-Each physical description can have an optional **Usage Context** field — a short note (up to 200 characters) describing when this particular appearance is most appropriate.
+### Inventory
 
-**Examples of good values:**
+**Open inventory** brings up the objects the character carries, and the card lists what they carry by default when they arrive in a chat. Whether they may manage it themselves is settled on **Abilities**.
 
-- "at work in a professional capacity"
-- "relaxing at the pool"
-- "attending a formal gala"
-- "in combat gear on a mission"
+## Abilities
 
-**How it affects AI behavior:**
+Every switch about the character's powers, in four cards, each saving the moment you change it. Where a setting may **Inherit**, the option tells you what it presently resolves to, so you need not go hunting through Settings to find out.
 
-- **In chat:** Physical descriptions are included in the system prompt sent to the AI. When multiple descriptions exist, the AI uses the usage context to decide which appearance best fits the current scene.
-- **In image generation:** The usage context is passed to the image prompt crafting system, helping it select the most scene-appropriate visual details.
+- **Trust & perception** — **System transparency** (see [System Transparency](character-system-transparency.md)) and **Aurora's Core whisper** (inherit, always or never).
+- **Tools & talents** — **Can answer @-queries (Carina)** (see [Carina](carina.md)) and **Draws diagrams**, with its **Drawing style** of **Hand-drawn** (the default) or **Clean**, greyed out but remembered while the pen is withheld (see [Diagrams](diagrams.md)).
+- **Wardrobe & inventory** — **Dresses themselves**, **Creates outfits**, **Chooses own opening outfit**, **Manages inventory**.
+- **Control** — **You play this character** (the character is user-controlled: you speak for them) and **Non-player character** (an NPC).
 
-If no usage context is set, the AI will use the description based on its name and contents alone.
+## Chat Defaults
 
-### Regenerating Descriptions
+The settings a new chat with the character begins with — exactly what the New Chat dialog fills in for you, each saved on change:
 
-1. Click **Generate New Description**
-2. Select which image source to use for generation:
-   - From text (AI creates from character description)
-   - From image file (upload image, AI analyzes)
-   - From character image (use existing gallery image)
-3. Wait for generation
-4. Review generated descriptions
-5. Accept all, edit some, or reject
+- **Connection profile** — which LLM speaks for them, or **User Acts As Character**
+- **Conversation partner** — the default `{{user}}` (greyed out, with a note, while you play the character yourself)
+- **Image generation profile**
+- **Timestamps**
+- **Agent mode** default
+- **Help tools** default
 
-### Uploading Images for Description
+## History
 
-1. Click **Upload Image**
-2. Select image file (JPG, PNG)
-3. AI analyzes image
-4. Generates descriptions based on appearance
-5. Review and save
+- **Conversations** — every chat the character has appeared in
+- **Memories** — the character's Commonplace Book, each memory opened and saved in its own dialog. See [Memory Maintenance](memory-maintenance.md)
+- **Bulk edits** — **Search & Replace** and **Rename / Replace**, side by side (below)
+- **LLM logs** — folded away at the foot of the page until you want them
 
-### Manual Physical Description
+### Bulk Edits
 
-If you prefer to write manually:
+Both tools rewrite history, so both open their own dialog and show you a preview before anything is touched.
 
-1. Click **Edit** next to description
-2. Type your description
-3. Save
+**Search & Replace** finds a word or phrase across the character's chats and memories and replaces it, after showing you what it found.
 
-**Good example:**
-
-```
-Sarah is a tall woman with an athletic build, suggesting years of 
-physical training. Her dark red hair is usually worn in a practical 
-braid down her back. Sharp green eyes and high cheekbones give her 
-a striking appearance. She has a small scar on her left eyebrow from 
-an old injury. She dresses practically in leather jackets and dark 
-jeans, with minimal jewelry except for a detective's badge on her belt.
-```
-
-## Editing Clothing Records
-
-The Appearance tab also includes a **Clothing & Outfits** section below physical descriptions.
-
-### What Clothing Records Do
-
-Clothing records describe what your character wears in different situations. They are:
-
-- Injected into the system prompt so the AI knows what the character is wearing
-- Included in image generation context for accurate visual depiction
-- Used by story background generation for scene-appropriate outfit selection
-
-### Adding a Clothing Record
-
-1. Click **Appearance** tab
-2. Scroll to **Clothing & Outfits** section
-3. Click **Add Outfit**
-4. Fill in:
-   - **Name** (required) — e.g. "Battle Armor", "Formal Gown", "Casual Wear"
-   - **Usage Context** — When this outfit is worn, e.g. "in combat", "at formal events"
-   - **Description** — Markdown text describing the outfit in detail
-5. Click **Create**
-
-### Managing Clothing Records
-
-- **Edit:** Click the pencil icon on any clothing record card
-- **Delete:** Click the trash icon to remove a record
-- **Expand:** Click the chevron to see the full description rendered as markdown
-- Multiple outfits can be defined per character for different contexts
-
-## Template Placeholders on the Character Page
-
-Quilltap's roleplay machinery understands two travelling tokens — `{{char}}`, which stands in for whichever character is speaking, and `{{user}}`, which stands in for the person they are addressing. A character authored with these tokens rather than hard-coded names travels gracefully: lend them to a new conversation partner and they greet the newcomer by the correct name without a word of editing.
-
-The character's **Details** view does two helpful things on your behalf. First, it quietly underlines every spot where a bare name *could* become a token, and every token that is already in place. Second, when there is honest work to be done, it offers up to four buttons at the top of the page — each appearing only when it has something to do, with the number of affected occurrences noted in parentheses:
-
-- **Name → `{{char}}`** — sweeps through the character's prose and swaps every literal occurrence of *their own name* for the `{{char}}` token.
-- **Partner → `{{user}}`** — does the same for the name of the character's **default conversation partner**, swapping it for `{{user}}`. This one keeps its peace unless a default partner has been appointed (see the **Defaults** tab).
-- **`{{char}}` → Name** — the reverse errand: bakes the character's own name back into the prose wherever `{{char}}` appears, should you ever want the plain article instead of the token.
-- **`{{user}}` → name…** — opens a small dialog bearing a dropdown of your **user-controlled characters**. Choose one, and every `{{user}}` token is replaced with that character's name. (The character you are presently viewing is, sensibly, kept off its own list.)
-
-Every one of these sweeps reaches the *entire* dossier — identity, description, manifesto, personality, every scenario, the first message, the example dialogues, all of the character's system prompts, and the physical-description prose and image prompts. The work is saved at once and the page refreshed, so the counts and buttons settle to reflect the new state of affairs. (System prompts are filed through their own ledger behind the scenes, so a token swap inside a non-default prompt is no longer quietly mislaid.)
-
-## Using the Rename/Replace Tab
-
-Where the tools above polish a single field, the **Rename/Replace** tab conducts a wholesale renaming — a careful sweep that follows a name (or any turn of phrase) clear across the character's entire estate and quietly replaces it everywhere at once.
-
-### What it reaches
+**Rename / Replace** conducts a wholesale renaming — a careful sweep that follows a name (or any turn of phrase) clear across the character's entire estate.
 
 A single sweep visits the character's own dossier (the name itself, title, identity, description, manifesto, personality, every scenario, the first message, the example dialogues, the aliases, and all of the character's system prompts), the physical-description prose together with its short/medium/long/complete image prompts, every one of the character's memories, and — most far-reaching of all — the titles and the actual message bodies of every conversation the character has ever appeared in. Messages authored by the Staff (the Lantern, Aurora, the Host, and their colleagues) are left untouched, since their wording is bookkeeping rather than prose.
 
-### Renaming the character
+**Renaming the character**
 
-1. Open the **Rename/Replace** tab.
+1. On **History**, under **Bulk edits**, click **Rename / Replace**.
 2. Type the **New Name**. The **Current Name** is shown beside it, fixed, for reference.
 3. Tick **Case sensitive matching** only if the capitalisation must match exactly.
 4. Click **Preview Changes**.
 
-### Replacing nicknames, aliases, or any other term
+**Replacing nicknames, aliases, or any other term**
 
 Beneath the rename, the **Additional Replacements** section takes any number of find-and-replace pairs — splendid for nicknames, an old surname, or a wholesale change of setting. Click **Add**, fill in **Find** and **Replace with**, and toggle the **Aa** box on a row that ought to mind its capitals. You may rename the character, supply additional replacements, or both in the one pass.
-
-**Examples:**
 
 - Find: "Snips" → Replace with: "Ace" (an outdated nickname)
 - Find: "pirate ship" → Replace with: "airship" (changing the genre)
 - Find: "London" → Replace with: "New York" (changing the setting)
 
-### Always preview first
-
-**Preview Changes** commits nothing. It lays out a tally — how many occurrences fall under character fields, descriptions, memories, chat titles, and messages — and a table showing each `before → after`, with surrounding context. Read it over; only then click **Execute *N* Replacements** and confirm the dialog. The change cannot be undone, so the preview is your safety net.
+**Always preview first.** **Preview Changes** commits nothing. It lays out a tally — how many occurrences fall under character fields, descriptions, memories, chat titles, and messages — and a table showing each `before → after`, with surrounding context. Read it over; only then click **Execute *N* Replacements** and confirm the dialog. The change cannot be undone, so the preview is your safety net.
 
 Once executed, any conversation whose messages were altered is re-indexed for search behind the scenes, so the Scriptorium's archive reflects the new wording rather than the old.
 
-## Keyboard Shortcuts for Editing
-
-| Action | Shortcut |
-|--------|----------|
-| Save | Cmd+S or Ctrl+S |
-| Undo | Cmd+Z or Ctrl+Z |
-| Redo | Cmd+Shift+Z or Ctrl+Y |
-| Close edit | Esc or Click close |
-
 ## Editing Workflow: Common Scenarios
 
-### Scenario 1: Character Acting Wrong in Chats
+### Character Acting Wrong in Chats
 
-**Problem:** Character not behaving as expected
-
-**Solution:**
-
-1. Identify specific behavior issue
-2. Edit System Prompts tab
-3. Add specific instruction:
+1. Identify the specific behaviour
+2. On **Prompts**, open the default system prompt and add a specific instruction:
 
    ```
    "Do NOT break character to explain yourself. Stay as [Character] always."
    ```
 
-4. Save and test in new chat
+3. Save the dialog and test in a new chat
 
-### Scenario 2: Updating Character for New Campaign
+### Updating a Character for a New Campaign
 
-**Problem:** Same character, different time period/setting
+1. On **Prompts**, add a new scenario with a title reflecting the new setting — rather than erasing the old one, let the character carry their history with them — and star it if it should be the new default
+2. On **Details**, update the Description if time has passed or circumstances have changed substantially
+3. On **Prompts**, add context about the new period to the system prompt
+4. Optionally, revise the physical description on **Appearance**
+5. Test in a new chat
 
-**Solution:**
+The character's previous scenarios remain intact, available for flashbacks, parallel campaigns, or the sort of elaborate timeline shenanigans that make worldbuilders so very pleased with themselves.
 
-1. Edit **Details** tab:
-   - Add a new scenario with a title reflecting the new setting — rather than erasing the old one, let the character carry their history with them
-   - Update Description if time has passed or circumstances have changed substantially
-2. Edit **System Prompts** tab:
-   - Add context about new time period
-   - Update relevant personality notes
-3. Optional: Update Physical Description if appearance changed
-4. Save and test
+### Adding Relationship Information
 
-**Note:** The character's previous scenarios remain intact, available for flashbacks, parallel campaigns, or the sort of elaborate timeline shenanigans that make worldbuilders so very pleased with themselves.
+On **Details**, add to the Personality or Description:
 
-### Scenario 3: Adding Relationship Information
+```
+"Close relationship with [Other Character Name]. Has tension with [Another Character]."
+```
 
-**Problem:** Want to note character relationships
+It saves as you type.
 
-**Solution:**
+### Fixing an Accent or Speech Pattern
 
-1. Edit **Details** tab
-2. Add to Personality or Description:
+1. On **Prompts**, add a communication instruction to the system prompt:
 
    ```
-   "Close relationship with [Other Character Name]. Has tension with [Another Character]."
-   ```
-
-3. Save
-
-### Scenario 4: Fixing Accent/Speech Pattern
-
-**Problem:** Character not using intended speech pattern
-
-**Solution:**
-
-1. Edit **System Prompts** tab
-2. Add communication instruction:
-
-   ```
-   "You speak with a Southern accent. Drop g's from -ing words (talkin', 
+   "You speak with a Southern accent. Drop g's from -ing words (talkin',
    fightin', walkin'). Use y'all and regional expressions naturally."
    ```
 
-3. Add examples to Details > Example Dialogues showing accent in action
-4. Save and test
+2. On **Details**, add Example Dialogues showing the accent in action
+3. Test in a new chat
 
-### Scenario 5: Making Character Darker/Lighter
+### Making a Character Darker or Lighter
 
-**Problem:** Character tone isn't matching what you want
+1. On **Details**, adjust the Personality, the First Message if needed, and add Example Dialogues in the new tone
+2. On **Prompts**, add a specific tone instruction:
 
-**Solution:**
+   ```
+   "Your responses have a dark, cynical tone tinged with dark humor."
+   ```
 
-1. Edit **Details** tab:
-   - Adjust Personality to shift tone
-   - Update First Message if needed
-   - Add Example Dialogues showing new tone
-2. Edit **System Prompts** tab:
-   - Add specific tone instruction:
-
-     ```
-     "Your responses have a dark, cynical tone tinged with dark humor."
-     ```
-
-3. Save and test
+3. Test in a new chat
 
 ## Advanced Editing Techniques
 
 ### Layered System Prompts
-
-Create prompts that work in layers:
 
 ```
 Core instruction: You are [Character]. You [core trait].
@@ -646,7 +520,7 @@ Always maintain: [core personality]
 
 ### Conflicting Traits
 
-If character has contradictions, explain them:
+If the character has contradictions, explain them:
 
 ```
 You are [Character], someone with seemingly contradictory traits:
@@ -659,83 +533,47 @@ This contradiction is core to your character. Express both sides naturally.
 
 ### Prompt Testing
 
-After editing system prompts:
-
-1. Start new chat with character
+1. Start a new chat with the character (**Start Chat** in the header)
 2. Try different conversation angles
-3. See if behavior matches intent
-4. Return to edit if needed
-5. Iterate until satisfied
+3. See whether the behaviour matches your intent
+4. Return to the page, adjust, and try again
 
-## Best Practices for Editing
+## Best Practices
 
 ### Do's ✓
 
-- Keep edits consistent across tabs
-- Test changes in chats before finalizing
-- Maintain backup of old version if changing significantly
-- Use Physical Descriptions for visual reference
-- Keep System Prompts focused and clear
-- Update all character variants together
+- Keep the sections consistent with one another
+- Test changes in chats before you consider them finished
+- Copy the old text somewhere safe before a significant rewrite
+- Use the physical description for visual reference
+- Keep system prompts focused and clear
 
 ### Don'ts ✗
 
 - Don't overwrite character details without review
-- Don't create contradictory instructions in System Prompt
+- Don't create contradictory instructions in a system prompt
 - Don't remove important personality traits accidentally
-- Don't change core character concept without confirmation
-- Don't ignore preview warnings before Replace All
-
-## Undoing Changes
-
-### If You Make a Mistake
-
-1. Immediately click **Undo** (Cmd+Z)
-2. This undoes recent edits
-3. Or close without saving to discard changes
-4. Character reverts to last saved state
-
-### Recovering Old Version
-
-If you saved unwanted changes:
-
-1. There's no version history feature
-2. Make note of changes you want to undo
-3. Edit manually back to previous state
-4. Or use Find/Replace to reverse changes
-
-**Tip:** If making major changes, copy character details to Notes app as backup before editing.
-
-## Performance Tips
+- Don't skip the preview before a Rename / Replace
 
 ### For Complex Characters
 
-If your character has extensive details:
-
-- Keep System Prompt under 500 words
+- Keep each system prompt under 500 words
 - Break very long descriptions into multiple sections
-- Use shorter first message (1-2 sentences)
+- Use a shorter first message (1–2 sentences)
 - Keep example dialogues focused
-
-### Character with Multiple Aspects
-
-If character has different modes:
-
-- Create separate System Prompt for each mode
-- Add notes about when to use each
-- Test each variant thoroughly
-- Keep consistent core personality
+- If the character has distinct modes, give each its own system prompt and keep the core personality consistent across them
 
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/aurora/:id/edit")`
+`help_navigate(url: "/aurora/:id")`
 
 ## Related Topics
 
 - [Character Creation](character-creation.md) — Creating new characters
 - [Character System Prompts](character-system-prompts.md) — Deep dive on prompts
+- [Subprompts](character-subprompts.md) — Smaller per-chat instructions
 - [Diagrams](diagrams.md) — Letting a character draw in the Salon
 - [Progressions](character-progressions.md) — Timed spans a character carries, reported each turn
 - [Organizing Characters](character-organization.md) — Tags and management

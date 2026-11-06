@@ -78,7 +78,7 @@ export function HelpChatDialog() {
   const [characterMap, setCharacterMap] = useState<Map<string, CharacterInfo>>(new Map())
   const [participantToCharacter, setParticipantToCharacter] = useState<Map<string, string>>(new Map())
   const [loadingMessages, setLoadingMessages] = useState(false)
-  /** URL template pending entity selection, e.g. "/aurora/:id/edit" */
+  /** URL template pending entity selection, e.g. "/aurora/:id?section=prompts" */
   const [pendingParamUrl, setPendingParamUrl] = useState<string | null>(null)
 
   // Persist tab selection to sessionStorage

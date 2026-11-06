@@ -153,6 +153,7 @@ describe('queryKeysForTopic', () => {
       queryKeys.characters.prompts('char-1'),
       queryKeys.characters.subprompts('char-1'),
       queryKeys.characters.photos('char-1'),
+      queryKeys.characters.stats('char-1'),
     ]);
   });
 });

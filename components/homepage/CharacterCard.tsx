@@ -43,7 +43,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
     <>
       <div className="qt-character-card">
         <Link
-          href={`/aurora/${character.id}/view`}
+          href={`/aurora/${character.id}`}
           className="flex flex-col items-center gap-2 flex-grow hover:opacity-80 transition-opacity"
         >
           <Avatar

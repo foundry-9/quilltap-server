@@ -327,7 +327,7 @@ Three flags on each character govern their clothing:
 - **canCreateOutfits** --- When enabled (also the default), the character may use `wardrobe_create`, `wardrobe_update`, and `wardrobe_archive` to fabricate, amend, and retire garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
 - **canChooseOutfit** --- Disabled by default. When enabled, a *new* chat with this character opens with its Starting Outfit already set to **Let Character Choose**, so a character with a wardrobe worth showing off arrives dressed for the occasion without your having to flip the switch each time. It changes only the default the new-chat dialog offers; you may still overrule it for any particular chat.
 
-All three flags live on the character's **Wardrobe** tab on the Aurora page — `canChooseOutfit` sits just above the "Open wardrobe" button; the other two are grouped with the character's other wardrobe permissions.
+All three flags live in the **Wardrobe & inventory** card of the **Abilities** section of the character's Aurora page, as **Dresses themselves**, **Creates outfits** and **Chooses own opening outfit**; each saves the moment you change it.
 
 ## Outfit Selection When Starting a Chat
 
@@ -354,7 +354,7 @@ This ensures that every conversation starts with the appropriate sartorial conte
 
 ### Dressing Instructions (a Standing Word with the Valet)
 
-A character left to dress themselves consults the scenario and their personality, but you may also leave them a **standing word on how they prefer to dress** --- and it will be read aloud, as it were, before the wardrobe is opened. Each wardrobe --- a character's own, a group's, a project's, or Quilltap General --- may keep a single optional page of **Dressing Instructions**, edited from a small collapsible panel just beneath the wardrobe selector in the Wardrobe dialog. A character's own page is also editable from the **Wardrobe** tab of their Aurora page, where the same panel sits beneath the "Open wardrobe" button.
+A character left to dress themselves consults the scenario and their personality, but you may also leave them a **standing word on how they prefer to dress** --- and it will be read aloud, as it were, before the wardrobe is opened. Each wardrobe --- a character's own, a group's, a project's, or Quilltap General --- may keep a single optional page of **Dressing Instructions**, edited from a small collapsible panel just beneath the wardrobe selector in the Wardrobe dialog. A character's own page is also editable from the **Wardrobe** card in the **Appearance** section of their Aurora page, where the same panel sits beneath the **Open wardrobe** button.
 
 Write it **to the character, in the second person**, as one would leave instructions for a particularly attentive valet: *"You prefer practical tweeds for fieldwork, and reserve the brass-buttoned frock coat for occasions with an audience."* State the preferences and the circumstances under which each applies; the character will weigh them heavily when choosing.
 

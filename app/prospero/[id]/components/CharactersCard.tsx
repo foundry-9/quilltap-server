@@ -260,7 +260,7 @@ export function CharactersCard({
                         </button>
 
                         <Link
-                          href={`/characters/${char.id}/view`}
+                          href={`/aurora/${char.id}`}
                           className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"
                         >
                           <Avatar

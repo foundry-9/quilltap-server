@@ -18,7 +18,7 @@ Tags are custom keywords you assign to your content to help you organize and fin
 
 Each character can have multiple tags assigned to help you organize your character roster:
 
-- Tags appear in the character's **Tags tab** on their profile
+- Tags appear in the **Facts** card of the **Details** section on the character's page
 - Tags help filter your characters in the sidebar
 - Tagged characters can be hidden using the **quick-hide** feature
 - When creating a new chat, you can filter character suggestions by tags
@@ -63,7 +63,7 @@ The **Tags customization tab** in Settings is your central hub for managing all 
 ### How to Add Tags
 
 1. Navigate to the item you want to tag (a character, profile, or file)
-2. Find the **Tags** section or **Tags tab**
+2. Find the **Tags** field (for a character, in the **Facts** card on **Details**) or the **Tags** tab
 3. Click to add a tag
 4. Search for existing tags or create a new tag by typing
 5. Click the tag to add it

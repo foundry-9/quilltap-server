@@ -1577,6 +1577,42 @@ Export character in SillyTavern-compatible format.
 
 Returns `400` for an archived character — a tombstone export would carry only the pruned vault, and the full bundle already exists as an `ARCHIVE` file. Rehydrate first, or use `quilltap db characters export`.
 
+#### `GET /api/v1/characters/[id]?action=stats`
+
+Counts for the character page's header stats line and its Vault card, plus the character's groups and vault.
+
+**Response**: `200 OK`
+
+```json
+{
+  "stats": {
+    "memories": 12,
+    "conversations": 4,
+    "wardrobeItems": 9,
+    "photos": 3,
+    "scenarios": 2,
+    "knowledge": 5,
+    "core": 1,
+    "characterFiles": 8,
+    "characterFilesTotal": 9,
+    "missingCharacterFiles": ["example-dialogues.md"],
+    "subprompts": 2,
+    "mail": 0,
+    "scenarioFiles": 2
+  },
+  "groups": [
+    { "id": "group-uuid", "name": "The Crew", "description": null, "color": null, "icon": null }
+  ],
+  "vault": { "mountPointId": "mount-uuid", "name": "Alice Character Vault" }
+}
+```
+
+- `photos` counts album members only (`isCharacterAlbumRelativePath`); avatar history is excluded.
+- `scenarios` is the length of `character.scenarios`; `scenarioFiles` counts files under the vault's `Scenarios/` folder.
+- `knowledge`, `core`, `subprompts`, `mail`, `scenarioFiles` count vault file links under `Knowledge/`, `Core/`, `Subprompts/`, `Mail/`, `Scenarios/` (case-insensitive prefix).
+- `characterFiles` / `characterFilesTotal` count the canonical managed vault files present (`SINGLE_FILE_OVERLAY_PATHS`); `missingCharacterFiles` names the absent ones by path. It is `[]` when the character has no vault.
+- `vault` is the character's linked document store, or `null` when there is none.
+
 #### `POST /api/v1/characters/[id]?action=archive`
 
 Archive the character: write the encrypted `.qtap` bundle (an `ARCHIVE` file row), verify it, commit the tombstone (`archivedAt` + `archiveFileId`, chat seats flipped to absent), then prune the vault in place — mail, non-avatar photos, conversation summaries, own memories and their embeddings go; managed fields, avatar, and wardrobe stay readable.
@@ -1974,7 +2010,7 @@ Update a scenario. Requires `scenarioId` query parameter.
 
 #### `DELETE /api/v1/characters/[id]/scenarios?scenarioId=xxx`
 
-Remove a scenario. Requires `scenarioId` query parameter.
+Remove a scenario. Requires `scenarioId` query parameter. If the character's `defaultScenarioId` names the removed scenario, it is cleared to `null` in the same request, so the character never points at a scenario that no longer exists.
 
 **Response**: `200 OK`
 

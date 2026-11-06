@@ -22,7 +22,7 @@ Your own gallery gathers every picture filed in Quilltap Uploads, Quilltap Gener
 
 ## Choosing an album
 
-Beneath the page title sits an **Album** selector. It opens on **My Photos**, the gathered collection described above. Choose any character, project, document store or Quilltap General instead, and the page shows that one album alone. Search works the same in every album, and **Remove from this album** removes the picture from whichever album you're looking at. A character's album here is the same one Aurora shows on that character's Photo Gallery, so a photo removed in one place is gone from both.
+Beneath the page title sits an **Album** selector. It opens on **My Photos**, the gathered collection described above. Choose any character, project, document store or Quilltap General instead, and the page shows that one album alone. Search works the same in every album, and **Remove from this album** removes the picture from whichever album you're looking at. A character's album here is the same one Aurora shows in the **Photos** card on that character's page, so a photo removed in one place is gone from both.
 
 ## What you'll see when you visit
 

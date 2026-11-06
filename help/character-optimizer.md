@@ -4,7 +4,7 @@ url: /aurora
 
 # Refine from Memories & Instructions
 
-> **[Open this page in Quilltap](/aurora)** — then select a character and click **Refine from Memories & Instructions**
+> **[Open this page in Quilltap](/aurora)** — then select a character and choose **Generate ▾ → Refine from memories & instructions…**
 
 The Character Optimizer — known in polite society as **Refine from Memories & Instructions** — is rather like hiring a particularly astute biographer to read through your character's accumulated experiences and suggest how their official dossier might better reflect who they've actually become. Characters, you see, have a habit of growing beyond their original descriptions, and this tool ensures the paperwork catches up with the personality.
 
@@ -22,7 +22,7 @@ When you supply **instructions**, every pass of the optimizer reads them too. Ea
 
 1. Navigate to the **Aurora** page (`/aurora`)
 2. Select the character you wish to refine
-3. In the character header, click the **Refine from Memories & Instructions** button (the book icon)
+3. In the character's header, open the **Generate ▾** menu and choose **Refine from memories & instructions…**
 4. The optimizer opens in a full-screen overlay
 
 ## Prerequisites
@@ -94,9 +94,9 @@ Navigate between suggestions freely — you needn't review them in order, and yo
 
 ### Phase 4: Apply
 
-A final summary shows all accepted changes. Review them once more, then click **Apply** to update the character. The changes are saved as a batch, and the character's view refreshes to reflect the new configuration.
+A final summary shows all accepted changes. Review them once more, then click **Apply** to update the character. The changes are saved as a batch, and the character's page refreshes to reflect the new configuration. (Any edit you were in the middle of on the page is saved first, so nothing of yours is trampled.)
 
-For characters whose properties are read from a document-store vault (the "Read from document store" switch on the character edit page, with a linked character vault), accepted changes route through the existing write overlay — they are written back to the relevant vault files (e.g. `personality.md`, `Prompts/<Name>.md`, `Scenarios/<Title>.md`) rather than to the database row. No extra step is required; the apply flow detects the vault and does the right thing.
+Accepted changes are written into the character's vault files (e.g. `personality.md`, `Prompts/<Name>.md`, `Scenarios/<Title>.md`), where all of a character's particulars live. No extra step is required.
 
 ## Saving Proposals to the Vault Instead of Applying
 

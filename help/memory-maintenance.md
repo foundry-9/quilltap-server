@@ -55,7 +55,7 @@ The work runs as a background job, so it never holds up a chat turn. Only one ro
 - **Consolidate** — has a switch of its own, separate from the master switch, because it costs model calls. Off by default.
 - **Archive retention** — the number of days an archived note a digest replaced is kept before **Retire** lets it go. Blank (the default) means *never*: retirement then does nothing at all. The clock starts when a note goes down to the cellar, and is not wound back by later tidying. A note the cap archived is never let go until a digest has replaced it. When an archived note does go, its digest's tally is corrected to match — though retirement never takes the digest itself, which was written precisely to outlive the notes it replaced.
 
-The switches govern every step the house decides on for itself. A step you ask for by hand — through **Run maintenance…**, the character page's **Maintenance** button, or `quilltap memories maintain` — runs regardless of them.
+The switches govern every step the house decides on for itself. A step you ask for by hand — through **Run maintenance…**, the **Maintenance** button on the **Memories** card of a character's **History** section, or `quilltap memories maintain` — runs regardless of them.
 
 ## The Cap
 

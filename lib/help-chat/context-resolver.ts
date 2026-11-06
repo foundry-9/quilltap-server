@@ -85,16 +85,32 @@ export async function resolveHelpContentForUrl(url: string): Promise<HelpPageCon
     return buildContext(pathMatch.id, 'exact')
   }
 
-  // Strategy 3: Pattern match (e.g., /aurora/:id/edit matches /aurora/abc-123/edit)
+  // Strategy 3: Pattern match (e.g., /groups/:id/edit matches /groups/abc-123/edit)
   const patternMatches = documents.filter(doc => {
     if (!doc.url.includes(':')) return false
     const [docPath] = doc.url.split('?')
     return matchUrlPattern(docPath, urlPath)
   })
   if (patternMatches.length > 0) {
-    // Pick most specific pattern (most segments)
-    const bestPattern = patternMatches.sort((a, b) => {
-      return b.url.split('/').length - a.url.split('/').length
+    // Several docs may share one pattern and differ by query — the character
+    // page's sections are `/aurora/:id?section=…`. Drop any whose query the URL
+    // contradicts, then prefer the most segments, then the most matching query
+    // params (so a sectionless doc is the fallback for a sectionless URL).
+    const queryCount = (docUrl: string): number => {
+      const docQuery = docUrl.split('?')[1]
+      if (!docQuery) return 0
+      let count = 0
+      for (const [key, value] of new URLSearchParams(docQuery).entries()) {
+        if (urlParams.get(key) !== value) return -1
+        count++
+      }
+      return count
+    }
+    const compatible = patternMatches.filter(doc => queryCount(doc.url) >= 0)
+    const pool = compatible.length > 0 ? compatible : patternMatches
+    const bestPattern = pool.sort((a, b) => {
+      const segments = b.url.split('?')[0].split('/').length - a.url.split('?')[0].split('/').length
+      return segments !== 0 ? segments : queryCount(b.url) - queryCount(a.url)
     })[0]
     return buildContext(bestPattern.id, 'pattern')
   }

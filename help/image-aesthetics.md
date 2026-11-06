@@ -25,7 +25,7 @@ A project may keep its own house style. Visit the project's page (Prospero), ope
 
 ## The Ariel Clause — a character's own terms
 
-Some characters care a great deal about how they are shown — and not as a matter of mere taste, but as a standing condition. For these, place a file named **`depiction-guidelines.md`** in the character's own vault (via the **Depiction Guidelines** field on the character's edit page, under *Descriptions*, or by dropping the file in directly).
+Some characters care a great deal about how they are shown — and not as a matter of mere taste, but as a standing condition. For these, place a file named **`depiction-guidelines.md`** in the character's own vault (via the **Depiction guidelines** card in the **Appearance** section of the character's page, which saves as you write, or by dropping the file in directly).
 
 Whenever that character appears in a **story background** or an **ad-hoc image**, their guidelines are passed along to the image-prompt writer as a **mandatory instruction**, plainly attributed to them by name. They are never quietly omitted, they never replace the general aesthetic — they sit atop it — and where the two disagree, the character's own terms prevail. Should several such characters share a frame, each one's guidelines travel with them.
 

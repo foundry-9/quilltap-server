@@ -160,7 +160,7 @@ export function getCategoryForUrl(pathname: string): string | null {
       return inputPath === '/';
     }
 
-    // Prefix match for other paths (e.g., /aurora matches /aurora/123/edit)
+    // Prefix match for other paths (e.g., /aurora matches /aurora/123)
     const inputPath = pathname.split('?')[0];
     if (!inputPath.startsWith(patternPath)) {
       return false;

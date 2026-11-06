@@ -3,7 +3,7 @@
  * (used so in-workspace link clicks open tabs instead of navigating away).
  */
 
-import { parseHrefToIntent } from '@/lib/navigation/route-to-intent'
+import { characterChatActionFromHref, parseHrefToIntent } from '@/lib/navigation/route-to-intent'
 
 describe('parseHrefToIntent', () => {
   it('maps a specific conversation to a salon tab with its chatId', () => {
@@ -75,30 +75,31 @@ describe('parseHrefToIntent', () => {
     expect(parseHrefToIntent('/settings/wizard')).toEqual({ kind: 'settings-wizard' })
   })
 
-  it('maps the character editor (aurora + legacy /characters paths) with its sub-tab', () => {
-    expect(parseHrefToIntent('/aurora/abc/edit')).toEqual({
-      kind: 'character-edit',
-      payload: { characterId: 'abc', tab: undefined },
+  it('maps the character page and every retired spelling of it, with ?tab= mapped to a section', () => {
+    expect(parseHrefToIntent('/aurora/abc')).toEqual({ kind: 'character', payload: { characterId: 'abc' } })
+    expect(parseHrefToIntent('/aurora/abc?section=abilities')).toEqual({
+      kind: 'character',
+      payload: { characterId: 'abc', section: 'abilities' },
     })
+    expect(parseHrefToIntent('/aurora/abc/edit')).toEqual({ kind: 'character', payload: { characterId: 'abc' } })
     expect(parseHrefToIntent('/characters/abc/edit?tab=system-prompts')).toEqual({
-      kind: 'character-edit',
-      payload: { characterId: 'abc', tab: 'system-prompts' },
+      kind: 'character',
+      payload: { characterId: 'abc', section: 'prompts' },
     })
-  })
-
-  it('does NOT map a bare character detail (it renders in-place in Aurora)', () => {
-    expect(parseHrefToIntent('/aurora/abc')).toBeNull()
-  })
-
-  it('maps the character detail view (aurora + legacy /characters paths) with its sub-tab', () => {
-    expect(parseHrefToIntent('/aurora/abc/view')).toEqual({
-      kind: 'character-view',
-      payload: { characterId: 'abc', tab: undefined },
-    })
+    expect(parseHrefToIntent('/aurora/abc/view')).toEqual({ kind: 'character', payload: { characterId: 'abc' } })
     expect(parseHrefToIntent('/characters/abc/view?tab=conversations')).toEqual({
-      kind: 'character-view',
-      payload: { characterId: 'abc', tab: 'conversations' },
+      kind: 'character',
+      payload: { characterId: 'abc', section: 'history' },
     })
+    expect(parseHrefToIntent('/characters/abc')).toEqual({ kind: 'character', payload: { characterId: 'abc' } })
+  })
+
+  it('keeps ?action=chat out of the tab payload and reports it separately', () => {
+    expect(parseHrefToIntent('/aurora/abc?action=chat')).toEqual({ kind: 'character', payload: { characterId: 'abc' } })
+    expect(characterChatActionFromHref('/aurora/abc?action=chat')).toBe('abc')
+    expect(characterChatActionFromHref('/aurora/abc/view?action=chat')).toBe('abc')
+    expect(characterChatActionFromHref('/aurora/abc')).toBeNull()
+    expect(characterChatActionFromHref('/salon/abc?action=chat')).toBeNull()
   })
 
   it('returns null for unknown or external hrefs', () => {

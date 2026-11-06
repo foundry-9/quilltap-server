@@ -63,7 +63,7 @@ Quilltap supports different character configurations:
 
 1. Click **Characters** in the left sidebar
 2. See list of all your characters
-3. Click character to view or edit
+3. Click a character to open their page
 4. Options to create new, search, filter, and manage
 
 ### Quick Access
@@ -83,7 +83,7 @@ The Characters page shows all your characters with:
 - **Favorite Status** — Star icon for quick identification
 - **Control Mode** — LLM or "You Act As" indicator
 - **Tags** — Organization tags
-- **Action Buttons** — Edit, view, delete, start chat
+- **Action Buttons** — Open, delete, start chat
 
 ### Sorting and Organization
 
@@ -98,8 +98,7 @@ Characters are sorted by:
 
 **From character card:**
 
-- **View** — See character details
-- **Edit** — Modify character information
+- **Open** — Go to the character's page, where everything is seen and changed
 - **Chat** — Start new conversation
 - **Favorite/Unfavorite** — Toggle star
 - **Toggle Control Mode** — Switch LLM/User-controlled
@@ -111,7 +110,7 @@ Characters are sorted by:
 
 - **Name** — What the character is called
 - **Aliases** — Optional alternate names the character goes by (e.g., "Liz", "Lizzy" for "Elizabeth")
-- **Pronouns** — Optional pronouns for the character (e.g., he/him/his, she/her/her, they/them/their). Choose from presets or enter custom pronouns. When set, pronouns are included in system prompts so the LLM uses them correctly, and displayed on the character's view page.
+- **Pronouns** — Optional pronouns for the character (e.g., he/him/his, she/her/her, they/them/their). Choose from presets or enter custom pronouns. When set, pronouns are included in system prompts so the LLM uses them correctly, and shown in the header of the character's page.
 - **Title** — Optional subtitle or role (e.g., "Bounty Hunter")
 - **Description** — Long-form narrative about character
 - **Personality** — Key traits and characteristics
@@ -127,7 +126,7 @@ Characters are sorted by:
 
 - **Avatar** — Profile picture or icon
 - **Physical Description** — Detailed appearance (optional)
-- **Photo Gallery** — Multiple images associated with character
+- **Photos** — Multiple images associated with character (the **Photos** card on **Appearance**)
 
 ### Organization
 
@@ -162,17 +161,11 @@ Characters are sorted by:
 For more control:
 
 1. Click **Create Character**
-2. Fill all available fields:
-   - Name, title, description
-   - Personality traits
-   - Background and scenarios (one or more named scenes)
-   - First message
-   - Example dialogues
-   - System prompt
-   - Avatar
-   - Tags
-3. Select default connection profile
-4. Click **Create**
+2. Fill in the three cards:
+   - **Facts** — name, title, aliases, pronouns, birthday, kind of character
+   - **Dossier** — identity, description, manifesto, personality, first message, example dialogues
+   - **How a chat begins** — a system prompt (saved as their first named prompt, "Default"), an opening scenario (saved as "Opening scene"), and a default connection profile
+3. Click **Create Character**; their page opens, where the avatar, tags and everything else may be added
 
 ### Using AI Wizard
 
@@ -188,110 +181,68 @@ For characters with less writing:
 
 See [Creating Characters](character-creation.md) for detailed guide.
 
-## Viewing Characters
+## The Character's Page
 
-### Character Details Tab
+Each character has one page, at `/aurora/<id>`, on which everything about them is both seen and changed. There is no separate edit screen and no **Save** button: every field saves itself (see [Editing Characters](character-editing.md#how-saving-works)). Across the top sits a header with the avatar, name, badges, a line of linked figures, **Start Chat**, the **Generate ▾** menu (AI Wizard, Refine from memories & instructions, Non-Quilltap prompt), the **⋯** menu (Export, Convert to NPC, Archive, Delete) and the favourite **⭐**. Beneath it are six sections:
 
-View comprehensive character information:
+### Details
 
-- Full description with formatting
-- Personality and background
-- Example dialogues
-- Physical description
-- Current configuration
-- Tags and organization
+- **Facts** — name, title, aliases, pronouns, birthday (and the age it gives), kind of character, tags
+- **Dossier** — identity, description, manifesto, personality, first message and example dialogues, with `{{char}}` / `{{user}}` tokens and the names they could replace tinted in the editors, and the **Template tools** bar for swapping between them
+- **Progressions** — timed spans the character carries
+- **Vault** — where the character's files live in the Scriptorium, and whether any have gone missing
 
-View shows template placeholders (like `{{character}}`) highlighted, helping you see how the character's information will be used.
+### Prompts
 
-### System Prompts Tab
+- **System prompts** — multiple named prompts; the **★** star marks the default
+- **Subprompts** — smaller per-chat instructions
+- **Scenarios** — named scenes, each opened in a dialog; the **★** star marks the default scenario, and an old scene may be archived rather than deleted
 
-See and edit all system prompts:
+### Appearance
 
-- Multiple named prompts
-- Default prompt indicator
-- Full text preview
-- Edit/delete options
+- **Photos** — the character's gallery: upload, browse, set as avatar, delete
+- **Physical description** — the head-and-shoulders, short, medium, long and complete prompts and the full description, for AI context and image generation
+- **Depiction guidelines** — the character's standing conditions on how they may be shown
+- **Wardrobe** — opens the wardrobe, and holds the wardrobe instructions
+- **Inventory** — opens the inventory, and lists what they carry by default
 
-### Conversations Tab
+### Abilities
 
-Browse chat history:
+- System transparency, Aurora's Core whisper, answering @-queries (Carina), drawing diagrams, the wardrobe and inventory permissions, and whether you play the character yourself or they are an NPC
 
-- List of all chats with character
-- Search within conversations
-- Message previews
-- Start new chat from history
+### Chat Defaults
 
-### Memories Tab
-
-View associated memories:
-
-- Memories about this character
-- Memory details and dates
-- Search and filter
-- **Reinforcement count** — shows how many times a memory has been observed (e.g., "x3" badge means the same fact was seen in 3 separate exchanges). Frequently reinforced memories are considered stable knowledge and are better protected when maintenance trims a character to the cap
-- **Related memories** — memories that are thematically linked are connected together. When a new memory is similar but distinct from an existing one, both are linked for context
-- **Adding a memory by hand** — a memory you write yourself is filed as **MANUAL** and passes the same doorman as any other. Should the character already hold the very thing you have written *in your own hand* (another MANUAL memory) or in a consolidated digest, no duplicate is made: that memory is reinforced instead, takes whichever importance is the higher, yours or its own, and the confirmation says as much. Should the near-twin be something the character merely picked up in conversation, however, your words are never quietly swallowed by it — yours is filed as a memory of its own, linked to the extracted one so the two are found together. A hand-written memory is never archived or swept away by housekeeping
-- **Looking is not touching** — opening or reading a memory here does not count as the character recalling it, so a curious glance never props up a memory that would otherwise be eligible for the archive
-- **Editing a memory** — revise a memory's words and the Commonplace Book re-files it under what it now says, not what it said before: the character finds it, and the doorman weighs new arrivals against it, by the new text. Raise or lower its importance and its standing moves at once. A link you add to a related memory is fastened at both ends (and only to memories of the same character), and an edited consolidated digest is copied afresh into the character's `Commonplace/` notes. Should the embedding service be indisposed when you save new words, nothing is saved at all — the memory keeps its old text and you are told why, rather than left with new words filed under the old ones
-
-### Tags Tab
-
-Manage character organization:
-
-- Current tags
-- Add/remove tags
-- Quick-hide settings
-- Filter by tag
-
-### Default Settings Tab
-
-Configure character partnerships, defaults, and chat behavior:
+What a new chat with the character begins with:
 
 - Default connection profile (LLM provider)
 - Default conversation partner
 - Image generation profile
-- Default system prompt (when multiple prompts exist)
-- Default scenario (when multiple scenarios exist)
+- Timestamp settings
 - Agent mode default
 - Help tools default
-- Default timestamp injection settings
 
-### Photo Gallery Tab
+### History
 
-Browse character images:
-
-- All associated images
-- Avatars and profile pictures
-- Physical description images
-- Upload new images
-- Set as default avatar
-
-### Appearance Tab
-
-View detailed appearance and outfits:
-
-- **Physical Descriptions** — Various description lengths (short/medium/long/complete/full) for AI context and image generation
-- **Clothing & Outfits** — Named outfit records with usage context and markdown descriptions, used in system prompts and image generation
+- **Conversations** — every chat with the character; start a new one from here too
+- **Memories** — the character's Commonplace Book:
+  - Memories about this character
+  - Memory details and dates
+  - Search and filter
+  - **Reinforcement count** — shows how many times a memory has been observed (e.g., "x3" badge means the same fact was seen in 3 separate exchanges). Frequently reinforced memories are considered stable knowledge and are better protected when maintenance trims a character to the cap
+  - **Related memories** — memories that are thematically linked are connected together. When a new memory is similar but distinct from an existing one, both are linked for context
+  - **Adding a memory by hand** — a memory you write yourself is filed as **MANUAL** and passes the same doorman as any other. Should the character already hold the very thing you have written *in your own hand* (another MANUAL memory) or in a consolidated digest, no duplicate is made: that memory is reinforced instead, takes whichever importance is the higher, yours or its own, and the confirmation says as much. Should the near-twin be something the character merely picked up in conversation, however, your words are never quietly swallowed by it — yours is filed as a memory of its own, linked to the extracted one so the two are found together. A hand-written memory is never archived or swept away by housekeeping
+  - **Looking is not touching** — opening or reading a memory here does not count as the character recalling it, so a curious glance never props up a memory that would otherwise be eligible for the archive
+  - **Editing a memory** — revise a memory's words and the Commonplace Book re-files it under what it now says, not what it said before: the character finds it, and the doorman weighs new arrivals against it, by the new text. Raise or lower its importance and its standing moves at once. A link you add to a related memory is fastened at both ends (and only to memories of the same character), and an edited consolidated digest is copied afresh into the character's `Commonplace/` notes. Should the embedding service be indisposed when you save new words, nothing is saved at all — the memory keeps its old text and you are told why, rather than left with new words filed under the old ones
+- **Bulk edits** — Search & Replace, and Rename / Replace, each with a preview before anything changes
+- **LLM logs** — folded away at the foot
 
 ## Editing Characters
 
 ### Editing Basics
 
-1. Open character
-2. Click **Edit** button
-3. Modify fields as needed
-4. Click **Save**
-
-Editable fields:
-
-- Name, aliases, pronouns, title, description
-- Personality and scenarios
-- First message and examples
-- Avatar and images
-- Tags
-- System prompts
-- Default profiles
-- Physical description
+1. Open the character
+2. Go to the section that holds what you want to change
+3. Change it — it saves itself when you pause or leave the field
 
 See [Editing Characters](character-editing.md) for detailed guide.
 
@@ -302,7 +253,7 @@ Find and replace hard-coded names with placeholders:
 - **{{char}}** — Character name
 - **{{user}}** — Default partner name
 - One click sweeps every prose field on the character — description, personality, first message, example dialogues, every scenario, every system prompt variant, and every physical-description entry (including the image-prompt slots). Structured metadata such as pronouns, aliases, and title is left untouched.
-- Preview changes before applying
+- Each button shows how many occurrences it will change; the work is saved at once
 
 ### Rename and Replace Tool
 
@@ -408,7 +359,7 @@ See [Managing Characters](character-management.md) for more details.
 Save character for sharing:
 
 1. Go to character
-2. Click **Export** button
+2. Open the **⋯** menu in the header and choose **Export…**
 3. Character downloads as JSON or PNG file
 4. Can share with other users
 

@@ -38,6 +38,7 @@ import {
 } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
+import { TemplateTokenHighlightPlugin } from './TemplateTokenHighlightPlugin'
 
 interface MarkdownLexicalEditorProps {
   value: string
@@ -61,6 +62,13 @@ interface MarkdownLexicalEditorProps {
   showSourceToggle?: boolean
   /** Minimum height of the editor body. Accepts any CSS height value. */
   minHeight?: string
+  /** Shown, greyed, while the editor is empty. */
+  placeholder?: string
+  /**
+   * Tint `{{char}}` / `{{user}}` tokens and the names that could become them
+   * (`TemplateTokenHighlightPlugin`). Off unless given.
+   */
+  templateHighlight?: { characterName?: string | null; userName?: string | null }
 }
 
 function EditorBody({
@@ -69,12 +77,16 @@ function EditorBody({
   disabled,
   minHeight,
   ariaLabel,
+  placeholder,
+  templateHighlight,
 }: {
   value: string
   onChange: (value: string) => void
   disabled: boolean
   minHeight: string
   ariaLabel?: string
+  placeholder?: string
+  templateHighlight?: MarkdownLexicalEditorProps['templateHighlight']
 }) {
   const [editor] = useLexicalComposerContext()
 
@@ -84,16 +96,30 @@ function EditorBody({
 
   return (
     <>
-      <RichTextPlugin
-        contentEditable={
-          <ContentEditable
-            className="qt-doc-editor-area qt-lexical-contenteditable"
-            aria-label={ariaLabel ?? 'Markdown editor'}
-            style={{ lineHeight: '1.6', minHeight }}
-          />
-        }
-        ErrorBoundary={LexicalErrorBoundary}
-      />
+      <div className="relative">
+        <RichTextPlugin
+          contentEditable={
+            <ContentEditable
+              className="qt-doc-editor-area qt-lexical-contenteditable"
+              aria-label={ariaLabel ?? 'Markdown editor'}
+              style={{ lineHeight: '1.6', minHeight }}
+            />
+          }
+          placeholder={
+            placeholder ? (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 select-none overflow-hidden qt-text-secondary opacity-70"
+                // Matches `.qt-doc-editor-area`'s padding, so the hint sits where the caret does.
+                style={{ lineHeight: '1.6', padding: '1rem 1.5rem' }}
+              >
+                {placeholder}
+              </div>
+            ) : null
+          }
+          ErrorBoundary={LexicalErrorBoundary}
+        />
+      </div>
       <HistoryPlugin />
       <ListPlugin />
       <CheckListPlugin />
@@ -105,6 +131,12 @@ function EditorBody({
         initialMarkdown={value}
       />
       <FormattingCommandPlugin />
+      {templateHighlight && (
+        <TemplateTokenHighlightPlugin
+          characterName={templateHighlight.characterName}
+          userName={templateHighlight.userName}
+        />
+      )}
     </>
   )
 }
@@ -151,6 +183,8 @@ export default function MarkdownLexicalEditor({
   ariaLabel,
   showSourceToggle = true,
   minHeight = '12rem',
+  placeholder,
+  templateHighlight,
 }: MarkdownLexicalEditorProps) {
   const [showSource, setShowSource] = useState(false)
   // Bumped each time the user leaves source mode, so the LexicalComposer
@@ -223,6 +257,7 @@ export default function MarkdownLexicalEditor({
             disabled={disabled}
             spellCheck={false}
             aria-label={ariaLabel ? `${ariaLabel} (markdown source)` : 'Markdown source'}
+            placeholder={placeholder}
             className="w-full px-3 py-2 font-mono text-sm qt-text-primary border-0 outline-none resize-y"
             style={{ lineHeight: '1.6', minHeight, backgroundColor: 'var(--color-background)' }}
           />
@@ -235,6 +270,8 @@ export default function MarkdownLexicalEditor({
                 disabled={disabled}
                 minHeight={minHeight}
                 ariaLabel={ariaLabel}
+                placeholder={placeholder}
+                templateHighlight={templateHighlight}
               />
             </div>
           </div>

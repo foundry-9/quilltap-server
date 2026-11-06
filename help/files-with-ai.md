@@ -141,7 +141,7 @@ AI: "Three hits — two in magic-system.md and one in
 **AI says a file isn't accessible:**
 
 - Confirm the chat is in a project, and the project has a linked document store (Project > The Scriptorium)
-- For character vaults, confirm the character has a linked document store in its Aurora edit page
+- For character vaults, confirm the character has a linked vault — the **Vault** card in the **Details** section of their Aurora page names it, or says plainly that there is none
 - For peer vaults, confirm the chat's "Shared Vaults" toggle is on
 
 **AI can't find a file it wrote earlier:**

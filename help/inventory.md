@@ -14,6 +14,7 @@ The Inventory is not the [Wardrobe](wardrobe.md). The Wardrobe dresses a charact
 
 - **The left rail's Inventory button** (the open box) opens the Inventory as a workspace tab, from which every shelf in the house may be browsed.
 - **In a Salon chat**, each character's card in the participant list carries an Inventory button. That opens the Inventory *for that character in that chat*, with the **Carrying now** pane alongside and an Equip button on every row.
+- **On a character's page in Aurora**, the **Inventory** card in the **Appearance** section has an **Open inventory** button for that character's own shelf, and lists what they carry by default when they arrive in a chat.
 - **On a project's page in Prospero**, the **Inventory** card browses the project's own shelf (see [Project Inventory](project-inventory.md)).
 
 At the top of the dialog a single dropdown chooses which inventory you are looking at: a **character**, **Quilltap General**, a **project** or a **group**.
@@ -179,7 +180,7 @@ However many of these a character uses in one reply, Pascal posts **one** line a
 
 ### Inventory management
 
-Whether a character may use any of these tools is the **Inventory Management** setting on the character's page in Aurora, beside *Self-Dressing* and *Outfit Creation*. It is on unless you turn it off, and it governs the whole family — a character who may not manage their inventory cannot so much as list it. The [Brahma Console](brahma-console.md) and the [Scenario Builder](scenario-builder.md) never offer these tools.
+Whether a character may use any of these tools is the **Manages inventory** setting on the character's page in Aurora — in the **Wardrobe & inventory** card of the **Abilities** section, beside *Dresses themselves* and *Creates outfits*. It is on unless you turn it off, and it governs the whole family — a character who may not manage their inventory cannot so much as list it. The [Brahma Console](brahma-console.md) and the [Scenario Builder](scenario-builder.md) never offer these tools.
 
 The [`self_inventory`](character-system-transparency.md) tool, despite the name, cannot pick anything up or set anything down: it is a character's look at their own settings, not a hand in their pockets. It will, however, *count* the pockets on request — its `holdings.inventory` part reports how many objects, kits and archetypes are within reach, how many the character is carrying in this chat, and which shelves they came from.
 

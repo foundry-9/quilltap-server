@@ -108,6 +108,8 @@ type TabKind =
   | 'photos'
   | 'scenarios'
   | 'brahma'
+  | 'character'    // payload: { characterId: string; section?: string } — the one character page (`/aurora/[id]`)
+  | 'character-new'
   | 'wardrobe';    // payload: { characterId?: string }  — RAIL-opened only; NO chatId (see Wardrobe)
 
 interface WorkspaceTab {
@@ -126,6 +128,15 @@ interface WorkspaceTab {
 > "Terminal & Document Mode as chat-linked tabs").
 > Wardrobe is a tab kind **only** when opened from the left rail; the chat-scoped
 > path keeps the existing dialog (see "Wardrobe: tab vs dialog").
+> The character page was originally two kinds, `character-view` and
+> `character-edit`, each carrying the old page's `?tab=`. They are now the one
+> `character` kind (`CharacterTabPayload`, `lib/workspace/types.ts`), whose
+> `section` is one of the page's six sections. A persisted workspace holding an
+> old kind is upgraded on load by `upgradeLegacyTab`
+> (`lib/workspace/workspace-persistence.ts`), which maps the old `?tab=` onto a
+> section. `?action=chat` is not part of the payload: `WorkspaceIntent` opens
+> the `character` tab and pops the New Chat modal beside it with the character
+> preselected.
 
 ```ts
 interface WorkspaceState {
@@ -209,16 +220,21 @@ refreshes its data sources:
   mounted (their queries remain active observers), a prefix invalidation also
   freshens sibling tabs sharing it.
 - **Views that still fetch outside TanStack Query** (Prospero, the Scriptorium
-  and their in-place detail views, Photos, Files/FileBrowser, the character
-  detail, General Scenarios, the rail Wardrobe, Aurora's groups list) call
+  and their in-place detail views, Photos, Files/FileBrowser, General Scenarios, the rail Wardrobe, Aurora's groups list) call
   `useOnTabActivated` themselves and re-run their loads **silently** — their
   fetchers accept `{ silent: true }` so a refresh never flips the `loading`
   flag that would swap the page (or an in-place detail) for its loading state.
 - **Deliberately not refreshed:** `salon` / `terminal` / `document` (live
   SSE/PTY surfaces; the streaming transport is out of bounds), `brahma`
-  (likewise a console), and editors holding unsaved state (`character-edit`,
-  `character-new`, `document-standalone`, `settings-wizard`). The full roster
-  and rationale live in `lib/workspace/tab-refetch.ts`'s module doc.
+  (likewise a console), and editors holding unsaved state (`character-new`,
+  `document-standalone`, `settings-wizard`). The full roster and rationale
+  live in `lib/workspace/tab-refetch.ts`'s module doc.
+- **The `character` tab is refreshed.** It used to be exempt as
+  `character-edit` (an editor holding unsaved state). The unified page
+  autosaves every field on blur or after a short idle, so nothing is unsaved for
+  longer than that; its activation keys are the row-scoped character keys from
+  `queryKeysForTopic('characters', characterId)`. A focused field is not
+  overwritten by the refetch.
 
 Wiring a **new tab kind**: give its TanStack reads an entry in
 `tabActivationQueryKeys`, and if it fetches outside TanStack Query, re-run
@@ -527,7 +543,7 @@ The old UI routes redirect to `/workspace` with an open-tab intent, the workspac
 store lives app-level in `AppLayout`, and `/workspace` is the post-login landing
 surface. The `WORKSPACE_TABS_ENABLED` flag now **defaults on** (set
 `NEXT_PUBLIC_WORKSPACE_TABS=0` to opt out). Every route with a tab equivalent —
-including the later editor/creator surfaces (character edit/new, image
+including the later editor/creator surfaces (character page/new, image
 generation, profile, about, the provider wizard) — redirects via
 `redirectToWorkspaceTab(...)`, and `WorkspaceIntent` opens the matching tab.
 
@@ -535,8 +551,10 @@ Detail and list deep links joined the cutover later: `/salon` redirects to a
 `salon-list` tab; `/prospero/[id]`, `/scriptorium/[id]`, and
 `/aurora/groups/[id]` redirect to their singleton list tab carrying a drill-in
 payload (`projectId` / `storeId` / `groupId`) that the view follows in place;
-`/aurora/[id]/view` redirects to a `character-view` tab (with `?tab=`, and
-`?action=chat` popping the new-chat modal); `/salon/new` redirects with an
+`/aurora/[id]` redirects to a `character` tab (with `?section=`, and
+`?action=chat` popping the new-chat modal beside it); the retired
+`/aurora/[id]/view` and `/aurora/[id]/edit` redirect to `/aurora/[id]`, with
+their old `?tab=` mapped to a section; `/salon/new` redirects with an
 `open=new-chat` intent that pops the new-chat modal; and
 `/salon/[id]/terminal/[sessionId]` opens the conversation's Salon tab plus a
 child terminal tab (the Salon view is the portal source for the live PTY). The

@@ -213,7 +213,7 @@ Some responses involve a sequence of tool calls:
 
 **Enable these first:**
 
-- Help tools must be enabled on the character (in the character's Profiles tab)
+- Help tools must be enabled on the character (in the **Chat Defaults** section of the character's page, under **Help tools**)
 
 **Best practices:**
 

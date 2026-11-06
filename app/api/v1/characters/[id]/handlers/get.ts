@@ -307,10 +307,15 @@ export async function handleGet(
         // Knowledge = files under the `Knowledge/` folder; Core = files under
         // the `Core/` packet folder (the periodically re-offered core whisper).
         // All three count link rows.
+        // Subprompts / Mail / Scenarios count the files in those vault folders
+        // for the character page's Vault card.
         const presentPaths = new Set<string>();
         let photos = 0;
         let knowledge = 0;
         let core = 0;
+        let subprompts = 0;
+        let mail = 0;
+        let scenarioFiles = 0;
         for (const link of fileLinks) {
           const rel = link.relativePath.toLowerCase();
           presentPaths.add(rel);
@@ -319,6 +324,9 @@ export async function handleGet(
           }
           if (rel.startsWith('knowledge/')) knowledge++;
           if (rel.startsWith('core/')) core++;
+          if (rel.startsWith('subprompts/')) subprompts++;
+          if (rel.startsWith('mail/')) mail++;
+          if (rel.startsWith('scenarios/')) scenarioFiles++;
         }
 
         // Character Files = how many of the canonical managed vault files are
@@ -326,9 +334,15 @@ export async function handleGet(
         // path so historic case-variant duplicate rows (`Manifesto.md` +
         // `manifesto.md`) can't push the figure past the canonical set size.
         let characterFiles = 0;
+        const missingCharacterFiles: string[] = [];
         for (const corePath of SINGLE_FILE_OVERLAY_PATHS) {
           if (presentPaths.has(corePath.toLowerCase())) characterFiles++;
+          else missingCharacterFiles.push(corePath);
         }
+
+        // The vault's own name, for the page's link into the Scriptorium.
+        const vaultMount = mountPointId ? await repos.docMountPoints.findById(mountPointId) : null;
+        const vault = vaultMount ? { mountPointId: vaultMount.id, name: vaultMount.name } : null;
 
         // Hydrate the character's groups (membership lives in the mount-index;
         // color/icon come from each group's document store via findByIds).
@@ -352,9 +366,20 @@ export async function handleGet(
           core,
           characterFiles,
           characterFilesTotal: SINGLE_FILE_OVERLAY_PATHS.length,
+          missingCharacterFiles: mountPointId ? missingCharacterFiles : [],
+          subprompts,
+          mail,
+          scenarioFiles,
         };
 
-        return NextResponse.json({ stats, groups });
+        logger.debug('[Characters v1] Character stats computed', {
+          characterId: id,
+          characterFiles,
+          missing: stats.missingCharacterFiles.length,
+          hasVault: Boolean(vault),
+        });
+
+        return NextResponse.json({ stats, groups, vault });
       } catch (error) {
         logger.error('[Characters v1] Error computing character stats', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to compute character stats');

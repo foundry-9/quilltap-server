@@ -329,7 +329,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           {refreshingArchive ? 'Refreshing...' : 'Refresh Conversation Archive'}
         </button>
         <Link
-          href={`/aurora/${characterId}/view?action=chat`}
+          href={`/aurora/${characterId}?action=chat`}
           className="flex items-center gap-2 px-4 py-2 qt-button-primary font-medium text-sm whitespace-nowrap"
         >
           <Icon name="plus" className="w-4 h-4" />
@@ -349,7 +349,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           </p>
           {!searchQuery && (
             <Link
-              href={`/aurora/${characterId}/view?action=chat`}
+              href={`/aurora/${characterId}?action=chat`}
               className="mt-4 inline-flex items-center gap-2 text-primary hover:underline"
             >
               Start your first conversation

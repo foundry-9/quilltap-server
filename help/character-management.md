@@ -56,8 +56,8 @@ When enabled for a character, two tools become available:
 ### Enabling Help Tools
 
 1. Open a character in **Aurora** (`/aurora`)
-2. Navigate to the **Profiles** tab
-3. Find the **Help Tools** section
+2. Open the **Chat Defaults** section
+3. Find **Help tools**
 4. Select **Enabled** from the dropdown
 5. The setting saves automatically
 
@@ -114,7 +114,7 @@ excused from the export wizard; their bundle *is* their export.
 ### How to Archive
 
 1. Open the character's page from the **Characters** roster
-2. Click **Archive** in the action column
+2. Open the **⋯** menu in the header and choose **Archive…**
 3. The confirmation spells out precisely what is packed and what stays —
    read it, then click **Archive**
 
@@ -196,20 +196,20 @@ Delete a character when:
 5. Click **Delete** to confirm
 6. Character is permanently removed
 
-**Method 2: From Character View**
+**Method 2: From the Character's Page**
 
-1. Open character to view
-2. Click menu icon (⋮ or ⋯) at top
-3. Select **Delete Character**
+1. Open the character's page
+2. Click the **⋯** menu in the header
+3. Select **Delete…**
 4. Confirmation dialog appears
 5. Click **Confirm Delete**
 6. Character removed
 
-**Method 3: From Character Edit**
+**Method 3: From the Character's Page**
 
-1. Open character edit
-2. Click menu icon at top
-3. Select **Delete Character**
+1. Open the character's page
+2. Click the **⋯** menu in the header
+3. Select **Delete…**
 4. Confirmation appears
 5. Click **Confirm**
 
@@ -299,11 +299,11 @@ Characters can have relationships with other characters:
 
 **When editing character:**
 
-1. Edit character
-2. Edit **Details** tab
-3. In Description or Personality section
+1. Open the character's page
+2. Go to the **Details** section
+3. In the Description or Personality field of the **Dossier** card
 4. Add relationship information
-5. Save
+5. It saves itself as you write
 
 ### Linking Relationships
 
@@ -347,8 +347,8 @@ Loyal ally of Captain Vex. Secret rival of his brother Daniel."
 
 To see all relationships a character has:
 
-1. Open character view
-2. Look in Description or Personality
+1. Open the character's page
+2. Look in Description or Personality on **Details**
 3. All mentioned relationships visible
 4. Click links to view related characters
 5. Build relationship map by following links
@@ -357,10 +357,10 @@ To see all relationships a character has:
 
 If characters' relationships change:
 
-1. Edit character
-2. Update Description or Personality
+1. Open the character's page
+2. Update Description or Personality in the **Dossier** card on **Details**
 3. Modify relationship information
-4. Save changes
+4. It saves itself as you write
 
 **Example:**
 
@@ -509,9 +509,9 @@ NPCs are characters typically controlled by AI that interact with player charact
 
 **Mark character as NPC:**
 
-1. When creating character, tag with "NPC"
-2. Or add tag later in organization
-3. Indicates character is AI-controlled
+1. Open the character's page and go to **Abilities**
+2. In the **Control** card, tick **Non-player character** — or choose **Convert to NPC** from the header's **⋯** menu
+3. The header shows an **NPC** badge from then on
 
 **Quick NPC creation:**
 

@@ -15,7 +15,7 @@ When Agent Mode is enabled, the AI can:
 - **Self-correct** - Fix mistakes and improve answers based on intermediate results
 - **Work autonomously** - Handle multi-step tasks without constant user input
 
-What Agent Mode *means* depends on the kind of character who is speaking (set on the character's Details tab — see [Character Editing](character-editing.md)):
+What Agent Mode *means* depends on the kind of character who is speaking (set in the **Facts** card of the character's **Details** section — see [Character Editing](character-editing.md)):
 
 - **A roleplay character** (the default) acts in the scene. Their tools become their hands: looking something up, checking a ledger, sending word, moving an object. They may take several such steps in a turn, and then they write the turn as they always would — in character, in prose, with no summary and no report.
 - **An assistant** researches and reports. They iterate, verify, and signal completion by calling the `submit_final_response` tool when confident in their answer.
@@ -68,7 +68,7 @@ To toggle agent mode for the current chat, open the **Chat Sidebar** on the righ
 
 ### Character Defaults
 
-Characters can have their own default agent mode setting that overrides the global default. Configure this in the character's **Profiles** tab under **Agent Mode**:
+Characters can have their own default agent mode setting that overrides the global default. Configure this in the **Chat Defaults** section of the character's page, under **Agent mode** (it saves the moment you choose):
 - **Inherit from global settings**: Use the global chat settings default
 - **Enabled by default**: Agent mode is on for new chats with this character
 - **Disabled by default**: Agent mode is off for new chats with this character

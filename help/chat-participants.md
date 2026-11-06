@@ -132,7 +132,7 @@ This makes switching models the fastest possible action — no need to open a se
 
 ### System Prompt Dropdown
 
-Immediately beneath the connection profile selector, each LLM-controlled character card also carries a **system prompt dropdown**. If the character has more than one named system prompt (defined on the character's edit page), this lets you pick which one the LLM should speak from — without leaving the chat:
+Immediately beneath the connection profile selector, each LLM-controlled character card also carries a **system prompt dropdown**. If the character has more than one named system prompt (kept in the **Prompts** section of the character's page), this lets you pick which one the LLM should speak from — without leaving the chat:
 
 - **Use default prompt** — the entry marked as default on the character takes the stage
 - **Every named prompt** the character carries appears in the list, with the default marked

@@ -32,8 +32,8 @@ const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AII
 
 // Lazy so the list bundle doesn't pull in the character detail (chat modal,
 // optimizer, editors) until a character is actually opened in place.
-const CharacterDetailView = dynamic(
-  () => import('./[id]/view/CharacterDetailView').then((m) => m.CharacterDetailView),
+const CharacterPage = dynamic(
+  () => import('./[id]/CharacterPage').then((m) => m.CharacterPage),
   { ssr: false, loading: () => <p className="qt-text-muted p-8 text-center">Loading character…</p> }
 )
 
@@ -91,7 +91,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
   const bgStyle = useSubsystemBackgroundStyle('aurora')
   // In a workspace tab, drilling into a character renders in place (keep-alive)
-  // instead of navigating to /aurora/[id]/view. (Group detail still routes.)
+  // instead of navigating to /aurora/[id]. (Group detail still routes.)
   const {
     inTab,
     selectedId: selectedGroupId,
@@ -281,7 +281,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       setOpenChatForSelected(false)
       setSelectedCharacterId(characterId)
     } else {
-      router.push(`/aurora/${characterId}/view`)
+      router.push(`/aurora/${characterId}`)
     }
   }
 
@@ -385,7 +385,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   // (the detail views manage their own loading, so this precedes the list gate).
   if (inTab && selectedCharacterId) {
     return (
-      <CharacterDetailView
+      <CharacterPage
         characterId={selectedCharacterId}
         onBack={() => {
           setSelectedCharacterId(null)
@@ -527,7 +527,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                   <div className="flex-grow">
                     <h2 className="qt-heading-3 text-foreground flex items-center gap-2">
                       <Link
-                        href={`/aurora/${character.id}/view`}
+                        href={`/aurora/${character.id}`}
                         onClick={inTab ? (e) => {
                           e.preventDefault()
                           setOpenChatForSelected(false)
@@ -612,7 +612,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                 ) : (
                   <>
                     <Link
-                      href={`/aurora/${character.id}/view?action=chat`}
+                      href={`/aurora/${character.id}?action=chat`}
                       onClick={inTab ? (e) => {
                         e.preventDefault()
                         setOpenChatForSelected(true)

@@ -45,8 +45,8 @@ import { AboutView } from '@/app/about/AboutView'
 import { GenerateImageView } from '@/app/generate-image/GenerateImageView'
 import { StandaloneDocumentView } from '@/components/workspace/StandaloneDocumentView'
 import { NewCharacterView } from '@/app/aurora/new/NewCharacterView'
-import { CharacterEditView } from '@/app/aurora/[id]/edit/CharacterEditView'
-import { CharacterDetailView } from '@/app/aurora/[id]/view/CharacterDetailView'
+import { CharacterPage } from '@/app/aurora/[id]/CharacterPage'
+import { isCharacterPageSection } from '@/lib/characters/page-sections'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import { SettingsWizardView } from '@/app/settings/wizard/SettingsWizardView'
 import { CustomToolsView } from '@/app/custom-tools/CustomToolsView'
@@ -59,22 +59,21 @@ import type {
   DocumentStandaloneTabPayload,
   WardrobeTabPayload,
   InventoryTabPayload,
-  CharacterEditTabPayload,
-  CharacterViewTabPayload,
+  CharacterTabPayload,
   CustomToolsTabPayload,
 } from '@/lib/workspace/types'
 
 /**
- * The read-only character detail as a workspace tab. Its "back" action closes
- * the tab (returning focus to the kept-alive tab it was opened from) rather than
+ * The character page as a workspace tab. Its "back" action closes the tab
+ * (returning focus to the kept-alive tab it was opened from) rather than
  * navigating, keeping the workspace mounted.
  */
-function CharacterViewTab({ characterId, initialTab }: { characterId: string; initialTab?: string }) {
+function CharacterTab({ characterId, section }: { characterId: string; section?: string }) {
   const closeSelf = useCloseSelfTab()
   return (
-    <CharacterDetailView
+    <CharacterPage
       characterId={characterId}
-      initialTab={initialTab}
+      initialSection={isCharacterPageSection(section) ? section : undefined}
       onBack={() => { closeSelf() }}
     />
   )
@@ -128,13 +127,9 @@ function renderView(tab: WorkspaceTab) {
       return <StandaloneDocumentView payload={tab.payload as DocumentStandaloneTabPayload} />
     case 'character-new':
       return <NewCharacterView />
-    case 'character-edit': {
-      const payload = tab.payload as CharacterEditTabPayload
-      return <CharacterEditView characterId={payload.characterId} initialTab={payload.tab} />
-    }
-    case 'character-view': {
-      const payload = tab.payload as CharacterViewTabPayload
-      return <CharacterViewTab characterId={payload.characterId} initialTab={payload.tab} />
+    case 'character': {
+      const payload = tab.payload as CharacterTabPayload
+      return <CharacterTab characterId={payload.characterId} section={payload.section} />
     }
     case 'settings-wizard':
       return <SettingsWizardView />
