@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Chore: dev-tag cleanup deletes Docker Hub images by digest
+
+- `remove-old-dev-tags` removed old dev images with `regctl tag rm`, which on Docker Hub only drops the tag; the manifests and layers stayed untagged and kept using storage (`foundry9/quilltap` passed 200 GB). Step 7 now deletes each old version's index and its child manifests (both images and both attestations) by digest, skips digests reachable from the kept dev version and `latest`, and stops if the registry token lacks delete scope instead of falling back to tag-only removal. Images already left untagged must still be cleared from Docker Hub's web UI.
+
 #### Fix: character page follow-ups; physical description name and usage context retired
 
 - Header menus (avatar, Generate, ⋯) opened offset down and right. The sticky header's `backdrop-blur` makes it the containing block for `position: fixed`, so the viewport coordinates from `fixedMenuPlacement` were applied relative to the header. `hooks/useFixedMenu.ts` now finds an ancestor that captures fixed positioning (`fixedContainingBlock`: transform, filter, backdrop-filter, perspective, contain, will-change) and places the menu against its box. Applies to every `ItemActionMenu`.
