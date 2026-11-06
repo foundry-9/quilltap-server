@@ -60,6 +60,7 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { buildHelpChatSystemPrompt } from '@/lib/help-chat/system-prompt-builder'
 import { resolveAllHelpContentForUrl } from '@/lib/help-chat/context-resolver'
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
+import { profileParams } from '@/lib/llm/cheap-llm'
 
 const logger = createServiceLogger('HelpChatOrchestrator')
 
@@ -359,7 +360,10 @@ async function processHelpResponse(
       messages: conversationMessages,
       connectionProfile,
       apiKey,
-      modelParams: {},
+      // The profile's own parameters (prompt-cache breakpoints, thinking,
+      // max tokens) — an empty object here left every Anthropic call in this
+      // loop uncached.
+      modelParams: profileParams(connectionProfile) ?? {},
       tools: effectiveTools,
       useNativeWebSearch: false,
       userId,

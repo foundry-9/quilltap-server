@@ -24025,6 +24025,167 @@ function buildSdkClientOptions(params, defaultMs = DEFAULT_REQUEST_TIMEOUT_MS) {
 }
 var rewriteLogger = createPluginLogger("host-rewrite");
 
+// model-families.ts
+var GPT_RE = /^gpt-(\d+)(?:\.(\d+))?(?![\d.])/;
+var O_SERIES_RE = /^o(\d+)(?![\d.])/;
+function parseOpenAIModelFamily(model) {
+  const id = (model ?? "").toLowerCase();
+  const gpt = GPT_RE.exec(id);
+  if (gpt) {
+    return {
+      family: "gpt",
+      major: Number(gpt[1]),
+      minor: gpt[2] !== void 0 ? Number(gpt[2]) : void 0,
+      id
+    };
+  }
+  const o = O_SERIES_RE.exec(id);
+  if (o) {
+    return { family: "o", major: Number(o[1]), id };
+  }
+  return null;
+}
+var MIN_CHAT_GPT_MAJOR = 4;
+var FIRST_REASONING_GPT_MAJOR = 5;
+var FIRST_RETENTION_GPT_MAJOR = 6;
+var GPT5_RETENTION_MINORS = /* @__PURE__ */ new Set([1, 2, 5]);
+var FIRST_EXPLICIT_CACHE_GPT5_MINOR = 6;
+function isOpenAIChatModel(model) {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed) return false;
+  return parsed.family === "o" || parsed.major >= MIN_CHAT_GPT_MAJOR;
+}
+function isOpenAIReasoningModel(model) {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed) return false;
+  return parsed.family === "o" || parsed.major >= FIRST_REASONING_GPT_MAJOR;
+}
+function supportsOpenAIExplicitCacheBreakpoints(model) {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed || parsed.family !== "gpt") return false;
+  if (parsed.major === 5) {
+    return parsed.minor !== void 0 && parsed.minor >= FIRST_EXPLICIT_CACHE_GPT5_MINOR;
+  }
+  return parsed.major > 5;
+}
+function supportsOpenAIExtendedCacheRetention(model) {
+  const parsed = parseOpenAIModelFamily(model);
+  if (!parsed || parsed.family !== "gpt") return false;
+  if (parsed.major === 5) {
+    return parsed.minor !== void 0 && GPT5_RETENTION_MINORS.has(parsed.minor);
+  }
+  return parsed.major >= FIRST_RETENTION_GPT_MAJOR && !parsed.id.includes("chat-latest");
+}
+function isPromptCacheControlRejection(error) {
+  if (!error || typeof error !== "object") return false;
+  const status = error.status;
+  if (status !== void 0 && status !== 400) return false;
+  const message = error instanceof Error ? error.message : String(error.message ?? "");
+  const param = error.param;
+  const pattern = /prompt_cache_(retention|options|breakpoint)/i;
+  return typeof param === "string" && pattern.test(param) || pattern.test(message);
+}
+
+// cache-breakpoints.ts
+var BREAKPOINT = { mode: "explicit" };
+var MAX_HISTORY_BREAKPOINTS = 48;
+var MARKABLE_BLOCK_TYPES = /* @__PURE__ */ new Set(["input_text", "input_image", "input_file"]);
+function isMessage(item, role) {
+  const m = item;
+  if (m.type !== void 0 && m.type !== "message") return false;
+  if (role) return m.role === role;
+  return m.role === "user" || m.role === "developer";
+}
+function isFunctionCallOutput(item) {
+  return item.type === "function_call_output";
+}
+function isMarkable(item) {
+  return isMessage(item) || isFunctionCallOutput(item);
+}
+function liftString(value) {
+  return typeof value === "string" && value.length > 0 ? [{ type: "input_text", text: value }] : value;
+}
+function markBlocks(blocks) {
+  if (!Array.isArray(blocks) || blocks.length === 0) return null;
+  const last = blocks[blocks.length - 1];
+  if (!last || !MARKABLE_BLOCK_TYPES.has(last.type ?? "")) return null;
+  return [...blocks.slice(0, -1), { ...last, prompt_cache_breakpoint: BREAKPOINT }];
+}
+function markItem(input, index) {
+  const item = input[index];
+  if (isFunctionCallOutput(item)) {
+    const output = markBlocks(item.output);
+    if (!output) return false;
+    input[index] = { ...item, output };
+    return true;
+  }
+  const content = markBlocks(item.content);
+  if (!content) return false;
+  input[index] = { ...item, content };
+  return true;
+}
+function applyOpenAICacheBreakpoints(input) {
+  if (input.length === 0) return 0;
+  for (let i = 0; i < input.length; i++) {
+    const item = input[i];
+    if (isFunctionCallOutput(item)) {
+      input[i] = { ...item, output: liftString(item.output) };
+    } else if (isMessage(item, "developer")) {
+      input[i] = { ...item, content: liftString(item.content) };
+    }
+  }
+  let leadingDeveloperEnd = -1;
+  while (leadingDeveloperEnd + 1 < input.length && isMessage(input[leadingDeveloperEnd + 1], "developer")) {
+    leadingDeveloperEnd++;
+  }
+  let latestUser = -1;
+  for (let i = input.length - 1; i >= 0; i--) {
+    if (isMessage(input[i], "user")) {
+      latestUser = i;
+      break;
+    }
+  }
+  const toolLoopAfterLatestUser = latestUser >= 0 && input.slice(latestUser + 1).some((item) => isFunctionCallOutput(item));
+  const history = [];
+  for (let i = leadingDeveloperEnd + 1; i < input.length; i++) {
+    if (!isMarkable(input[i])) continue;
+    if (i === latestUser && !toolLoopAfterLatestUser) continue;
+    history.push(i);
+  }
+  const chosen = [];
+  if (leadingDeveloperEnd >= 0) chosen.push(leadingDeveloperEnd);
+  chosen.push(...history.slice(-MAX_HISTORY_BREAKPOINTS));
+  let placed = 0;
+  for (const index of chosen) {
+    if (markItem(input, index)) placed++;
+  }
+  if (placed === 0 && latestUser >= 0 && markItem(input, latestUser)) placed++;
+  return placed;
+}
+function stripBreakpoints(input) {
+  if (!Array.isArray(input)) return input;
+  const strip = (blocks) => Array.isArray(blocks) ? blocks.map((block) => {
+    if (!block || typeof block !== "object" || !("prompt_cache_breakpoint" in block)) return block;
+    const { prompt_cache_breakpoint: _dropped, ...rest } = block;
+    return rest;
+  }) : blocks;
+  return input.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const record = item;
+    if (Array.isArray(record.content)) return { ...record, content: strip(record.content) };
+    if (Array.isArray(record.output)) return { ...record, output: strip(record.output) };
+    return item;
+  });
+}
+function stripPromptCacheControls(requestParams) {
+  const {
+    prompt_cache_retention: _retention,
+    prompt_cache_options: _options,
+    ...rest
+  } = requestParams;
+  return { ...rest, input: stripBreakpoints(rest.input) };
+}
+
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-openai");
 var OPENAI_SUPPORTED_MIME_TYPES = [
@@ -24033,16 +24194,6 @@ var OPENAI_SUPPORTED_MIME_TYPES = [
   "image/gif",
   "image/webp"
 ];
-var REASONING_MODEL_PREFIXES = ["o1", "o3", "o4", "gpt-5"];
-function isReasoningModel(model) {
-  const modelLower = model.toLowerCase();
-  return REASONING_MODEL_PREFIXES.some((prefix) => modelLower.startsWith(prefix));
-}
-var EXTENDED_RETENTION_MODEL_PREFIXES = ["gpt-5.1", "gpt-5.2", "gpt-5.5"];
-function supportsExtendedCacheRetention(model) {
-  const modelLower = model.toLowerCase();
-  return EXTENDED_RETENTION_MODEL_PREFIXES.some((prefix) => modelLower.startsWith(prefix));
-}
 var OpenAIProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
@@ -24146,20 +24297,6 @@ var OpenAIProvider = class {
       });
     }
     return { input, instructions, attachmentResults: { sent, failed } };
-  }
-  /**
-   * Extract only the last user message from the input for use with previous_response_id.
-   * When chaining, OpenAI reconstructs the conversation from the previous response,
-   * so we only need to send the new user message.
-   */
-  extractLastUserMessage(input) {
-    for (let i = input.length - 1; i >= 0; i--) {
-      const item = input[i];
-      if ("role" in item && item.role === "user") {
-        return [item];
-      }
-    }
-    return input.length > 0 ? [input[input.length - 1]] : [];
   }
   /**
    * Convert Chat Completions-format tools to Responses API function tools
@@ -24274,7 +24411,7 @@ var OpenAIProvider = class {
    * Build the common request parameters shared between sendMessage and streamMessage
    */
   buildBaseRequestParams(params, input, instructions) {
-    const isReasoning = isReasoningModel(params.model);
+    const isReasoning = isOpenAIReasoningModel(params.model);
     const requestParams = {
       model: params.model,
       input,
@@ -24325,11 +24462,23 @@ var OpenAIProvider = class {
     if (Object.keys(textConfig).length > 0) {
       requestParams.text = textConfig;
     }
-    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
+    const hasCacheKey = typeof params.cacheKey === "string" && params.cacheKey.length > 0;
+    if (hasCacheKey) {
       requestParams.prompt_cache_key = params.cacheKey;
-      if (supportsExtendedCacheRetention(params.model)) {
-        requestParams.prompt_cache_retention = "24h";
+    }
+    if (supportsOpenAIExplicitCacheBreakpoints(params.model)) {
+      const placed = applyOpenAICacheBreakpoints(input);
+      if (placed > 0) {
+        requestParams.prompt_cache_options = { mode: "explicit" };
       }
+      logger.debug("Placed explicit prompt-cache breakpoints", {
+        context: "OpenAIProvider.buildBaseRequestParams",
+        model: params.model,
+        breakpoints: placed,
+        inputItems: input.length
+      });
+    } else if (hasCacheKey && supportsOpenAIExtendedCacheRetention(params.model)) {
+      requestParams.prompt_cache_retention = "24h";
     }
     if (params.stop) {
       const stopArr = Array.isArray(params.stop) ? params.stop : [params.stop];
@@ -24375,6 +24524,23 @@ var OpenAIProvider = class {
       ...reasoningContent ? { reasoningContent } : {}
     };
   }
+  async createResponse(client, requestParams) {
+    try {
+      return await client.responses.create(requestParams);
+    } catch (error) {
+      const withControls = requestParams;
+      const hasControls = withControls.prompt_cache_retention !== void 0 || withControls.prompt_cache_options !== void 0;
+      if (!hasControls || !isPromptCacheControlRejection(error)) {
+        throw error;
+      }
+      logger.warn("Model rejected a prompt-cache control; retrying without cache controls", {
+        context: "OpenAIProvider.createResponse",
+        model: requestParams.model,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return await client.responses.create(stripPromptCacheControls(requestParams));
+    }
+  }
   async sendMessage(params, apiKey) {
     const client = new OpenAI({
       apiKey,
@@ -24386,33 +24552,11 @@ var OpenAIProvider = class {
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
-    if (params.previousResponseId) {
-      try {
-        const chainedInput = this.extractLastUserMessage(input);
-        const chainedParams = {
-          ...baseParams,
-          input: chainedInput,
-          previous_response_id: params.previousResponseId,
-          stream: false
-        };
-        const response2 = await client.responses.create(chainedParams);
-        if (response2.error) {
-          throw new Error(`OpenAI API error: ${response2.error.message}`);
-        }
-        return this.buildLLMResponse(response2, attachmentResults);
-      } catch (error) {
-        logger.warn("Conversation chaining failed, falling back to full input", {
-          context: "OpenAIProvider.sendMessage",
-          previousResponseId: params.previousResponseId,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    }
     const requestParams = {
       ...baseParams,
       stream: false
     };
-    const response = await client.responses.create(requestParams);
+    const response = await this.createResponse(client, requestParams);
     if (response.error) {
       logger.error("Responses API returned error", {
         context: "OpenAIProvider.sendMessage",
@@ -24434,34 +24578,11 @@ var OpenAIProvider = class {
     });
     const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
     const baseParams = this.buildBaseRequestParams(params, input, instructions);
-    let useChaining = !!params.previousResponseId;
-    let stream = null;
-    if (useChaining) {
-      try {
-        const chainedInput = this.extractLastUserMessage(input);
-        const chainedParams = {
-          ...baseParams,
-          input: chainedInput,
-          previous_response_id: params.previousResponseId,
-          stream: true
-        };
-        stream = await client.responses.create(chainedParams);
-      } catch (error) {
-        logger.warn("Streaming conversation chaining failed, falling back to full input", {
-          context: "OpenAIProvider.streamMessage",
-          previousResponseId: params.previousResponseId,
-          error: error instanceof Error ? error.message : String(error)
-        });
-        useChaining = false;
-      }
-    }
-    if (!stream) {
-      const requestParams = {
-        ...baseParams,
-        stream: true
-      };
-      stream = await client.responses.create(requestParams);
-    }
+    const requestParams = {
+      ...baseParams,
+      stream: true
+    };
+    const stream = await this.createResponse(client, requestParams);
     let finalResponse = null;
     let streamReasoning = "";
     for await (const event of stream) {
@@ -24532,8 +24653,7 @@ var OpenAIProvider = class {
         defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       const models = await client.models.list();
-      const chatModelPrefixes = ["gpt-4", "gpt-5", "o1", "o3", "o4"];
-      const chatModels = models.data.filter((m) => chatModelPrefixes.some((prefix) => m.id.startsWith(prefix))).map((m) => m.id).sort();
+      const chatModels = models.data.filter((m) => isOpenAIChatModel(m.id)).map((m) => m.id).sort();
       return chatModels;
     } catch (error) {
       logger.error("Failed to fetch OpenAI models", { context: "OpenAIProvider.getAvailableModels" }, error instanceof Error ? error : void 0);

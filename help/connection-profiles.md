@@ -211,14 +211,15 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 
 ## Provider-Specific Notes
 
-### OpenAI (GPT-4, GPT-3.5, etc.)
+### OpenAI (GPT-4 and later, the o-series)
 
-- Models update frequently — use "Fetch Models" to see current options
+- Models update frequently — use "Fetch Models" to see current options. The list admits every GPT from 4 onward and every o-series model by the number on the tin rather than by a guest list, so a new generation (GPT-6, and whatever follows it up the stairs) is shown the moment OpenAI announces it, with no need to wait for Quilltap to be told. GPT-3.5 is no longer offered.
 - Temperature: 0-2 (default 1)
 - Supports vision (image) context
 - Token limits vary by model
 - **Verbosity** *(GPT-5 and newer)* — sets how concise or expansive the answer is, on a Low / Medium / High scale. Leaving it at *(model default)* omits the parameter entirely; older models that don't recognise it are unaffected either way.
-- **Reasoning Effort** *(o-series and GPT-5 reasoning models)* — picks how much hidden thinking the model does before it speaks: Minimal, Low, Medium, or High. Non-reasoning models ignore the setting. Background tasks like summarisation are pinned to *Low* regardless of this choice, so a profile set to *High* still won't burn its whole token budget on chores.
+- **Reasoning Effort** *(o-series, and GPT-5 and every later generation)* — picks how much hidden thinking the model does before it speaks: Minimal, Low, Medium, or High. Non-reasoning models ignore the setting. Background tasks like summarisation are pinned to *Low* regardless of this choice, so a profile set to *High* still won't burn its whole token budget on chores.
+- **Prompt caching wants no switch.** OpenAI keeps its own cache of whatever repeats, and Quilltap arranges matters so the repetition is as long as possible. From GPT-5.6 onward, OpenAI will reuse a cached passage only where a bookmark has been left for it, and left to its own devices it set one after the house rules and one after your newest line — which arrives each turn wrapped in the moment's particulars and is never seen again. The conversation in between was therefore read at full freight every turn, while the unreadable bookmark was paid for besides. Quilltap now leaves the bookmarks itself: after the house rules and after every line of the conversation so far, but never on your newest line while it still wears its wrappings, and after each tool result while a chain of tool calls is under way. Each turn re-reads the previous turn's conversation at a small fraction of the usual rate. Older models carry on caching as before.
 
 ### Anthropic (Claude)
 
@@ -227,8 +228,8 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - **No Temperature or Top P.** Anthropic's current API refuses both on every Claude model, so the editor hides them and Quilltap never sends them. Any figures an older Anthropic profile was carrying were quietly removed on upgrade, and will not return through a save, an import, or a restore. The model samples at its own defaults; *Max Tokens* is still yours to set.
 - Strong at reasoning and complex tasks
 - **Enable Prompt Caching** — invites Anthropic to mark the steady portions of your prompt as a cache breakpoint. On the next call within the cache's lifetime, those portions are charged at a steep discount instead of full freight. Worth the indulgence on long-running chats where the system prompt and tools repeat verbatim turn after turn.
-- **Cache Strategy** *(visible only when Prompt Caching is enabled)* — *System message only* caches just the persona/tools header; *System + tools + conversation* (recommended) extends the breakpoint deeper into the conversation so the savings compound across turns.
-- **Cache Duration** *(visible only when Prompt Caching is enabled)* — five minutes is the default and the cheapest to write; one hour costs more upfront but pays off when a chat sprawls past the five-minute window. Pick the longer setting for slow-and-deliberate writing sessions; leave it at five minutes for everyday chatting.
+- **Cache Strategy** *(visible only when Prompt Caching is enabled)* — *System message only* caches just the persona/tools header; *System + tools + conversation* (recommended) extends the breakpoint deeper into the conversation so the savings compound across turns. The conversation breakpoint is set just *before* your newest line — that line arrives each turn swaddled in the moment's particulars (recollections, the line being answered and the like), which are gone by the next turn, so caching it would be money spent on a ledger nobody ever reopens. Everything above it is read back, discounted, on the turn that follows. The same settings govern the Brahma Console, `@Brahma` and the Scenario Builder, whose step-by-step tool rummaging now reuses each step's prefix on the next.
+- **Cache Duration** *(visible only when Prompt Caching is enabled)* — five minutes is the default and the cheapest to write; one hour costs more upfront but pays off when a chat sprawls past the five-minute window. The clock runs between calls, so if you habitually take more than five minutes to compose a reply, every turn will find the cache gone cold and pay to fill it again — pick the longer setting for slow-and-deliberate writing sessions; leave it at five minutes for brisk everyday chatting.
 
 ### DeepSeek
 

@@ -117,7 +117,18 @@ export type CheapLLMLatencyClass = 'background' | 'interactive'
 export interface CheapLLMTaskOptions {
   /** Whether a human is waiting on this call. Defaults to `background`. */
   latency?: CheapLLMLatencyClass
+  /**
+   * Sampling temperature to ask for. Defaults to
+   * {@link DEFAULT_CHEAP_LLM_TEMPERATURE}, which suits extraction and
+   * summarisation; a task whose answer *should* vary between calls (the green
+   * room's outfit pick) asks for more. A profile that rejects a custom
+   * temperature still falls back to the provider default.
+   */
+  temperature?: number
 }
+
+/** The temperature cheap tasks run at unless they ask otherwise. */
+export const DEFAULT_CHEAP_LLM_TEMPERATURE = 0.3
 
 /**
  * Per-task deadline overrides, keyed by the granular task type, then by
@@ -305,7 +316,8 @@ async function sendToProvider(
   messageId?: string,
   maxTokens?: number,
   characterId?: string,
-  latency: CheapLLMLatencyClass = 'background'
+  latency: CheapLLMLatencyClass = 'background',
+  requestedTemperature: number = DEFAULT_CHEAP_LLM_TEMPERATURE
 ): Promise<ProviderResponse> {
   const apiKey = await getApiKeyForCheapLLMSelection(selection, userId)
   if (apiKey === null) {
@@ -402,9 +414,9 @@ async function sendToProvider(
     return send(undefined)
   }
 
-  // Try with lower temperature for more consistent outputs
+  // Try with the task's temperature (low by default, for consistent outputs)
   try {
-    return await send(0.3)
+    return await send(requestedTemperature)
   } catch (error) {
     // If temperature is not supported, cache it and retry with default temperature
     const errorMessage = getErrorMessage(error, '')
@@ -552,10 +564,11 @@ async function runCheapLLMTask<T>(
   // the uncensored fallback below only fires after a *completed* call came back
   // empty, so it is a fresh attempt and deserves a fresh deadline.
   const latency: CheapLLMLatencyClass = options?.latency ?? 'background'
+  const temperature = options?.temperature ?? DEFAULT_CHEAP_LLM_TEMPERATURE
 
   const attempt = (route: CheapLLMSelection) =>
     withDeadline(
-      sendToProvider(route, messages, userId, taskType, chatId, messageId, maxTokens, characterId, latency),
+      sendToProvider(route, messages, userId, taskType, chatId, messageId, maxTokens, characterId, latency, temperature),
       deadlineFor(route, taskType, latency),
       taskType,
       { chatId, characterId, provider: route.provider, model: route.modelName }
@@ -679,7 +692,7 @@ async function runCheapLLMTask<T>(
 
     const fallbackResult = await attemptCheapFallbackChain(
       selection, messages, userId, parseResponse, error,
-      { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback, latency }
+      { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback, latency, temperature }
     )
     if (fallbackResult) return fallbackResult
 
@@ -722,9 +735,10 @@ async function attemptCheapFallbackChain<T>(
     characterId?: string
     uncensoredFallback?: UncensoredFallbackOptions
     latency: CheapLLMLatencyClass
+    temperature: number
   }
 ): Promise<CheapLLMTaskResult<T> | null> {
-  const { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback, latency } = meta
+  const { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback, latency, temperature } = meta
 
   const trigger = classifyFallbackTrigger(error)
   if (!trigger) {
@@ -776,7 +790,7 @@ async function attemptCheapFallbackChain<T>(
 
     try {
       const response = await withDeadline(
-        sendToProvider(standIn, messages, userId, taskType, chatId, messageId, maxTokens, characterId, latency),
+        sendToProvider(standIn, messages, userId, taskType, chatId, messageId, maxTokens, characterId, latency, temperature),
         deadlineFor(standIn, taskType, latency),
         taskType,
         { chatId, characterId, provider: standIn.provider, model: standIn.modelName }

@@ -31,21 +31,30 @@ COPY package.json package-lock.json ./
 COPY scripts/fix-node-pty-permissions.js scripts/sync-pdf-worker.js ./scripts/
 RUN npm ci --omit=dev && npm rebuild
 
-# --- Production stage ---
-FROM node:24-bookworm-slim AS production
+# --- Production stage (Wolfi, glibc) ---
+# Only this stage ships. It is Wolfi rather than Debian because every finding
+# left in the bookworm image was an unfixable Debian OS package; the deps stage
+# above stays on node:24-bookworm-slim (npm 11, same as CI). See Dockerfile for
+# the full rationale — keep the two files in lockstep. Unpinned on purpose: the
+# moving tag is what invalidates the layer cache so `apk upgrade` picks up fixes.
+FROM cgr.dev/chainguard/wolfi-base:latest AS production
 WORKDIR /app
 
-# Refresh package index and apply security patches
-RUN apt-get update \
-    && apt-get -y upgrade \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime packages, upgraded on every build: nodejs-24 (npm is a separate
+# package and is NOT installed), libstdc++ (node-pty), bash (Ariel's terminal
+# hard-codes /bin/bash), zip + unzip (backup/restore shell out to them).
+# git/curl/wget/jq stay out for CVE surface — see Dockerfile.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache nodejs-24 libstdc++ bash zip unzip \
+    && mkdir -p /usr/local/bin
 
 ENV NODE_ENV=production
 ENV DOCKER_CONTAINER=true
 
-# Create non-root user (Debian groupadd/useradd, not Alpine busybox addgroup/adduser)
-RUN groupadd --system --gid 1001 nodejs \
-    && useradd --system --uid 1001 --gid nodejs --no-create-home --shell /usr/sbin/nologin nextjs
+# Create non-root user (busybox addgroup/adduser); UID/GID 1001 kept from the
+# Debian image so existing volumes stay writable.
+RUN addgroup -S -g 1001 nodejs \
+    && adduser -S -D -H -u 1001 -G nodejs -s /sbin/nologin nextjs
 
 # Create data directories (data, files, logs, plugins/npm)
 RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/quilltap/plugins/npm && \
@@ -71,18 +80,6 @@ RUN rm -rf /app/plugins/dist/*/node_modules
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
-# Install runtime tools:
-#   - zip + unzip — backup/restore (lib/backup/restore/archive.ts and
-#     lib/backup/backup-service.ts shell out to `unzip` / `zip`)
-#   - bash — required by Ariel's terminal (PTY hard-codes /bin/bash)
-#
-# git/curl/wget/jq removed for CVE surface — see the matching block in Dockerfile
-# for the full rationale. The `curl` *tool* is qtap-plugin-curl (Node fetch()), so
-# it is unaffected.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash zip unzip \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy production node_modules from the build stage (node-pty already compiled)
 COPY --from=deps-prod /app/node_modules ./node_modules
 
@@ -103,17 +100,7 @@ RUN ln -s /app/packages/quilltap/bin/quilltap.js /usr/local/bin/quilltap
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# --- Attack-surface reduction (must stay LAST: no apt-get or npm may follow) ---
-# Strips npm/npx/corepack/yarn (1 CRITICAL + 6 HIGH from npm's own bundled
-# node_modules; nothing at runtime shells out to them) and Debian's perl (2
-# CRITICAL + 2 HIGH, no fix in bookworm or trixie). See Dockerfile for the full
-# rationale — keep the two files in lockstep.
-RUN rm -rf /usr/local/lib/node_modules/npm \
-           /usr/local/lib/node_modules/corepack \
-           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
-           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-v* \
-    && dpkg --purge --force-remove-essential --force-depends \
-           perl perl-base perl-modules-5.36 libperl5.36 2>/dev/null || true
+# No npm / npx / corepack / yarn and no perl in this image — see Dockerfile.
 
 USER nextjs
 

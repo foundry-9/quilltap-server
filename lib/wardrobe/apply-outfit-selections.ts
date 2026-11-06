@@ -24,6 +24,7 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   dissolveCompositeToLeaves,
   dissolveCompositesInSlots,
+  dropOverlappingEnsembles,
   spreadAcrossCoveredSlots,
 } from '@/lib/wardrobe/slot-ops';
 import type { EquipSource } from '@/lib/database/repositories/wardrobe-wear.repository';
@@ -52,6 +53,7 @@ import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipp
 import { createSharedTierLoader, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
 import { filterByPronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
+import { loadRecentOpenings } from '@/lib/wardrobe/recent-openings';
 import type {
   CreationProgressEmitter,
   OutfitPreviewSlots,
@@ -421,6 +423,13 @@ export async function applyOutfitSelections(
                   });
                 }
 
+                // What they arrived in lately, so the green room can steer
+                // away from opening every chat in the same favourite.
+                // Soft-fails to none.
+                const recentOpenings = await loadRecentOpenings(repos, characterId, pool.byId, {
+                  excludeChatId: chatId,
+                });
+
                 const startedAt = Date.now();
                 const result = await withTimeout(
                   chooseLLMOutfit(
@@ -436,6 +445,7 @@ export async function applyOutfitSelections(
                     chatId,
                     characterId,
                     subprompts,
+                    { recentOpenings },
                   ),
                   OUTFIT_LLM_TIMEOUT_MS,
                 );
@@ -467,7 +477,18 @@ export async function applyOutfitSelections(
                     // Then make each garment occupy every slot it covers:
                     // the model often lists a dress only under "top", which
                     // left the bottom slot reading as bare.
-                    const dissolved = dissolveCompositesInSlots(result.result.slots, pool.byId);
+                    // First, one outfit at a time: a second outfit set the
+                    // model slipped in under one of its slots (a gown listed
+                    // only under "hair") would otherwise go on whole.
+                    const single = dropOverlappingEnsembles(result.result.slots, pool.byId);
+                    if (single.droppedIds.length > 0) {
+                      logger.info('[applyOutfitSelections] Dropped a second outfit from the green room pick', {
+                        chatId,
+                        characterId,
+                        droppedIds: single.droppedIds,
+                      });
+                    }
+                    const dissolved = dissolveCompositesInSlots(single.slots, pool.byId);
                     const spread = spreadAcrossCoveredSlots(dissolved.slots, pool.byId);
                     if (outfitSlotCount(spread) !== outfitSlotCount(dissolved.slots)) {
                       logger.debug('[applyOutfitSelections] Spread multi-slot picks across every slot they cover', {

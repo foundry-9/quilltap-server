@@ -17,6 +17,7 @@
 import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
+import { findForeignResolutions, formatResolutionViolations } from './lib/plugin-resolution-guard';
 
 interface PluginManifest {
   name: string;
@@ -106,6 +107,58 @@ function hasTypecheckScript(pluginPath: string): boolean {
 }
 
 /**
+ * After a plugin typechecks, make sure it typechecked against its *own* copy of
+ * every dependency it declares (#145). Runs `tsc --explainFiles` once more and
+ * resolves to an error message, or null when every declared dependency came
+ * from the plugin's own node_modules. Skipped for plugins with no typecheck.
+ */
+function checkPluginResolution(plugin: { name: string; path: string }): Promise<string | null> {
+  return new Promise((resolvePromise) => {
+    const { name, path: pluginPath } = plugin;
+    if (!hasTypecheckScript(pluginPath)) {
+      resolvePromise(null);
+      return;
+    }
+
+    let dependencies: string[] = [];
+    try {
+      const pkg = JSON.parse(readFileSync(join(pluginPath, 'package.json'), 'utf-8'));
+      dependencies = Object.keys(pkg.dependencies ?? {});
+    } catch {
+      resolvePromise(null);
+      return;
+    }
+    if (dependencies.length === 0) {
+      resolvePromise(null);
+      return;
+    }
+
+    const tsc = spawn('npx', ['tsc', '-p', 'tsconfig.json', '--noEmit', '--explainFiles'], {
+      cwd: pluginPath,
+      stdio: 'pipe',
+    });
+    let output = '';
+    tsc.stdout?.on('data', (data) => {
+      output += data.toString();
+    });
+    tsc.stderr?.on('data', (data) => {
+      output += data.toString();
+    });
+    tsc.on('close', (code) => {
+      if (code !== 0) {
+        resolvePromise(`${name}: tsc --explainFiles exited ${code}\n${output.slice(-2000)}`);
+        return;
+      }
+      const violations = findForeignResolutions(output, pluginPath, dependencies);
+      resolvePromise(violations.length > 0 ? formatResolutionViolations(name, violations) : null);
+    });
+    tsc.on('error', (err) => {
+      resolvePromise(`${name}: could not run tsc --explainFiles: ${err.message}`);
+    });
+  });
+}
+
+/**
  * Check if a plugin needs npm install (no node_modules or package-lock.json changed)
  */
 function needsInstall(pluginPath: string): boolean {
@@ -145,6 +198,10 @@ async function buildPlugin(plugin: { name: string; path: string }): Promise<Buil
         stdio: 'pipe',
         encoding: 'utf-8',
       });
+      const resolutionError = await checkPluginResolution(plugin);
+      if (resolutionError) {
+        return { name, success: false, error: resolutionError };
+      }
     }
 
     // Run the build
@@ -232,7 +289,13 @@ function buildPluginAsync(plugin: { name: string; path: string }): Promise<Build
 
       check.on('close', (code) => {
         if (code === 0) {
-          onPass();
+          void checkPluginResolution(plugin).then((resolutionError) => {
+            if (resolutionError) {
+              resolve({ name, success: false, error: resolutionError });
+            } else {
+              onPass();
+            }
+          });
         } else {
           resolve({ name, success: false, error: output || `Typecheck exit code ${code}` });
         }
@@ -317,7 +380,7 @@ async function main() {
     console.error('\n❌ Some plugins failed to build:');
     for (const result of results) {
       if (!result.success) {
-        console.error(`  - ${result.name}: ${result.error?.substring(0, 200)}`);
+        console.error(`  - ${result.name}: ${result.error?.substring(0, 2000)}`);
       }
     }
     process.exit(1);

@@ -243,6 +243,10 @@ describe('chooseLLMOutfit — response parsing', () => {
         instructions,
         { profileId: 'cheap' },
         'user-1',
+        undefined,
+        undefined,
+        undefined,
+        { random: () => 0.5 }, // a fixed shuffle, so only the instructions can differ
       );
       const messages = mockExecute.mock.calls[0][1] as Array<{ role: string; content: string }>;
       return messages.find((m) => m.role === 'user')!.content;
@@ -271,5 +275,65 @@ describe('chooseLLMOutfit — response parsing', () => {
       success: true,
       result: { slots: EMPTY, deliberatelyUnclothed: false },
     });
+  });
+});
+
+describe('chooseLLMOutfit — variety', () => {
+  beforeEach(() => {
+    mockExecute.mockReset();
+    mockExecute.mockResolvedValue({ success: true, result: null });
+  });
+
+  async function promptFor(options: Record<string, unknown> = {}) {
+    await chooseLLMOutfit(
+      'Bertie', 'd', 'p', 'm', POOL, 'a formal evening', null,
+      { profileId: 'cheap' }, 'user-1', 'chat-1', 'char-1', null, options,
+    );
+    const call = mockExecute.mock.calls[0];
+    return {
+      system: call[1][0].content as string,
+      user: call[1][1].content as string,
+      options: call[10] as { temperature?: number },
+    };
+  }
+
+  it('asks for a higher-than-default temperature', async () => {
+    const { options } = await promptFor();
+    const { OUTFIT_SELECTION_TEMPERATURE } = require('@/lib/memory/cheap-llm-tasks/outfit-selection');
+    expect(options.temperature).toBe(OUTFIT_SELECTION_TEMPERATURE);
+    expect(OUTFIT_SELECTION_TEMPERATURE).toBeGreaterThan(0.3);
+  });
+
+  it('tells the model to vary the outfit', async () => {
+    const { system } = await promptFor();
+    expect(system).toMatch(/Vary the outfit/);
+    expect(system).toMatch(/never decides whether the scene calls for clothes/);
+  });
+
+  it('lists recent openings newest first, unclothed ones marked', async () => {
+    const { user } = await promptFor({
+      recentOpenings: [
+        { when: 'yesterday', titles: ['Navy Sweater', 'Jeans'], unclothed: false },
+        { when: '3 days ago', titles: ['Wedding Ring'], unclothed: true },
+      ],
+    });
+    expect(user).toContain('Recent Openings (what Bertie arrived in');
+    expect(user).toContain('1. (yesterday) Navy Sweater, Jeans');
+    expect(user).toContain('2. (3 days ago) nothing but Wedding Ring (unclothed)');
+  });
+
+  it('omits the section when there are no recent openings', async () => {
+    const { user } = await promptFor({ recentOpenings: [] });
+    expect(user).not.toContain('Recent Openings');
+  });
+
+  it('shuffles the wardrobe listing with the injected randomness', async () => {
+    const order = (user: string) => Array.from(user.matchAll(/ID: ([a-z-]+) \|/g)).map((m) => m[1]);
+    const { user: asIs } = await promptFor({ random: () => 0.999999 });
+    expect(order(asIs)).toEqual(POOL.map((i) => i.id));
+    mockExecute.mockClear();
+    const { user: reversed } = await promptFor({ random: () => 0 });
+    expect(order(reversed)).not.toEqual(POOL.map((i) => i.id));
+    expect([...order(reversed)].sort()).toEqual(POOL.map((i) => i.id).sort());
   });
 });

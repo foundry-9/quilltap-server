@@ -388,6 +388,34 @@ export class ChatWardrobeHistoryRepository {
     return rows.length > 0 ? normalizeRow(rows[0]) : null;
   }
 
+  /**
+   * What a character arrived in across their most recent chats, newest first:
+   * each timeline's entry `0`, from a real arrival (`chat-start` or
+   * `participant-added` — never the backfill's `seeded` rows, which record
+   * whatever was worn at migration time, not an opening). The green room
+   * reads this so a character stops opening every chat in the same outfit.
+   *
+   * A full scan of a small table (thousands of rows); no index is needed.
+   */
+  async findRecentOpenings(
+    characterId: string,
+    limit: number,
+    excludeChatId?: string,
+  ): Promise<ChatWardrobeHistoryRow[]> {
+    if (limit <= 0) return [];
+    const rows = await rawQuery<RawRow[]>(
+      `SELECT * FROM "${CHAT_WARDROBE_HISTORY_TABLE}"
+        WHERE "characterId" = ? AND "entryIndex" = 0
+          AND "source" IN ('chat-start', 'participant-added')
+          AND "chatId" != ?
+        ORDER BY "createdAt" DESC
+        LIMIT ?`,
+      [characterId, excludeChatId ?? '', limit],
+    );
+    log.debug('Read recent opening outfits', { characterId, limit, found: rows.length });
+    return rows.map(normalizeRow);
+  }
+
   /** Every row for a chat (export, backup), by character then index. */
   async findByChatId(chatId: string): Promise<ChatWardrobeHistoryRow[]> {
     const rows = await rawQuery<RawRow[]>(

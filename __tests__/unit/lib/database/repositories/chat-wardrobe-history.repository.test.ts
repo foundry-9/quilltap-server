@@ -269,6 +269,37 @@ describe('ChatWardrobeHistoryRepository', () => {
     })
   })
 
+  describe('findRecentOpenings', () => {
+    const CHAT_2 = '44444444-4444-4444-8444-444444444444'
+    const CHAT_3 = '55555555-5555-4555-8555-555555555555'
+    const row = (id: string, chatId: string, entryIndex: number, source: string, createdAt: string, s: EquippedSlots) => ({
+      id, chatId, characterId: CHAR_A, entryIndex, slots: s, slotsHash: hashEquippedSlots(s),
+      source: source as 'chat-start', actorCharacterId: null, actorToolName: null,
+      isCurrent: true, createdAt,
+    })
+
+    beforeEach(async () => {
+      for (const id of [CHAT_2, CHAT_3]) db.prepare('INSERT INTO "chats" VALUES (?)').run(id)
+      await repo.upsertRows([
+        row('a0000000-0000-4000-8000-000000000001', CHAT, 0, 'chat-start', '2026-11-01T00:00:00.000Z', slots({ top: [DRESS] })),
+        row('a0000000-0000-4000-8000-000000000002', CHAT_2, 0, 'participant-added', '2026-11-03T00:00:00.000Z', slots({ footwear: [BOOTS] })),
+        row('a0000000-0000-4000-8000-000000000003', CHAT_3, 0, 'seeded', '2026-11-04T00:00:00.000Z', slots({ accessories: [SCARF] })),
+      ])
+    })
+
+    it('returns real arrivals newest first, never seeded rows', async () => {
+      const found = await repo.findRecentOpenings(CHAR_A, 5)
+      expect(found.map((r) => r.chatId)).toEqual([CHAT_2, CHAT])
+    })
+
+    it('excludes the chat being dressed and honours the limit', async () => {
+      expect((await repo.findRecentOpenings(CHAR_A, 5, CHAT_2)).map((r) => r.chatId)).toEqual([CHAT])
+      expect(await repo.findRecentOpenings(CHAR_A, 1)).toHaveLength(1)
+      expect(await repo.findRecentOpenings(CHAR_A, 0)).toEqual([])
+      expect(await repo.findRecentOpenings(CHAR_B, 5)).toEqual([])
+    })
+  })
+
   it('deleteByCharacter drops only that character', async () => {
     chats.set(CHAR_A, slots({ top: [DRESS] }))
     chats.set(CHAR_B, slots({ top: [DRESS] }))

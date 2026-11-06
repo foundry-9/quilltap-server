@@ -26,7 +26,7 @@ import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
 } from '@/lib/chat/file-attachment-fallback'
-import { verifyImageReachedModel } from '@/lib/llm/vision-request'
+import { textOnlyTokenCeiling, verifyImageReachedModel } from '@/lib/llm/vision-request'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
 
@@ -429,6 +429,37 @@ describe('lib/chat/file-attachment-fallback', () => {
           INSTRUCTION
         ).arrived
       ).toBe(true)
+    })
+
+    describe('on a long prompt', () => {
+      // The wardrobe analysis prompt, near enough: ~2,400 characters, whose
+      // pessimistic text allowance (951) outgrew a whole Gemini image (258).
+      const LONG = 'x'.repeat(2376)
+
+      it('accepts a Gemini call that saw the image (billed 844, text ~590 + 258)', () => {
+        expect(
+          verifyImageReachedModel(
+            { usage: { promptTokens: 844, completionTokens: 761, totalTokens: 1605 } } as any,
+            'file-1',
+            LONG
+          ).arrived
+        ).toBe(true)
+      })
+
+      it('still rejects a call billed for the text alone', () => {
+        const verdict = verifyImageReachedModel(
+          { usage: { promptTokens: 594, completionTokens: 761, totalTokens: 1355 } } as any,
+          'file-1',
+          LONG
+        )
+        expect(verdict.arrived).toBe(false)
+      })
+
+      it('caps the allowance at the typical text cost plus the cheapest image', () => {
+        expect(textOnlyTokenCeiling(LONG)).toBe(594 + 85)
+        // A short instruction keeps the pessimistic bound (bug 116's 66).
+        expect(textOnlyTokenCeiling(INSTRUCTION)).toBe(Math.ceil(INSTRUCTION.length / 2.5))
+      })
     })
 
     it('adds cache reads back before judging', () => {

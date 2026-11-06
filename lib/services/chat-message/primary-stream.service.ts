@@ -15,8 +15,7 @@
  *      service surfaces that via the `earlyReturn` field on its result.
  *
  * The pre-stream "Sending to..." status, the streaming/responding status
- * gate that flips on the first content chunk, and the previousResponseId
- * extraction all live here. Mutations: `streaming.fullResponse`,
+ * gate that flips on the first content chunk live here. Mutations: `streaming.fullResponse`,
  * `streaming.usage`, `streaming.cacheUsage`, `streaming.attachmentResults`,
  * `streaming.rawResponse`, `streaming.thoughtSignature`, `streaming.reasoningContent`, and
  * `streaming.hasStartedStreaming` are written in place.
@@ -50,7 +49,7 @@ import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/err
 import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { Character, ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
+import type { Character, ChatMetadataBase, ConnectionProfile } from '@/lib/schemas/types'
 import type { AttachedFile, ProcessMessageResult, StreamingState } from './types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
@@ -171,7 +170,6 @@ export interface RunPrimaryStreamOptions {
   modelParams: Record<string, unknown>
   actualTools: unknown[]
   useNativeWebSearch: boolean
-  previousResponseId?: string
   /** Optional provider stop sequences (e.g. simple-json's `</tool_call>`). */
   stop?: string[]
   preGeneratedAssistantMessageId: string
@@ -215,7 +213,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
   const {
     chatId, userId, chat, character, characterParticipant, userParticipantId, isMultiCharacter,
     formattedMessages, modelParams, actualTools, useNativeWebSearch,
-    previousResponseId, stop, preGeneratedAssistantMessageId,
+    stop, preGeneratedAssistantMessageId,
     attachedFiles, originalMessage, connectionProfile, isDangerousRouted, conciergePolicy,
     streaming, controller, encoder, preservePartialOnError,
     repos,
@@ -240,7 +238,6 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
       messageId: preGeneratedAssistantMessageId,
       chatId,
       characterId: character.id,
-      previousResponseId,
       stop,
     })) {
       // Capture + live-forward reasoning ("thinking") on any chunk. DISPLAY ONLY.
@@ -450,26 +447,4 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
   }
 
   return {}
-}
-
-/**
- * Convenience: extract the OpenAI Responses API previousResponseId from the
- * most recent assistant message in `existingMessages`. Returns `undefined`
- * for any other provider or when no chainable response is found.
- */
-export function findPreviousResponseId(
-  provider: string,
-  existingMessages: MessageEvent[]
-): string | undefined {
-  if (provider !== 'OPENAI') return undefined
-  for (let i = existingMessages.length - 1; i >= 0; i--) {
-    const msg = existingMessages[i]
-    if (msg.type === 'message' && msg.role === 'ASSISTANT' && msg.rawResponse) {
-      const raw = msg.rawResponse as Record<string, unknown>
-      if (typeof raw.id === 'string' && raw.id.startsWith('resp_')) {
-        return raw.id
-      }
-    }
-  }
-  return undefined
 }

@@ -101,7 +101,6 @@ jest.mock('@/lib/llm/message-formatter', () => ({
 const {
   runPrimaryStream,
   makePreservePartialOnError,
-  findPreviousResponseId,
 } = require('@/lib/services/chat-message/primary-stream.service') as typeof import('@/lib/services/chat-message/primary-stream.service')
 
 function makeStreaming(overrides: Partial<Record<string, unknown>> = {}) {
@@ -135,7 +134,6 @@ function makeBaseOpts(overrides: Partial<Record<string, unknown>> = {}) {
     modelParams: { temperature: 0.7 },
     actualTools: [{ name: 'doc_open_file' }],
     useNativeWebSearch: false,
-    previousResponseId: undefined,
     preGeneratedAssistantMessageId: 'pre-msg-1',
     attachedFiles: [],
     originalMessage: 'Hi',
@@ -332,32 +330,6 @@ describe('primary-stream.service', () => {
     })
   })
 
-  describe('findPreviousResponseId', () => {
-    it('returns undefined for non-OPENAI providers', () => {
-      expect(findPreviousResponseId('ANTHROPIC', [])).toBeUndefined()
-      expect(findPreviousResponseId('GOOGLE', [
-        { type: 'message', role: 'ASSISTANT', rawResponse: { id: 'resp_x' } } as any,
-      ])).toBeUndefined()
-    })
-
-    it('returns the most recent resp_-prefixed assistant id for OPENAI', () => {
-      const result = findPreviousResponseId('OPENAI', [
-        { type: 'message', role: 'USER', content: 'hi' } as any,
-        { type: 'message', role: 'ASSISTANT', rawResponse: { id: 'resp_a' } } as any,
-        { type: 'message', role: 'USER', content: 'hi again' } as any,
-        { type: 'message', role: 'ASSISTANT', rawResponse: { id: 'resp_b' } } as any,
-      ])
-      expect(result).toBe('resp_b')
-    })
-
-    it('ignores assistant messages whose rawResponse.id is not resp_-prefixed', () => {
-      const result = findPreviousResponseId('OPENAI', [
-        { type: 'message', role: 'ASSISTANT', rawResponse: { id: 'chatcmpl_x' } } as any,
-      ])
-      expect(result).toBeUndefined()
-    })
-  })
-
   describe('runPrimaryStream — happy path', () => {
     it('streams content, flips hasStartedStreaming, updates streaming state, returns no earlyReturn', async () => {
       nextStreamMessageScripts = [[
@@ -381,18 +353,10 @@ describe('primary-stream.service', () => {
 
       const sent = streamMessageCalls[0]!
       expect(sent.tools).toEqual([{ name: 'doc_open_file' }])
-      expect(sent.previousResponseId).toBeUndefined()
+      expect(sent).not.toHaveProperty('previousResponseId')
       expect(sent.userId).toBe('user-1')
       expect(sent.messageId).toBe('pre-msg-1')
       expect(sent.characterId).toBe('char-1')
-    })
-
-    it('forwards previousResponseId when provided', async () => {
-      nextStreamMessageScripts = [[{ done: true, usage: null, cacheUsage: null }]]
-      nextStreamMessageBehaviours = ['happy']
-      const opts = makeBaseOpts({ previousResponseId: 'resp_prev' })
-      await runPrimaryStream(opts as any)
-      expect(streamMessageCalls[0]?.previousResponseId).toBe('resp_prev')
     })
   })
 
