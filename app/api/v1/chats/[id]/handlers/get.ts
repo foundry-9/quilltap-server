@@ -6,6 +6,7 @@
  * GET /api/v1/chats/[id]?action=export-markdown - Export chat as a Markdown transcript
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
+ * GET /api/v1/chats/[id]?action=avatar-timeline - Each character's dated avatars in this chat, images resolved
  * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
@@ -39,6 +40,7 @@ import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reemb
 import { projectChatTranscript } from '@/lib/chat/transcript-projection';
 import {
   handleGetAvatars,
+  handleGetAvatarTimeline,
   handleGetState,
   handleGetOutfit,
   handleGetOutfitSummary,
@@ -73,6 +75,7 @@ export async function handleGet(
       'export': () => handleExport(req, ctx, chatId),
       'export-markdown': () => handleExportMarkdown(chatId, ctx),
       'get-avatars': () => handleGetAvatars(chatId, ctx),
+      'avatar-timeline': () => handleGetAvatarTimeline(chatId, ctx),
       'get-state': () => handleGetState(chatId, ctx),
       'outfit': () => handleGetOutfit(chatId, ctx),
       'outfit-summary': () => handleGetOutfitSummary(chatId, ctx),

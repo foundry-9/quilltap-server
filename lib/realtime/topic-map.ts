@@ -78,6 +78,10 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // a cancel publishes the topic explicitly — so the composer chips
             // stay honest without a poll.
             queryKeys.chats.informs(id),
+            // The Salon avatar timeline. A bound avatar (the avatar job, or
+            // a hand-set one) is recorded by the timeline's writer, which
+            // publishes `chats`.
+            queryKeys.chats.avatarTimeline(id),
             // Name chips for absent characters. A new message — the only
             // thing that can name someone — publishes `chats`.
             queryKeys.chats.absentMentions(id),

@@ -69,6 +69,13 @@ export const queryKeys = {
      */
     informs: (id: string) => ['chats', id, 'informs'] as const,
     /**
+     * The chat's avatar timeline (`?action=avatar-timeline`): each character's
+     * dated avatars, so a bubble shows its author as they looked when it was
+     * written. Rides the `chats` realtime topic — the avatar job's completion
+     * and the timeline's own writer both publish it.
+     */
+    avatarTimeline: (id: string) => ['chats', id, 'avatar-timeline'] as const,
+    /**
      * Absent workspace characters named in one conversation, from
      * `?action=absent-mentions`: the message that first names each, and their
      * card. Drives the Salon's name chips; rides the `chats` realtime topic,

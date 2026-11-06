@@ -2920,6 +2920,37 @@ Get all avatar overrides for characters in this chat.
 }
 ```
 
+#### `GET /api/v1/chats/[id]?action=avatar-timeline`
+
+Each character's dated avatars in this chat, images resolved. The Salon draws every bubble with the avatar in force when it was written (`avatarAt`, `lib/chat/salon-avatar.ts`). Empty for a chat that has not bound an avatar since the timeline was introduced.
+
+**Response**: `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "characterId": "char-uuid",
+      "effectiveAt": "1970-01-01T00:00:00.000Z",
+      "imageId": null,
+      "imageUrl": "/api/v1/mount-points/mp-uuid/blobs/images/avatar.webp",
+      "ownAvatar": true,
+      "source": "baseline",
+      "missing": false
+    },
+    {
+      "characterId": "char-uuid",
+      "effectiveAt": "2026-11-06T11:00:00.000Z",
+      "imageId": "link-uuid",
+      "imageUrl": "/api/v1/mount-points/mp-uuid/blobs/photos/avatar-2.webp",
+      "ownAvatar": false,
+      "source": "generated",
+      "missing": false
+    }
+  ]
+}
+```
+
 #### `POST /api/v1/chats/[id]?action=set-avatar`
 
 Set avatar override for a character in a chat.

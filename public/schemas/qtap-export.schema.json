@@ -48,7 +48,8 @@
               "conversationAnnotations": { "type": "array", "items": { "$ref": "#/$defs/ConversationAnnotation" } },
               "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } },
               "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } },
-              "wardrobeHistory": { "type": "array", "items": { "$ref": "#/$defs/WardrobeHistory" } }
+              "wardrobeHistory": { "type": "array", "items": { "$ref": "#/$defs/WardrobeHistory" } },
+              "avatarTimeline": { "type": "array", "items": { "$ref": "#/$defs/AvatarTimeline" } }
             },
             "additionalProperties": false
           }
@@ -380,6 +381,7 @@
         "chatDocuments": { "type": "integer", "minimum": 0 },
         "chatInforms": { "type": "integer", "minimum": 0 },
         "wardrobeHistory": { "type": "integer", "minimum": 0 },
+        "avatarTimeline": { "type": "integer", "minimum": 0 },
         "wardrobeWear": { "type": "integer", "minimum": 0 },
         "files": { "type": "integer", "minimum": 0 },
         "folders": { "type": "integer", "minimum": 0 },
@@ -1506,6 +1508,22 @@
         "actorCharacterId": { "type": ["string", "null"], "description": "Who made the change: for `character`, the character whose tool call it was; for `pascal`, the rolling character; for `operator`, the character the user was speaking as at the time (null when the user drove no character). Null for arrivals and seeds." },
         "actorToolName": { "type": ["string", "null"], "description": "For `pascal` entries: the name of the custom tool whose wardrobe effects made the change. Null otherwise. Absent in bundles from before the field; read as null." },
         "isCurrent": { "type": "boolean", "description": "The cursor: the entry the character is wearing now." },
+        "createdAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "AvatarTimeline": {
+      "type": "object",
+      "description": "One avatar-timeline row (chat_avatar_timeline): one dated avatar a chat bound for one character, so the Salon draws each bubble with the avatar in force when it was written. In an NDJSON stream each row is an `avatar_timeline` record emitted with its chat. Ids are source-instance ids: the importer mints a fresh id, remaps chatId and characterId, follows imageId through the imported vault links (an id with no entry is kept), and copies effectiveAt, source and createdAt as they are.",
+      "required": ["id", "chatId", "characterId", "imageId", "effectiveAt", "source", "createdAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "characterId": { "type": "string", "minLength": 1 },
+        "imageId": { "type": ["string", "null"], "description": "Vault link id (or legacy files.id) of the avatar; null means the character's own avatar from here on." },
+        "effectiveAt": { "$ref": "#/$defs/Timestamp", "description": "When the avatar took effect. A baseline row is dated 1970-01-01T00:00:00.000Z, before any message." },
+        "source": { "enum": ["baseline", "generated", "cache", "operator", "operator-removed"] },
         "createdAt": { "$ref": "#/$defs/Timestamp" }
       }
     },

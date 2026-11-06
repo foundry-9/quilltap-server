@@ -37,6 +37,7 @@ import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { ChatAvatarTimelineRow } from '@/lib/schemas/chat-avatar-timeline.types';
 import type { LogEntry } from '@/lib/schemas/log-entry.types';
 import type {
   DocMountPoint,
@@ -250,6 +251,8 @@ export interface BackupManifest {
     wardrobeWear?: number;
     /** Number of outfit-history rows (`chat_wardrobe_history`) */
     wardrobeHistory?: number;
+    /** Number of avatar-timeline rows (`chat_avatar_timeline`) */
+    avatarTimeline?: number;
     /** Number of Log lines (`log_entries`, in the LLM logs database) */
     logEntries?: number;
   };
@@ -432,6 +435,13 @@ export interface BackupData {
    * it cascades from; optional, so an older archive simply has none.
    */
   wardrobeHistory?: ChatWardrobeHistoryRow[];
+
+  /**
+   * The Salon avatar timeline (`chat_avatar_timeline`): the dated avatars each
+   * chat bound for each character. Restored after the chats it cascades from;
+   * optional, so an older archive simply has none.
+   */
+  avatarTimeline?: ChatAvatarTimelineRow[];
 
   /**
    * The Log (`log_entries`, in the LLM logs database): lines written by
@@ -632,6 +642,9 @@ export interface RestoreSummary {
 
   /** Number of outfit-history rows restored */
   wardrobeHistory?: number;
+
+  /** Number of avatar-timeline rows restored */
+  avatarTimeline?: number;
 
   /** Number of Log lines restored */
   logEntries?: number;

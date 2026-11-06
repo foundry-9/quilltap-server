@@ -4,6 +4,15 @@
 
 ### 4.13-dev
 
+#### Feature: Salon avatars fixed to their moment
+
+- Each Salon bubble now shows its author's avatar as it was when the message was written. A new avatar (from a wardrobe or inventory change, the configuration cache, or set by hand) takes effect when it is bound to the chat; earlier bubbles keep the old one. Previously every bubble showed the character's current avatar.
+- New table `chat_avatar_timeline` (migration `add-chat-avatar-timeline-table-v1`, no backfill). Written only by `ChatAvatarTimelineRepository.record`, from `bindAvatarToChat` and the `set-avatar` / `remove-avatar` actions; buffered from the job child and replayed in the parent. The first record for a (chat, character) writes a baseline row with the chat's prior per-chat avatar, so chats that predate the table keep their current look on earlier bubbles.
+- `GET /api/v1/chats/[id]?action=avatar-timeline` returns the timeline with images resolved (`loadAvatarTimeline`, `lib/chat/salon-avatar-loader.ts`). `avatarAt` (`lib/chat/salon-avatar.ts`) picks the avatar in force; a row whose image is gone falls back to the latest surviving image for that character in the chat, then the current avatar. A "character's own avatar" row shows the character's default image, not the chat's per-chat avatar.
+- `getMessageAvatar` in the Salon uses it for participant, announcer, Carina answerer and fallback branches. New query key `queryKeys.chats.avatarTimeline`, refreshed by the `chats` realtime topic.
+- The table is included in backups, restore remapping, `.qtap` export/import (`avatar_timeline` records, `qtap-export.schema.json`) and character cascade delete.
+- Tests: `avatarAt` selection and fallback, `record` baseline and no-op rules against real SQLite, and the import remap.
+
 #### Docs: correct two out-of-date help pages
 
 - `help/character-system-transparency.md` said System Transparency is mirrored into the vault's `properties.json`. It is a database column only (see DDL.md); the page now says so and why.

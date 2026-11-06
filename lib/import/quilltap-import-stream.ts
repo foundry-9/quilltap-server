@@ -52,6 +52,7 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { ChatAvatarTimelineRow } from '@/lib/schemas/chat-avatar-timeline.types';
 
 const logger = baseLogger.child({ module: 'import:quilltap-import-stream' });
 
@@ -152,6 +153,7 @@ export async function assembleExportFromStream(
   const chatInforms: ChatInform[] = [];
   const wardrobeWear: WardrobeWearStatsRow[] = [];
   const wardrobeHistory: ChatWardrobeHistoryRow[] = [];
+  const avatarTimeline: ChatAvatarTimelineRow[] = [];
 
   const folderRecords: ExportedFolder[] = [];
   const filesById = new Map<string, ExportedFileWithBytes>();
@@ -331,6 +333,12 @@ export async function assembleExportFromStream(
       // once every chat and character has landed.
       case 'wardrobe_history':
         wardrobeHistory.push((record as { data: ChatWardrobeHistoryRow }).data);
+        break;
+
+      // Avatar-timeline rows. Source-instance ids; the executor remaps them
+      // once every chat, character and vault link has landed.
+      case 'avatar_timeline':
+        avatarTimeline.push((record as { data: ChatAvatarTimelineRow }).data);
         break;
 
       case 'doc_mount_point':
@@ -530,6 +538,7 @@ export async function assembleExportFromStream(
     chatInforms,
     wardrobeWear,
     wardrobeHistory,
+    avatarTimeline,
     fileFolders: folderRecords,
     files: fileOrder.map((id) => filesById.get(id)!),
     promptTemplates,
@@ -571,6 +580,7 @@ interface CollectedArrays {
   chatInforms: ChatInform[];
   wardrobeWear: WardrobeWearStatsRow[];
   wardrobeHistory: ChatWardrobeHistoryRow[];
+  avatarTimeline: ChatAvatarTimelineRow[];
   /**
    * General file-library folders. Named `fileFolders` rather than `folders`
    * because `folders` is already taken by the document-store folder rows.
@@ -607,6 +617,7 @@ function buildExportDataForType(
         ...(c.chatDocuments.length > 0 && { chatDocuments: c.chatDocuments }),
         ...(c.chatInforms.length > 0 && { chatInforms: c.chatInforms }),
         ...(c.wardrobeHistory.length > 0 && { wardrobeHistory: c.wardrobeHistory }),
+        ...(c.avatarTimeline.length > 0 && { avatarTimeline: c.avatarTimeline }),
       };
     case 'roleplay-templates':
       return { roleplayTemplates: c.roleplayTemplates };

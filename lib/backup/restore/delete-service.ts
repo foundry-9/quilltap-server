@@ -60,6 +60,9 @@ async function clearFormat3Entities(): Promise<void> {
     // clearing it here keeps a restore from colliding on the timelines of
     // chat ids it is about to recreate (the per-timeline unique indexes).
     'chat_wardrobe_history',
+    // The avatar timeline. Same reasoning as the outfit history: cleared here
+    // so a replace-mode restore never meets stale rows for recreated chats.
+    'chat_avatar_timeline',
     // Storyteller rounds. Never backed up (bids are not part of the record),
     // so a replace-mode restore simply drops whatever rounds were open.
     'storyteller_rounds',

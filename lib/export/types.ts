@@ -112,6 +112,8 @@ export interface QuilltapExportCounts {
   chatInforms?: number;
   /** Outfit-history rows (`chat_wardrobe_history`) for exported chats. */
   wardrobeHistory?: number;
+  /** Avatar-timeline rows (`chat_avatar_timeline`) for exported chats. */
+  avatarTimeline?: number;
   /** Wear-ledger rows (`wardrobe_wear_stats`) for exported wardrobe items. */
   wardrobeWear?: number;
   files?: number;
@@ -276,6 +278,12 @@ export interface ChatsExportData {
    * on the first change of clothes.
    */
   wardrobeHistory?: import('@/lib/schemas/chat-wardrobe-history.types').ChatWardrobeHistoryRow[];
+  /**
+   * Avatar-timeline rows (`chat_avatar_timeline`) for any exported chat: the
+   * dated avatars each character wore in it. Optional — older bundles carry
+   * none, and those chats take a baseline on the first avatar change.
+   */
+  avatarTimeline?: import('@/lib/schemas/chat-avatar-timeline.types').ChatAvatarTimelineRow[];
 }
 
 /**
@@ -797,6 +805,18 @@ export interface QtapWardrobeHistoryRecord {
   data: import('@/lib/schemas/chat-wardrobe-history.types').ChatWardrobeHistoryRow;
 }
 
+/**
+ * One avatar-timeline row streamed alongside its parent chat. Ids are
+ * source-instance ids; the importer mints a fresh `id`, remaps `chatId` and
+ * `characterId`, follows `imageId` through the imported vault links, and
+ * copies `effectiveAt`, `source` and `createdAt` as they are.
+ */
+export interface QtapAvatarTimelineRecord {
+  kind: 'avatar_timeline';
+  chatId: string;
+  data: import('@/lib/schemas/chat-avatar-timeline.types').ChatAvatarTimelineRow;
+}
+
 export interface QtapDocMountPointRecord {
   kind: 'doc_mount_point';
   data: ExportedDocumentStore;
@@ -933,6 +953,7 @@ export type QtapRecord =
   | QtapChatMessageRecord
   | QtapChatInformRecord
   | QtapWardrobeHistoryRecord
+  | QtapAvatarTimelineRecord
   | QtapConversationAnnotationRecord
   | QtapChatDocumentRecord
   | QtapMemoryRecord

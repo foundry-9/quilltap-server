@@ -33,6 +33,7 @@ import {
 import { importDocumentStores } from './import-document-stores';
 import { buildImportedWardrobeItemIdMap, importWardrobeWear } from './import-wardrobe-wear';
 import { importWardrobeHistory } from './import-wardrobe-history';
+import { importAvatarTimeline } from './import-avatar-timeline';
 import { importWardrobeItemImages } from './import-wardrobe-images';
 import { importFiles } from './import-files';
 import {
@@ -938,6 +939,25 @@ async function executeImportStrict(
         warnings.push(`Failed to import the outfit history: ${msg}`);
         moduleLogger.warn('Failed to import outfit history', {
           rowCount: data.wardrobeHistory.length,
+          error: msg,
+        });
+      }
+    }
+
+    // 7g. Avatar timeline. After the chats, characters and document stores
+    //    (whose id maps it reads). A timeline already live is never merged into.
+    if (data.avatarTimeline && data.avatarTimeline.length > 0) {
+      try {
+        imported.avatarTimeline = await importAvatarTimeline(
+          data.avatarTimeline,
+          idMaps,
+          warnings
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        warnings.push(`Failed to import the avatar timeline: ${msg}`);
+        moduleLogger.warn('Failed to import avatar timeline', {
+          rowCount: data.avatarTimeline.length,
           error: msg,
         });
       }

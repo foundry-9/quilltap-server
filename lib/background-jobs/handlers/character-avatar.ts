@@ -55,9 +55,24 @@ async function bindAvatarToChat(
     character: { id: string; avatarOverrides?: Array<{ chatId: string; imageId: string }> | null };
     chatId: string;
     fileId: string;
+    /** Timeline source: a freshly drawn avatar, or a reused one for the same configuration. */
+    source: 'generated' | 'cache';
   },
 ): Promise<void> {
-  const { chat, character, chatId, fileId } = args;
+  const { chat, character, chatId, fileId, source } = args;
+
+  // The Salon avatar timeline: from this moment the chat's bubbles for this
+  // character carry the new look; earlier bubbles keep theirs. Recorded
+  // before the bindings below so the parent's replay reads the prior
+  // override for the first-time baseline (it is also passed explicitly).
+  const priorImageId = (character.avatarOverrides || []).find(o => o.chatId === chatId)?.imageId ?? null;
+  await repos.avatarTimeline.record({
+    chatId,
+    characterId: character.id,
+    imageId: fileId,
+    source,
+    priorImageId,
+  });
 
   const existingAvatars = (chat.characterAvatars && typeof chat.characterAvatars === 'object')
     ? chat.characterAvatars as Record<string, unknown>
@@ -206,6 +221,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         character,
         chatId: payload.chatId,
         fileId: cached.id,
+        source: 'cache',
       });
 
       // No Lantern notification: nothing was produced. The avatar still reaches
@@ -486,6 +502,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     character,
     chatId: payload.chatId,
     fileId,
+    source: 'generated',
   });
 
   logger.info('[CharacterAvatar] Avatar generation completed', {

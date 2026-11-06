@@ -467,6 +467,7 @@ import { addEstablishedFactFieldMigration } from './add-established-fact-field-v
 import { addProfileMaxImagesPerRequestMigration } from './add-profile-max-images-per-request-v1';
 // Tool-result elision window: connection_profiles.toolResultVerbatimTurns
 import { addProfileToolResultVerbatimTurnsMigration } from './add-profile-tool-result-verbatim-turns-v1';
+import { addChatAvatarTimelineTableMigration } from './add-chat-avatar-timeline-table-v1';
 
 /**
  * All available migrations.
@@ -962,6 +963,8 @@ export const migrations: Migration[] = [
   addProfileMaxImagesPerRequestMigration,
   // Tool-result elision window: connection_profiles.toolResultVerbatimTurns (turns a result stays in full)
   addProfileToolResultVerbatimTurnsMigration,
+  // Salon avatar timeline: chat_avatar_timeline (each bubble keeps the look it was written in)
+  addChatAvatarTimelineTableMigration,
 ];
 
 export {
@@ -1428,5 +1431,6 @@ export {
   addEstablishedFactFieldMigration,
   addProfileMaxImagesPerRequestMigration,
   addProfileToolResultVerbatimTurnsMigration,
+  addChatAvatarTimelineTableMigration,
 };
 

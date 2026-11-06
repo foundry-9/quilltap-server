@@ -61,6 +61,7 @@ jest.mock('@/lib/photos/chat-gallery', () => ({
 
 jest.mock('@/app/api/v1/chats/[id]/actions', () => ({
   handleGetAvatars: jest.fn(),
+  handleGetAvatarTimeline: jest.fn(),
   handleGetState: jest.fn(),
   handleGetOutfit: jest.fn(),
   handleGetOutfitSummary: jest.fn(),
@@ -84,6 +85,7 @@ const GET_ACTIONS = [
   'export',
   'export-markdown',
   'get-avatars',
+  'avatar-timeline',
   'get-state',
   'outfit',
   'outfit-summary',

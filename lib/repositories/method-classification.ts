@@ -71,6 +71,12 @@ export const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   // discard the return. `findEntries` / `findCurrent` stay reads and answer
   // from the job's snapshot.
   'wardrobeHistory.settle': 'write',
+  // Salon avatar timeline. `record` is the one runtime writer of
+  // `chat_avatar_timeline`; the avatar job calls it from the child. Buffered
+  // whole so the parent replays it, where its "first row for this pair?"
+  // check (which decides the baseline) reads the real table. Callers discard
+  // the return.
+  'avatarTimeline.record': 'write',
   // background jobs
   'backgroundJobs.cancelByType': 'write',
   'backgroundJobs.createBatch': 'write',

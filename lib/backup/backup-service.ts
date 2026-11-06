@@ -291,6 +291,10 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   const wardrobeHistory = await globalRepos.wardrobeHistory.findAll();
   moduleLogger.debug('Collected outfit history for backup', { rowCount: wardrobeHistory.length });
 
+  // The Salon avatar timeline: every chat's dated avatars per character.
+  const avatarTimeline = await globalRepos.avatarTimeline.findAll();
+  moduleLogger.debug('Collected avatar timeline for backup', { rowCount: avatarTimeline.length });
+
   // The Log: instance-wide lines in the LLM logs database (no userId), so the
   // whole table is the user's. Empty while the logs DB is degraded.
   const logEntries = await globalRepos.logEntries.findAllEntries();
@@ -402,6 +406,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     textReplacementRules,
     wardrobeWear,
     wardrobeHistory,
+    avatarTimeline,
     logEntries,
   };
 }
@@ -506,6 +511,7 @@ function createManifest(
       textReplacementRules: data.textReplacementRules?.length || 0,
       wardrobeWear: data.wardrobeWear?.length || 0,
       wardrobeHistory: data.wardrobeHistory?.length || 0,
+      avatarTimeline: data.avatarTimeline?.length || 0,
       logEntries: data.logEntries?.length || 0,
     },
   };
@@ -715,6 +721,8 @@ export async function createBackup(
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-wear.json'), data.wardrobeWear || []);
     // Outfit history (4.11). Optional on the way back in, like the wear ledger.
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-history.json'), data.wardrobeHistory || []);
+    // Salon avatar timeline. Optional on the way back in, like the outfit history.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'avatar-timeline.json'), data.avatarTimeline || []);
     // The Log (4.11). Optional on the way back in, like the wear ledger.
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'log-entries.json'), data.logEntries || []);
 

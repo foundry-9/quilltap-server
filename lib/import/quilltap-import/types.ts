@@ -64,6 +64,8 @@ export interface AnyExportData {
   chatInforms?: import('@/lib/schemas/chat-inform.types').ChatInform[];
   // Outfit-history rows for the bundle's chats
   wardrobeHistory?: import('@/lib/schemas/chat-wardrobe-history.types').ChatWardrobeHistoryRow[];
+  // Avatar-timeline rows for the bundle's chats
+  avatarTimeline?: import('@/lib/schemas/chat-avatar-timeline.types').ChatAvatarTimelineRow[];
   // Wear-ledger rows for the bundle's wardrobe items (characters and
   // document-stores exports)
   wardrobeWear?: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow[];

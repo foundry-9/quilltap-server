@@ -18,7 +18,7 @@ export {
 } from './participants';
 export { handleTurnAction } from './turn';
 export { handleStopTurn, handleRaiseHand } from './interrupt';
-export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';
+export { handleGetAvatars, handleGetAvatarTimeline, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
 export { handleQueueMemories, handleExtractMemoriesDryRun } from './memories';

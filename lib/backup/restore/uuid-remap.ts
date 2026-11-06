@@ -52,6 +52,7 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { ChatAvatarTimelineRow } from '@/lib/schemas/chat-avatar-timeline.types';
 import type { LogEntry } from '@/lib/schemas/log-entry.types';
 import { bySlot } from '@/lib/schemas/wardrobe.types';
 import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash';
@@ -784,6 +785,26 @@ export function remapBackupData(
     };
   }) as ChatWardrobeHistoryRow[];
 
+  // Avatar timeline. `id`, `chatId` and `characterId` go through the remapper.
+  // `imageId` is the same kind of id as `chats.characterAvatars[].imageId`,
+  // which the chat remap above sends through `remapper.remap`, so the timeline
+  // and the chat's own override keep naming the same file. A null `imageId`
+  // ("the character's own avatar") stays null. A row for a character the
+  // backup does not carry is dropped, as the chat remap drops such entries.
+  const remappedAvatarTimeline = (data.avatarTimeline || []).flatMap((row) => {
+    if (!backupCharacterIds.has(row.characterId)) {
+      moduleLogger.debug('Dropped avatar timeline row for a character not in the backup', {
+        chatId: row.chatId,
+        characterId: row.characterId,
+      });
+      return [];
+    }
+    return [{
+      ...remapper.remapFields(row, ['id', 'chatId', 'characterId']),
+      imageId: row.imageId ? remapper.remap(row.imageId) : null,
+    }];
+  }) as ChatAvatarTimelineRow[];
+
   // The Log. Each line names the chat it was written from and the character
   // who wrote it (nullable, which `remapFields` passes through).
   const remappedLogEntries = (data.logEntries || []).map((entry) =>
@@ -850,6 +871,7 @@ export function remapBackupData(
     textReplacementRules: data.textReplacementRules || [],
     wardrobeWear: remappedWardrobeWear,
     wardrobeHistory: remappedWardrobeHistory,
+    avatarTimeline: remappedAvatarTimeline,
     logEntries: remappedLogEntries,
   };
 }

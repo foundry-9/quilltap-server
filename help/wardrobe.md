@@ -403,7 +403,13 @@ Should you wish it, Quilltap can generate fresh character portraits whenever an 
 
 To enable this feature, look for the **Auto-Generate Avatars** toggle in your chat settings. Note that each portrait costs an image generation API call, so this feature is entirely opt-in --- one does not wish to receive an unexpectedly large bill from one's portraitist.
 
-The generated avatars update asynchronously: the chat continues without interruption, and the new portrait appears once the image provider has finished its work. Previous messages retain whatever avatar was current at the time, so scrolling backwards through the conversation reveals each costume change in sequence.
+The generated avatars update asynchronously: the chat continues without interruption, and the new portrait appears once the image provider has finished its work. Each message keeps the portrait that was in force when it was written, so scrolling backwards through the conversation reveals each costume change in sequence --- Clark Kent is bespectacled up to the very line on which his new likeness arrives, and the Man of Steel thereafter. A few particulars of the arrangement:
+
+- **The new look takes effect when the portrait arrives**, not at the instant the spectacles come off. The painter is not instantaneous, and the lines spoken while the paint dries keep the old face.
+- **Picking up or putting down an object** from the Inventory repaints the portrait just as a change of clothes does, and is dated the same way.
+- **A portrait you choose by hand** for a character in a conversation (or remove, returning them to their usual likeness) takes effect from that moment, likewise.
+- **Should a portrait be lost** --- swept away with an old conversation's superseded pictures, say --- the messages that wore it borrow the latest portrait of that character in the conversation that still exists, or failing that, the character's present avatar.
+- **Conversations from before this arrangement** keep looking exactly as they did. If you resume one, it simply begins keeping its record from that point onward.
 
 ### The Portrait Kept On File
 

@@ -47,6 +47,7 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.background('chat-1'),
       queryKeys.chats.gallery('chat-1'),
       queryKeys.chats.informs('chat-1'),
+      queryKeys.chats.avatarTimeline('chat-1'),
       queryKeys.chats.absentMentions('chat-1'),
       queryKeys.wardrobe.outfit('chat-1'),
       queryKeys.wardrobe.histories('chat-1'),

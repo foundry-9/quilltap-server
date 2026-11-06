@@ -1228,6 +1228,23 @@ export async function restore(
       restored: wardrobeHistoryRestored,
     });
 
+    // 22n-ter-bis. Salon avatar timeline. After the chats it cascades from;
+    // rows go in whole (ids preserved); a failing row is logged and skipped.
+    let avatarTimelineRestored = 0;
+    const avatarTimelineRows = data.avatarTimeline || [];
+    if (avatarTimelineRows.length > 0) {
+      try {
+        avatarTimelineRestored = await globalRepos.avatarTimeline.upsertRows(avatarTimelineRows);
+      } catch (error) {
+        warnings.push(`Failed to restore the avatar timeline: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore avatar timeline', { rowCount: avatarTimelineRows.length, error });
+      }
+    }
+    moduleLogger.debug('Restored avatar timeline', {
+      total: avatarTimelineRows.length,
+      restored: avatarTimelineRestored,
+    });
+
     // 22n-quater. The Log. Lives in the LLM logs database, so it is skipped
     // with the LLM logs when that database is degraded. Lines are written once
     // and never edited, so each keeps its id and both timestamps.
@@ -1486,6 +1503,7 @@ export async function restore(
       textReplacementRules: textReplacementRulesRestored,
       wardrobeWear: wardrobeWearRestored,
       wardrobeHistory: wardrobeHistoryRestored,
+      avatarTimeline: avatarTimelineRestored,
       logEntries: logEntriesRestored,
       embeddingReconcile: {
         targetDimensions: reconcileResult.targetDimensions,

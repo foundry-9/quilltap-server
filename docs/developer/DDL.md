@@ -565,6 +565,45 @@ next real change appends at `max + 1`. Unbounded; nothing prunes or renumbers.
 - DDL single source: `lib/database/backends/sqlite/chat-wardrobe-history-ddl.ts`.
   Design of record: `docs/developer/features/complete/wardrobe-outfit-history.md`.
 
+### chat_avatar_timeline
+
+```sql
+CREATE TABLE "chat_avatar_timeline" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL REFERENCES "chats"("id") ON DELETE CASCADE,
+  "characterId" TEXT NOT NULL,   -- no FK: characters may be archived tombstones
+  "imageId" TEXT,                -- vault link id or legacy files.id; NULL = the character's own avatar from here on
+  "effectiveAt" TEXT NOT NULL,   -- ISO time the avatar took effect (the bind); baselines use 1970-01-01T00:00:00.000Z
+  "source" TEXT NOT NULL,        -- baseline | generated | cache | operator | operator-removed
+  "createdAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_chat_avatar_timeline_chat"
+  ON "chat_avatar_timeline" ("chatId", "characterId", "effectiveAt");
+```
+
+The Salon avatar timeline (added 4.13 by `add-chat-avatar-timeline-table-v1`, no
+seeding). Per character per chat, the avatars the chat has bound, dated, so each
+Salon bubble is drawn with the avatar in force when it was written
+(`avatarAt`, `lib/chat/salon-avatar.ts`). Append-only.
+
+- The only runtime writer is `ChatAvatarTimelineRepository.record`
+  (`lib/database/repositories/chat-avatar-timeline.repository.ts`), called from the
+  avatar job's `bindAvatarToChat` (`generated` / `cache`) and the chat route's
+  `set-avatar` / `remove-avatar` (`operator` / `operator-removed`). From the job
+  child it is buffered whole and replayed in the parent. `upsertRows` is for
+  restore and import only.
+- The first `record` for a pair also writes a `baseline` row holding what the chat
+  showed before (its prior `avatarOverrides` entry, or NULL), so an older chat's
+  earlier bubbles keep their look.
+- Rows are never rewritten when an image is deleted; the resolver falls back to the
+  latest surviving image for that character in the chat, then the current avatar.
+- Chat deletion cascades. Character deletion calls `deleteByCharacter`.
+- Exported in `.qtap` bundles as `avatar_timeline` records and included in backups
+  (`data/avatar-timeline.json`).
+- DDL single source: `lib/database/backends/sqlite/chat-avatar-timeline-ddl.ts`.
+  Design of record: `docs/developer/features/salon-avatar-timeline.md`.
+
 ### outfit_presets — REMOVED in 4.5
 
 The `outfit_presets` table was eliminated; named outfit bundles are now expressed as composite `wardrobe_items` rows whose `componentItemIds` references the constituent items. Migrations `migrate-outfit-presets-to-composites-v1` and `drop-outfit-presets-table-v1` perform the fold-and-drop. A snapshot of the table content is written to `<dataDir>/backup/pre-drop-outfit-presets.json` before the drop.

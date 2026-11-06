@@ -435,6 +435,21 @@ async function* streamChats(
       });
     }
 
+    // Every character's dated avatars in this chat.
+    try {
+      const timelineRows = await getRepositories().avatarTimeline.findByChatId(id);
+      for (const row of timelineRows) {
+        yield { kind: 'avatar_timeline', chatId: id, data: row };
+        bump(counts, 'avatarTimeline');
+      }
+      logger.debug('Exported avatar timeline', { chatId: id, count: timelineRows.length });
+    } catch (error) {
+      logger.warn('Failed to load avatar timeline for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Conversation annotations and chat documents come after the messages so
     // importers can resolve sourceMessageId / chatId against IDs they have
     // already seen in this same stream.

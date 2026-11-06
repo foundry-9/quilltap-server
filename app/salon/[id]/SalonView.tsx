@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
+import { useRealtimeFallbackPoll, useRealtimeRefetchInterval, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import { StorytellerBoard, withBid, type StorytellerRoundResponse } from '@/components/chat/StorytellerBoard'
 import type { StorytellerStreamEvent } from './hooks/useSSEStreaming'
@@ -39,6 +39,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { ConciergeTooltipBody } from '@/components/chat/ConciergeMark'
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
 import { staffAvatar } from '@/lib/chat/staff-display-names'
+import { avatarAt, indexAvatarTimeline, type SalonAvatarSegment } from '@/lib/chat/salon-avatar'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -119,6 +120,8 @@ import { ReplyAnnouncer } from '@/components/chat/ReplyAnnouncer'
 const AVATAR_POLL_INTERVAL_MS = 5000
 /** How long the avatar watch waits before giving up on a generation. */
 const AVATAR_WATCH_TIMEOUT_MS = 2 * 60_000
+/** Fallback re-read cadence for the avatar timeline, while the socket is down. */
+const AVATAR_TIMELINE_FALLBACK_POLL_MS = 30_000
 
 export interface SalonViewProps {
   /** The conversation this Salon tab renders. */
@@ -1279,6 +1282,39 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     return () => setRightContent(null)
   }, [id, chatSettings?.tokenDisplaySettings?.showChatTotals, chatSettings?.llmLoggingSettings?.enabled, setRightContent, messages.length, toggleInspector, inspectorOpen])
 
+  // The chat's avatar timeline: each bubble shows its author as they looked
+  // when it was written (lib/chat/salon-avatar.ts). Rides the `chats`
+  // realtime topic; the interval is only the offline fallback.
+  const avatarTimelineRefetch = useRealtimeRefetchInterval(AVATAR_TIMELINE_FALLBACK_POLL_MS)
+  const avatarTimelineQuery = useQuery({
+    queryKey: queryKeys.chats.avatarTimeline(id),
+    queryFn: ({ signal }) =>
+      apiFetch<{ data: SalonAvatarSegment[] }>(`/api/v1/chats/${id}?action=avatar-timeline`, { signal }),
+    enabled: Boolean(id),
+    refetchInterval: avatarTimelineRefetch,
+  })
+  const avatarTimelineIndex = useMemo(
+    () => indexAvatarTimeline(avatarTimelineQuery.data?.data ?? []),
+    [avatarTimelineQuery.data],
+  )
+
+  /**
+   * A character's face at the moment of one message. When the timeline
+   * answers, its URL stands alone (the enriched `defaultImage` would win in
+   * `<Avatar>` and carries the chat's current look). Otherwise the
+   * character's current avatar, exactly as before the timeline existed.
+   */
+  const faceAt = useCallback((
+    character: { id: string; avatarUrl?: string | null; defaultImage?: CharacterData['defaultImage'] | null },
+    message: Message,
+  ): { avatarUrl: string | null; defaultImage: CharacterData['defaultImage'] | null } => {
+    const answer = avatarAt(avatarTimelineIndex, character.id, message.createdAt, character.avatarUrl ?? null)
+    if (answer.from === 'character-current') {
+      return { avatarUrl: character.avatarUrl ?? null, defaultImage: character.defaultImage ?? null }
+    }
+    return { avatarUrl: answer.url, defaultImage: null }
+  }, [avatarTimelineIndex])
+
   // --- UI helpers ---
   const shouldShowAvatars = useCallback(() => {
     if (!chatSettings) return true
@@ -1314,8 +1350,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
             name: participant.character.name,
             characterId: participant.character.id,
             title: participant.character.title ?? null,
-            avatarUrl: participant.character.avatarUrl ?? null,
-            defaultImage: participant.character.defaultImage ?? null,
+            ...faceAt(participant.character, message),
           }
         }
         const offScene = chat?.offSceneCharacters?.find(c => c.id === charId)
@@ -1365,8 +1400,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
             name: participant.character.name,
             characterId: participant.character.id,
             title: participant.character.title ?? null,
-            avatarUrl: participant.character.avatarUrl ?? null,
-            defaultImage: participant.character.defaultImage ?? null,
+            ...faceAt(participant.character, message),
           }
         }
         const offScene = chat?.offSceneCharacters?.find(c => c.id === answererId)
@@ -1380,25 +1414,25 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
         if (participant.type === 'CHARACTER' && participant.character) {
-          return { name: participant.character.name, characterId: participant.character.id, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
+          return { name: participant.character.name, characterId: participant.character.id, title: participant.character.title, ...faceAt(participant.character, message) }
         }
       }
     }
     if (message.role === 'USER') {
       const userChar = participantsWithImpersonation.getFirstUserCharacter()
       if (userChar) {
-        return { name: userChar.name, characterId: userChar.id, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
+        return { name: userChar.name, characterId: userChar.id, title: userChar.title, ...faceAt(userChar, message) }
       } else if (chat?.user) {
         return { name: chat.user.name || 'User', title: null, avatarUrl: chat.user.image ?? null, defaultImage: null }
       }
     } else if (message.role === 'ASSISTANT') {
       const character = participantsWithImpersonation.getFirstCharacter()
       if (character) {
-        return { name: character.name, characterId: character.id, title: character.title, avatarUrl: character.avatarUrl, defaultImage: character.defaultImage }
+        return { name: character.name, characterId: character.id, title: character.title, ...faceAt(character, message) }
       }
     }
     return null
-  }, [participantsWithImpersonation, chat?.user, chat?.participants, chat?.offSceneCharacters])
+  }, [participantsWithImpersonation, chat?.user, chat?.participants, chat?.offSceneCharacters, faceAt])
 
   // --- In-conversation search (header search bar) ---
   // The header search bar looks inside this chat before searching everywhere.
