@@ -44,6 +44,8 @@ export interface CheapLLMSettings {
    * that do have a profile take their chain from that profile instead.
    */
   allowCheapFallback?: boolean
+  /** The Green Room's own profile for choosing opening outfits; null = the cheap LLM. */
+  outfitSelectionProfileId?: string | null
   embeddingProvider: EmbeddingProvider
 }
 

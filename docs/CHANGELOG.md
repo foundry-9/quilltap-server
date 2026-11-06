@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Feature: Green Room wardrobe model; single pieces from outfit sets
+
+- New setting `chatSettings.cheapLLMSettings.outfitSelectionProfileId` (Settings → Providers → Cheap LLM Settings → Green Room Wardrobe Model). Any connection profile; it makes the `llm_choose` opening-outfit pick instead of the cheap LLM. Unset or a deleted profile falls back to the cheap LLM. Resolved by `selectGreenRoomLLM` (`lib/wardrobe/green-room-model.ts`), carried by `buildCheapLLMConfig`. Stored in the existing `cheapLLMSettings` JSON column, so no migration; restore remaps the id.
+- The outfit prompt's composite marker now names the set's pieces by title (`[composite — bundles "Linen Blazer", "Linen Trousers", 1 other item]`; pieces not offered are counted), and the prompt says one piece of a set may be picked by its own ID.
+
 #### Fix: Green Room could dress a character in two whole outfits
 
 - The model could list an outfit set under one slot it happens to cover beside a full outfit. On Friday, Amy got "Summer Travel Look — Peacock & Olive Linen" (top, bottom, footwear) plus "Gothic Victorian Enchantress Attire" (top, bottom, accessories, hair) listed only under `hair`. Dissolving and spreading put every piece of both on.

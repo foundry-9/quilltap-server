@@ -45,7 +45,7 @@ import {
   DEFAULT_CHEAP_LLM_CONFIG,
   type CheapLLMConfig,
 } from '@/lib/llm/cheap-llm';
-import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
+import { selectGreenRoomLLM } from '@/lib/wardrobe/green-room-model';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts';
@@ -378,7 +378,7 @@ export async function applyOutfitSelections(
             }
 
             if (character && wardrobeItems.length > 0) {
-              const resolved = selectCheapLLMFromProfiles(
+              const resolved = selectGreenRoomLLM(
                 await repos.connections.findAll(),
                 context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
               );

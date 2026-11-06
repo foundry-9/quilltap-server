@@ -9,7 +9,7 @@ import { NextRequest } from 'next/server'
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
-import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
+import { TagStyleMapSchema, ThemePreferenceSchema, UUIDSchema } from '@/lib/schemas/common.types'
 import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, CoreWhisperSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, WardrobeImageSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -139,6 +139,12 @@ async function updateChatSettings(
         typeof settings.allowCheapFallback !== 'boolean'
       ) {
         throw new Error('allowCheapFallback must be a boolean')
+      }
+      if (
+        settings.outfitSelectionProfileId != null &&
+        !UUIDSchema.safeParse(settings.outfitSelectionProfileId).success
+      ) {
+        throw new Error('outfitSelectionProfileId must be a profile id or null')
       }
     }
     updateData.cheapLLMSettings = cheapLLMSettings

@@ -45,6 +45,12 @@ export interface CheapLLMConfig {
   defaultCheapProfileId?: string
   /** Whether to fall back to local models (Ollama) if available */
   fallbackToLocal: boolean
+  /**
+   * The Green Room's own profile for choosing opening outfits (`llm_choose`).
+   * Unset = the cheap LLM. Read only by `selectGreenRoomLLM`
+   * (`lib/wardrobe/green-room-model.ts`); the ladder ignores it.
+   */
+  outfitSelectionProfileId?: string
 }
 
 /**
@@ -150,6 +156,7 @@ export function buildCheapLLMConfig(
     fallbackToLocal: settings.fallbackToLocal,
     userDefinedProfileId: settings.userDefinedProfileId ?? undefined,
     defaultCheapProfileId: settings.defaultCheapProfileId ?? undefined,
+    outfitSelectionProfileId: settings.outfitSelectionProfileId ?? undefined,
   }
 }
 

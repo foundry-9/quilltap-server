@@ -123,6 +123,36 @@ export function CheapLLMSettings({
           </select>
         </div>
 
+        {/* The Green Room's own model for opening outfits */}
+        <div>
+          <label className="block qt-text-label mb-2" htmlFor={`${id}-green-room-profile`}>
+            Green Room Wardrobe Model (Optional)
+          </label>
+          <p className="qt-text-xs mb-2" id={`${id}-green-room-hint`}>
+            Who chooses an opening outfit when a character is left to dress themselves. Choosing
+            well is a matter of taste, and a cheap model often lacks it — any profile may serve
+            here. Left unset, the cheap LLM chooses.
+          </p>
+          <select
+            id={`${id}-green-room-profile`}
+            aria-describedby={`${id}-green-room-hint`}
+            value={settings?.cheapLLMSettings.outfitSelectionProfileId || ''}
+            onChange={(e) => onUpdate({ outfitSelectionProfileId: e.target.value || null })}
+            disabled={saving || loadingProfiles}
+            className="qt-select"
+          >
+            <option value="">Use the cheap LLM</option>
+            {connectionProfiles.map((profile) => {
+              const hasApiKey = Boolean(profile.apiKey)
+              return (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
+                </option>
+              )
+            })}
+          </select>
+        </div>
+
         {/* Fallback to Local */}
         <label className="flex items-center gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
           <input

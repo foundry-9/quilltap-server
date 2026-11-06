@@ -69,6 +69,15 @@ export const CheapLLMSettingsSchema = z.object({
    * automatic provider choice.
    */
   allowCheapFallback: z.boolean().default(false),
+  /**
+   * The Green Room's own connection profile for choosing opening outfits
+   * ("Let Character Choose"). Any profile, not only cheap ones: matching a
+   * wardrobe to a scenario, a personality and a run of recent openings is
+   * more than a flash model does well. null/undefined = the cheap LLM; a stale
+   * id falls back the same way. Resolved by `selectGreenRoomLLM`
+   * (`lib/wardrobe/green-room-model.ts`).
+   */
+  outfitSelectionProfileId: UUIDSchema.nullable().optional(),
 });
 
 export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;

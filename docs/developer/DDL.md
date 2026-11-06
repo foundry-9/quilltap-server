@@ -1117,7 +1117,7 @@ CREATE TABLE "chat_settings" (
   "avatarDisplayMode" TEXT DEFAULT 'ALWAYS',
   "avatarDisplayStyle" TEXT DEFAULT 'CIRCULAR',
   "tagStyles" TEXT DEFAULT '{}',
-  "cheapLLMSettings" TEXT DEFAULT '{}',
+  "cheapLLMSettings" TEXT DEFAULT '{}', -- JSON { strategy, userDefinedProfileId, defaultCheapProfileId, fallbackToLocal, embeddingProvider, allowCheapFallback, outfitSelectionProfileId (4.13: the Green Room's opening-outfit profile, null = the cheap LLM) }
   "imageDescriptionProfileId" TEXT,
   "uncensoredImageDescriptionProfileId" TEXT, -- DEPRECATED in 4.10: no longer read; moved to conciergeSettings.uncensoredVisionProfileId by add-concierge-settings-v1. Column retained until a housekeeping migration drops it. (Added in 4.4 by add-uncensored-image-description-profile-field-v1.)
   "defaultRoleplayTemplateId" TEXT,

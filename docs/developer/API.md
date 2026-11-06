@@ -514,7 +514,8 @@ Update chat settings.
   "cheapLLMSettings": {
     "strategy": "USER_DEFINED" | "PROVIDER_CHEAPEST" | "LOCAL_FIRST",
     "fallbackToLocal": true,
-    "embeddingProvider": "SAME_PROVIDER" | "OPENAI" | "LOCAL"
+    "embeddingProvider": "SAME_PROVIDER" | "OPENAI" | "LOCAL",
+    "outfitSelectionProfileId": "profile-uuid" | null
   },
   "imageDescriptionProfileId": "profile-uuid" | null,
   "wardrobeImageSettings": { "imageProfileId": "image-profile-uuid" | null },

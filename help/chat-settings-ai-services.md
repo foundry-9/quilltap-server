@@ -31,6 +31,10 @@ Image description is *not* among them, though it is thrifty by disposition: it n
 3. The selected profile is used for cost-saving operations
 4. Your main profile is used for actual chat interactions
 
+**Green Room Wardrobe Model**
+
+When a character is left to choose their own opening outfit, the cheap LLM does the choosing unless you name someone better. This setting accepts any connection profile, cheap or dear: matching a wardrobe to a scene is a matter of taste, and taste is seldom the cheapest thing in the house. It is one call per character per chat opening. Leave it at **Use the cheap LLM** to keep things as they were. See [Outfit Selection When Starting a Chat](wardrobe.md#outfit-selection-when-starting-a-chat).
+
 **Allow a Similar-Tier Stand-In**
 
 Background work goes wrong quietly. A cheap route that stops answering takes your
