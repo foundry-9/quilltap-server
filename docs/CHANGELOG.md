@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Docs: spec for moving the OpenRouter plugin off `callModel()` (#145)
+
+- New spec `docs/developer/features/openrouter-plugin-chat-completions-streaming.md`: route the plugin's plain streaming turn through the existing direct Chat Completions fetch, delete `callModel()` / `chat-compat`, and return `@openrouter/sdk` to a caret range. `@openrouter/agent` is rejected (second SDK major plus an MCP client peer dependency).
+- Research recorded in the spec: the streaming fetch path, already used for every tool and image turn, does not send ZDR (`provider.data_collection`), provider preferences, the `user` cache key, `response_format` or the model fallback list, and sends web search as a Responses-API tool type. The spec puts both fetch paths on one request-body builder with a parity test, adds a `delta.reasoning_details` fallback, and proposes a build-time guard against a plugin import resolving from the root `node_modules` (what hid the break locally). No code changed.
+
 #### Fix: CI and Release builds failed on the OpenRouter plugin
 
 - `@openrouter/sdk` 1.5.57 (a patch release) removed `callModel()` and `@openrouter/sdk/lib/chat-compat`, which moved to the separate `@openrouter/agent` package. Plugins have no committed lockfile, so CI resolved the plugin's `^1.5.34` range to 1.5.60 and the plugin typecheck failed in `provider.ts`. Locally the typecheck passed because TypeScript fell back to the root `node_modules` copy (1.5.34) for the missing subpath.
