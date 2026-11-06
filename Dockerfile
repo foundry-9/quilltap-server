@@ -94,21 +94,45 @@ RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next b
 # esbuild flags and the child's externals list can't drift between call sites.
 RUN node scripts/build-standalone-overlay.mjs .next/standalone
 
-# Production stage — clean image WITHOUT build tools (python3/make/g++)
-FROM node:24-bookworm-slim AS production
+# Production stage — Wolfi, not Debian. Clean image WITHOUT build tools.
+#
+# Every finding left in the bookworm image was a Debian OS package with no fix
+# available (util-linux, zlib, ncurses, systemd libs, gzip, acl — "affected",
+# "fix_deferred" or "will_not_fix"), and trixie scanned worse. Wolfi is glibc
+# (2.44, above the SQLite driver's 2.35 floor), rebuilds its packages
+# continuously, and scans clean. Only this stage ships, so the build stages
+# above stay on node:24-bookworm-slim — Wolfi only packages npm 12, and the
+# lockfile is installed with the same npm 11 that CI uses. node_modules built
+# there (glibc 2.36) load unchanged on Wolfi's newer glibc; all three native
+# modules are Node-API.
+#
+# Unpinned on purpose: wolfi-base is rebuilt daily, and a moving tag is what
+# invalidates the build cache so `apk upgrade` actually fetches new fixes.
+FROM cgr.dev/chainguard/wolfi-base:latest AS production
 WORKDIR /app
 
-# Refresh package index and apply security patches
-RUN apt-get update \
-    && apt-get -y upgrade \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime packages, upgraded on every build:
+#   - nodejs-24 — the runtime (npm is a separate package and is NOT installed)
+#   - libstdc++ — node-pty's native binding links it
+#   - bash — required by Ariel's terminal (PTY hard-codes /bin/bash)
+#   - zip + unzip — backup/restore (lib/backup/restore/archive.ts and
+#     lib/backup/backup-service.ts shell out to `unzip` / `zip`)
+#
+# git/curl/wget/jq were previously pre-installed here as a convenience toolbox for
+# the LLM shell agent. They were removed for CVE surface (git dragged in perl,
+# curl/git pulled libssh2) and none of them are on a code path — the `curl`
+# *tool* is qtap-plugin-curl, which uses Node's fetch(), not the binary.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache nodejs-24 libstdc++ bash zip unzip \
+    && mkdir -p /usr/local/bin
 
 ENV NODE_ENV=production
 ENV DOCKER_CONTAINER=true
 
-# Create non-root user (Debian groupadd/useradd, not Alpine busybox addgroup/adduser)
-RUN groupadd --system --gid 1001 nodejs \
-    && useradd --system --uid 1001 --gid nodejs --no-create-home --shell /usr/sbin/nologin nextjs
+# Create non-root user (busybox addgroup/adduser). UID/GID 1001 is kept from the
+# Debian image so existing volumes stay writable.
+RUN addgroup -S -g 1001 nodejs \
+    && adduser -S -D -H -u 1001 -G nodejs -s /sbin/nologin nextjs
 
 # Create data directories (data, files, logs, plugins/npm)
 RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/quilltap/plugins/npm && \
@@ -124,21 +148,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
-
-# Install runtime tools:
-#   - zip + unzip — backup/restore (lib/backup/restore/archive.ts and
-#     lib/backup/backup-service.ts shell out to `unzip` / `zip`)
-#   - bash — required by Ariel's terminal (PTY hard-codes /bin/bash)
-#
-# git/curl/wget/jq were previously pre-installed here as a convenience toolbox for
-# the LLM shell agent. They were removed for CVE surface: `git` drags in Debian's
-# perl (2 CRITICAL + 2 HIGH, all "not fixed" in both bookworm and trixie) and
-# curl/git pull libssh2 (CVE-2025-15661 HIGH, no fix). None of them are on a code
-# path — the `curl` *tool* is qtap-plugin-curl, which uses Node's fetch(), not the
-# binary. Only a human/agent typing at Ariel's bash prompt loses them.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash zip unzip \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy production node_modules from the build stage (node-pty already compiled)
 COPY --from=deps-prod /app/node_modules ./node_modules
@@ -162,25 +171,11 @@ RUN ln -s /app/packages/quilltap/bin/quilltap.js /usr/local/bin/quilltap
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# --- Attack-surface reduction (must stay LAST: no apt-get or npm may follow) ---
-#
-# 1. npm / npx / corepack / yarn ship in the node base image and account for one
-#    CRITICAL and six HIGH findings (tar, brace-expansion, undici, ip-address —
-#    npm's own bundled node_modules). The container's only command is
-#    `node server.js`, and plugin installs go through lib/plugins/registry-client.ts,
-#    which downloads and extracts registry tarballs over HTTP rather than shelling
-#    out to the npm CLI. Nothing at runtime executes any of these binaries.
-#
-# 2. Debian's perl carries 2 CRITICAL + 2 HIGH with no fix available in bookworm
-#    *or* trixie, so no base-image bump clears them. perl-base is Essential, hence
-#    --force-remove-essential. Nothing in Quilltap invokes perl; it was only present
-#    as a dependency of the git package removed above.
-RUN rm -rf /usr/local/lib/node_modules/npm \
-           /usr/local/lib/node_modules/corepack \
-           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
-           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-v* \
-    && dpkg --purge --force-remove-essential --force-depends \
-           perl perl-base perl-modules-5.36 libperl5.36 2>/dev/null || true
+# No npm / npx / corepack / yarn and no perl in this image: npm is a separate
+# Wolfi package that is never installed, and nothing pulls perl in. The container's
+# only command is `node server.js`, and plugin installs go through
+# lib/plugins/registry-client.ts, which downloads and extracts registry tarballs
+# over HTTP rather than shelling out to the npm CLI.
 
 USER nextjs
 

@@ -374,8 +374,15 @@ docker run -d --name quilltap ... foundry9/quilltap:previous-version
 
 ## Container Contents
 
-The production image is deliberately minimal. Beyond Node.js and the application
-itself, it ships only what a code path actually invokes:
+The production image is built on [Wolfi](https://github.com/wolfi-dev)
+(`cgr.dev/chainguard/wolfi-base`), a glibc distribution whose packages are rebuilt
+continuously. It replaced `node:24-bookworm-slim` in 4.13 because every finding
+left in the Debian image (util-linux, zlib, ncurses, systemd libraries, gzip, acl)
+had no fix available, and Debian 13 scanned no better. Its package manager is
+`apk`, not `apt-get`.
+
+The image is deliberately minimal. Beyond Node.js and the application itself, it
+ships only what a code path actually invokes:
 
 | Present | Why |
 | --- | --- |
@@ -389,13 +396,12 @@ itself, it ships only what a code path actually invokes:
 
 Each was removed to shrink the image's CVE surface, and none is on a code path:
 
-- **npm / npx / corepack / yarn** ship in the Node base image and carry a critical
-  and several high findings in their own bundled dependencies. Plugin installation
-  does not use them — Quilltap downloads and extracts registry tarballs over HTTP
-  directly, so Settings → Plugins and the install API work exactly as before.
-- **perl** carries critical findings with no fix available in any current Debian
-  release. Nothing in Quilltap invokes it; it was present only as a dependency of
-  `git`.
+- **npm / npx / corepack / yarn** are not installed (on Wolfi, npm is a separate
+  package). Plugin installation does not use them — Quilltap downloads and
+  extracts registry tarballs over HTTP directly, so Settings → Plugins and the
+  install API work exactly as before.
+- **perl** is not installed. Nothing in Quilltap invokes it; it used to arrive
+  only as a dependency of `git`.
 - **git / curl / wget / jq** were previously pre-installed as a convenience toolbox
   for the LLM shell agent. The `curl` **tool** your characters use is a plugin that
   makes HTTP requests from within Node, so it is unaffected. Only a human typing at
@@ -407,9 +413,7 @@ patching the base:
 ```dockerfile
 FROM foundry9/quilltap:latest
 USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl
 USER nextjs
 ```
 

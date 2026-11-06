@@ -4,6 +4,15 @@
 
 ### 4.13-dev
 
+#### Security: Docker production image moves from Debian bookworm to Wolfi
+
+- The production stage of `Dockerfile` and `Dockerfile.ci` now starts from `cgr.dev/chainguard/wolfi-base:latest` and installs `nodejs-24`, `libstdc++`, `bash`, `zip` and `unzip` with `apk`. Every finding left in the `node:24-bookworm-slim` image (1 critical, about 10 high: util-linux, zlib, ncurses, systemd libraries, gzip, acl) was a Debian package marked affected, fix-deferred or will-not-fix, so `apt-get upgrade` could not clear them; `node:24-trixie-slim` scanned worse (13 high). Trivy on a local arm64 build: 97 findings (1 critical, 9 high) on the published 4.13.0-dev.29 image, 1 on the Wolfi build (a low in the app's own `katex` dependency, not the OS).
+- Only the production stage changed. The build stages stay on `node:24-bookworm-slim`, because Wolfi only packages npm 12 and the lockfile is installed with npm 11 as in CI. node_modules built there (glibc 2.36) load on Wolfi's glibc 2.44; the SQLite driver, sharp and node-pty are all Node-API.
+- The base tag is deliberately unpinned. Wolfi rebuilds it daily, and a moving tag is what invalidates the GitHub Actions layer cache so `apk upgrade` actually pulls new fixes.
+- The npm/corepack/yarn removal and the forced `perl` purge are gone: npm is a separate Wolfi package that is never installed, and nothing pulls perl in.
+- The `nextjs` user and `nodejs` group keep UID/GID 1001 (now created with busybox `addgroup`/`adduser`), so existing volumes stay writable.
+- Images that layer extra tools on top must use `apk add` instead of `apt-get`. `docs/DEPLOYMENT.md` and `help/ariel.md` say so.
+
 #### Change: Salon agent-mode turn cap raised to 50
 
 - `AgentModeSettingsSchema.maxTurns` now allows 1–50 (was 1–25); the default stays 10. The Chat settings dropdown adds 30, 40 and 50.
