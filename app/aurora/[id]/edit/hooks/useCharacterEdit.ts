@@ -20,6 +20,7 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   name: '',
   aliases: [],
   pronouns: null,
+  birthday: null,
   title: '',
   identity: '',
   description: '',
@@ -92,6 +93,7 @@ export function useCharacterEdit(id: string) {
           name: char.name,
           aliases: char.aliases || [],
           pronouns: char.pronouns || null,
+          birthday: char.birthday || null,
           title: char.title || '',
           identity: char.identity || '',
           description: char.description || '',
@@ -184,6 +186,16 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, pronouns },
+    }))
+  }
+
+  /**
+   * Handle birthday changes (YYYY-MM-DD, or null to clear)
+   */
+  const handleBirthdayChange = (birthday: string | null) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, birthday },
     }))
   }
 
@@ -486,6 +498,7 @@ export function useCharacterEdit(id: string) {
     handleChange,
     handleAliasesChange,
     handlePronounsChange,
+    handleBirthdayChange,
     handleScenariosChange,
     handleSystemTransparencyChange,
     handleCanBeCarinaChange,

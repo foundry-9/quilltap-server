@@ -92,7 +92,7 @@ export async function readCharacterVaultProperties(
  * transient error, malformed JSON, a body the schema rejects — **throws**
  * {@link CharacterVaultUnavailableError}.
  *
- * That distinction is load-bearing. The fields this file owns (`pronouns`,
+ * That distinction is load-bearing. The fields this file owns (`pronouns`, `birthday`,
  * `aliases`, `title`, `firstMessage`, `talkativeness`, `canChooseOutfit`,
  * `canDrawDiagrams`, `diagramStyle`, `kind`) live ONLY here post-4.6 — the DB row
  * carries none of them. The fail-soft

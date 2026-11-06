@@ -7,8 +7,10 @@
  * normal conversation history.
  *
  * Add announcements include the joining character's avatar (as inline markdown)
- * and either their identity (if a character vault is present and exposes
- * `identity.md`) or their `description` field — preferring identity, never both.
+ * and their public identity — what is known from other fields (age, public
+ * progressions, pronouns; `lib/characters/public-identity.ts`) followed by
+ * `identity.md` — or, when the vault has no identity text, their
+ * `description` field.
  * Remove and status-change announcements are text-only.
  *
  * Errors never propagate — participant operations must never fail because an
@@ -29,6 +31,11 @@ import type { MessageEvent } from '@/lib/schemas/types';
 import type { Character } from '@/lib/schemas/character.types';
 import type { ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/chat.types';
 import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
+import {
+  composePublicIdentity,
+  publicIdentityFacts,
+  renderPublicIdentityFacts,
+} from '@/lib/characters/public-identity';
 
 /**
  * Replace `{{char}}` and `{{user}}` template tokens in a character-derived
@@ -131,6 +138,35 @@ async function readVaultIdentity(character: Character): Promise<string | null> {
   }
 }
 
+/**
+ * The joining character's particulars: the public identity (age, public
+ * progressions, pronouns, then `identity.md`) under **Identity:**, and the
+ * `description` under **Description:** only when there is no identity text to
+ * stand in for it — identity is preferred, never both.
+ */
+async function identityOrDescriptionLines(
+  character: Character,
+  userCharacterName?: string | null,
+): Promise<string[]> {
+  const vaultIdentity = await readVaultIdentity(character);
+  const identity = composePublicIdentity(
+    character,
+    vaultIdentity ? applyHostTemplates(vaultIdentity, character.name, userCharacterName) : '',
+  );
+  const lines: string[] = [];
+  if (identity) {
+    lines.push('**Identity:**', '', identity);
+  }
+  if (!vaultIdentity) {
+    const description = (character.description ?? '').trim();
+    if (description.length > 0) {
+      if (lines.length > 0) lines.push('');
+      lines.push('**Description:**', '', applyHostTemplates(description, character.name, userCharacterName));
+    }
+  }
+  return lines;
+}
+
 export async function buildAddContent(
   character: Character,
   userCharacterName?: string | null,
@@ -139,19 +175,7 @@ export async function buildAddContent(
   lines.push(`The Host welcomes ${character.name} to the Salon.`);
   lines.push('');
 
-  const identity = await readVaultIdentity(character);
-  if (identity) {
-    lines.push('**Identity:**');
-    lines.push('');
-    lines.push(applyHostTemplates(identity, character.name, userCharacterName));
-  } else {
-    const description = (character.description ?? '').trim();
-    if (description.length > 0) {
-      lines.push('**Description:**');
-      lines.push('');
-      lines.push(applyHostTemplates(description, character.name, userCharacterName));
-    }
-  }
+  lines.push(...(await identityOrDescriptionLines(character, userCharacterName)));
 
   return lines.join('\n').trimEnd();
 }
@@ -168,19 +192,7 @@ export async function buildAddOpaqueContent(
   lines.push(`${character.name} has joined the scene.`);
   lines.push('');
 
-  const identity = await readVaultIdentity(character);
-  if (identity) {
-    lines.push('**Identity:**');
-    lines.push('');
-    lines.push(applyHostTemplates(identity, character.name, userCharacterName));
-  } else {
-    const description = (character.description ?? '').trim();
-    if (description.length > 0) {
-      lines.push('**Description:**');
-      lines.push('');
-      lines.push(applyHostTemplates(description, character.name, userCharacterName));
-    }
-  }
+  lines.push(...(await identityOrDescriptionLines(character, userCharacterName)));
 
   return lines.join('\n').trimEnd();
 }
@@ -829,6 +841,9 @@ export interface OffSceneCharacterCard {
   name: string;
   aliases?: string[];
   pronouns?: { subject: string; object: string; possessive: string } | null;
+  birthday?: string | null;
+  /** For the public progressions only; raw metadata never reaches a model. */
+  metadata?: unknown;
   identity?: string | null;
   description?: string | null;
 }
@@ -839,7 +854,8 @@ export interface OffSceneCharacterCard {
  */
 /**
  * An absent character's particulars, as the model is told them: name, aliases,
- * pronouns and the body (identity, else description) with `{{char}}` /
+ * the known facts (age, public progressions, pronouns) and the body (identity,
+ * else description) with `{{char}}` /
  * `{{user}}` bound. The one source for the card in the referent ledger
  * ({@link renderOffSceneCard}), the left-behind notice and the Salon's
  * name-chip popup (`lib/chat/absent-mentions.ts`).
@@ -849,6 +865,12 @@ export interface OffSceneCardFields {
   aliases: string[];
   /** `subject/object/possessive`, or null when none are recorded. */
   pronouns: string | null;
+  /**
+   * What is known from other fields besides pronouns, as lines — age, then
+   * public progressions (`lib/characters/public-identity.ts`). The card puts
+   * them before the pronouns.
+   */
+  facts: string[];
   body: string;
 }
 
@@ -857,10 +879,12 @@ export function offSceneCardFields(
   userCharacterName?: string | null,
 ): OffSceneCardFields {
   const body = ((c.identity ?? '').trim() || (c.description ?? '').trim());
+  const facts = publicIdentityFacts(c);
   return {
     name: c.name,
     aliases: c.aliases ?? [],
-    pronouns: c.pronouns ? `${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}` : null,
+    pronouns: facts.pronouns,
+    facts: renderPublicIdentityFacts({ ...facts, pronouns: null }),
     body: body.length > 0 ? applyHostTemplates(body, c.name, userCharacterName) : '',
   };
 }
@@ -872,6 +896,7 @@ export function renderOffSceneCard(
   const fields = offSceneCardFields(c, userCharacterName);
   const lines: string[] = [`### ${fields.name}`];
   if (fields.aliases.length > 0) lines.push(`Aliases: ${fields.aliases.join(', ')}`);
+  lines.push(...fields.facts);
   if (fields.pronouns) lines.push(`Pronouns: ${fields.pronouns}`);
   if (fields.body) lines.push(fields.body);
   return lines.join('\n');

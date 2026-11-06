@@ -79,6 +79,34 @@ described further down.
 **Once it finishes.** Whether the completed state keeps being reported, or is
 announced exactly once and then goes politely quiet.
 
+**Public.** Whether anyone else may know of it. Ticked by default; see
+[Public Or Private](#public-or-private) below.
+
+## Public Or Private
+
+A pregnancy at six months is not a secret from anybody with eyes. A curse
+that lifts at the full moon very likely is. So every progression is marked
+**public** or **private**, and starts out public.
+
+A **public** progression becomes part of what *others* are told about your
+character — the Host's introduction when they join a room, the card the
+cast is given for someone mentioned but not present, the identity Carina's
+answerer is shown, and the identity a tool looks up. It appears there in
+plain, fixed, third-person wording:
+
+> *Pregnancy: 13 weeks, 1 day elapsed, 25 weeks, 6 days remaining.*
+
+Your description and your template are never used for this. They are written
+*to* the character, in the second person, and "You are carrying Charlie's
+daughter" reads very strangely when addressed to a stranger. A completed
+progression set to go quiet once it finishes drops out of the public view at
+the same moment it falls silent for the character.
+
+A **private** progression is reported to the character themselves exactly as
+before, and to nobody else at all. The card marks it *private*, and the
+editor's preview shows you both versions — what the character reads, and what
+others are told — side by side.
+
 ## Cadence — How Often To Say So
 
 A recharging cannon wants mentioning every single turn: the whole drama is in
@@ -225,7 +253,8 @@ and is never validated; this one alone has a shape.
       "percentageReport": true,
       "reportFrequency": "turn",
       "quantity": { "total": 1.0, "unit": "MJ", "precision": 1 },
-      "onComplete": "once"
+      "onComplete": "once",
+      "public": true
     }
   }
 }

@@ -3,7 +3,8 @@
 /**
  * A chip on an absent character's name, at its first mention in a chat.
  *
- * Hovering it shows their card — name, aliases, pronouns and identity — the
+ * Hovering it shows their card — name, aliases, age, public progressions,
+ * pronouns and identity — the
  * same particulars the model is given in its referent ledger. Click pins the
  * card open so a long identity can be scrolled and read. The chips replace the
  * Host's old introduction card in the conversation.
@@ -26,6 +27,8 @@ export interface AbsentMentionChip {
     name: string
     aliases: string[]
     pronouns: string | null
+    /** Age and public progressions, one line each. */
+    facts: string[]
     body: string
   }
 }
@@ -41,6 +44,13 @@ function MentionCard({ card }: { card: AbsentMentionChip['card'] }) {
         <div className="qt-tooltip-section">
           <div className="qt-tooltip-section-label">Also known as</div>
           <div>{card.aliases.join(', ')}</div>
+        </div>
+      )}
+      {card.facts.length > 0 && (
+        <div className="qt-tooltip-section">
+          {card.facts.map((fact) => (
+            <div key={fact}>{fact}</div>
+          ))}
         </div>
       )}
       {card.pronouns && (

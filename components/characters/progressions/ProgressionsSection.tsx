@@ -169,6 +169,7 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
                       <h4 className="qt-text-primary truncate">{progression.name}</h4>
                       <code className="text-xs qt-text-secondary">{id}</code>
                       <span className={badge.className}>{badge.label}</span>
+                      {!progression.public && <span className="qt-badge qt-badge-secondary">private</span>}
                     </div>
                     <p className="qt-text-small italic">
                       {renderProgressionReport(progression, derived)}
@@ -236,6 +237,7 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
           key={editing?.id ?? '__new__'}
           editing={editing}
           existingIds={entries.map(([id]) => id)}
+          characterName={characterName}
           saving={save.isPending}
           onClose={() => {
             setCreating(false)

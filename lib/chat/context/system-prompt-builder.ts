@@ -12,6 +12,7 @@ import { processTemplate, type TemplateContext } from '@/lib/templates/processor
 import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
 import { isHumanoid, pickPhysicalDescription } from '@/lib/characters/physical-description'
+import { publicIdentityFacts, renderPublicIdentityFacts } from '@/lib/characters/public-identity'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -291,7 +292,8 @@ export const NO_PUBLIC_IDENTITY_FALLBACK =
 /**
  * Build a compact, SURFACE-LEVEL identity card for `character`: the public view
  * one character would have of another who has just addressed them — name, title,
- * pronouns, aliases, and the `identity` field (the project's "what strangers
+ * aliases, the known facts (age, public progressions, pronouns — see
+ * `lib/characters/public-identity.ts`), and the `identity` field (the project's "what strangers
  * know" vantage point), falling back to `description` (the acquaintance view) and
  * then {@link NO_PUBLIC_IDENTITY_FALLBACK} when neither is set.
  *
@@ -310,14 +312,11 @@ export function buildPublicIdentityCard(character: Character, userName?: string 
     const title = render(character.title)
     if (title) lines.push(`Title: ${title}`)
   }
-  if (character.pronouns) {
-    lines.push(
-      `Pronouns: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}`,
-    )
-  }
   if (character.aliases && character.aliases.length > 0) {
     lines.push(`Also known as: ${character.aliases.join(', ')}`)
   }
+  // Age, public progressions, pronouns — the known facts, before the prose.
+  lines.push(...renderPublicIdentityFacts(publicIdentityFacts(character)))
   const body = render(character.identity?.trim() || character.description?.trim() || '')
   lines.push(body || NO_PUBLIC_IDENTITY_FALLBACK)
   return lines.join('\n')

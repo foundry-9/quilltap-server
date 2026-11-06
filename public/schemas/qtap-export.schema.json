@@ -498,6 +498,11 @@
           "enum": ["roleplay", "assistant"],
           "description": "How the character is performed: 'roleplay' (a person inside a story, the default) or 'assistant' (a character whose job is to do work for the user). Absent or unrecognized reads as 'roleplay'. Stored in the vault's properties.json."
         },
+        "birthday": {
+          "type": ["string", "null"],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Optional real birthday, YYYY-MM-DD. When set, the character's age is calculated from it on the instance calendar (never stored) and leads their public identity. Absent, null or not a real date reads as no birthday. Stored in the vault's properties.json."
+        },
         "systemTransparency": {
           "type": ["boolean", "null"],
           "description": "When true, the character may inspect 'the Staff' (self_inventory, Staff messages from Lantern/Aurora/Librarian/Prospero/Host, and character vaults) subject to chat/project settings. When null or false, those three are hidden from this character regardless of any chat/project toggle — a hard character-level override. Default null (opaque)."

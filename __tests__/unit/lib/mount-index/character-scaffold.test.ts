@@ -126,6 +126,7 @@ describe('scaffoldCharacterMount', () => {
     const parsed = JSON.parse(propertiesCall![2] as string);
     expect(parsed).toEqual({
       pronouns: null,
+      birthday: null,
       aliases: [],
       title: '',
       firstMessage: '',

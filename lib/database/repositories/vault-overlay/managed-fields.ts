@@ -18,6 +18,7 @@ import type {
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { diagramStyleOrDefault } from '@/lib/markdown/diagrams';
 import { characterKindOrDefault } from '@/lib/characters/kind';
+import { birthdayOrNull } from '@/lib/characters/birthday';
 import {
   buildSystemPromptFile,
   buildScenarioFile,
@@ -89,6 +90,7 @@ export async function readCharacterVaultManagedFields(
         const props = await readCharacterVaultProperties(mountPointId, characterId);
         if (props) {
           snapshot.pronouns = props.pronouns;
+          snapshot.birthday = props.birthday;
           snapshot.aliases = props.aliases;
           snapshot.title = props.title;
           snapshot.firstMessage = props.firstMessage;
@@ -228,6 +230,7 @@ export async function writeCharacterVaultManagedFields(
     JSON.stringify(
       {
         pronouns: character.pronouns ?? null,
+        birthday: birthdayOrNull(character.birthday),
         aliases: character.aliases ?? [],
         title: character.title ?? null,
         firstMessage: character.firstMessage ?? null,
@@ -424,7 +427,7 @@ export async function applyDocumentStoreWriteOverlay(
       }
       case 'properties-json': {
         const propsKeys = [
-          'pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness',
+          'pronouns', 'birthday', 'aliases', 'title', 'firstMessage', 'talkativeness',
           'canChooseOutfit', 'canDrawDiagrams', 'diagramStyle', 'kind',
         ] as const;
         const touched = propsKeys.filter((k) => k in patch);
@@ -446,6 +449,7 @@ export async function applyDocumentStoreWriteOverlay(
         // broken vault; there is no "silent hollow" character.)
         const current = (await readCharacterVaultPropertiesForWrite(mountPointId, characterId)) ?? {
           pronouns: character.pronouns ?? null,
+          birthday: birthdayOrNull(character.birthday),
           aliases: character.aliases ?? [],
           title: character.title ?? null,
           firstMessage: character.firstMessage ?? null,
@@ -457,6 +461,7 @@ export async function applyDocumentStoreWriteOverlay(
         };
         const next: CharacterVaultProperties = {
           pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
+          birthday: 'birthday' in patch ? birthdayOrNull(patch.birthday) : current.birthday,
           aliases: 'aliases' in patch ? (patch.aliases ?? []) : current.aliases,
           title: 'title' in patch ? (patch.title ?? null) : current.title,
           firstMessage:
@@ -476,6 +481,12 @@ export async function applyDocumentStoreWriteOverlay(
             characterId,
             canDrawDiagrams: next.canDrawDiagrams,
             diagramStyle: next.diagramStyle,
+          });
+        }
+        if (touched.includes('birthday')) {
+          logger.debug('[VaultOverlay] Writing birthday to properties.json', {
+            characterId,
+            hasBirthday: next.birthday !== null,
           });
         }
         if (touched.includes('kind')) {

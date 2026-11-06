@@ -16,6 +16,7 @@ import {
 import { TimestampConfigSchema } from './settings.types';
 import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
 import { CHARACTER_KINDS, DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
+import { BirthdaySchema } from '@/lib/characters/birthday';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -191,8 +192,10 @@ export const CharacterSchema = z.object({
    * transparent character can read and edit the file through the ordinary
    * doc_* tools, like any vault document.
    *
-   * **Raw metadata is never injected into a prompt.** The one sanctioned
-   * reader is the derived character-progressions report: the reserved
+   * **Raw metadata is never injected into a prompt.** The sanctioned
+   * readers are derived: the public identity (`lib/characters/public-identity.ts`,
+   * public progressions only, third person) and the character-progressions
+   * report: the reserved
    * `progressions` key (validated by `lib/progressions/schema.ts` — the only
    * reserved key; every other key stays freeform) is turned into a
    * second-person line by `lib/progressions/prompt-section.ts` and appended to
@@ -310,6 +313,12 @@ export const CharacterSchema = z.object({
   })).default([]),
   aliases: z.array(z.string()).default([]),
   pronouns: PronounsSchema.nullable().optional(),
+  /**
+   * Optional real birthday, `YYYY-MM-DD`. When set, the character's age is
+   * calculated from it (`lib/characters/birthday.ts`) and goes up every year;
+   * it is never stored. Lives in the vault's `properties.json`.
+   */
+  birthday: BirthdaySchema.nullable().optional(),
   tags: z.array(UUIDSchema).default([]),
   avatarOverrides: z.array(z.object({
     chatId: UUIDSchema,

@@ -31,6 +31,7 @@ import { getErrorMessage, roundPercent, mapVaultFiles, HIGH_IMPORTANCE_THRESHOLD
 import { chatActivityAt } from '@/lib/chat/chat-activity';
 import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
 import { CORE_VAULT_FILE_SUMMARIES } from '@/lib/services/character-field-semantics';
+import { composePublicIdentity } from '@/lib/characters/public-identity';
 
 async function buildVaultCharacterSection(
   character: Character,
@@ -1010,7 +1011,8 @@ async function buildContextCharacters(
       id: c.id,
       name: c.name,
       aliases: c.aliases ?? [],
-      identity: c.identity ?? null,
+      // The public identity: age, public progressions and pronouns, then identity.md.
+      identity: composePublicIdentity(c, c.identity) || null,
       isUserPersona: p.controlledBy === 'user',
     });
   }

@@ -76,6 +76,15 @@ The assembled system prompt addresses the character directly throughout, and eac
 - The shallow first impression — what a stranger could know on sight or by reputation. Name, station, occupation, public reputation, the signifying outward facts
 - Useful for someone considering whether to hail the character across a crowded room. Never private mannerisms, never inner motivation
 - Examples: "Detective Sarah Jones, of the Yard, known for closing unclosable cases"; "Old Tom the baker, three doors down, makes the best cinnamon buns in Whitechapel"
+- Wherever others are given the character's identity — the Host's introduction when they join a room, the card for someone mentioned but absent, Carina's answerer, and the identity a tool looks up — Quilltap first sets down what it already knows for certain: their **age** (when they have a birthday), their **public progressions**, and their **pronouns**. Your Identity text follows. There is no need to repeat those facts in the prose, and every reason not to: the prose will not age, and the reckoned figures will
+
+**Birthday**
+
+- Optional. A real date of birth, chosen from the date picker and kept as `YYYY-MM-DD`
+- Set one and the character has a definite age, reckoned afresh every day — a year older on each birthday, with nobody lifting a finger. The editor shows the age beside the picker, and the character's page shows it beside their pronouns
+- Leave it empty and their age is whatever the prose says, as it always was
+- Counted on the wall clock and the instance calendar, never a chat's story date: a birthday belongs to the character in every room at once. Someone born on 29 February turns a year older on 1 March in ordinary years
+- Clear it with the **Clear** button beside the picker, then save
 
 **Description**
 
@@ -151,7 +160,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 
 | Vault file | What it replaces |
 |---|---|
-| `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness**, **kind** (`roleplay` or `assistant`), and the outfit and diagram settings |
+| `properties.json` | **pronouns**, **birthday**, **aliases**, **title**, **first message**, **talkativeness**, **kind** (`roleplay` or `assistant`), and the outfit and diagram settings |
 | `metadata.json` | The character's **fact sheet** — a flat object of keys you invent yourself, answering to no field in the editor. See the note below. |
 | `identity.md` | **Identity** (the surface, outside-view prose field) |
 | `description.md` | **Description** (the acquaintance-view prose field) |

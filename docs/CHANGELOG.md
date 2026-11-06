@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Feature: character birthdays, public progressions, and a composed public identity
+
+- Characters have an optional `birthday` (`YYYY-MM-DD`), stored in the vault's `properties.json`. The age is derived from it on the instance calendar and never stored (`lib/characters/birthday.ts`; a leap-day birthday turns over on 1 March in common years). Absent or invalid values read as no birthday, so existing vaults need no migration. PUT `/api/v1/characters/[id]` accepts it (null clears); the export schema documents it.
+- Aurora edit page: a native date picker under Pronouns, with a Clear button and the age as of today. The character page header shows the age beside the pronouns.
+- Progressions have a `public` flag, default `true`. It is in the progression JSON Schema, Pascal's writable fields (`progress.<id>.public`) and the flattened sheet (`<id>.public`). The editor has a Public checkbox and previews both the line the character reads and the line others see; the Progressions card marks private entries.
+- New `lib/characters/public-identity.ts` composes the public identity: age, public progressions, pronouns, then the identity text. Public progressions use fixed third-person wording (`renderPublicProgressionLine`); the description and report template are never used, and a completed `onComplete: 'once'` progression is omitted. Used by the Host's join announcement, the off-scene card (referent ledger, left-behind notice, name-chip popup), Carina's asker card (`buildPublicIdentityCard`), the self_inventory roster and Brahma's `lookup_character` (which also returns `birthday`). The identity stack and other cached prompt blocks are unchanged.
+- Fix: the progression editor overlay is portalled to `document.body`, so the LLM Logs panel no longer paints over it. Its preview caption now names the character instead of the progression.
+
 #### Fix: OpenRouter plugin off `callModel()`; streaming tool and image turns send ZDR (#145)
 
 - OpenRouter plugin 1.0.71 streams every turn (plain, tool, image) through the direct Chat Completions fetch. The `callModel()` / `@openrouter/sdk/lib/chat-compat` path, removed upstream in `@openrouter/sdk` 1.5.57, is gone, and the SDK range returns to `^1.5.60`. The SDK is still used for text-only non-streaming sends (`chat.send`), `models.list` and embeddings.

@@ -143,6 +143,7 @@ function makePhysicalDescription(
 
 const VALID_VAULT_PROPS = {
   pronouns: { subject: 'they', object: 'them', possessive: 'their' },
+  birthday: null,
   aliases: ['vault-alias'],
   title: 'vault-title',
   firstMessage: 'vault-first',
@@ -1527,6 +1528,7 @@ describe('CharacterVaultPropertiesSchema', () => {
     const parsed = CharacterVaultPropertiesSchema.safeParse({
       ...VALID_VAULT_PROPS,
       pronouns: null,
+      birthday: null,
     });
     expect(parsed.success).toBe(true);
   });
@@ -1911,6 +1913,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     const character = makeCharacter({
       id: 'char-sync',
       pronouns: { subject: 'they', object: 'them', possessive: 'their' },
+      birthday: null,
       aliases: ['Nick', 'Nicky'],
       title: 'Detective',
       firstMessage: 'Hello there.',
@@ -1947,6 +1950,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
     expect(props).toEqual({
       pronouns: { subject: 'they', object: 'them', possessive: 'their' },
+      birthday: null,
       aliases: ['Nick', 'Nicky'],
       title: 'Detective',
       firstMessage: 'Hello there.',
@@ -2033,6 +2037,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       firstMessage: null,
       aliases: [],
       pronouns: null,
+      birthday: null,
       physicalDescription: null,
       systemPrompts: [],
       scenarios: [],
@@ -2051,6 +2056,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
     expect(props).toEqual({
       pronouns: null,
+      birthday: null,
       aliases: [],
       title: null,
       firstMessage: null,

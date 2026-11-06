@@ -162,7 +162,7 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
 
   let out: Character = character;
 
-  // properties.json: pronouns, aliases, title, firstMessage, talkativeness,
+  // properties.json: pronouns, birthday, aliases, title, firstMessage, talkativeness,
   // canChooseOutfit, canDrawDiagrams, diagramStyle, kind
   // (systemTransparency is access-control state — DB column only, not vault-mirrored)
   const parsed = parseVaultProperties(propsRaw, character.id);
@@ -170,6 +170,7 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
     out = {
       ...out,
       pronouns: parsed.pronouns,
+      birthday: parsed.birthday,
       aliases: parsed.aliases,
       title: parsed.title,
       firstMessage: parsed.firstMessage,

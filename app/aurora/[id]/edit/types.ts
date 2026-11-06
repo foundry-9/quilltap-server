@@ -32,6 +32,7 @@ export interface Character {
   npc?: boolean
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
+  birthday?: string | null
   characterDocumentMountPointId?: string | null
   systemTransparency?: boolean | null
   coreWhisperEnabled?: boolean | null
@@ -51,6 +52,8 @@ export interface CharacterFormData {
   name: string
   aliases: string[]
   pronouns: { subject: string; object: string; possessive: string } | null
+  /** YYYY-MM-DD, or null for no birthday. */
+  birthday: string | null
   title: string
   identity: string
   description: string

@@ -15,6 +15,7 @@ import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
 import { CHARACTER_KINDS } from '@/lib/characters/kind';
+import { BirthdaySchema } from '@/lib/characters/birthday';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -56,6 +57,8 @@ const updateCharacterSchema = z.object({
     .nullable(),
   aliases: z.array(z.string()).optional(),
   pronouns: PronounsSchema.nullable().optional(),
+  // Real birthday, YYYY-MM-DD; null clears it. Vault-managed (properties.json).
+  birthday: BirthdaySchema.nullable().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
   defaultAgentModeEnabled: z.boolean().nullable().optional(),

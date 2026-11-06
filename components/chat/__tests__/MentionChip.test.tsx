@@ -46,7 +46,7 @@ jest.mock('react-markdown', () => {
 const abby: AbsentMentionChip = {
   characterId: 'abigail',
   text: 'Abby',
-  card: { name: 'Abigail', aliases: ['Abby', 'True North'], pronouns: 'she/her/her', body: 'Abigail keeps the records.' },
+  card: { name: 'Abigail', aliases: ['Abby', 'True North'], pronouns: 'she/her/her', facts: [], body: 'Abigail keeps the records.' },
 }
 
 describe('MentionChip in MessageContent', () => {

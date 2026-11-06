@@ -41,6 +41,7 @@ const TOP_LEVEL_FOLDERS = [
 
 const PROPERTIES_JSON = {
   pronouns: null,
+  birthday: null,
   aliases: [],
   title: '',
   firstMessage: '',

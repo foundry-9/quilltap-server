@@ -209,6 +209,8 @@ export async function buildReferentSections(input: {
                 name: c.name,
                 aliases: c.aliases ?? undefined,
                 pronouns: c.pronouns ?? undefined,
+                birthday: c.birthday ?? undefined,
+                metadata: c.metadata,
                 identity: c.identity ?? undefined,
                 description: c.description ?? undefined,
               },

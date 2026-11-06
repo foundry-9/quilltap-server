@@ -272,6 +272,7 @@ nothing is stored and nothing can go stale:
 | `elapsed`, `remaining` | the phrased spans — *2 minutes, 10 seconds* |
 | `name` | the progression's display name |
 | `quantity` | the current amount, when the progression fills one |
+| `public` | true when others may know of it (the default), false when private |
 
 The comparisons are the same eight, ANDed the same way, and `{ "$param": … }`
 operands work here too. And the fail-soft rule is exactly the metadata rule,
@@ -512,7 +513,7 @@ ten minutes later.
 
 The fields you may write are `name`, `description`, `startTime`, `endTime`,
 `timeIncrement`, `percentageReport`, `reportFrequency`, `onComplete`,
-`reportTemplate`, `quantity.total`, `quantity.unit`, `quantity.precision` —
+`reportTemplate`, `public`, `quantity.total`, `quantity.unit`, `quantity.precision` —
 and the pseudo-field **`remove`**, where writing `true` deletes the
 progression outright. Anything else (`percent`, say, which is worked out
 rather than kept) is refused when the file loads, with the list of what you

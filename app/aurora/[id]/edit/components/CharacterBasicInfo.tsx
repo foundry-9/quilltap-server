@@ -8,6 +8,7 @@ import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
 import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { CharacterFormData, CharacterScenario } from '../types'
 import { STANDARD_PRONOUNS } from '@/lib/characters/pronoun-presets'
+import { ageOn, dateStampIn } from '@/lib/characters/birthday'
 
 interface CharacterBasicInfoProps {
   characterId: string
@@ -17,6 +18,7 @@ interface CharacterBasicInfoProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onAliasesChange: (aliases: string[]) => void
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
+  onBirthdayChange: (birthday: string | null) => void
   onScenariosChange: (scenarios: CharacterScenario[]) => void
   onSystemTransparencyChange: (enabled: boolean) => void
   onCanBeCarinaChange: (value: boolean) => void
@@ -81,12 +83,18 @@ export function CharacterBasicInfo({
   onChange,
   onAliasesChange,
   onPronounsChange,
+  onBirthdayChange,
   onScenariosChange,
   onSystemTransparencyChange,
   onCanBeCarinaChange,
   onCoreWhisperEnabledChange,
 }: CharacterBasicInfoProps) {
   const fieldId = useId()
+  // Today on the browser's calendar, read once — for the age preview and the
+  // picker's upper bound. (The server counts on the instance calendar; the two
+  // differ only for the hours around midnight on the day itself.)
+  const [today] = useState(() => dateStampIn(Date.now()))
+  const age = formData.birthday ? ageOn(formData.birthday, today) : null
   // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
   // the parent's event-based handleChange (same synthetic-event shape used by
   // the AI wizard's apply flow).
@@ -315,6 +323,38 @@ export function CharacterBasicInfo({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Birthday Field */}
+      <div>
+        <label htmlFor={`${fieldId}-birthday`} className="block qt-text-label mb-2">
+          Birthday (Optional)
+        </label>
+        <p className="text-xs qt-text-secondary mb-2">
+          A real date of birth. Set one and the character&apos;s age is reckoned from it — a year older every
+          birthday, with no further fuss — and leads the identity others are given. Leave it empty and their
+          age is whatever the prose says.
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            id={`${fieldId}-birthday`}
+            type="date"
+            value={formData.birthday ?? ''}
+            max={today}
+            onChange={(e) => onBirthdayChange(e.target.value || null)}
+            className="qt-input w-auto"
+          />
+          {formData.birthday && (
+            <button type="button" onClick={() => onBirthdayChange(null)} className="qt-button-secondary qt-button-sm">
+              Clear
+            </button>
+          )}
+          {age !== null && (
+            <span className="qt-text-small qt-text-secondary" aria-live="polite">
+              {age} {age === 1 ? 'year' : 'years'} of age today
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Title Field */}

@@ -5,7 +5,7 @@
  * out of vault files rather than DB columns (those columns no longer exist
  * post-4.6 cutover). Nine vault targets participate, each independently:
  *
- *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit,
+ *   - properties.json          — pronouns, birthday, aliases, title, firstMessage, talkativeness, canChooseOutfit,
  *                                canDrawDiagrams, diagramStyle, kind
  *   - identity.md              — character.identity
  *   - description.md           — character.description

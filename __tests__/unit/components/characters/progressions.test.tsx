@@ -287,7 +287,22 @@ describe('ProgressionsSection — the editor modal', () => {
     renderSection()
 
     fireEvent.click(await screen.findByRole('button', { name: /Edit progression/ }))
-    expect(screen.getByText(/As Cannon recharge would read it now/)).toBeInTheDocument()
+    expect(screen.getByText(/would read it now/)).toBeInTheDocument()
+    expect(screen.getByText(/As others are told it/)).toBeInTheDocument()
+  })
+
+  it('saves a progression marked private', async () => {
+    const puts = stubCharacter({ progressions: { cannon: CANNON } })
+    renderSection()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Edit progression/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Public/ }))
+    expect(screen.getByText(/Nothing — it is private/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(puts).toHaveLength(1))
+    const sent = puts[0] as { metadata: { progressions: { cannon: { public: boolean } } } }
+    expect(sent.metadata.progressions.cannon.public).toBe(false)
   })
 
   it('offers every documented placeholder in the legend', async () => {

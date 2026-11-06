@@ -382,11 +382,35 @@ export function renderProgressionReport(
  * reads well with nothing else set.
  */
 export function defaultInProgressTemplate(p: Progression): string {
+  const sentence = publicInProgressTemplate(p);
+  return p.description ? `${p.description} ${sentence}` : sentence;
+}
+
+/**
+ * The line OTHER people see — the public view of a progression, for the
+ * identity a character is introduced by (`lib/characters/public-identity.ts`).
+ *
+ * Fixed, neutral wording: the author's `description` and `reportTemplate` are
+ * written to the character in the second person ("You are carrying…") and
+ * would read as nonsense addressed to a stranger, so neither is used. Null
+ * when the progression is private, or a completed `once` progression that has
+ * already gone quiet.
+ */
+export function renderPublicProgressionLine(p: Progression, d: DerivedProgression): string | null {
+  if (!p.public) return null;
+  if (d.state === 'pending') return `${p.name}: begins in ${d.remaining}.`;
+  if (d.state === 'complete') {
+    return p.onComplete === 'once' ? null : `${p.name}: complete; ${d.elapsed} since it finished.`;
+  }
+  return substitute(publicInProgressTemplate(p), progressionPlaceholders(p, d));
+}
+
+/** The default in-progress wording without the second-person description. */
+function publicInProgressTemplate(p: Progression): string {
   const parts = ['{{name}}: {{elapsed}} elapsed, {{remaining}} remaining'];
   if (p.percentageReport) parts.push(', {{percent}}% complete');
   if (p.quantity) parts.push(' ({{quantity}})');
-  const sentence = `${parts.join('')}.`;
-  return p.description ? `${p.description} ${sentence}` : sentence;
+  return `${parts.join('')}.`;
 }
 
 /** Every placeholder a report template may name, already rendered to text. */
@@ -473,6 +497,7 @@ export function flattenProgressions(
     sheet[`${id}.started`] = d.started;
     sheet[`${id}.complete`] = d.complete;
     sheet[`${id}.state`] = d.state;
+    sheet[`${id}.public`] = p.public;
     sheet[`${id}.elapsed`] = d.elapsed;
     sheet[`${id}.remaining`] = d.remaining;
     if (d.quantityCurrent !== undefined) sheet[`${id}.quantity`] = d.quantityCurrent;

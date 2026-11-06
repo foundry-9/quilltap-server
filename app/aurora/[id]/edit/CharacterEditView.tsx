@@ -75,6 +75,7 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
     handleChange,
     handleAliasesChange,
     handlePronounsChange,
+    handleBirthdayChange,
     handleScenariosChange,
     handleSystemTransparencyChange,
     handleCanBeCarinaChange,
@@ -251,6 +252,7 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
                       onChange={handleChange}
                       onAliasesChange={handleAliasesChange}
                       onPronounsChange={handlePronounsChange}
+                      onBirthdayChange={handleBirthdayChange}
                       onScenariosChange={handleScenariosChange}
                       onSystemTransparencyChange={handleSystemTransparencyChange}
                       onCanBeCarinaChange={handleCanBeCarinaChange}

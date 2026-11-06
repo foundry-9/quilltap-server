@@ -95,6 +95,7 @@ export interface Character {
   defaultSystemPromptId?: string | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
+  birthday?: string | null
   characterDocumentMountPointId?: string | null
   /** Set when the character is archived (tombstone with a pruned vault). */
   archivedAt?: string | null

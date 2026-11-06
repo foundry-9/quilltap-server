@@ -15,6 +15,7 @@ import { PronounsSchema } from '@/lib/schemas/character.types';
 import { JsonSchema } from '@/lib/schemas/common.types';
 import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES, diagramStyleOrDefault } from '@/lib/markdown/diagrams';
 import { CHARACTER_KINDS, DEFAULT_CHARACTER_KIND, characterKindOrDefault } from '@/lib/characters/kind';
+import { birthdayOrNull } from '@/lib/characters/birthday';
 import {
   WardrobeItemSchema,
   type WardrobeItem,
@@ -60,6 +61,9 @@ export const CharacterVaultPropertiesSchema = z.object({
     characterKindOrDefault,
     z.enum(CHARACTER_KINDS).optional().default(DEFAULT_CHARACTER_KIND),
   ),
+  // Optional real birthday (YYYY-MM-DD). Lenient like `kind`: absent (every
+  // vault written before birthdays existed) or not a real date reads as null.
+  birthday: z.preprocess(birthdayOrNull, z.string().nullable()),
 });
 
 export type CharacterVaultProperties = z.infer<typeof CharacterVaultPropertiesSchema>;
@@ -241,6 +245,7 @@ export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Charac
   'personality',
   'exampleDialogues',
   'pronouns',
+  'birthday',
   'aliases',
   'title',
   'firstMessage',

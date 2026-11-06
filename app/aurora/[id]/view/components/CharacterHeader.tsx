@@ -1,11 +1,12 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import type { AvatarDisplayStyle } from '@/lib/avatar-styles'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { Character, CharacterStats, GroupBadge } from '../types'
+import { ageOn, dateStampIn } from '@/lib/characters/birthday'
 
 interface CharacterHeaderProps {
   character: Character | null
@@ -54,6 +55,9 @@ export function CharacterHeader({
   togglingControlledBy = false,
   togglingCarina = false,
 }: CharacterHeaderProps) {
+  // Age from the birthday, on the browser's calendar; today is read once per mount.
+  const [today] = useState(() => dateStampIn(Date.now()))
+  const age = character?.birthday ? ageOn(character.birthday, today) : null
   // Stat line entries in display order. `value` is the bold figure (a count,
   // or the `N/total` fraction for character files); `tip` is the hover tooltip
   // explaining what the figure represents.
@@ -196,21 +200,31 @@ export function CharacterHeader({
             </div>
             )}
           </div>
-          {(character?.title || character?.pronouns) && (
+          {(character?.title || character?.pronouns || age !== null) && (
             <div className="flex items-baseline justify-between gap-4">
               {character?.title ? (
                 <h2 className="qt-heading-2 qt-text-secondary min-w-0">{character.title}</h2>
               ) : (
                 <span />
               )}
+              <span className="flex-shrink-0 flex items-baseline gap-3">
+              {age !== null && (
+                <span
+                  className="cursor-help qt-text-small qt-text-secondary"
+                  title={`Born ${character?.birthday}; reckoned afresh every day, so a year older on each birthday.`}
+                >
+                  {age} {age === 1 ? 'year' : 'years'} old
+                </span>
+              )}
               {character?.pronouns && (
                 <span
-                  className="flex-shrink-0 cursor-help qt-text-small qt-text-secondary"
+                  className="cursor-help qt-text-small qt-text-secondary"
                   title={`Pronouns used to refer to ${character.name || 'this character'}: ${character.pronouns.subject} (subject) / ${character.pronouns.object} (object) / ${character.pronouns.possessive} (possessive).`}
                 >
                   {character.pronouns.subject}/{character.pronouns.object}/{character.pronouns.possessive}
                 </span>
               )}
+              </span>
             </div>
           )}
         </div>

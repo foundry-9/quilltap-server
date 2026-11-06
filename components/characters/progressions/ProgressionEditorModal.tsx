@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { Icon } from '@/components/ui/icon'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -30,6 +31,7 @@ import {
   UNIT_MS,
   deriveProgression,
   renderProgressionReport,
+  renderPublicProgressionLine,
 } from '@/lib/progressions/engine'
 import {
   MAX_PROGRESSION_DESCRIPTION_LENGTH,
@@ -76,6 +78,8 @@ export interface ProgressionEditorModalProps {
   editing: { id: string; progression: Progression } | null
   /** Ids already in use, so a create cannot silently overwrite one. */
   existingIds: string[]
+  /** Whose progression it is, for the preview's caption. */
+  characterName?: string
   saving: boolean
   onClose: () => void
   onSave: (id: string, progression: Progression) => void
@@ -90,6 +94,7 @@ interface FormState {
   end: string
   increment: TimeIncrement
   percentageReport: boolean
+  isPublic: boolean
   cadenceMode: CadenceMode
   periodCount: string
   periodUnit: string
@@ -127,6 +132,7 @@ function initialForm(editing: ProgressionEditorModalProps['editing']): FormState
       end: toLocalInput(new Date(now + UNIT_MS.hour).toISOString()),
       increment: 'minute',
       percentageReport: true,
+      isPublic: true,
       cadenceMode: 'turn',
       periodCount: '1',
       periodUnit: 'h',
@@ -150,6 +156,7 @@ function initialForm(editing: ProgressionEditorModalProps['editing']): FormState
     end: toLocalInput(p.endTime),
     increment: p.timeIncrement,
     percentageReport: p.percentageReport,
+    isPublic: p.public,
     cadenceMode: p.reportFrequency === 'turn' ? 'turn' : p.reportFrequency === 'increment' ? 'increment' : 'period',
     periodCount: period?.[1] ?? '1',
     periodUnit: period?.[2] ?? 'h',
@@ -175,6 +182,7 @@ function toProgression(form: FormState): { ok: true; value: Progression } | { ok
     endTime,
     timeIncrement: form.increment,
     percentageReport: form.percentageReport,
+    public: form.isPublic,
     reportFrequency:
       form.cadenceMode === 'period' ? `${form.periodCount}${form.periodUnit}` : form.cadenceMode,
     onComplete: form.onComplete,
@@ -200,6 +208,7 @@ function toProgression(form: FormState): { ok: true; value: Progression } | { ok
 export function ProgressionEditorModal({
   editing,
   existingIds,
+  characterName,
   saving,
   onClose,
   onSave,
@@ -231,11 +240,19 @@ export function ProgressionEditorModal({
   // file addresses the id, and a rename would break it silently.
   const effectiveId = isCreate && !idTouched ? idFromName(form.name) : form.id
 
-  /** The line this progression would produce right now, for the live preview. */
+  /**
+   * The lines this progression would produce right now, for the live preview:
+   * what the character reads, and what others are told (null when private or
+   * gone quiet).
+   */
   const preview = useMemo(() => {
     const built = toProgression(form)
     if (!built.ok) return null
-    return renderProgressionReport(built.value, deriveProgression(effectiveId || 'preview', built.value, nowMs))
+    const derived = deriveProgression(effectiveId || 'preview', built.value, nowMs)
+    return {
+      own: renderProgressionReport(built.value, derived),
+      public: renderPublicProgressionLine(built.value, derived),
+    }
   }, [form, effectiveId, nowMs])
 
   const handleSave = () => {
@@ -264,7 +281,10 @@ export function ProgressionEditorModal({
     setForm((prev) => ({ ...prev, end: toLocalInput(new Date(startMs + count * UNIT_MS[unit]).toISOString()) }))
   }
 
-  return (
+  // Portalled to <body>: rendered in place, the overlay is trapped in the
+  // workspace's isolated stacking context and later siblings (the LLM Logs
+  // panel) paint over it.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay p-4">
       <div
         ref={dialogRef}
@@ -463,6 +483,22 @@ export function ProgressionEditorModal({
           Include the percentage in the default wording
         </label>
 
+        <div className="space-y-1">
+          <label className="flex items-center gap-2 qt-text-small">
+            <input
+              type="checkbox"
+              checked={form.isPublic}
+              onChange={(e) => set('isPublic', e.target.checked)}
+            />
+            Public — others may know of it
+          </label>
+          <p className="qt-hint">
+            A public progression is part of what others are told about the character — the Host&rsquo;s
+            introduction and the identity a tool looks up — in plain third-person wording, never your description
+            or template. A private one is still reported to the character themselves.
+          </p>
+        </div>
+
         <div className="space-y-2">
           <label className="flex items-center gap-2 qt-text-small">
             <input
@@ -542,9 +578,17 @@ export function ProgressionEditorModal({
         </div>
 
         {preview && (
-          <div className="qt-card p-3">
-            <p className="qt-text-small qt-text-secondary mb-1">As {form.name || 'this character'} would read it now:</p>
-            <p className="qt-text-small italic">{preview}</p>
+          <div className="qt-card p-3 space-y-2">
+            <div>
+              <p className="qt-text-small qt-text-secondary mb-1">As {characterName || 'the character'} would read it now:</p>
+              <p className="qt-text-small italic">{preview.own}</p>
+            </div>
+            <div>
+              <p className="qt-text-small qt-text-secondary mb-1">As others are told it:</p>
+              <p className="qt-text-small italic">
+                {preview.public ?? (form.isPublic ? 'Nothing — it has finished and gone quiet.' : 'Nothing — it is private.')}
+              </p>
+            </div>
           </div>
         )}
 
@@ -559,6 +603,7 @@ export function ProgressionEditorModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

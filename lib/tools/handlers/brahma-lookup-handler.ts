@@ -40,6 +40,7 @@ import { lookupCharacterToolInputSchema } from '../lookup-character-tool'
 import { lookupMemoriesToolInputSchema } from '../lookup-memories-tool'
 import { lookupMessagesToolInputSchema } from '../lookup-messages-tool'
 import { readMessagesToolInputSchema } from '../read-messages-tool'
+import { composePublicIdentity } from '@/lib/characters/public-identity'
 
 const logger = createServiceLogger('BrahmaLookup')
 
@@ -249,7 +250,9 @@ export async function executeLookupCharacterTool(
       controlledBy: c.controlledBy,
       archived: !!c.archivedAt,
       createdAt: c.createdAt,
-      identity: clip(c.identity, CORE_FIELD_CHARS),
+      // The public identity: age, public progressions and pronouns, then identity.md.
+      identity: clip(composePublicIdentity(c, c.identity), CORE_FIELD_CHARS),
+      birthday: c.birthday ?? null,
       description: clip(c.description, CORE_FIELD_CHARS),
       personality: clip(c.personality, CORE_FIELD_CHARS),
       manifesto: clip(c.manifesto, CORE_FIELD_CHARS),
@@ -266,7 +269,7 @@ export async function executeLookupCharacterTool(
           updatedAt: chat.updatedAt,
         })),
       },
-      hint: 'For facts not in these fields (an age, a date, an event), use lookup_memories with character set to this one, then lookup_messages.',
+      hint: 'For facts not in these fields (an age when there is no birthday, a date, an event), use lookup_memories with character set to this one, then lookup_messages.',
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
