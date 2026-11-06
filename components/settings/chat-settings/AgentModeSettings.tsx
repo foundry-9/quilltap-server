@@ -16,7 +16,10 @@ const MAX_TURNS_OPTIONS = [
   { value: 10, label: '10 turns (default)' },
   { value: 15, label: '15 turns' },
   { value: 20, label: '20 turns' },
-  { value: 25, label: '25 turns (maximum)' },
+  { value: 25, label: '25 turns' },
+  { value: 30, label: '30 turns' },
+  { value: 40, label: '40 turns' },
+  { value: 50, label: '50 turns (maximum)' },
 ]
 
 export function AgentModeSettings({

@@ -8,7 +8,8 @@
  * echoes the saved settings. `DataRetentionSettings` and
  * `BrahmaConsoleSettings` are this component plus copy and constants.
  *
- * Commit rules (blur or Enter): an entry outside `[min, max]` or not a number
+ * Commit rules (blur or Enter): an entry outside `[min, max]` (or below `min`
+ * when there is no `max`) or not a number
  * is reverted without comment — the bounds live in the copy; an unchanged
  * entry is normalised (`"30.7"` → `"30"`) and nothing is sent; a changed
  * entry PUTs, and a failed PUT shows the server's `error` (or the caller's
@@ -30,7 +31,8 @@ export interface UseInstanceNumberSettingOptions {
   field: string
   defaultValue: number
   min: number
-  max: number
+  /** Upper bound; omit for none (the dial then accepts any integer ≥ `min`). */
+  max?: number
   /** Inline error when the GET fails with a non-2xx status. */
   loadFailureMessage: string
   /** Fallback error when the PUT fails and the server sent no `error`. */
@@ -103,7 +105,7 @@ export function useInstanceNumberSetting({
 
   const commit = () => {
     const parsed = Math.floor(Number(draft ?? saved))
-    if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    if (!Number.isFinite(parsed) || parsed < min || (max !== undefined && parsed > max)) {
       // Revert an unusable entry rather than nag — the bounds live in the copy.
       setDraft(null)
       return
@@ -187,7 +189,9 @@ export function BoundedNumberInstanceSetting({
             disabled={saving}
             className="qt-input w-28"
           />
-          <span className="qt-text-small qt-text-secondary">{unit} ({min}&ndash;{max}; the default is {defaultValue})</span>
+          <span className="qt-text-small qt-text-secondary">
+            {unit} ({max === undefined ? <>at least {min}</> : <>{min}&ndash;{max}</>}; the default is {defaultValue})
+          </span>
         </div>
         <p className="qt-text-xs qt-text-secondary mt-1">{footnote}</p>
       </div>

@@ -60,7 +60,7 @@ Each level can override the previous if explicitly set.
 ### Global Settings (The Salon)
 
 - **Enable Agent Mode by Default**: When enabled, new chats will use agent mode
-- **Maximum Agent Turns**: The maximum number of tool iterations (1-25, default: 10)
+- **Maximum Agent Turns**: The maximum number of tool iterations (1-50, default: 10)
 
 ### Per-Chat Toggle
 
@@ -119,8 +119,8 @@ This prevents runaway iterations while ensuring the user gets a response.
 
 - **5 turns**: Quick tasks, cost-conscious
 - **10 turns** (default): Balanced for most use cases
-- **15-20 turns**: Complex research or multi-step operations
-- **25 turns**: Maximum for very complex tasks
+- **15-25 turns**: Complex research or multi-step operations
+- **30-50 turns**: Long investigations; 50 is the maximum
 
 ## Status Events
 

@@ -114,6 +114,7 @@ export function BrahmaConsolePanel({ session, active, children }: BrahmaConsoleP
     streamingContent,
     streamingReasoning,
     streamingToolCalls,
+    streamingToolBatchMarks,
     isExecutingTools,
     error: streamError,
     sendMessage,
@@ -315,6 +316,7 @@ export function BrahmaConsolePanel({ session, active, children }: BrahmaConsoleP
             streamingContent={streamingContent}
             streamingReasoning={streamingReasoning}
             streamingToolCalls={streamingToolCalls}
+            streamingToolBatchMarks={streamingToolBatchMarks}
             isStreaming={isStreaming}
             isExecutingTools={isExecutingTools}
           />

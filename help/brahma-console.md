@@ -56,6 +56,8 @@ The Console's replies arrive as they are composed, word following word across th
 
 Above each such answer sits a small, dimmed **Thinking** panel. While the engine deliberates the panel stands open, and you may watch the chain of thought unspool in real time; once the answer is settled the panel folds itself shut, leaving the reply uncluttered. Press it open again at any time, on a fresh answer or one long since concluded, to revisit how the engine reasoned its way there.
 
+When the engine consults the ledgers along the way, its musings are not lumped together at the top like a stack of unsorted correspondence. Each stretch of thought sits just before the query it prompted, so the transcript reads in the order things happened: a thought, a query, a further thought, another query, and at last the answer.
+
 This musing is shown to you and to you alone. Like everything in the thinking panel throughout Quilltap, it is **for your eyes only** — never fed back to the engine, never filed into a memory, never counted as part of the answer. Engines that do not reason aloud simply show no panel at all.
 
 ## The clerk's shortcuts
@@ -81,7 +83,7 @@ Three points of etiquette govern the arrangement:
 
 ### Seeing the Console's working
 
-You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, two tidy panels slip into the transcript at that very spot. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed — to the row cap, or because the rows were too bulky to carry whole, in which case the longest entries are shortened and the Console is told to ask a narrower question. Both panels appear the instant the query lands and may be folded shut with a tap, so the conversation stays unhurried while the evidence remains within easy reach.
+You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, a slim **Ran SQL** card slips into the transcript at that very spot, folded shut as neatly as a calling card: it names the ledger consulted, gives the first line or so of the query, and reports how many rows came back (or that the attempt failed). Press it open and two tidy panels unfold. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed — to the row cap, or because the rows were too bulky to carry whole, in which case the longest entries are shortened and the Console is told to ask a narrower question. The card appears the instant the query lands, so the conversation stays unhurried while the evidence remains within easy reach.
 
 Should a query go awry — a misremembered column, a table that isn't there — the **Result** panel reports the ledger's own complaint in plain words rather than a polite shrug, so you (and the engine) can see exactly what went wrong. The Console takes such a rebuff as a cue to inspect the ledger's true shape and try again, rather than guess a second time.
 
@@ -101,9 +103,9 @@ Enquiries of this sort reward a capable engine. A model that handles tools deftl
 
 ## Setting the Console's patience
 
-A thorny question — *"where in all these ledgers is the airship first mentioned?"* — is rarely answered in a single stroke. The Console works such a problem the way any diligent clerk would: one step at a time, a query here, a document read there, each step a **turn** at the telegraph key. It takes as many turns as the question demands, up to a ceiling you set, at which point it must lay down its tools and report whatever it has gathered so far.
+A thorny question — *"where in all these ledgers is the airship first mentioned?"* — is rarely answered in a single stroke. The Console works such a problem the way any diligent clerk would: one step at a time, a query here, a document read there, each step a **turn** at the telegraph key. It takes as many turns as the question demands, up to a ceiling you set — and only you set it — at which point it must lay down its tools and report whatever it has gathered so far.
 
-That ceiling lives in **Settings → Chat → Brahma Console**, as **"Let the Console take up to N turns"** (5–200; the default is 50). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
+That ceiling lives in **Settings → Chat → Brahma Console**, as **"Let the Console take up to N turns"** (any whole number from 1 upward, with no upper limit; the default is 10). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
 
 A generous ceiling costs nothing on questions the Console dispatches quickly, and it carries no risk of a runaway search: should the engine fall to asking the very same question twice, Quilltap recognises it chasing its own tail and calls a halt at once — no matter how high the ceiling stands. The dial buys patience for genuine progress, never licence to spin.
 

@@ -5114,6 +5114,54 @@
   .qt-chat-thinking-details {
     max-width: 85%;
   }
+  /* Start-aligned variant: thinking set flush left in a column of tool cards
+     (the Brahma Console), where the right offset would read as misplaced. */
+  /*
+   * Collapsible tool card summary (the Brahma Console's "Ran SQL" card): one
+   * line that stays put; the chevron turns and the query preview hides when the
+   * card is open (the full query is in the body then).
+   */
+  .qt-tool-card-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+    list-style: none;
+  }
+  .qt-tool-card-summary::-webkit-details-marker {
+    display: none;
+  }
+  .qt-tool-card-summary > * {
+    flex-shrink: 0;
+  }
+  .qt-tool-card-chevron {
+    transition: transform 150ms ease;
+  }
+  details[open] > .qt-tool-card-summary .qt-tool-card-chevron {
+    transform: rotate(90deg);
+  }
+  .qt-tool-card-summary > .qt-tool-card-preview {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  details[open] > .qt-tool-card-summary .qt-tool-card-preview {
+    visibility: hidden;
+  }
+  .qt-chat-thinking-start {
+    justify-content: flex-start;
+  }
+  .qt-chat-thinking-start .qt-chat-thinking-details {
+    max-width: 100%;
+  }
+  .qt-chat-thinking-start .qt-chat-thinking-summary {
+    justify-content: flex-start;
+  }
   .qt-chat-thinking-summary {
     display: flex;
     align-items: center;

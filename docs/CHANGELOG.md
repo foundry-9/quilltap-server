@@ -4,6 +4,24 @@
 
 ### 4.13-dev
 
+#### Change: Salon agent-mode turn cap raised to 50
+
+- `AgentModeSettingsSchema.maxTurns` now allows 1–50 (was 1–25); the default stays 10. The Chat settings dropdown adds 30, 40 and 50.
+
+#### Change: Brahma Console turn budget has no upper bound; default 10
+
+- `maxAgentTurns` in `instance_settings['brahmaConsole']` is now any integer ≥ 1 (was 5–200) and defaults to 10 (was 50). The operator's value is the only ceiling on the Console's and one-shot `@Brahma`'s tool-use turns; the duplicate/stale-query guard still stops a looping run.
+- The default is one constant, `DEFAULT_BRAHMA_MAX_AGENT_TURNS` in `lib/schemas/settings.types.ts`, used by the schema, `lib/instance-settings`, `turn-budget.ts` and the settings dial. `resolveBrahmaMaxAgentTurns` now logs the resolved budget (debug) and an unreadable setting (warn).
+- `BoundedNumberInstanceSetting` takes an optional `max`; with none, the input has no `max` attribute and the hint reads "at least N".
+- A stored value is kept as is, including a 50 written by an earlier save of the inline `@Brahma` engine (the PUT merges the whole object). Salon agent mode has its own cap (see above).
+
+#### Feature: Brahma Console SQL cards collapse; thinking interleaves with queries
+
+- Each `run_sql` card in the Brahma Console now starts collapsed to one line: database, a one-line query preview, and the row count or failure. Expanding it shows the Query and Result panes as before New `qt-tool-card-summary` / `qt-tool-card-chevron` / `qt-tool-card-preview` classes style the summary line.
+- Thinking is shown where it happened instead of as one block above the answer. The orchestrator stores the reasoning that preceded each tool-call turn on that turn's (content-less) assistant message, and the final answer carries only the reasoning since the last tool call. The transcript renders reasoning-only assistant messages as collapsed Thinking blocks between the SQL cards. Older chats keep the whole chain on the final message and render as before.
+- While streaming, the hook records where each tool batch fell in the cumulative reasoning (`streamingToolBatchMarks`); `segmentLiveRun` (`components/brahma-console/brahma-sql-tool-call.ts`) splits the chain around the batches. Only the trailing stretch stays open.
+- `ThinkingBlock` gains `align: 'end' | 'start'` (default `end`, unchanged for the Salon). The console uses `start`, backed by the new `qt-chat-thinking-start` class, so thinking sits flush left with the SQL cards instead of jumping right when expanded. `@quilltap/theme-storybook` 1.0.102 with regenerated CSS.
+
 #### Chore: dev-tag cleanup deletes Docker Hub images by digest
 
 - `remove-old-dev-tags` removed old dev images with `regctl tag rm`, which on Docker Hub only drops the tag; the manifests and layers stayed untagged and kept using storage (`foundry9/quilltap` passed 200 GB). Step 7 now deletes each old version's index and its child manifests (both images and both attestations) by digest, skips digests reachable from the kept dev version and `latest`, and stops if the registry token lacks delete scope instead of falling back to tag-only removal. Images already left untagged must still be cleared from Docker Hub's web UI.

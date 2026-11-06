@@ -369,7 +369,8 @@ export type DataRetentionSettings = z.infer<typeof DataRetentionSettingsSchema>;
  * How many agent turns the Brahma Console (and its one-shot Salon `@Brahma`
  * cousin) may take before it is forced to answer with what it has. Each turn is
  * one round of the tool-use loop — a search, a `run_sql` query, a document read.
- * A generous budget lets the Console chase something deep in the ledgers; the
+ * The operator sets it with no upper bound (default 10). A generous budget lets
+ * the Console chase something deep in the ledgers; the
  * duplicate/stale-query guard still short-circuits a genuinely stuck loop long
  * before this cap, so raising it costs nothing when the model is making real
  * progress.
@@ -382,13 +383,21 @@ export type DataRetentionSettings = z.infer<typeof DataRetentionSettingsSchema>;
  * `resolveBrahmaMaxAgentTurns` in
  * `lib/services/brahma-console/turn-budget.ts`.
  */
+/**
+ * The Console's agent-turn budget when the operator hasn't set one. The one
+ * copy: the schema default, the server fallback (`turn-budget.ts`) and the
+ * settings dial all read it.
+ */
+export const DEFAULT_BRAHMA_MAX_AGENT_TURNS = 10;
+
 export const BrahmaConsoleSettingsSchema = z.object({
   /**
    * Maximum tool-use turns per query before the Console is made to give its
-   * final answer. Independent of the duplicate/stale-query guard, which still
+   * final answer. The operator's figure is the only ceiling — there is no
+   * upper bound. Independent of the duplicate/stale-query guard, which still
    * stops a loop that repeats itself regardless of this number.
    */
-  maxAgentTurns: z.number().int().min(5).max(200).default(50),
+  maxAgentTurns: z.number().int().min(1).default(DEFAULT_BRAHMA_MAX_AGENT_TURNS),
   /**
    * Connection profile the inline Brahma (the `@Brahma:` / `@Brahma?` Carina
    * answerer in a Salon chat) answers with. null/undefined = the user's
@@ -614,8 +623,8 @@ export type AutoLockSettings = z.infer<typeof AutoLockSettingsSchema>;
 // ============================================================================
 
 export const AgentModeSettingsSchema = z.object({
-  /** Maximum number of agent turns (iterations) before forcing final response (1-25, default: 10) */
-  maxTurns: z.number().min(1).max(25).default(10),
+  /** Maximum number of agent turns (iterations) before forcing final response (1-50, default: 10) */
+  maxTurns: z.number().min(1).max(50).default(10),
   /** Whether agent mode is enabled by default for new chats (default: false) */
   defaultEnabled: z.boolean().default(false),
 });

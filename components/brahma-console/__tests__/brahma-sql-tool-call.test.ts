@@ -7,6 +7,7 @@
 import {
   parseBrahmaSqlToolMessage,
   formatCell,
+  segmentLiveRun,
 } from '../brahma-sql-tool-call'
 
 /** Build a persisted TOOL-message content string the way `saveToolMessages` does. */
@@ -132,5 +133,38 @@ describe('formatCell', () => {
     expect(formatCell(42)).toEqual({ text: '42', isNull: false })
     expect(formatCell('hi')).toEqual({ text: 'hi', isNull: false })
     expect(formatCell(false)).toEqual({ text: 'false', isNull: false })
+  })
+})
+
+describe('segmentLiveRun', () => {
+  it('is just the streaming thinking before any tool batch lands', () => {
+    expect(segmentLiveRun('Pondering…', [], 0)).toEqual([
+      { kind: 'thinking', text: 'Pondering…', isLast: true },
+    ])
+  })
+
+  it('interleaves thinking with the batches it led to', () => {
+    const reasoning = 'Count chats.\n\nNow count messages.\n\nDone.'
+    const marks = [
+      { reasoningLength: 'Count chats.'.length, toolIndex: 0 },
+      { reasoningLength: 'Count chats.\n\nNow count messages.'.length, toolIndex: 1 },
+    ]
+    expect(segmentLiveRun(reasoning, marks, 3)).toEqual([
+      { kind: 'thinking', text: 'Count chats.', isLast: false },
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'thinking', text: 'Now count messages.', isLast: false },
+      { kind: 'tools', start: 1, end: 3 },
+      { kind: 'thinking', text: 'Done.', isLast: true },
+    ])
+  })
+
+  it('drops empty thinking between back-to-back batches', () => {
+    expect(segmentLiveRun('', [
+      { reasoningLength: 0, toolIndex: 0 },
+      { reasoningLength: 0, toolIndex: 1 },
+    ], 2)).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'tools', start: 1, end: 2 },
+    ])
   })
 })

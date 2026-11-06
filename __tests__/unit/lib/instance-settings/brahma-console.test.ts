@@ -29,9 +29,9 @@ describe('brahmaConsole instance setting', () => {
   })
 
   describe('getBrahmaConsoleSettings', () => {
-    it('returns the 50-turn default when the setting is unset', async () => {
+    it('returns the 10-turn default when the setting is unset', async () => {
       mockRawQuery.mockResolvedValue([] as never)
-      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 50 })
+      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 10 })
     })
 
     it('returns the stored value', async () => {
@@ -41,17 +41,22 @@ describe('brahmaConsole instance setting', () => {
 
     it('falls back to defaults on unparseable JSON', async () => {
       mockRawQuery.mockResolvedValue([{ value: 'not json' }] as never)
-      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 50 })
+      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 10 })
+    })
+
+    it('returns a stored budget above the old 200 cap', async () => {
+      mockRawQuery.mockResolvedValue([{ value: JSON.stringify({ maxAgentTurns: 1000 }) }] as never)
+      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 1000 })
     })
 
     it('falls back to defaults on out-of-range values', async () => {
-      mockRawQuery.mockResolvedValue([{ value: JSON.stringify({ maxAgentTurns: 1 }) }] as never)
-      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 50 })
+      mockRawQuery.mockResolvedValue([{ value: JSON.stringify({ maxAgentTurns: 0 }) }] as never)
+      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 10 })
     })
 
     it('returns defaults when the read throws', async () => {
       mockRawQuery.mockRejectedValue(new Error('db down'))
-      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 50 })
+      await expect(getBrahmaConsoleSettings()).resolves.toEqual({ maxAgentTurns: 10 })
     })
   })
 
@@ -72,8 +77,8 @@ describe('brahmaConsole instance setting', () => {
     })
 
     it('rejects out-of-range values', async () => {
-      await expect(setBrahmaConsoleSettings({ maxAgentTurns: 1 })).rejects.toThrow()
-      await expect(setBrahmaConsoleSettings({ maxAgentTurns: 500 })).rejects.toThrow()
+      await expect(setBrahmaConsoleSettings({ maxAgentTurns: 0 })).rejects.toThrow()
+      await expect(setBrahmaConsoleSettings({ maxAgentTurns: -3 })).rejects.toThrow()
       expect(mockRawQuery).not.toHaveBeenCalled()
     })
   })

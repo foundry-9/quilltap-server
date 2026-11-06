@@ -567,7 +567,7 @@ Update the retention window. Merges with the current value and validates (intege
 
 Read the instance-wide Brahma Console settings (`instance_settings['brahmaConsole']`, not a `chat_settings`
 column — same class as the data-retention knob). Holds the agent-turn budget the streaming orchestrator and
-the one-shot `@Brahma` Carina path both read through `resolveBrahmaMaxAgentTurns`. Defaults to 50; the
+the one-shot `@Brahma` Carina path both read through `resolveBrahmaMaxAgentTurns`. Defaults to 10 and has no upper bound; the
 duplicate/stale-query guard still stops a self-repeating loop regardless of this number. Also holds
 `inlineConnectionProfileId`, the engine for `@Brahma` in the Salon: `resolveInlineBrahmaConnectionProfile`
 tries the chat's project's `brahmaConnectionProfileId`, then this, then the default profile (a stale id
@@ -577,15 +577,15 @@ falls through with a warning). `null` means "use the default."
 
 ```json
 {
-  "maxAgentTurns": 50,
+  "maxAgentTurns": 10,
   "inlineConnectionProfileId": null
 }
 ```
 
 #### `PUT /api/v1/settings/brahma-console`
 
-Update the Console settings. The body is merged over the current value before validation (integer, 5-200
-turns), so a partial body is a partial update rather than a wipe — setting the profile leaves the turn
+Update the Console settings. The body is merged over the current value before validation (integer, at least 1
+turn; no upper bound), so a partial body is a partial update rather than a wipe — setting the profile leaves the turn
 budget alone and vice versa.
 
 **Request Body:**

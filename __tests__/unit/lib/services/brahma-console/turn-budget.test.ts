@@ -31,7 +31,7 @@ describe('resolveBrahmaMaxAgentTurns', () => {
     await expect(resolveBrahmaMaxAgentTurns()).resolves.toBe(DEFAULT_BRAHMA_MAX_AGENT_TURNS)
   })
 
-  it('default matches the schema default (50)', () => {
-    expect(DEFAULT_BRAHMA_MAX_AGENT_TURNS).toBe(50)
+  it('default matches the schema default (10)', () => {
+    expect(DEFAULT_BRAHMA_MAX_AGENT_TURNS).toBe(10)
   })
 })

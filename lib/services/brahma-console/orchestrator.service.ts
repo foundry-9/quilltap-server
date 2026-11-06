@@ -327,9 +327,13 @@ async function processBrahmaResponse(
   // own streamMessage call, so the provider's cumulative `reasoningContent`
   // resets per turn; we fold completed turns into `priorReasoning` and emit the
   // growing `runReasoning` so the client watches one continuous chain and the
-  // saved message keeps the whole thing.
+  // saved messages keep the whole thing. `unsavedReasoning` is the reasoning
+  // not yet attached to a persisted message: each intermediate tool-call turn
+  // takes what precedes it, so the transcript interleaves thinking with the
+  // SQL cards it led to; the final answer takes the remainder.
   let priorReasoning = ''
   let runReasoning = ''
+  let unsavedReasoning = ''
 
   while (agentTurnCount <= maxAgentTurns) {
     agentTurnCount++
@@ -382,6 +386,7 @@ async function processBrahmaResponse(
     // cumulative thinking appends after it rather than overwriting it.
     if (turnReasoning.trim()) {
       priorReasoning = `${runReasoning}\n\n`
+      unsavedReasoning = unsavedReasoning ? `${unsavedReasoning}\n\n${turnReasoning}` : turnReasoning
     }
 
     totalUsage.promptTokens += streamUsage?.promptTokens || 0
@@ -475,9 +480,19 @@ async function processBrahmaResponse(
         completionTokens: streamUsage?.completionTokens,
         tokenCount: (streamUsage?.promptTokens || 0) + (streamUsage?.completionTokens || 0),
         attachments: [],
+        // Reasoning that led to these calls — DISPLAY ONLY, never re-fed to a
+        // model. Rendered just before this turn's SQL cards.
+        reasoningContent: unsavedReasoning.trim() || null,
         createdAt: new Date().toISOString(),
       }
       await repos.chats.addMessage(chatId, assistantMessage)
+      logger.debug('Brahma Console saved tool-call turn', {
+        chatId,
+        turn: agentTurnCount,
+        reasoningChars: unsavedReasoning.length,
+        toolCount: toolCallsToProcess.length,
+      })
+      unsavedReasoning = ''
 
       // Thread the assistant tool-call turn into the live slate WITH its native
       // tool_calls (paired by callId on the next stream), so the model can see
@@ -579,10 +594,10 @@ async function processBrahmaResponse(
       completionTokens: totalUsage.completionTokens,
       tokenCount: totalUsage.promptTokens + totalUsage.completionTokens,
       attachments: [],
-      // Reasoning ("thinking") for the turn — DISPLAY ONLY, never re-fed to a
-      // model. The Console renders it as a single leading block, so no
-      // positioned reasoningSegments are needed.
-      reasoningContent: runReasoning.trim() || null,
+      // Reasoning ("thinking") since the last tool-call turn — DISPLAY ONLY,
+      // never re-fed to a model. Earlier turns' reasoning rides on their own
+      // (tool-call) assistant messages, interleaved with the SQL cards.
+      reasoningContent: unsavedReasoning.trim() || null,
       createdAt: new Date().toISOString(),
     }
     await repos.chats.addMessage(chatId, assistantMessage)
