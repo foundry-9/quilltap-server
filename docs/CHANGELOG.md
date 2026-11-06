@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Docs: correct two out-of-date help pages
+
+- `help/character-system-transparency.md` said System Transparency is mirrored into the vault's `properties.json`. It is a database column only (see DDL.md); the page now says so and why.
+- `help/character-management.md` described a "Partnerships" feature (partner sections, Create Partnership buttons, dissolving partnerships) that does not exist. Replaced it with "Conversation Partners", covering what does exist: the default conversation partner in Chat Defaults, which pre-fills Play As in the New Chat dialog, and multi-character chats. `help/characters.md` updated to match.
+
 #### Feature: one character page in Aurora; Fixes #146
 
 - `/aurora/[id]/view` and `/aurora/[id]/edit` are replaced by one page at `/aurora/[id]` (`app/aurora/[id]/CharacterPage.tsx`) with six sections: Details, Prompts, Appearance, Abilities, Chat Defaults, History. Every control saves itself; only modals have Save buttons. Design of record: `docs/developer/features/complete/aurora-character-page-unification.md`.
@@ -20,6 +25,7 @@
 - Help chat: the entity picker accepts `/aurora/:id?section=…` templates, and pattern matching prefers the doc whose query matches the current URL.
 - New Character form reuses the page's Facts and Dossier blocks (`components/characters/fields/`) and now saves aliases, pronouns, birthday and kind.
 - Fix (#146): the edit form's System Prompt field, the create form's System Prompt and Scenario fields, and the AI Wizard's generated System Prompt were stripped by the character schemas and silently lost. The edit-page field is gone; the create form sends them as a named prompt ("Default") and a scenario ("Opening scene"); the wizard's prompt is saved through `POST /api/v1/characters/[id]/prompts`. The create form's dead Avatar URL field is removed.
+- The sticky header used `qt-bg-card/95`, which is not a defined utility, so `npm run lint` failed and the header had no background. It now uses `qt-bg-card/90`.
 - Tests: the autosave engine, the section map and redirects, legacy layout upgrade, section rendering on a blank character, the draft-to-PUT builder, and a grep-test that no file under `app/aurora/[id]/` submits a form or shows a Save button outside a modal.
 
 #### Feature: character birthdays, public progressions, and a composed public identity

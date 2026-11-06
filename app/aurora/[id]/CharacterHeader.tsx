@@ -151,7 +151,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
   const avatarClasses = getAvatarClasses(props.avatarStyle, 'lg')
 
   return (
-    <div className="sticky top-0 z-20 mb-4 border-b qt-border-default qt-bg-card/95 px-1 pb-3 pt-3 backdrop-blur">
+    <div className="sticky top-0 z-20 mb-4 border-b qt-border-default qt-bg-card/90 px-1 pb-3 pt-3 backdrop-blur">
       <button
         type="button"
         onClick={props.onBack}

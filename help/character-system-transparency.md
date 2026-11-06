@@ -49,7 +49,7 @@ Consider turning System Transparency on when:
 
 ## Where the Setting Lives
 
-The toggle is stored on the character record (a single boolean column, defaulting to NULL/off). When a character has a linked Scriptorium vault and the Scriptorium overlay is on, the same value also lives in the vault's `properties.json` so the file is the source of truth — handy if you're tracking character configuration in Git.
+The toggle is stored on the character record in the database (a single boolean column, defaulting to NULL/off). Unlike the character's descriptive fields, it is *not* written to the character's vault: it is a matter of who may open which doors, not a fact about the character, and so it is kept where a character cannot edit it by editing her own `properties.json`.
 
 The setting follows the character through exports and imports: a `.qtap` character bundle preserves it, and a backup-restore round-trip preserves it.
 

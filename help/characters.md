@@ -138,7 +138,7 @@ Characters are sorted by:
 
 - **Default Connection Profile** — Which LLM to use for this character
 - **Image Generation Profile** — For image creation in chats
-- **Default Partner** — Character to chat with (for partnerships)
+- **Default Partner** — The character you play who sits opposite them in a new chat (see [Conversation Partners](character-management.md#conversation-partners))
 - **Default Template** — Roleplay template to use
 
 ## Creating Characters
