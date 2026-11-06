@@ -4,6 +4,11 @@
 
 ### 4.12.2
 
+#### Fix: image-arrival check rejected Gemini answers on long prompts
+
+- `verifyImageReachedModel` (bug 116) judged a vision call imageless when its prompt tokens were at or below `text / 2.5`. That slack grows with the prompt: Import from image's ~2,400-character prompt allowed 951 tokens, more than Gemini bills for a whole image (258). On Friday, NanoGPT `gemini-2.5-flash` saw the photograph three times (844 tokens; all three answers described the same garments) and every answer was discarded as "accepted and discarded".
+- `textOnlyTokenCeiling` now takes the lower of `text / 2.5` and `text / 4 + 85` (typical text cost plus the cheapest image tier). Short instructions keep the old bound, so bug 116's case is still caught. Affects the describe-fallback too.
+
 #### Fix: Green Room could dress a character in two whole outfits
 
 - The model could list an outfit set under one slot it happens to cover beside a full outfit. On Friday, Amy got "Summer Travel Look — Peacock & Olive Linen" (top, bottom, footwear) plus "Gothic Victorian Enchantress Attire" (top, bottom, accessories, hair) listed only under `hair`. Dissolving and spreading put every piece of both on.

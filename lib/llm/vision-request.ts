@@ -43,17 +43,47 @@ const moduleLogger = logger.child({ module: 'vision-request' })
 // ============================================================================
 
 /**
- * A deliberately pessimistic characters-per-token ratio, used only to put a
- * *ceiling* on what the text of a request could cost on its own. Real BPE
- * tokenizers run 3.5–4.5 chars/token on English prose, so 2.5 leaves ~40%
- * headroom before a text-only prompt could climb past the ceiling and be
- * mistaken for a real one.
+ * A deliberately pessimistic characters-per-token ratio: the most the text of
+ * a request could cost on its own. Real BPE tokenizers run 3.5–4.5
+ * chars/token on English prose, so 2.5 leaves ~40% headroom before a
+ * text-only prompt could climb past the ceiling and be mistaken for a real one.
  */
 const MIN_CHARS_PER_TOKEN = 2.5
 
-/** The most prompt tokens `text` could plausibly cost on its own. */
+/** A typical characters-per-token ratio for English prompt text. */
+const TYPICAL_CHARS_PER_TOKEN = 4
+
+/**
+ * The fewest tokens any provider in the field bills for one image (OpenAI
+ * low-detail). A genuine call costs at least the text plus this.
+ */
+const MIN_IMAGE_TOKENS = 85
+
+/**
+ * The most prompt tokens `text` could cost without an image reaching the
+ * model, and below which a call is judged imageless.
+ *
+ * Two bounds, and the lower one wins:
+ *
+ *  1. **The pessimistic text cost** (`text / 2.5`). Tight on a short
+ *     instruction, where it is the whole of bug 116's check (165 characters
+ *     → 66; the dropped call billed 38).
+ *  2. **The typical text cost plus the cheapest image** (`text / 4 + 85`).
+ *     The pessimistic slack grows with the prompt, and on a long one it
+ *     outgrows a whole image: the wardrobe's 2,376-character prompt allowed
+ *     951 tokens, Gemini bills an image at 258, and a call that genuinely saw
+ *     the photograph came in at 844 and was thrown away. This bound
+ *     keeps the slack no larger than the smallest image.
+ *
+ * The cost of the second bound is a text-only call on an unusually
+ * inefficient tokenizer slipping through on a long prompt. A provider that
+ * drops images silently is the case being caught, and those run ordinary
+ * tokenizers.
+ */
 export function textOnlyTokenCeiling(text: string): number {
-  return Math.ceil(text.length / MIN_CHARS_PER_TOKEN)
+  const pessimistic = Math.ceil(text.length / MIN_CHARS_PER_TOKEN)
+  const typicalPlusImage = Math.ceil(text.length / TYPICAL_CHARS_PER_TOKEN) + MIN_IMAGE_TOKENS
+  return Math.min(pessimistic, typicalPlusImage)
 }
 
 /** Verdict from {@link verifyImageReachedModel}. */
