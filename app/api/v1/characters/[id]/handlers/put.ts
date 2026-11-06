@@ -95,9 +95,9 @@ const updateCharacterSchema = z.object({
   metadata: JsonSchema.nullable().optional(),
   physicalDescription: z
     .object({
+      // `name` / `usageContext` were retired (one description per character);
+      // an older client that still sends them has them stripped here.
       id: z.string().uuid().optional(),
-      name: z.string().min(1),
-      usageContext: z.string().max(200).nullable().optional(),
       headAndShouldersPrompt: z.string().max(500).nullable().optional(),
       shortPrompt: z.string().max(350).nullable().optional(),
       mediumPrompt: z.string().max(500).nullable().optional(),
@@ -193,8 +193,6 @@ async function handleUpdateCharacter(
       const now = new Date().toISOString();
       updatePayload.physicalDescription = PhysicalDescriptionSchema.parse({
         id: rawPhysical.id ?? crypto.randomUUID(),
-        name: rawPhysical.name,
-        usageContext: rawPhysical.usageContext ?? null,
         headAndShouldersPrompt: rawPhysical.headAndShouldersPrompt ?? null,
         shortPrompt: rawPhysical.shortPrompt ?? null,
         mediumPrompt: rawPhysical.mediumPrompt ?? null,

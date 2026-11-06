@@ -363,11 +363,9 @@ const APPEARANCE_RESOLUTION_PROMPT = `You are analyzing a conversation to determ
 You will receive:
 - Recent conversation messages
 - An image prompt that is about to be used for image generation
-- For each character: their available physical descriptions (with usage contexts) and the items they currently have equipped in their wardrobe
+- For each character: their physical description and the items they currently have equipped in their wardrobe
 
-Your task is to determine for each character:
-1. Which physical description best matches the current scene context (by usage context)
-2. What the character is currently wearing
+Your task is to determine what each character is currently wearing.
 
 CLOTHING PRIORITY (highest to lowest):
 1. NARRATIVE: If the conversation explicitly describes what a character changed into or is currently wearing, use the conversation's wording — paraphrased into a single concise visual sentence (not copied verbatim).
@@ -379,14 +377,12 @@ Respond with a JSON array, one entry per character:
 [
   {
     "characterId": "uuid-here",
-    "selectedDescriptionId": "uuid-of-best-matching-description-or-null",
     "clothingDescription": "what they are wearing right now",
     "clothingSource": "narrative" | "stored" | "default"
   }
 ]
 
 IMPORTANT:
-- For selectedDescriptionId, pick the description whose usageContext best fits the current scene. Use null to indicate the first/default.
 - clothingDescription MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visible (garment + color/material + any standout detail). No markdown, no bullet lists, no parentheticals, no commentary about purpose or feel, no quoted item names.
 - clothingSource must be "narrative" if from conversation, "stored" if from equipped wardrobe, "default" if using first/fallback.
 
@@ -532,9 +528,6 @@ export async function craftImagePrompt(
         parts.push(`  Gender: ${p.gender === 'male' ? 'man' : 'woman'} — always refer to this person as a ${p.gender === 'male' ? 'man' : 'woman'} in the prompt`);
       }
 
-      if (p.usageContext) {
-        parts.push(`  Usage context: ${p.usageContext}`);
-      }
 
       if (p.tiers.complete) {
         parts.push(`  Complete: "${p.tiers.complete}"`);
@@ -924,11 +917,11 @@ export async function resolveAppearance(
 ): Promise<CheapLLMTaskResult<AppearanceResolutionItem[]>> {
   // Build character data section
   const characterSection = characters.map(char => {
-    const descParts = char.physicalDescriptions.map(d => {
-      const context = d.usageContext ? ` (context: ${d.usageContext})` : ''
-      const preview = pickPhysicalDescription(d, 'scene') || '(no description text)'
-      return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
-    })
+    // One physical description per character: shown as reference for the
+    // body the clothing goes on, never something to choose between.
+    const appearance = char.physicalDescription
+      ? pickPhysicalDescription(char.physicalDescription, 'scene') || '(no description text)'
+      : '(none)'
 
     // Build equipped wardrobe items section using canonical describeOutfit.
     // Multiple entries per slot represent layering; we feed describeOutfit
@@ -951,8 +944,7 @@ export async function resolveAppearance(
       ? ` [not humanoid]\n  Form: NOT HUMANOID — no head, face, neck, shoulders, torso or limbs. Describe anything it wears or bears without naming a body part it lacks.`
       : ''
     return `  Character: ${char.characterName} (ID: ${char.characterId})${form}
-  Physical Descriptions:
-${descParts.length > 0 ? descParts.join('\n') : '    (none)'}${wardrobeSection}`
+  Physical Description: ${appearance}${wardrobeSection}`
   }).join('\n\n')
 
   // Format recent messages
@@ -998,7 +990,6 @@ Determine what each character currently looks like and is wearing:`,
 
         return parsed.map((item: Record<string, unknown>) => ({
           characterId: String(item.characterId || ''),
-          selectedDescriptionId: item.selectedDescriptionId ? String(item.selectedDescriptionId) : null,
           clothingDescription: String(item.clothingDescription || ''),
           clothingSource: (['narrative', 'stored', 'default'].includes(String(item.clothingSource))
             ? String(item.clothingSource)

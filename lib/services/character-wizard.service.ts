@@ -86,7 +86,6 @@ export interface WizardRequest {
 }
 
 export interface GeneratedPhysicalDescription {
-  name: string;
   headAndShouldersPrompt: string;
   shortPrompt: string;
   mediumPrompt: string;
@@ -615,9 +614,7 @@ export async function generatePhysicalDescriptions(
   profileProvider?: string,
   profileParameters?: Record<string, unknown>
 ): Promise<GeneratedPhysicalDescription> {
-  const results: Partial<GeneratedPhysicalDescription> = {
-    name: 'AI Generated',
-  };
+  const results: Partial<GeneratedPhysicalDescription> = {};
 
   for (const [level, prompt] of Object.entries(PHYSICAL_DESCRIPTION_PROMPTS)) {
     const maxTokens = level === 'full' ? 1500 : level === 'complete' ? 400 : 300;

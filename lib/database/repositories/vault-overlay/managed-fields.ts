@@ -138,8 +138,6 @@ export async function readCharacterVaultManagedFields(
             ? { ...existingPhysicalDescription }
             : {
                 id: stableUuidFromString(`physical:${mountPointId}`),
-                name: 'default',
-                usageContext: null,
                 headAndShouldersPrompt: null,
                 shortPrompt: null,
                 mediumPrompt: null,

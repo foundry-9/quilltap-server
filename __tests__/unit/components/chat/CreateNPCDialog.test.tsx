@@ -97,7 +97,9 @@ describe('CreateNPCDialog payload shape', () => {
     // Bug 2: physical description must be a singular object, never a plural array.
     expect(body.physicalDescriptions).toBeUndefined()
     expect(body.physicalDescription).toEqual(
-      expect.objectContaining({ name: 'Default', fullDescription: 'Tall, bald.' })
+      expect.objectContaining({ fullDescription: 'Tall, bald.' })
     )
+    // A character has one description; it carries no name.
+    expect(body.physicalDescription).not.toHaveProperty('name')
   })
 })

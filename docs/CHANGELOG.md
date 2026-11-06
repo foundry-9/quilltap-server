@@ -4,6 +4,20 @@
 
 ### 4.13-dev
 
+#### Fix: character page follow-ups; physical description name and usage context retired
+
+- Header menus (avatar, Generate, ⋯) opened offset down and right. The sticky header's `backdrop-blur` makes it the containing block for `position: fixed`, so the viewport coordinates from `fixedMenuPlacement` were applied relative to the header. `hooks/useFixedMenu.ts` now finds an ancestor that captures fixed positioning (`fixedContainingBlock`: transform, filter, backdrop-filter, perspective, contain, will-change) and places the menu against its box. Applies to every `ItemActionMenu`.
+- Header stats add the character's own Inventory shelf: objects, carried by default, archetypes and kits, each opening the Inventory dialog. `?action=stats` returns `stats.inventory`. The header's stats now re-read on `inventory` and `wardrobe` realtime events.
+- The header avatar fills the header's height (square, 96–240 px) instead of a fixed 80 px. `ItemActionMenu` gains `containerClassName`.
+- Removed the duplicate "Tags" label on Details (the tag editor has its own).
+- New Metadata card on Details: lists the `metadata.json` keys and edits them as JSON in a modal. Only JSON objects are accepted; the reserved `progressions` key is excluded from the editor and re-read fresh and carried over on save, since the PUT replaces the whole object.
+- The photo album in Appearance is collapsible and starts collapsed, like avatar rolls and wardrobe pictures.
+- History's Conversations and Memories cards start collapsed (`SectionCard` gains `collapsible` / `summary`) and page with Previous/Next (`components/ui/ListPager.tsx`) instead of infinite scroll. Deleting a row re-reads the page.
+- Stat links open the collapsed card they point at (`hooks/useAnchorReveal.ts`), and now scroll even when the target is in the section already showing.
+- A character has one physical description, so its `name` and `usageContext` are removed from `PhysicalDescriptionSchema`, the character POST/PUT schemas, the page, the AI Wizard, AI import and NPC creation. Neither was stored in the vault (reads always produced `name: 'default'`, `usageContext: null`), so nothing is migrated; old payloads and exports carrying them are stripped by the non-strict schemas.
+- The identity stack's appearance line is now `This is how you look: …` (no quoted label, no `(best used: …)`). `IDENTITY_STACK_BUILDER_VERSION` is 3; goldens registered.
+- Appearance resolution takes one description per character and decides clothing only: `CharacterAppearanceInput.physicalDescription` replaces the `physicalDescriptions` array, `selectedDescriptionId` and `physicalDescriptionName` are removed, and the cheap-LLM prompt no longer asks for a description choice. Prompt expansion drops `usageContext` / `entityName` from description tiers. The optimizer and Rename/Replace no longer read or rewrite the name.
+
 #### Feature: Salon avatars fixed to their moment
 
 - Each Salon bubble now shows its author's avatar as it was when the message was written. A new avatar (from a wardrobe or inventory change, the configuration cache, or set by hand) takes effect when it is bound to the chat; earlier bubbles keep the old one. Previously every bubble showed the character's current avatar.

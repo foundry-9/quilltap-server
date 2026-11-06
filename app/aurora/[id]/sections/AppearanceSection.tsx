@@ -133,6 +133,7 @@ export function AppearanceSection() {
           currentAvatarId={character.defaultImageId}
           onAvatarChange={() => void reload()}
           onRefresh={reload}
+          revealAnchor="photos"
         />
       </SectionCard>
 

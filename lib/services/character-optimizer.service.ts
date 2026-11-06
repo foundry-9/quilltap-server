@@ -269,7 +269,7 @@ export function buildCharacterContext(character: Character, wardrobeItems?: Ward
   if (character.physicalDescription) {
     const pd = character.physicalDescription;
     parts.push('=== Physical Description ===');
-    parts.push(`[Physical Description: "${pd.name}" (ID: ${pd.id})]`);
+    parts.push(`[Physical Description (ID: ${pd.id})]`);
     parts.push(`Head & Shoulders: ${pd.headAndShouldersPrompt || '(empty)'}`);
     parts.push(`Short: ${pd.shortPrompt || '(empty)'}`);
     parts.push(`Medium: ${pd.mediumPrompt || '(empty)'}`);
@@ -591,7 +591,6 @@ export function getPhysicalDescriptionSuggestionPrompt(
   const pd = physical ?? null;
   const current = pd
     ? [
-        `Name: ${pd.name}`,
         `fullDescription: ${pd.fullDescription || '(empty)'}`,
         `headAndShouldersPrompt: ${pd.headAndShouldersPrompt || '(empty)'}`,
         `shortPrompt: ${pd.shortPrompt || '(empty)'}`,

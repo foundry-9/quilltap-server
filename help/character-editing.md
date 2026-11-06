@@ -19,10 +19,10 @@ Old bookmarks to a character's "view" or "edit" page still work; they are quietl
 
 Across the top, holding its place as you scroll, sits the character's calling card:
 
-- **The avatar** is a menu: **Choose from photos…** (pick from the character's gallery), **Upload…**, or **Generate portrait…** (which opens the [Wardrobe](wardrobe.md) dialog, where portraits are painted in whatever the character happens to be wearing).
+- **The avatar**, as tall as the header itself — the largest the portrait appears anywhere short of opening it in a picture viewer — is a menu: **Choose from photos…** (pick from the character's gallery), **Upload…**, or **Generate portrait…** (which opens the [Wardrobe](wardrobe.md) dialog, where portraits are painted in whatever the character happens to be wearing).
 - **The name**, and beneath it the **title**, **pronouns**, **age** (when they have a birthday), a **Roleplay** or **Assistant** badge, and badges for **NPC**, **User-controlled**, **Carina** and **Archived** when any of those is so.
 - **Alias chips** and **group chips**. Group membership is arranged on the group's own page; each chip carries a **Manage ↗** link there.
-- **A line of figures** — memories, conversations, wardrobe items, photos, scenarios, knowledge, core files, character files — every one of them a link to the place it counts. Memories and conversations lead to **History**; wardrobe opens the Wardrobe; photos lead to **Appearance**; scenarios to **Prompts**; knowledge and core open the vault in the Scriptorium; character files lead to the **Vault** card on **Details**.
+- **A line of figures** — memories, conversations, wardrobe items, inventory objects (and how many of them are carried by default), archetypes and kits, photos, scenarios, knowledge, core files, character files — every one of them a link to the place it counts. Memories and conversations lead to **History**, opening the list in question; wardrobe opens the Wardrobe; the four inventory figures open the Inventory; photos lead to **Appearance**, with the album opened; scenarios to **Prompts**; knowledge and core open the vault in the Scriptorium; character files lead to the **Vault** card on **Details**.
 - **Start Chat** — the one primary button.
 - **Generate ▾** — the three errands that write *into* the character with an LLM: **AI Wizard…**, **Refine from memories & instructions…** (the [Character Optimizer](character-optimizer.md)), and **Non-Quilltap prompt…** (the [external prompt generator](character-external-prompt.md)).
 - **⋯** — the matters of life and estate: **Export…**, **Convert to NPC** (or **Convert to character**), **Archive…**, **Delete…**.
@@ -184,6 +184,10 @@ Timed spans the character carries — a gestation, a recharging weapon, a senten
 
 A read-only card, and the first door from the character's page into their vault. It names the vault (a link into the Scriptorium), counts what sits in its **Core**, **Knowledge**, **Scenarios**, **Subprompts** and **Mail** folders, and reports how many of the character's managed files are present — naming any that have gone missing. Nothing on this card writes; it is there so that you know where everything lives.
 
+### The Metadata Card
+
+Lists the keys you have filed in the character's `metadata.json` fact sheet, and offers **Edit metadata.json…**, which opens the sheet as JSON in a dialog of its own with a proper **Save** (the one kind of Save this page keeps — see [How Saving Works](#how-saving-works)). Whatever you write must be a JSON object; anything else is politely refused with the reason, and nothing is saved. The reserved `progressions` key is kept out of the editor altogether and carried across untouched when you save, so the Progressions card's work is never trampled. The button stays dim until the character has a vault.
+
 ### Living Properties from the Scriptorium
 
 Each character carries a private vault in the Scriptorium — a small database-backed document store seeded at creation with your character's identity, personality, wardrobe, and a small, tidy cluster of files that mirror the fields on the character's page. Those files are the character: the version you see in chats, on the roster, in image prompts, and in every other corner of the application comes straight from the vault, and every save from the page — or from an import, an API call, or the Optimizer — is written back into the matching file.
@@ -236,7 +240,7 @@ A few points of etiquette worth knowing:
 - **It is an ordinary vault file for all that.** A character with **system transparency** enabled may read — and edit — `metadata.json` through the `doc_*` tools, their own and their tablemates', exactly as with any other document in the vault. An opaque character cannot see it at all. No new permissions, no special cases.
 - **Its absence is not a fault.** Characters created before the fact sheet existed simply have no such file, and Quilltap reads that as an empty sheet rather than a broken vault. New characters are seeded with `{}`. Should the file ever fail to parse — a comma out of place at midnight — the sheet reads as empty for that reading and a warning goes to the log; the rest of your character is entirely undisturbed.
 - **Saving through the API replaces the whole object.** The file is one field's property, so a `metadata` write is the new sheet entire, not a merge into the old one. Editing the file by hand, of course, does exactly what you'd expect.
-- **The editing desk depends on the key.** Progressions have their own card on **Details**, described in [Progressions](character-progressions.md). Everything else is edited by opening the character's vault in the Scriptorium (the **Vault** card's link will take you there) and writing the JSON directly.
+- **The editing desk depends on the key.** Progressions have their own card on **Details**, described in [Progressions](character-progressions.md). Everything else is edited on the **Metadata** card, just below the Vault card on **Details** (see [The Metadata Card](#the-metadata-card)) — or, if you prefer, by opening the vault in the Scriptorium and writing the JSON directly.
 
 **What it is for.** The fact sheet exists so that [custom tools](custom-tools.md) may consult it: an outcome table can branch on `hasAnsibleAccess`, so the same lock opens for the character carrying the key and stays shut for everyone else. Anything else you file there is yours to use as you see fit.
 
@@ -337,11 +341,11 @@ Smaller, per-chat instructions kept on their own card. See [Subprompts](characte
 
 ### Photos
 
-The character's photo gallery: upload pictures, browse them, set one as the avatar, delete what you no longer want. See [Character Gallery](character-gallery.md).
+The character's photo gallery: upload pictures, browse them, set one as the avatar, delete what you no longer want. The **Photo Album** arrives folded shut, as do the **Avatar Rolls** and **Wardrobe Pictures** beneath it, each showing its count; click a heading to open it. The header's photo figure opens the album for you. See [Character Gallery](character-gallery.md).
 
 ### Physical Description
 
-Physical descriptions help the AI understand the character's appearance, keep it consistent across conversations, and give the image generators something accurate to paint from. There is no **Save** button on this card: each text field saves itself as the Dossier fields do, and **Humanoid** saves the moment you tick or untick it. **Clear** (behind a confirmation) removes the description entirely.
+A character has exactly one physical description — so it wants neither a name nor a note on when to wear it, and has neither. It helps the AI understand the character's appearance, keep it consistent across conversations, and give the image generators something accurate to paint from. There is no **Save** button on this card: each text field saves itself as the Dossier fields do, and **Humanoid** saves the moment you tick or untick it. **Clear** (behind a confirmation) removes the description entirely.
 
 **Humanoid, or Otherwise**
 
@@ -375,10 +379,6 @@ The setting lives in the vault's `physical-prompts.json` as `"humanoid": false`;
 **Complete Description** (2–3 paragraphs) — very detailed, for generating many variations.
 
 **Full Description** (extensive) — the complete freeform account, from which the shorter prompts above may be written.
-
-**Usage Context**
-
-An optional short note (up to 200 characters) describing when this appearance is most appropriate — "at work in a professional capacity", "relaxing at the pool", "attending a formal gala". In chat, it helps the AI decide how the character looks in the present scene; in image generation, it is passed to the prompt-crafting system to help it pick scene-appropriate details.
 
 ### Depiction Guidelines
 
@@ -416,6 +416,8 @@ The settings a new chat with the character begins with — exactly what the New 
 
 - **Conversations** — every chat the character has appeared in
 - **Memories** — the character's Commonplace Book, each memory opened and saved in its own dialog. See [Memory Maintenance](memory-maintenance.md)
+
+Conversations and Memories both arrive folded shut, their counts beside their headings; click a heading to open the list. Once open, each shows one page at a time — ten conversations, thirty memories — with **← Previous** and **Next →** at the foot and a note of where you stand, rather than growing ever longer as you scroll. A search or filter returns you to the first page.
 - **Bulk edits** — **Search & Replace** and **Rename / Replace**, side by side (below)
 - **LLM logs** — folded away at the foot of the page until you want them
 

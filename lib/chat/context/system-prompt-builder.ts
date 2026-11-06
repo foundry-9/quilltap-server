@@ -166,7 +166,7 @@ export interface BuildIdentityStackOptions {
  * versions one function's output for OUR compiled-stack cache; colocation
  * with the function is deliberate so whoever edits the strings sees it.
  */
-export const IDENTITY_STACK_BUILDER_VERSION = 2
+export const IDENTITY_STACK_BUILDER_VERSION = 3
 
 /**
  * Build just the static character-identity portion of the system prompt,
@@ -258,7 +258,6 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
   // and diffusion models take noun phrases, not "you have auburn hair".
   if (character.physicalDescription) {
     const desc = character.physicalDescription
-    const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
     const descText = pickPhysicalDescription(desc, 'self-image')
     // A non-humanoid character (`humanoid: false` in physical-prompts.json)
     // is told so, lest it narrate a shrug or a nod it has no body for. Only
@@ -267,7 +266,7 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
       ? ''
       : '\nYou have no humanoid body: no head, face, shoulders, hands or limbs. Never describe yourself as having or using one.'
     if (descText) {
-      parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}${formNote}`)
+      parts.push(`\n## Physical Appearance\nThis is how you look: ${descText}${formNote}`)
     } else if (formNote) {
       // Flag set before any prompt is written: the reminder still goes out.
       parts.push(`\n## Physical Appearance${formNote}`)

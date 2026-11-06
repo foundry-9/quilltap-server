@@ -13,7 +13,7 @@ import type { Character } from '@/app/aurora/[id]/types'
 const stored: Character = {
   id: 'c1',
   name: 'Ada',
-  physicalDescription: { id: 'pd1', name: 'Base', shortPrompt: 'tall', mediumPrompt: 'tall, dark', humanoid: false },
+  physicalDescription: { id: 'pd1', shortPrompt: 'tall', mediumPrompt: 'tall, dark', humanoid: false },
 }
 
 describe('buildCharacterPatch', () => {
@@ -29,16 +29,16 @@ describe('buildCharacterPatch', () => {
     const { body } = buildCharacterPatch({ 'physicalDescription.shortPrompt': 'very tall' }, stored)
     expect(body.physicalDescription).toMatchObject({
       id: 'pd1',
-      name: 'Base',
       shortPrompt: 'very tall',
       mediumPrompt: 'tall, dark',
       humanoid: false,
     })
   })
 
-  it('names a new physical description when its name is blank', () => {
+  it('builds a new physical description with no name or usage context', () => {
     const pd = mergePhysicalDescription(null, { longPrompt: 'x' })
-    expect(pd.name).toBe('Base Appearance')
+    expect(pd).not.toHaveProperty('name')
+    expect(pd).not.toHaveProperty('usageContext')
     expect(pd.humanoid).toBe(true)
     expect(pd.longPrompt).toBe('x')
     expect(pd.shortPrompt).toBeNull()

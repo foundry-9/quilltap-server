@@ -241,8 +241,6 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
       ? { ...base }
       : {
           id: stableUuidFromString(`physical:${mountId}`),
-          name: 'default',
-          usageContext: null,
           headAndShouldersPrompt: null,
           shortPrompt: null,
           mediumPrompt: null,

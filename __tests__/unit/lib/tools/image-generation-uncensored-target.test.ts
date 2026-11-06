@@ -32,7 +32,7 @@ jest.mock('@/lib/image-gen/appearance-resolution', () => ({
   resolveCharacterAppearances: jest.fn(async () => ({
     appearances: [{
       characterId: 'char-1', characterName: 'Amy', physicalDescription: 'a young woman',
-      physicalDescriptionName: 'Default', clothingDescription: 'nothing at all',
+      clothingDescription: 'nothing at all',
       clothingSource: 'narrative', wasSanitized: false,
     }],
     llmResolved: true,

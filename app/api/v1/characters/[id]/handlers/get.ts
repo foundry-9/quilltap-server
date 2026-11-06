@@ -24,6 +24,7 @@ import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/ae
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
 import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 import { deriveScriptoriumStatus } from '@/lib/scriptorium/status';
+import { resolveInventoryLocation } from '@/lib/inventory/location';
 
 
 export async function handleGet(
@@ -292,13 +293,35 @@ export async function handleGet(
         // Fan out the independent counts. The vault file links are fetched once
         // and reused for photos, knowledge, and core so we don't re-query the
         // mount-index three times for the same mount point.
-        const [memoryCount, chats, wardrobeItems, fileLinks, memberships] = await Promise.all([
+        const [memoryCount, chats, wardrobeItems, fileLinks, memberships, inventoryLocation] = await Promise.all([
           repos.memories.countByCharacterId(id),
           repos.chats.findByCharacterId(id),
           repos.wardrobe.findByCharacterId(id),
           mountPointId ? repos.docMountFileLinks.findByMountPointId(mountPointId) : Promise.resolve([]),
           repos.groupCharacterMembers.findByCharacterId(id),
+          // Read probe only — never `ensure`, so the stats never provision a folder.
+          resolveInventoryLocation('character', id, repos, user.id),
         ]);
+
+        // The character's own Inventory shelf (live objects only), split the
+        // way the header shows it: archetypes (classes, never carried), kits,
+        // and plain objects; "carried" is what arrives in a chat with them —
+        // `equippedByDefault` on a non-archetype, kits included, exactly as
+        // `applyInventoryDefaults` selects it.
+        const inventoryRecords = inventoryLocation ? await inventoryLocation.readItems(false) : [];
+        let inventoryArchetypes = 0;
+        let inventoryKits = 0;
+        let inventoryObjects = 0;
+        let inventoryCarried = 0;
+        for (const record of inventoryRecords) {
+          if (record.isArchetype) {
+            inventoryArchetypes++;
+            continue;
+          }
+          if (record.kind === 'kit') inventoryKits++;
+          else inventoryObjects++;
+          if (record.equippedByDefault) inventoryCarried++;
+        }
 
         // Photos counts through `isCharacterAlbumRelativePath`, the same
         // predicate `listCharacterGallery` filters on, so this figure and the
@@ -360,6 +383,12 @@ export async function handleGet(
           memories: memoryCount,
           conversations: chats.length,
           wardrobeItems: wardrobeItems.length,
+          inventory: {
+            objects: inventoryObjects,
+            archetypes: inventoryArchetypes,
+            kits: inventoryKits,
+            carriedByDefault: inventoryCarried,
+          },
           photos,
           scenarios: character.scenarios?.length ?? 0,
           knowledge,
@@ -377,6 +406,7 @@ export async function handleGet(
           characterFiles,
           missing: stats.missingCharacterFiles.length,
           hasVault: Boolean(vault),
+          inventory: stats.inventory,
         });
 
         return NextResponse.json({ stats, groups, vault });

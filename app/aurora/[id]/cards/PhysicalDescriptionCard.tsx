@@ -1,14 +1,15 @@
 'use client'
 
 /**
- * The physical description: one record per character — a name and usage
- * context, the Humanoid flag, the head-and-shoulders avatar prompt, the four
- * prompt variants and a full freeform description. Stored in the vault as
+ * The physical description: one record per character — the Humanoid flag,
+ * the head-and-shoulders avatar prompt, the four prompt variants and a full
+ * freeform description. (It once had a name and usage context, from when a
+ * character could have several; both were retired with the list.) Stored in the vault as
  * `physical-description.md` + `physical-prompts.json`.
  *
  * Every text field autosaves like the Dossier (keys
  * `physicalDescription.<field>`; the record is sent whole, merged over the
- * stored one, because its schema requires a name). Humanoid saves on change —
+ * stored one, because the write replaces the vault's two files together). Humanoid saves on change —
  * it is the one flag here that recompiles the character's seats server-side.
  * *Clear* is the one explicit action: it removes the record, behind a confirm.
  *
@@ -26,11 +27,7 @@ import { showSuccessToast } from '@/lib/toast'
 import { SectionCard } from '../components/SectionCard'
 import { useMarkdownBinding, useTextBinding } from '../components/autosave-bindings'
 import { useCharacterPage } from '../CharacterPageContext'
-import {
-  DEFAULT_PHYSICAL_DESCRIPTION_NAME,
-  PHYSICAL_KEY_PREFIX,
-  mergePhysicalDescription,
-} from '../hooks/useCharacterAutosave'
+import { PHYSICAL_KEY_PREFIX, mergePhysicalDescription } from '../hooks/useCharacterAutosave'
 import type { CharacterResponse } from '../hooks/useCharacter'
 
 interface PromptVariant {
@@ -107,8 +104,6 @@ export function PhysicalDescriptionCard() {
   const fieldId = useId()
   const pd = character.physicalDescription ?? null
   const humanoid = pd?.humanoid !== false
-  const name = useTextBinding(autosave.engine, `${PHYSICAL_KEY_PREFIX}name`, pd?.name)
-  const usage = useTextBinding(autosave.engine, `${PHYSICAL_KEY_PREFIX}usageContext`, pd?.usageContext)
   const [confirmClear, setConfirmClear] = useState(false)
 
   const setHumanoid = async (next: boolean) => {
@@ -169,43 +164,6 @@ export function PhysicalDescriptionCard() {
         ) : undefined
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor={`${fieldId}-name`} className="qt-label mb-1 block">
-            Name
-          </label>
-          <input
-            id={`${fieldId}-name`}
-            type="text"
-            value={name.value}
-            disabled={readOnly}
-            onChange={(e) => name.onChange(e.target.value)}
-            onBlur={() => name.onCommit?.()}
-            placeholder={DEFAULT_PHYSICAL_DESCRIPTION_NAME}
-            className={`qt-input ${name.failed ? 'qt-border-destructive' : ''}`}
-          />
-        </div>
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label htmlFor={`${fieldId}-usage`} className="qt-label">
-              Usage context
-            </label>
-            <span className={`text-xs ${charCountClass(usage.value.length, 200)}`}>{usage.value.length}/200</span>
-          </div>
-          <input
-            id={`${fieldId}-usage`}
-            type="text"
-            maxLength={200}
-            value={usage.value}
-            disabled={readOnly}
-            onChange={(e) => usage.onChange(e.target.value)}
-            onBlur={() => usage.onCommit?.()}
-            placeholder="e.g., at work in a professional capacity, relaxing at the pool"
-            className={`qt-input ${usage.failed ? 'qt-border-destructive' : ''}`}
-          />
-        </div>
-      </div>
-
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <label htmlFor={`${fieldId}-humanoid`} className="block qt-text-label">

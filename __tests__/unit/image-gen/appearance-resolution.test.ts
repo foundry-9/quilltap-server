@@ -92,8 +92,6 @@ const sampleCharacter1: AppearanceResolutionInput = {
   characterName: 'Alice',
   physicalDescription: {
     id: 'desc-1',
-    name: 'Default',
-    usageContext: 'General appearance',
     shortPrompt: 'A woman with red hair',
     mediumPrompt: 'A young woman with flowing red hair and green eyes',
     longPrompt: 'A young woman with long flowing red hair, vibrant green eyes, and fair skin',
@@ -112,8 +110,6 @@ const sampleCharacter2: AppearanceResolutionInput = {
   characterName: 'Bob',
   physicalDescription: {
     id: 'desc-2a',
-    name: 'Work appearance',
-    usageContext: 'Office settings',
     shortPrompt: 'A man in a suit',
     mediumPrompt: 'A middle-aged man with gray hair in a formal suit',
     longPrompt: 'A middle-aged man with short gray hair, wearing glasses and a formal navy suit',
@@ -165,7 +161,6 @@ describe('Appearance Resolution Module', () => {
           characterId: 'char-1',
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
-          physicalDescriptionName: 'Default',
           clothingDescription: '- **top:** Casual Outfit\n- **bottom:** bottomless\n- **footwear:** barefoot\n- **accessories:** no accessories\n',
           clothingSource: 'stored',
           wasSanitized: false,
@@ -185,7 +180,6 @@ describe('Appearance Resolution Module', () => {
           result: [
             {
               characterId: 'char-2',
-              selectedDescriptionId: null,
               clothingDescription: 'Comfortable weekend clothes',
               clothingSource: 'stored',
             },
@@ -214,7 +208,6 @@ describe('Appearance Resolution Module', () => {
           result: [
             {
               characterId: 'char-1',
-              selectedDescriptionId: null,
               clothingDescription: 'Blue jeans and white t-shirt',
               clothingSource: 'stored',
             },
@@ -236,19 +229,16 @@ describe('Appearance Resolution Module', () => {
     })
 
     describe('LLM resolution', () => {
-      // Note: post-cutover each character has at most one physicalDescription,
-      // so the LLM's `selectedDescriptionId` is informational only — the mapper
-      // always uses the character's singular description. Tests that previously
-      // asserted selection between desc-2a vs desc-2b were dropped; the
-      // remaining tests cover clothing-source mapping and the singular-desc
-      // mapping behavior.
+      // Each character has exactly one physicalDescription, so the resolver
+      // decides clothing only (its old `selectedDescriptionId` was retired with
+      // the description's name and usage context). These cover clothing-source
+      // mapping and the singular-description mapping.
       it('should call mockResolveAppearance and map results correctly', async () => {
         const characters: AppearanceResolutionInput[] = [sampleCharacter2]
 
         const llmResult: AppearanceResolutionItem[] = [
           {
             characterId: 'char-2',
-            selectedDescriptionId: null,
             clothingDescription: 'Comfortable jeans and plaid shirt',
             clothingSource: 'stored',
           },
@@ -290,7 +280,6 @@ describe('Appearance Resolution Module', () => {
           // Singular physicalDescription — always the character's own.
           physicalDescription:
             'A middle-aged professional man with short gray hair, rectangular glasses, wearing a formal navy suit with a red tie',
-          physicalDescriptionName: 'Work appearance',
           clothingDescription: 'Comfortable jeans and plaid shirt',
           clothingSource: 'stored',
           wasSanitized: false,
@@ -303,7 +292,6 @@ describe('Appearance Resolution Module', () => {
         const llmResult: AppearanceResolutionItem[] = [
           {
             characterId: 'char-1',
-            selectedDescriptionId: null,
             clothingDescription: 'A flowing summer dress mentioned in conversation',
             clothingSource: 'narrative', // From chat context
           },
@@ -353,7 +341,6 @@ describe('Appearance Resolution Module', () => {
           characterId: 'char-1',
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
-          physicalDescriptionName: 'Default',
           clothingDescription: '- **top:** Casual Outfit\n- **bottom:** bottomless\n- **footwear:** barefoot\n- **accessories:** no accessories\n',
           clothingSource: 'stored',
           wasSanitized: false,
@@ -379,7 +366,6 @@ describe('Appearance Resolution Module', () => {
 
         expect(result.llmResolved).toBe(false)
         expect(result.appearances).toHaveLength(1)
-        expect(result.appearances[0].physicalDescriptionName).toBe('Default')
       })
 
       it('should return defaults with llmResolved=false when mockResolveAppearance result is undefined', async () => {
@@ -401,7 +387,6 @@ describe('Appearance Resolution Module', () => {
 
         expect(result.llmResolved).toBe(false)
         expect(result.appearances).toHaveLength(1)
-        expect(result.appearances[0].physicalDescriptionName).toBe('Default')
       })
     })
 
@@ -441,7 +426,6 @@ describe('Appearance Resolution Module', () => {
         )
 
         expect(result.appearances[0].physicalDescription).toBe('Charlie')
-        expect(result.appearances[0].physicalDescriptionName).toBe('default')
         expect(result.appearances[0].clothingDescription).toBe('')
       })
     })
@@ -467,8 +451,6 @@ describe('Appearance Resolution Module', () => {
           characterName: 'Diana',
           physicalDescription: {
             id: 'desc-4',
-            name: 'Default',
-            usageContext: null,
             shortPrompt: 'A person',
             mediumPrompt: null,
             longPrompt: null,
@@ -499,7 +481,6 @@ describe('Appearance Resolution Module', () => {
         characterId: 'char-1',
         characterName: 'Alice',
         physicalDescription: 'A young woman with red hair',
-        physicalDescriptionName: 'Default',
         clothingDescription: 'Blue jeans and t-shirt',
         clothingSource: 'stored',
         wasSanitized: false,
@@ -820,7 +801,6 @@ describe('Appearance Resolution Module', () => {
             characterId: 'char-1',
             characterName: 'Alice',
             physicalDescription: 'Safe description',
-            physicalDescriptionName: 'Default',
             clothingDescription: 'Safe clothes',
             clothingSource: 'stored',
             wasSanitized: false,
@@ -829,7 +809,6 @@ describe('Appearance Resolution Module', () => {
             characterId: 'char-2',
             characterName: 'Bob',
             physicalDescription: 'Another safe description',
-            physicalDescriptionName: 'Default',
             clothingDescription: 'Safe outfit',
             clothingSource: 'stored',
             wasSanitized: false,
@@ -951,8 +930,6 @@ describe('Appearance Resolution Module', () => {
           descriptions: [
             {
               id: 'desc-1',
-              name: 'Default',
-              usageContext: 'General',
               shortPrompt: 'A woman',
               mediumPrompt: 'A woman with red hair',
               longPrompt: 'A woman with long red hair and green eyes',
@@ -974,7 +951,6 @@ describe('Appearance Resolution Module', () => {
           characterId: 'char-1',
           characterName: 'Alice',
           physicalDescription: 'A woman with red hair wearing a summer dress',
-          physicalDescriptionName: 'Context-resolved',
           clothingDescription: 'A flowing yellow summer dress',
           clothingSource: 'narrative',
           wasSanitized: false,
@@ -992,7 +968,6 @@ describe('Appearance Resolution Module', () => {
       expect(context.placeholders[0]).toEqual({
         placeholder: '{{Alice}}',
         name: 'Alice',
-        usageContext: 'Context-resolved',
         tiers: {
           complete: 'A woman with red hair wearing a summer dress',
         },
@@ -1023,7 +998,6 @@ describe('Appearance Resolution Module', () => {
           characterId: 'char-2',
           characterName: 'Bob',
           physicalDescription: 'A man with gray hair',
-          physicalDescriptionName: 'Default',
           clothingDescription: 'Navy suit and red tie',
           clothingSource: 'stored',
           wasSanitized: false,
@@ -1063,7 +1037,6 @@ describe('Appearance Resolution Module', () => {
           characterId: 'char-1',
           characterName: 'Alice',
           physicalDescription: 'A woman',
-          physicalDescriptionName: 'Default',
           clothingDescription: '', // Empty
           clothingSource: 'default',
           wasSanitized: false,
@@ -1090,8 +1063,6 @@ describe('Appearance Resolution Module', () => {
           descriptions: [
             {
               id: 'desc-1',
-              name: 'Default',
-              usageContext: 'General',
               shortPrompt: 'A woman',
               mediumPrompt: 'A woman with red hair',
               longPrompt: 'A woman with long red hair',
@@ -1139,8 +1110,6 @@ describe('Appearance Resolution Module', () => {
           descriptions: [
             {
               id: 'desc-1',
-              name: 'Default',
-              usageContext: null,
               shortPrompt: 'A woman',
               mediumPrompt: null,
               longPrompt: null,

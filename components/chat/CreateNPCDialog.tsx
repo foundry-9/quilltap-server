@@ -204,7 +204,6 @@ export default function CreateNPCDialog({
       if (physicalDescription.trim()) {
         characterData.physicalDescription = {
           id: crypto.randomUUID(),
-          name: 'Default',
           fullDescription: physicalDescription.trim(),
           createdAt: now,
           updatedAt: now,

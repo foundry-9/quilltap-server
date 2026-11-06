@@ -1008,13 +1008,12 @@ When generating images involving characters (via `{{CharacterName}}` placeholder
 1. **Placeholder Detection**: When an image prompt contains `{{CharacterName}}` placeholders, the system loads all physical descriptions and clothing records for each character.
 
 2. **Appearance Resolution** (`resolveCharacterAppearances()`): A cheap LLM call analyzes recent chat messages and the image prompt to determine:
-   - Which physical description best matches the current scene (by usageContext)
-   - What the character is currently wearing
+   - What the character is currently wearing (each character has exactly one physical description, shown as reference; there is nothing to choose between)
 
 3. **Clothing Priority** (highest to lowest):
    - **Narrative**: If the conversation explicitly describes what a character changed into, that takes priority
    - **Image prompt**: If the image prompt specifies clothing, that is used
-   - **Stored record**: The best-matching clothing record by usageContext
+   - **Stored record**: The character's equipped wardrobe items, summarised
    - **Default**: The first stored clothing record, or empty if none exist
 
 4. **Concierge Sanitization** (`sanitizeAppearancesIfNeeded()`): Resolved appearances are classified for safety. If dangerous and no uncensored image provider is available, a cheap LLM rewrites the appearance descriptions to be safe for standard providers.

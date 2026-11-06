@@ -23,8 +23,6 @@ const userId = '11111111-1111-1111-1111-111111111111'
 
 const mockDescription = {
   id: 'desc-1',
-  name: 'Mirel',
-  usageContext: 'adventuring in the wilderness',
   shortPrompt: 'short desc',
   mediumPrompt: 'medium desc',
   longPrompt: 'long desc',
@@ -185,8 +183,6 @@ describe('image prompt expansion utilities', () => {
       medium: 'medium desc',
       long: 'long desc',
       complete: 'complete desc',
-      entityName: 'Mirel',
-      usageContext: 'adventuring in the wilderness',
     })
   })
 

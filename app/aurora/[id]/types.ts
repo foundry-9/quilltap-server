@@ -51,8 +51,6 @@ export type { CharacterScenario }
 
 export interface CharacterPhysicalDescription {
   id: string
-  name?: string | null
-  usageContext?: string | null
   headAndShouldersPrompt?: string | null
   shortPrompt?: string | null
   mediumPrompt?: string | null
@@ -105,6 +103,8 @@ export interface Character {
   pronouns?: { subject: string; object: string; possessive: string } | null
   birthday?: string | null
   characterDocumentMountPointId?: string | null
+  /** The vault `metadata.json` fact sheet (freeform keys plus the reserved `progressions`). */
+  metadata?: unknown
   /** Set when the character is archived (tombstone with a pruned vault). */
   archivedAt?: string | null
   archiveFileId?: string | null
@@ -127,6 +127,17 @@ export interface CharacterStats {
   memories: number
   conversations: number
   wardrobeItems: number
+  /** The character's own Inventory shelf, live objects only. */
+  inventory?: {
+    /** Non-archetype single objects. */
+    objects: number
+    /** Archetypes: classes of object, never carried. */
+    archetypes: number
+    /** Kits: lists of objects equipped as one. */
+    kits: number
+    /** Objects and kits flagged `equippedByDefault`. */
+    carriedByDefault: number
+  }
   photos: number
   scenarios: number
   knowledge: number

@@ -26,7 +26,6 @@ export async function saveGeneratedPhysicalDescription(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         physicalDescription: {
-          name: pd.name,
           headAndShouldersPrompt: pd.headAndShouldersPrompt,
           shortPrompt: pd.shortPrompt,
           mediumPrompt: pd.mediumPrompt,

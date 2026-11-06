@@ -47,7 +47,7 @@ describe('non-humanoid characters in scene prompts', () => {
     const resolved = buildExpansionContext('Paint {{Orrery}}', [{
       placeholder: '{{Orrery}}', name: 'Orrery', type: 'character', entityId: 'c-o', pronouns: HE, descriptions: [],
     } as never], 'OPENAI', [{
-      characterId: 'c-o', characterName: 'Orrery', physicalDescription: 'spheres', physicalDescriptionName: 'default',
+      characterId: 'c-o', characterName: 'Orrery', physicalDescription: 'spheres',
       clothingDescription: '', clothingSource: 'default', wasSanitized: false, humanoid: false,
     }])
     expect(resolved.placeholders[0]).toEqual(expect.objectContaining({ nonHumanoid: true, gender: undefined }))

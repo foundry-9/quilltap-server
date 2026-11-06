@@ -244,8 +244,6 @@ export function getAllDescriptionTiers(
   medium?: string;
   long?: string;
   complete?: string;
-  entityName?: string;
-  usageContext?: string;
 } | null {
   if (!descriptions || descriptions.length === 0) {
     return null;
@@ -259,8 +257,6 @@ export function getAllDescriptionTiers(
     medium: primary.mediumPrompt || undefined,
     long: primary.longPrompt || undefined,
     complete: primary.completePrompt || undefined,
-    entityName: primary.name,
-    usageContext: primary.usageContext || undefined,
   };
 }
 
@@ -285,7 +281,6 @@ export function buildExpansionContext(
     name: string;
     gender?: string;
     nonHumanoid?: boolean;
-    usageContext?: string;
     tiers: {
       short?: string;
       medium?: string;
@@ -327,7 +322,6 @@ export function buildExpansionContext(
         name: placeholder.name,
         gender,
         ...(nonHumanoid ? { nonHumanoid } : {}),
-        usageContext: resolved.physicalDescriptionName,
         tiers: {
           // Put the resolved description in the 'complete' tier so the
           // prompt crafter uses it directly
@@ -359,7 +353,6 @@ export function buildExpansionContext(
       name: placeholder.name,
       gender,
       ...(nonHumanoid ? { nonHumanoid } : {}),
-      usageContext: tiers?.usageContext,
       tiers: {
         short: tiers?.short,
         medium: tiers?.medium,

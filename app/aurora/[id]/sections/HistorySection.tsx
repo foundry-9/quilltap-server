@@ -1,9 +1,10 @@
 'use client'
 
 /**
- * History — *What has happened to them?* Conversations, memories, the two bulk
- * tools that rewrite history (side by side, each behind its own preview), and
- * the LLM logs, collapsed at the foot.
+ * History — *What has happened to them?* Conversations and memories (each
+ * collapsed until opened, and paged rather than infinitely scrolled), the two
+ * bulk tools that rewrite history (side by side, each behind its own preview),
+ * and the LLM logs, collapsed at the foot.
  *
  * @module app/aurora/[id]/sections/HistorySection
  */
@@ -23,7 +24,7 @@ import { SectionCard } from '../components/SectionCard'
 import { useCharacterPage } from '../CharacterPageContext'
 
 export function HistorySection() {
-  const { characterId, character, readOnly, reload } = useCharacterPage()
+  const { characterId, character, readOnly, reload, stats } = useCharacterPage()
   const queryClient = useQueryClient()
   const [refreshKey, setRefreshKey] = useState(0)
   const [showSearchReplace, setShowSearchReplace] = useState(false)
@@ -36,11 +37,21 @@ export function HistorySection() {
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Conversations" anchor="conversations">
+      <SectionCard
+        title="Conversations"
+        anchor="conversations"
+        collapsible
+        summary={stats ? `${stats.conversations} ${stats.conversations === 1 ? 'conversation' : 'conversations'}` : undefined}
+      >
         <CharacterConversationsTab characterId={characterId} characterName={character.name} refreshKey={refreshKey} />
       </SectionCard>
 
-      <SectionCard title="Memories" anchor="memories">
+      <SectionCard
+        title="Memories"
+        anchor="memories"
+        collapsible
+        summary={stats ? `${stats.memories} ${stats.memories === 1 ? 'memory' : 'memories'}` : undefined}
+      >
         <MemoryList characterId={characterId} refreshKey={refreshKey} />
       </SectionCard>
 

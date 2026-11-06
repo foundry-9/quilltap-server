@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
+import { ListPager } from '@/components/ui/ListPager'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ChatCard } from '@/components/chat/ChatCard'
 import { showConfirmation } from '@/lib/alert'
@@ -53,20 +54,17 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     })),
     [chats, shouldHideChat]
   )
-  const [loadingMore, setLoadingMore] = useState(false)
+  // A page change keeps the current page on screen (dimmed) while the next loads.
+  const [loadingPage, setLoadingPage] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [hasMore, setHasMore] = useState(true)
+  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const loadMoreRef = useRef<HTMLDivElement | null>(null)
 
-  const fetchChats = useCallback(async (pageNum: number, search: string, append: boolean = false) => {
-    if (pageNum === 0) {
-      setIsLoading(true)
-    } else {
-      setLoadingMore(true)
-    }
+  // One page at a time, replacing what is shown — paged, not an infinite
+  // scroller that keeps growing as the bottom comes into view.
+  const fetchChats = useCallback(async (pageNum: number, search: string) => {
+    setLoadingPage(true)
 
     try {
       const url = new URL(`/api/v1/characters/${characterId}`, window.location.origin)
@@ -83,56 +81,28 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
       const data = await res.json()
       const newChats = data.chats || data || []
 
-      if (append) {
-        setChats(prev => [...prev, ...newChats])
-      } else {
-        setChats(newChats)
-      }
-
-      setHasMore(newChats.length === CHATS_PER_PAGE)
+      setChats(newChats)
+      setTotal(typeof data.total === 'number' ? data.total : newChats.length)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversations')
     } finally {
       setIsLoading(false)
-      setLoadingMore(false)
+      setLoadingPage(false)
     }
   }, [characterId])
 
-  // Initial load and refresh when refreshKey changes
+  // Back to the first page whenever the search or the refresh key changes.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- page resets to 0 whenever the paginated query key changes
     setPage(0)
-    fetchChats(0, searchQuery, false)
+    fetchChats(0, searchQuery)
   }, [fetchChats, searchQuery, refreshKey])
 
-  // Set up infinite scroll observer
-  useEffect(() => {
-    if (observerRef.current) {
-      observerRef.current.disconnect()
-    }
-
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading && !loadingMore) {
-          const nextPage = page + 1
-          setPage(nextPage)
-          fetchChats(nextPage, searchQuery, true)
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    if (loadMoreRef.current) {
-      observerRef.current.observe(loadMoreRef.current)
-    }
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-      }
-    }
-  }, [hasMore, isLoading, loadingMore, page, searchQuery, fetchChats])
+  const goToPage = useCallback((next: number) => {
+    setPage(next)
+    void fetchChats(next, searchQuery)
+  }, [fetchChats, searchQuery])
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
@@ -142,6 +112,10 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   const deleteChat = async (chatId: string) => {
     if (await confirmAndDeleteChat(chatId)) {
       setChats(chats.filter(c => c.id !== chatId))
+      // Re-read the page so the next conversation slides up into the gap;
+      // step back a page when this emptied the last one.
+      const lastPage = Math.max(0, Math.ceil((total - 1) / CHATS_PER_PAGE) - 1)
+      goToPage(Math.min(page, lastPage))
     }
   }
 
@@ -190,8 +164,8 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   >(null)
 
   const refreshScriptoriumStatus = useCallback(async () => {
-    await fetchChats(0, searchQuery, false)
-  }, [fetchChats, searchQuery])
+    await fetchChats(page, searchQuery)
+  }, [fetchChats, searchQuery, page])
 
   // A single-chat watch is satisfied the moment its chat reads `embedded`.
   // Derived rather than stored: the answer is already on screen in `chats`, and
@@ -237,8 +211,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
         showSuccessToast('Conversation rendering queued')
         notifyQueueChange()
         // Refresh immediately
-        setPage(0)
-        fetchChats(0, searchQuery, false)
+        fetchChats(page, searchQuery)
 
         // Watch this chat's status until it reaches 'embedded'.
         setScriptoriumWatch({
@@ -295,7 +268,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
       <div className="text-center py-12">
         <p className="qt-text-destructive">{error}</p>
         <button
-          onClick={() => fetchChats(0, searchQuery, false)}
+          onClick={() => fetchChats(page, searchQuery)}
           className="mt-4 text-primary hover:underline"
         >
           Try again
@@ -357,7 +330,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           )}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className={`space-y-4 transition-opacity ${loadingPage ? 'opacity-60' : ''}`} aria-busy={loadingPage}>
           {visibleChats.map((chat) => (
             <ChatCard
               key={chat.id}
@@ -374,20 +347,14 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
             />
           ))}
 
-          {/* Load more trigger */}
-          <div ref={loadMoreRef} className="py-4">
-            {loadingMore && (
-              <div className="flex items-center justify-center gap-2 qt-text-secondary">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
-                Loading more...
-              </div>
-            )}
-            {!hasMore && visibleChats.length > 0 && (
-              <p className="text-center qt-text-small">
-                No more conversations
-              </p>
-            )}
-          </div>
+          <ListPager
+            page={page}
+            total={total}
+            pageSize={CHATS_PER_PAGE}
+            onPageChange={goToPage}
+            disabled={loadingPage}
+            noun="conversations"
+          />
         </div>
       )}
     </div>

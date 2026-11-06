@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { Icon } from '@/components/ui/icon'
+import { useAnchorReveal } from '@/hooks/useAnchorReveal'
 import ImageDetailModal from '../ImageDetailModal'
 import { GalleryControls } from './GalleryControls'
 import { GalleryEmpty } from './GalleryEmpty'
@@ -19,8 +21,13 @@ export function EmbeddedPhotoGallery({
   entityName,
   currentAvatarId,
   onAvatarChange,
-  onRefresh
+  onRefresh,
+  revealAnchor,
 }: EmbeddedPhotoGalleryProps) {
+  // The album starts collapsed, like the avatar rolls and wardrobe pictures
+  // beneath it; a stat link to the gallery's anchor opens it.
+  const [albumExpanded, setAlbumExpanded] = useState(false)
+  useAnchorReveal(revealAnchor, () => setAlbumExpanded(true))
   const [thumbnailSizeIndex, setThumbnailSizeIndex] = useState(DEFAULT_THUMBNAIL_INDEX)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [settingAvatar, setSettingAvatar] = useState<string | null>(null)
@@ -135,45 +142,65 @@ export function EmbeddedPhotoGallery({
 
   return (
     <div>
-      <GalleryControls
-        totalCount={images.length}
-        onUploadClick={handleUploadButtonClick}
-        onClearAvatarClick={handleClearAvatarClick}
-        thumbnailSize={thumbnailSize}
-        thumbnailSizeIndex={thumbnailSizeIndex}
-        maxThumbnailIndex={THUMBNAIL_SIZES.length - 1}
-        onZoomOut={() => setThumbnailSizeIndex(Math.max(0, thumbnailSizeIndex - 1))}
-        onZoomIn={() => setThumbnailSizeIndex(Math.min(THUMBNAIL_SIZES.length - 1, thumbnailSizeIndex + 1))}
-        hasAvatarSet={!!(onAvatarChange && currentAvatarId)}
-      />
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileSelected}
-        disabled={uploading}
-        className="hidden"
-      />
-
-      {images.length === 0 ? (
-        <GalleryEmpty showOnlyTagged={false} entityName={entityName} />
-      ) : (
-        <GalleryGrid
-          images={images}
-          thumbnailSize={thumbnailSize}
-          currentAvatarId={currentAvatarId}
-          missingImages={missingImages}
-          settingAvatar={settingAvatar}
-          deletingImage={deletingImage}
-          confirmDelete={confirmDelete}
-          onImageClick={(index) => setSelectedIndex(index)}
-          onImageError={handleImageError}
-          onSetAvatar={handleSetAvatarClick}
-          onDownloadImage={handleDownloadImageClick}
-          onDeleteImage={handleDeleteImageClick}
-          entityName={entityName}
+      <button
+        type="button"
+        onClick={() => setAlbumExpanded(prev => !prev)}
+        className="flex w-full items-center gap-2 text-left"
+        aria-expanded={albumExpanded}
+      >
+        <Icon
+          name={albumExpanded ? 'chevron-down' : 'chevron-right'}
+          className="w-4 h-4 qt-text-secondary"
         />
+        <span className="qt-text-label">Photo Album</span>
+        <span className="qt-text-label-xs">
+          {`${images.length} photo${images.length === 1 ? '' : 's'}`}
+        </span>
+      </button>
+
+      {albumExpanded && (
+        <div className="mt-4">
+          <GalleryControls
+            totalCount={images.length}
+            onUploadClick={handleUploadButtonClick}
+            onClearAvatarClick={handleClearAvatarClick}
+            thumbnailSize={thumbnailSize}
+            thumbnailSizeIndex={thumbnailSizeIndex}
+            maxThumbnailIndex={THUMBNAIL_SIZES.length - 1}
+            onZoomOut={() => setThumbnailSizeIndex(Math.max(0, thumbnailSizeIndex - 1))}
+            onZoomIn={() => setThumbnailSizeIndex(Math.min(THUMBNAIL_SIZES.length - 1, thumbnailSizeIndex + 1))}
+            hasAvatarSet={!!(onAvatarChange && currentAvatarId)}
+          />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelected}
+            disabled={uploading}
+            className="hidden"
+          />
+
+          {images.length === 0 ? (
+            <GalleryEmpty showOnlyTagged={false} entityName={entityName} />
+          ) : (
+            <GalleryGrid
+              images={images}
+              thumbnailSize={thumbnailSize}
+              currentAvatarId={currentAvatarId}
+              missingImages={missingImages}
+              settingAvatar={settingAvatar}
+              deletingImage={deletingImage}
+              confirmDelete={confirmDelete}
+              onImageClick={(index) => setSelectedIndex(index)}
+              onImageError={handleImageError}
+              onSetAvatar={handleSetAvatarClick}
+              onDownloadImage={handleDownloadImageClick}
+              onDeleteImage={handleDeleteImageClick}
+              entityName={entityName}
+            />
+          )}
+        </div>
       )}
 
       <AvatarRollsSection

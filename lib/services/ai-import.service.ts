@@ -537,7 +537,6 @@ export function assembleQtapExport(
     physicalDescription: stepResults.physical_descriptions
       ? {
           id: crypto.randomUUID(),
-          name: 'AI Generated',
           headAndShouldersPrompt: (stepResults.physical_descriptions.headAndShouldersPrompt || '').substring(0, 500),
           shortPrompt: (stepResults.physical_descriptions.shortPrompt || '').substring(0, 350),
           mediumPrompt: (stepResults.physical_descriptions.mediumPrompt || '').substring(0, 500),
@@ -756,10 +755,6 @@ export function restampStructuralFields(data: QuilltapExport['data'], now: strin
       if (physicalDescription && typeof physicalDescription === 'object') {
         const pd = physicalDescription as Record<string, unknown>;
         ensureEntryScaffolding(pd);
-        if (typeof pd.name !== 'string' || !pd.name.trim()) {
-          pd.name = 'AI Generated';
-          fixes++;
-        }
       }
 
       const wardrobeItems = character.wardrobeItems;

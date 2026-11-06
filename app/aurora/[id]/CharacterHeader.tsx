@@ -17,7 +17,7 @@
  * @module app/aurora/[id]/CharacterHeader
  */
 
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
@@ -38,6 +38,7 @@ export interface CharacterHeaderProps {
   onUploadAvatar: () => void
   onGeneratePortrait: () => void
   onOpenWardrobe: () => void
+  onOpenInventory: () => void
   onAIWizard: () => void
   onOptimize: () => void
   onExternalPrompt: () => void
@@ -78,6 +79,34 @@ function Badge({ children, title }: { children: ReactNode; title?: string }) {
   )
 }
 
+/** Smallest and largest the header avatar may be, in px. */
+const AVATAR_MIN_PX = 96
+const AVATAR_MAX_PX = 240
+
+/**
+ * The avatar's edge: the height of the text column beside it, clamped. A
+ * square sized by percentage height cannot feed its width back into the flex
+ * row (the percentage resolves after the row has measured its items), so the
+ * column is measured instead and the avatar follows it as it grows or wraps.
+ */
+function useAvatarEdge() {
+  const columnRef = useRef<HTMLDivElement>(null)
+  const [edge, setEdge] = useState(AVATAR_MIN_PX)
+  useEffect(() => {
+    const column = columnRef.current
+    if (!column || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const next = Math.round(Math.min(AVATAR_MAX_PX, Math.max(AVATAR_MIN_PX, column.offsetHeight)))
+      setEdge((prev) => (prev === next ? prev : next))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(column)
+    return () => observer.disconnect()
+  }, [])
+  return { columnRef, edge }
+}
+
 export function CharacterHeader(props: CharacterHeaderProps) {
   const { character, autosave, stats, groups, vault, readOnly, goToSection } = useCharacterPage()
   const [today] = useState(() => dateStampIn(Date.now()))
@@ -110,6 +139,38 @@ export function CharacterHeader(props: CharacterHeaderProps) {
           tip: "Garments and accessories in this character's own wardrobe. Opens the wardrobe.",
           onClick: props.onOpenWardrobe,
         },
+        ...(stats.inventory
+          ? ([
+              {
+                key: 'inventory-objects',
+                value: stats.inventory.objects,
+                label: stats.inventory.objects === 1 ? 'object' : 'objects',
+                tip: "Objects (not archetypes or kits) on this character's own Inventory shelf. Opens the inventory.",
+                onClick: props.onOpenInventory,
+              },
+              {
+                key: 'inventory-carried',
+                value: stats.inventory.carriedByDefault,
+                label: 'carried by default',
+                tip: 'Objects and kits flagged to arrive in every chat with this character. Opens the inventory.',
+                onClick: props.onOpenInventory,
+              },
+              {
+                key: 'inventory-archetypes',
+                value: stats.inventory.archetypes,
+                label: stats.inventory.archetypes === 1 ? 'archetype' : 'archetypes',
+                tip: 'Classes of object on the shelf; never carried themselves, instances derive from them. Opens the inventory.',
+                onClick: props.onOpenInventory,
+              },
+              {
+                key: 'inventory-kits',
+                value: stats.inventory.kits,
+                label: stats.inventory.kits === 1 ? 'kit' : 'kits',
+                tip: 'Kits on the shelf: lists of objects equipped as one. Opens the inventory.',
+                onClick: props.onOpenInventory,
+              },
+            ] satisfies Stat[])
+          : []),
         {
           key: 'photos',
           value: stats.photos,
@@ -149,6 +210,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
     : []
 
   const avatarClasses = getAvatarClasses(props.avatarStyle, 'lg')
+  const { columnRef, edge } = useAvatarEdge()
 
   return (
     <div className="sticky top-0 z-20 mb-4 border-b qt-border-default qt-bg-card/90 px-1 pb-3 pt-3 backdrop-blur">
@@ -160,16 +222,19 @@ export function CharacterHeader(props: CharacterHeaderProps) {
         ← Back to Characters
       </button>
       <div className="flex flex-wrap items-start gap-4">
-        {/* Avatar — a menu, not a pencil. */}
-        <div className="flex-shrink-0">
+        {/* Avatar — a menu, not a pencil. As tall as the text beside it and
+            square: the largest the avatar is shown anywhere short of a
+            picture viewer. */}
+        <div className="flex-shrink-0" style={{ width: edge, height: edge }}>
           <ItemActionMenu
             label={`Change ${character.name}'s avatar`}
             disabled={readOnly}
             minWidthClass="min-w-[13rem]"
+            containerClassName="h-full w-full"
             trigger={{
               ariaLabel: `Change ${character.name}'s avatar`,
               title: 'Change avatar',
-              className: `relative block h-20 w-20 overflow-hidden ${props.avatarStyle === 'CIRCULAR' ? 'rounded-full' : 'rounded-lg'} focus:outline-none focus:ring-2 focus:ring-ring`,
+              className: `relative block h-full w-full overflow-hidden ${props.avatarStyle === 'CIRCULAR' ? 'rounded-full' : 'rounded-lg'} focus:outline-none focus:ring-2 focus:ring-ring`,
               content: avatarSrc ? (
                 <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -186,7 +251,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
           />
         </div>
 
-        <div className="min-w-0 flex-1 space-y-1">
+        <div ref={columnRef} className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className="qt-heading-1 min-w-0 break-words">{character.name}</h1>
             {!archived && (

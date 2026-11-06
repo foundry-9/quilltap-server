@@ -1589,6 +1589,7 @@ Counts for the character page's header stats line and its Vault card, plus the c
     "memories": 12,
     "conversations": 4,
     "wardrobeItems": 9,
+    "inventory": { "objects": 12, "archetypes": 3, "kits": 1, "carriedByDefault": 4 },
     "photos": 3,
     "scenarios": 2,
     "knowledge": 5,
@@ -1608,6 +1609,7 @@ Counts for the character page's header stats line and its Vault card, plus the c
 ```
 
 - `photos` counts album members only (`isCharacterAlbumRelativePath`); avatar history is excluded.
+- `inventory` counts the character's own `Inventory/` shelf (character tier only, archived objects excluded; read through `resolveInventoryLocation` without `ensure`): `archetypes` (`isArchetype`), `kits` (`kind: 'kit'`), `objects` (non-archetype items), and `carriedByDefault` (non-archetype objects and kits with `equippedByDefault`, as `applyInventoryDefaults` selects them). All zero when the character has no vault.
 - `scenarios` is the length of `character.scenarios`; `scenarioFiles` counts files under the vault's `Scenarios/` folder.
 - `knowledge`, `core`, `subprompts`, `mail`, `scenarioFiles` count vault file links under `Knowledge/`, `Core/`, `Subprompts/`, `Mail/`, `Scenarios/` (case-insensitive prefix).
 - `characterFiles` / `characterFilesTotal` count the canonical managed vault files present (`SINGLE_FILE_OVERLAY_PATHS`); `missingCharacterFiles` names the absent ones by path. It is `[]` when the character has no vault.

@@ -172,7 +172,7 @@ const APPEARANCE = {
   characterId: 'char-1',
   characterName: 'Amy',
   physicalDescription: 'a young woman',
-  physicalDescriptionName: 'Default',
+ 
   clothingDescription: 'naked, barefoot, wearing pearls',
   clothingSource: 'narrative',
   wasSanitized: false,

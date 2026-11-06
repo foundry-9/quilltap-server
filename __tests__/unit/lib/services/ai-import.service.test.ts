@@ -374,7 +374,6 @@ describe('ai-import.service', () => {
       expect(character.systemPrompts[0].updatedAt).toBe(now);
       expect(character.scenarios[0].id).toMatch(UUID_LIKE);
       expect(character.physicalDescription.id).toMatch(UUID_LIKE);
-      expect(character.physicalDescription.name).toBe('AI Generated');
       expect(character.wardrobeItems[0].id).toMatch(UUID_LIKE);
       expect(character.wardrobeItems[0].characterId).toBe(character.id);
       expect((data.memories[0] as Record<string, unknown>).id).toMatch(UUID_LIKE);

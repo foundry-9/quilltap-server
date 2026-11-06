@@ -286,9 +286,9 @@ export async function runCharacterRename(
   const physical = character.physicalDescription;
   if (physical) {
     const next: PhysicalDescription = { ...physical };
-    const pdLocation = `Description: ${physical.name}`;
+    const pdLocation = 'Physical description';
     const pdFields: (keyof PhysicalDescription)[] = [
-      'name', 'usageContext', 'headAndShouldersPrompt', 'shortPrompt',
+      'headAndShouldersPrompt', 'shortPrompt',
       'mediumPrompt', 'longPrompt', 'completePrompt', 'fullDescription',
     ];
     let touched = false;

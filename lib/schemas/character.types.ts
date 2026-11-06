@@ -65,11 +65,13 @@ export type CharacterScenario = z.infer<typeof CharacterScenarioSchema>;
 // PHYSICAL DESCRIPTIONS
 // ============================================================================
 
-// Physical Description for image generation prompts
+// Physical Description for image generation prompts. A character has exactly
+// one (`physicalDescription`), so it carries no name or usage context — those
+// belonged to the old list of several and were retired with it. Old records
+// that still carry `name` / `usageContext` parse fine: the object is not
+// strict, so the keys are stripped on read.
 export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
-  name: z.string().min(1),
-  usageContext: z.string().max(200).nullable().optional(),
   // Tight head-and-shoulders portrait prompt — face/hair/expression/neckline
   // only, never below-shoulder anatomy. Preferred source for avatar generation
   // (avatars are a head-and-shoulders crop); see lib/image-gen/avatar-prompt.ts.

@@ -118,7 +118,6 @@ export interface ImagePromptExpansionContext {
      * gives it a head, face, shoulders or limbs; `gender` is left unset.
      */
     nonHumanoid?: boolean
-    usageContext?: string
     tiers: {
       short?: string
       medium?: string
@@ -241,8 +240,6 @@ export interface CompressionResult {
  */
 export interface AppearanceResolutionItem {
   characterId: string
-  /** ID of the selected physical description, or null to use the first/default */
-  selectedDescriptionId: string | null
   /** What the character is currently wearing */
   clothingDescription: string
   /** How clothing was determined */
@@ -260,13 +257,11 @@ export interface CharacterAppearanceInput {
    * and must not write clothing onto body parts it lacks.
    */
   nonHumanoid?: boolean
-  physicalDescriptions: Array<{
-    id: string
-    name: string
-    usageContext?: string | null
+  /** The character's one physical description, or null when they have none. */
+  physicalDescription: {
     shortPrompt?: string | null
     mediumPrompt?: string | null
-  }>
+  } | null
   /** Equipped wardrobe items (from the wardrobe system) */
   equippedWardrobeItems?: Array<{
     slot: string        // 'top', 'bottom', 'footwear', 'accessories', 'hair'

@@ -31,6 +31,8 @@ import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
+import { revealAnchor } from '@/hooks/useAnchorReveal'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { queryKeys } from '@/lib/query/keys'
@@ -103,6 +105,7 @@ function LoadedCharacterPage({
   const queryClient = useQueryClient()
   const { style: avatarStyle } = useAvatarDisplay()
   const wardrobeDialog = useWardrobeDialogOptional()
+  const inventoryDialog = useInventoryDialogOptional()
   const autosave = useCharacterAutosave(characterId)
   const { stats, groups, vault, refetch: refetchStats } = useCharacterStats(characterId)
   const { profiles, userControlledCharacters } = useCharacterPageSupport()
@@ -168,10 +171,14 @@ function LoadedCharacterPage({
     [onSectionChange],
   )
 
+  // Bumped on every stat-link navigation, so a link to a card in the section
+  // already showing still scrolls (and reveals) it.
+  const [anchorRequest, setAnchorRequest] = useState(0)
   const goToSection = useCallback(
     (next: CharacterPageSection, anchor?: string) => {
       pendingAnchor.current = anchor ?? null
       changeSection(next)
+      if (anchor) setAnchorRequest((n) => n + 1)
     },
     [changeSection],
   )
@@ -181,9 +188,13 @@ function LoadedCharacterPage({
     if (!anchor) return
     pendingAnchor.current = null
     requestAnimationFrame(() => {
-      document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // A collapsed card opens itself before it is scrolled to.
+      revealAnchor(anchor)
+      requestAnimationFrame(() => {
+        document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     })
-  }, [section])
+  }, [section, anchorRequest])
 
   const context: CharacterPageContextValue = useMemo(
     () => ({
@@ -404,6 +415,7 @@ function LoadedCharacterPage({
           onUploadAvatar={() => setShowUpload(true)}
           onGeneratePortrait={() => wardrobeDialog?.open({ characterId })}
           onOpenWardrobe={() => wardrobeDialog?.open({ characterId })}
+          onOpenInventory={() => inventoryDialog?.open({ characterId })}
           onAIWizard={() => setShowWizard(true)}
           onOptimize={() => setShowOptimizer(true)}
           onExternalPrompt={() => setShowExternalPrompt(true)}

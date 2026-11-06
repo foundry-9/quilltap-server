@@ -100,8 +100,6 @@ describe('buildCharacterContext', () => {
     const character = createMockCharacter({
       physicalDescription: {
         id: '1',
-        name: 'Appearance',
-        usageContext: null,
         shortPrompt: 'Tall',
         mediumPrompt: 'Tall and dark-haired',
         longPrompt: 'A tall figure with dark hair',
@@ -113,8 +111,7 @@ describe('buildCharacterContext', () => {
     })
     const result = buildCharacterContext(character)
     expect(result).toContain('=== Physical Description ===')
-    expect(result).toContain('Appearance')
-    expect(result).toContain('Tall')
+    expect(result).toContain('Short: Tall')
   })
 
   // The standalone "clothing records when present" test was removed when the

@@ -51,6 +51,36 @@ describe('fixedMenuPlacement', () => {
   })
 })
 
+describe('fixedMenuPlacement inside an ancestor that captures position: fixed', () => {
+  it('places the menu against a backdrop-filtered ancestor, not the viewport', () => {
+    const header = document.createElement('div')
+    header.style.backdropFilter = 'blur(8px)'
+    header.getBoundingClientRect = () =>
+      ({ top: 50, left: 200, right: 950, bottom: 250, width: 750, height: 200, x: 200, y: 50 }) as DOMRect
+    Object.defineProperty(header, 'clientWidth', { configurable: true, value: 750 })
+    Object.defineProperty(header, 'clientHeight', { configurable: true, value: 200 })
+    const button = anchorAt(100, 124, 900)
+    header.appendChild(button)
+    document.body.appendChild(header)
+    try {
+      // jsdom does not know backdrop-filter; report it the way a browser would.
+      const real = window.getComputedStyle
+      const spy = jest.spyOn(window, 'getComputedStyle').mockImplementation((el: Element) => {
+        const style = real(el)
+        if (el === header) return { ...style, backdropFilter: 'blur(8px)' } as CSSStyleDeclaration
+        return style
+      })
+      const style = fixedMenuPlacement(button)
+      spy.mockRestore()
+      // The button's right edge sits 50px inside the header's; its bottom 74px below the header's top.
+      expect(style.right).toBe(50)
+      expect(style.top).toBe(124 + 4 - 50)
+    } finally {
+      header.remove()
+    }
+  })
+})
+
 describe('useFixedMenu', () => {
   let container: HTMLDivElement
   let inside: HTMLDivElement

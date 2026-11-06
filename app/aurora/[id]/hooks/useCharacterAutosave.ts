@@ -37,8 +37,6 @@ export const PHYSICAL_KEY_PREFIX = 'physicalDescription.'
 
 /** The physical description's autosaved text fields. */
 export const PHYSICAL_TEXT_FIELDS = [
-  'name',
-  'usageContext',
   'headAndShouldersPrompt',
   'shortPrompt',
   'mediumPrompt',
@@ -47,9 +45,6 @@ export const PHYSICAL_TEXT_FIELDS = [
   'fullDescription',
 ] as const
 export type PhysicalTextField = (typeof PHYSICAL_TEXT_FIELDS)[number]
-
-/** The name a physical description is given when its own name field is blank. */
-export const DEFAULT_PHYSICAL_DESCRIPTION_NAME = 'Base Appearance'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Name',
@@ -62,8 +57,6 @@ const FIELD_LABELS: Record<string, string> = {
   exampleDialogues: 'Example dialogues',
   pronouns: 'Pronouns',
   birthday: 'Birthday',
-  'physicalDescription.name': 'Appearance name',
-  'physicalDescription.usageContext': 'Usage context',
   'physicalDescription.headAndShouldersPrompt': 'Head & shoulders prompt',
   'physicalDescription.shortPrompt': 'Short prompt',
   'physicalDescription.mediumPrompt': 'Medium prompt',
@@ -122,8 +115,6 @@ export function mergePhysicalDescription(
   }
   return {
     id: stored?.id ?? crypto.randomUUID(),
-    name: pick('name')?.trim() || DEFAULT_PHYSICAL_DESCRIPTION_NAME,
-    usageContext: pick('usageContext'),
     headAndShouldersPrompt: pick('headAndShouldersPrompt'),
     shortPrompt: pick('shortPrompt'),
     mediumPrompt: pick('mediumPrompt'),

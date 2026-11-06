@@ -15,7 +15,9 @@
  * @module app/aurora/[id]/hooks/useCharacter
  */
 
+import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useRealtimeTopic } from '@/hooks/useRealtime'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
@@ -60,6 +62,13 @@ export function useCharacterStats(characterId: string) {
         cache: 'no-store',
       }),
   })
+  // The header counts the character's own wardrobe and Inventory shelf. Those
+  // topics carry no character id, so a write to either re-reads the counts
+  // (one cheap request) rather than leaving them stale behind an open dialog.
+  const { refetch } = query
+  const refreshCounts = useCallback(() => void refetch(), [refetch])
+  useRealtimeTopic('inventory', refreshCounts)
+  useRealtimeTopic('wardrobe', refreshCounts)
   return {
     stats: query.data?.stats ?? null,
     groups: query.data?.groups ?? [],

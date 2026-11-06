@@ -2,7 +2,7 @@
 
 /**
  * Details — *Who are they?* Facts, the Dossier (with the template tools),
- * Progressions and the Vault.
+ * Progressions, the Vault and the metadata.json fact sheet.
  *
  * @module app/aurora/[id]/sections/DetailsSection
  */
@@ -18,6 +18,7 @@ import { SectionCard } from '../components/SectionCard'
 import { useMarkdownBinding, useTextBinding, useValueBinding } from '../components/autosave-bindings'
 import { TemplateTools } from '../cards/TemplateTools'
 import { VaultCard } from '../cards/VaultCard'
+import { MetadataCard } from '../cards/MetadataCard'
 import { useCharacterPage } from '../CharacterPageContext'
 
 export function DetailsSection() {
@@ -65,12 +66,7 @@ export function DetailsSection() {
               onChange={(kind) => void saveNow({ kind }, 'The kind of character could not be saved.')}
             />
           }
-          tagsSlot={
-            <div>
-              <span className="block qt-text-label mb-2">Tags</span>
-              <TagEditor entityType="character" entityId={characterId} />
-            </div>
-          }
+          tagsSlot={<TagEditor entityType="character" entityId={characterId} />}
         />
       </SectionCard>
 
@@ -94,6 +90,7 @@ export function DetailsSection() {
       </div>
 
       <VaultCard />
+      <MetadataCard />
     </div>
   )
 }

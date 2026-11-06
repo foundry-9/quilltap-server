@@ -55,10 +55,8 @@ export interface AppearanceResolutionResult {
 export interface ResolvedCharacterAppearance {
   characterId: string
   characterName: string
-  /** Selected physical description text */
+  /** The physical description text chosen for this scene */
   physicalDescription: string
-  /** The selected physical description's name (for logging) */
-  physicalDescriptionName: string
   /**
    * False when the character has no humanoid body (`isHumanoid` on its
    * physical description). {@link sceneDescriptionParts} then drops the
@@ -194,7 +192,6 @@ function buildDefaultAppearances(
       characterId: char.characterId,
       characterName: char.characterName,
       physicalDescription: physDesc,
-      physicalDescriptionName: primary?.name || 'default',
       ...(isHumanoid(primary) ? {} : { humanoid: false }),
       clothingDescription: hasWardrobe
         ? describeOutfit(wardrobeItemsToSlotValues(char.equippedWardrobeItems!))
@@ -218,8 +215,7 @@ function mapResolutionResults(
   return characters.map(char => {
     const resolved = items.find(i => i.characterId === char.characterId)
 
-    // Only one physical description per character now; the resolver's
-    // selectedDescriptionId is informational only.
+    // One physical description per character; the resolver decides clothing only.
     const selectedDesc: PhysicalDescription | null = char.physicalDescription
 
     const physDesc = pickPhysicalDescription(selectedDesc, 'full-length') || char.characterName
@@ -228,7 +224,6 @@ function mapResolutionResults(
       characterId: char.characterId,
       characterName: char.characterName,
       physicalDescription: physDesc,
-      physicalDescriptionName: selectedDesc?.name || 'default',
       ...(isHumanoid(selectedDesc) ? {} : { humanoid: false }),
       clothingDescription: resolved?.clothingDescription || '',
       clothingSource: resolved?.clothingSource || 'default',
@@ -324,7 +319,6 @@ async function resolveAppearancesWithoutInventory(
         characterId: char.characterId,
         characterName: char.characterName,
         physicalDescription: physDesc,
-        physicalDescriptionName: primary?.name || 'scene-state',
         ...(isHumanoid(primary) ? {} : { humanoid: false }),
         // If scene state has clothing info, use it. If clothing is explicitly null/empty
         // (e.g. character undressed), do NOT fall back — that would incorrectly redress.
@@ -356,15 +350,12 @@ async function resolveAppearancesWithoutInventory(
     characterId: char.characterId,
     characterName: char.characterName,
     ...(isHumanoid(char.physicalDescription) ? {} : { nonHumanoid: true }),
-    physicalDescriptions: char.physicalDescription
-      ? [{
-          id: char.physicalDescription.id,
-          name: char.physicalDescription.name,
-          usageContext: char.physicalDescription.usageContext,
+    physicalDescription: char.physicalDescription
+      ? {
           shortPrompt: char.physicalDescription.shortPrompt,
           mediumPrompt: char.physicalDescription.mediumPrompt,
-        }]
-      : [],
+        }
+      : null,
     ...(char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
       ? { equippedWardrobeItems: char.equippedWardrobeItems }
       : {}),
