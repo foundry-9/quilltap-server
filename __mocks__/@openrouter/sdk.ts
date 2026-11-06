@@ -1,40 +1,16 @@
 /**
- * Mock for @openrouter/sdk v0.8.0
- * Used in unit tests to avoid loading the actual ESM module
+ * Mock for @openrouter/sdk (1.5.x), mapped in jest.config.ts.
+ *
+ * The OpenRouter plugin uses the SDK only for its generated OpenAPI surface:
+ * `chat.send` (text-only non-streaming sends), `models.list` and
+ * `embeddings.*`. Streaming and image sends go through a direct fetch, so
+ * there is nothing else to mock. Used to avoid loading the real ESM module.
  */
 
 const mockChatSend = jest.fn()
 const mockModelsList = jest.fn()
-
-// Mock for callModel() which returns a ModelResult with streaming methods
-const mockGetTextStream = jest.fn().mockImplementation(async function* () {
-  yield 'Hello'
-  yield ' World'
-})
-
-const mockGetResponse = jest.fn().mockResolvedValue({
-  status: 'completed',
-  output: [
-    { type: 'message', content: [{ type: 'output_text', text: 'Hello World' }] },
-  ],
-  usage: {
-    inputTokens: 10,
-    outputTokens: 5,
-  },
-})
-
-const mockGetToolCalls = jest.fn().mockResolvedValue([])
-
-const mockCallModel = jest.fn().mockReturnValue({
-  getTextStream: mockGetTextStream,
-  getResponse: mockGetResponse,
-  getToolCalls: mockGetToolCalls,
-  getText: jest.fn().mockResolvedValue('Hello World'),
-  getItemsStream: jest.fn().mockImplementation(async function* () {}),
-  getReasoningStream: jest.fn().mockImplementation(async function* () {}),
-  getToolCallsStream: jest.fn().mockImplementation(async function* () {}),
-  cancel: jest.fn().mockResolvedValue(undefined),
-})
+const mockEmbeddingsGenerate = jest.fn()
+const mockEmbeddingsListModels = jest.fn()
 
 export const OpenRouter = jest.fn().mockImplementation(() => ({
   chat: {
@@ -43,27 +19,18 @@ export const OpenRouter = jest.fn().mockImplementation(() => ({
   models: {
     list: mockModelsList,
   },
-  callModel: mockCallModel,
+  embeddings: {
+    generate: mockEmbeddingsGenerate,
+    listModels: mockEmbeddingsListModels,
+  },
 }))
-
-// Mock fromChatMessages helper
-export const fromChatMessages = jest.fn().mockImplementation((messages: any[]) => {
-  // Convert chat messages to OpenResponses input format (simplified mock)
-  return messages.map(m => ({
-    type: m.role === 'system' ? 'system' : m.role === 'user' ? 'message' : 'message',
-    role: m.role,
-    content: typeof m.content === 'string' ? [{ type: 'input_text', text: m.content }] : m.content,
-  }))
-})
 
 // Export mock references for test assertions
 export const __mocks__ = {
   mockChatSend,
   mockModelsList,
-  mockCallModel,
-  mockGetTextStream,
-  mockGetResponse,
-  mockGetToolCalls,
+  mockEmbeddingsGenerate,
+  mockEmbeddingsListModels,
 }
 
 export default OpenRouter

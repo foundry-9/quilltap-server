@@ -1,6 +1,6 @@
 # OpenRouter plugin — one Chat Completions path, no `callModel()`
 
-**Status:** Proposed 2026-11-05. Fixes [foundry-9/quilltap-server#145](https://github.com/foundry-9/quilltap-server/issues/145). Nothing implemented.
+**Status:** Phases 0–2 done 2026-11-05 (OpenRouter plugin 1.0.71), live-verified on V4test (§10). Phase 3 is deferred until Phase 1 has been live. Fixes [foundry-9/quilltap-server#145](https://github.com/foundry-9/quilltap-server/issues/145).
 
 ## 1. The problem
 
@@ -164,3 +164,17 @@ All in `__tests__/unit/openrouter-text-provider.test.ts` unless noted; `fetch` i
 - `lib/llm/pricing-fetcher.ts` and the root `@openrouter/sdk` range.
 - The other provider plugins' request-budget or web-search shapes.
 - A committed lockfile for plugins. The guard in §4.7 catches the local blind spot; floating ranges in CI remain the deliberate policy that surfaced this break in the first place.
+
+## 10. Implementation notes (2026-11-05)
+
+- **Phase 1.** `buildChatCompletionsMessages` / `buildChatCompletionsBody` / `chatCompletionsHeaders` in `provider.ts`; the SDK `chat.send` path also takes its messages from `buildChatCompletionsMessages`. `streamMessage` is the delegate in §4.2. `route` is no longer sent anywhere on the fetch paths. The reasoning reader is the exported `reasoningDeltaText`: `delta.reasoning` wins; otherwise `reasoning.text` entries contribute `text` and `reasoning.summary` entries contribute `summary` (or `text`); `reasoning.encrypted` is skipped. Refusal text from `delta.refusal` is accumulated, reported as `finish_reason: 'refusal'` when no tool calls were seen, and carried on `rawResponse.choices[0].delta.refusal`.
+- **Phase 0 (V4test, `moonshotai/kimi-k2-thinking`).** OpenRouter sends **both** `delta.reasoning` and `delta.reasoning_details` on the same deltas. `reasoningDeltaText` prefers `reasoning`, so nothing is double-counted (2,044 reasoning characters accumulated, matching the `reasoning` text). The `reasoning_details` branch is therefore a fallback for models that send only the typed form; it stays covered by the unit tests.
+- **Debug logging.** Both fetch paths log `describeChatCompletionsBody(body)` — model / models, tool count, provider preferences, plugins, response-format type, whether `user` is set, reasoning — never messages or the key. The stream-finished line adds the reasoning fields seen, usage and OpenRouter's reported `cost`. This is how the live check confirmed the wire body: the host's LLM log records its own view of the request, not the plugin's.
+- **Live check (§7.4, V4test, 2026-11-05).** Three throwaway profiles (`OR145 …`) and chats with Walt Pruitt:
+  - *Plain / reasoning* (Kimi K2 Thinking, tools off — the old `callModel` path): text streams; reasoning streams before the text (504 reasoning frames); `finish_reason: stop`; `user` sent; `cost` reported (0.0028).
+  - *Tool* (gpt-4.1-mini, 37 tools): step 1 `tool_calls`, step 2 `stop`; step 2 reported 13,184 cached tokens, excluded from `promptTokens` (415) and carried in `cacheUsage`. Kimi's upstream did not cache across turns, so no cache read there.
+  - *ZDR tool turn* (claude-haiku-4.5, `enableZDR`): the logged body carried `provider: { data_collection: 'deny' }` on both tool-loop steps and OpenRouter served it; the die roll came back through the tool.
+  - *Image* (gpt-4.1-mini): an uploaded PNG went out as an `image_url` part (`hasImages: true`) and the model described its colour correctly.
+  - OpenRouter reported `cost: 0` for the Anthropic-routed calls (the account passes those through to the operator's own Anthropic key, so OpenRouter bills nothing) and for the OpenAI-routed ones, and a real cost for Kimi. `cost` is OpenRouter's billing figure, read as reported; the plugin computes nothing from it.
+- **Phase 2.** The classifier is `scripts/lib/plugin-resolution-guard.ts` (`packageNameFromPath`, `findForeignResolutions`, `formatResolutionViolations`, message capped at five paths); `checkPluginResolution` in `scripts/build-plugins.ts` runs it in both the serial and `--parallel` paths, only for plugins with a `typecheck` script and at least one dependency. Checked by hand: re-adding the `chat-compat` import makes plain `tsc` exit 0 and the guard report 913 root-resolved `@openrouter/sdk` files. The build summary now prints up to 2,000 characters of each failure instead of 200.
+- The esbuild SDK patch (§3) is left in place for Phase 3, as planned.
