@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Fix: CI and Release builds failed on the OpenRouter plugin
+
+- `@openrouter/sdk` 1.5.57 (a patch release) removed `callModel()` and `@openrouter/sdk/lib/chat-compat`, which moved to the separate `@openrouter/agent` package. Plugins have no committed lockfile, so CI resolved the plugin's `^1.5.34` range to 1.5.60 and the plugin typecheck failed in `provider.ts`. Locally the typecheck passed because TypeScript fell back to the root `node_modules` copy (1.5.34) for the missing subpath.
+- OpenRouter plugin 1.0.70 pins `@openrouter/sdk` to exactly 1.5.56, the last release with those APIs and the version the last green Release built against. Moving the streaming path off `callModel()` is follow-up work.
+
 #### Feature: Green Room wardrobe model; single pieces from outfit sets
 
 - New setting `chatSettings.cheapLLMSettings.outfitSelectionProfileId` (Settings → Providers → Cheap LLM Settings → Green Room Wardrobe Model). Any connection profile; it makes the `llm_choose` opening-outfit pick instead of the cheap LLM. Unset or a deleted profile falls back to the cheap LLM. Resolved by `selectGreenRoomLLM` (`lib/wardrobe/green-room-model.ts`), carried by `buildCheapLLMConfig`. Stored in the existing `cheapLLMSettings` JSON column, so no migration; restore remaps the id.
