@@ -18,6 +18,7 @@ const {
   computeDisplacedSlots,
   dissolveCompositeToLeaves,
   dissolveCompositesInSlots,
+  dropOverlappingEnsembles,
   layLeavesIntoSlots,
   spreadAcrossCoveredSlots,
   wearItemIntoSlots,
@@ -454,5 +455,59 @@ describe('dissolveCompositesInSlots', () => {
     expect(result.slots.top).toEqual(['man-in-black'])
     expect(result.slots.accessories).toEqual(['hat'])
     expect(result.wornBundles).toEqual([{ id: 'kit', leafIds: ['hat'] }])
+  })
+})
+
+describe('dropOverlappingEnsembles', () => {
+  const empty = (): EquippedSlots => ({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
+  const lookup = (...items: WardrobeItem[]) => new Map(items.map((item) => [item.id, item]))
+
+  // The Friday case: a full linen look, plus a gown set listed only under hair.
+  const shirt = makeItem('shirt', ['top'])
+  const trousers = makeItem('trousers', ['bottom'])
+  const sandals = makeItem('sandals', ['footwear'])
+  const linen = makeItem('linen', ['top', 'bottom', 'footwear'], ['shirt', 'trousers', 'sandals'])
+  const bodice = makeItem('bodice', ['top'])
+  const skirt = makeItem('skirt', ['bottom'])
+  const updo = makeItem('updo', ['hair'])
+  const gothic = makeItem('gothic', ['top', 'bottom', 'accessories', 'hair'], ['bodice', 'skirt', 'updo'])
+  const pearls = makeItem('pearls', ['accessories'])
+
+  it('drops the outfit set slipped in under one slot, keeping the fully listed one', () => {
+    const slots = { ...empty(), top: ['linen'], bottom: ['linen'], footwear: ['linen'], accessories: ['pearls'], hair: ['gothic'] }
+    const result = dropOverlappingEnsembles(slots, lookup(linen, gothic, pearls, shirt, trousers, sandals, bodice, skirt, updo))
+    expect(result.droppedIds).toEqual(['gothic'])
+    expect(result.slots).toEqual({ ...empty(), top: ['linen'], bottom: ['linen'], footwear: ['linen'], accessories: ['pearls'] })
+  })
+
+  it('breaks a tie by slot order: the set listed first under top wins', () => {
+    const slots = { ...empty(), top: ['gothic', 'linen'] }
+    const result = dropOverlappingEnsembles(slots, lookup(linen, gothic))
+    expect(result.droppedIds).toEqual(['linen'])
+    expect(result.slots.top).toEqual(['gothic'])
+  })
+
+  it('drops a dress that clashes with an outfit set', () => {
+    const dress = makeItem('dress', ['top', 'bottom'])
+    const slots = { ...empty(), top: ['linen'], bottom: ['linen'], footwear: ['linen'], hair: [] , accessories: [] }
+    slots.top.push('dress')
+    const result = dropOverlappingEnsembles(slots, lookup(linen, dress))
+    expect(result.droppedIds).toEqual(['dress'])
+  })
+
+  it('leaves layering alone: a slip under a dress, and a set beside single garments', () => {
+    const slip = makeItem('slip', ['top', 'bottom'])
+    const dress = makeItem('dress', ['top', 'bottom'])
+    const cardigan = makeItem('cardigan', ['top'])
+    const slots = { ...empty(), top: ['slip', 'dress', 'cardigan'], bottom: ['slip', 'dress'] }
+    expect(dropOverlappingEnsembles(slots, lookup(slip, dress, cardigan)).droppedIds).toEqual([])
+    const withSet = { ...empty(), top: ['linen', 'cardigan'], bottom: ['linen'], footwear: ['linen'] }
+    expect(dropOverlappingEnsembles(withSet, lookup(linen, cardigan)).droppedIds).toEqual([])
+  })
+
+  it('leaves sets that share no top or bottom slot alone', () => {
+    const jewels = makeItem('jewels', ['accessories', 'hair'], ['pearls', 'updo'])
+    const slots = { ...empty(), top: ['linen'], bottom: ['linen'], footwear: ['linen'], accessories: ['jewels'], hair: ['jewels'] }
+    expect(dropOverlappingEnsembles(slots, lookup(linen, jewels, pearls, updo)).droppedIds).toEqual([])
   })
 })

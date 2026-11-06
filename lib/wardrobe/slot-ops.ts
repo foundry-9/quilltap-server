@@ -221,6 +221,72 @@ export function dissolveCompositesInSlots(
   return { slots: next, wornBundles };
 }
 
+/** The slots whose double occupancy by two ensembles means two outfits at once. */
+const BODY_SLOTS: readonly WardrobeItemType[] = ['top', 'bottom'];
+
+/**
+ * Keep a composed snapshot from wearing two whole outfits at once.
+ *
+ * For snapshots composed outside the wear gestures (the cheap LLM's
+ * chat-start pick). A model can list an outfit set under one slot it happens
+ * to cover — "Gothic Victorian Enchantress Attire" under `hair` beside a full
+ * linen travel look — and since dissolving and spreading put every piece of a
+ * set on, the character arrives in both.
+ *
+ * Two picks conflict when both span more than one slot, at least one is a
+ * composite (an outfit set), and they share a top or bottom slot. The stronger
+ * survives: the one the model listed in more slots, then the one it listed
+ * first in slot order (top before bottom before the rest). Single-slot items
+ * and two plain multi-slot garments (a slip under a dress, a cover-up over a
+ * swimsuit) are layering and are left alone. Run it **before**
+ * {@link dissolveCompositesInSlots}, while the sets are still whole.
+ */
+export function dropOverlappingEnsembles(
+  currentSlots: EquippedSlots,
+  itemsById: WearableLookup,
+): { slots: EquippedSlots; droppedIds: string[] } {
+  const listed = new Map<string, number>();
+  const firstSeen = new Map<string, number>();
+  let position = 0;
+  for (const slot of WARDROBE_SLOT_TYPES) {
+    for (const id of currentSlots[slot] ?? []) {
+      listed.set(id, (listed.get(id) ?? 0) + 1);
+      if (!firstSeen.has(id)) firstSeen.set(id, position++);
+    }
+  }
+
+  const ensembles = Array.from(listed.keys())
+    .map((id) => itemsById.get(id))
+    .filter((item): item is WearableNode => {
+      if (!item) return false;
+      const covered = slotsOf(item);
+      return covered.length > 1 && covered.some((slot) => BODY_SLOTS.includes(slot));
+    })
+    .sort((a, b) =>
+      (listed.get(b.id)! - listed.get(a.id)!) || (firstSeen.get(a.id)! - firstSeen.get(b.id)!),
+    );
+
+  const kept: WearableNode[] = [];
+  const droppedIds: string[] = [];
+  for (const candidate of ensembles) {
+    const body = slotsOf(candidate).filter((slot) => BODY_SLOTS.includes(slot));
+    const clashes = kept.some(
+      (other) =>
+        (isComposite(other) || isComposite(candidate)) &&
+        slotsOf(other).some((slot) => body.includes(slot)),
+    );
+    if (clashes) droppedIds.push(candidate.id);
+    else kept.push(candidate);
+  }
+
+  if (droppedIds.length === 0) return { slots: currentSlots, droppedIds };
+  let slots = cloneEquippedSlots(currentSlots);
+  for (const id of droppedIds) {
+    for (const slot of WARDROBE_SLOT_TYPES) slots = removeIdFromSlot(slots, slot, id);
+  }
+  return { slots, droppedIds };
+}
+
 /**
  * Make every item in a slots snapshot occupy every slot its own `types`
  * declare — a dress listed only under `top` is also put in `bottom` — the same
