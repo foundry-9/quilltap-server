@@ -12,7 +12,10 @@
  *     on Grok, every request round-robins).
  *   - DeepSeek: `user_id` (KV-cache isolation namespace).
  *   - Z.AI: `user_id` (6–128 chars; the plugin omits a key outside that).
- *   - OpenAI-compatible / OpenRouter (OpenAI-routed): `user`.
+ *   - OpenAI-compatible: `user`.
+ *   - OpenRouter: `session_id` (sticky provider routing), `prompt_cache_key`
+ *     and `user`.
+ *   - NanoGPT: `user` (its affinity routing keys on the API key itself).
  *   - Anthropic: ignored (uses content-hashed `cache_control` breakpoints).
  *   - Ollama / Curl: ignored (local KV / raw passthrough).
  *

@@ -47496,6 +47496,87 @@ var OpenRouter = class extends ClientSDK {
   }
 };
 
+// cache-breakpoints.ts
+var MAX_CLAUDE_CACHE_BREAKPOINTS = 4;
+var MIN_MESSAGES_FOR_MID_BREAKPOINT = 20;
+var MID_BREAKPOINT_STEP = 15;
+function claudeCacheControl(ttl) {
+  return ttl === "1h" ? { type: "ephemeral", ttl: "1h" } : { type: "ephemeral" };
+}
+function markMessage(messages, index, cc) {
+  const msg = messages[index];
+  if (!msg) return false;
+  const content = msg.content;
+  if (typeof content === "string") {
+    if (content.length === 0) return false;
+    messages[index] = { ...msg, content: [{ type: "text", text: content, cache_control: cc }] };
+    return true;
+  }
+  if (Array.isArray(content) && content.length > 0) {
+    const last = content[content.length - 1];
+    if (last?.cache_control) return true;
+    if (last?.type !== "text") return false;
+    messages[index] = { ...msg, content: [...content.slice(0, -1), { ...last, cache_control: cc }] };
+    return true;
+  }
+  return false;
+}
+function liftAll(messages) {
+  for (let i = 0; i < messages.length; i++) {
+    const content = messages[i].content;
+    if (typeof content === "string" && content.length > 0) {
+      messages[i] = { ...messages[i], content: [{ type: "text", text: content }] };
+    }
+  }
+}
+function applyClaudeCacheBreakpoints(messages, hostMarked, ttl) {
+  if (messages.length === 0) return [];
+  liftAll(messages);
+  const cc = claudeCacheControl(ttl);
+  const placed = [];
+  const tryMark = (index) => {
+    if (index < 0 || placed.length >= MAX_CLAUDE_CACHE_BREAKPOINTS || placed.includes(index)) return false;
+    if (messages[index]?.role === "system" && placed.length > 0) return false;
+    if (!markMessage(messages, index, cc)) return false;
+    placed.push(index);
+    return true;
+  };
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) tryMark(firstSystem);
+  let latestUser = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") {
+      latestUser = i;
+      break;
+    }
+  }
+  const last = messages.length - 1;
+  const toolLoop = latestUser >= 0 && messages.slice(latestUser + 1).some((m) => m.role === "tool");
+  const variable = toolLoop ? -1 : latestUser;
+  let tailIndex = -1;
+  if (toolLoop && messages[last]?.role === "tool" && tryMark(last)) tailIndex = last;
+  if (latestUser > firstSystem) {
+    if (tryMark(latestUser - 1) && tailIndex < 0) tailIndex = latestUser - 1;
+    let runStart = latestUser;
+    while (runStart - 1 > firstSystem && messages[runStart - 1].role === "user") runStart--;
+    for (let i = runStart - 1; i > firstSystem; i--) {
+      if (messages[i].role === "system") continue;
+      if (placed.includes(i) || tryMark(i)) break;
+    }
+  }
+  for (const index of [...hostMarked].sort((a, b) => a - b)) {
+    if (index !== variable) tryMark(index);
+  }
+  if (messages.length >= MIN_MESSAGES_FOR_MID_BREAKPOINT) {
+    const stepped = Math.floor((messages.length - MID_BREAKPOINT_STEP) / MID_BREAKPOINT_STEP) * MID_BREAKPOINT_STEP;
+    const role = messages[stepped]?.role;
+    if (stepped > firstSystem && (tailIndex < 0 || stepped < tailIndex) && (role === "user" || role === "assistant")) {
+      tryMark(stepped);
+    }
+  }
+  return placed;
+}
+
 // node_modules/@quilltap/plugin-types/dist/index.mjs
 var PluginError = class extends Error {
   constructor(message, code, pluginName) {
@@ -71459,6 +71540,8 @@ function describeChatCompletionsBody(body) {
     plugins: body.plugins,
     responseFormat: body.response_format?.type,
     hasUser: typeof body.user === "string",
+    hasSessionId: typeof body.session_id === "string",
+    cacheBreakpoints: Array.isArray(body.messages) ? body.messages.filter((m) => Array.isArray(m.content) && m.content.some((p) => p?.cache_control)).length : 0,
     reasoning: body.reasoning
   };
 }
@@ -71477,6 +71560,25 @@ function reasoningDeltaText(delta) {
     }
   }
   return text2;
+}
+function isAnthropicRoutedModel(model) {
+  return typeof model === "string" && /^~?anthropic\//.test(model);
+}
+function readOpenRouterUsage(raw) {
+  const read = Number(raw?.prompt_tokens_details?.cached_tokens) || 0;
+  const written = Number(raw?.prompt_tokens_details?.cache_write_tokens) || 0;
+  const cacheUsage = read > 0 || written > 0 ? {
+    ...read > 0 ? { cacheReadInputTokens: read, cachedTokens: read } : {},
+    ...written > 0 ? { cacheCreationInputTokens: written } : {}
+  } : void 0;
+  return {
+    usage: {
+      promptTokens: Math.max(0, (raw?.prompt_tokens ?? 0) - read),
+      completionTokens: raw?.completion_tokens ?? 0,
+      totalTokens: Math.max(0, (raw?.total_tokens ?? 0) - read)
+    },
+    ...cacheUsage ? { cacheUsage } : {}
+  };
 }
 function resolveProviderPrefs(profileParams) {
   if (!profileParams) return void 0;
@@ -71542,112 +71644,24 @@ var OpenRouterProvider = class {
     }
     return { sent, failed };
   }
-  hasImageAttachments(params) {
-    return params.messages.some(
-      (m) => (m.attachments ?? []).some(
-        (a) => SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType) && (a.data || a.url)
-      )
-    );
-  }
   async sendMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentResults(params);
-    if (this.hasImageAttachments(params)) {
-      return this.sendViaChatCompletions(params, apiKey, attachmentResults);
-    }
-    const client = new OpenRouter({
-      apiKey,
-      httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      appTitle: getQuilltapUserAgent(),
-      // Non-streaming, so bounding the whole request is right. Without this the
-      // SDK default would let a silent endpoint hold a turn open indefinitely.
-      timeoutMs: resolveRequestTimeoutMs(params)
+    return this.sendViaChatCompletions(params, apiKey, attachmentResults);
+  }
+  /** The messages that reach the wire: orphan tool messages (no toolCallId) are dropped. */
+  sendableMessages(params) {
+    return params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId));
+  }
+  /**
+   * Indexes, in the built `messages` array, of the messages the host flagged
+   * with `cacheControl` (the summary head).
+   */
+  hostCacheMarks(params) {
+    const marks = /* @__PURE__ */ new Set();
+    this.sendableMessages(params).forEach((m, i) => {
+      if (m.cacheControl?.type === "ephemeral") marks.add(i);
     });
-    const messages = this.buildChatCompletionsMessages(params);
-    const requestParams = {
-      model: params.model,
-      messages,
-      temperature: params.temperature ?? 0.7,
-      maxTokens: params.maxTokens ?? 4096,
-      topP: params.topP ?? 1,
-      stop: params.stop,
-      stream: false
-    };
-    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
-      requestParams.user = params.cacheKey;
-    }
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      requestParams.toolChoice = "auto";
-    }
-    if (params.webSearchEnabled) {
-      requestParams.plugins = [{ id: "web", maxResults: 5 }];
-    }
-    if (params.responseFormat) {
-      if (params.responseFormat.type === "json_schema" && params.responseFormat.jsonSchema) {
-        requestParams.responseFormat = {
-          type: "json_schema",
-          jsonSchema: {
-            name: params.responseFormat.jsonSchema.name,
-            strict: params.responseFormat.jsonSchema.strict ?? true,
-            schema: params.responseFormat.jsonSchema.schema
-          }
-        };
-      } else if (params.responseFormat.type !== "text") {
-        requestParams.responseFormat = { type: params.responseFormat.type };
-      }
-    }
-    const profileParams = params.profileParameters;
-    if (profileParams?.fallbackModels?.length) {
-      requestParams.models = [params.model, ...profileParams.fallbackModels];
-      requestParams.route = "fallback";
-      delete requestParams.model;
-    }
-    const providerPrefs = resolveProviderPrefs(profileParams);
-    if (providerPrefs) {
-      requestParams.provider = {};
-      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
-      if (providerPrefs.allowFallbacks !== void 0) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
-      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
-      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
-      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
-      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
-    }
-    const sendReasoningEffort = profileParams?.reasoningEffort;
-    if (typeof sendReasoningEffort === "string" && sendReasoningEffort.length > 0) {
-      requestParams.reasoning = { effort: sendReasoningEffort, exclude: false };
-    } else {
-      requestParams.reasoning = { exclude: false };
-    }
-    const response = await client.chat.send({
-      chatRequest: requestParams
-    });
-    const choice = response.choices[0];
-    const content = choice.message.content;
-    const contentStr = typeof content === "string" ? content : "";
-    const sendReasoningContent = choice.message?.reasoning;
-    const usageAny = response.usage;
-    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount ? {
-      cachedTokens: usageAny.cachedTokens,
-      cacheDiscount: usageAny.cacheDiscount,
-      cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
-      cacheReadInputTokens: usageAny.cacheReadInputTokens
-    } : void 0;
-    return {
-      content: contentStr,
-      finishReason: choice.finishReason || "stop",
-      usage: {
-        // Exclude cache-read tokens from prompt/total so cached input is not
-        // charged against budgets or cost; cacheUsage still reports them for
-        // display. (OpenRouter normalizes cached tokens into promptTokens.)
-        promptTokens: Math.max(0, (response.usage?.promptTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0)),
-        completionTokens: response.usage?.completionTokens ?? 0,
-        totalTokens: Math.max(0, (response.usage?.totalTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0))
-      },
-      raw: response,
-      attachmentResults,
-      cacheUsage,
-      ...sendReasoningContent && typeof sendReasoningContent === "string" ? { reasoningContent: sendReasoningContent } : {}
-    };
+    return marks;
   }
   /**
    * Build the OpenAI Chat Completions `messages` array: tool results keyed by
@@ -71656,7 +71670,7 @@ var OpenRouterProvider = class {
    * (no toolCallId) are dropped.
    */
   buildChatCompletionsMessages(params) {
-    return params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
+    return this.sendableMessages(params).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
         return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
       }
@@ -71693,6 +71707,8 @@ var OpenRouterProvider = class {
     };
     if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
       body.user = params.cacheKey;
+      body.prompt_cache_key = params.cacheKey;
+      if (params.cacheKey.length <= 256) body.session_id = params.cacheKey;
     }
     if (params.tools && params.tools.length > 0) {
       body.tools = params.tools.map((tool) => ({
@@ -71723,6 +71739,19 @@ var OpenRouterProvider = class {
       }
     }
     const profileParams = params.profileParameters;
+    if (profileParams?.enablePromptCaching === true && isAnthropicRoutedModel(params.model)) {
+      const placed = applyClaudeCacheBreakpoints(
+        body.messages,
+        this.hostCacheMarks(params),
+        profileParams.cacheTTL
+      );
+      logger.debug("Placed Claude prompt-cache breakpoints", {
+        context: "OpenRouterProvider.buildChatCompletionsBody",
+        model: params.model,
+        ttl: profileParams.cacheTTL ?? "5m",
+        breakpoints: placed
+      });
+    }
     if (profileParams?.fallbackModels?.length) {
       body.models = [params.model, ...profileParams.fallbackModels];
       delete body.model;
@@ -71794,17 +71823,18 @@ var OpenRouterProvider = class {
     const contentStr = typeof content === "string" ? content : "";
     const finishReason = choice?.finish_reason || "stop";
     const reasoningContent = choice?.message?.reasoning;
-    const cachedTokens = data.usage?.prompt_tokens_details?.cached_tokens;
-    const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
-    const cacheRead = cachedTokens ?? 0;
+    const { usage, cacheUsage } = readOpenRouterUsage(data.usage);
+    logger.debug("OpenRouter Chat Completions send finished", {
+      context: "OpenRouterProvider.sendViaChatCompletions",
+      finishReason,
+      usage,
+      cacheUsage,
+      cost: data.usage?.cost
+    });
     return {
       content: contentStr,
       finishReason,
-      usage: {
-        promptTokens: Math.max(0, (data.usage?.prompt_tokens ?? 0) - cacheRead),
-        completionTokens: data.usage?.completion_tokens ?? 0,
-        totalTokens: Math.max(0, (data.usage?.total_tokens ?? 0) - cacheRead)
-      },
+      usage,
       raw: data,
       attachmentResults,
       ...cacheUsage ? { cacheUsage } : {},
@@ -71865,6 +71895,7 @@ var OpenRouterProvider = class {
       let buffer = "";
       let usage;
       let cacheUsage;
+      let rawProviderUsage = null;
       const toolCalls = [];
       let fetchReasoning = "";
       let refusalText = "";
@@ -71926,14 +71957,8 @@ var OpenRouterProvider = class {
           }
           if (chunk.usage) {
             if (typeof chunk.usage.cost === "number") reportedCost = chunk.usage.cost;
-            const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens;
-            cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
-            const cacheRead = cachedTokens ?? 0;
-            usage = {
-              promptTokens: Math.max(0, (chunk.usage.prompt_tokens ?? 0) - cacheRead),
-              completionTokens: chunk.usage.completion_tokens ?? 0,
-              totalTokens: Math.max(0, (chunk.usage.total_tokens ?? 0) - cacheRead)
-            };
+            ({ usage, cacheUsage } = readOpenRouterUsage(chunk.usage));
+            rawProviderUsage = chunk.usage;
           }
         }
       }
@@ -71947,6 +71972,7 @@ var OpenRouterProvider = class {
         reasoningFields: [...reasoningFieldsSeen],
         hasUsage: !!usage,
         usage,
+        cacheUsage,
         cost: reportedCost
       });
       const rawResponse = {
@@ -71968,6 +71994,7 @@ var OpenRouterProvider = class {
         usage,
         attachmentResults,
         rawResponse,
+        rawProviderUsage,
         ...cacheUsage ? { cacheUsage } : {},
         ...fetchReasoning ? { reasoningContent: fetchReasoning } : {}
       };
@@ -72832,6 +72859,30 @@ var optionsSchema = {
           multiEnumSource: "fetchedModels",
           max: 2,
           default: []
+        }
+      ]
+    },
+    {
+      title: "Prompt Caching",
+      helpText: "OpenAI, Gemini, DeepSeek, Grok, Moonshot and their kin cache repeated context on their own, and Quilltap keeps each character on the same upstream so the shelf stays warm. Claude wants asking: switch this on and OpenRouter places the cache checkpoint itself, advancing it as the conversation grows, so a long-running chat re-reads its history at a tenth the price. The ledger's honest caveat: writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward. Pinning a provider order in the profile also switches off OpenRouter's cache-keeping stickiness.",
+      fields: [
+        {
+          key: "enablePromptCaching",
+          label: "Enable Prompt Caching",
+          type: "boolean",
+          default: false,
+          helpText: "Applies to Anthropic (Claude) models; other models ignore it and carry on with their own automatic caching."
+        },
+        {
+          key: "cacheTTL",
+          label: "Cache Duration",
+          type: "enum",
+          default: "5m",
+          enumValues: [
+            { value: "5m", label: "5 minutes (1.25x write cost)" },
+            { value: "1h", label: "1 hour (2x write cost)" }
+          ],
+          showIf: { field: "enablePromptCaching", equals: true }
         }
       ]
     }

@@ -180,23 +180,31 @@ export class AnthropicProvider implements TextProvider {
   /**
    * Place the conversation breakpoints for `system_and_long_context`.
    *
-   * **Tail breakpoint.** The final message of a Salon turn is the operator's
-   * line *plus* that turn's trailing context sections (recall, Core whisper,
-   * the line being answered, …) — thousands of tokens that are gone from the
-   * next turn's copy of the same message. A breakpoint on it writes a cache
-   * entry no later request can ever match. So the breakpoint goes on the
-   * message *before* the final one: everything up to it is history that the
-   * next turn sends again byte-for-byte, and the next turn reads it back. In a
-   * tool loop the same rule caches each step's prefix for the step after it.
-   * A single-message request keeps its breakpoint on that message.
+   * **The newest line is never marked.** A Salon turn's newest user line
+   * carries that turn's trailing context sections (recall, Core whisper, the
+   * line being answered, …), which are gone from the next turn's copy of it,
+   * so an entry written there is never read. It is the last *real* user
+   * message — one that is not just tool results — and need not be the final
+   * message: a multi-character `[Name]` prefill or a tool loop can follow it.
    *
-   * **Mid-history breakpoint.** On a long array the previous turn's tail can
-   * fall outside Anthropic's 20-block lookback from the new tail, so a second
-   * breakpoint sits mid-history. Its index is rounded down to a multiple of
-   * MID_BREAKPOINT_STEP so it stays on the same block for several turns.
-   * Stepping at K=15: between 20–34 messages it sits at index 0, between
-   * 35–49 at index 15, between 50–64 at index 30, etc. It is placed only when
-   * the four-breakpoint budget allows (tools and system take theirs first).
+   * **History breakpoints**, in order of worth:
+   *  1. in a tool loop, the final message (the latest tool results), which
+   *     every later step of the turn repeats;
+   *  2. the previous reply: the message before the run of user messages that
+   *     ends in the newest line. Live on Friday the old `length - 2` rule
+   *     marked the last of the whispers that precede the newest line; those
+   *     are swept and replaced on later turns, so the entry was never read and
+   *     reads stalled at an older prefix while the history grew;
+   *  3. the message just before the newest line, when it is not the previous
+   *     reply — whispers that are recorded and recur do get read back;
+   *  4. a stepped mid-history breakpoint on long arrays. On a long array the
+   *     previous turn's tail can fall outside Anthropic's 20-block lookback
+   *     from the new one; its index is rounded down to a multiple of
+   *     MID_BREAKPOINT_STEP so it stays on the same block for several turns.
+   *
+   * A lone message keeps its breakpoint on itself. Breakpoints are placed only
+   * while the four-breakpoint budget allows (tools, system and a caller's
+   * summary-head mark take theirs first).
    */
   private applyHistoryBreakpoints(
     messages: AnthropicMessage[],
@@ -205,28 +213,76 @@ export class AnthropicProvider implements TextProvider {
     if (opts.strategy !== 'system_and_long_context' || messages.length === 0) return
 
     const budget = AnthropicProvider.MAX_CACHE_BREAKPOINTS - opts.reservedBreakpoints
-    const tailIndex = messages.length >= 2 ? messages.length - 2 : messages.length - 1
+    const placed: number[] = []
+    const tryMark = (index: number): boolean => {
+      if (index < 0 || index >= messages.length) return false
+      if (this.countMessageBreakpoints(messages) >= budget) return false
+      if (!this.markBreakpoint(messages, index, opts.ttl)) return false
+      placed.push(index)
+      return true
+    }
 
-    if (this.countMessageBreakpoints(messages) < budget) {
-      this.markBreakpoint(messages, tailIndex, opts.ttl)
+    const last = messages.length - 1
+    if (messages.length === 1) {
+      tryMark(0)
+      return
+    }
+
+    let latestUser = -1
+    for (let i = last; i >= 0; i--) {
+      if (this.isRealUserMessage(messages[i])) { latestUser = i; break }
+    }
+    const toolLoop = latestUser >= 0 && messages.slice(latestUser + 1).some(m => this.isToolResultMessage(m))
+
+    if (toolLoop) tryMark(last)
+
+    if (latestUser > 0) {
+      let runStart = latestUser
+      while (runStart - 1 >= 0 && messages[runStart - 1].role === 'user' && !this.isToolResultMessage(messages[runStart - 1])) {
+        runStart--
+      }
+      tryMark(runStart - 1)
+      if (latestUser - 1 !== runStart - 1) tryMark(latestUser - 1)
+    } else if (latestUser < 0) {
+      // No real user line at all (an assistant-led request): the old rule.
+      tryMark(last - 1)
     }
 
     const MIN_MESSAGES_FOR_MID_BREAKPOINT = 20
     const MID_BREAKPOINT_STEP = 15
-    if (messages.length < MIN_MESSAGES_FOR_MID_BREAKPOINT) return
-
-    const rawIndex = messages.length - MID_BREAKPOINT_STEP
-    const steppedIndex = Math.floor(rawIndex / MID_BREAKPOINT_STEP) * MID_BREAKPOINT_STEP
-    if (steppedIndex < 0 || steppedIndex >= tailIndex) return
-    if (this.countMessageBreakpoints(messages) >= budget) {
-      logger.debug('Anthropic cache breakpoint budget spent; skipping mid-history breakpoint', {
-        context: 'AnthropicProvider.applyHistoryBreakpoints',
-        reservedBreakpoints: opts.reservedBreakpoints,
-        messageCount: messages.length,
-      })
-      return
+    if (messages.length >= MIN_MESSAGES_FOR_MID_BREAKPOINT) {
+      const rawIndex = messages.length - MID_BREAKPOINT_STEP
+      const steppedIndex = Math.floor(rawIndex / MID_BREAKPOINT_STEP) * MID_BREAKPOINT_STEP
+      const lowestHistoryMark = placed.length > 0 ? Math.min(...placed) : last
+      if (steppedIndex >= 0 && steppedIndex < lowestHistoryMark && !tryMark(steppedIndex)) {
+        logger.debug('Anthropic cache breakpoint budget spent; skipping mid-history breakpoint', {
+          context: 'AnthropicProvider.applyHistoryBreakpoints',
+          reservedBreakpoints: opts.reservedBreakpoints,
+          messageCount: messages.length,
+        })
+      }
     }
-    this.markBreakpoint(messages, steppedIndex, opts.ttl)
+
+    logger.debug('Placed Anthropic conversation cache breakpoints', {
+      context: 'AnthropicProvider.applyHistoryBreakpoints',
+      messageCount: messages.length,
+      latestUser,
+      toolLoop,
+      breakpoints: placed,
+    })
+  }
+
+  /** A user message that carries only tool results (a tool-loop step). */
+  private isToolResultMessage(message: AnthropicMessage): boolean {
+    return message.role === 'user'
+      && Array.isArray(message.content)
+      && message.content.length > 0
+      && message.content.every(block => block.type === 'tool_result')
+  }
+
+  /** A user message that is the operator's (or a whisper's) words, not tool results. */
+  private isRealUserMessage(message: AnthropicMessage): boolean {
+    return message.role === 'user' && !this.isToolResultMessage(message)
   }
 
   private formatMessagesWithAttachments(

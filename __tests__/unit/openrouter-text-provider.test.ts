@@ -8,7 +8,7 @@
  * legs) must carry image attachments to OpenRouter. The @openrouter/sdk
  * chat.send() request path rejects OpenAI content-parts (image_url) messages at
  * client-side validation, so vision sends are routed around it through a direct
- * Chat Completions fetch. Text-only sends keep the SDK path.
+ * Chat Completions fetch. Text-only sends now take the same fetch.
  *
  * #145: every streaming turn (plain, tool, image) goes through the same direct
  * fetch, and both fetch paths build their body in one place.
@@ -32,7 +32,7 @@ jest.mock('@quilltap/plugin-utils', () => ({
 }))
 
 import { OpenRouter, __mocks__ as openRouterMocks } from '@openrouter/sdk'
-import { OpenRouterProvider } from '@/plugins/dist/qtap-plugin-openrouter/provider'
+import { OpenRouterProvider, isAnthropicRoutedModel } from '@/plugins/dist/qtap-plugin-openrouter/provider'
 import type { LLMParams } from '@/plugins/dist/qtap-plugin-openrouter/types'
 
 const { mockChatSend } = openRouterMocks as unknown as { mockChatSend: jest.Mock }
@@ -137,10 +137,20 @@ describe('OpenRouterProvider.sendMessage — non-streaming vision (Bug 31)', () 
     expect(body.provider?.data_collection).toBe('deny')
   })
 
-  it('keeps the SDK path for text-only sends (no direct fetch)', async () => {
-    mockChatSend.mockResolvedValue({
-      choices: [{ message: { content: 'hello there' }, finishReason: 'stop' }],
-      usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5 },
+  it('sends text-only turns through the same fetch, never the SDK, reading cache usage', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: 'hello there' }, finish_reason: 'stop' }],
+        usage: {
+          prompt_tokens: 1000,
+          completion_tokens: 2,
+          total_tokens: 1002,
+          prompt_tokens_details: { cached_tokens: 900, cache_write_tokens: 50 },
+        },
+      }),
+      text: async () => '',
     })
 
     const params = {
@@ -150,9 +160,12 @@ describe('OpenRouterProvider.sendMessage — non-streaming vision (Bug 31)', () 
 
     const res = await provider.sendMessage(params, 'sk-test')
 
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(mockChatSend).toHaveBeenCalledTimes(1)
+    expect(mockChatSend).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(res.content).toBe('hello there')
+    expect(res.cacheUsage).toEqual({ cacheReadInputTokens: 900, cachedTokens: 900, cacheCreationInputTokens: 50 })
+    expect(res.usage.promptTokens).toBe(100)
+    expect(res.usage.totalTokens).toBe(102)
   })
 })
 
@@ -399,5 +412,142 @@ describe('OpenRouterProvider.streamMessage — one Chat Completions path (#145)'
     expect(raw.choices[0].delta.toolCalls).toEqual([
       { id: 'call_1', type: 'function', function: { name: 'roll', arguments: '{"sides":6}' } },
     ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Prompt caching
+// ---------------------------------------------------------------------------
+
+describe('OpenRouterProvider prompt caching', () => {
+  let provider: OpenRouterProvider
+  let fetchMock: jest.Mock
+  const originalFetch = global.fetch
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    provider = new OpenRouterProvider()
+    fetchMock = jest.fn()
+    fetchMock.mockResolvedValue(sseResponse([{ choices: [{ delta: { content: 'x' }, finish_reason: 'stop' }] }]))
+    global.fetch = fetchMock as unknown as typeof fetch
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  async function bodyFor(params: LLMParams) {
+    await collect(provider.streamMessage(params, 'sk-test'))
+    return JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+  }
+
+  function chat(model: string, profileParameters: Record<string, unknown> = {}, messages?: unknown[]): LLMParams {
+    return {
+      model,
+      cacheKey: 'quilltap:char:abc:v4',
+      profileParameters,
+      messages: messages ?? [
+        { role: 'system', content: 'identity stack' },
+        { role: 'system', content: 'reminder' },
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'reply' },
+        { role: 'user', content: 'newest, wrapped in this turn' },
+      ],
+    } as unknown as LLMParams
+  }
+
+  const marked = (body: any) =>
+    body.messages
+      .map((m: any, i: number) => (Array.isArray(m.content) && m.content.some((p: any) => p.cache_control) ? i : -1))
+      .filter((i: number) => i >= 0)
+
+  it('sends the cache key as session_id, prompt_cache_key and user', async () => {
+    const body = await bodyFor(chat('openai/gpt-4.1-mini'))
+    expect(body.session_id).toBe('quilltap:char:abc:v4')
+    expect(body.prompt_cache_key).toBe('quilltap:char:abc:v4')
+    expect(body.user).toBe('quilltap:char:abc:v4')
+  })
+
+  it('places no breakpoints unless Prompt Caching is on', async () => {
+    const body = await bodyFor(chat('anthropic/claude-haiku-4.5'))
+    expect(marked(body)).toEqual([])
+    expect(body).not.toHaveProperty('cache_control')
+  })
+
+  it('places no breakpoints on non-Claude models even when on', async () => {
+    const body = await bodyFor(chat('openai/gpt-4.1-mini', { enablePromptCaching: true }))
+    expect(marked(body)).toEqual([])
+  })
+
+  it('marks the first system message and the history tail, never the newest line', async () => {
+    const body = await bodyFor(chat('anthropic/claude-haiku-4.5', { enablePromptCaching: true }))
+    expect(body).not.toHaveProperty('cache_control')
+    expect(marked(body)).toEqual([0, 3])
+    expect(body.messages[0].content).toEqual([{ type: 'text', text: 'identity stack', cache_control: { type: 'ephemeral' } }])
+    expect(body.messages[4].content).toEqual([{ type: 'text', text: 'newest, wrapped in this turn' }])
+  })
+
+  it('renders every message as a list, marked or not, so a mark never changes the prefix', async () => {
+    const body = await bodyFor(chat('anthropic/claude-haiku-4.5', { enablePromptCaching: true }))
+    for (const m of body.messages) expect(Array.isArray(m.content)).toBe(true)
+  })
+
+  it('looks past a multi-character prefill to the newest user line', async () => {
+    const body = await bodyFor(chat('anthropic/claude-haiku-4.5', { enablePromptCaching: true }, [
+      { role: 'system', content: 'identity stack' },
+      { role: 'user', content: 'older line' },
+      { role: 'assistant', content: 'previous reply' },
+      { role: 'user', content: 'vault whisper' },
+      { role: 'user', content: 'newest, wrapped in this turn' },
+      { role: 'assistant', content: '[Walt Pruitt]' },
+    ]))
+    expect(marked(body)).toEqual([0, 2, 3])
+  })
+
+  it('carries the one-hour TTL', async () => {
+    const body = await bodyFor(chat('~anthropic/claude-sonnet-latest', { enablePromptCaching: true, cacheTTL: '1h' }))
+    expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
+  })
+
+  it('marks the final tool result in a tool loop', async () => {
+    const body = await bodyFor(chat('anthropic/claude-haiku-4.5', { enablePromptCaching: true }, [
+      { role: 'system', content: 'identity stack' },
+      { role: 'user', content: 'look it up' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 't1', type: 'function', function: { name: 'f', arguments: '{}' } }] },
+      { role: 'tool', toolCallId: 't1', content: 'result' },
+    ]))
+    expect(marked(body)).toEqual([0, 3])
+  })
+
+  it('honours the host mark and never exceeds four breakpoints', async () => {
+    const messages: any[] = [{ role: 'system', content: 'identity stack' }]
+    messages.push({ role: 'user', content: 'SUMMARY', cacheControl: { type: 'ephemeral' } })
+    for (let i = 0; i < 40; i++) messages.push({ role: i % 2 ? 'assistant' : 'user', content: `m${i}` })
+    const body = await bodyFor(chat('anthropic/claude-haiku-4.5', { enablePromptCaching: true }, messages))
+    const idx = marked(body)
+    expect(idx.length).toBeLessThanOrEqual(4)
+    // Final message is an assistant reply; the newest user line is the one before it.
+    expect(idx).toEqual(expect.arrayContaining([0, 1, messages.length - 3]))
+    expect(idx).not.toContain(messages.length - 2)
+  })
+
+  it('keeps OpenRouter\'s raw usage and cache-write tokens on the final chunk', async () => {
+    const usage = { prompt_tokens: 500, completion_tokens: 3, total_tokens: 503, prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 480 } }
+    fetchMock.mockResolvedValue(sseResponse([
+      { choices: [{ delta: { content: 'x' }, finish_reason: 'stop' }] },
+      { choices: [], usage },
+    ]))
+    const chunks = await collect(provider.streamMessage(chat('anthropic/claude-haiku-4.5', { enablePromptCaching: true }), 'sk-test'))
+    const last = chunks[chunks.length - 1]
+    expect(last.rawProviderUsage).toEqual(usage)
+    expect(last.cacheUsage).toEqual({ cacheCreationInputTokens: 480 })
+    expect(last.usage.promptTokens).toBe(500)
+  })
+
+  it('recognises Anthropic-routed model ids', () => {
+    expect(isAnthropicRoutedModel('anthropic/claude-haiku-4.5')).toBe(true)
+    expect(isAnthropicRoutedModel('~anthropic/claude-sonnet-latest')).toBe(true)
+    expect(isAnthropicRoutedModel('openai/gpt-4o')).toBe(false)
+    expect(isAnthropicRoutedModel(undefined)).toBe(false)
   })
 })

@@ -24784,6 +24784,18 @@ var NANOGPT_PROFILE_PARAM_ALLOWLIST = [
   "top_logprobs",
   "reasoning_effort"
 ];
+function promptCacheCutIndex(messages) {
+  let latestUser = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === "user") {
+      latestUser = i;
+      break;
+    }
+  }
+  if (latestUser < 1) return void 0;
+  if (messages.slice(latestUser + 1).some((m) => m?.role === "tool")) return void 0;
+  return latestUser - 1;
+}
 var NanoGPTProvider = class extends OpenAICompatibleProvider {
   constructor(config2) {
     super({
@@ -24935,7 +24947,18 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
     }
     if (params.profileParameters?.enablePromptCaching === true) {
       const ttl = params.profileParameters.cacheTTL === "1h" ? "1h" : "5m";
-      body.promptCaching = { enabled: true, ttl };
+      const cutAfterMessageIndex = promptCacheCutIndex(formatted.messages);
+      body.promptCaching = {
+        enabled: true,
+        ttl,
+        ...cutAfterMessageIndex !== void 0 ? { cutAfterMessageIndex } : {}
+      };
+      this.logger.debug("NanoGPT prompt caching requested", {
+        context: "NanoGPTProvider.buildBody",
+        model: params.model,
+        ttl,
+        cutAfterMessageIndex
+      });
     }
     this.applyProfileParams(body, params);
     return { body, attachmentResults: formatted.attachmentResults };
@@ -26095,7 +26118,7 @@ var optionsSchema = {
     },
     {
       title: "Prompt Caching",
-      helpText: "NanoGPT's OpenAI- and Gemini-routed models cache repeated context on their own, gratis and automatic. Anthropic-routed (Claude) models want asking: switch this on and NanoGPT places the cache checkpoints itself, so a long-running conversation re-reads its history at a tenth the price. The ledger's honest caveat \u2014 writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward.",
+      helpText: "NanoGPT's OpenAI- and Gemini-routed models cache repeated context on their own, gratis and automatic. Anthropic-routed (Claude) models want asking: switch this on and NanoGPT places the cache checkpoints itself, so a long-running conversation re-reads its history at a tenth the price. The ledger's honest caveat \u2014 writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward. Mind the subscription, too: NanoGPT bills an explicitly cached request pay-as-you-go, outside any subscription that would otherwise cover the model.",
       fields: [
         {
           key: "enablePromptCaching",

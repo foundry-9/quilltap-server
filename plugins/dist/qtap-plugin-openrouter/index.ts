@@ -151,6 +151,32 @@ const optionsSchema: ProviderOptionsSchema = {
         },
       ],
     },
+    {
+      title: 'Prompt Caching',
+      helpText:
+        'OpenAI, Gemini, DeepSeek, Grok, Moonshot and their kin cache repeated context on their own, and Quilltap keeps each character on the same upstream so the shelf stays warm. Claude wants asking: switch this on and OpenRouter places the cache checkpoint itself, advancing it as the conversation grows, so a long-running chat re-reads its history at a tenth the price. The ledger\'s honest caveat: writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward. Pinning a provider order in the profile also switches off OpenRouter\'s cache-keeping stickiness.',
+      fields: [
+        {
+          key: 'enablePromptCaching',
+          label: 'Enable Prompt Caching',
+          type: 'boolean',
+          default: false,
+          helpText:
+            'Applies to Anthropic (Claude) models; other models ignore it and carry on with their own automatic caching.',
+        },
+        {
+          key: 'cacheTTL',
+          label: 'Cache Duration',
+          type: 'enum',
+          default: '5m',
+          enumValues: [
+            { value: '5m', label: '5 minutes (1.25x write cost)' },
+            { value: '1h', label: '1 hour (2x write cost)' },
+          ],
+          showIf: { field: 'enablePromptCaching', equals: true },
+        },
+      ],
+    },
   ],
 };
 
