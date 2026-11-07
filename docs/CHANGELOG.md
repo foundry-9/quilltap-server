@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Fix: Z.AI plugin sends the prompt-cache key as `user_id`
+
+- Z.AI's chat API names its end-user field `user_id` (6–128 characters). The plugin sent OpenAI's `user`, which Z.AI does not list, so the per-character cache key from `buildCharacterCacheKey` never reached it. `zaiUserId` (plugin `provider.ts`) now puts the key in `user_id` on both send and stream, and omits a key outside the documented length rather than risk a 400. Z.AI plugin 1.1.35.
+- DeepSeek streams now keep the provider's own usage object (`prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`) on the final chunk as `rawProviderUsage`, so the LLM log records DeepSeek's hit/miss split. DeepSeek plugin 1.0.31.
+- Audit, Friday instance, same multi-character chat with identical system blocks and tools across turns: DeepSeek `deepseek-v4-flash` hit about 85% of prompt tokens per call; Z.AI `glm-5.3-flash` hit 0 on 13 straight turns with byte-identical message prefixes, and hits on other chats land on fixed sizes (often 32768). The prefix Quilltap sends is stable, so the Z.AI shortfall is on the provider side or in routing. Whether `user_id` improves it still has to be measured.
+- Test: `__tests__/unit/plugins/prompt-cache-wire-fields.test.ts`.
+
 #### Security: Docker production image moves from Debian bookworm to Wolfi
 
 - The production stage of `Dockerfile` and `Dockerfile.ci` now starts from `cgr.dev/chainguard/wolfi-base:latest` and installs `nodejs-24`, `libstdc++`, `bash`, `zip` and `unzip` with `apk`. Every finding left in the `node:24-bookworm-slim` image (1 critical, about 10 high: util-linux, zlib, ncurses, systemd libraries, gzip, acl) was a Debian package marked affected, fix-deferred or will-not-fix, so `apt-get upgrade` could not clear them; `node:24-trixie-slim` scanned worse (13 high). Trivy on a local arm64 build: 97 findings (1 critical, 9 high) on the published 4.13.0-dev.29 image, 1 on the Wolfi build (a low in the app's own `katex` dependency, not the OS).

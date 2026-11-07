@@ -24174,6 +24174,11 @@ function supportsReasoningEffort(model) {
   if (major < 5) return false;
   return minor >= 2;
 }
+function zaiUserId(cacheKey) {
+  if (typeof cacheKey !== "string") return void 0;
+  if (cacheKey.length < 6 || cacheKey.length > 128) return void 0;
+  return cacheKey;
+}
 var ZAIProvider = class {
   constructor() {
     this.baseUrl = "https://api.z.ai/api/paas/v4";
@@ -24385,9 +24390,8 @@ var ZAIProvider = class {
         };
       }
     }
-    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
-      body.user = params.cacheKey;
-    }
+    const userId = zaiUserId(params.cacheKey);
+    if (userId) body.user_id = userId;
     this.applyProfileParameters(body, params);
     const response = await client.chat.completions.create(
       body
@@ -24468,9 +24472,8 @@ var ZAIProvider = class {
         };
       }
     }
-    if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
-      body.user = params.cacheKey;
-    }
+    const userId = zaiUserId(params.cacheKey);
+    if (userId) body.user_id = userId;
     this.applyProfileParameters(body, params);
     const stream = await client.chat.completions.create(
       body

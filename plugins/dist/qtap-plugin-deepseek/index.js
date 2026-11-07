@@ -24750,6 +24750,10 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
         toolCalls: toolCalls.length > 0 ? toolCalls : void 0,
         attachmentResults,
         rawResponse,
+        // Keep DeepSeek's own hit/miss split (prompt_cache_hit_tokens /
+        // prompt_cache_miss_tokens) on the LLM log so cache health can be
+        // audited from the provider's numbers, not just our derived ones.
+        rawProviderUsage: usage ?? null,
         ...reasoningContent ? { reasoningContent } : {},
         ...cacheUsage ? { cacheUsage } : {}
       };

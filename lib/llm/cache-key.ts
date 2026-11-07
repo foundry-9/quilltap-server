@@ -11,7 +11,8 @@
  *     requests above ~15 RPM shard across machines and degrade hit rate;
  *     on Grok, every request round-robins).
  *   - DeepSeek: `user_id` (KV-cache isolation namespace).
- *   - OpenAI-compatible / Z.AI / OpenRouter (OpenAI-routed): `user`.
+ *   - Z.AI: `user_id` (6–128 chars; the plugin omits a key outside that).
+ *   - OpenAI-compatible / OpenRouter (OpenAI-routed): `user`.
  *   - Anthropic: ignored (uses content-hashed `cache_control` breakpoints).
  *   - Ollama / Curl: ignored (local KV / raw passthrough).
  *
