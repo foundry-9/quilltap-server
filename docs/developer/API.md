@@ -4491,17 +4491,44 @@ Any frame may carry `seat: { participantId, concurrent: true }` — a Storytelle
 
 Get a specific message.
 
+#### `GET /api/v1/messages/[id]?action=edit-impact`
+
+What editing this message would disturb (`assessMessageEditImpact`, `lib/services/chat-message/message-edit-impact.ts`). Reads only. The Salon calls it when the editor opens.
+
+```json
+{
+  "impact": {
+    "seenByLlm": true,
+    "laterLlmCalls": 3,
+    "laterCharacterLines": 1,
+    "memoryCount": 2,
+    "memorySource": "turn",
+    "canRegenerateMemories": true
+  }
+}
+```
+
+- `laterLlmCalls` — `llm_logs` rows for the chat created after the message, less its own `CHAT_MESSAGE` / `TOOL_CONTINUATION` rows (and its swipe siblings').
+- `laterCharacterLines` — character lines after it; the signal when logging is off. `seenByLlm` is true when either is non-zero.
+- `memorySource` — `turn` (a conversation line: memories of its whole extraction turn), `carina`, `established-fact`, or null (other Staff rows).
+- `canRegenerateMemories` — memories exist and a profile is available to extract with (`resolveChatExtractionProfileId`; an established fact needs none).
+
 #### `PUT /api/v1/messages/[id]`
 
-Edit a message.
+Edit any message — the operator's, a character's, or a Staff row's. Clears the row's `opaqueContent` when it has one, so opaque chats send the edited text.
 
 **Request Body**:
 
 ```json
 {
-  "content": "Updated message content"
+  "content": "Updated message content",
+  "regenerateMemories": true
 }
 ```
+
+`regenerateMemories` (optional): after the write, retire the memories the old text formed (`retireMemories`, reason `message-edit`) and enqueue the source's job to form them again — a `MEMORY_EXTRACTION` turn job with `backfill: true`, a `CARINA_MEMORY_EXTRACTION`, or an `ESTABLISHED_FACT_MEMORIES`. Nothing is retired when no profile is available.
+
+**Response**: `{ "message": {...}, "memoriesRetired": 2, "memoryJobId": "…" | null, "memoryRegenerateFailed": false }`
 
 #### `DELETE /api/v1/messages/[id]`
 

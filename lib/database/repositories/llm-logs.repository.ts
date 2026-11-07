@@ -652,6 +652,33 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   }
 
   /**
+   * Count a chat's logs written strictly after a timestamp — how many model
+   * calls could have read a line that landed then. `only` narrows the count to
+   * the given message ids and/or log types (used to subtract a line's own
+   * generation calls). Counts only; never loads a request or response body.
+   */
+  async countForChatSince(
+    chatId: string,
+    sinceTimestamp: string,
+    only?: { messageIds?: string[]; types?: LLMLogType[] },
+  ): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<LLMLog> = {
+          chatId,
+          createdAt: { $gt: sinceTimestamp },
+          ...(only?.messageIds ? { messageId: { $in: only.messageIds } } : {}),
+          ...(only?.types ? { type: { $in: only.types } } : {}),
+        };
+        return this.count(filter);
+      },
+      'Error counting LLM logs for chat since timestamp',
+      { chatId, sinceTimestamp },
+      0
+    );
+  }
+
+  /**
    * Delete logs by message ID
    * @param messageId The message ID
    * @returns Promise<number> Number of logs deleted

@@ -7,6 +7,15 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { Message, MemoryCascadeAction, ChatSettings } from '../types'
 import { queryKeys } from '@/lib/query/keys'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
+import { apiFetch } from '@/lib/query/fetcher'
+import type { MessageEditImpact } from '@/lib/schemas/message-edit-impact.types'
+
+/** The open editor's impact check: in flight, answered, or failed. */
+export interface EditImpactState {
+  messageId: string
+  status: 'loading' | 'ready' | 'error'
+  impact: MessageEditImpact | null
+}
 
 /** Info returned when delete requires memory cascade confirmation */
 export interface MemoryCascadeConfirmation {
@@ -33,22 +42,41 @@ export function useMessageActions(
   const queryClient = useQueryClient()
   // State for memory cascade dialog
   const [memoryCascadeConfirmation, setMemoryCascadeConfirmation] = useState<MemoryCascadeConfirmation | null>(null)
+  // What editing the open line would disturb (fetched when the editor opens),
+  // and whether to regenerate the memories its old text formed.
+  const [editImpact, setEditImpact] = useState<EditImpactState | null>(null)
+  const [regenerateMemoriesOnSave, setRegenerateMemoriesOnSave] = useState(true)
+
   const startEdit = (message: Message) => {
     setEditingMessageId(message.id)
     setEditContent(message.content)
+    setRegenerateMemoriesOnSave(true)
+    setEditImpact({ messageId: message.id, status: 'loading', impact: null })
+    // Any line may be edited; ask what a model has already made of it.
+    apiFetch<{ impact: MessageEditImpact }>(`/api/v1/messages/${message.id}?action=edit-impact`)
+      .then(({ impact }) => {
+        setEditImpact(prev => (prev?.messageId === message.id ? { messageId: message.id, status: 'ready', impact } : prev))
+      })
+      .catch(() => {
+        // The edit still works; we just cannot say what it disturbs.
+        setEditImpact(prev => (prev?.messageId === message.id ? { messageId: message.id, status: 'error', impact: null } : prev))
+      })
   }
 
   const cancelEdit = () => {
     setEditingMessageId(null)
     setEditContent('')
+    setEditImpact(null)
   }
 
   const saveEdit = async (messageId: string) => {
+    const impact = editImpact?.messageId === messageId ? editImpact.impact : null
+    const regenerateMemories = !!impact?.canRegenerateMemories && regenerateMemoriesOnSave
     try {
       const res = await fetch(`/api/v1/messages/${messageId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editContent }),
+        body: JSON.stringify({ content: editContent, regenerateMemories }),
       })
 
       if (!res.ok) throw new Error('Failed to update message')
@@ -56,9 +84,23 @@ export function useMessageActions(
       const updated = await res.json()
       // The endpoint returns { message: <event> }; fall back to what we sent.
       const newContent: string = updated?.message?.content ?? editContent
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent } : m))
+      // The pre-rendered HTML was rendered from the old text; drop it so the
+      // row renders what was just written.
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: newContent, renderedHtml: null } : m))
       setEditingMessageId(null)
       setEditContent('')
+      setEditImpact(null)
+
+      if (regenerateMemories) {
+        if (updated?.memoryRegenerateFailed) {
+          showErrorToast('Saved, but the memories could not be regenerated')
+        } else if (updated?.memoryJobId) {
+          const retired: number = updated?.memoriesRetired ?? 0
+          showSuccessToast(
+            `Saved. ${retired} ${retired === 1 ? 'memory' : 'memories'} retired; fresh ones are being drawn from the new text.`
+          )
+        }
+      }
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to update message')
     }
@@ -367,6 +409,9 @@ export function useMessageActions(
     startEdit,
     cancelEdit,
     saveEdit,
+    editImpact,
+    regenerateMemoriesOnSave,
+    setRegenerateMemoriesOnSave,
     deleteMessage,
     canResendMessage,
     resendMessage,

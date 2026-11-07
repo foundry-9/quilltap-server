@@ -2813,6 +2813,31 @@
   }
 
   /**
+   * In-place message editor — the notices above the textarea (a model has
+   * read the line; memories it formed, with the regenerate checkbox) and the
+   * Save / Cancel row beneath it.
+   */
+  .qt-chat-message-editor {
+    @apply space-y-2;
+  }
+
+  .qt-chat-message-editor-notice {
+    @apply space-y-1;
+  }
+
+  .qt-chat-message-editor-option {
+    @apply flex items-start gap-2 cursor-pointer;
+  }
+
+  .qt-chat-message-editor-option input {
+    @apply mt-0.5;
+  }
+
+  .qt-chat-message-editor-actions {
+    @apply flex gap-2;
+  }
+
+  /**
    * Message action bar - shows action icons at bottom of message
    * Persistent on mobile, replaces hover-based actions
    */

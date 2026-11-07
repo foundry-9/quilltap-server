@@ -106,7 +106,7 @@ export function findAutonomousTurnAnchorMessageId(messages: MessageEvent[]): str
   return null
 }
 
-function isAutonomousTurnAnchor(m: MessageEvent): boolean {
+export function isAutonomousTurnAnchor(m: MessageEvent): boolean {
   return m.type === 'message' && m.role === 'ASSISTANT' && !m.systemSender && !m.isSilentMessage && !!m.participantId
 }
 

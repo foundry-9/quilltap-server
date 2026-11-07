@@ -4,6 +4,19 @@
 
 ### 4.13-dev
 
+#### Feature: Edit any line in the Salon, with warnings about what the edit disturbs
+
+- The pencil now appears on every message row, not only the operator's: character lines, Staff announcements, Carina answers and established facts. `PUT /api/v1/messages/[id]` already accepted any message; the Salon was the gate (`MessageActionBar`).
+- Opening the editor calls the new `GET /api/v1/messages/[id]?action=edit-impact`, answered by `assessMessageEditImpact` (`lib/services/chat-message/message-edit-impact.ts`). It reports whether a model has read the line since it landed (chat `llm_logs` rows after `createdAt`, less the line's own `CHAT_MESSAGE` / `TOOL_CONTINUATION` rows, via new `LLMLogsRepository.countForChatSince`; later character lines as the fallback when logging is off) and how many memories the old text formed. The editor (`message-row/MessageEditor.tsx`) shows a warning for the first and, for the second, a "regenerate on save" checkbox that defaults to on.
+- `locateMemorySource` maps a line to the path that stamped its memories: a conversation line to its whole extraction turn (turn memories carry the turn's last character line, so a user line's memories sit on another row; autonomous rooms use the speaker anchor span), a Carina answer to `CARINA_MEMORY_EXTRACTION`, a machine established fact to `ESTABLISHED_FACT_MEMORIES`. Other Staff rows have no memory source.
+- `PUT` takes `regenerateMemories: true`. After the edit is written, `regenerateEditedMessageMemories` retires the sourced memories through `retireMemories` (new reason `message-edit`; AUTO rows only, except an established fact's MANUAL rows) and enqueues that path's job (a turn job runs with `backfill: true`, so it reads the turn whole past the live cursor). With no profile to extract on, nothing is retired. Response adds `memoriesRetired`, `memoryJobId`, `memoryRegenerateFailed`.
+- Editing a row that carries `opaqueContent` clears it, so opaque chats send the edited text instead of the stale persona-free copy.
+- The client now drops a saved row's `renderedHtml`, so an edited character line no longer keeps showing its pre-rendered old text until reload.
+- `resolveChatExtractionProfileId` (`lib/memory/extraction/context.ts`) replaces the queue-memories action's private resolver; `isAutonomousTurnAnchor` is exported from `turn-transcript.ts`.
+- Not covered: tool-result rows (rendered by `ToolMessage`) and the pending Courier placeholder have no pencil. Fold-grain memories sourced inside the edited turn are retired with the turn's and come back only as turn memories.
+- New `qt-chat-message-editor*` classes (`_chat.css`) for the editor layout; storybook CSS regenerated, `@quilltap/theme-storybook` 1.0.103.
+- Test: `__tests__/unit/lib/services/chat-message/message-edit-impact.test.ts`.
+
 #### Fix: Anthropic plugin no longer caches the turn's whispers instead of its history
 
 - `applyHistoryBreakpoints` (Anthropic plugin `provider.ts`) put the conversation breakpoint on `messages.length - 2`. In a Salon turn that is usually the last of the whispers sent just before the newest user line, not history. Snapshot whispers are swept and replaced on later turns, so the entry was often never read. Friday, `claude-sonnet-4-6`: reads stalled at 60,266 tokens for two turns while the history grew. With a multi-character `[Name]` prefill as the final message, `length - 2` was the newest user line itself.

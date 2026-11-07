@@ -47,25 +47,38 @@ On touch devices:
 
 ## Actions for Your Messages
 
-### Edit Your Message
+### Edit Any Line
 
-Modify what you said:
+Every line in the transcript wears a **pencil** — your own remarks, a character's speeches, and the Staff's announcements alike. Nothing that appears in the conversation is beyond correction.
 
-1. Hover over your message
+1. Hover over the line
 2. Click **Edit** (pencil icon)
-3. Message text becomes editable
+3. The text becomes editable, and any notices about what the edit disturbs appear above it (see below)
 4. Make your changes
 5. Click **Save** to confirm or **Cancel** to discard
 
 **What happens:**
-- Your edited message replaces the original
-- Timestamp and metadata preserved
-- If a character already responded, their response remains unchanged
+- The edited text replaces the original; there is no second copy kept (a swipe is the tool for keeping alternatives)
+- Timestamp, speaker and metadata are preserved
+- Every later model call reads the edited version — it becomes the truth of the record
+- A Staff announcement that carried a separate, plainer version for the models loses it: the models read precisely what you wrote
+
+**"A model has already read this line."** The instant the editor opens, Quilltap consults its ledgers. If any model has been handed this line since it landed — a character answering it, the Commonplace Book reading the turn, a summary being folded, a title being considered — a yellow notice says so, and how many times. Your edit changes what every *future* call sees; it cannot unsay what was already said in answer to the old words. A character's reply that rested on your typo will go on resting on it until you regenerate or edit the reply as well. (When request logging is off, the notice counts the character lines written after yours instead, which is nearly always the same answer.)
+
+**"The Commonplace Book holds memories drawn from this."** If the old text has already furnished memories, a second notice gives the count, with a box — ticked by default — to **regenerate them on save**: the old memories are retired and fresh ones are drawn from the edited text in the background. Leave it unticked to keep the old memories as they stand. Which memories count depends on the line:
+
+- An ordinary line of conversation — yours or a character's — counts the memories of **the whole turn** it belongs to (from your remark to the last reply before your next one), because the Commonplace Book reads and remembers a turn as one piece. Regenerating re-reads that turn.
+- A Carina answer counts the answerer's memories of that exchange.
+- An established fact counts the memories each character was given of it.
+- Other Staff announcements are never read for memories, so they have none.
+
+If no connection profile is at hand to draw fresh memories with, the notice says so and the old ones are left alone rather than discarded for nothing.
 
 **Use cases:**
-- Fix typos or errors
-- Clarify what you meant
-- Add forgotten details
+- Fix typos or errors — yours or a character's
+- Clarify what you meant, or add a forgotten detail
+- Adjust a character's voice, trim an overlong speech, or strike unwanted content
+- Correct a Staff announcement that got a detail wrong
 
 ### Delete Your Message
 
@@ -187,24 +200,7 @@ When a message has multiple versions:
 
 ### Edit Character Message
 
-Modify what the character said:
-
-1. Hover over the character's message
-2. Click **Edit** (pencil icon)
-3. Text becomes editable
-4. Make changes
-5. Click **Save** or **Cancel**
-
-**What happens:**
-- Message content is updated
-- Original is not preserved (unlike swipes)
-- Character "remembers" the edited version going forward
-
-**Use cases:**
-- Fix minor issues in an otherwise good response
-- Adjust character voice or tone
-- Remove unwanted content
-- Add missing details
+A character's line is edited exactly as your own is — see [Edit Any Line](#edit-any-line), including the notices about models that have already read it and memories it furnished.
 
 ### Delete Character Message
 
@@ -424,7 +420,8 @@ Check Settings for your configured shortcuts.
 
 ### For Context Management
 
-- **Edited messages become "truth"** — AI sees edited version
+- **Edited messages become "truth"** — AI sees edited version from then on, but replies already written to the old version are unchanged
+- **Regenerate memories after a meaningful edit** — otherwise the Commonplace Book remembers the old words
 - **Deleted messages create gaps** — Subsequent messages may not make sense
 - **Swipe selection matters** — Only current swipe is in context
 
@@ -433,13 +430,14 @@ Check Settings for your configured shortcuts.
 ### Can't edit message
 
 **Causes:**
-- Message is currently generating
-- Message is a system message
+- Message is currently being regenerated (its icons are greyed out)
+- A collapsed announcement chip — expand it first to reach its icons
+- A pending Courier hand-off, which is answered by pasting, not editing
 - UI issue
 
 **Solutions:**
-- Wait for generation to complete
-- System messages can't be edited
+- Wait for the regeneration to finish
+- Click the chip to expand the announcement, then use its pencil
 - Refresh the page
 
 ### Regenerate produces same response

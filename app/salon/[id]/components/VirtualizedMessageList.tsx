@@ -1,6 +1,7 @@
 'use client'
 
 import type { Virtualizer } from '@tanstack/react-virtual'
+import type { EditImpactState } from '../hooks/useMessageActions'
 import ToolMessage from '@/components/chat/ToolMessage'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { TurnState } from '@/lib/chat/turn-manager'
@@ -59,6 +60,9 @@ interface VirtualizedMessageListProps {
     startEdit: (message: Message) => void
     saveEdit: (messageId: string) => Promise<void>
     cancelEdit: () => void
+    editImpact: EditImpactState | null
+    regenerateMemoriesOnSave: boolean
+    setRegenerateMemoriesOnSave: (value: boolean) => void
     toggleSourceView: (messageId: string) => void
     deleteMessage: (messageId: string) => Promise<void>
     switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
@@ -322,6 +326,8 @@ export function VirtualizedMessageList({
                   messageIndex={messageIndex}
                   isEditing={isEditing}
                   editContent={editContent}
+                  editImpact={isEditing ? messageActions.editImpact : null}
+                  regenerateMemoriesOnSave={messageActions.regenerateMemoriesOnSave}
                   viewSourceMessageIds={viewSourceMessageIds}
                   isSystemMessageCollapsed={
                     // Same rule that packs chip groups, so an always-expanded
@@ -353,6 +359,7 @@ export function VirtualizedMessageList({
                   onEditSave={messageActions.saveEdit}
                   onEditCancel={messageActions.cancelEdit}
                   onEditChange={setEditContent}
+                  onRegenerateMemoriesChange={messageActions.setRegenerateMemoriesOnSave}
                   onToggleSourceView={messageActions.toggleSourceView}
                   onDelete={messageActions.deleteMessage}
                   onGenerateSwipe={onRegenerate}
