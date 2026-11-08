@@ -36,6 +36,7 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 import { unionTypes } from '@/lib/wardrobe/composite-types'
 import { linkWardrobeItemImage, uploadWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
+import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
 
 // ============================================================================
 // TYPES
@@ -50,6 +51,8 @@ interface ImportFromImageModalProps {
 interface ProposedItem {
   title: string
   description: string
+  /** The image-generation cue the analysis wrote; always filled, capped. */
+  imagePrompt: string
   types: WardrobeItemType[]
   appropriateness: string
   selected: boolean
@@ -194,6 +197,7 @@ export function ImportFromImageModal({
         proposedItems: Array<{
           title: string
           description: string
+          imagePrompt: string
           types: WardrobeItemType[]
           appropriateness: string
         }>
@@ -224,7 +228,7 @@ export function ImportFromImageModal({
 
       const reader = visionProfiles.find(p => p.id === selectedProfileId)
       setAnalyzedBy(reader ? `${reader.name} (${reader.provider} • ${reader.modelName})` : `${result.data.provider} • ${result.data.model}`)
-      setProposedItems(items.map(item => ({ ...item, selected: true })))
+      setProposedItems(items.map(item => ({ ...item, imagePrompt: item.imagePrompt ?? '', selected: true })))
       const proposedOutfit = result.data.proposedOutfit
       setOutfit(
         proposedOutfit && items.length >= MIN_OUTFIT_PIECES
@@ -315,6 +319,7 @@ export function ImportFromImageModal({
             body: JSON.stringify({
               title: item.title,
               description: item.description || null,
+              imagePrompt: item.imagePrompt.trim() || null,
               types: item.types,
               appropriateness: item.appropriateness || null,
               isDefault: false,
@@ -677,6 +682,27 @@ export function ImportFromImageModal({
                               className="qt-input text-sm w-full"
                               placeholder="e.g., formal, casual, intimate"
                               maxLength={200}
+                            />
+                          </div>
+
+                          {/* Portrait cue — what the image-makers are told */}
+                          <div className="ml-8">
+                            <div className="flex items-center justify-between mb-1">
+                              <label htmlFor={`${id}-image-prompt-${index}`} className="qt-label text-xs block">
+                                Portrait Cue
+                              </label>
+                              <span className="text-xs qt-text-secondary">
+                                {item.imagePrompt.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
+                              </span>
+                            </div>
+                            <input
+                              id={`${id}-image-prompt-${index}`}
+                              type="text"
+                              value={item.imagePrompt}
+                              onChange={(e) => updateItem(index, { imagePrompt: e.target.value })}
+                              className="qt-input text-sm w-full"
+                              placeholder="e.g., worn brown leather duster with brass buttons"
+                              maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
                             />
                           </div>
 

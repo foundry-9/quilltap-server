@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { clampWardrobeImagePrompt, WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
 
 const moduleLogger = logger.child({ module: 'wardrobe-image-analysis' })
 
@@ -30,6 +31,11 @@ const moduleLogger = logger.child({ module: 'wardrobe-image-analysis' })
 export interface ProposedWardrobeItem {
   title: string
   description: string
+  /**
+   * The terse literal cue image pipelines use in place of the title. Always
+   * present: when the model omits one, the title stands in, clamped to the cap.
+   */
+  imagePrompt: string
   types: WardrobeItemType[]
   appropriateness: string
 }
@@ -82,10 +88,11 @@ const SYSTEM_PROMPT = `You are a fashion and costume analyst. Your task is to id
 For each item you identify:
 1. Give it a concise, evocative title (e.g., "Emerald Silk Evening Gown", "Worn Leather Ankle Boots")
 2. Write a detailed description capturing texture, fit, color, material, and notable details. Use vivid, descriptive language — not clinical catalog copy.
-3. Classify it into one or more slot types: "top", "bottom", "footwear", "accessories", "hair"
+3. Write an "imagePrompt": a short, literal visual phrase for an image-generation model naming the garment itself — colour, material, cut, notable visible details (e.g., "ankle-length emerald silk evening gown with beaded straps"). At most ${WARDROBE_IMAGE_PROMPT_MAX_LENGTH} characters, plain text, no Markdown, no full stop, never a person, pose or setting. It must agree with the description.
+4. Classify it into one or more slot types: "top", "bottom", "footwear", "accessories", "hair"
    - Items that span multiple slots (e.g., a dress covering top + bottom, a jumpsuit) should include all applicable types
    - If the subject wears a distinct, deliberate hairstyle (braids, an updo, an elaborate coif, a wig), emit ONE "hair" item describing the styling. Plain, loose, unstyled hair is NOT an item.
-4. Suggest appropriateness tags (e.g., "formal", "casual", "combat", "intimate", "evening", "everyday") based on the visual context
+5. Suggest appropriateness tags (e.g., "formal", "casual", "combat", "intimate", "evening", "everyday") based on the visual context
 
 Then name the ensemble the items make together — the whole look, as one outfit:
 - A concise, evocative title for the outfit as a whole (e.g., "Midnight Gala Ensemble", "Rain-Soaked Detective's Kit")
@@ -98,6 +105,7 @@ Return your analysis as a JSON object with this exact structure:
     {
       "title": "Item Title",
       "description": "Detailed description of the item...",
+      "imagePrompt": "terse literal visual cue for the item",
       "types": ["top"],
       "appropriateness": "casual, everyday"
     }
@@ -112,6 +120,7 @@ Return your analysis as a JSON object with this exact structure:
 Important rules:
 - Focus ONLY on clothing, accessories, and a deliberate hairstyle if one is present. Do not describe faces, bodies, backgrounds, or other non-wearable features.
 - Each distinct garment or accessory should be its own item.
+- Every item MUST have a non-empty "imagePrompt" of at most ${WARDROBE_IMAGE_PROMPT_MAX_LENGTH} characters.
 - Valid types are ONLY: "top", "bottom", "footwear", "accessories", "hair"
 - If you identify fewer than two items, set "outfit" to null.
 - If you cannot identify any clothing items, return {"items": [], "outfit": null}
@@ -183,9 +192,18 @@ function parseAnalysisResponse(content: string): {
         (t): t is WardrobeItemType => typeof t === 'string' && VALID_TYPES.has(t)
       )
 
+      const title = String(item.title).trim()
+      const imagePrompt =
+        clampWardrobeImagePrompt(typeof item.imagePrompt === 'string' ? item.imagePrompt : '') ||
+        clampWardrobeImagePrompt(title)
+      if (typeof item.imagePrompt !== 'string' || !item.imagePrompt.trim()) {
+        moduleLogger.debug('[Wardrobe Image Analysis] Model omitted an imagePrompt; the title stands in', { title })
+      }
+
       return {
-        title: String(item.title).trim(),
+        title,
         description: String(item.description).trim(),
+        imagePrompt,
         types: validatedTypes.length > 0 ? validatedTypes : ['accessories' as WardrobeItemType],
         appropriateness: typeof item.appropriateness === 'string'
           ? String(item.appropriateness).trim()

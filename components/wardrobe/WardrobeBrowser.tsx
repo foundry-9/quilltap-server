@@ -81,6 +81,8 @@ export interface WardrobeBrowserProps {
   wear?: WardrobeRowWearControls
   /** Character view only: open the import-from-image flow. */
   onImportFromImage?: () => void
+  /** Character view only: open the portrait-cue (image prompt) optimizer. */
+  onOptimizePrompts?: () => void
   /** Cap the list's height (the dialog) instead of letting it grow (a card). */
   scrollList?: boolean
   /**
@@ -110,6 +112,7 @@ export function WardrobeBrowser({
   onShowArchivedChange,
   wear,
   onImportFromImage,
+  onOptimizePrompts,
   scrollList = true,
   pronounFilter,
 }: WardrobeBrowserProps) {
@@ -371,6 +374,17 @@ export function WardrobeBrowser({
               title="Import wardrobe items from a reference image"
             >
               Import from image
+            </button>
+          )}
+          {/* The portrait-cue wizard reviews only the character's own pieces. */}
+          {onOptimizePrompts && (
+            <button
+              type="button"
+              onClick={onOptimizePrompts}
+              className="qt-button-ghost qt-button-sm"
+              title="Check every garment's image prompt against its description"
+            >
+              Polish portrait cues
             </button>
           )}
           <button

@@ -34,6 +34,7 @@ import { WardrobeFolderField } from './wardrobe-item-editor/WardrobeFolderField'
 import { WardrobePronounGuidanceField } from './wardrobe-item-editor/WardrobePronounGuidanceField'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
 import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
+import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
 
 type EditorMode = 'single' | 'bundle'
 
@@ -742,8 +743,8 @@ export function WardrobeItemEditor({
                 <label htmlFor="wardrobe-image-prompt" className="qt-label">
                   Portrait Cue
                 </label>
-                <span className={`text-xs ${charCountClass(formData.imagePrompt.length, 200)}`}>
-                  {formData.imagePrompt.length}/200
+                <span className={`text-xs ${charCountClass(formData.imagePrompt.length, WARDROBE_IMAGE_PROMPT_MAX_LENGTH)}`}>
+                  {formData.imagePrompt.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
                 </span>
               </div>
               <input
@@ -752,7 +753,7 @@ export function WardrobeItemEditor({
                 name="imagePrompt"
                 value={formData.imagePrompt}
                 onChange={handleChange}
-                maxLength={200}
+                maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
                 placeholder="e.g., intricate burnished-gold circular rank glyph on the shoulder"
                 className="qt-input"
               />

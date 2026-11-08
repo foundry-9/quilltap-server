@@ -35,6 +35,7 @@ import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstr
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { OutfitComposer } from './outfit-composer'
 import { ImportFromImageModal } from './import-from-image-modal'
+import { ImagePromptOptimizerModal } from './image-prompt-optimizer-modal'
 import { AvatarGenerationPane } from './AvatarGenerationPane'
 import { WardrobeBrowser, WardrobeItemOverlays } from './WardrobeBrowser'
 import { useWardrobeListData } from './hooks/useWardrobeListData'
@@ -178,6 +179,7 @@ function WardrobeControlDialogInner({
 
   const [rightTab, setRightTab] = useState<RightTab>(isInChat ? 'live' : 'builder')
   const [importFromImageOpen, setImportFromImageOpen] = useState(false)
+  const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false)
 
   /**
    * The row buttons route to the Outfit Builder when its tab is active (or
@@ -233,7 +235,7 @@ function WardrobeControlDialogInner({
 
   // While an overlay is up, a click inside it (rendered as a sibling) must not
   // close the outer dialog via BaseModal's click-outside handler.
-  const overlayOpen = actions.overlayOpen || importFromImageOpen
+  const overlayOpen = actions.overlayOpen || importFromImageOpen || promptOptimizerOpen
 
   return (
     <ItemControlDialogShell
@@ -259,6 +261,18 @@ function WardrobeControlDialogInner({
               characterId={selectedCharacterId}
               onClose={() => setImportFromImageOpen(false)}
               onImported={() => {
+                void actions.refresh()
+              }}
+            />
+          )}
+
+          {/* Portrait-cue wizard — the character's own garments only */}
+          {promptOptimizerOpen && selectedCharacterId && (
+            <ImagePromptOptimizerModal
+              characterId={selectedCharacterId}
+              characterName={selectedCharacter?.name}
+              onClose={() => setPromptOptimizerOpen(false)}
+              onApplied={() => {
                 void actions.refresh()
               }}
             />
@@ -297,6 +311,9 @@ function WardrobeControlDialogInner({
             }
             onImportFromImage={
               selectedCharacterId ? () => setImportFromImageOpen(true) : undefined
+            }
+            onOptimizePrompts={
+              selectedCharacterId ? () => setPromptOptimizerOpen(true) : undefined
             }
           />
 

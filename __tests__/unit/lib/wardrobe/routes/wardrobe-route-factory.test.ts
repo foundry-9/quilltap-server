@@ -1447,3 +1447,50 @@ describe('POST ?action=duplicate', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 });
+
+// ============================================================================
+// Image-prompt optimizer — character tier only
+// ============================================================================
+
+describe('image-prompt optimizer actions', () => {
+  it.each(['project', 'group', 'general'] as const)(
+    '%s: optimize-image-prompts is not an action there (400, never the create)',
+    async (scope) => {
+      const res = await collection(scope).POST(
+        req('https://x.test/?action=optimize-image-prompts', {}, 'POST'),
+        ctx(),
+        { id: OWNER_ID[scope] },
+      );
+      expect(res.status).toBe(400);
+      expect(mockCreate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('character: apply-image-prompts writes the clamped cues in one projection', async () => {
+    mockReadItems.mockResolvedValue([wardrobeItem({ id: 'item-1', characterId: CHAR_ID })] as never);
+    const res = await collection('character').POST(
+      req('https://x.test/?action=apply-image-prompts', {
+        changes: [{ itemId: 'item-1', imagePrompt: '**charcoal wool greatcoat**.' }],
+      }, 'POST'),
+      ctx(),
+      { id: CHAR_ID },
+    );
+    expect(res.status).toBe(200);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockUpdateMany).toHaveBeenCalledTimes(1);
+    expect(mockUpdateMany.mock.calls[0][1]).toEqual([
+      { id: 'item-1', patch: { imagePrompt: 'charcoal wool greatcoat' } },
+    ]);
+    await expect(res.json()).resolves.toEqual({ updated: 1, itemIds: ['item-1'] });
+  });
+
+  it('character: apply-image-prompts refuses an empty change list', async () => {
+    await expect(
+      collection('character').POST(
+        req('https://x.test/?action=apply-image-prompts', { changes: [] }, 'POST'),
+        ctx(),
+        { id: CHAR_ID },
+      ),
+    ).rejects.toThrow();
+  });
+});

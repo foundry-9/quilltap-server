@@ -288,6 +288,7 @@ export function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'inventory-selection': 'SUMMARIZATION',
     'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
     'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
+    'optimize-wardrobe-image-prompts': 'IMAGE_PROMPT_CRAFTING',
     'describe-attachment': 'IMAGE_DESCRIPTION',
     'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
     'sanitize-appearance': 'APPEARANCE_RESOLUTION',
@@ -479,6 +480,7 @@ const TASK_TYPE_ACTIVITY: Record<string, ActivityKind> = {
   // the user is waiting on, so it belongs inside the same span.
   'craft-image-prompt': 'image',
   'craft-story-background-prompt': 'image',
+  'optimize-wardrobe-image-prompts': 'image',
   'derive-scene-context': 'image',
   'resolve-character-appearances': 'image',
   'sanitize-appearance': 'image',

@@ -34,6 +34,7 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types';
 import { wardrobeItemFromCreateBody, type WardrobeCreateBody } from '@/lib/wardrobe/create-body';
+import { clampWardrobeImagePrompt } from '@/lib/wardrobe/image-prompt-limit';
 import {
   isSameFolder,
   WARDROBE_FOLDER_RULES,
@@ -182,6 +183,38 @@ export async function updateItem(
     itemId: current.id,
     fields: Object.keys(next),
     found: updated !== null,
+    context: 'wardrobe',
+  });
+  return updated;
+}
+
+/**
+ * Set several items' `imagePrompt` in one read and one projection (the
+ * image-prompt optimizer's apply step). Each prompt is clamped to the cap;
+ * an empty one clears the field. Composites and items not in the folder are
+ * skipped — an outfit's cue is its leaves. Returns the items written.
+ */
+export async function updateItemImagePrompts(
+  location: WardrobeLocation,
+  changes: ReadonlyArray<{ itemId: string; imagePrompt: string }>,
+): Promise<WardrobeItem[]> {
+  const current = new Map((await location.readItems(true)).map((item) => [item.id, item]));
+  const patches = changes
+    .filter((change) => {
+      const item = current.get(change.itemId);
+      return item !== undefined && !isComposite(item);
+    })
+    .map((change) => {
+      const imagePrompt = clampWardrobeImagePrompt(change.imagePrompt);
+      return { id: change.itemId, patch: { imagePrompt: imagePrompt || null } };
+    });
+  if (patches.length === 0) return [];
+  const updated = await location.updateMany(patches);
+  logger.debug('[ItemMutations] Updated wardrobe image prompts', {
+    scope: location.scope,
+    mountPointId: location.mountPointId,
+    requested: changes.length,
+    written: updated.length,
     context: 'wardrobe',
   });
   return updated;

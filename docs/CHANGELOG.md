@@ -4,6 +4,15 @@
 
 ### 4.13-dev
 
+#### Feature: Wardrobe image-prompt optimizer; import-from-image writes image prompts
+
+- New "Polish portrait cues" wizard in the Wardrobe dialog (character view only, `components/wardrobe/image-prompt-optimizer-modal.tsx`). The cheap LLM checks each of the character's own garments' `imagePrompt` against its title, slots and description, fills blank ones, fixes ones that contradict the description, and trims ones over 200 characters. Shared tiers, archived items and composites are excluded; multi-slot leaves are included. The operator reviews (and may edit) each recommendation, then applies all of them or a chosen subset.
+- `POST /api/v1/characters/[id]/wardrobe?action=optimize-image-prompts` returns recommendations and writes nothing; `?action=apply-image-prompts` writes the chosen cues. Both are registered on the character tier only (other tiers answer 400). Logic in `lib/wardrobe/prompt-optimizer.ts` (batches of 12, two in flight, cheap-LLM task `optimize-wardrobe-image-prompts` logged as `IMAGE_PROMPT_CRAFTING`, `interactive` latency); writes through new `updateItemImagePrompts` in `lib/wardrobe/item-mutations.ts` (one `updateMany` projection, composites skipped).
+- The 200-character limit is now one constant with a clamp, `lib/wardrobe/image-prompt-limit.ts` (`WARDROBE_IMAGE_PROMPT_MAX_LENGTH`, `clampWardrobeImagePrompt`: strips Markdown, quotes, line breaks and a trailing period; cuts at a comma or word boundary). The item editor uses the constant.
+- Import from image: the vision analysis now asks for an `imagePrompt` on every proposed item; the parser clamps it and falls back to the title when the model omits one. The review screen shows it as an editable Portrait Cue field, and it is sent on create.
+- Docs: `help/wardrobe.md` (Polishing Every Cue at Once; import-from-image), API.md.
+- Tests: `__tests__/unit/lib/wardrobe/prompt-optimizer.test.ts`, new cases in `image-analysis.test.ts`, `item-mutations.test.ts`, `routes/wardrobe-route-factory.test.ts`.
+
 #### Feature: The Green Room chooses what a character carries
 
 - A character whose outfit mode is `llm_choose` now also chooses their arrival Inventory. `applyInventoryDefaults` takes `choose` (`InventoryGreenRoomOptions`: character ids, scenario, cheap-LLM config, progress emitter); chat creation, add-participant and merge pass it for `llm_choose` selections.

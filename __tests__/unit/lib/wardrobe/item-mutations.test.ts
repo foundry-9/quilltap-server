@@ -26,6 +26,7 @@ const {
   updateItem,
   validateComponentRefs,
   moveItemsToFolder,
+  updateItemImagePrompts,
 } = require('@/lib/wardrobe/item-mutations') as typeof import('@/lib/wardrobe/item-mutations');
 const { buildCompositeTypes } = require('@/lib/wardrobe/composite-types') as typeof import('@/lib/wardrobe/composite-types');
 const { resolveWardrobeFolder } = require('@/lib/wardrobe/folders') as typeof import('@/lib/wardrobe/folders');
@@ -331,5 +332,31 @@ describe('folders', () => {
       { requireAll: true },
     );
     expect(moved.map((i) => i.folder)).toEqual(['Formal', 'Formal']);
+  });
+});
+
+describe('updateItemImagePrompts', () => {
+  it('writes clamped cues in one projection, skipping composites and strangers', async () => {
+    const outfit = item('outfit', ['top', 'bottom'], { componentItemIds: ['shirt', 'trousers'] });
+    const location = makeLocation({ readItems: jest.fn(async () => [shirt, boots, outfit]) });
+    const long = Array.from({ length: 60 }, () => 'wool').join(' ');
+    const written = await updateItemImagePrompts(location as never, [
+      { itemId: 'shirt', imagePrompt: '**white linen shirt**.' },
+      { itemId: 'boots', imagePrompt: long },
+      { itemId: 'outfit', imagePrompt: 'should not land' },
+      { itemId: 'missing', imagePrompt: 'nor this' },
+    ]);
+    expect(location.updateMany).toHaveBeenCalledTimes(1);
+    const patches = (location.updateMany as jest.Mock).mock.calls[0][0] as Array<{ id: string; patch: { imagePrompt: string } }>;
+    expect(patches.map((p) => p.id)).toEqual(['shirt', 'boots']);
+    expect(patches[0].patch.imagePrompt).toBe('white linen shirt');
+    expect(patches[1].patch.imagePrompt.length).toBeLessThanOrEqual(200);
+    expect(written).toHaveLength(2);
+  });
+
+  it('writes nothing when nothing applies', async () => {
+    const location = makeLocation({ readItems: jest.fn(async () => []) });
+    expect(await updateItemImagePrompts(location as never, [{ itemId: 'x', imagePrompt: 'y' }])).toEqual([]);
+    expect(location.updateMany).not.toHaveBeenCalled();
   });
 });

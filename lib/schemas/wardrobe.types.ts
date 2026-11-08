@@ -247,6 +247,26 @@ export const copyWardrobeItemsSchema = z.object({
   components: z.enum(['copy', 'none']).optional(),
 });
 
+/**
+ * `POST /api/v1/characters/[id]/wardrobe?action=optimize-image-prompts` body:
+ * optionally limit the review to these items (default: every garment the
+ * character owns that is neither archived nor a composite).
+ */
+export const optimizeWardrobeImagePromptsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).max(1000).optional(),
+});
+
+/**
+ * `POST /api/v1/characters/[id]/wardrobe?action=apply-image-prompts` body: the
+ * recommendations the operator chose, each clamped to the cap on write.
+ */
+export const applyWardrobeImagePromptsSchema = z.object({
+  changes: z
+    .array(z.object({ itemId: z.string().min(1), imagePrompt: z.string().max(2000) }))
+    .min(1, 'At least one change is required')
+    .max(1000),
+});
+
 /** `POST …/wardrobe?action=duplicate` body: the item to copy beside itself. */
 export const duplicateWardrobeItemSchema = z.object({
   itemId: z.string().min(1, 'itemId is required'),

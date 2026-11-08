@@ -1,7 +1,7 @@
 ---
 title: The Wardrobe
 url: /aurora
-tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import, vision, folders, history, rollback, pronouns, pronoun guidance]
+tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import, vision, folders, history, rollback, pronouns, pronoun guidance, portrait cue, image prompt, optimize, optimizer]
 ---
 
 # The Wardrobe
@@ -91,9 +91,9 @@ To use this feature:
 
 Unless you choose otherwise, the analyst is the profile you have named for image descriptions, provided it can actually receive a picture; failing that, the first profile that can. Should one model squint, simply pick another from the list and analyze again --- the review screen notes which profile did the reading. The photograph is trimmed to a sensible size before it travels, and should the model answer without ever having laid eyes on it --- a provider that quietly drops the picture --- the dialog says so rather than offering you garments it invented. A model that dawdles past two minutes is likewise given up on.
 
-A vision-capable LLM will examine the image and return a list of proposed wardrobe items, each with a suggested title, description, slot type(s), and appropriateness tags. You are then presented with a review screen where you may:
+A vision-capable LLM will examine the image and return a list of proposed wardrobe items, each with a suggested title, description, **Portrait Cue**, slot type(s), and appropriateness tags. Every piece arrives with its Portrait Cue already written --- two hundred characters or fewer of colour, cloth and cut --- so the garments are ready for the easel the moment they are hung (should the analyst forget one, the title is pencilled in until you supply better). You are then presented with a review screen where you may:
 
-- **Edit** any field (title, types, appropriateness, description) before importing
+- **Edit** any field (title, types, appropriateness, Portrait Cue, description) before importing
 - **Deselect** items you do not wish to import
 - **Re-analyze** the image if the results are unsatisfactory
 - **Assemble an outfit** from the pieces --- see below
@@ -388,6 +388,14 @@ A few principles for a cue that actually lands:
 - **Placement is a suggestion, not a command.** Phrases like "on the left shoulder" nudge but do not bind; picture-makers are famously cavalier about where they put things.
 
 When a character tailors a garment for themselves with `wardrobe_create`, they are told in no uncertain terms to furnish a Portrait Cue alongside the description --- two hundred characters or fewer of colour, cloth and cut, with no backstory, no feelings and no names --- and that the description, however eloquent, will never reach the easel. A character who neglects the instruction leaves the painter with nothing but the title, and the resulting likeness is apt to be a matter of guesswork. Should one of your company's creations show a lovely paragraph and an empty Cue, open it and supply the Cue yourself; the next portrait will be the better for it.
+
+#### Polishing Every Cue at Once
+
+A wardrobe of any vintage accumulates cues the way an attic accumulates hatboxes: some blank, some written before the description was revised, some running well past the two-hundred-character limit. Rather than opening each garment in turn, click **Polish portrait cues** at the foot of the character's wardrobe list, then **Begin the review**.
+
+A brisk, inexpensive clerk --- your cheap LLM --- goes through the character's own garments and compares each Portrait Cue with its description. Only the character's own pieces are examined: nothing shared from a group, a project or Quilltap General, nothing archived, and no multi-part outfits (an outfit is drawn from its pieces, so its pieces are what matter). A garment that covers several slots --- a gown, a boiler suit --- is examined like any other.
+
+The clerk returns a list of recommendations, each marked as a **blank filled in**, a cue **revised to match** its description, or one **trimmed to fit** the limit, with the old cue beside the new and a word on why. Every new cue may be amended before it is written. You are then asked whether to **Make all** of them or **Let me choose**; choosing puts a tick-box beside each, and **Apply chosen** writes only those you ticked. Nothing is changed until you say so, and every cue written is held to two hundred characters. Should part of a large wardrobe go unread (a clerk does occasionally lose the thread), the dialog says how many, and running it again picks them up.
 
 A Portrait Cue changes only what the *image* pipeline is told. The title still appears in lists and tools, the description still informs the AI's prose, and a character referring to the garment in conversation is none the wiser. Should you need a glyph rendered with true fidelity --- exact rings, exact spokes --- a Cue will get you the *impression*; for the genuine article, compose the portrait without the insignia and lay the real artwork over the shoulder afterward.
 
