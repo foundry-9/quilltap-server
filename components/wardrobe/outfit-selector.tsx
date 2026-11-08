@@ -338,7 +338,7 @@ function CharacterOutfitSection({
           {
             value: 'llm_choose' as OutfitSelectionMode,
             label: 'Let character choose',
-            description: 'The character picks based on the scenario.',
+            description: 'The character picks clothes, and what to carry, based on the scenario.',
           },
         ]),
     {

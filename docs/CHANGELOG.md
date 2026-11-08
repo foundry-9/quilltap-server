@@ -4,6 +4,16 @@
 
 ### 4.13-dev
 
+#### Feature: The Green Room chooses what a character carries
+
+- A character whose outfit mode is `llm_choose` now also chooses their arrival Inventory. `applyInventoryDefaults` takes `choose` (`InventoryGreenRoomOptions`: character ids, scenario, cheap-LLM config, progress emitter); chat creation, add-participant and merge pass it for `llm_choose` selections.
+- `chooseArrivalInventory` (`lib/inventory/green-room.ts`) offers the character's reachable carriable objects and kits (no archetypes, no archived objects, no project-shelf objects when the roster does not admit them), with defaults marked "usually carried", plus scenario, character fields, seat subprompts and the outfit just chosen. New cheap-LLM task `chooseLLMInventory` (`lib/memory/cheap-llm-tasks/inventory-selection.ts`, task type `inventory-selection`) returns `{"carry": [ids]}`; ids not offered are dropped, an unreadable answer is a failure, an empty list is kept.
+- Choices run concurrently outside the chat's inventory lock; the commit is serial under it. The pick is equipped leniently, silently, with `character` provenance. A failure, a timeout, or no model falls back to the existing rules (source-chat copy, then defaults). A Green Room pick wins over a continuation's copy.
+- Uses the Green Room's model (`selectGreenRoomLLM`). The timeout and seat-subprompt helpers moved from `apply-outfit-selections.ts` to `lib/wardrobe/green-room-model.ts` (`withGreenRoomTimeout`, `GREEN_ROOM_LLM_TIMEOUT_MS`, `resolveGreenRoomSubprompts`) so both passes share them.
+- The status dialog logs each character's choice ("Packing everyone's pockets…").
+- Docs: `help/inventory.md` (Packing in the Green Room), `help/wardrobe.md`, `help/chats.md`.
+- Tests: `__tests__/unit/lib/memory/cheap-llm-tasks/inventory-selection.test.ts`, `__tests__/unit/lib/inventory/green-room.test.ts`.
+
 #### Feature: Turns mode; Paused renamed Manual
 
 - The Salon's turn-mode control has four positions: Normal, Manual, Turns, Storyteller. Manual is the old Paused (`isPaused`, label change only).

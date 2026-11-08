@@ -114,6 +114,12 @@ Every equip or unequip posts a short line from Pascal in the chat — *"Vivienne
 
 When a character arrives in a chat — the chat starts, they are added or brought back, or two chats are merged — they take up every item within their reach that is flagged **Equipped by default** (and not archived, and not an archetype). A flagged kit brings its members. A **continuation** of another chat, or a merge, carries over exactly what they carried there instead.
 
+### Packing in the Green Room
+
+A character whose starting outfit is set to **Let Character Choose** is trusted with their pockets as well as their wardrobe. Once dressed, they look over everything within their reach — their own shelf, their groups', the project's (if the project's roster admits them) and Quilltap General — weigh it against the scenario, their nature, any subprompts in play and what they have just put on, and take up what the occasion calls for. Items marked **Equipped by default** are offered as what they *usually* carry, and are kept unless the scene makes carrying one absurd; a gentleman does not take his sabre into the Turkish bath. Walking on empty-handed is a perfectly respectable choice. Archetypes are not offered, though a kit is, along with its pieces.
+
+This holds at every arrival the choice is offered — a new chat, a character added to one, a merge — and it wins over a continuation's carry-over, since you asked for a fresh decision. The consultation borrows the same mind as the wardrobe valet (the **Green Room Wardrobe Model**, or the cheap LLM), and the Green Room's log reports what each character took up. Should the consultation fail or dawdle past its minute, the character simply gathers up their usual effects — the defaults above — and nothing is announced in the chat either way.
+
 Defaults apply *only on arrival*. A chat from before the Inventory existed, or one where you have already changed things, is left as it stands; **Reset to defaults** is there when you want the defaults again.
 
 A shared shelf's defaults reach everyone who can reach the shelf: an item flagged on a project's shelf is carried by every character in every chat of that project.

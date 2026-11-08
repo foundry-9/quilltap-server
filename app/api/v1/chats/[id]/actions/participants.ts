@@ -207,8 +207,10 @@ async function applyOutfitForAddedParticipant(
     mode: 'default',
   };
 
+  let cheapLLMConfig: ReturnType<typeof buildCheapLLMConfig> | undefined;
   try {
     const chatSettings = await repos.chatSettings.findByUserId(userId);
+    cheapLLMConfig = buildCheapLLMConfig(chatSettings);
     await applyOutfitSelections(
       chatId,
       [selection],
@@ -219,7 +221,7 @@ async function applyOutfitForAddedParticipant(
         // dressed from the project's shared stores as well as their own vault.
         projectMountPointIds: await resolveProjectMountPointIds(chat.projectId ?? null),
         scenarioText: chat.scenarioText ?? null,
-        cheapLLMConfig: buildCheapLLMConfig(chatSettings),
+        cheapLLMConfig,
         source: 'participant-added',
       },
     );
@@ -237,9 +239,16 @@ async function applyOutfitForAddedParticipant(
     });
   }
 
-  // What the arriving character carries: their equipped-by-default objects,
-  // unless a returning seat already has an entry. Never throws.
-  await applyInventoryDefaults(repos, chatId, [characterId], { source: 'participant-added', userId });
+  // What the arriving character carries: their own choice when they chose
+  // their outfit, else their equipped-by-default objects — unless a returning
+  // seat already has an entry. Never throws.
+  await applyInventoryDefaults(repos, chatId, [characterId], {
+    source: 'participant-added',
+    userId,
+    choose: selection.mode === 'llm_choose'
+      ? { characterIds: [characterId], scenarioText: chat.scenarioText ?? null, cheapLLMConfig }
+      : undefined,
+  });
 }
 
 /**

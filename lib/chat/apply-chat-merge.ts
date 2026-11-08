@@ -264,7 +264,15 @@ export async function applyChatMerge(
 
       // A merge brings what the character carried in the merged chat along
       // (or their defaults, when they carried nothing there). Never throws.
-      await applyInventoryDefaults(repos, targetChatId, [characterId], { source: 'merge', userId, sourceChatId });
+      // A character left to choose their outfit chooses their objects too.
+      await applyInventoryDefaults(repos, targetChatId, [characterId], {
+        source: 'merge',
+        userId,
+        sourceChatId,
+        choose: selection.mode === 'llm_choose'
+          ? { characterIds: [characterId], scenarioText: targetChat.scenarioText ?? null, cheapLLMConfig }
+          : undefined,
+      });
 
       logger.info('[ChatMerge] Merged character into chat', {
         targetChatId,

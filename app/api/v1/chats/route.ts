@@ -1401,6 +1401,11 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     source: 'chat-start',
   };
   progress.status('Consulting the wardrobe…');
+  // The characters left to choose their own outfit also choose what they
+  // carry in (the Green Room's inventory pass, below).
+  const greenRoomCharacterIds = (validatedData.outfitSelections ?? [])
+    .filter((s) => s.mode === 'llm_choose')
+    .map((s) => s.characterId);
   try {
     if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
       // Apply explicit selections, then backfill defaults for any participants not covered
@@ -1440,7 +1445,8 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     });
   }
 
-  // What everyone carries on arrival: a continuation copies the source chat's
+  // What everyone carries on arrival: a character who chose their own outfit
+  // chooses their objects too; a continuation copies the source chat's
   // Inventory; otherwise each character's equipped-by-default objects. Never
   // throws — a failure is logged per character.
   await applyInventoryDefaults(
@@ -1449,7 +1455,17 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     participantsWithTimestamps
       .filter((p) => p.type === 'CHARACTER' && p.characterId)
       .map((p) => p.characterId as string),
-    { source: 'chat-start', userId: user.id, sourceChatId: validatedData.continuationFromChatId ?? null },
+    {
+      source: 'chat-start',
+      userId: user.id,
+      sourceChatId: validatedData.continuationFromChatId ?? null,
+      choose: {
+        characterIds: greenRoomCharacterIds,
+        scenarioText: outfitContext.scenarioText ?? null,
+        cheapLLMConfig: outfitContext.cheapLLMConfig,
+        progress,
+      },
+    },
   );
 
   // Phase H: precompile the per-participant identity stack for the new chat

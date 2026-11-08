@@ -285,6 +285,7 @@ export function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'memory-recap-summarization': 'SUMMARIZATION',
     'derive-scene-context': 'SUMMARIZATION',
     'outfit-selection': 'SUMMARIZATION',
+    'inventory-selection': 'SUMMARIZATION',
     'craft-image-prompt': 'IMAGE_PROMPT_CRAFTING',
     'craft-story-background-prompt': 'IMAGE_PROMPT_CRAFTING',
     'describe-attachment': 'IMAGE_DESCRIPTION',
@@ -483,6 +484,7 @@ const TASK_TYPE_ACTIVITY: Record<string, ActivityKind> = {
   'sanitize-appearance': 'image',
   'describe-attachment': 'image',
   'outfit-selection': 'image',
+  'inventory-selection': 'image',
 
   // the Commonplace Book
   'memory-extraction-self': 'memory',

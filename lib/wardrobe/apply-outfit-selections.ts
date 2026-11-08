@@ -45,10 +45,15 @@ import {
   DEFAULT_CHEAP_LLM_CONFIG,
   type CheapLLMConfig,
 } from '@/lib/llm/cheap-llm';
-import { selectGreenRoomLLM } from '@/lib/wardrobe/green-room-model';
+import {
+  GREEN_ROOM_LLM_TIMEOUT_MS,
+  GREEN_ROOM_TIMED_OUT,
+  resolveGreenRoomSubprompts,
+  selectGreenRoomLLM,
+  withGreenRoomTimeout,
+} from '@/lib/wardrobe/green-room-model';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
-import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { createSharedTierLoader, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
@@ -60,73 +65,6 @@ import type {
 } from '@/lib/chat/creation-progress';
 
 type Repos = RepositoryContainer;
-
-/**
- * The subprompts in play for `characterId`'s LLM-controlled seat in `chatId`,
- * resolved from the persisted participant record. `[]` when the chat or seat
- * cannot be found, or on any read error — the outfit choice never waits on
- * this.
- */
-async function resolveSubpromptsForSeat(
-  repos: Repos,
-  chatId: string,
-  characterId: string,
-): Promise<SubpromptForPrompt[]> {
-  try {
-    const chat = await repos.chats.findById(chatId);
-    const seat = chat?.participants.find(
-      (p) => p.characterId === characterId && p.controlledBy !== 'user' && p.status !== 'removed',
-    );
-    const selected = seat?.selectedSubpromptIds ?? [];
-    if (selected.length === 0) return [];
-    // Loaded lazily: the subprompts module reaches into the mount-index
-    // document store, which this orchestrator otherwise never touches.
-    const { resolveSelectedSubprompts } = await import('@/lib/subprompts/subprompts');
-    return await resolveSelectedSubprompts(characterId, selected);
-  } catch (error) {
-    logger.warn('[applyOutfitSelections] Could not read subprompts for the green room — continuing without', {
-      chatId,
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-/**
- * How long to wait on the wardrobe LLM for one character before giving up and
- * dressing them in their defaults.
- *
- * A healthy call on a cheap model is a second or two. Observed in the wild: a
- * provider that took 2m32s to emit 19 tokens, which — back when this loop was
- * serial — stalled the entire chat-creation request behind one character.
- * Concurrency stops one straggler from blocking the others; this stops a
- * straggler from blocking the chat.
- *
- * Note the underlying request is not aborted, only abandoned; it will still be
- * billed and still land in the LLM log.
- */
-const OUTFIT_LLM_TIMEOUT_MS = 60_000;
-
-/** Sentinel distinguishing "gave up waiting" from any legitimate resolution. */
-const TIMED_OUT = Symbol('outfit-llm-timed-out');
-
-/**
- * Resolve `work`, or `TIMED_OUT` if it takes longer than `ms`.
- *
- * The timer is always cleared so a fast resolution doesn't hold the event loop
- * open, and a late rejection from `work` is absorbed by the race rather than
- * surfacing as an unhandled rejection.
- */
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const guard = new Promise<typeof TIMED_OUT>((resolve) => {
-    timer = setTimeout(() => resolve(TIMED_OUT), ms);
-  });
-  return Promise.race([work, guard]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
-}
 
 /**
  * Context needed for LLM-based outfit selection during chat creation or
@@ -228,7 +166,7 @@ function toOutfitPreviewSlots(
  * - 'none': Set every slot to an empty array
  * - 'previous_chat': Copy equipped state from the source chat (continuation flow)
  * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on
- *   failure, on an unflagged empty answer, or on {@link OUTFIT_LLM_TIMEOUT_MS}
+ *   failure, on an unflagged empty answer, or on `GREEN_ROOM_LLM_TIMEOUT_MS`
  *
  * Runs in two phases:
  *
@@ -414,7 +352,7 @@ export async function applyOutfitSelections(
                 // room too. The chat row is already persisted at every call
                 // site (creation, add-participant, merge), so the seat's
                 // selection is readable here. Soft-fails to none.
-                const subprompts = await resolveSubpromptsForSeat(repos, chatId, characterId);
+                const subprompts = await resolveGreenRoomSubprompts(repos, chatId, characterId);
                 if (subprompts.length > 0) {
                   logger.debug('[applyOutfitSelections] Subprompts in play for the green room', {
                     chatId,
@@ -431,7 +369,7 @@ export async function applyOutfitSelections(
                 });
 
                 const startedAt = Date.now();
-                const result = await withTimeout(
+                const result = await withGreenRoomTimeout(
                   chooseLLMOutfit(
                     character.name,
                     character.description || null,
@@ -447,14 +385,13 @@ export async function applyOutfitSelections(
                     subprompts,
                     { recentOpenings },
                   ),
-                  OUTFIT_LLM_TIMEOUT_MS,
                 );
 
-                if (result === TIMED_OUT) {
+                if (result === GREEN_ROOM_TIMED_OUT) {
                   logger.warn('[applyOutfitSelections] LLM outfit selection timed out, falling back to defaults', {
                     chatId,
                     characterId,
-                    timeoutMs: OUTFIT_LLM_TIMEOUT_MS,
+                    timeoutMs: GREEN_ROOM_LLM_TIMEOUT_MS,
                     poolSize: wardrobeItems.length,
                   });
                 } else {

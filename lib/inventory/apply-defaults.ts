@@ -4,6 +4,12 @@
  * Called beside `applyOutfitSelections` at each of its call sites (chat
  * start, a seat added or reactivated, a merge) with the same `source`:
  *
+ *   - for a character the operator let choose (`choose`, the characters whose
+ *     outfit mode is `llm_choose`) with no entry yet, the Green Room picks
+ *     what they carry in from what they can reach (`green-room.ts`) and it
+ *     is equipped leniently and silently; a failed or timed-out choice falls
+ *     through to the rules below. This wins over a source chat's list — the
+ *     operator asked for a fresh choice for this scene;
  *   - with a source chat (a continuation, or a merge's merged chat) that has
  *     an entry for the character, its list is copied — ids only; the reader
  *     drops what no longer resolves;
@@ -36,6 +42,7 @@ import {
 } from '@/lib/inventory/equip';
 import { equippedIdsOf, hasEquippedEntry } from '@/lib/inventory/equipped-set';
 import { loadInventoryPool } from '@/lib/inventory/pool';
+import { chooseArrivalInventory, type InventoryGreenRoomOptions } from '@/lib/inventory/green-room';
 
 export type InventoryArrivalSource = 'chat-start' | 'participant-added' | 'merge';
 
@@ -44,6 +51,8 @@ export interface ApplyInventoryDefaultsOptions {
   userId: string;
   /** A continuation's (or a merge's) source chat: its lists are copied. */
   sourceChatId?: string | null;
+  /** The Green Room's inventory pass, for the characters who choose their own. */
+  choose?: InventoryGreenRoomOptions;
 }
 
 /**
@@ -69,6 +78,49 @@ async function equipDefaults(
     : null;
   if (!result || result.equipped.length === 0) await writeCarriedSet(repos, chat.id, characterId, []);
   return result;
+}
+
+/**
+ * Equip what the Green Room chose — leniently (an object over its cap is
+ * dropped, one that can no longer be carried is skipped) and silently, as the
+ * character's own choice, so the project roster still holds. Records an empty
+ * entry for an empty-handed choice. Returns false when the equip failed, so
+ * the caller falls back to the defaults. The caller holds the chat's lock.
+ */
+async function equipGreenRoomPicks(
+  repos: RepositoryContainer,
+  chat: EquipChat,
+  characterId: string,
+  ids: readonly string[],
+  opts: ApplyInventoryDefaultsOptions,
+): Promise<boolean> {
+  try {
+    const result = ids.length > 0
+      ? await equipItemsHoldingLock(repos, chat, characterId, ids, inventoryChangeContext(opts.userId, 'character', { announce: false }), { lenient: true })
+      : null;
+    if (!result || result.equipped.length === 0) await writeCarriedSet(repos, chat.id, characterId, []);
+    logger.debug('[InventoryArrival] Equipped the Green Room\'s choice', {
+      op: 'arrival',
+      chatId: chat.id,
+      characterId,
+      source: opts.source,
+      chosen: ids,
+      equipped: result?.equipped.map((item) => item.id) ?? [],
+      created: result?.created.map((item) => item.id) ?? [],
+      skipped: result?.skipped ?? [],
+      context: 'inventory',
+    });
+    return true;
+  } catch (error) {
+    logger.warn('[InventoryArrival] Could not equip the Green Room\'s choice; applying the defaults', {
+      chatId: chat.id,
+      characterId,
+      source: opts.source,
+      context: 'inventory',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
 }
 
 /** Apply arrival defaults for each character. */
@@ -102,12 +154,31 @@ async function applyDefaultsUnguarded(
     return;
   }
   const sourceChat = opts.sourceChatId ? await loadEquipChat(repos, opts.sourceChatId) : null;
+  const arriving = Array.from(new Set(characterIds));
 
-  for (const characterId of Array.from(new Set(characterIds))) {
+  // The Green Room's choices, concurrently and outside the lock — each is a
+  // model round trip, and holding the chat's lock across them would hold up
+  // every other gesture. Only a character with no entry yet is asked; the
+  // entry is checked again under the lock before anything is written.
+  const choosing = new Set(opts.choose?.characterIds ?? []);
+  const picks = new Map<string, string[] | null>();
+  if (opts.choose && choosing.size > 0) {
+    const askFor = arriving.filter((id) => choosing.has(id) && !hasEquippedEntry(chat, id));
+    if (askFor.length > 0) {
+      opts.choose.progress?.status('Packing everyone’s pockets…');
+      const choices = await Promise.all(
+        askFor.map((id) => chooseArrivalInventory(repos, chat, id, opts.userId, opts.choose!)),
+      );
+      askFor.forEach((id, i) => picks.set(id, choices[i]));
+    }
+  }
+
+  for (const characterId of arriving) {
     try {
       // One character's arrival is one critical section on the chat's carried
       // set, so an equip landing mid-arrival is never rewound.
-      await withChatInventoryLock(chat.id, () => arriveUnderLock(repos, chat, sourceChat, characterId, opts));
+      const picked = picks.get(characterId) ?? null;
+      await withChatInventoryLock(chat.id, () => arriveUnderLock(repos, chat, sourceChat, characterId, opts, picked));
     } catch (error) {
       logger.warn('[InventoryArrival] Failed to apply arrival defaults for a character', {
         chatId,
@@ -126,6 +197,8 @@ async function arriveUnderLock(
   sourceChat: EquipChat | null,
   characterId: string,
   opts: ApplyInventoryDefaultsOptions,
+  /** The Green Room's choice, when it made one; null applies the rules below. */
+  picked: string[] | null = null,
 ): Promise<void> {
   const chatId = chat.id;
   // Read inside the lock: an earlier character's write, or an equip, changed it.
@@ -139,6 +212,7 @@ async function arriveUnderLock(
     });
     return;
   }
+  if (picked && (await equipGreenRoomPicks(repos, current, characterId, picked, opts))) return;
   if (sourceChat && hasEquippedEntry(sourceChat, characterId)) {
     const ids = equippedIdsOf(sourceChat, characterId);
     await writeCarriedSet(repos, chatId, characterId, ids);
