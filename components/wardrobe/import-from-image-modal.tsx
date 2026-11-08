@@ -22,6 +22,7 @@
  */
 
 import { useState, useRef, useCallback, useId, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -399,7 +400,11 @@ export function ImportFromImageModal({
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  return (
+  if (typeof document === 'undefined') return null
+  // Portalled to <body>: rendered in place, a `.qt-workspace` pane's stacking
+  // context (isolation: isolate) traps the z-index below the left rail and
+  // the sticky toolbar, which paint over the dialog's edges.
+  return createPortal(
     <>
       {/* Overlay — z values sit above qt-dialog-overlay (z-[60]) so this
           stacks on top of the parent wardrobe dialog. */}
@@ -855,6 +860,7 @@ export function ImportFromImageModal({
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   )
 }

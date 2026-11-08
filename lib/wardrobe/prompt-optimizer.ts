@@ -1,7 +1,7 @@
 /**
  * Wardrobe image-prompt optimizer.
  *
- * Reads a character's own wardrobe garments (never shared tiers, never
+ * Reads one wardrobe tier's own garments (never another tier's, never
  * archived pieces, never composite outfits — an outfit's cue is its leaves),
  * asks the cheap LLM to check each item's `imagePrompt` against its title,
  * slots and description, and returns recommendations: fill a blank cue,
@@ -74,7 +74,7 @@ export function selectOptimizableItems(items: readonly WardrobeItem[]): Wardrobe
   return items.filter((item) => !item.archivedAt && (item.componentItemIds?.length ?? 0) === 0);
 }
 
-const SYSTEM_PROMPT = `You review the image-generation prompts of wardrobe items for a character.
+const SYSTEM_PROMPT = `You review the image-generation prompts of wardrobe items.
 
 Each item has a title, the slots it covers, a human-written description, and an "imagePrompt". The imagePrompt is fed directly to an image-generation (diffusion) model IN PLACE OF the title whenever the item is drawn, joined with other garments into a comma-separated outfit list.
 
@@ -191,7 +191,8 @@ export interface OptimizeWardrobeImagePromptsInput {
   items: readonly WardrobeItem[];
   selection: CheapLLMSelection;
   userId: string;
-  characterId: string;
+  /** The owning character, for the LLM log; absent for a shared tier. */
+  characterId?: string;
 }
 
 /**
@@ -203,7 +204,7 @@ export async function optimizeWardrobeImagePrompts(
   const items = selectOptimizableItems(input.items);
   const batches = chunk(items, OPTIMIZER_BATCH_SIZE);
   moduleLogger.debug('[PromptOptimizer] Starting review', {
-    characterId: input.characterId,
+    characterId: input.characterId ?? null,
     items: items.length,
     batches: batches.length,
     provider: input.selection.provider,

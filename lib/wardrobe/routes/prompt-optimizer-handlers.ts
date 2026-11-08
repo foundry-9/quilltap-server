@@ -1,14 +1,15 @@
 /**
- * Route bodies for the character wardrobe's image-prompt optimizer:
+ * Route bodies for the wardrobe's image-prompt optimizer, on every tier
+ * (character, group, project, Quilltap General):
  *
- *   POST /api/v1/characters/[id]/wardrobe?action=optimize-image-prompts
- *     — review the character's own garments with the cheap LLM and return
+ *   POST <tier>/wardrobe?action=optimize-image-prompts
+ *     — review that tier's own garments with the cheap LLM and return
  *       recommendations. Writes nothing.
- *   POST /api/v1/characters/[id]/wardrobe?action=apply-image-prompts
+ *   POST <tier>/wardrobe?action=apply-image-prompts
  *     — write the chosen recommendations (`updateItemImagePrompts`).
  *
- * Wired into the character tier only by `wardrobe-route-factory.ts`; shared
- * tiers are never reviewed.
+ * Wired by `wardrobe-route-factory.ts`. A review reads only the tier it was
+ * called on — never the pieces another tier shares into it.
  *
  * @module lib/wardrobe/routes/prompt-optimizer-handlers
  */
@@ -28,7 +29,7 @@ import { optimizeWardrobeImagePrompts } from '@/lib/wardrobe/prompt-optimizer';
 const NO_CHEAP_LLM_MESSAGE =
   'No connection profile is configured to run the review. Add one in your provider settings.';
 
-/** Review the character's garments; `location` is the character tier (or null with no vault). */
+/** Review one tier's garments; `location` is that tier (or null when it has no store yet). */
 export async function handleOptimizeImagePrompts(
   body: unknown,
   ctx: RequestContext,
@@ -46,7 +47,8 @@ export async function handleOptimizeImagePrompts(
   if (!resolved) return badRequest(NO_CHEAP_LLM_MESSAGE);
 
   logger.debug('[Wardrobe v1] Optimizing image prompts', {
-    characterId: location.id,
+    scope: location.scope,
+    ownerId: location.id,
     candidates: items.length,
     provider: resolved.selection.provider,
     model: resolved.selection.modelName,
@@ -57,7 +59,8 @@ export async function handleOptimizeImagePrompts(
     items,
     selection: resolved.selection,
     userId: ctx.user.id,
-    characterId: location.id as string,
+    // Only a character's review is filed against the character in the LLM logs.
+    characterId: location.scope === 'character' ? (location.id ?? undefined) : undefined,
   });
   return successResponse({
     ...result,
@@ -75,7 +78,8 @@ export async function handleApplyImagePrompts(
   const { changes } = applyWardrobeImagePromptsSchema.parse(body);
   const updated = await updateItemImagePrompts(location, changes);
   logger.info('[Wardrobe v1] Applied optimized image prompts', {
-    characterId: location.id,
+    scope: location.scope,
+    ownerId: location.id,
     userId: ctx.user.id,
     mountPointId: location.mountPointId,
     requested: changes.length,

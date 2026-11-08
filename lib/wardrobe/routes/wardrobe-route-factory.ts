@@ -11,8 +11,8 @@
  * are written once: list / create (each with `?action=instructions`), the
  * folder actions (`GET ?action=folders`; `POST ?action=create-folder`,
  * `rename-folder`, `delete-folder`, `move-items`, `copy-items`), `POST
- * ?action=duplicate` (and, on the character tier only, `optimize-image-prompts`
- * / `apply-image-prompts`, `routes/prompt-optimizer-handlers.ts`), and get (with `?action=wear-history`) / update /
+ * ?action=duplicate`, `optimize-image-prompts` / `apply-image-prompts`
+ * (`routes/prompt-optimizer-handlers.ts`), and get (with `?action=wear-history`) / update /
  * delete. Each route file is a config. The config shape, the per-tier labels,
  * the resolver, the read probe, `?action=folders` and the error mapping are
  * the shared item-route preamble (`lib/mount-index/item-folder-routes.ts`),
@@ -38,7 +38,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, withActionDispatch } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
-import type { ActionHandlerMap } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { badRequest, conflict, created, notFound, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
@@ -302,8 +301,8 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   }
 
   /**
-   * Character tier only: the image-prompt optimizer. The review is a read
-   * probe (never provisions); applying is a write to the vault.
+   * The image-prompt optimizer, on every tier. The review is a read probe
+   * (never provisions); applying writes to the tier's store.
    */
   async function handleOptimize(req: NextRequest, ctx: RequestContext, params: P) {
     const body = await req.json().catch(() => ({}));
@@ -323,9 +322,6 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     }
   }
 
-  const promptActions: ActionHandlerMap<P> = scope === 'character'
-    ? { 'optimize-image-prompts': handleOptimize, 'apply-image-prompts': handleApply }
-    : {};
 
   const GET = createContextParamsHandler<P>(
     withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders }, async (req, ctx, params) => {
@@ -359,7 +355,8 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
       'move-items': handleMoveItems,
       'copy-items': handleCopyItems,
       duplicate: handleDuplicate,
-      ...promptActions,
+      'optimize-image-prompts': handleOptimize,
+      'apply-image-prompts': handleApply,
     }, async (req, ctx, params) => {
       // Parse before resolving: an invalid body must never provision a store.
       const body = createWardrobeSchema.parse(await req.json());

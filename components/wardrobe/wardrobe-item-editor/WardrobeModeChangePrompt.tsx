@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
 
@@ -29,7 +30,11 @@ export function WardrobeModeChangePrompt({
 
   useEscapeKey(onCancel, true)
 
-  return (
+  if (typeof document === 'undefined') return null
+  // Portalled to <body>: rendered in place, a `.qt-workspace` pane's stacking
+  // context (isolation: isolate) traps the z-index below the left rail and
+  // the sticky toolbar, which paint over the dialog's edges.
+  return createPortal(
     <>
       <button
         className="qt-dialog-overlay !p-0 cursor-default border-none z-[90]"
@@ -85,6 +90,7 @@ export function WardrobeModeChangePrompt({
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   )
 }

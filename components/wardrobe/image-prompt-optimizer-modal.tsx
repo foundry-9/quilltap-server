@@ -3,8 +3,10 @@
 /**
  * Image Prompt Optimizer Modal — the wardrobe's portrait-cue wizard.
  *
- * 1. Intro — what will be reviewed (the character's own garments: no shared
- *    pieces, no archived ones, no outfits) and a "Begin" button.
+ * 1. Intro — what will be reviewed (the browsed tier's own garments — a
+ *    character's, a group's, a project's or Quilltap General's — with no
+ *    pieces shared in from another tier, no archived ones, no outfits) and a
+ *    "Begin" button.
  * 2. Reviewing — the cheap LLM checks each garment's `imagePrompt` against
  *    its description (`?action=optimize-image-prompts`; writes nothing).
  * 3. Decide — the recommendations, each editable, and the question: make
@@ -16,6 +18,7 @@
  */
 
 import { useCallback, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
@@ -23,10 +26,17 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
 import type { PromptRecommendation, PromptRecommendationKind } from '@/lib/wardrobe/prompt-optimizer'
+import {
+  GENERAL_WARDROBE_NAME,
+  wardrobeCollectionActionUrl,
+  type WardrobeContainer,
+} from '@/lib/wardrobe/wardrobe-container'
 
 interface ImagePromptOptimizerModalProps {
-  characterId: string
-  characterName?: string
+  /** The wardrobe tier under review; only its own pieces are read. */
+  container: WardrobeContainer
+  /** The tier owner's name (character, group or project), when known. */
+  ownerName?: string
   onClose: () => void
   /** Called after cues were written, so the wardrobe list re-reads. */
   onApplied: () => void
@@ -54,12 +64,35 @@ const KIND_LABEL: Record<PromptRecommendationKind, string> = {
   shorten: 'Trimmed to fit',
 }
 
-const optimizeUrl = (characterId: string, action: string) =>
-  `/api/v1/characters/${encodeURIComponent(characterId)}/wardrobe?action=${action}`
+/** "Whose wardrobe" and "what is left out", phrased for the tier under review. */
+function describeScope(container: WardrobeContainer, ownerName?: string): { whose: string; excluded: string } {
+  switch (container.scope) {
+    case 'character':
+      return {
+        whose: ownerName ? `${ownerName}'s` : "this character's",
+        excluded: "Only the character's own pieces are examined: nothing shared from a group, project or Quilltap General",
+      }
+    case 'group':
+      return {
+        whose: ownerName ? `the ${ownerName} group's` : "this group's",
+        excluded: "Only the group's own pieces are examined: nothing from a member's own closet, a project or Quilltap General",
+      }
+    case 'project':
+      return {
+        whose: ownerName ? `the ${ownerName} project's` : "this project's",
+        excluded: "Only the project's own pieces are examined: nothing from a character's own closet, a group or Quilltap General",
+      }
+    case 'general':
+      return {
+        whose: `the ${GENERAL_WARDROBE_NAME}`,
+        excluded: `Only the ${GENERAL_WARDROBE_NAME} pieces are examined: nothing from a character's own closet, a group or a project`,
+      }
+  }
+}
 
 export function ImagePromptOptimizerModal({
-  characterId,
-  characterName,
+  container,
+  ownerName,
   onClose,
   onApplied,
 }: ImagePromptOptimizerModalProps) {
@@ -81,7 +114,7 @@ export function ImagePromptOptimizerModal({
   const handleReview = useCallback(async () => {
     setStage('reviewing')
     setError(null)
-    const result = await fetchJson<OptimizeResponse>(optimizeUrl(characterId, 'optimize-image-prompts'), {
+    const result = await fetchJson<OptimizeResponse>(wardrobeCollectionActionUrl(container, 'optimize-image-prompts'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -101,7 +134,7 @@ export function ImagePromptOptimizerModal({
       data.recommendations.map((rec) => ({ ...rec, draft: rec.proposedPrompt, chosen: true })),
     )
     setStage('decide')
-  }, [characterId])
+  }, [container])
 
   const updateRec = useCallback((itemId: string, patch: Partial<DraftRecommendation>) => {
     setRecommendations((prev) => prev.map((rec) => (rec.itemId === itemId ? { ...rec, ...patch } : rec)))
@@ -120,7 +153,7 @@ export function ImagePromptOptimizerModal({
         return
       }
       setApplying(true)
-      const result = await fetchJson<{ updated: number }>(optimizeUrl(characterId, 'apply-image-prompts'), {
+      const result = await fetchJson<{ updated: number }>(wardrobeCollectionActionUrl(container, 'apply-image-prompts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ changes }),
@@ -135,12 +168,16 @@ export function ImagePromptOptimizerModal({
       onApplied()
       onClose()
     },
-    [recommendations, characterId, onApplied, onClose],
+    [recommendations, container, onApplied, onClose],
   )
 
-  const whose = characterName ? `${characterName}'s` : "this character's"
+  const { whose, excluded } = describeScope(container, ownerName)
 
-  return (
+  if (typeof document === 'undefined') return null
+  // Portalled to <body>: rendered in place, a `.qt-workspace` pane's stacking
+  // context (isolation: isolate) traps the z-index below the left rail and
+  // the sticky toolbar, which paint over the dialog's edges.
+  return createPortal(
     <>
       {/* Stacks above the wardrobe dialog, like the import-from-image modal. */}
       <button
@@ -191,8 +228,7 @@ export function ImagePromptOptimizerModal({
                   every one kept to {WARDROBE_IMAGE_PROMPT_MAX_LENGTH} characters.
                 </p>
                 <p className="qt-text-secondary text-xs">
-                  Only the character&apos;s own pieces are examined: nothing shared from a group, project or
-                  Quilltap General, nothing archived, and no multi-part outfits (an outfit is drawn from its
+                  {excluded}, nothing archived, and no multi-part outfits (an outfit is drawn from its
                   pieces). Garments covering several slots are included. Nothing is changed until you say so.
                 </p>
                 {stage === 'reviewing' && (
@@ -350,6 +386,7 @@ export function ImagePromptOptimizerModal({
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   )
 }

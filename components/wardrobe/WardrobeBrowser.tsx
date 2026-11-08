@@ -81,7 +81,7 @@ export interface WardrobeBrowserProps {
   wear?: WardrobeRowWearControls
   /** Character view only: open the import-from-image flow. */
   onImportFromImage?: () => void
-  /** Character view only: open the portrait-cue (image prompt) optimizer. */
+  /** Open the portrait-cue (image prompt) optimizer for the browsed tier. */
   onOptimizePrompts?: () => void
   /** Cap the list's height (the dialog) instead of letting it grow (a card). */
   scrollList?: boolean
@@ -376,7 +376,7 @@ export function WardrobeBrowser({
               Import from image
             </button>
           )}
-          {/* The portrait-cue wizard reviews only the character's own pieces. */}
+          {/* The portrait-cue wizard reviews only the browsed tier's own pieces. */}
           {onOptimizePrompts && (
             <button
               type="button"

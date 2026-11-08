@@ -233,6 +233,20 @@ function WardrobeControlDialogInner({
     [catalogue.characters, selectedCharacterId],
   )
 
+  /** The browsed tier owner's name, for the portrait-cue wizard's wording. */
+  const optimizerOwnerName = useMemo(() => {
+    switch (selectedContainer?.scope) {
+      case 'character':
+        return selectedCharacter?.name
+      case 'project':
+        return catalogue.projects.find((p) => p.id === selectedContainer.id)?.name
+      case 'group':
+        return catalogue.groups.find((g) => g.id === selectedContainer.id)?.name
+      default:
+        return undefined
+    }
+  }, [selectedContainer, selectedCharacter, catalogue.projects, catalogue.groups])
+
   // While an overlay is up, a click inside it (rendered as a sibling) must not
   // close the outer dialog via BaseModal's click-outside handler.
   const overlayOpen = actions.overlayOpen || importFromImageOpen || promptOptimizerOpen
@@ -266,11 +280,11 @@ function WardrobeControlDialogInner({
             />
           )}
 
-          {/* Portrait-cue wizard — the character's own garments only */}
-          {promptOptimizerOpen && selectedCharacterId && (
+          {/* Portrait-cue wizard — the browsed tier's own garments only */}
+          {promptOptimizerOpen && selectedContainer && (
             <ImagePromptOptimizerModal
-              characterId={selectedCharacterId}
-              characterName={selectedCharacter?.name}
+              container={selectedContainer}
+              ownerName={optimizerOwnerName}
               onClose={() => setPromptOptimizerOpen(false)}
               onApplied={() => {
                 void actions.refresh()
@@ -313,7 +327,7 @@ function WardrobeControlDialogInner({
               selectedCharacterId ? () => setImportFromImageOpen(true) : undefined
             }
             onOptimizePrompts={
-              selectedCharacterId ? () => setPromptOptimizerOpen(true) : undefined
+              selectedContainer ? () => setPromptOptimizerOpen(true) : undefined
             }
           />
 

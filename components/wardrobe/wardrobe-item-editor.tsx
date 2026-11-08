@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
@@ -466,7 +467,11 @@ export function WardrobeItemEditor({
     )
   }, [candidates, candidatesLoading, componentItemIds])
 
-  return (
+  if (typeof document === 'undefined') return null
+  // Portalled to <body>: rendered in place, a `.qt-workspace` pane's stacking
+  // context (isolation: isolate) traps the z-index below the left rail and
+  // the sticky toolbar, which paint over the dialog's edges.
+  return createPortal(
     <>
       {/* Overlay — z values sit above the qt-dialog-overlay (z-[60]) so this
           editor always stacks on top when summoned from another dialog. */}
@@ -816,6 +821,7 @@ export function WardrobeItemEditor({
           onKeepTypes={handleConfirmKeepTypes}
         />
       )}
-    </>
+    </>,
+    document.body,
   )
 }

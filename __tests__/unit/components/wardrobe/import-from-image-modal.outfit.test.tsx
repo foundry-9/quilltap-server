@@ -113,12 +113,12 @@ function routeFetch(analysis: unknown = ANALYSIS, options: { failUploads?: boole
 }
 
 async function analyzeAnImage(): Promise<void> {
-  const { container } = render(
+  render(
     <ImportFromImageModal characterId={CHARACTER_ID} onClose={jest.fn()} onImported={jest.fn()} />
   )
   const select = await screen.findByLabelText('Reading the photograph') as HTMLSelectElement
   await waitFor(() => expect(select.value).toBe('profile-usual'))
-  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement // the modal is portalled to <body>
   const file = new File(['png-bytes'], 'look.png', { type: 'image/png' })
   fireEvent.change(input, { target: { files: [file] } })
   await waitFor(() => expect(screen.getByAltText('Selected reference image')).toBeTruthy())
@@ -136,13 +136,13 @@ describe('ImportFromImageModal — choosing the vision profile', () => {
 
   it('sends the profile the operator picks instead', async () => {
     routeFetch()
-    const { container } = render(
+    render(
       <ImportFromImageModal characterId={CHARACTER_ID} onClose={jest.fn()} onImported={jest.fn()} />
     )
     const select = await screen.findByLabelText('Reading the photograph') as HTMLSelectElement
     await waitFor(() => expect(select.value).toBe('profile-usual'))
     fireEvent.change(select, { target: { value: 'profile-other' } })
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const input = document.body.querySelector('input[type="file"]') as HTMLInputElement // the modal is portalled to <body>
     fireEvent.change(input, { target: { files: [new File(['png-bytes'], 'look.png', { type: 'image/png' })] } })
     await waitFor(() => expect(screen.getByAltText('Selected reference image')).toBeTruthy())
     fireEvent.click(screen.getByText('Analyze Image'))
@@ -274,10 +274,10 @@ describe('ImportFromImageModal — keeping the photograph', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     routeFetch(ANALYSIS, { failUploads: true })
     const onImported = jest.fn()
-    const { container } = render(
+    render(
       <ImportFromImageModal characterId={CHARACTER_ID} onClose={jest.fn()} onImported={onImported} />
     )
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const input = document.body.querySelector('input[type="file"]') as HTMLInputElement // the modal is portalled to <body>
     fireEvent.change(input, { target: { files: [new File(['png-bytes'], 'look.png', { type: 'image/png' })] } })
     await waitFor(() => expect(screen.getByAltText('Selected reference image')).toBeTruthy())
     fireEvent.click(screen.getByText('Analyze Image'))
