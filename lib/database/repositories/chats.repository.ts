@@ -57,7 +57,7 @@ const CONCIERGE_MODE_FIELDS: readonly string[] = ['conciergeMode', 'conciergeMod
 const EQUIPPED_INVENTORY_FIELD = 'equippedInventory';
 
 /**
- * The chat's turn mode ('rotation' | 'storyteller') — patch-only on this
+ * The chat's turn mode ('rotation' | 'turns' | 'storyteller') — patch-only on this
  * table, written solely by `ChatsRepository.setTurnMode`.
  */
 const TURN_MODE_FIELD = 'turnMode';

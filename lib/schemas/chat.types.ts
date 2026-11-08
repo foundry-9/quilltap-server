@@ -978,7 +978,8 @@ export const ChatMetadataSchema = z.object({
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
   /**
-   * Turn mode: 'rotation' (NULL) or 'storyteller' — each operator post opens a
+   * Turn mode: 'rotation' (NULL), 'turns' (the chain stops when the round
+   * closes) or 'storyteller' — each operator post opens a
    * round of bids. Independent of `isPaused`. **Patch-only**: written only by
    * `ChatsRepository.setTurnMode`, so a whole-row update cannot carry a stale
    * copy back.
@@ -1394,7 +1395,7 @@ export const ChatMetadataBaseSchema = z.object({
   summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
-  /** Turn mode ('rotation' | 'storyteller'). See ChatMetadataSchema. */
+  /** Turn mode ('rotation' | 'turns' | 'storyteller'). See ChatMetadataSchema. */
   turnMode: ChatTurnModeSchema.nullable().optional(),
   /** Storyteller invite filter. See ChatMetadataSchema. */
   storytellerInviteFilter: z.boolean().default(false),

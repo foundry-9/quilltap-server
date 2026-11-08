@@ -284,6 +284,13 @@ export interface ProcessMessageResult {
    */
   yielded?: boolean
   /**
+   * This character's turn (a spoken line or a pass) completed the cycle: every
+   * present seat has now spoken or passed once. Turns mode ends its chain here
+   * (`executeTurnChain`). Judged before the turn was recorded, because a wrap
+   * resets the persisted cycle list.
+   */
+  closedCycle?: boolean
+  /**
    * Storyteller: an operator post was recorded and a round should open (or,
    * with `carina`, the post was an `@Name:` query and no round opens).
    */

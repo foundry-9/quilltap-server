@@ -22,6 +22,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   computeCycleOrderAfterSkip,
   computeSpokenThisCycleAfterSkip,
+  turnClosesCycle,
   detectSkipSentinel,
   detectYieldSentinel,
 } from '@/lib/chat/turn-manager'
@@ -345,10 +346,18 @@ async function closePass(params: SettleTurnParams): Promise<ProcessMessageResult
 
   // Re-read for fresh participants and cycle state.
   let isPaused = false
+  let closedCycle = false
   try {
     const freshChat = await repos.chats.findById(chatId)
     if (freshChat) {
       isPaused = freshChat.isPaused === true
+      // A pass spends a turn as a line does, so it can close the cycle too
+      // (Turns mode stops there). Judged before the advance below resets it.
+      closedCycle = turnClosesCycle(
+        characterParticipant.id,
+        freshChat.participants,
+        freshChat.spokenThisCycleParticipantIds,
+      )
       const cycleUpdate = computeSpokenThisCycleAfterSkip(
         characterParticipant.id,
         freshChat.participants,
@@ -389,6 +398,7 @@ async function closePass(params: SettleTurnParams): Promise<ProcessMessageResult
     skipped: true,
     skippedParticipantId: characterParticipant.id,
     isPaused,
+    closedCycle,
   })
 }
 

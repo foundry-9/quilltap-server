@@ -22,6 +22,7 @@ export {
   updateTurnStateAfterMessage,
   computeSpokenThisCycleAfterMessage,
   computeSpokenThisCycleAfterSkip,
+  turnClosesCycle,
   computeCycleOrderAfterMessage,
   computeCycleOrderAfterSkip,
 } from './state';

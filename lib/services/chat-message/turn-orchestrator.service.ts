@@ -18,6 +18,7 @@ import {
   encodeChainCompleteEvent,
   safeEnqueue,
 } from './streaming.service'
+import { triggerTurnMemoryExtraction } from './memory-trigger.service'
 
 /**
  * Guards on a multi-character chain: how many turns it may run and for how
@@ -388,6 +389,14 @@ export async function executeTurnChain({
     return
   }
 
+  // Turns mode: the first answer may already have closed the cycle (the
+  // operator's post was the second-to-last turn of it).
+  let housekeeping = initialResult.sceneTrackingContext
+  if (await endsTurnsRound(repos, chatId, initialResult)) {
+    await endChainOnRoundComplete(repos, chatId, userId, controller, encoder, 0, persistTurnParticipant, housekeeping)
+    return
+  }
+
   const chainStartTime = Date.now()
   let chainDepth = 0
 
@@ -450,6 +459,12 @@ export async function executeTurnChain({
         break
       }
 
+      housekeeping = chainResult.sceneTrackingContext ?? housekeeping
+      if (await endsTurnsRound(repos, chatId, chainResult)) {
+        await endChainOnRoundComplete(repos, chatId, userId, controller, encoder, chainDepth, persistTurnParticipant, housekeeping)
+        break
+      }
+
       // A skipped turn advanced the rotation (Host turn-pass record) — fall
       // through to the next decideNextTurn iteration. Only a genuinely empty
       // response (no content, no skip) stops the chain.
@@ -489,6 +504,57 @@ export async function executeTurnChain({
       break
     }
   }
+}
+
+/**
+ * Turns mode: does this turn end the round? Only when it closed the cycle and
+ * the chat is (still) in Turns mode — read fresh, so a mode change mid-chain
+ * takes effect at the next cycle boundary.
+ */
+async function endsTurnsRound(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  result: ProcessMessageResult,
+): Promise<boolean> {
+  if (!result.closedCycle) return false
+  const fresh = await repos.chats.findById(chatId)
+  return fresh?.turnMode === 'turns' && fresh.isPaused !== true
+}
+
+/**
+ * Turns mode: everyone present has spoken or passed once. Queue the round's
+ * memory extraction (the queue dedupes it against the finalizer's own
+ * turn-close trigger), then stop. Not a pause: the operator's next post, or
+ * Next Round, runs the next cycle.
+ */
+async function endChainOnRoundComplete(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  chainDepth: number,
+  persistTurnParticipant: typeof persistTurnParticipantId,
+  housekeeping: ProcessMessageResult['sceneTrackingContext'],
+): Promise<void> {
+  logger.info('[TurnOrchestrator] Turns mode: the round is complete, stopping', { chatId, chainDepth })
+  if (housekeeping) {
+    await triggerTurnMemoryExtraction(repos, {
+      chatId,
+      userId,
+      connectionProfile: housekeeping.connectionProfile,
+      chatSettings: housekeeping.memoryChatSettings,
+    })
+  } else {
+    logger.debug('[TurnOrchestrator] Round ended on passes alone; no memory extraction to queue', { chatId })
+  }
+  await persistTurnParticipant(repos, chatId, null)
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+    reason: 'turn_complete',
+    nextSpeakerId: null,
+    chainDepth,
+    paused: false,
+  }))
 }
 
 /**

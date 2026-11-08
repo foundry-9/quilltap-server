@@ -2258,6 +2258,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onTogglePause={chatControls.togglePause}
           turnMode={chat?.turnMode ?? 'rotation'}
           onSetTurnPosition={chatControls.setTurnPosition}
+          onNextRound={turnManagement.handleContinue}
           storytellerInviteFilter={chat?.storytellerInviteFilter === true}
           onToggleStorytellerInviteFilter={chatControls.toggleStorytellerInviteFilter}
           onNudge={turnManagement.handleNudge}

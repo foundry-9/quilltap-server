@@ -304,9 +304,10 @@ To prevent runaway conversations:
 - **Stop** leaves it paused, the floor yours
 - Or take over one of the characters and speak in their place
 
-## Pausing the Room
+## Manual: Pausing the Room
 
-**Pause** in the participants sidebar brings the room to a halt, and a halted room advances *only*
+**Manual** in the participants sidebar's turn-mode control (the collapsed strip keeps a single
+**Pause** button) brings the room to a halt, and a halted room advances *only*
 at your invitation. Nothing happens by itself: no rotation, no chain of replies, not so much as a
 single answer to a remark of your own.
 
@@ -318,7 +319,7 @@ While the room is paused:
 | **Nudge** a character | That character takes exactly one turn. The room then falls quiet again, still paused, the floor back with you |
 | **Skip** your own seat | The seat the floor passes to takes exactly one turn, on the same terms |
 | **Queue** a character | Notes their place. They speak when a nudge or a resumption next calls for a speaker |
-| **Resume** | Returns the company to its ordinary rotation |
+| **Normal**, **Turns** or **Storyteller** (or **Resume** on the collapsed strip) | Lifts the pause and returns the company to that arrangement |
 
 A nudge does **not** lift the pause — it borrows a single turn against it. This is the whole use of
 a paused room: you may lay down three paragraphs of scene-setting, invite precisely one character to
@@ -328,20 +329,34 @@ The first remark you enter into a paused room is answered with a quiet notice to
 the silence be mistaken for a message that never arrived. Later remarks pass without comment, the
 point having been made.
 
+### Turns Mode
+
+**Turns** runs the table one full round at a time. When you post — or press **Next Round** beneath
+the control — the company takes the floor in its ordinary rotation until every soul present has had
+their chance: each speaks once, or passes if they have nothing to add, and any seat you drive is
+counted by the remark you have just made. Then the room falls still, the Commonplace Book is sent
+off to set down what the round was about, and the floor is yours until you call for the next.
+
+It is the middle way between Normal, which lets the company talk among itself until somebody stops
+it, and Manual, which grants one turn at a time. Should the rotation reach one of your own seats
+partway through a round, it waits for you there exactly as it would in Normal; your remark then
+carries the round on to its end. The first round to close in a visit says so in a small notice;
+afterwards the rounds close without remark.
+
 ### Storyteller Mode
 
-The control beside Pause has a third position, **Storyteller**. In it, every post of yours opens a
+The control has a fourth position, **Storyteller**. In it, every post of yours opens a
 *round*: each character is asked in private whether they wish to answer and what they mean to do —
 just speak, look something up, act on the world, or (rarely, and with a warning) delete something
 — and you choose who goes ahead, in rotation order or all at once. Nothing is done that you have not
 first seen proposed, and the floor comes back to you when the round is over. The full tour is on
 [Storyteller Mode](storyteller-mode.md).
 
-The Pause button is also the establishment's own safety catch. It is pressed for you when a turn
+Manual is also the establishment's own safety catch. It is pressed for you when a turn
 fails outright, when an all-LLM room reaches one of the thresholds above, and — briefly — when the
 Courier is holding a conversation while it waits for a reply you must paste in by hand. In every
-case **Resume** is the way out, and the button reads **Resume** whenever a pause is in force,
-whoever called it.
+case the control shows **Manual** (and the collapsed strip's button reads **Resume**) whenever a
+pause is in force, whoever called it; choose any other position to carry on.
 
 ## Per-Character Settings
 

@@ -4,6 +4,17 @@
 
 ### 4.13-dev
 
+#### Feature: Turns mode; Paused renamed Manual
+
+- The Salon's turn-mode control has four positions: Normal, Manual, Turns, Storyteller. Manual is the old Paused (`isPaused`, label change only).
+- Turns (`chats.turnMode = 'turns'`, new value of `ChatTurnModeSchema`; the column is TEXT, so no migration) runs the chain until the cycle closes, i.e. every present character seat has spoken or passed once, then stops with chain-complete reason `turn_complete` (`paused: false`). A user-driven seat reached mid-round still stops the chain as `user_turn`, and the operator's post counts as that seat's turn.
+- Cycle close is `turnClosesCycle` (`lib/chat/turn-manager/state.ts`), the same predicate `advanceSpokenThisCycle` wraps on, read against `spokenThisCycleParticipantIds` before the turn is recorded. The finalizer (`readTurnClosesCycle`) and the pass path (`closePass`) set `ProcessMessageResult.closedCycle`; `executeTurnChain` checks it after the first answer and after each chained turn and re-reads `turnMode` fresh.
+- On `turn_complete` the chain queues `triggerTurnMemoryExtraction` with the latest turn's profile (the queue dedupes it against the finalizer's own turn-close trigger). A round that closed on passes alone queues nothing.
+- Sidebar: Next Round button in Turns mode (runs `handleContinue`); a one-time toast when the first round closes. Continue (and Next Round) now says the floor is yours when the next seat is the operator's own; it used to show "No characters available to speak" for the operator's own seat and nothing for another user-driven seat.
+- The turn-mode control (`qt-storyteller-mode`) is a 2x2 grid instead of one row: four equal slots in the sidebar clipped "Storyteller" under themes that uppercase and letter-space buttons (Art Deco). theme-storybook 1.0.104.
+- Docs: `help/chat-participants.md`, `help/chat-multi-character.md`, `help/storyteller-mode.md`, API.md, DDL.md, export schema.
+- Tests: `__tests__/unit/lib/chat/turn-manager/turn-closes-cycle.test.ts`, Turns cases in `turn-orchestrator.test.ts`.
+
 #### Feature: Edit any line in the Salon, with warnings about what the edit disturbs
 
 - The pencil now appears on every message row, not only the operator's: character lines, Staff announcements, Carina answers and established facts. `PUT /api/v1/messages/[id]` already accepted any message; the Salon was the gate (`MessageActionBar`).

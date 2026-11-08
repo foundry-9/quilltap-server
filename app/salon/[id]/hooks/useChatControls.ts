@@ -12,6 +12,7 @@ import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { Chat, Message } from '../types'
+import type { ChatTurnMode, TurnPosition } from '@/lib/schemas/storyteller.types'
 
 /**
  * Persist one `{ chat: { … } }` patch through {@link patchChat}. A server
@@ -219,17 +220,19 @@ export function useChatControls({
     await persistChatField(chatId, { isPaused: paused }, 'pause state')
   }, [chatId, setIsPaused, setChat])
 
-  // The three-position turn-mode control: Normal / Paused / Storyteller. Pause
-  // and turn mode are independent (a paused storyteller chat records posts
-  // without opening a round), so Paused keeps the turn mode, and Normal /
-  // Storyteller each un-pause and set the mode.
-  const setTurnPosition = useCallback(async (position: 'normal' | 'paused' | 'storyteller') => {
-    if (position === 'paused') {
+  // The four-position turn-mode control: Normal / Manual / Turns / Storyteller.
+  // Manual is the pause, and pause and turn mode are independent (a paused
+  // storyteller chat records posts without opening a round), so Manual keeps
+  // the turn mode, and the other three each un-pause and set the mode.
+  const setTurnPosition = useCallback(async (position: TurnPosition) => {
+    if (position === 'manual') {
       await setPauseState(true)
-      showInfoToast('Auto-responses paused')
+      showInfoToast('Manual: nobody answers until you nudge them')
       return
     }
-    const turnMode = position === 'storyteller' ? 'storyteller' : 'rotation'
+    const turnMode: ChatTurnMode = position === 'storyteller' ? 'storyteller'
+      : position === 'turns' ? 'turns'
+      : 'rotation'
     setIsPaused(false)
     setChat((prev) => (prev ? { ...prev, isPaused: false, turnMode } : prev))
     try {
@@ -242,7 +245,9 @@ export function useChatControls({
       })
       showInfoToast(turnMode === 'storyteller'
         ? 'Storyteller mode: each of your posts asks the company who wishes to answer'
-        : 'Auto-responses resumed')
+        : turnMode === 'turns'
+          ? 'Turns: everyone has their say once, then the room waits for you'
+          : 'Auto-responses resumed')
     } catch (error) {
       showErrorToast('Could not change the turn mode')
       console.error('[useChatControls] turn mode change failed', error)

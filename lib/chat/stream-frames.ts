@@ -110,7 +110,7 @@ export type DoneOutcome = z.infer<typeof DoneOutcomeSchema>
 /** Why a chain stopped. */
 export const ChainCompleteReasonSchema = z.enum([
   'user_turn', 'paused', 'max_depth', 'max_time', 'error', 'no_next_speaker',
-  'cycle_complete', 'yielded', 'stopped', 'round_open',
+  'cycle_complete', 'yielded', 'stopped', 'round_open', 'turn_complete',
 ])
 export type ChainCompleteReason = z.infer<typeof ChainCompleteReasonSchema>
 

@@ -36,6 +36,7 @@ import {
   type ConciergeProvenanceNote,
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
+import type { ChatTurnMode, TurnPosition } from '@/lib/schemas/storyteller.types'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
 
@@ -152,10 +153,12 @@ export interface ChatSidebarProps {
   waitingForResponse?: boolean
   isPaused?: boolean
   onTogglePause?: () => void
-  /** The chat's turn mode; with `onSetTurnPosition` the pause button becomes a three-way control. */
-  turnMode?: 'rotation' | 'storyteller'
-  /** Normal (rotation, running) / Paused / Storyteller (bids each round). */
-  onSetTurnPosition?: (position: 'normal' | 'paused' | 'storyteller') => void
+  /** The chat's turn mode; with `onSetTurnPosition` the pause button becomes a four-way control. */
+  turnMode?: ChatTurnMode
+  /** Normal (rotation, running) / Manual (paused) / Turns (one round at a time) / Storyteller (bids each round). */
+  onSetTurnPosition?: (position: TurnPosition) => void
+  /** Turns mode: run the next round without posting. */
+  onNextRound?: () => void
   /** Storyteller: invite seats to bid weighted by talkativeness (off = everyone, every round). */
   storytellerInviteFilter?: boolean
   onToggleStorytellerInviteFilter?: () => void
@@ -767,9 +770,10 @@ function CollapsedStrip({
 // Turn-mode control
 // =================================================================
 
-const TURN_POSITIONS: Array<{ id: 'normal' | 'paused' | 'storyteller'; label: string; title: string }> = [
+const TURN_POSITIONS: Array<{ id: TurnPosition; label: string; title: string }> = [
   { id: 'normal', label: 'Normal', title: 'The company takes turns on its own' },
-  { id: 'paused', label: 'Paused', title: 'Nobody answers until you nudge them' },
+  { id: 'manual', label: 'Manual', title: 'Nobody answers until you nudge them' },
+  { id: 'turns', label: 'Turns', title: 'Everyone has their turn once, then the room waits for you' },
   { id: 'storyteller', label: 'Storyteller', title: 'Each of your posts asks the company who wishes to answer; you choose' },
 ]
 
@@ -779,16 +783,20 @@ function TurnModeControl({
   onSet,
 }: {
   isPaused: boolean
-  turnMode: 'rotation' | 'storyteller'
-  onSet: (position: 'normal' | 'paused' | 'storyteller') => void
+  turnMode: ChatTurnMode
+  onSet: (position: TurnPosition) => void
 }) {
-  const current = isPaused ? 'paused' : turnMode === 'storyteller' ? 'storyteller' : 'normal'
+  const current: TurnPosition = isPaused
+    ? 'manual'
+    : turnMode === 'storyteller' ? 'storyteller'
+    : turnMode === 'turns' ? 'turns'
+    : 'normal'
   return (
     <div className="qt-storyteller-mode mt-3" role="radiogroup" aria-label="Turn mode">
       {TURN_POSITIONS.map((position) => {
         const active = position.id === current
         const classes = ['qt-storyteller-mode-option']
-        if (active) classes.push(position.id === 'paused' ? 'qt-storyteller-mode-option-paused' : 'qt-storyteller-mode-option-active')
+        if (active) classes.push(position.id === 'manual' ? 'qt-storyteller-mode-option-paused' : 'qt-storyteller-mode-option-active')
         return (
           <button
             key={position.id}
@@ -855,6 +863,18 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
           turnMode={p.turnMode ?? 'rotation'}
           onSet={p.onSetTurnPosition}
         />
+      )}
+
+      {p.onSetTurnPosition && p.onNextRound && p.turnMode === 'turns' && p.isPaused !== true && (
+        <button
+          type="button"
+          onClick={p.onNextRound}
+          disabled={p.isGenerating}
+          className="qt-button qt-button-secondary qt-button-sm mt-2 w-full"
+          title="Everyone takes their turn once more, then the room waits again"
+        >
+          Next Round
+        </button>
       )}
 
       {p.onSetTurnPosition && p.turnMode === 'storyteller' && p.onToggleStorytellerInviteFilter && (

@@ -435,6 +435,10 @@ export function useSSEStreaming({
     if (!isPaused) heldTurnAnnouncedRef.current = false
   }, [isPaused])
 
+  // Turns mode: the first round to close in a visit says why the room went
+  // quiet and how to carry on; later rounds close without a word.
+  const roundCloseAnnouncedRef = useRef(false)
+
   /**
    * Bug 123: a chain that stops because the chat is paused used to do so in
    * silence — the room simply stopped answering, one reply per message, and the
@@ -450,6 +454,12 @@ export function useSSEStreaming({
    * nothing happened, and how to get a turn out of it.
    */
   const announceChainPause = useCallback((event: { reason: string; paused: boolean; heldUserTurn?: boolean }) => {
+    if (event.reason === 'turn_complete') {
+      if (roundCloseAnnouncedRef.current) return
+      roundCloseAnnouncedRef.current = true
+      showInfoToast('The round is complete — everyone has had their say. Post a line, or press Next Round in the sidebar.')
+      return
+    }
     if (!event.paused) return
     if (event.heldUserTurn) {
       if (heldTurnAnnouncedRef.current) return

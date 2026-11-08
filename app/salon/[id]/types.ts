@@ -1,6 +1,7 @@
 import type { ConciergeModeReason, RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { DiagramStyle } from '@/lib/markdown/diagrams'
+import type { ChatTurnMode } from '@/lib/schemas/storyteller.types'
 
 export interface MessageAttachment {
   id: string
@@ -260,8 +261,8 @@ export interface Chat {
   lastTurnParticipantId?: string | null
   /** Whether auto-responses are paused in multi-character chats */
   isPaused?: boolean
-  /** Turn mode: rotation (Normal) or storyteller (each operator post opens a round of bids) */
-  turnMode?: 'rotation' | 'storyteller'
+  /** Turn mode: rotation (Normal), turns (one full round, then wait) or storyteller (each operator post opens a round of bids) */
+  turnMode?: ChatTurnMode
   /** Storyteller: invite seats to bid weighted by talkativeness */
   storytellerInviteFilter?: boolean
   /** Whether the user has manually renamed this chat (disables auto-renaming) */

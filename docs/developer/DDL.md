@@ -675,7 +675,7 @@ CREATE TABLE "chats" (
   "lastFullRebuildTurn" INTEGER DEFAULT 0,
   "summaryAnchorMessageIds" TEXT DEFAULT '[]',
   "isPaused" INTEGER DEFAULT 0,
-  "turnMode" TEXT DEFAULT NULL,               -- Storyteller mode: 'rotation' (NULL) or 'storyteller'. Patch-only: written only by ChatsRepository.setTurnMode. Independent of isPaused. Added by add-storyteller-mode-v1.
+  "turnMode" TEXT DEFAULT NULL,               -- Turn mode: 'rotation' (NULL), 'turns' (one full cycle, then stop) or 'storyteller'. Patch-only: written only by ChatsRepository.setTurnMode. Independent of isPaused. Added by add-storyteller-mode-v1.
   "storytellerInviteFilter" INTEGER DEFAULT 0, -- Storyteller mode: 1 = invite each seat to bid with probability 0.25 + 0.75 × talkativeness; 0 = invite everyone. Added by add-storyteller-mode-v1.
   "isManuallyRenamed" INTEGER DEFAULT 0,
   "impersonatingParticipantIds" TEXT DEFAULT '[]',

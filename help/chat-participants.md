@@ -235,20 +235,24 @@ If characters are queued:
 - **"2 in queue"** — Shows how many are waiting
 - Queue empties as characters speak
 
-### Turn Mode: Normal, Paused, Storyteller
+### Turn Mode: Normal, Manual, Turns, Storyteller
 
-In the expanded sidebar the old Pause button has become a three-way control (the collapsed strip
+In the expanded sidebar the old Pause button has become a four-way control (the collapsed strip
 keeps its single Pause/Resume button):
 
-- **Normal** — The company answers in its ordinary weighted rotation
-- **Paused** — Nothing happens by itself. Your remarks are set down in the record and answered by
-  nobody; the rotation waits where you left it. **Nudge** a character while paused and they take
-  exactly one turn, and the room falls quiet again
+- **Normal** — The company answers in its ordinary weighted rotation, carrying on among itself
+  until the floor comes back to you
+- **Manual** — Nothing happens by itself. Your remarks are set down in the record and answered by
+  nobody; the rotation waits where you left it. **Nudge** a character and they take exactly one
+  turn, and the room falls quiet again. (This position was once called *Paused*.)
+- **Turns** — One full round at a time. Every character present speaks once — or passes, if they
+  have nothing to add — and then the room waits, with the round's memories sent off to the
+  Commonplace Book. Post a line, or press **Next Round** beneath the control, to run the next one
 - **Storyteller** — Each of your posts asks every character, privately, whether they wish to answer
   and what they mean to do, and you choose who goes ahead. See [Storyteller Mode](storyteller-mode.md)
 
-Pausing a storyteller chat keeps the mode: Paused records your posts without asking for bids, and
-Storyteller resumes the bidding.
+Manual keeps whichever mode you were in: a storyteller chat set to Manual records your posts without
+asking for bids, and choosing Storyteller again resumes the bidding.
 
 **Invite by talkativeness** appears beneath the control in Storyteller mode. Off (the default),
 every character is asked every round. On, each is asked with a likelihood that rises with their

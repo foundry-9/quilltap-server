@@ -590,7 +590,7 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('should not auto-continue when next speaker is user-controlled', async () => {
+    it('should hand the floor back, not auto-continue, when next speaker is user-controlled', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => createMockTurnResponse({
@@ -617,7 +617,9 @@ describe('useTurnManagement', () => {
         await result.current.handleContinue()
       })
 
-      expect(mockShowInfoToast).not.toHaveBeenCalled()
+      expect(mockShowInfoToast).toHaveBeenCalledWith(
+        'The floor is yours — post a line, or skip your turn.'
+      )
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
@@ -651,7 +653,7 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('should show info toast when next speaker matches user participant id', async () => {
+    it('should say the floor is yours when next speaker is the user participant', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => createMockTurnResponse({ nextSpeakerId: 'p3' }),
@@ -676,7 +678,7 @@ describe('useTurnManagement', () => {
       })
 
       expect(mockShowInfoToast).toHaveBeenCalledWith(
-        'No characters available to speak. Try adding or activating a character.'
+        'The floor is yours — post a line, or skip your turn.'
       )
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })

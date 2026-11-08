@@ -139,7 +139,7 @@ export const chatUpdateRequestSchema = z.object({
    */
   conciergeState: ConciergeModeSchema.optional(),
   /**
-   * Turn mode: 'rotation' or 'storyteller'. Patch-only on the chat row, so it
+   * Turn mode: 'rotation', 'turns' or 'storyteller'. Patch-only on the chat row, so it
    * is written through `ChatsRepository.setTurnMode`, never the whole-row
    * update; leaving storyteller mode closes any open round.
    */

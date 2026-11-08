@@ -15,6 +15,7 @@ import {
   resolveCycleOrder,
   loadRoomCharacters,
   isUsersTurn,
+  turnClosesCycle,
 } from '@/lib/chat/turn-manager'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -280,6 +281,11 @@ export async function finalizeMessageResponse({
   // The call sheet for this turn: null unless something stepped aside. Composed
   // here, at the one place that knows the turn is over and who answered.
   const routeTrail = buildRouteTrail(streaming, { chatId, messageId: assistantMessageId })
+
+  // Does this line complete the cycle? Read the persisted cycle fresh, before
+  // the save advances (and on a wrap, resets) it. Turns mode stops on this; a
+  // storyteller turn never chains, so it needs no answer.
+  const closedCycle = storyteller ? false : await readTurnClosesCycle(repos, chatId, characterParticipant.id)
 
   await saveAssistantMessage(
     repos,
@@ -629,6 +635,7 @@ export async function finalizeMessageResponse({
     messageId: assistantMessageId,
     userParticipantId,
     isPaused: chat.isPaused,
+    closedCycle,
     sceneTrackingContext: chatSettings ? {
       connectionProfile,
       memoryChatSettings: {
@@ -636,6 +643,33 @@ export async function finalizeMessageResponse({
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
+  }
+}
+
+/**
+ * Whether a turn by `participantId` would complete the chat's current cycle,
+ * judged against the persisted cycle as it stands now (before the turn is
+ * recorded). A failed read answers false: a missed stop costs Turns mode one
+ * extra round, never a turn.
+ */
+export async function readTurnClosesCycle(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  participantId: string,
+): Promise<boolean> {
+  try {
+    const fresh = await repos.chats.findById(chatId)
+    if (!fresh) return false
+    const closes = turnClosesCycle(participantId, fresh.participants, fresh.spokenThisCycleParticipantIds)
+    logger.debug('Cycle-close check for turn', { chatId, participantId, closes })
+    return closes
+  } catch (error) {
+    logger.warn('Cycle-close check failed; treating the cycle as open', {
+      chatId,
+      participantId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
   }
 }
 

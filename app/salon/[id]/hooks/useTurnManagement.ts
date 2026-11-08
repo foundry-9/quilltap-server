@@ -205,14 +205,18 @@ export function useTurnManagement(
 
     const { nextSpeakerId, nextSpeakerControlledBy } = response.turn
 
-    if (nextSpeakerId && nextSpeakerId !== userParticipantId) {
-      if (nextSpeakerControlledBy === 'user') {
-        return
-      }
-      triggerContinueMode(nextSpeakerId)
-    } else {
+    if (!nextSpeakerId) {
       showInfoToast('No characters available to speak. Try adding or activating a character.')
+      return
     }
+    // The operator's own seat (or another seat they drive) is on deck: nothing
+    // to summon. Next Round in Turns mode lands here whenever a fresh round
+    // opens on the operator.
+    if (nextSpeakerId === userParticipantId || nextSpeakerControlledBy === 'user') {
+      showInfoToast('The floor is yours — post a line, or skip your turn.')
+      return
+    }
+    triggerContinueMode(nextSpeakerId)
   }, [chatId, hasActiveCharacters, userParticipantId, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode])
 
   // Skip is offered whenever the human can type as a seat — their own character

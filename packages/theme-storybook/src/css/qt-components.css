@@ -9305,23 +9305,30 @@
   /**
    * Storyteller mode — the Salon's turn-mode control and the bidding board.
    *
-   *   qt-storyteller-mode*   — Normal / Paused / Storyteller segmented control
+   *   qt-storyteller-mode*   — Normal / Manual / Turns / Storyteller segmented control
    *   qt-storyteller-board*  — the round's board above the composer
    *   qt-storyteller-card*   — one seat's bid
    *
    * Plain CSS (no @apply) so the theme-storybook mirror is the same text.
    * Every colour reads a --qt-storyteller-* hook with a token fallback.
    */
-  /* The turn-mode control: Normal / Paused / Storyteller, one segmented row. */
+  /*
+   * The turn-mode control: Normal / Manual / Turns / Storyteller, a 2x2 grid.
+   * Four equal slots in one row cannot hold "Storyteller" in a sidebar once a
+   * theme uppercases and letter-spaces its buttons, so it is two rows; the
+   * 1px gap over the border colour draws the dividers.
+   */
   .qt-storyteller-mode {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
     width: 100%;
+    background: var(--qt-storyteller-mode-border, var(--color-border));
     border: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
     border-radius: var(--qt-storyteller-mode-radius, 0.5rem);
     overflow: hidden;
   }
   .qt-storyteller-mode-option {
-    flex: 1 1 0%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -9337,9 +9344,6 @@
     color: var(--qt-storyteller-mode-fg, var(--color-muted-foreground));
     border: none;
     transition: background-color 150ms, color 150ms;
-  }
-  .qt-storyteller-mode-option + .qt-storyteller-mode-option {
-    border-left: 1px solid var(--qt-storyteller-mode-border, var(--color-border));
   }
   .qt-storyteller-mode-option:hover {
     background: var(--qt-storyteller-mode-hover-bg, var(--color-accent));

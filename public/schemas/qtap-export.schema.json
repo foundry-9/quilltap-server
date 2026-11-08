@@ -738,8 +738,8 @@
           "description": "Why the chat is in its conciergeMode. NULL when Moderated."
         },
         "turnMode": {
-          "enum": ["rotation", "storyteller", null],
-          "description": "The chat's turn mode. NULL reads as 'rotation' (the weighted rotation). 'storyteller' = each operator post opens a round: every LLM character is asked for a bid, and the operator chooses who speaks."
+          "enum": ["rotation", "turns", "storyteller", null],
+          "description": "The chat's turn mode. NULL reads as 'rotation' (the weighted rotation). 'turns' = the rotation runs one full cycle (every present character speaks or passes once), then waits for the operator. 'storyteller' = each operator post opens a round: every LLM character is asked for a bid, and the operator chooses who speaks."
         },
         "storytellerInviteFilter": {
           "type": ["boolean", "null"],
