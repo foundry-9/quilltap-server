@@ -12,6 +12,7 @@ import { isCollapsedAnnouncement, type RenderItem } from '../announcement-render
 import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
+import { GreenRoomPanel } from './GreenRoomPanel'
 import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
 import { resolveToolRowAttributionMessage } from '../group-tool-messages'
 import { StreamingMessage } from './StreamingMessage'
@@ -26,6 +27,8 @@ interface VirtualizedMessageListProps {
   messages: Message[]
   /** Render-items the virtualizer indexes over: messages + packed announcement groups. */
   renderItems: RenderItem[]
+  /** Flip a docked Green Room card's record open or shut. */
+  onToggleGreenRoom: (roomId: string) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
   messagesContainerRef: React.RefObject<HTMLDivElement | null>
   messagesEndRef: React.RefObject<HTMLDivElement | null>
@@ -147,6 +150,7 @@ interface VirtualizedMessageListProps {
 export function VirtualizedMessageList({
   messages,
   renderItems,
+  onToggleGreenRoom,
   virtualizer,
   messagesContainerRef,
   messagesEndRef,
@@ -232,6 +236,27 @@ export function VirtualizedMessageList({
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const item = renderItems[virtualRow.index]
             if (!item) return null
+
+            // A docked Green Room — the record of an opening or a watched join,
+            // at the head of its part of the conversation. UI only.
+            if (item.kind === 'green-room') {
+              return (
+                <div
+                  key={item.id}
+                  data-index={virtualRow.index}
+                  ref={measureRow}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <GreenRoomPanel state={item.room} onToggle={onToggleGreenRoom} />
+                </div>
+              )
+            }
 
             // Packed run of consecutive collapsed announcements — one virtual row
             // of flex-wrapping chips.

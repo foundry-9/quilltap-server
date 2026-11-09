@@ -85,7 +85,7 @@ import { retryUncensoredTurnUrl, type ConciergeRetryHandlers } from './concierge
 import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
-import { buildRenderItems, type RenderItem } from './announcement-render-items'
+import { buildRenderItems, insertGreenRoomItems, renderItemMessageIds, type RenderItem } from './announcement-render-items'
 import { useSearchHighlight } from './hooks/useSearchHighlight'
 import { getAnnouncementSenderName } from './components/system-message-labels'
 import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
@@ -448,10 +448,21 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // horizontally instead of each taking a full-width virtualized row. Depends on
   // expandedSystemMessageIds because expanding one announcement breaks it out of
   // its group. This is what the virtualizer indexes over.
+  //
+  // A closed (docked) Green Room is laid into the same list as a card at the
+  // head of its part of the conversation, so it scrolls with the transcript.
+  // It is a UI record only; nothing here reaches a model.
+  const greenRoom = useGreenRoom()
   const renderItems = useMemo(
-    () => buildRenderItems(renderMessages, expandedSystemMessageIds),
-    [renderMessages, expandedSystemMessageIds],
+    () => insertGreenRoomItems(buildRenderItems(renderMessages, expandedSystemMessageIds), greenRoom.docked),
+    [renderMessages, expandedSystemMessageIds, greenRoom.docked],
   )
+  // The ids on the page when a Green Room begins mark where its card docks.
+  const greenRoomMessagesRef = useRef(messages)
+  useEffect(() => {
+    greenRoomMessagesRef.current = messages
+  }, [messages])
+  const currentMessageIds = useCallback(() => greenRoomMessagesRef.current.map(m => m.id), [])
 
   // --- Modal state hook ---
   const modals = useModalState()
@@ -584,9 +595,8 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   }, [id, storytellerQueryClient])
 
   // --- SSE Streaming hook ---
-  // The Green Room: a chat cast but not yet opened is opened here, narrated at
-  // the head of the transcript; a watched join narrates the same way.
-  const greenRoom = useGreenRoom()
+  // The Green Room: a chat cast but not yet opened is opened here, narrated in
+  // a panel pinned above the transcript; a watched join narrates the same way.
   const sseStreaming = useSSEStreaming({
     onGreenRoom: greenRoom.onEvent,
     chatId: id,
@@ -651,11 +661,11 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     if (!chat.openingState || chat.openingState === 'done') return
     if (openedChatRef.current === id) return
     openedChatRef.current = id
-    beginGreenRoom('The Green Room')
+    beginGreenRoom('The Green Room', currentMessageIds())
     // The panel folds when the stream says `done`; if the stream ends without
     // one (an error, a dropped connection) it folds when the request settles.
     void openChat().finally(endGreenRoom)
-  }, [loading, chat, id, openChat, beginGreenRoom, endGreenRoom])
+  }, [loading, chat, id, openChat, beginGreenRoom, endGreenRoom, currentMessageIds])
 
   // Continue Elsewhere opens the one New Chat dialog, in continuation mode,
   // pre-filled from this chat.
@@ -1563,9 +1573,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   useEffect(() => {
     if (!pendingReveal) return
     const { messageId } = pendingReveal
-    const index = renderItems.findIndex((item: RenderItem) =>
-      item.kind === 'message' ? item.id === messageId : item.members.some(m => m.message.id === messageId),
-    )
+    const index = renderItems.findIndex((item: RenderItem) => renderItemMessageIds(item).includes(messageId))
     if (index < 0) return
     // Still a chip: the expansion above hasn't rendered yet; this effect re-runs when it does.
     if (renderItems[index].kind === 'announcement-group') return
@@ -1786,10 +1794,13 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onCloseTerminal={terminalModeHook.hidePane}
           chatContent={
             <>
-        <GreenRoomPanel state={greenRoom.state} />
+        {greenRoom.pinned && (
+          <GreenRoomPanel state={greenRoom.pinned} onToggle={greenRoom.toggle} onClose={greenRoom.dock} />
+        )}
         <VirtualizedMessageList
           messages={renderMessages}
           renderItems={renderItems}
+          onToggleGreenRoom={greenRoom.toggle}
           virtualizer={virtualizer}
           messagesContainerRef={messagesContainerRef}
           messagesEndRef={messagesEndRef}
@@ -2226,7 +2237,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           getFirstUserCharacter={participantsWithImpersonation.getFirstUserCharacter}
           onCharacterAdded={chatControls.handleCharacterAdded}
           onArrivalStream={(response, characterName) => {
-            greenRoom.begin(`${characterName} arrives`)
+            greenRoom.begin(`${characterName} arrives`, currentMessageIds())
             void sseStreaming.readGreenRoomStream(response)
           }}
           onReattributed={handleReattributed}

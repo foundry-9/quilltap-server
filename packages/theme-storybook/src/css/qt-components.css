@@ -9486,11 +9486,16 @@
      ========================================================================== */
   /**
    * The Green Room — the panel above the Salon transcript that narrates a
-   * chat's opening (and a watched join), then folds to one line.
+   * chat's opening (and a watched join), then folds to one line; closed, it
+   * docks into the transcript as a collapsed card.
    *
    *   qt-green-room            — the panel (sits on a qt-card)
+   *   qt-green-room-docked     — closed: docked in the transcript as a card
+   *   qt-green-room-header     — the headline/disclosure row plus close button
    *   qt-green-room-headline   — running: pulse, title, status
    *   qt-green-room-disclosure — folded: the "curtain is up" toggle
+   *   qt-green-room-toggle     — docked while running: the record's toggle
+   *   qt-green-room-close      — pinned: close (dock into the transcript)
    *   qt-green-room-body       — the record: wardrobe, packing, activity log
    *   qt-green-room-character* — one character's consultation line
    *   qt-green-room-log*       — the activity log
@@ -9505,6 +9510,42 @@
     max-width: var(--qt-green-room-max-width, 48rem);
     margin: 0.75rem auto;
     padding: 0.75rem;
+  }
+  .qt-green-room-docked {
+    margin: 0.5rem auto;
+    padding: 0.5rem 0.75rem;
+  }
+  .qt-green-room-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .qt-green-room-header > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .qt-green-room-close, .qt-green-room-toggle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+    background: none;
+    border: none;
+    border-radius: 0.25rem;
+    padding: 0;
+    cursor: pointer;
+  }
+  .qt-green-room-toggle {
+    font-size: 0.875rem;
+    min-width: 1rem;
+  }
+  .qt-green-room-close:hover, .qt-green-room-toggle:hover {
+    color: var(--qt-green-room-title, var(--color-foreground));
   }
   .qt-green-room-headline {
     display: flex;

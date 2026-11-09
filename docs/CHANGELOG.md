@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Feature: the Green Room panel can be closed and docks into the transcript
+
+- The Green Room panel stayed pinned above the Salon transcript for the rest of the session. It now has a close button; closing it docks the room as a collapsed card inside the message list, placed after the last message that was on the page when the room began (the top for an opening), so it scrolls with the conversation. The card's disclosure shows the wardrobe, packing and activity record as before.
+- `useGreenRoom` now keeps a list of rooms (one per opening or watched join) with `docked` / `expanded` state; starting a new room docks the previous one instead of discarding it. Client-only; nothing is persisted or sent to a model.
+- New `RenderItem` kind `green-room`, placed by `insertGreenRoomItems`; `renderItemMessageIds` replaces the two hand-rolled kind checks in `SalonView`.
+- CSS: `qt-green-room-docked`, `-header`, `-close`, `-toggle`; `packages/theme-storybook` regenerated and bumped to 1.0.107.
+- Tests: `insertGreenRoomItems` placement cases in `announcement-render-items.test.ts`.
+
 #### Fix: Inventory pool lists consulted stores in tier order (#155)
 
 - `loadInventoryPool` read its four tiers concurrently and every tier pushed into one shared `consulted` / `unread` array, so `consultedMounts` (and the title lint's Census `pools` DEBUG line) interleaved tiers in read-settlement order. `readTier` (`lib/inventory/pool.ts`) now returns its own records, consulted and unread lists, and the pool concatenates them in tier order (own, group, project, General) after the reads settle. Reads stay concurrent; the lint's verdict was never affected.
