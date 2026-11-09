@@ -34,7 +34,7 @@ import {
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
   CHARACTER_PROPERTIES_JSON_PATH,
   type CharacterVaultFilePath,
-} from '@/lib/characters/vault/layout';
+} from '@/lib/characters/vault/paths';
 import { kindPolicy, type CharacterKind, type GeneratorDirectionKey } from '@/lib/characters/kind';
 
 export const FIELD_SEMANTICS_PREAMBLE = `Quilltap distinguishes four character fields by *vantage point*, plus a fifth foundational field (manifesto) that is not a vantage point. Use these definitions to label which field each pattern belongs to — they are not interchangeable.

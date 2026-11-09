@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Fix: Production build failed on `node:crypto` in the client bundle
+
+- `character-field-semantics.ts` (imported by the Aurora new-character page) took its vault path constants from `lib/characters/vault/layout.ts`, which pulls the parsers and `lib/utils/stable-uuid.ts` (`node:crypto`) into the browser bundle. `next build --webpack` failed with `UnhandledSchemeError`.
+- The path constants now live in client-safe `lib/characters/vault/paths.ts`; `layout.ts` re-exports them.
+
 #### Feature: Aurora sends intent; a broken vault gets a repair card
 
 - Phase 6 of `refactor-character-repository-and-vault.md`.
