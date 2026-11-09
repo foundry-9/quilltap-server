@@ -20,6 +20,7 @@
 - A within-store folder move from the Scriptorium (`?action=move-folder`, both storage types) now calls `sweepChatDocumentsAfterFolderMove`, so open documents under the folder follow it. Before, only the doc tools' moves swept them.
 - Docs: `help/mount-points.md`.
 - Tests: `__tests__/unit/lib/database/repositories/chat-documents-find-under-folder.test.ts`, new cases in `folder-ops-fs-move.test.ts`.
+- The other-casing case in `folder-ops-fs-move.test.ts` assumed a case-insensitive disk and failed on Linux CI (`SOURCE_NOT_FOUND`). It now probes the temp dir: on a case-insensitive disk it checks the rows are carried; on a case-sensitive one it expects the move refused and no rows written.
 
 #### Fix: Wardrobe pop-up dialogs no longer sit under the left rail
 

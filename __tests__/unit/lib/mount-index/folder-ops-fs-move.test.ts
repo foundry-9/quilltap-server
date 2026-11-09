@@ -82,6 +82,20 @@ describe('moveFolder on a filesystem store', () => {
   })
 
   it('carries the rows when the source is typed in another casing (#147)', async () => {
+    // #147 is a case-insensitive-disk bug (macOS, Windows). On a case-sensitive
+    // disk (Linux, and CI) `notes` is a different folder from `Notes`, so there
+    // the move must refuse it and leave every row alone.
+    let caseInsensitive = true
+    try { await fs.access(path.join(base, 'notes')) } catch { caseInsensitive = false }
+
+    if (!caseInsensitive) {
+      await expect(moveFolder({ mountPointId: 'fs', fromPath: 'notes', toPath: 'archive' }))
+        .rejects.toMatchObject({ code: 'SOURCE_NOT_FOUND' })
+      expect(mockRepos.docMountFileLinks.update).not.toHaveBeenCalled()
+      expect(mockRepos.docMountFolders.update).not.toHaveBeenCalled()
+      return
+    }
+
     await moveFolder({ mountPointId: 'fs', fromPath: 'notes', toPath: 'archive' })
 
     expect(mockRepos.docMountFileLinks.update).toHaveBeenCalledWith('l1', {
