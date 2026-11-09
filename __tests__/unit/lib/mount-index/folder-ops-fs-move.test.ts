@@ -35,6 +35,10 @@ jest.mock('@/lib/mount-index/database-store', () => ({
 jest.mock('@/lib/mount-index/scanner', () => ({ createFilesystemFolder: jest.fn(), listFilesystemFolders: jest.fn() }))
 jest.mock('@/lib/mount-index/db-store-events', () => ({ emitDocumentMoved: jest.fn() }))
 jest.mock('@/lib/mount-index/realtime', () => ({ publishMountChange: jest.fn() }))
+const mockSweep = jest.fn(async () => 0)
+jest.mock('@/lib/documents/core', () => ({
+  sweepChatDocumentsAfterFolderMove: (...args: unknown[]) => mockSweep(...(args as [])),
+}))
 const mockEnsureFolderPath = jest.fn(async (_id: string, p: string) => `row:${p}`)
 jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: (id: string, p: string) => mockEnsureFolderPath(id, p),
@@ -75,6 +79,29 @@ describe('moveFolder on a filesystem store', () => {
       path: 'Archive/Notes',
     })
     expect(mockRepos.docMountFolders.update).toHaveBeenCalledWith('f-deep', { path: 'Archive/Notes/Deep' })
+  })
+
+  it('carries the rows when the source is typed in another casing (#147)', async () => {
+    await moveFolder({ mountPointId: 'fs', fromPath: 'notes', toPath: 'archive' })
+
+    expect(mockRepos.docMountFileLinks.update).toHaveBeenCalledWith('l1', {
+      relativePath: 'archive/Deep/readme.txt',
+      fileName: 'readme.txt',
+    })
+    expect(mockRepos.docMountFolders.update).toHaveBeenCalledWith('f-notes', { parentId: null, name: 'archive', path: 'archive' })
+    expect(mockRepos.docMountFolders.update).toHaveBeenCalledWith('f-deep', { path: 'archive/Deep' })
+  })
+
+  it('sweeps the open documents under the folder (#147)', async () => {
+    await moveFolder({ mountPointId: 'fs', fromPath: 'Notes', toPath: 'Archive' })
+
+    expect(mockSweep).toHaveBeenCalledWith({
+      scope: 'document_store',
+      mountPoint: 'fs',
+      mountPointId: 'fs',
+      oldFolderPath: 'Notes',
+      newFolderPath: 'Archive',
+    })
   })
 
   it('moves a nested folder to the top, leaving its old parent row alone', async () => {

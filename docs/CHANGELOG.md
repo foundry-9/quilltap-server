@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Fix: Folder moves match folder paths case-insensitively (#147)
+
+- A filesystem store's `move-folder` typed in another casing (`notes` for `Notes/`) renamed the directory on a case-insensitive disk but left every `doc_mount_folders` row and `doc_mount_file_links` row at the old path, so the next scan dropped the files (chunks, embeddings, descriptions) and re-added them as new. `moveFolderWithinMount` (`lib/mount-index/folder-ops.ts`) now matches the source row and the descendant prefixes case-insensitively, as `under()` and the database store's NOCASE lookups already did.
+- `chatDocuments.findUnderFolder` matches the folder prefix case-insensitively, so a Document-Mode row recorded as `Notes/a.md` is swept by a move of `notes`.
+- A within-store folder move from the Scriptorium (`?action=move-folder`, both storage types) now calls `sweepChatDocumentsAfterFolderMove`, so open documents under the folder follow it. Before, only the doc tools' moves swept them.
+- Docs: `help/mount-points.md`.
+- Tests: `__tests__/unit/lib/database/repositories/chat-documents-find-under-folder.test.ts`, new cases in `folder-ops-fs-move.test.ts`.
+
 #### Fix: Wardrobe pop-up dialogs no longer sit under the left rail
 
 - The image-prompt optimizer, import-from-image, item editor and the editor's mode-change prompt rendered inside the `.qt-workspace` stacking context, so the left nav rail (and sticky toolbar) painted over their edges at narrow widths (1024px cut off the dialog title and the start of each line). All four now render through `createPortal(..., document.body)`, matching `BaseModal` and the search dialog.

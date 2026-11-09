@@ -157,7 +157,7 @@ A store's detail page lays out its contents the way the Wardrobe and the Invento
 - **Open in Pascal's Workbench** — on a custom tool's definition in `Tools/`
 - **Delete**
 
-**The ⋮ menu on a folder** offers **Rename**, **Move to…**, **Copy to…** and **Delete**. Moving or copying a folder carries everything inside it, to this store or another. Deleting a folder deletes what is inside it too, after a confirmation that says so in as many words; on a filesystem store it declines if the folder holds files the store does not index, so nothing on your disk vanishes unseen.
+**The ⋮ menu on a folder** offers **Rename**, **Move to…**, **Copy to…** and **Delete**. Moving or copying a folder carries everything inside it, to this store or another. Folder names pay no heed to capitals — `notes` and `Notes` are the same shelf in every store — so a move addressed in either casing brings the whole index along with it, and any document you have open in the Salon under that folder follows to its new address rather than being left calling at the old one. Deleting a folder deletes what is inside it too, after a confirmation that says so in as many words; on a filesystem store it declines if the folder holds files the store does not index, so nothing on your disk vanishes unseen.
 
 **Several at once.** **Select** puts a checkbox on every file; tick what you like and **Move…**, **Copy…** or **Delete** them together.
 

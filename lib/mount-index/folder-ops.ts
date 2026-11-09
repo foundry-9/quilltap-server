@@ -109,6 +109,7 @@ async function moveFolderWithinMount(input: {
 
   if (!isFilesystemMount(mp)) {
     await moveDatabaseFolder(mp.id, fromRel, toRel);
+    await sweepOpenDocuments(mp, fromRel, toRel);
     return { mountPointId: mp.id, fromPath: fromRel, toPath: toRel };
   }
 
@@ -144,12 +145,18 @@ async function moveFolderWithinMount(input: {
 
   const oldPrefix = `${fromRel}/`;
   const newPrefix = `${toRel}/`;
+  // A case-insensitive disk (APFS, NTFS) renames `Notes/` when asked for
+  // `notes`, so the index rows are matched the same way, as `under()` and the
+  // database store's NOCASE lookups do (#147). Only the prefix's length is
+  // sliced off, which is the same in either casing.
+  const fromLower = fromRel.toLowerCase();
+  const isUnderSource = (p: string): boolean => under(p, fromRel);
 
   // The scanner records a filesystem store's folders as rows too. Carry them
   // along in place (ids kept, so the moved links' folderId stays right), or
   // the old path lingers in the listing beside the new one.
   const folderRows = await repos.docMountFolders.findByMountPointId(mp.id);
-  const sourceRow = folderRows.find((f) => f.path === fromRel);
+  const sourceRow = folderRows.find((f) => typeof f.path === 'string' && f.path.toLowerCase() === fromLower);
   if (sourceRow) {
     const destDir = path.posix.dirname(toRel);
     let parentId: string | null = null;
@@ -159,7 +166,7 @@ async function moveFolderWithinMount(input: {
     }
     await repos.docMountFolders.update(sourceRow.id, { parentId, name: path.posix.basename(toRel), path: toRel });
     for (const row of folderRows) {
-      if (row.path.startsWith(oldPrefix)) {
+      if (typeof row.path === 'string' && isUnderSource(row.path)) {
         await repos.docMountFolders.update(row.id, { path: newPrefix + row.path.slice(oldPrefix.length) });
       }
     }
@@ -167,12 +174,12 @@ async function moveFolderWithinMount(input: {
       mountPointId: mp.id,
       fromPath: fromRel,
       toPath: toRel,
-      rows: 1 + folderRows.filter((r) => r.path.startsWith(oldPrefix)).length,
+      rows: 1 + folderRows.filter((r) => typeof r.path === 'string' && isUnderSource(r.path)).length,
     });
   }
   const links = await repos.docMountFileLinks.findByMountPointId(mp.id);
   for (const link of links) {
-    if (!link.relativePath.startsWith(oldPrefix)) continue;
+    if (!isUnderSource(link.relativePath)) continue;
     const newPath = newPrefix + link.relativePath.slice(oldPrefix.length);
     await repos.docMountFileLinks.update(link.id, {
       relativePath: newPath,
@@ -181,7 +188,30 @@ async function moveFolderWithinMount(input: {
     emitDocumentMoved({ mountPointId: mp.id, fromRelativePath: link.relativePath, toRelativePath: newPath });
   }
 
+  await sweepOpenDocuments(mp, fromRel, toRel);
   return { mountPointId: mp.id, fromPath: fromRel, toPath: toRel };
+}
+
+/**
+ * Carry the Document-Mode rows open under a moved folder to its new path, as
+ * the doc tools' folder moves do. Best-effort (the sweep logs and swallows its
+ * own failures). Loaded lazily: the document core sits above this module.
+ */
+async function sweepOpenDocuments(mp: DocMountPoint, fromRel: string, toRel: string): Promise<void> {
+  const { sweepChatDocumentsAfterFolderMove } = await import('@/lib/documents/core');
+  const swept = await sweepChatDocumentsAfterFolderMove({
+    scope: 'document_store',
+    mountPoint: mp.name,
+    mountPointId: mp.id,
+    oldFolderPath: fromRel,
+    newFolderPath: toRel,
+  });
+  logger.debug('Swept open documents after a store-browser folder move', {
+    mountPointId: mp.id,
+    fromPath: fromRel,
+    toPath: toRel,
+    rowsUpdated: swept,
+  });
 }
 
 // ============================================================================

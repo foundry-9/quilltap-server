@@ -46,6 +46,7 @@ jest.mock('@/lib/mount-index/scanner', () => ({ createFilesystemFolder: jest.fn(
 jest.mock('@/lib/mount-index/db-store-events', () => ({ emitDocumentMoved: jest.fn() }))
 const mockPublish = jest.fn()
 jest.mock('@/lib/mount-index/realtime', () => ({ publishMountChange: (id: string) => mockPublish(id) }))
+jest.mock('@/lib/documents/core', () => ({ sweepChatDocumentsAfterFolderMove: jest.fn(async () => 0) }))
 
 import { copyFolder, deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops'
 import { FileOpError } from '@/lib/mount-index/file-op-error'
