@@ -115,7 +115,11 @@ async function resolveCharacterRef(ref: string): Promise<CharacterMatch> {
   const byName = raw.filter(c => c.name.trim().toLowerCase() === needle)
   if (byName.length === 1) return hydrate(byName[0].id)
 
-  const all = byName.length > 1 ? byName : await repos.characters.findAll()
+  // Aliases live in the vault, so the alias match needs hydrated characters
+  // (a raw row has none — it used to be matched against nothing here).
+  const all = byName.length > 1
+    ? await repos.characters.findByIds(byName.map(c => c.id))
+    : await repos.characters.findAll()
   const exact = all.filter(c =>
     c.name.trim().toLowerCase() === needle ||
     (c.aliases ?? []).some(a => a.trim().toLowerCase() === needle)

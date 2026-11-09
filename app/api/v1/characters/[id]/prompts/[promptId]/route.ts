@@ -9,6 +9,8 @@
 import { z } from 'zod';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 
 const updatePromptSchema = z.object({
@@ -87,6 +89,7 @@ export const PUT = createContextParamsHandler<{ id: string; promptId: string }>(
       updatedFields: Object.keys(updates),
     });
 
+    publishRealtime('characters', characterId);
     return successResponse({ prompt });
   }
 );
@@ -128,8 +131,10 @@ export const DELETE = createContextParamsHandler<{ id: string; promptId: string 
         promptId,
       });
 
+      publishRealtime('characters', characterId);
       return successResponse({ success: true });
     } catch (error) {
+      if (error instanceof CharacterArchivedError) throw error;
       logger.error('[Characters v1] Error deleting character system prompt', { characterId, promptId }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete character prompt');
     }

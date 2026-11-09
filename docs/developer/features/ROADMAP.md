@@ -117,7 +117,7 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Salon stream frames as a tagged union ([spec](refactor-4-12-salon-stream-frames.md))
   - [ ] the browser family finished, and the `FileBrowser` retirement decisions ([spec](refactor-4-12-browser-family.md))
   - [x] one recursive watcher core under both filesystem watchers ([spec](refactor-4-12-native-watcher-core.md))
-- [ ] Refactor — the character repository, the vault and Aurora's writes: one store-backed base for characters, projects and groups; one declarative vault layout table; stable prompt and scenario ids; per-item sub-collection writes; derived strict API schemas; the startup heal that could blank a vault ([spec](refactor-character-repository-and-vault.md))
+- [x] Refactor — the character repository, the vault and Aurora's writes: one store-backed base; one declarative vault layout table; stable prompt and scenario ids; per-item sub-collection writes; derived strict API schemas; vault health and repair; the startup heal that could blank a vault (#148) ([spec](complete/refactor-character-repository-and-vault.md); projects and groups stay on their own engine — Phase 7's gate failed)
 - [ ] Refactor — the Green Room, casting and the opening: `POST /api/v1/chats` returns after casting; dressing, packing, announcing and the greeting run as one stoppable, resumable opening narrated inside the Salon over the chat's own stream; the greeting is a real turn (the Salon's prompt, recall, fallback and finalizer, streamed live); one `seatArrival` for chat start, joins and merges, every arrival announced and drawn; server-side casting defaults and a query-backed, single-mount New Chat dialog ([spec](refactor-green-room-and-opening.md))
 
 ### Virgil: Setup & Onboarding

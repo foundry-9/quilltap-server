@@ -430,6 +430,11 @@ export interface ScriptoriumInfo {
     total: number;
     withKeystone: number;
     missingKeystone: number;
+    /**
+     * Vaults whose `properties.json` is present but invalid, as the last boot
+     * heal found them (left untouched; repaired by the operator).
+     */
+    invalidKeystone: Array<{ characterId: string; name: string; detail: string }>;
     withMetadata: number;
   };
   wardrobe: Array<{ tier: string; items: number; archived: number }>;

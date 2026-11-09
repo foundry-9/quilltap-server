@@ -347,14 +347,12 @@ export function collectTemplateFields(
 /**
  * Applies a text transform (forward: name → template; reverse: template → name)
  * across every field {@link collectTemplateFields} yields, routing the results
- * to the two persistence paths:
- *   - `mainUpdates` — fields the character PUT body accepts (scalars, the full
- *     scenarios array, the single physicalDescription object).
- *   - `changedSystemPrompts` — system prompts, which the PUT schema strips and
- *     must persist through their dedicated per-prompt endpoint.
- * Only changed fields are emitted. The physicalDescription `name` is required by
- * the PUT schema, so it falls back to `'Appearance'` (matching the optimizer)
- * and is never itself transformed.
+ * to the persistence paths:
+ *   - `mainUpdates` — fields the character PUT body accepts (scalars and the
+ *     single physicalDescription object).
+ *   - `changedSystemPrompts` / `changedScenarios` — the sub-collections, which
+ *     the PUT refuses and which persist one item each through their own routes.
+ * Only changed fields are emitted.
  */
 export function applyTemplateTransform(
   character: TemplatableCharacter,
@@ -362,9 +360,11 @@ export function applyTemplateTransform(
 ): {
   mainUpdates: Record<string, unknown>
   changedSystemPrompts: Array<{ id: string; content: string }>
+  changedScenarios: Array<{ id: string; content: string }>
 } {
   const mainUpdates: Record<string, unknown> = {}
   const changedSystemPrompts: Array<{ id: string; content: string }> = []
+  const changedScenarios: Array<{ id: string; content: string }> = []
   const scenarioChanges = new Map<string, string>()
   const physicalChanges = new Map<PhysicalSubField, string>()
 
@@ -389,29 +389,27 @@ export function applyTemplateTransform(
     }
   }
 
-  if (scenarioChanges.size > 0 && character.scenarios) {
-    // PUT replaces the scenarios array wholesale, so send every scenario,
-    // swapping content only on the ones that changed (spread preserves
-    // title/createdAt/updatedAt at runtime).
-    mainUpdates.scenarios = character.scenarios.map((scenario) =>
-      scenarioChanges.has(scenario.id)
-        ? { ...scenario, content: scenarioChanges.get(scenario.id)! }
-        : scenario
-    )
+  // Scenarios go through their per-item route, naming only the content that
+  // changed — never the whole array, which used to un-archive scenarios (#150).
+  for (const [id, content] of scenarioChanges) {
+    changedScenarios.push({ id, content })
   }
 
+  // The physical description is sent whole (its text fields), with the
+  // changed ones swapped in. The id and timestamps are the server's.
   if (physicalChanges.size > 0 && character.physicalDescription) {
     const pd = character.physicalDescription
-    const nextPhysical: Record<string, unknown> = { ...pd }
+    const nextPhysical: Record<string, unknown> = {}
+    for (const sub of PHYSICAL_SUBS) {
+      if (pd[sub] !== undefined) nextPhysical[sub] = pd[sub]
+    }
     for (const [sub, content] of physicalChanges) {
       nextPhysical[sub] = content
     }
-    nextPhysical.name =
-      typeof pd.name === 'string' && pd.name.trim() ? pd.name : 'Appearance'
     mainUpdates.physicalDescription = nextPhysical
   }
 
-  return { mainUpdates, changedSystemPrompts }
+  return { mainUpdates, changedSystemPrompts, changedScenarios }
 }
 
 interface TemplateDisplayProps {

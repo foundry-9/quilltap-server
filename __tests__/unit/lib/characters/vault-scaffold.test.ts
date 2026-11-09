@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/mount-index/character-scaffold.ts
+ * Unit tests for lib/characters/vault/scaffold.ts
  *
  * Tests cover the preset structure that is materialized when a
  * database-backed character store is created or flipped to 'character'.
@@ -29,7 +29,7 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   writeDatabaseDocument: jest.fn().mockResolvedValue({ mtime: 0 }),
 }));
 
-import { scaffoldCharacterMount, ensureCharacterMetadataFile } from '@/lib/mount-index/character-scaffold';
+import { scaffoldCharacterMount, ensureCharacterMetadataFile } from '@/lib/characters/vault/scaffold';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 
@@ -112,7 +112,7 @@ describe('scaffoldCharacterMount', () => {
     const call = writeDatabaseDocumentMock.mock.calls.find(c => c[1] === 'physical-prompts.json');
     expect(call).toBeDefined();
     const parsed = JSON.parse(call![2] as string);
-    expect(parsed).toEqual({ short: null, medium: null, long: null, complete: null, humanoid: true });
+    expect(parsed).toEqual({ headAndShoulders: null, short: null, medium: null, long: null, complete: null, humanoid: true });
   });
 
   it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit and the diagram settings', async () => {
@@ -128,8 +128,8 @@ describe('scaffoldCharacterMount', () => {
       pronouns: null,
       birthday: null,
       aliases: [],
-      title: '',
-      firstMessage: '',
+      title: null,
+      firstMessage: null,
       talkativeness: 0.5,
       canChooseOutfit: false,
       canDrawDiagrams: false,

@@ -22,15 +22,13 @@ import {
   sanitizeFileName,
 } from '@/lib/mount-index/character-vault';
 
-import {
-  CHARACTER_WARDROBE_FOLDER,
-  CHARACTER_WARDROBE_JSON_PATH,
-  WARDROBE_INSTRUCTIONS_FILENAME,
-} from './schema';
+import { CHARACTER_WARDROBE_FOLDER, WARDROBE_INSTRUCTIONS_FILENAME } from '@/lib/mount-index/character-vault';
+import { CHARACTER_WARDROBE_JSON_PATH } from '@/lib/characters/vault/layout';
 import { joinFolder, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
-import { hasLinkedVault, isWardrobeItemDocument } from './parsers';
-import { readCharacterVaultWardrobe } from './vault-readers';
-import { projectArrayIntoVaultFolder } from './vault-projection';
+import { hasLinkedVault } from '@/lib/characters/vault/parsers';
+import { isWardrobeItemDocument } from '@/lib/wardrobe/vault-parsers';
+import { readCharacterVaultWardrobe } from '@/lib/wardrobe/vault-readers';
+import { projectArrayIntoVaultFolder } from '@/lib/mount-index/vault-projection';
 
 export interface WardrobeOverlayOptions {
   /** Include items whose archivedAt is non-null. Default false. */

@@ -47,6 +47,6 @@ export class GroupsRepository extends AbstractStoreBackedRepository<Group> {
     applyOverlayOne: applyGroupStoreOverlayOne,
     applyWriteOverlay: applyGroupStoreWriteOverlay,
     writeManagedFields: writeGroupStoreManagedFields,
-    ensureOfficialStore: (id, name) => ensureOwnerOfficialStore('group', id, name),
+    ensureOfficialStore: (group) => ensureOwnerOfficialStore('group', group.id, group.name),
   };
 }

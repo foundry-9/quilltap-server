@@ -48,7 +48,7 @@ jest.mock('@/lib/file-storage/library-file-writer', () => ({
 }))
 
 jest.mock('@/lib/mount-index/character-vault', () => ({
-  ensureCharacterVault: jest.fn(),
+  ensureCharacterVault: jest.fn().mockResolvedValue({ mountPointId: 'mp-fresh', created: false }),
 }))
 
 jest.mock('@/lib/paths', () => ({
@@ -181,6 +181,7 @@ function buildRepoMocks() {
 
   const characterCreate = echo()
   const characterCreateBound = echo()
+  const characterProvision = jest.fn().mockResolvedValue('mp-fresh')
   const projectCreate = echo()
   const projectCreateBound = echo()
   const projectProvision = jest.fn().mockResolvedValue('fresh-project-store')
@@ -207,7 +208,7 @@ function buildRepoMocks() {
   const globalRepos = new Proxy({} as Record<string, unknown>, {
     get(_t, prop: string) {
       if (prop === 'characters')
-        return repoStub({ createBoundToVault: characterCreateBound, findByIdRaw: jest.fn().mockResolvedValue(null) })
+        return repoStub({ createBoundToStore: characterCreateBound, provisionOfficialStore: characterProvision, findByIdRaw: jest.fn().mockResolvedValue(null) })
       if (prop === 'projects') return repoStub({ createBoundToStore: projectCreateBound, provisionOfficialStore: projectProvision })
       if (prop === 'groups') return repoStub({ createBoundToStore: groupCreateBound, provisionOfficialStore: groupProvision })
       if (prop === 'memories') return repoStub({ create: memoriesCreate })
@@ -230,6 +231,7 @@ function buildRepoMocks() {
     order,
     characterCreate,
     characterCreateBound,
+    characterProvision,
     projectCreate,
     projectCreateBound,
     projectProvision,
@@ -385,7 +387,9 @@ describe('restore binds entities to their archived stores (bug 185)', () => {
 
     const summary = await restore('/tmp/backup.zip', { mode: 'replace', targetUserId: 'user-1' })
 
-    expect(mockedEnsureCharacterVault).toHaveBeenCalledWith(
+    // The backup's own record (with its content) gets a fresh vault, through
+    // the same provisioning a create performs.
+    expect(mocks.characterProvision).toHaveBeenCalledWith(
       expect.objectContaining({ id: CHAR_A, characterDocumentMountPointId: null })
     )
     expect(mocks.projectProvision).toHaveBeenCalledWith(expect.objectContaining({ id: PROJECT }))

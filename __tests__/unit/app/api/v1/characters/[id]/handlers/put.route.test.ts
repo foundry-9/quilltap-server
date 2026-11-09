@@ -39,12 +39,16 @@ jest.mock('@/lib/api/responses', () => ({
   badRequest: (msg: string) => ({ __kind: 'badRequest', status: 400, msg }),
   notFound: (what: string) => ({ __kind: 'notFound', status: 404, what }),
   successResponse: (data: any) => ({ __kind: 'success', data }),
+  conflict: (msg: string) => ({ __kind: 'conflict', status: 409, msg }),
 }))
 
 jest.mock('@/lib/image-gen/aesthetic', () => ({
   writeStoreFile: jest.fn(),
   DEPICTION_GUIDELINES_FILENAME: 'depiction-guidelines.md',
 }))
+
+const publishRealtimeMock = jest.fn()
+jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: (...args: unknown[]) => publishRealtimeMock(...args) }))
 
 import { handlePut } from '@/app/api/v1/characters/[id]/handlers/put'
 
@@ -157,4 +161,63 @@ it('answers 400 when the named prompt is not on the character', async () => {
   )
 
   expect(res.status).toBe(400)
+})
+
+/**
+ * The PUT schema is derived from the entity and strict (D9): an unknown key is
+ * a 400 rather than a silent drop (#146), and the sub-collections are not
+ * taken here at all — a whole-array scenarios PUT is what un-archived
+ * scenarios (#150); they are written one at a time through their own route.
+ */
+describe('the strict, derived schema', () => {
+  it('refuses an unknown key', async () => {
+    const { ctx, update } = buildCtx()
+    await expect(handlePut(reqWith({ name: 'Tess', systemPromt: 'typo' }), ctx, CHAR_ID)).rejects.toThrow(/unrecognized|systemPromt/i)
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('refuses the sub-collections as whole arrays', async () => {
+    const { ctx, update } = buildCtx()
+    await expect(handlePut(reqWith({ scenarios: [] }), ctx, CHAR_ID)).rejects.toThrow()
+    await expect(handlePut(reqWith({ systemPrompts: [] }), ctx, CHAR_ID)).rejects.toThrow()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('refuses a server-owned field', async () => {
+    const { ctx } = buildCtx()
+    await expect(handlePut(reqWith({ characterDocumentMountPointId: null }), ctx, CHAR_ID)).rejects.toThrow()
+    await expect(handlePut(reqWith({ tags: [] }), ctx, CHAR_ID)).rejects.toThrow()
+  })
+
+  it('takes every vault-managed setting without a hand-written list', async () => {
+    const { ctx, update } = buildCtx()
+    await handlePut(reqWith({
+      kind: 'assistant', birthday: '1890-03-14', canDrawDiagrams: true, diagramStyle: 'clean',
+      canChooseOutfit: true, aliases: ['Tessie'], metadata: { a: 1 }, talkativeness: 0.7,
+    }), ctx, CHAR_ID)
+    expect(update.mock.calls[0][1]).toMatchObject({ kind: 'assistant', birthday: '1890-03-14', diagramStyle: 'clean', metadata: { a: 1 } })
+  })
+
+  it('reads an empty profile select as "clear"', async () => {
+    const { ctx, update } = buildCtx()
+    await handlePut(reqWith({ defaultImageProfileId: '' }), ctx, CHAR_ID)
+    expect(update.mock.calls[0][1].defaultImageProfileId).toBeNull()
+  })
+
+  it('owns the physical description id and passes Clear through as null', async () => {
+    const { ctx, update } = buildCtx()
+    ctx.repos.characters.findByIdRaw.mockResolvedValue({ id: CHAR_ID, userId: OWNER_ID, characterDocumentMountPointId: '22222222-2222-4222-8222-222222222222' })
+    await handlePut(reqWith({ physicalDescription: { fullDescription: 'Tall.' } }), ctx, CHAR_ID)
+    const pd = update.mock.calls[0][1].physicalDescription
+    expect(pd.fullDescription).toBe('Tall.')
+    expect(pd.id).toMatch(/^[0-9a-f-]{36}$/)
+    await handlePut(reqWith({ physicalDescription: null }), ctx, CHAR_ID)
+    expect(update.mock.calls[1][1].physicalDescription).toBeNull()
+  })
+
+  it('publishes the characters topic after a write', async () => {
+    const { ctx } = buildCtx()
+    await handlePut(reqWith({ name: 'Tess' }), ctx, CHAR_ID)
+    expect(publishRealtimeMock).toHaveBeenCalledWith('characters', CHAR_ID)
+  })
 })

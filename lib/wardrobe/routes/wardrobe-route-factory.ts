@@ -41,8 +41,8 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, conflict, created, notFound, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
-import { WardrobeComponentCycleError } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
+import { WardrobeComponentCycleError } from '@/lib/wardrobe/vault-writes';
 import { groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
 import {
   copyWardrobeItemsSchema,

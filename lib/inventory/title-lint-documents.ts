@@ -30,12 +30,25 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { classifyMount } from '@/lib/mount-index/reach';
 import type { InventoryRecord } from '@/lib/schemas/inventory.types';
-import { parseInventoryItemFile } from '@/lib/database/repositories/vault-overlay/inventory-readers';
+import { parseInventoryItemFile } from '@/lib/inventory/vault-readers';
 import { InventoryTitleCheckUnavailableError } from '@/lib/inventory/errors';
-import { GENERAL_INVENTORY_ORIGIN, inventoryLocationForMount, type InventoryLocation } from '@/lib/inventory/location';
-import { inventoryWritesAreLinted, isTitleLintFolder, isToolDefinitionPath } from '@/lib/inventory/lint-scope';
+import {
+  GENERAL_INVENTORY_ORIGIN,
+  inventoryLocationForMount,
+  type InventoryLocation,
+} from '@/lib/inventory/location';
+import {
+  inventoryWritesAreLinted,
+  isTitleLintFolder,
+  isToolDefinitionPath,
+} from '@/lib/inventory/lint-scope';
 import { isInventoryItemDocumentPath } from '@/lib/inventory/folders';
-import { lintInventoryTitle, writeTitleLintRows, type TitleLintDoor, type TitleLintVerdict } from '@/lib/inventory/title-lint';
+import {
+  lintInventoryTitle,
+  writeTitleLintRows,
+  type TitleLintDoor,
+  type TitleLintVerdict,
+} from '@/lib/inventory/title-lint';
 
 export type InventoryDocumentChange =
   | { kind: 'write'; mountPointId: string; relativePath: string; content: string }

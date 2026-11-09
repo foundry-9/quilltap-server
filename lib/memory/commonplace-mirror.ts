@@ -136,7 +136,7 @@ export async function mirrorCommonplaceForSubjects(
       const isSelf = subjectId === holderCharacterId
       let subjectName = holder.name
       if (!isSelf) {
-        let subject: Character | null = null
+        let subject: Pick<Character, 'name'> | null = null
         try {
           subject = await repos.characters.findById(subjectId)
         } catch {

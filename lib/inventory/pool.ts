@@ -28,7 +28,7 @@ import { logger } from '@/lib/logger';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
-import { readInventoryRecords } from '@/lib/database/repositories/vault-overlay/inventory-readers';
+import { readInventoryRecords } from '@/lib/inventory/vault-readers';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryOrigin, InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { findRecordsAnywhere } from '@/lib/inventory/dependents';

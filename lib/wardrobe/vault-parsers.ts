@@ -1,24 +1,15 @@
 /**
- * Pure parsing/validation helpers for vault overlay files.
+ * Parsing helpers for a vault's `Wardrobe/` folder: item files, ids, component
+ * references, and the legacy `wardrobe.json`. Pure: they operate on content
+ * already read (or pre-fetched `DocMountDocument`s).
  *
- * Each parser turns raw file content (JSON or markdown-with-frontmatter) into
- * a validated domain value, falling back to null and logging a warning when
- * the content is missing/malformed so a single bad file never blows up a whole
- * overlay read. None of these reach the database; they operate on already-read
- * content (or pre-fetched `DocMountDocument`s).
- *
- * @module database/repositories/vault-overlay/parsers
+ * @module wardrobe/vault-parsers
  */
 
-import crypto from 'node:crypto';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import type {
-  Character,
-  CharacterSystemPrompt,
-  CharacterScenario,
-} from '@/lib/schemas/types';
 import {
+  WardrobeItemSchema,
   WardrobeItemTypeEnum,
   type WardrobeItem,
   type WardrobeItemType,
@@ -27,112 +18,40 @@ import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 import { folderOfWardrobePath, WARDROBE_FOLDER_RULES } from '@/lib/wardrobe/folders';
 import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 import { isItemDocumentPath } from '@/lib/mount-index/item-folders';
+import { isWardrobeInstructionsFileName } from '@/lib/mount-index/character-vault';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
-import { sortScenarios } from '@/lib/scenarios/sort';
-import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
+import { isUuidShaped, resolveFileItemId } from '@/lib/utils/stable-uuid';
+import { parseJsonVaultFile } from '@/lib/characters/vault/parsers';
+import type {
+  DocMountDocumentWithLink as DocMountDocument,
+} from '@/lib/database/repositories/doc-mount-documents.repository';
 
-import {
-  isWardrobeInstructionsFileName,
-  CharacterVaultPropertiesSchema,
-  type CharacterVaultProperties,
-  CharacterVaultMetadataSchema,
-  type CharacterVaultMetadata,
-  CharacterVaultPhysicalPromptsSchema,
-  type CharacterVaultPhysicalPrompts,
-  type CharacterVaultWardrobe,
-  LegacyVaultWardrobeJsonSchema,
-} from './schema';
+export { CHARACTER_WARDROBE_JSON_PATH } from '@/lib/characters/vault/layout';
 
-/**
- * Returns true if this character has a linked vault and is therefore subject
- * to vault-managed-field routing. Post-cutover this is the only condition;
- * the per-character opt-in flag is gone.
- */
-export function hasLinkedVault(character: Character): boolean {
-  return !!character.characterDocumentMountPointId;
+// Snapshot of a vault's wardrobe state — composite items live alongside leaf
+// items in the same list and reference their components via
+// `componentItemIds`. Returned from the folder-based reader; the legacy JSON
+// parser produces the same shape so callers don't have to care which file
+// layout the vault is on.
+export interface CharacterVaultWardrobe {
+  items: WardrobeItem[];
 }
 
-/**
- * Parse one JSON-backed vault file into a validated value, returning null (and
- * logging a warning) when the content is missing/malformed or fails schema
- * validation. The single shape shared by every JSON vault parser below; each
- * caller supplies only its schema, log messages, and log context.
- */
-function parseJsonVaultFile<T>(
-  raw: string,
-  schema: z.ZodType<T>,
-  opts: {
-    parseErrorMessage: string;
-    validationErrorMessage: string;
-    logContext: Record<string, unknown>;
-  },
-): T | null {
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch (error) {
-    logger.warn(opts.parseErrorMessage, {
-      ...opts.logContext,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-
-  const parsed = schema.safeParse(json);
-  if (!parsed.success) {
-    logger.warn(opts.validationErrorMessage, {
-      ...opts.logContext,
-      issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
-    });
-    return null;
-  }
-
-  return parsed.data;
-}
-
-export function parseVaultProperties(
-  raw: string,
-  characterId: string,
-): CharacterVaultProperties | null {
-  return parseJsonVaultFile(raw, CharacterVaultPropertiesSchema, {
-    parseErrorMessage: 'Invalid JSON in vault properties.json; falling back to DB values',
-    validationErrorMessage: 'Vault properties.json failed schema validation; falling back to DB values',
-    logContext: { characterId },
-  });
-}
-
-/**
- * Parse `metadata.json` — the character's freeform fact sheet.
- *
- * Returns null for anything that isn't a JSON object (invalid JSON, a
- * top-level array, a bare scalar), and the caller hydrates `{}` instead.
- * Deliberately unlike `properties.json`: metadata is not a keystone, so a file
- * the user fat-fingered costs them their metadata for that read and nothing
- * else. Hollowing the character over it would be wildly out of proportion to a
- * missing brace.
- */
-export function parseVaultMetadata(
-  raw: string,
-  characterId: string,
-  mountPointId?: string,
-): CharacterVaultMetadata | null {
-  return parseJsonVaultFile(raw, CharacterVaultMetadataSchema, {
-    parseErrorMessage: 'Invalid JSON in vault metadata.json; hydrating empty metadata',
-    validationErrorMessage: 'Vault metadata.json is not a JSON object; hydrating empty metadata',
-    logContext: { characterId, mountPointId },
-  });
-}
-
-export function parseVaultPhysicalPrompts(
-  raw: string,
-  characterId: string,
-): CharacterVaultPhysicalPrompts | null {
-  return parseJsonVaultFile(raw, CharacterVaultPhysicalPromptsSchema, {
-    parseErrorMessage: 'Invalid JSON in vault physical-prompts.json; falling back to DB values',
-    validationErrorMessage: 'Vault physical-prompts.json failed schema validation; falling back to DB values',
-    logContext: { characterId },
-  });
-}
+// The legacy JSON shape we still parse on migration. New vaults never write
+// this; the folder format is authoritative going forward. Pre-rework vaults
+// included a `presets` array that is now ignored — the migration step folds
+// those into composite wardrobe items, so honoring it here would double-write.
+export const LegacyVaultWardrobeJsonSchema = z.object({
+  items: z.array(WardrobeItemSchema),
+  outfit: z
+    .object({
+      top: z.string().nullable().optional(),
+      bottom: z.string().nullable().optional(),
+      footwear: z.string().nullable().optional(),
+      accessories: z.string().nullable().optional(),
+    })
+    .optional(),
+});
 
 /**
  * Parse the legacy `wardrobe.json` payload — kept for migration so vaults that
@@ -156,82 +75,6 @@ export function parseLegacyWardrobeJson(
 }
 
 /**
- * Convert markdown file content into an overlay value. Empty strings become
- * null so that clearing a file collapses to the "unset" state that nullable
- * schema fields expect.
- */
-export function markdownToNullable(content: string): string | null {
-  return content === '' ? null : content;
-}
-
-/**
- * Build a stable, RFC 4122 v8-style UUID from a SHA-256 digest of the source
- * string. v8 is the "custom" version reserved for implementation-specific
- * content; we use it so the `z.uuid()` schema accepts the string without us
- * having to implement true v5 (which requires SHA-1). The exact version byte
- * is not load-bearing — we just need a stable string that parses as a UUID
- * and will always round-trip to itself for the same input.
- */
-export function stableUuidFromString(source: string): string {
-  const hash = crypto.createHash('sha256').update(source).digest();
-  const bytes = Buffer.alloc(16);
-  hash.copy(bytes, 0, 0, 16);
-  // Set version to 8 (custom) in byte 6
-  bytes[6] = (bytes[6] & 0x0f) | 0x80;
-  // Set variant to RFC 4122 in byte 8
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-}
-
-/**
- * Parse a prompt-variant file. The YAML frontmatter carries the display name
- * and isDefault flag; the body (after the closing ---) becomes the prompt
- * content. Files without frontmatter or without a `name` field are skipped.
- */
-export function parsePromptFile(
-  doc: DocMountDocument,
-  characterId: string,
-): CharacterSystemPrompt | null {
-  const parsed = parseFrontmatter(doc.content);
-  if (!parsed.data) {
-    logger.warn('Prompts/*.md file has no parseable frontmatter; skipping', {
-      characterId,
-      mountPointId: doc.mountPointId,
-      relativePath: doc.relativePath,
-    });
-    return null;
-  }
-  const name = parsed.data.name;
-  if (typeof name !== 'string' || name.trim().length === 0) {
-    logger.warn('Prompts/*.md file missing `name` in frontmatter; skipping', {
-      characterId,
-      mountPointId: doc.mountPointId,
-      relativePath: doc.relativePath,
-    });
-    return null;
-  }
-  const isDefault = parsed.data.isDefault === true;
-  const body = doc.content.slice(parsed.bodyStartOffset).trimStart();
-  if (body.length === 0) {
-    logger.warn('Prompts/*.md body is empty; skipping', {
-      characterId,
-      mountPointId: doc.mountPointId,
-      relativePath: doc.relativePath,
-    });
-    return null;
-  }
-  return {
-    id: stableUuidFromString(`prompt:${doc.mountPointId}:${doc.relativePath}`),
-    name: name.trim().slice(0, 100),
-    content: body,
-    isDefault,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-  };
-}
-
-/**
  * The id a `Wardrobe/*.md` file's item carries: its frontmatter `id` when that
  * is UUID-shaped, otherwise a stable id derived from where the file lives. The
  * single source of this rule — `parseWardrobeItemFile` and the `.qtap`
@@ -243,9 +86,7 @@ export function resolveWardrobeItemId(
   mountPointId: string,
   relativePath: string,
 ): string {
-  return typeof frontmatterId === 'string' && /^[0-9a-f-]{36}$/i.test(frontmatterId)
-    ? frontmatterId
-    : stableUuidFromString(`wardrobe-item:${mountPointId}:${relativePath}`);
+  return resolveFileItemId(frontmatterId, 'wardrobe-item', mountPointId, relativePath);
 }
 
 /**
@@ -279,8 +120,7 @@ export function isWardrobeItemDocument(doc: { relativePath: string; content?: st
  * re-projecting them must stamp ids first.
  */
 export function hasStableWardrobeItemId(content: string | null | undefined): boolean {
-  const id = parseFrontmatter(content ?? '').data?.id;
-  return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id);
+  return isUuidShaped(parseFrontmatter(content ?? '').data?.id);
 }
 
 /**
@@ -583,120 +423,3 @@ export function resolveAndCheckComponentItems(
   }
 }
 
-/**
- * Parse a scenario file. Frontmatter — when present — supplies `name` (title)
- * and `description`; the body after the closing `---` becomes the scenario
- * content. When no frontmatter is present, falls back to the legacy heading
- * convention: the first `# heading` is the title and everything after it is
- * the body. Files with neither fall back to the filename-without-extension as
- * the title so malformed files are still visible rather than silently dropped.
- *
- * The file-backed scenario tiers (`lib/mount-index/scenarios-common.ts`, via
- * the scenario location in `lib/scenarios/location.ts`) use the same
- * shape (frontmatter-first, heading-fallback) for symmetry between vault and
- * project scenario authoring.
- */
-export function parseScenarioFile(
-  doc: DocMountDocument,
-  characterId: string,
-): CharacterScenario | null {
-  const content = doc.content;
-  const parsed = parseFrontmatter(content);
-
-  // Title resolution — frontmatter `name` wins, then first `# heading`,
-  // then filename-without-extension.
-  let title: string | null = null;
-  let frontmatterDescription: string | undefined;
-
-  if (parsed.data) {
-    const name = parsed.data.name;
-    if (typeof name === 'string' && name.trim().length > 0) {
-      title = name.trim();
-    }
-    const description = parsed.data.description;
-    if (typeof description === 'string' && description.trim().length > 0) {
-      frontmatterDescription = description.trim().slice(0, 500);
-    }
-  }
-  // Absence means active — matches the file-backed scenario scopes.
-  const archived = parsed.data?.archived === true || parsed.data?.archived === 'true';
-
-  // Body excludes the frontmatter block (parsed.bodyStartOffset is 0 when
-  // no frontmatter was present, so this is safe in either case).
-  const afterFrontmatter = content.slice(parsed.bodyStartOffset);
-  const lines = afterFrontmatter.split('\n');
-  let titleLineIndex = -1;
-
-  if (title === null) {
-    for (let i = 0; i < lines.length; i++) {
-      const match = lines[i].match(/^#\s+(.+)$/);
-      if (match) {
-        titleLineIndex = i;
-        title = match[1].trim();
-        break;
-      }
-    }
-  }
-
-  if (title === null) {
-    const fileName = doc.fileName.replace(/\.md$/i, '');
-    title = fileName.trim().slice(0, 200);
-    if (title.length === 0) {
-      logger.warn('Scenarios/*.md file has no title; skipping', {
-        characterId,
-        mountPointId: doc.mountPointId,
-        relativePath: doc.relativePath,
-      });
-      return null;
-    }
-  }
-
-  // Body: when a `# heading` was used as the title, drop that line; otherwise
-  // use everything after the frontmatter block.
-  let body: string;
-  if (titleLineIndex >= 0) {
-    body = lines.slice(titleLineIndex + 1).join('\n').trim();
-  } else {
-    body = afterFrontmatter.trim();
-  }
-  if (body.length === 0) {
-    logger.warn('Scenarios/*.md body is empty; skipping', {
-      characterId,
-      mountPointId: doc.mountPointId,
-      relativePath: doc.relativePath,
-    });
-    return null;
-  }
-  return {
-    id: stableUuidFromString(`scenario:${doc.mountPointId}:${doc.relativePath}`),
-    title: title.slice(0, 200),
-    content: body,
-    ...(frontmatterDescription !== undefined && { description: frontmatterDescription }),
-    ...(archived && { archived: true }),
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-  };
-}
-
-/**
- * Parse every `Scenarios/*.md` document of one vault and return them in
- * display order — title, then filename, leading "The" ignored
- * (`lib/scenarios/sort.ts`). The one way a vault's scenario array is built, so
- * `character.scenarios` and therefore its "first scenario" agree with every
- * picker.
- */
-export function parseScenarioFilesSorted(
-  docs: DocMountDocument[],
-  characterId: string,
-): CharacterScenario[] {
-  const parsed: Array<{ doc: DocMountDocument; scenario: CharacterScenario }> = [];
-  for (const doc of docs) {
-    const scenario = parseScenarioFile(doc, characterId);
-    if (scenario) parsed.push({ doc, scenario });
-  }
-  return sortScenarios(parsed, ({ doc, scenario }) => ({
-    title: scenario.title,
-    filename: doc.fileName.replace(/\.md$/i, ''),
-    path: doc.relativePath,
-  })).map(({ scenario }) => scenario);
-}

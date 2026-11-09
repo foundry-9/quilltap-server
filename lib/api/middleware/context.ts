@@ -15,7 +15,8 @@ import { validationError, serverError } from '@/lib/api/responses';
 import type { User } from '@/lib/schemas/types';
 import { ProjectStoreUnavailableError } from '@/lib/projects/project-store/schema';
 import { GroupStoreUnavailableError } from '@/lib/groups/group-store/schema';
-import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
+import { CharacterVaultUnavailableError } from '@/lib/characters/vault/layout';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 
 const contextLogger = logger.child({ module: 'api-context-middleware' });
 
@@ -201,6 +202,15 @@ async function handleRouteError(
       return NextResponse.json(
         { error: 'Character vault unavailable', characterId: error.characterId },
         { status: 503 },
+      );
+    }
+    // A write that reached an archived character (the tombstone guard) is the
+    // caller's conflict, not a crash.
+    if (error instanceof CharacterArchivedError) {
+      contextLogger.warn(`[${method} ${url}] Write refused: character is archived`, { error: error.message });
+      return NextResponse.json(
+        { error: 'This character is archived; rehydrate it to make changes.' },
+        { status: 409 },
       );
     }
     contextLogger.error(`[${method} ${url}] Unhandled route error`, {}, error instanceof Error ? error : undefined);

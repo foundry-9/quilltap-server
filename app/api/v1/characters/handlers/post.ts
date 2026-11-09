@@ -22,62 +22,11 @@ import { executeImport } from '@/lib/import/quilltap-import-service';
 import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
 import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge';
 import type { RequestContext } from '@/lib/api/middleware';
+import { createCharacterSchema } from '@/lib/characters/api-schemas';
 
 // ============================================================================
 // Schemas
 // ============================================================================
-
-const createCharacterSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  title: z.string().optional(),
-  identity: z.string().optional(),
-  description: z.string().optional(),
-  manifesto: z.string().optional(),
-  personality: z.string().optional(),
-  scenarios: z
-    .array(
-      z.object({
-        id: z.string().uuid().optional(),
-        title: z.string().min(1).max(200),
-        content: z.string().min(1),
-      })
-    )
-    .optional(),
-  firstMessage: z.string().optional(),
-  exampleDialogues: z.string().optional(),
-  defaultConnectionProfileId: z.uuid().optional(),
-  controlledBy: z.enum(['llm', 'user']).optional(),
-  npc: z.boolean().optional(),
-  systemPrompts: z
-    .array(
-      z.object({
-        id: z.uuid(),
-        name: z.string().min(1).max(100),
-        content: z.string().min(1),
-        isDefault: z.boolean().prefault(false),
-        createdAt: z.string(),
-        updatedAt: z.string(),
-      })
-    )
-    .optional(),
-  physicalDescription: z
-    .object({
-      id: z.uuid(),
-      shortPrompt: z.string().max(350).nullable().optional(),
-      mediumPrompt: z.string().max(500).nullable().optional(),
-      longPrompt: z.string().max(750).nullable().optional(),
-      completePrompt: z.string().max(1000).nullable().optional(),
-      fullDescription: z.string().nullable().optional(),
-      createdAt: z.string(),
-      updatedAt: z.string(),
-    })
-    .nullable()
-    .optional(),
-  characterDocumentMountPointId: z.uuid()
-    .optional()
-    .or(z.literal('').transform(() => undefined))
-    .nullable(),
-});
 
 const quickCreateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -310,39 +259,46 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
-  const validatedData = createCharacterSchema.parse(body);
+  // Derived from the entity schema and strict: an unknown key is a 400. Every
+  // writable field is taken here, so a new character arrives whole.
+  const { systemPrompts, scenarios, physicalDescription, ...fields } = createCharacterSchema.parse(body);
 
-  // Normalize scenarios: fill in missing id/createdAt/updatedAt
+  // The server mints any missing id and the timestamps.
   const now = new Date().toISOString();
-  const normalizedScenarios = (validatedData.scenarios || []).map(s => ({
+  const normalizedPrompts = (systemPrompts ?? []).map((p) => ({
+    ...p,
+    id: p.id ?? crypto.randomUUID(),
+    createdAt: p.createdAt ?? now,
+    updatedAt: p.updatedAt ?? now,
+  }));
+  // Exactly one default; the first when none is marked (the read's rule).
+  if (normalizedPrompts.length > 0 && !normalizedPrompts.some((p) => p.isDefault)) {
+    normalizedPrompts[0] = { ...normalizedPrompts[0], isDefault: true };
+  }
+  const normalizedScenarios = (scenarios ?? []).map((s) => ({
+    ...s,
     id: s.id ?? crypto.randomUUID(),
-    title: s.title,
-    content: s.content,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: s.createdAt ?? now,
+    updatedAt: s.updatedAt ?? now,
   }));
 
   const character = await repos.characters.create({
+    ...fields,
     userId: user.id,
-    name: validatedData.name,
-    title: validatedData.title || null,
-    identity: validatedData.identity || null,
-    description: validatedData.description || null,
-    manifesto: validatedData.manifesto || null,
-    personality: validatedData.personality || null,
-    scenarios: normalizedScenarios,
-    firstMessage: validatedData.firstMessage || null,
-    exampleDialogues: validatedData.exampleDialogues || null,
-    defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
-    controlledBy: validatedData.controlledBy || 'llm',
-    isFavorite: false,
-    npc: validatedData.npc ?? false,
-    tags: [] as string[],
-    partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
-    avatarOverrides: [] as { chatId: string; imageId: string }[],
+    controlledBy: fields.controlledBy ?? 'llm',
+    npc: fields.npc ?? false,
+    isFavorite: fields.isFavorite ?? false,
+    tags: [],
+    partnerLinks: [],
+    avatarOverrides: [],
     defaultImageId: null,
-    physicalDescription: validatedData.physicalDescription ?? null,
-    systemPrompts: validatedData.systemPrompts || [],
+    // The physical description's id is derived from the vault on read.
+    physicalDescription: physicalDescription
+      ? { ...physicalDescription, id: crypto.randomUUID(), createdAt: now, updatedAt: now }
+      : null,
+    systemPrompts: normalizedPrompts,
+    scenarios: normalizedScenarios,
+    defaultSystemPromptId: normalizedPrompts.find((p) => p.isDefault)?.id ?? null,
   });
 
   logger.info('[Characters v1] Character created', {
@@ -350,6 +306,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     name: character.name,
     controlledBy: character.controlledBy || 'llm',
     npc: character.npc,
+    fields: Object.keys(fields),
   });
 
   return created({ character });

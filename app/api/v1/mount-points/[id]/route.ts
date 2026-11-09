@@ -30,7 +30,7 @@ import {
   deconvertMountPointToFilesystem,
   validateDeconvertTarget,
 } from '@/lib/mount-index/conversion';
-import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { scaffoldCharacterMount } from '@/lib/characters/vault/scaffold';
 import { copyFile, moveFile, writeFile, deleteFile, linkFile, FileOpError } from '@/lib/mount-index/file-ops';
 import { copyFolder, deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
 import { publishMountChange } from '@/lib/mount-index/realtime';
@@ -109,9 +109,7 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
       if (validatedData.name !== undefined && validatedData.name !== existing.name) {
         // A live character vault is named after its character; renaming the
         // vault alone would be undone by the next store-name reconcile.
-        const owner = (await repos.characters.findAllRaw()).find(
-          (c) => c.characterDocumentMountPointId === id
-        );
+        const owner = await repos.characters.findByStorePointerRaw(id);
         if (owner) {
           logger.warn('[Mount Points v1] Rejected rename of a live character vault', {
             mountPointId: id,

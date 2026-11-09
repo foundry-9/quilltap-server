@@ -19,7 +19,7 @@
 
 import { UuidRemapper } from '@/lib/backup/uuid-remapper'
 import { planInventoryImagePointerFixes, remapBackupData } from '@/lib/backup/restore/uuid-remap'
-import { parseInventoryItemFile } from '@/lib/database/repositories/vault-overlay/inventory-readers'
+import { parseInventoryItemFile } from '@/lib/inventory/vault-readers'
 import { resolveItem } from '@/lib/inventory/resolve'
 import type { BackupData } from '@/lib/backup/types'
 import type { InventoryRecord } from '@/lib/schemas/inventory.types'

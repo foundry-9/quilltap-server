@@ -31,7 +31,7 @@ const mockWrites = {
   deleteFolderInMount: jest.fn(async () => ({ movedItems: 0, movedFolders: 0 })),
   resolveWardrobeMount: jest.fn(),
 }
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => mockWrites)
+jest.mock('@/lib/wardrobe/vault-writes', () => mockWrites)
 
 // Required after the mocks: `mockWrites` is initialised above, and an import
 // would be hoisted past it.

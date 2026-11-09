@@ -17,8 +17,8 @@
 
 import { logger } from '@/lib/logger';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { readCharacterVaultWardrobe } from '@/lib/database/repositories/vault-overlay/vault-readers';
-import { CHARACTER_WARDROBE_FOLDER } from '@/lib/database/repositories/vault-overlay/schema';
+import { readCharacterVaultWardrobe } from '@/lib/wardrobe/vault-readers';
+import { CHARACTER_WARDROBE_FOLDER } from '@/lib/mount-index/character-vault';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /** Shared wardrobe lives under the same `Wardrobe/` folder name as character vaults. */

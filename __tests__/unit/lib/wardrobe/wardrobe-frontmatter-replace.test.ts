@@ -8,7 +8,7 @@ jest.mock('@/lib/logger', () => {
 const { buildWardrobeItemFile } =
   require('@/lib/mount-index/character-vault') as typeof import('@/lib/mount-index/character-vault')
 const { parseWardrobeItemFile } =
-  require('@/lib/database/repositories/vault-overlay/parsers') as typeof import('@/lib/database/repositories/vault-overlay/parsers')
+  require('@/lib/wardrobe/vault-parsers') as typeof import('@/lib/wardrobe/vault-parsers')
 
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 

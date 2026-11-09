@@ -31,7 +31,7 @@ jest.mock('@/lib/background-jobs/activity-registry', () => ({
   trackActivity: jest.fn((_kind: string, fn: () => Promise<unknown>) => fn()),
 }))
 
-jest.mock('@/lib/database/repositories/characters.repository', () => ({
+jest.mock('@/lib/characters/archive-guard', () => ({
   CharacterArchivedError: class CharacterArchivedError extends Error {
     constructor(id: string) {
       super(`Character ${id} is archived`)
@@ -98,7 +98,7 @@ jest.mock('@/lib/mount-index/character-vault', () => ({
 
 import { NextRequest } from 'next/server'
 import { GET, POST } from '@/app/api/v1/wardrobe/[itemId]/images/route'
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
+import { CharacterArchivedError } from '@/lib/characters/archive-guard'
 import {
   ForeignWardrobeImageError,
   addWardrobeItemImage,

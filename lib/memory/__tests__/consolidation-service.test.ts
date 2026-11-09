@@ -57,8 +57,8 @@ jest.mock('../commonplace-mirror', () => ({
 jest.mock('@/lib/llm/cheap-llm-user-selection', () => ({ selectCheapLLMFromProfiles: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('../recall/archive', () => ({ invalidateFrozenArchive: jest.fn() }))
-jest.mock('@/lib/database/repositories/character-properties-overlay', () => ({
-  readVaultTextFile: jest.fn(async () => null),
+jest.mock('@/lib/characters/vault/readers', () => ({
+  readVaultFile: jest.fn(async () => null),
 }))
 jest.mock('../cheap-llm-tasks/consolidation-tasks', () => ({
   ...jest.requireActual('../cheap-llm-tasks/consolidation-tasks'),

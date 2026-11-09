@@ -41,6 +41,10 @@ import {
   ArchiveFormatError,
 } from '@/lib/characters/archive-crypto';
 import type { RequestContext } from '@/lib/api/middleware';
+import type { Character } from '@/lib/schemas/types';
+import { repairCharacterVault } from '@/lib/characters/vault/health';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
+import { publishRealtime } from '@/lib/realtime/bus';
 
 const avatarSchema = z.object({
   imageId: z.string().nullable(),
@@ -153,20 +157,68 @@ async function handleOptimizeStream(
   });
 }
 
+/** The POST actions that act on the hydrated character. */
+const HYDRATED_ACTIONS = [
+  'favorite',
+  'avatar',
+  'add-tag',
+  'remove-tag',
+  'toggle-controlled-by',
+  'toggle-carina',
+  'set-default-partner',
+  'optimize-stream',
+  'generate-external-prompt',
+  'refresh-archive',
+  'archive',
+  'rehydrate',
+  'rename',
+] as const;
+type HydratedAction = (typeof HYDRATED_ACTIONS)[number];
+
 export async function handlePost(
   req: NextRequest,
   ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
+  const { repos } = ctx;
 
-  // Verify ownership first
-  const character = await repos.characters.findById(id);
-  if (!exists(character)) {
+  // Existence first, from the row: the vault repair must reach a character
+  // whose vault is broken, which a hydrated read refuses with a 503.
+  const row = await repos.characters.findByIdRaw(id);
+  if (!exists(row)) {
     return notFound('Character');
   }
 
-  return dispatchAction(req, {
+  const viaHydrated = (action: HydratedAction) => async (): Promise<NextResponse> => {
+    const character = await repos.characters.findById(id);
+    if (!exists(character)) return notFound('Character');
+    return hydratedPostHandlers(req, ctx, id, character)[action]();
+  };
+
+  return dispatchAction<HydratedAction | 'repair-vault'>(req, {
+    ...(Object.fromEntries(HYDRATED_ACTIONS.map((a) => [a, viaHydrated(a)])) as Record<HydratedAction, () => Promise<NextResponse>>),
+    // Seed an absent properties.json / metadata.json (or scaffold a missing
+    // vault) and nothing else — never a present file (D1, D10).
+    'repair-vault': async () => {
+      if (row.archivedAt) {
+        throw new CharacterArchivedError(id);
+      }
+      const result = await repairCharacterVault(row);
+      publishRealtime('characters', id);
+      return NextResponse.json(result);
+    },
+  });
+}
+
+function hydratedPostHandlers(
+  req: NextRequest,
+  ctx: RequestContext,
+  id: string,
+  character: Character
+): Record<HydratedAction, () => Promise<NextResponse>> {
+  const { user, repos } = ctx;
+
+  return {
     favorite: async () => {
       try {
         const updatedCharacter = await repos.characters.setFavorite(id, !character.isFavorite);
@@ -212,8 +264,9 @@ export async function handlePost(
         newImageId: imageId,
       });
 
+      // `{ character }`, like every other character-returning action.
       return NextResponse.json({
-        data: {
+        character: {
           ...updatedCharacter,
           defaultImage,
         },
@@ -449,5 +502,5 @@ export async function handlePost(
         return serverError('Failed to process rename request');
       }
     },
-  });
+  };
 }

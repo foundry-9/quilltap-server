@@ -39,7 +39,7 @@ import {
   readInventoryRecords,
   scanInventoryFolder,
   type InventoryFolderScan,
-} from './inventory-readers';
+} from '@/lib/inventory/vault-readers';
 import {
   chainKey,
   createFolderIn,
@@ -51,8 +51,8 @@ import {
   runSerialized as runSerializedOnKey,
   type ItemFolderTree,
   type VaultFolderMount,
-} from './item-folder-ops';
-import { projectArrayIntoVaultFolder } from './vault-projection';
+} from '@/lib/mount-index/item-folder-ops';
+import { projectArrayIntoVaultFolder } from '@/lib/mount-index/vault-projection';
 import { withInventoryWritesLinted } from '@/lib/inventory/lint-scope';
 
 /** An Inventory tier's folder on disk. */

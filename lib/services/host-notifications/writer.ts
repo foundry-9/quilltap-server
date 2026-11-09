@@ -17,6 +17,7 @@
  * announcement couldn't be written.
  */
 
+import { CHARACTER_IDENTITY_MD_PATH } from '@/lib/characters/vault/layout';
 import {
   HOST_KIND_OFF_SCENE_CHARACTERS,
   HOST_KIND_OFF_SCENE_LEFT_BEHIND,
@@ -129,7 +130,7 @@ async function readVaultIdentity(character: Character): Promise<string | null> {
   try {
     const { content } = await readDatabaseDocument(
       character.characterDocumentMountPointId,
-      'identity.md',
+      CHARACTER_IDENTITY_MD_PATH,
     );
     const trimmed = content.trim();
     return trimmed.length > 0 ? trimmed : null;

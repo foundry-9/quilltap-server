@@ -40,7 +40,7 @@ import type { NextRequest, NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { badRequest, conflict, notFound, serverError, successResponse } from '@/lib/api/responses';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {

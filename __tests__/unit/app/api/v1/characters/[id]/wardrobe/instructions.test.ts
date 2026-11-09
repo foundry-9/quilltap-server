@@ -46,7 +46,7 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
   resolveGroupMountsForCharacter: jest.fn(),
 }))
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+jest.mock('@/lib/wardrobe/vault-writes', () => ({
   WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
   readMountItems: jest.fn(),
   createInMount: jest.fn(),
@@ -60,7 +60,7 @@ jest.mock('@/lib/mount-index/ensure-owner-store', () => ({ ensureOwnerOfficialSt
 jest.mock('@/lib/mount-index/shared-wardrobe', () => ({ ensureSharedWardrobeFolder: jest.fn() }))
 jest.mock('@/lib/wardrobe/pool', () => ({ loadWearablePool: jest.fn() }))
 
-jest.mock('@/lib/database/repositories/characters.repository', () => ({
+jest.mock('@/lib/characters/archive-guard', () => ({
   CharacterArchivedError: class CharacterArchivedError extends Error {
     constructor(id: string) {
       super(`archived: ${id}`)
@@ -78,8 +78,8 @@ import { GET, POST } from '@/app/api/v1/characters/[id]/wardrobe/route'
 import {
   readMountItems,
   resolveWardrobeMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
+} from '@/lib/wardrobe/vault-writes'
+import { CharacterArchivedError } from '@/lib/characters/archive-guard'
 import {
   readWardrobeInstructionsFile,
   writeWardrobeInstructionsFile,

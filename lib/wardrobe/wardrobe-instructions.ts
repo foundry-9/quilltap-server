@@ -14,11 +14,8 @@
  */
 
 import { logger } from '@/lib/logger';
-import { readVaultTextFile } from '@/lib/database/repositories/vault-overlay/vault-readers';
-import {
-  CHARACTER_WARDROBE_FOLDER,
-  WARDROBE_INSTRUCTIONS_PATH,
-} from '@/lib/mount-index/character-vault';
+import { readVaultFile } from '@/lib/characters/vault/readers';
+import { CHARACTER_WARDROBE_FOLDER, WARDROBE_INSTRUCTIONS_PATH } from '@/lib/mount-index/character-vault';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
   writeDatabaseDocument,
@@ -43,7 +40,7 @@ export interface WardrobeInstructionsResult {
  * outfit. First tier with a non-blank `Wardrobe/instructions.md` wins and the
  * search stops there; a file that exists but trims to empty counts as absent,
  * so clearing the editor behaves as "unset". Per-tier read failures degrade
- * to "not found" (`readVaultTextFile` already logs and returns null), so this
+ * to "not found" (`readVaultFile` already logs and returns null), so this
  * never throws on a broken mount.
  */
 export async function resolveWardrobeInstructions(opts: {
@@ -66,7 +63,7 @@ export async function resolveWardrobeInstructions(opts: {
   }));
 
   for (const { tier, mountPointId } of probes) {
-    const raw = await readVaultTextFile(mountPointId, WARDROBE_INSTRUCTIONS_PATH);
+    const raw = await readVaultFile(mountPointId, WARDROBE_INSTRUCTIONS_PATH);
     const content = raw?.trim() ?? '';
     if (content.length === 0) continue;
     logger.debug('[WardrobeInstructions] Dressing instructions resolved', {
@@ -85,7 +82,7 @@ export async function resolveWardrobeInstructions(opts: {
  * its own file). Blank or missing both come back as null.
  */
 export async function readWardrobeInstructionsFile(mountPointId: string): Promise<string | null> {
-  const raw = await readVaultTextFile(mountPointId, WARDROBE_INSTRUCTIONS_PATH);
+  const raw = await readVaultFile(mountPointId, WARDROBE_INSTRUCTIONS_PATH);
   const content = raw?.trim() ?? '';
   return content.length > 0 ? content : null;
 }

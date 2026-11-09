@@ -289,10 +289,28 @@ left to fall back to), mirroring the project/group stores: a vault-linked
 character whose `properties.json` keystone is missing/unreadable causes
 `findById` to throw `CharacterVaultUnavailableError` (mapped to a 503 by the
 route handler) and list reads (`findAll`/`findByIds`) to drop the offending
-row. Existence-only callers (delete, ownership pre-checks, cascade delete) read
+row. A keystone that is present but will not parse also makes `findById`
+throw (4.13); list reads take its settings at their defaults, so the character
+stays in the roster. Existence-only callers (delete, ownership pre-checks, cascade delete) read
 `findByIdRaw`, which never applies the overlay, so a broken vault stays
-deletable/repairable; the startup backfill repopulates a linked-but-empty vault
-from the raw row.
+deletable/repairable.
+
+**Row and entity are two types (4.13).** `CharacterRowSchema` is this table;
+`CharacterManagedFieldsSchema` is the vault-managed fields; `CharacterSchema`
+is the row extended with them (`lib/schemas/character.types.ts`).
+`CHARACTER_MANAGED_FIELDS` and `characterManagedDefaults()` are derived from the
+schemas. `findByIdRaw`, `findAllRaw`, `findByStorePointerRaw` and
+`createBoundToStore` return `CharacterRow`; every other read returns the
+hydrated `Character`. The repository validates rows with the row schema, so a
+managed field can never reach an `UPDATE`.
+
+**The heal never writes over content (4.13, #148).** At boot,
+`backfillCharacterVaults` seeds an *absent* `properties.json` (defaults) and an
+absent `metadata.json` (`{}`), and nothing else. A present `properties.json`
+that fails to parse is logged at `error`, listed in the Almanack, and left
+alone. `GET /api/v1/characters/[id]?action=vault-health` reports which layout
+files are present and which parse; `POST …?action=repair-vault` seeds only
+what is absent.
 
 ```sql
 CREATE TABLE "characters" (
@@ -350,16 +368,31 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | personality | `personality.md` |
 | exampleDialogues | `example-dialogues.md` |
 | pronouns, birthday, aliases, title, firstMessage, talkativeness, canChooseOutfit, canDrawDiagrams, diagramStyle, kind | `properties.json` — `birthday` (4.13) is a `YYYY-MM-DD` calendar date or `null`; absent or not a real date hydrates as `null`, and the age is derived from it (`lib/characters/birthday.ts`), never stored; `canChooseOutfit` and `canDrawDiagrams` are optional-with-default (absent hydrates as `false`); `diagramStyle` is `'handDrawn'` or `'clean'`, and absent or unrecognized hydrates as `'handDrawn'`; `kind` (4.13) is `'roleplay'` or `'assistant'`, and absent or unrecognized hydrates as `'roleplay'` (read only through `lib/characters/kind.ts`). Old vaults need no backfill and no migration exists. |
-| metadata | `metadata.json` — optional; a flat object of user-authored keys with any JSON value. Absent file or unparseable content hydrates as `{}` (**not** a keystone — only `properties.json` may declare a vault broken), so old vaults need no backfill and no migration exists. A patch REPLACES the whole object rather than merging keys. One **reserved key**, `progressions`, holds the character's timed spans (each with a `public` flag, default `true`, deciding whether it joins the character's public identity) and IS validated — by `lib/progressions/schema.ts` (the runtime source of truth), mirrored for editors at `public/schemas/qtap-progression.schema.json`. Validation happens at the point of use, not at hydration: the parser stays shape-agnostic, and a malformed entry is dropped alone with a `warn` while its siblings survive. Every other key stays freeform and unchecked. No migration: the key appears on first write. |
+| metadata | `metadata.json` — optional; a flat object of user-authored keys with any JSON value. Absent file or unparseable content hydrates as `{}` (**not** a keystone — only `properties.json` may declare a vault broken), so old vaults need no backfill and no migration exists. A patch REPLACES the whole object rather than merging keys — in the repository and in every job-child writer (Pascal's effects). **One exception (4.13):** the HTTP route's `PUT /api/v1/characters/[id]?action=patch-metadata` takes `{ set, unset }` and merges keys server-side under the character's write chain (`CharactersRepository.patchMetadata`), so two editors cannot race a read-merge-replace; a present sheet that is not a JSON object is refused (409), never merged over. One **reserved key**, `progressions`, holds the character's timed spans (each with a `public` flag, default `true`, deciding whether it joins the character's public identity) and IS validated — by `lib/progressions/schema.ts` (the runtime source of truth), mirrored for editors at `public/schemas/qtap-progression.schema.json`. Validation happens at the point of use, not at hydration: the parser stays shape-agnostic, and a malformed entry is dropped alone with a `warn` while its siblings survive. Every other key stays freeform and unchecked. No migration: the key appears on first write. |
 | physicalDescription.fullDescription | `physical-description.md` |
-| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt, physicalDescription.humanoid | `physical-prompts.json` — `humanoid` is optional (absent hydrates as `true`), so old vaults need no backfill and no migration exists. A write that omits it keeps the vault's current value. |
+| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt, physicalDescription.humanoid | `physical-prompts.json` — `humanoid` is optional (absent hydrates as `true`), so old vaults need no backfill and no migration exists. A write that omits it keeps the vault's current value. A `null` physical description (the card's Clear) empties both files and keeps `humanoid` (4.13, #149). |
 | systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
 | scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record). Frontmatter carries `description` and, since 4.9, `archived: true` — omitted entirely while the scenario is active. The same `archived` key marks a scenario archived in the other three scopes (general, project, group `Scenarios/` folders). |
 
-Reads go through `applyDocumentStoreOverlay()` in
-`lib/database/repositories/character-properties-overlay.ts`; writes through
-`applyDocumentStoreWriteOverlay()`. The repository's `*Raw` helpers bypass
-the overlay (used by exports and the migration's populator).
+The table above is `CHARACTER_VAULT_LAYOUT` in
+`lib/characters/vault/layout.ts`, the one declarative description of the
+layout: each entry's file(s), codec, defaults, scaffold seed and keystone
+status. Hydration (`hydrate.ts`), patch routing and the full projection
+(`write.ts`), the scaffold (`scaffold.ts`), the adoption / sync keystones, the
+archive keep-set and the "character files" health figure all derive from it.
+The repository's `*Raw` helpers bypass the vault.
+
+**Prompt and scenario ids (4.13).** `Prompts/*.md` and `Scenarios/*.md`
+frontmatter carries `id:` (a UUID). A file without one takes the old
+path-derived id (`stableUuidFromString('prompt:<mount>:<path>')`, `scenario:` for
+scenarios — `resolveFileItemId` in `lib/utils/stable-uuid.ts`), so nothing
+already referencing it breaks; the next write stamps that id in, and from then
+on the id survives a rename. The project, group and General `Scenarios/`
+folders follow the same rule. Prompts and scenarios are written one file at a
+time (`lib/characters/vault/items.ts`), never as a whole array through
+`update()`, and nothing sweeps a file that does not parse as an item. The
+physical description's id is derived from the vault
+(`physicalDescriptionIdFor`), never stored.
 
 ### wardrobe_items — DROPPED in 4.7 (`drop-wardrobe-items-table-v1`)
 

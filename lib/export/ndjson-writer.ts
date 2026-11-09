@@ -35,10 +35,7 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { isFileExcludedFromExport } from './excluded-files';
 import { getPlugin } from '@/lib/plugins/registry';
 import { listPortableInstanceSettings } from '@/lib/instance-settings';
-import {
-  isWardrobeItemDocumentPath,
-  wardrobeItemIdForDocument,
-} from '@/lib/database/repositories/vault-overlay/parsers';
+import { isWardrobeItemDocumentPath, wardrobeItemIdForDocument } from '@/lib/wardrobe/vault-parsers';
 
 const logger = baseLogger.child({ module: 'export:ndjson-writer' });
 const APP_VERSION = packageJson.version;

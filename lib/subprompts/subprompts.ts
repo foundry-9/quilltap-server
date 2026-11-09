@@ -34,7 +34,7 @@ import {
 } from '@/lib/mount-index/database-store';
 import { parseFrontmatter, serializeFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 
 const logger = createServiceLogger('Subprompts');
 

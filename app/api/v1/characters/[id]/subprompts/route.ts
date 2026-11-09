@@ -12,7 +12,7 @@ import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, created, successResponse, conflict, badRequest } from '@/lib/api/responses';
 import { publishRealtime } from '@/lib/realtime/bus';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import {
   listCharacterSubprompts,
   createCharacterSubprompt,

@@ -105,7 +105,7 @@ describe('ensureOwnerOfficialStore(group) — raw FK write contract', () => {
 
     const result = await ensureOwnerOfficialStore('group', 'g1', 'Cabal');
 
-    expect(result).toEqual({ mountPointId: 'mp-existing', created: false });
+    expect(result).toEqual({ mountPointId: 'mp-existing', created: false, adopted: true });
     expect(entityRepo.setOfficialMountPointId).toHaveBeenCalledWith('g1', 'mp-existing');
     expect(entityRepo.update).not.toHaveBeenCalled();
   });

@@ -52,6 +52,8 @@ import { CharacterHeader } from './CharacterHeader'
 import { useCharacter, useCharacterPageSupport, useCharacterStats } from './hooks/useCharacter'
 import { useCharacterAutosave } from './hooks/useCharacterAutosave'
 import { ArchiveCharacterDialog } from './components/ArchiveCharacterDialog'
+import { VaultRepairCard } from './components/VaultRepairCard'
+import { ApiFetchError } from '@/lib/query/fetcher'
 import { RehydrateBundleDialog } from './components/RehydrateBundleDialog'
 import { ExternalPromptDialog } from './components/ExternalPromptDialog'
 import { ExternalPromptResultDialog } from './components/ExternalPromptResultDialog'
@@ -320,11 +322,9 @@ function LoadedCharacterPage({
     const mainUpdates: Record<string, unknown> = {}
     for (const entry of getGeneratedCharacterTextEntries(data)) mainUpdates[entry.field] = entry.value
     if (data.properties?.pronouns && !character.pronouns) mainUpdates.pronouns = data.properties.pronouns
+    // The generated aliases join the existing ones; the server drops duplicates.
     if (data.properties && data.properties.aliases.length > 0) {
-      const existing = character.aliases ?? []
-      const lower = new Set(existing.map((a) => a.toLowerCase()))
-      const additions = data.properties.aliases.filter((a) => !lower.has(a.toLowerCase()))
-      if (additions.length > 0) mainUpdates.aliases = [...existing, ...additions]
+      mainUpdates.aliases = [...(character.aliases ?? []), ...data.properties.aliases]
     }
     const errors: string[] = []
     if (Object.keys(mainUpdates).length > 0) {
@@ -337,21 +337,19 @@ function LoadedCharacterPage({
 
     const systemPrompt = generatedSystemPrompt(data)
     if (systemPrompt) {
+      // The server makes a character's first prompt the default; the name is
+      // the only thing the page chooses.
       const isFirst = (character.systemPrompts?.length ?? 0) === 0
       const created = await autosave.run(async () => {
         const res = await fetch(`/api/v1/characters/${characterId}/prompts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: isFirst ? FIRST_SYSTEM_PROMPT_NAME : 'AI Wizard',
-            content: systemPrompt,
-            isDefault: isFirst,
-          }),
+          body: JSON.stringify({ name: isFirst ? FIRST_SYSTEM_PROMPT_NAME : 'AI Wizard', content: systemPrompt }),
         })
         if (!res.ok) throw new Error('The generated system prompt could not be saved.')
-        return true
+        return ((await res.json()) as { prompt: { isDefault: boolean } }).prompt
       }, 'The generated system prompt could not be saved.')
-      if (created) showSuccessToast(isFirst ? 'System prompt created' : 'Generated system prompt added beside the others')
+      if (created) showSuccessToast(created.isDefault ? 'System prompt created' : 'Generated system prompt added beside the others')
     }
 
     if (data.physicalDescription) {
@@ -377,11 +375,8 @@ function LoadedCharacterPage({
     void invalidateLists()
   }
 
-  const defaultPromptContent =
-    character.systemPrompts?.find((p) => p.id === character.defaultSystemPromptId)?.content ??
-    character.systemPrompts?.find((p) => p.isDefault)?.content ??
-    character.systemPrompts?.[0]?.content ??
-    ''
+  // The server settles which prompt is the default (exactly one carries the flag).
+  const defaultPromptContent = character.systemPrompts?.find((p) => p.isDefault)?.content ?? ''
 
   const renderSection = (active: string) => {
     switch (active) {
@@ -604,6 +599,12 @@ export function CharacterPage(props: CharacterPageProps) {
         <p className="text-lg text-foreground">Loading character…</p>
       </div>
     )
+  }
+
+  // A broken vault answers 503: show its health report and the repair, not a
+  // dead page.
+  if (!character && error instanceof ApiFetchError && error.status === 503) {
+    return <VaultRepairCard characterId={props.characterId} onBack={props.onBack} />
   }
 
   if (!character) {

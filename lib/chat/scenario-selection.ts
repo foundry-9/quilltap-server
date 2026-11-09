@@ -145,7 +145,7 @@ async function readFromScope(
   return { location, scenario };
 }
 
-/** Find a character scenario by its path-derived id. */
+/** Find a character scenario by its id. */
 async function readCharacterScenarioById(
   scenarioId: string,
   options: ResolveScenarioSelectionOptions,
@@ -156,7 +156,7 @@ async function readCharacterScenarioById(
     : null;
   if (location) {
     const { scenarios } = await location.list({ includeArchived: true });
-    const scenario = scenarios.find((s) => location.idForPath(s.path) === scenarioId);
+    const scenario = scenarios.find((s) => s.id === scenarioId);
     if (scenario) return { location, scenario };
   }
   logger.warn(`${logTag} scenarioId not found on character`, {

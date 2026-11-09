@@ -409,7 +409,7 @@ async function describeBuckets(
     const subjectId = bucket.ref.subjectCharacterId as string
     // The overlay read carries the vault-managed identity/description; a
     // broken vault throws, so fall back to the raw row for name-only canon.
-    let subject: Character | null = null
+    let subject: Pick<Character, 'id' | 'name' | 'identity' | 'description'> | null = null
     try {
       subject = await repos.characters.findById(subjectId)
     } catch {
@@ -417,7 +417,9 @@ async function describeBuckets(
     }
     if (!subject) {
       try {
-        subject = await repos.characters.findByIdRaw(subjectId)
+        // The row has no content: a broken vault leaves name-only canon.
+        const row = await repos.characters.findByIdRaw(subjectId)
+        subject = row ? { id: row.id, name: row.name, identity: null, description: null } : null
       } catch {
         subject = null
       }

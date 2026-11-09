@@ -18,7 +18,7 @@
  *
  * Draft keys are the PUT's own field names, except the physical description's
  * text fields, which are `physicalDescription.<field>` — that record is sent
- * whole (its schema requires a name), merged over the stored one.
+ * whole, merged over the stored one (its id is the server's).
  *
  * @module app/aurora/[id]/hooks/useCharacterAutosave
  */
@@ -104,7 +104,11 @@ export function buildCharacterPatch(
   return { body, cachePatch: body as Partial<Character> }
 }
 
-/** The whole physical description record, with `changes` laid over the stored one. */
+/**
+ * The whole physical description as a write sends it: every text field, with
+ * `changes` laid over the stored one. No id and no timestamps — the server owns
+ * them.
+ */
 export function mergePhysicalDescription(
   stored: CharacterPhysicalDescription | null,
   changes: Partial<Record<PhysicalTextField, string>> & { humanoid?: boolean },
@@ -114,7 +118,6 @@ export function mergePhysicalDescription(
     return value ? value : null
   }
   return {
-    id: stored?.id ?? crypto.randomUUID(),
     headAndShouldersPrompt: pick('headAndShouldersPrompt'),
     shortPrompt: pick('shortPrompt'),
     mediumPrompt: pick('mediumPrompt'),

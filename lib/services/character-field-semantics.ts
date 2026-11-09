@@ -23,7 +23,18 @@ import {
   HAIR_PHYSICAL_BOUNDARY,
   HAIR_PHYSICAL_DESCRIPTION_NOTE,
 } from '@/lib/wardrobe/slot-guidance';
-import type { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
+import {
+  CHARACTER_DESCRIPTION_MD_PATH,
+  CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
+  CHARACTER_IDENTITY_MD_PATH,
+  CHARACTER_MANIFESTO_MD_PATH,
+  CHARACTER_METADATA_JSON_PATH,
+  CHARACTER_PERSONALITY_MD_PATH,
+  CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
+  CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+  CHARACTER_PROPERTIES_JSON_PATH,
+  type CharacterVaultFilePath,
+} from '@/lib/characters/vault/layout';
 import { kindPolicy, type CharacterKind, type GeneratorDirectionKey } from '@/lib/characters/kind';
 
 export const FIELD_SEMANTICS_PREAMBLE = `Quilltap distinguishes four character fields by *vantage point*, plus a fifth foundational field (manifesto) that is not a vantage point. Use these definitions to label which field each pattern belongs to — they are not interchangeable.
@@ -225,26 +236,26 @@ ${WARDROBE_SEMANTICS}`;
 /**
  * The short version of what belongs in each core file of a character vault,
  * addressed to the character who owns it (the `self_inventory` tool's
- * `vault.coreFiles` checklist). Keyed by the overlay's own path list, so a
- * core file added there fails to compile until it is described here.
+ * `vault.coreFiles` checklist). Keyed by the vault layout's own path union, so
+ * a core file added there fails to compile until it is described here.
  */
-export const CORE_VAULT_FILE_SUMMARIES: Readonly<Record<(typeof SINGLE_FILE_OVERLAY_PATHS)[number], string>> = {
-  'properties.json':
+export const CORE_VAULT_FILE_SUMMARIES: Readonly<Record<CharacterVaultFilePath, string>> = {
+  [CHARACTER_PROPERTIES_JSON_PATH]:
     'Small structured facts as JSON: pronouns, aliases (names others actually call you), title (the user\'s private framing of you), firstMessage (your opening line), talkativeness (0.1–1.0), and canChooseOutfit.',
-  'metadata.json':
+  [CHARACTER_METADATA_JSON_PATH]:
     'Your fact sheet: one flat JSON object of keys the user invents. Never put into your prompt as-is; custom tools may test its keys, and the reserved "progressions" key drives your progress reports.',
-  'identity.md':
+  [CHARACTER_IDENTITY_MD_PATH]:
     'Surface knowledge of you from outside: name, station, occupation, public reputation. Third person, read only by others; never inner motivation.',
-  'description.md':
+  [CHARACTER_DESCRIPTION_MD_PATH]:
     'What someone talking with you notices: behaviour, mannerisms, verbal habits. Third person; not physical appearance, not inner monologue.',
-  'manifesto.md':
+  [CHARACTER_MANIFESTO_MD_PATH]:
     'Your axiomatic core: short, declarative truths every other file must stay consistent with. Addressed to you, in second person.',
-  'personality.md':
+  [CHARACTER_PERSONALITY_MD_PATH]:
     'What you know about yourself: your inner drivers, unseen by others unless shared. Addressed to you, in second person.',
-  'example-dialogues.md':
+  [CHARACTER_EXAMPLE_DIALOGUES_MD_PATH]:
     'Sample exchanges showing how you speak — style samples for the model, not lore.',
-  'physical-description.md':
+  [CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH]:
     'Your body with nothing removable: face, hair, eyes, skin, build, distinctive features. No clothing or accessories (those are the wardrobe). Noun phrases; also fed to image models.',
-  'physical-prompts.json':
+  [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]:
     'Image-generation prompts for your appearance as JSON: headAndShoulders, short, medium, long, complete, plus a `humanoid` flag (false when you have no head, shoulders or body to draw). Terse noun phrases, no clothing.',
 };

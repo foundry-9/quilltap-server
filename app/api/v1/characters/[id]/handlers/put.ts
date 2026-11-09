@@ -2,128 +2,54 @@
  * Characters API v1 - PUT Handler
  *
  * PUT /api/v1/characters/[id] - Update a character
+ * PUT /api/v1/characters/[id]?action=depiction-guidelines - Write the Ariel Clause file
+ * PUT /api/v1/characters/[id]?action=patch-metadata - Set / unset fact-sheet keys
+ *
+ * The body schema is derived from the entity (`lib/characters/api-schemas.ts`)
+ * and strict: an unknown key is a 400. Prompts and scenarios are not taken
+ * here — they have their own per-item routes.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import { exists } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { z } from 'zod';
-import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
-import { JsonSchema } from '@/lib/schemas/common.types';
-import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
-import type { Character } from '@/lib/schemas/types';
-import { DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
-import { CHARACTER_KINDS } from '@/lib/characters/kind';
-import { BirthdaySchema } from '@/lib/characters/birthday';
+import type { CharacterRow, PhysicalDescription } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, successResponse } from '@/lib/api/responses';
+import { badRequest, conflict, notFound, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { writeStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
-import { readCharacterVaultPhysicalPrompts } from '@/lib/database/repositories/vault-overlay/vault-readers';
+import { readVaultFile } from '@/lib/characters/vault/readers';
+import { parseVaultPhysicalPrompts } from '@/lib/characters/vault/parsers';
+import { CHARACTER_PHYSICAL_PROMPTS_JSON_PATH, physicalDescriptionIdFor } from '@/lib/characters/vault/layout';
+import { updateCharacterSchema } from '@/lib/characters/api-schemas';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
+import {
+  CharacterMetadataUnreadableError,
+  type CharacterUpdate,
+} from '@/lib/database/repositories/characters.repository';
+import { publishRealtime } from '@/lib/realtime/bus';
 import { recompileCharacterSeats } from '@/lib/services/system-prompt-compiler/character-fanout';
 
-const updateCharacterSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  title: z.string().optional(),
-  identity: z.string().nullable().optional(),
-  description: z.string().optional(),
-  manifesto: z.string().nullable().optional(),
-  personality: z.string().optional(),
-  scenarios: z
-    .array(
-      z.object({
-        id: z.string().uuid().optional(),
-        title: z.string().min(1).max(200),
-        content: z.string().min(1),
-        createdAt: z.string().optional(),
-        updatedAt: z.string().optional(),
-      })
-    )
-    .optional(),
-  firstMessage: z.string().optional(),
-  exampleDialogues: z.string().optional(),
-  talkativeness: z.number().min(0.1).max(1.0).optional(),
-  defaultConnectionProfileId: z.uuid()
-    .optional()
-    .or(
-      z.literal('').transform(() => undefined)
-    ),
-  defaultImageProfileId: z.uuid()
-    .optional()
-    .or(
-      z.literal('').transform(() => undefined)
-    )
-    .nullable(),
-  aliases: z.array(z.string()).optional(),
-  pronouns: PronounsSchema.nullable().optional(),
-  // Real birthday, YYYY-MM-DD; null clears it. Vault-managed (properties.json).
-  birthday: BirthdaySchema.nullable().optional(),
-  controlledBy: z.enum(['llm', 'user']).optional(),
-  npc: z.boolean().optional(),
-  defaultAgentModeEnabled: z.boolean().nullable().optional(),
-  defaultHelpToolsEnabled: z.boolean().nullable().optional(),
-  defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
-  defaultScenarioId: z.uuid().nullable().optional(),
-  defaultSystemPromptId: z.uuid().nullable().optional(),
-  characterDocumentMountPointId: z.uuid()
-    .optional()
-    .or(z.literal('').transform(() => null))
-    .nullable(),
-  systemTransparency: z.boolean().nullable().optional(),
-  coreWhisperEnabled: z.boolean().nullable().optional(),
-  canBeCarina: z.boolean().nullable().optional(),
-  // Vault-managed (properties.json) plain boolean — named here or the parse
-  // below would strip it before update() could route it to the vault.
-  canChooseOutfit: z.boolean().optional(),
-  // Diagrams in the Salon — vault-managed (properties.json) for the same reason.
-  canDrawDiagrams: z.boolean().optional(),
-  diagramStyle: z.enum(DIAGRAM_STYLES).optional(),
-  // How the character is performed (roleplay / assistant) — vault-managed
-  // (properties.json) for the same reason.
-  kind: z.enum(CHARACTER_KINDS).optional(),
-  // Wardrobe-permission tri-states (null = inherit global, true/false = override).
-  // Real DB columns, not vault-managed — omitting them here strips the key before
-  // it reaches update(), so the editor toggles would silently never persist.
-  canDressThemselves: z.boolean().nullable().optional(),
-  canCreateOutfits: z.boolean().nullable().optional(),
-  canManageInventory: z.boolean().nullable().optional(),
-  // The freeform fact sheet (vault `metadata.json`). This schema strips unknown
-  // keys, so the field has to be named here or a PUT carrying it would be
-  // silently dropped before the write overlay ever saw it. Sending `metadata`
-  // REPLACES the whole object — patch a single key by reading first.
-  metadata: JsonSchema.nullable().optional(),
-  physicalDescription: z
-    .object({
-      // `name` / `usageContext` were retired (one description per character);
-      // an older client that still sends them has them stripped here.
-      id: z.string().uuid().optional(),
-      headAndShouldersPrompt: z.string().max(500).nullable().optional(),
-      shortPrompt: z.string().max(350).nullable().optional(),
-      mediumPrompt: z.string().max(500).nullable().optional(),
-      longPrompt: z.string().max(750).nullable().optional(),
-      completePrompt: z.string().max(1000).nullable().optional(),
-      fullDescription: z.string().nullable().optional(),
-      // Omitted → the vault's current value is kept (managed-fields write).
-      humanoid: z.boolean().optional(),
-      createdAt: z.string().optional(),
-      updatedAt: z.string().optional(),
-    })
-    .nullable()
-    .optional(),
-});
+/** `?action=patch-metadata`: keys to set and keys to remove, merged server-side. */
+const patchMetadataSchema = z
+  .object({
+    set: z.record(z.string(), z.unknown()).optional(),
+    unset: z.array(z.string()).optional(),
+  })
+  .strict();
 
 export async function handlePut(
   req: NextRequest,
   ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
+  const { repos } = ctx;
 
-  // Existence/ownership check only — use the raw row so a character with a
-  // broken vault can still be edited (and thereby repaired: update() routes
-  // managed fields back to the vault and auto-provisions a missing one).
-  // findById would throw CharacterVaultUnavailableError → 503.
+  // Existence/ownership check only — the raw row, so a character with a broken
+  // vault can still be edited (the write routes managed fields back to the
+  // vault). findById would throw CharacterVaultUnavailableError → 503.
   const existingCharacter = await repos.characters.findByIdRaw(id);
 
   if (!exists(existingCharacter)) {
@@ -134,8 +60,12 @@ export async function handlePut(
     req,
     {
       // The depiction-guidelines (Ariel Clause) file lives in the character's
-      // vault root, not the character row.
+      // vault root, not the character row. A side-store write, so it carries
+      // the archive guard itself.
       'depiction-guidelines': async () => {
+        if (existingCharacter.archivedAt) {
+          throw new CharacterArchivedError(id);
+        }
         const mountId = existingCharacter.characterDocumentMountPointId;
         if (!mountId) {
           return badRequest('Character has no document vault to store depiction guidelines');
@@ -148,7 +78,29 @@ export async function handlePut(
           length: content.trim().length,
           deleted: content.trim().length === 0,
         });
+        publishRealtime('characters', id);
         return successResponse({ success: true });
+      },
+
+      // Key-level fact-sheet edits, merged under the character's write chain so
+      // two editors (the fact-sheet card, the progressions card) never race a
+      // read-merge-replace. The repository primitive stays whole-object replace.
+      'patch-metadata': async () => {
+        const patch = patchMetadataSchema.parse(await req.json());
+        try {
+          const character = await repos.characters.patchMetadata(id, {
+            set: patch.set ?? {},
+            unset: patch.unset ?? [],
+          });
+          if (!character) return notFound('Character');
+          publishRealtime('characters', id);
+          return NextResponse.json({ character });
+        } catch (error) {
+          if (error instanceof CharacterMetadataUnreadableError) {
+            return conflict(error.message);
+          }
+          throw error;
+        }
       },
     },
     () => handleUpdateCharacter(req, ctx, id, existingCharacter)
@@ -159,61 +111,43 @@ async function handleUpdateCharacter(
   req: NextRequest,
   ctx: RequestContext,
   id: string,
-  existingCharacter: Character
+  existingCharacter: CharacterRow
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
+  const { repos } = ctx;
   const body = await req.json();
-  const validatedData = updateCharacterSchema.parse(body);
+  const validated = updateCharacterSchema.parse(body);
 
-  // Normalize scenarios: fill in missing id/createdAt/updatedAt
-  const {
-    scenarios: rawScenarios,
-    physicalDescription: rawPhysical,
-    // Pulled out of the generic payload: the default prompt is recorded both as
-    // this column and as the `isDefault` flag on the prompt itself, so it goes
-    // through the repository chokepoint below instead of being written raw.
-    defaultSystemPromptId: rawDefaultSystemPromptId,
-    ...restValidatedData
-  } = validatedData;
-  const updatePayload: Partial<Character> = { ...restValidatedData };
-  if (rawScenarios) {
-    const now = new Date().toISOString();
-    updatePayload.scenarios = rawScenarios.map(s => ({
-      id: s.id ?? crypto.randomUUID(),
-      title: s.title,
-      content: s.content,
-      createdAt: s.createdAt ?? now,
-      updatedAt: s.updatedAt ?? now,
-    }));
-  }
-  if (rawPhysical !== undefined) {
-    if (rawPhysical === null) {
+  // The default prompt is recorded both as this column and as the `isDefault`
+  // flag on the prompt itself, so it goes through the repository chokepoint
+  // below instead of being written raw.
+  const { defaultSystemPromptId, physicalDescription, ...rest } = validated;
+  const updatePayload: CharacterUpdate = { ...rest };
+
+  if (physicalDescription !== undefined) {
+    if (physicalDescription === null) {
+      // Clear means clear: both files emptied, `humanoid` kept (#149).
       updatePayload.physicalDescription = null;
     } else {
+      // The id is the server's, derived from the vault (D5); no client mints one.
       const now = new Date().toISOString();
-      updatePayload.physicalDescription = PhysicalDescriptionSchema.parse({
-        id: rawPhysical.id ?? crypto.randomUUID(),
-        headAndShouldersPrompt: rawPhysical.headAndShouldersPrompt ?? null,
-        shortPrompt: rawPhysical.shortPrompt ?? null,
-        mediumPrompt: rawPhysical.mediumPrompt ?? null,
-        longPrompt: rawPhysical.longPrompt ?? null,
-        completePrompt: rawPhysical.completePrompt ?? null,
-        fullDescription: rawPhysical.fullDescription ?? null,
-        ...(rawPhysical.humanoid !== undefined ? { humanoid: rawPhysical.humanoid } : {}),
-        createdAt: rawPhysical.createdAt ?? now,
+      const mountPointId = existingCharacter.characterDocumentMountPointId;
+      updatePayload.physicalDescription = {
+        ...physicalDescription,
+        id: mountPointId ? physicalDescriptionIdFor(mountPointId) : crypto.randomUUID(),
+        createdAt: now,
         updatedAt: now,
-      });
+      } as PhysicalDescription;
     }
   }
 
   // The Humanoid flag is baked into every chat's cached identity stack for
   // this character, which a character edit does not otherwise invalidate.
   // Read the vault's current value so a flip can be fanned out below.
-  const incomingHumanoid = rawPhysical ? rawPhysical.humanoid : undefined;
+  const incomingHumanoid = physicalDescription ? physicalDescription.humanoid : undefined;
   let previousHumanoid: boolean | undefined;
   if (incomingHumanoid !== undefined && existingCharacter.characterDocumentMountPointId) {
-    const current = await readCharacterVaultPhysicalPrompts(existingCharacter.characterDocumentMountPointId, id);
-    previousHumanoid = current?.humanoid ?? true;
+    const raw = await readVaultFile(existingCharacter.characterDocumentMountPointId, CHARACTER_PHYSICAL_PROMPTS_JSON_PATH, id);
+    previousHumanoid = (raw === null ? null : parseVaultPhysicalPrompts(raw, id))?.humanoid ?? true;
   }
 
   // A PUT carrying nothing but the default prompt leaves an empty payload, and
@@ -224,8 +158,8 @@ async function handleUpdateCharacter(
       ? await repos.characters.update(id, updatePayload)
       : await repos.characters.findById(id);
 
-  if (rawDefaultSystemPromptId !== undefined) {
-    const updated = await repos.characters.setDefaultSystemPrompt(id, rawDefaultSystemPromptId);
+  if (defaultSystemPromptId !== undefined) {
+    const updated = await repos.characters.setDefaultSystemPrompt(id, defaultSystemPromptId);
     if (!updated) {
       return badRequest('System prompt not found on this character');
     }
@@ -242,8 +176,10 @@ async function handleUpdateCharacter(
   }
 
   revalidatePath('/');
+  // A second tab (or the workspace's other pane) refetches on this topic.
+  publishRealtime('characters', id);
 
-  logger.info('[Characters v1] Character updated', { characterId: id });
+  logger.info('[Characters v1] Character updated', { characterId: id, fields: Object.keys(validated) });
 
   return NextResponse.json({ character });
 }

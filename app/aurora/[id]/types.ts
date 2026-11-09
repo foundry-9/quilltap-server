@@ -50,7 +50,8 @@ export interface CharacterSystemPrompt {
 export type { CharacterScenario }
 
 export interface CharacterPhysicalDescription {
-  id: string
+  /** Server-owned (derived from the vault); a write never sends it. */
+  id?: string
   headAndShouldersPrompt?: string | null
   shortPrompt?: string | null
   mediumPrompt?: string | null

@@ -837,8 +837,8 @@ describe('remapBackupData() - wardrobe wear ledger', () => {
     const remapper = new UuidRemapper()
     const content = '---\ntitle: Hat\ntypes: [accessories]\n---\n'
     const { wardrobeItemIdForDocument } = jest.requireActual(
-      '@/lib/database/repositories/vault-overlay/parsers'
-    ) as typeof import('@/lib/database/repositories/vault-overlay/parsers')
+      '@/lib/wardrobe/vault-parsers'
+    ) as typeof import('@/lib/wardrobe/vault-parsers')
     const oldItemId = wardrobeItemIdForDocument({ mountPointId: OLD_MOUNT, relativePath: 'Wardrobe/Hat.md', content })
     const data: BackupData = {
       ...emptyBackup(),
@@ -1111,8 +1111,8 @@ describe('remapBackupData() - wardrobe items filed in subfolders', () => {
 
   it('remaps the wear ledger of an item at Wardrobe/Formal/Evening/', () => {
     const { wardrobeItemIdForDocument } = jest.requireActual(
-      '@/lib/database/repositories/vault-overlay/parsers'
-    ) as typeof import('@/lib/database/repositories/vault-overlay/parsers')
+      '@/lib/wardrobe/vault-parsers'
+    ) as typeof import('@/lib/wardrobe/vault-parsers')
     const oldItemId = wardrobeItemIdForDocument({
       mountPointId: 'mount-old',
       relativePath: 'Wardrobe/Formal/Evening/Coat.md',
@@ -1248,7 +1248,7 @@ describe('remapBackupData() - chat equipped outfit (bug 252)', () => {
 
   it('moves slot item ids with the wardrobe item remap', () => {
     const remapper = new UuidRemapper()
-    const { wardrobeItemIdForDocument } = require('@/lib/database/repositories/vault-overlay/parsers')
+    const { wardrobeItemIdForDocument } = require('@/lib/wardrobe/vault-parsers')
     const derivedContent = '---\ntitle: Spats\ntypes: [footwear]\n---\n'
     const oldDerived = wardrobeItemIdForDocument({
       mountPointId: OLD_MOUNT,

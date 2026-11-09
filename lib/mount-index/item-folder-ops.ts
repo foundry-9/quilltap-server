@@ -19,7 +19,7 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
-import { CharacterArchivedError } from '../characters.repository';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import {
   folderName,
   folderSegments,

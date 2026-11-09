@@ -53,24 +53,20 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: jest.fn().mockResolvedValue(undefined),
 }));
 
+import { applyDocumentStoreOverlay, applyDocumentStoreOverlayOne } from '@/lib/characters/vault/hydrate';
 import {
-  applyDocumentStoreOverlay,
-  applyDocumentStoreOverlayOne,
-  readCharacterVaultProperties,
-  readCharacterVaultDescription,
-  readCharacterVaultPersonality,
-  readCharacterVaultExampleDialogues,
-  readCharacterVaultPhysicalDescription,
-  readCharacterVaultPhysicalPrompts,
-  readCharacterVaultSystemPrompts,
-  readCharacterVaultScenarios,
   writeCharacterVaultManagedFields,
-  projectVaultWardrobe,
-  readCharacterVaultWardrobe,
-  readCharacterVaultMetadata,
   applyDocumentStoreWriteOverlay,
+} from '@/lib/characters/vault/write';
+import { projectVaultWardrobe } from '@/lib/wardrobe/vault-sync';
+import { readCharacterVaultWardrobe } from '@/lib/wardrobe/vault-readers';
+import {
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
+} from '@/lib/characters/vault/file-schemas';
+import { parseVaultProperties } from '@/lib/characters/vault/parsers';
+import {
+  physicalDescriptionIdFor,
   CharacterVaultUnavailableError,
   CHARACTER_PROPERTIES_JSON_PATH,
   CHARACTER_METADATA_JSON_PATH,
@@ -81,7 +77,7 @@ import {
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_SCENARIOS_FOLDER,
-} from '@/lib/database/repositories/character-properties-overlay';
+} from '@/lib/characters/vault/layout';
 import type { Character, PhysicalDescription } from '@/lib/schemas/types';
 import {
   readDatabaseDocument,
@@ -246,7 +242,10 @@ describe('applyDocumentStoreOverlay — basic candidate filtering', () => {
       makeCharacter({ id: 'b' }),
     ];
     const result = await applyDocumentStoreOverlay(chars);
-    expect(result).toEqual(chars);
+    // A vault-less row hydrates to its row plus the managed-field defaults.
+    expect(result).toHaveLength(2);
+    result.forEach((c, i) => expect(c).toMatchObject(chars[i]));
+    expect(result[0].kind).toBe('roleplay');
     expect(getRepositoriesMock).not.toHaveBeenCalled();
   });
 });
@@ -353,6 +352,28 @@ describe('applyDocumentStoreOverlay — properties.json overlay', () => {
     expect(result.title).toBe('db-title');
     expect(result.talkativeness).toBe(0.5);
   });
+
+  // The single read behind the character page refuses an anchor that will not
+  // parse, as it refuses a missing one, so the page shows the repair card
+  // rather than the character's settings at their defaults. Lists stay
+  // lenient (above), so the character remains reachable from the roster.
+  it('throws on a single read when properties.json will not parse', async () => {
+    mockRepoPaths({
+      [CHARACTER_PROPERTIES_JSON_PATH]: [{ mountPointId: 'mp-1', content: '{ not valid json' }],
+    });
+    const char = makeCharacter({ id: 'a', characterDocumentMountPointId: 'mp-1' });
+    await expect(applyDocumentStoreOverlayOne(char)).rejects.toBeInstanceOf(CharacterVaultUnavailableError);
+  });
+
+  it('throws on a single read when properties.json fails schema validation', async () => {
+    mockRepoPaths({
+      [CHARACTER_PROPERTIES_JSON_PATH]: [
+        { mountPointId: 'mp-1', content: JSON.stringify({ ...VALID_VAULT_PROPS, talkativeness: 0 }) },
+      ],
+    });
+    const char = makeCharacter({ id: 'a', characterDocumentMountPointId: 'mp-1' });
+    await expect(applyDocumentStoreOverlayOne(char)).rejects.toThrow(/talkativeness/);
+  });
 });
 
 describe('applyDocumentStoreOverlay — metadata.json overlay', () => {
@@ -438,27 +459,6 @@ describe('applyDocumentStoreOverlay — metadata.json overlay', () => {
     const char = makeCharacter({ id: 'a', characterDocumentMountPointId: null });
     const [result] = await applyDocumentStoreOverlay([char]);
     expect(result.metadata).toBeUndefined();
-  });
-});
-
-describe('readCharacterVaultMetadata', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('returns the parsed sheet', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({ content: '{"faction":"Ordo Aurum"}' } as any);
-    expect(await readCharacterVaultMetadata('mp-1', 'char-1')).toEqual({ faction: 'Ordo Aurum' });
-  });
-
-  it('returns null when the file is missing', async () => {
-    readDatabaseDocumentMock.mockRejectedValue(new DatabaseStoreError('nope', 'NOT_FOUND'));
-    expect(await readCharacterVaultMetadata('mp-1', 'char-1')).toBeNull();
-  });
-
-  it('returns null when the file is not a JSON object', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({ content: '["nope"]' } as any);
-    expect(await readCharacterVaultMetadata('mp-1', 'char-1')).toBeNull();
   });
 });
 
@@ -594,7 +594,8 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     });
     const [result] = await applyDocumentStoreOverlay([char]);
     expect(result.physicalDescription!.fullDescription).toBe('vault-full-description');
-    expect(result.physicalDescription!.id).toBe('pd-1');
+    // The id is server-owned, derived from the vault — never the row's (D5).
+    expect(result.physicalDescription!.id).toBe(physicalDescriptionIdFor('mp-1'));
   });
 
   it('overrides the four prompt tiers from physical-prompts.json', async () => {
@@ -695,7 +696,7 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
     expect(result.physicalDescription!.completePrompt).toBeNull();
   });
 
-  it('leaves prompts from DB when physical-prompts.json is malformed JSON', async () => {
+  it('leaves the prompt tiers null when physical-prompts.json is malformed JSON', async () => {
     mockRepoPaths({
       [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
         { mountPointId: 'mp-1', content: '{ not json' },
@@ -707,10 +708,12 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
       physicalDescription: makePhysicalDescription({ id: 'pd-1', shortPrompt: 'db-short' }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescription!.shortPrompt).toBe('db-short');
+    // A row carries no physical description (the vault is the record), so a
+    // bad prompts file leaves the tiers at null rather than at a DB value.
+    expect(result.physicalDescription!.shortPrompt).toBeNull();
   });
 
-  it('leaves prompts from DB when physical-prompts.json fails schema validation', async () => {
+  it('leaves the prompt tiers null when physical-prompts.json fails schema validation', async () => {
     mockRepoPaths({
       [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]: [
         { mountPointId: 'mp-1', content: JSON.stringify({ short: 42 }) },
@@ -722,7 +725,9 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
       physicalDescription: makePhysicalDescription({ id: 'pd-1', shortPrompt: 'db-short' }),
     });
     const [result] = await applyDocumentStoreOverlay([char]);
-    expect(result.physicalDescription!.shortPrompt).toBe('db-short');
+    // A row carries no physical description (the vault is the record), so a
+    // bad prompts file leaves the tiers at null rather than at a DB value.
+    expect(result.physicalDescription!.shortPrompt).toBeNull();
   });
 
   // The old "preserves subsequent physical descriptions" test asserted that
@@ -1147,7 +1152,7 @@ describe('applyDocumentStoreOverlay — per-file independence', () => {
     });
     const [result] = await applyDocumentStoreOverlay([char]);
     expect(result.physicalDescription!.fullDescription).toBe('vault-full');
-    expect(result.physicalDescription!.shortPrompt).toBe('db-short'); // not overridden
+    expect(result.physicalDescription!.shortPrompt).toBeNull(); // the bad file contributes nothing
   });
 });
 
@@ -1295,218 +1300,6 @@ describe('applyDocumentStoreOverlayOne', () => {
     await expect(applyDocumentStoreOverlayOne(char)).rejects.toThrow(
       CharacterVaultUnavailableError,
     );
-  });
-});
-
-describe('readCharacterVaultProperties', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('returns the parsed properties on a clean read', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: JSON.stringify(VALID_VAULT_PROPS),
-      mtime: 0,
-      size: 100,
-    });
-    const result = await readCharacterVaultProperties('mp-1', 'char-a');
-    expect(result).toEqual(VALID_VAULT_PROPS);
-  });
-
-  it('returns null when the document is not found', async () => {
-    readDatabaseDocumentMock.mockRejectedValue(
-      new (DatabaseStoreError as any)('not found', 'NOT_FOUND'),
-    );
-    const result = await readCharacterVaultProperties('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-
-  it('returns null on malformed JSON', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({ content: 'not json', mtime: 0, size: 10 });
-    const result = await readCharacterVaultProperties('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-
-  it('returns null on schema validation failure', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: JSON.stringify({ ...VALID_VAULT_PROPS, talkativeness: 5 }),
-      mtime: 0,
-      size: 100,
-    });
-    const result = await readCharacterVaultProperties('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-
-  it('returns null on generic read errors', async () => {
-    readDatabaseDocumentMock.mockRejectedValue(new Error('io error'));
-    const result = await readCharacterVaultProperties('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-});
-
-describe('readCharacterVaultDescription / readCharacterVaultPersonality / readCharacterVaultExampleDialogues / readCharacterVaultPhysicalDescription', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('returns raw text when the file exists', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: 'hello from the vault',
-      mtime: 0,
-      size: 10,
-    });
-    const result = await readCharacterVaultDescription('mp-1', 'char-a');
-    expect(result).toBe('hello from the vault');
-  });
-
-  it('returns the empty string when the file exists but is empty', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({ content: '', mtime: 0, size: 0 });
-    const result = await readCharacterVaultPersonality('mp-1', 'char-a');
-    expect(result).toBe('');
-  });
-
-  it('returns null when the file is not found', async () => {
-    readDatabaseDocumentMock.mockRejectedValue(
-      new (DatabaseStoreError as any)('not found', 'NOT_FOUND'),
-    );
-    const result = await readCharacterVaultPhysicalDescription('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-
-  it('returns null on generic read errors', async () => {
-    readDatabaseDocumentMock.mockRejectedValue(new Error('io error'));
-    const result = await readCharacterVaultDescription('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-
-  it('readCharacterVaultExampleDialogues returns raw text when the file exists', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: '{{user}}: Hi\n{{char}}: Hello.',
-      mtime: 0,
-      size: 20,
-    });
-    const result = await readCharacterVaultExampleDialogues('mp-1', 'char-a');
-    expect(result).toBe('{{user}}: Hi\n{{char}}: Hello.');
-  });
-});
-
-describe('readCharacterVaultPhysicalPrompts', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('returns the parsed prompts on a clean read', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: JSON.stringify(VALID_VAULT_PHYSICAL_PROMPTS),
-      mtime: 0,
-      size: 100,
-    });
-    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
-    expect(result).toEqual(VALID_VAULT_PHYSICAL_PROMPTS);
-  });
-
-  it('accepts null fields', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: JSON.stringify({ short: null, medium: null, long: null, complete: null }),
-      mtime: 0,
-      size: 100,
-    });
-    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
-    expect(result).toEqual({ short: null, medium: null, long: null, complete: null });
-  });
-
-  it.each([
-    [false, false],
-    ['false', false],
-    [true, true],
-    ['true', true],
-    [null, undefined],
-    ['nope', undefined],
-  ])('reads a hand-edited humanoid of %p as %p without discarding the prompts', async (raw, expected) => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: JSON.stringify({ ...VALID_VAULT_PHYSICAL_PROMPTS, humanoid: raw }),
-      mtime: 0,
-      size: 100,
-    });
-    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
-    expect(result).not.toBeNull();
-    expect(result!.short).toBe(VALID_VAULT_PHYSICAL_PROMPTS.short);
-    expect(result!.humanoid).toBe(expected);
-  });
-
-  it('returns null on malformed JSON', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({ content: 'not json', mtime: 0, size: 10 });
-    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-
-  it('returns null on schema validation failure', async () => {
-    readDatabaseDocumentMock.mockResolvedValue({
-      content: JSON.stringify({ short: 42 }),
-      mtime: 0,
-      size: 10,
-    });
-    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when the file is not found', async () => {
-    readDatabaseDocumentMock.mockRejectedValue(
-      new (DatabaseStoreError as any)('not found', 'NOT_FOUND'),
-    );
-    const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
-    expect(result).toBeNull();
-  });
-});
-
-describe('readCharacterVaultSystemPrompts / readCharacterVaultScenarios', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('enumerates Prompts/*.md and returns parsed entries', async () => {
-    mockRepoPaths({}, {
-      [CHARACTER_PROMPTS_FOLDER]: [
-        {
-          mountPointId: 'mp-1',
-          relativePath: 'Prompts/Alpha.md',
-          fileName: 'Alpha.md',
-          content: `---\nname: Alpha\nisDefault: true\n---\n\nAlpha body.`,
-        },
-      ],
-    });
-    const result = await readCharacterVaultSystemPrompts('mp-1', 'char-a');
-    expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('Alpha');
-    expect(result[0].isDefault).toBe(true);
-  });
-
-  it('returns [] when the Prompts/ folder is empty', async () => {
-    mockRepoPaths({}, {});
-    const result = await readCharacterVaultSystemPrompts('mp-1', 'char-a');
-    expect(result).toEqual([]);
-  });
-
-  it('enumerates Scenarios/*.md and returns parsed entries', async () => {
-    mockRepoPaths({}, {
-      [CHARACTER_SCENARIOS_FOLDER]: [
-        {
-          mountPointId: 'mp-1',
-          relativePath: 'Scenarios/Wakeup.md',
-          fileName: 'Wakeup.md',
-          content: '# Wakeup\n\nBody.',
-        },
-      ],
-    });
-    const result = await readCharacterVaultScenarios('mp-1', 'char-a');
-    expect(result).toHaveLength(1);
-    expect(result[0].title).toBe('Wakeup');
-  });
-
-  it('returns [] when the Scenarios/ folder is empty', async () => {
-    mockRepoPaths({}, {});
-    const result = await readCharacterVaultScenarios('mp-1', 'char-a');
-    expect(result).toEqual([]);
   });
 });
 
@@ -1724,13 +1517,13 @@ describe('properties.json — diagram settings (canDrawDiagrams, diagramStyle)',
 
   it('parses a file without the keys as false / handDrawn, hollowing nothing', async () => {
     serve(LEGACY_PROPS);
-    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    const result = parseVaultProperties((await readDatabaseDocumentMock(MOUNT_ID, CHARACTER_PROPERTIES_JSON_PATH)).content, CHAR_ID);
     expect(result).toEqual({ ...LEGACY_PROPS, canDrawDiagrams: false, diagramStyle: 'handDrawn' });
   });
 
   it('reads an unrecognized diagramStyle as handDrawn instead of failing the parse', async () => {
     serve({ ...VALID_VAULT_PROPS, canDrawDiagrams: true, diagramStyle: 'crayon' });
-    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    const result = parseVaultProperties((await readDatabaseDocumentMock(MOUNT_ID, CHARACTER_PROPERTIES_JSON_PATH)).content, CHAR_ID);
     expect(result).not.toBeNull();
     expect(result!.diagramStyle).toBe('handDrawn');
     expect(result!.canDrawDiagrams).toBe(true);
@@ -1740,7 +1533,7 @@ describe('properties.json — diagram settings (canDrawDiagrams, diagramStyle)',
 
   it('keeps a valid clean style', async () => {
     serve({ ...VALID_VAULT_PROPS, diagramStyle: 'clean' });
-    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    const result = parseVaultProperties((await readDatabaseDocumentMock(MOUNT_ID, CHARACTER_PROPERTIES_JSON_PATH)).content, CHAR_ID);
     expect(result!.diagramStyle).toBe('clean');
   });
 
@@ -1804,13 +1597,13 @@ describe('properties.json — character kind', () => {
 
   it('parses a file without the key as roleplay, hollowing nothing', async () => {
     serve(LEGACY_PROPS);
-    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    const result = parseVaultProperties((await readDatabaseDocumentMock(MOUNT_ID, CHARACTER_PROPERTIES_JSON_PATH)).content, CHAR_ID);
     expect(result).toEqual({ ...LEGACY_PROPS, kind: 'roleplay' });
   });
 
   it('reads an unrecognized kind as roleplay instead of failing the parse', async () => {
     serve({ ...VALID_VAULT_PROPS, kind: 'butler' });
-    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    const result = parseVaultProperties((await readDatabaseDocumentMock(MOUNT_ID, CHARACTER_PROPERTIES_JSON_PATH)).content, CHAR_ID);
     expect(result).not.toBeNull();
     expect(result!.kind).toBe('roleplay');
     expect(result!.title).toBe(VALID_VAULT_PROPS.title);
@@ -1818,7 +1611,7 @@ describe('properties.json — character kind', () => {
 
   it('keeps a valid assistant kind', async () => {
     serve({ ...VALID_VAULT_PROPS, kind: 'assistant' });
-    const result = await readCharacterVaultProperties(MOUNT_ID, CHAR_ID);
+    const result = parseVaultProperties((await readDatabaseDocumentMock(MOUNT_ID, CHARACTER_PROPERTIES_JSON_PATH)).content, CHAR_ID);
     expect(result!.kind).toBe('assistant');
   });
 
@@ -2137,7 +1930,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
 
     expect(result.scenariosWritten).toBe(1);
     const scenarioFile = getWrite(`${CHARACTER_SCENARIOS_FOLDER}/The Drawing Room.md`);
-    expect(scenarioFile).toBe('# The Drawing Room\n\nA quiet gathering on a Tuesday afternoon.');
+    expect(scenarioFile).toBe('---\nid: s1\n---\n\n# The Drawing Room\n\nA quiet gathering on a Tuesday afternoon.');
   });
 
   it('deletes stale files in Prompts/ and Scenarios/ that no longer correspond to a DB entry', async () => {
@@ -2147,7 +1940,8 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
           mountPointId: 'mount-5',
           relativePath: `${CHARACTER_PROMPTS_FOLDER}/Old.md`,
           fileName: 'Old.md',
-          content: 'stale',
+          // A real prompt: only files that parse as items are swept (D6).
+          content: '---\nname: Old\n---\n\nstale',
         },
       ],
       [CHARACTER_SCENARIOS_FOLDER]: [

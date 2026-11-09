@@ -1558,7 +1558,53 @@ Get a character with enriched data.
 
 #### `PUT /api/v1/characters/[id]`
 
-Update a character.
+Update a character. The body schema is derived from the entity
+(`lib/characters/api-schemas.ts`, `updateCharacterSchema`) and **strict**: an
+unknown key is a 400 naming it. Server-owned fields (`id`, `userId`,
+timestamps, the archive tombstone, `characterDocumentMountPointId`,
+`defaultImageId`, `tags`, `partnerLinks`, `avatarOverrides`) and the
+sub-collections (`systemPrompts`, `scenarios` — use their per-item routes) are
+refused. `physicalDescription` carries text fields only (its id is the
+server's); `null` clears it. `defaultSystemPromptId` is routed through
+`setDefaultSystemPrompt`. An empty profile select (`''`) means "clear".
+Publishes the `characters` realtime topic. **Response**: `{ character }`.
+
+#### `PUT /api/v1/characters/[id]?action=patch-metadata`
+
+Set and unset fact-sheet keys, merged server-side under the character's write
+chain: `{ "set": { "faction": "Ordo Aurum" }, "unset": ["oldKey"] }`. Every
+other key is untouched. 409 when `metadata.json` is present but not a JSON
+object. **Response**: `{ character }`.
+
+#### `GET /api/v1/characters/[id]?action=vault-health`
+
+The character's vault, from the row and the file list (works on a character
+whose item GET answers 503): each layout file present or absent, whether it
+parses and why not, which absent files `repair-vault` would seed, and which
+present files need the operator.
+
+```json
+{ "health": { "characterId": "…", "mountPointId": "…", "linked": true, "readable": false,
+  "files": [{ "path": "properties.json", "keystone": true, "present": true, "parses": false, "error": "…" }],
+  "repairable": ["metadata.json"], "needsAttention": ["properties.json"] } }
+```
+
+#### `POST /api/v1/characters/[id]?action=repair-vault`
+
+Seed an absent `properties.json` / `metadata.json` (or scaffold a vault the
+character lacks entirely) and nothing else — a present file is never
+rewritten. 409 for an archived character. **Response**:
+`{ "seeded": ["metadata.json"], "health": { … } }`.
+
+#### Prompts and scenarios
+
+`/api/v1/characters/[id]/prompts` (GET, POST), `…/prompts/[promptId]` (GET,
+PUT, DELETE) and `/api/v1/characters/[id]/scenarios` (GET, POST, and PUT /
+DELETE with `?scenarioId=`) write one item each. Ids are stable (frontmatter
+`id:`): the id a POST returns is the id every later GET returns, and a rename
+keeps it. A character's first prompt is its default. Scenario bodies take
+`title`, `content`, `description` and `archived`. Each write publishes the
+`characters` realtime topic; a write to an archived character is a 409.
 
 #### `DELETE /api/v1/characters/[id]`
 
@@ -1647,7 +1693,8 @@ Set or clear character avatar.
 }
 ```
 
-To clear avatar, set `imageId` to `null`.
+To clear avatar, set `imageId` to `null`. **Response**: `{ character }` (with
+`defaultImage`), like every character-returning action.
 
 #### `POST /api/v1/characters/[id]?action=add-tag`
 

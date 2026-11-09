@@ -18,7 +18,9 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
+import type {
+  DocMountDocumentWithLink as DocMountDocument,
+} from '@/lib/database/repositories/doc-mount-documents.repository';
 import {
   folderOfInventoryPath,
   INVENTORY_FOLDER,

@@ -44,14 +44,14 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: () => mockRepos,
 }))
 
+import { stableUuidFromString } from '@/lib/utils/stable-uuid'
 import {
-  characterScenarioIdForPath,
   classifyScenarioMount,
   lookupScenarioRef,
   resolveScenarioLocation,
   ScenarioConflictError,
 } from '@/lib/scenarios/location'
-import { parseScenarioFile } from '@/lib/database/repositories/vault-overlay/parsers'
+import { parseScenarioFile } from '@/lib/characters/vault/parsers'
 import { sanitizeFileName } from '@/lib/mount-index/character-vault'
 import { isScenarioContentArchived } from '@/lib/mount-index/scenarios-common'
 import { makeScenarioStores, type FakeScenarioStores } from '../../../__tests__/helpers/scenario-stores'
@@ -151,7 +151,7 @@ describe('lookupScenarioRef', () => {
     const lookup = await lookupScenarioRef({ mountPointId: PROJECT_MOUNT, path: 'Scenarios/../secrets.md' }, stores.repos, USER)
     expect(lookup.status).toBe('refused')
     expect(stores.repos.docMountDocuments.findByMountPointAndPath).not.toHaveBeenCalled()
-    expect(stores.repos.projects.findByOfficialMountPointIdRaw).not.toHaveBeenCalled()
+    expect(stores.repos.projects.findByStorePointerRaw).not.toHaveBeenCalled()
   })
 
   it('refuses a nested path', async () => {
@@ -185,11 +185,11 @@ describe('the character tier', () => {
     stores.put(VAULT, 'Scenarios/Rooftop.md', '# Rooftop\n\nRain.')
     const lookup = await lookupScenarioRef({ mountPointId: VAULT, path: 'Scenarios/Rooftop.md' }, stores.repos, USER)
     expect(lookup.status).toBe('ok')
-    expect(stores.repos.characters.findByDocumentMountPointIdRaw).toHaveBeenCalledTimes(1)
+    expect(stores.repos.characters.findByStorePointerRaw).toHaveBeenCalledTimes(1)
     expect(stores.repos.characters.findByIdRaw).not.toHaveBeenCalled()
   })
 
-  it("derives a scenario's id from its path the way the vault overlay does", async () => {
+  it("gives a legacy scenario the path-derived id the vault overlay does", async () => {
     // The overlay names a character scenario's file `Scenarios/<sanitizeFileName(title)>.md`.
     const path = `Scenarios/${sanitizeFileName('A Tavern: at Dusk')}.md`
     expect(path).toBe('Scenarios/A Tavern_ at Dusk.md')
@@ -202,14 +202,14 @@ describe('the character tier', () => {
 
     const overlayDoc = { content: stores.files.get(`${VAULT}|${path}`)!, mountPointId: VAULT, relativePath: path, fileName: 'A Tavern_ at Dusk.md', createdAt: '', updatedAt: '' }
     const overlayId = parseScenarioFile(overlayDoc as never, 'char-1')!.id
-    expect(location!.idForPath(path)).toBe(overlayId)
-    expect(characterScenarioIdForPath(VAULT, path)).toBe(overlayId)
+    expect(scenarios[0].id).toBe(overlayId)
+    expect(stableUuidFromString(`scenario:${VAULT}:${path}`)).toBe(overlayId)
   })
 
   it("reads the character's default from the column", async () => {
     const path = 'Scenarios/Rooftop.md'
     stores.put(VAULT, path, '# Rooftop\n\nRain.')
-    stores.characters[0].defaultScenarioId = characterScenarioIdForPath(VAULT, path)
+    stores.characters[0].defaultScenarioId = stableUuidFromString(`scenario:${VAULT}:${path}`)
     const location = await resolveScenarioLocation('character', 'char-1', stores.repos, USER)
     const { scenarios } = await location!.list()
     expect(scenarios[0].isDefault).toBe(true)

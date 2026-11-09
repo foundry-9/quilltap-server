@@ -5,13 +5,12 @@
  *
  * Progressions live under one reserved key inside the character's vault
  * `metadata.json`, so there is no route of their own to call: reads come off
- * the hydrated character, and a save is a read-modify-write of that object
- * through the ordinary character PUT.
- *
- * The RMW is the load-bearing part. `PUT /api/v1/characters/[id]` REPLACES the
- * whole `metadata` object, so every other key the user has out there —
- * `faction`, `hasAnsibleAccess`, whatever they invented — has to be spread
- * back in or this editor would quietly eat the rest of their fact sheet.
+ * the hydrated character, and a save sets (or unsets) that one key through
+ * `PUT /api/v1/characters/[id]?action=patch-metadata`, which merges it on the
+ * server under the character's write chain. Every other key the user has out
+ * there — `faction`, `hasAnsibleAccess`, whatever they invented — is never
+ * sent, so it can never be eaten by a stale copy, and the fact-sheet card's
+ * save cannot race this one.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -52,24 +51,14 @@ function useSaveProgressions(characterId: string) {
 
   return useMutation({
     mutationFn: async (next: Record<string, Progression>) => {
-      // Re-read the character rather than trusting a snapshot this component
-      // may have been holding since before someone else's write: the PUT
-      // replaces the whole object, and a stale spread would drop their keys.
-      const fresh = await apiFetch<CharacterResponse>(`/api/v1/characters/${characterId}`)
-      const current = fresh.character?.metadata
-      const metadata =
-        typeof current === 'object' && current !== null && !Array.isArray(current)
-          ? (current as Record<string, unknown>)
-          : {}
-
-      const body: Record<string, unknown> = { ...metadata }
-      if (Object.keys(next).length === 0) delete body[PROGRESSIONS_METADATA_KEY]
-      else body[PROGRESSIONS_METADATA_KEY] = next
-
-      return apiFetch<unknown>(`/api/v1/characters/${characterId}`, {
+      const patch =
+        Object.keys(next).length === 0
+          ? { unset: [PROGRESSIONS_METADATA_KEY] }
+          : { set: { [PROGRESSIONS_METADATA_KEY]: next } }
+      return apiFetch<unknown>(`/api/v1/characters/${characterId}?action=patch-metadata`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metadata: body }),
+        body: JSON.stringify(patch),
       })
     },
     onSuccess: () => {

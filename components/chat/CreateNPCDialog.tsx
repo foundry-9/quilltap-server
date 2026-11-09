@@ -165,49 +165,24 @@ export default function CreateNPCDialog({
         uploadedImageId = uploadData.id
       }
 
-      // Step 2: Create character with npc flag
-      const now = new Date().toISOString()
-      const characterData: any = {
+      // Step 2: Create character with npc flag. One create carries everything;
+      // the server mints the ids and timestamps, and makes the prompt the
+      // default (a character's first prompt always is).
+      const characterData: Record<string, unknown> = {
         npc: true,
         name: name.trim(),
         description: description.trim(),
         personality: description.trim(), // Copy description to personality
         defaultConnectionProfileId: selectedConnectionProfileId,
       }
-
-      // Add optional fields. The server schema expects a `scenarios` array of
-      // { id?, title, content }, not a scalar `scenario` (Zod silently strips
-      // the unknown key), so wrap the single field in a one-element array.
       if (scenario.trim()) {
-        characterData.scenarios = [
-          { id: crypto.randomUUID(), title: 'Default', content: scenario.trim() },
-        ]
+        characterData.scenarios = [{ title: 'Default', content: scenario.trim() }]
       }
-
-      // Add system prompt if provided
       if (systemPrompt.trim()) {
-        characterData.systemPrompts = [
-          {
-            id: crypto.randomUUID(),
-            name: 'Default',
-            content: systemPrompt.trim(),
-            isDefault: true,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ]
+        characterData.systemPrompts = [{ name: 'Default', content: systemPrompt.trim() }]
       }
-
-      // Add physical description if provided. The server schema expects a
-      // singular `physicalDescription` object, not a plural `physicalDescriptions`
-      // array (Zod silently strips the unknown plural key), so send the object.
       if (physicalDescription.trim()) {
-        characterData.physicalDescription = {
-          id: crypto.randomUUID(),
-          fullDescription: physicalDescription.trim(),
-          createdAt: now,
-          updatedAt: now,
-        }
+        characterData.physicalDescription = { fullDescription: physicalDescription.trim() }
       }
 
       const createResponse = await fetch('/api/v1/characters', {
@@ -223,7 +198,8 @@ export default function CreateNPCDialog({
         throw new Error(errorData.error || 'Failed to create NPC')
       }
 
-      const createdCharacter = await createResponse.json()
+      // `{ character }`, like every character-returning route.
+      const { character: createdCharacter } = (await createResponse.json()) as { character: { id: string } }
       const characterId = createdCharacter.id
 
       // Step 3: Set avatar if it was uploaded

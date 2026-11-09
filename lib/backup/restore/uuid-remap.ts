@@ -12,7 +12,10 @@ import { UuidRemapper } from '../uuid-remapper';
 import { remapScenarioSource } from '@/lib/scenarios/source-remap';
 import { remapCharacterKeyedChatFields } from '@/lib/chat/character-keyed-fields';
 import { logger } from '@/lib/logger';
-import { getConciergeState, withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
+import {
+  getConciergeState,
+  withConciergeModeFromLegacy,
+} from '@/lib/services/dangerous-content/chat-override';
 import {
   withConciergeSettingsFromLegacy,
   type SettingsWithLegacyConcierge,
@@ -56,10 +59,7 @@ import type { ChatAvatarTimelineRow } from '@/lib/schemas/chat-avatar-timeline.t
 import type { LogEntry } from '@/lib/schemas/log-entry.types';
 import { bySlot } from '@/lib/schemas/wardrobe.types';
 import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash';
-import {
-  isWardrobeItemDocumentPath,
-  wardrobeItemIdForDocument,
-} from '@/lib/database/repositories/vault-overlay/parsers';
+import { isWardrobeItemDocumentPath, wardrobeItemIdForDocument } from '@/lib/wardrobe/vault-parsers';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { isInventoryItemDocumentPath } from '@/lib/inventory/folders';
 import type {

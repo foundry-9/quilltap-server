@@ -50,7 +50,7 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: jest.fn(async () => 'folder-id'),
 }));
 
-import { projectVaultWardrobe } from '@/lib/database/repositories/vault-overlay/wardrobe-sync';
+import { projectVaultWardrobe } from '@/lib/wardrobe/vault-sync';
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 

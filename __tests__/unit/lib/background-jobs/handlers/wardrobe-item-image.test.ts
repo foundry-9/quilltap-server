@@ -33,7 +33,7 @@ jest.mock('@/lib/wardrobe/item-image-generation', () => {
   }
 })
 
-jest.mock('@/lib/database/repositories/characters.repository', () => ({
+jest.mock('@/lib/characters/archive-guard', () => ({
   CharacterArchivedError: class CharacterArchivedError extends Error {},
 }))
 
@@ -42,7 +42,7 @@ import {
   NoWardrobeImageProfileError,
   WardrobeImageGenerationError,
 } from '@/lib/wardrobe/item-image-generation'
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
+import { CharacterArchivedError } from '@/lib/characters/archive-guard'
 import { getRepositories } from '@/lib/repositories/factory'
 
 const repos = { sentinel: 'repos' }

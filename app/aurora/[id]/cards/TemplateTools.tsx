@@ -52,13 +52,18 @@ export function TemplateTools() {
       await autosave.flush()
       const latest =
         queryClient.getQueryData<CharacterResponse>(queryKeys.characters.detail(characterId))?.character ?? character
-      const { mainUpdates, changedSystemPrompts } = applyTemplateTransform(latest, transform)
-      if (Object.keys(mainUpdates).length === 0 && changedSystemPrompts.length === 0) {
+      const { mainUpdates, changedSystemPrompts, changedScenarios } = applyTemplateTransform(latest, transform)
+      if (Object.keys(mainUpdates).length === 0 && changedSystemPrompts.length === 0 && changedScenarios.length === 0) {
         showSuccessToast('No replacements needed')
         return
       }
       const result = await autosave.run(
-        () => applyCharacterFieldUpdates(characterId, { mainUpdates, promptUpdates: changedSystemPrompts }),
+        () =>
+          applyCharacterFieldUpdates(characterId, {
+            mainUpdates,
+            promptUpdates: changedSystemPrompts,
+            scenarioUpdates: changedScenarios,
+          }),
         'The replacement could not be saved.',
       )
       await reload()

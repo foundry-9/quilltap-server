@@ -40,3 +40,47 @@ describe('character page save model', () => {
     expect(offenders).toEqual([])
   })
 })
+
+/**
+ * The client sends intent; the server owns the rules (D11 of
+ * refactor-character-repository-and-vault.md). The page and the character
+ * components used to re-derive which prompt is the default, mint
+ * physical-description ids, and send whole scenario arrays — each a copy of a
+ * server rule that could (and, for scenarios, did — #150) drift.
+ */
+describe('the client re-derives no server rule', () => {
+  const clientRoots = [
+    path.join(process.cwd(), 'app', 'aurora'),
+    path.join(process.cwd(), 'components', 'characters'),
+    path.join(process.cwd(), 'components', 'chat', 'CreateNPCDialog.tsx'),
+  ]
+  const clientFiles = clientRoots.flatMap((root) =>
+    fs.statSync(root).isDirectory() ? sources(root) : [root],
+  ).filter((f) => !f.includes('__tests__'))
+  const read = (f: string) => fs.readFileSync(f, 'utf8')
+
+  it('derives no default prompt: no first-is-default, no column-then-flag-then-first chain', () => {
+    const patterns = [
+      /isDefault:\s*[^,\n}]*length\s*===\s*0/, // "the first prompt is the default"
+      /defaultSystemPromptId\)\??\.content\s*\?\?/, // the resolution order, by hand
+      /systemPrompts\?*\.\[0\]/, // "else the first prompt"
+      /resolveDefaultSystemPrompt/, // the server's resolver, borrowed
+    ]
+    const offenders = clientFiles.filter((f) => patterns.some((p) => p.test(read(f))))
+    expect(offenders).toEqual([])
+  })
+
+  it('never sends a whole scenarios or systemPrompts array through the character PUT', () => {
+    const offenders = clientFiles.filter((f) =>
+      /(mainUpdates|updatePayload|body)\.(scenarios|systemPrompts)\s*=/.test(read(f)),
+    )
+    expect(offenders).toEqual([])
+  })
+
+  it('never mints a physical description id', () => {
+    const offenders = clientFiles.filter((f) =>
+      /physicalDescription[\s\S]{0,200}id:\s*crypto\.randomUUID\(\)|id:\s*stored\?\.id\s*\?\?\s*crypto\.randomUUID\(\)/.test(read(f)),
+    )
+    expect(offenders).toEqual([])
+  })
+})

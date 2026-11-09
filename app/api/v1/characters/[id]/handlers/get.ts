@@ -7,6 +7,7 @@
  * GET /api/v1/characters/[id]?action=cascade-preview - Get cascade delete preview
  * GET /api/v1/characters/[id]?action=default-partner - Get default partner
  * GET /api/v1/characters/[id]?action=get-tags - Get character tags
+ * GET /api/v1/characters/[id]?action=vault-health - Keystones present / parsing, from the row (works on a broken vault)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,29 +17,79 @@ import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
 import { isCharacterAlbumRelativePath } from '@/lib/photos/photos-paths';
-import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
+import { CHARACTER_VAULT_FILE_PATHS } from '@/lib/characters/vault/layout';
+import { inspectCharacterVault } from '@/lib/characters/vault/health';
+import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
-import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import {
+  getConciergeProvenance,
+  getConciergeReason,
+  getConciergeState,
+} from '@/lib/services/dangerous-content/chat-override';
 import { deriveScriptoriumStatus } from '@/lib/scriptorium/status';
 import { resolveInventoryLocation } from '@/lib/inventory/location';
 
+
+/** The GET actions that answer from the hydrated character. */
+const HYDRATED_ACTIONS = [
+  'export',
+  'chats',
+  'cascade-preview',
+  'default-partner',
+  'get-tags',
+  'stats',
+  'depiction-guidelines',
+] as const;
+type HydratedAction = (typeof HYDRATED_ACTIONS)[number];
 
 export async function handleGet(
   req: NextRequest,
   ctx: RequestContext,
   id: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
+  const { repos } = ctx;
 
-  // First verify ownership for all actions
-  const character = await repos.characters.findById(id);
-  if (!exists(character)) {
+  // Existence first, from the row: the vault-health report must answer for a
+  // character whose vault is broken, which a hydrated read refuses with a 503.
+  const row = await repos.characters.findByIdRaw(id);
+  if (!exists(row)) {
     return notFound('Character');
   }
+
+  // Every other answer needs the hydrated character, loaded only when asked.
+  const hydrated = async () => {
+    const character = await repos.characters.findById(id);
+    return exists(character) ? hydratedGetHandlers(req, ctx, id, character) : null;
+  };
+  const viaHydrated = (action: HydratedAction | null) => async (): Promise<NextResponse> => {
+    const handlers = await hydrated();
+    if (!handlers) return notFound('Character');
+    return action === null ? handlers.fallback() : handlers.actions[action]();
+  };
+
+  return dispatchAction(
+    req,
+    {
+      ...(Object.fromEntries(HYDRATED_ACTIONS.map((a) => [a, viaHydrated(a)])) as Record<HydratedAction, () => Promise<NextResponse>>),
+      // Which keystones are present, which parse, and why not — from the row
+      // and the file list, never the hydrated character.
+      'vault-health': async () => NextResponse.json({ health: await inspectCharacterVault(row) }),
+    },
+    viaHydrated(null),
+  );
+}
+
+function hydratedGetHandlers(
+  req: NextRequest,
+  ctx: RequestContext,
+  id: string,
+  character: Character
+): { actions: Record<HydratedAction, () => Promise<NextResponse>>; fallback: () => Promise<NextResponse> } {
+  const { user, repos } = ctx;
 
   const handleGetDefault = async (): Promise<NextResponse> => {
     try {
@@ -60,7 +111,8 @@ export async function handleGet(
     }
   };
 
-  return dispatchAction(req, {
+  return {
+    actions: {
     export: async () => {
       try {
         // A tombstone export would be a pruned shell, and the full bundle
@@ -358,7 +410,7 @@ export async function handleGet(
         // `manifesto.md`) can't push the figure past the canonical set size.
         let characterFiles = 0;
         const missingCharacterFiles: string[] = [];
-        for (const corePath of SINGLE_FILE_OVERLAY_PATHS) {
+        for (const corePath of CHARACTER_VAULT_FILE_PATHS) {
           if (presentPaths.has(corePath.toLowerCase())) characterFiles++;
           else missingCharacterFiles.push(corePath);
         }
@@ -394,7 +446,7 @@ export async function handleGet(
           knowledge,
           core,
           characterFiles,
-          characterFilesTotal: SINGLE_FILE_OVERLAY_PATHS.length,
+          characterFilesTotal: CHARACTER_VAULT_FILE_PATHS.length,
           missingCharacterFiles: mountPointId ? missingCharacterFiles : [],
           subprompts,
           mail,
@@ -426,5 +478,7 @@ export async function handleGet(
       const content = await readStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME);
       return successResponse({ content: content ?? '' });
     },
-  }, handleGetDefault);
+    },
+    fallback: handleGetDefault,
+  };
 }

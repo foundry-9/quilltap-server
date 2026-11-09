@@ -110,10 +110,8 @@ export function useSystemPrompts(
 
   const openCreateModal = () => {
     setEditingPrompt(null)
-    setFormData({
-      ...INITIAL_FORM_DATA,
-      isDefault: prompts.length === 0, // First prompt is default
-    })
+    // The server makes a character's first prompt the default.
+    setFormData(INITIAL_FORM_DATA)
     setIsModalOpen(true)
   }
 
@@ -134,11 +132,7 @@ export function useSystemPrompts(
   }
 
   const handleImport = (content: string, suggestedName: string) => {
-    setFormData({
-      name: suggestedName,
-      content,
-      isDefault: prompts.length === 0,
-    })
+    setFormData({ name: suggestedName, content, isDefault: false })
     setShowImportModal(false)
     setIsModalOpen(true)
   }

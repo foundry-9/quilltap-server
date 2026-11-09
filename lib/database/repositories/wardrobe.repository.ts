@@ -16,14 +16,14 @@ import { logger } from '@/lib/logger';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemWithOrigin, WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container';
 import type { RepositoryDbTarget } from './base.repository';
-import { getOverlaidWardrobeItems } from './character-properties-overlay';
+import { getOverlaidWardrobeItems } from '@/lib/wardrobe/vault-sync';
 import {
   createInMount,
   deleteInMount,
   resolveWardrobeMount,
   updateInMount,
   type WardrobeMount,
-} from './vault-overlay/wardrobe-writes';
+} from '@/lib/wardrobe/vault-writes';
 
 /** Create options: a caller restoring or transferring an item keeps its id and stamps. */
 export interface WardrobeCreateOptions {

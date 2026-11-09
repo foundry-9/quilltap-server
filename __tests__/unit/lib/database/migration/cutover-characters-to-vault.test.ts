@@ -25,7 +25,8 @@ jest.mock('../../../../../migrations/lib/database-utils', () => ({
   getSQLiteTableColumns: () => [],
 }));
 jest.mock('../../../../../lib/mount-index/character-vault', () => ({ ensureCharacterVault: jest.fn() }));
-jest.mock('../../../../../lib/database/repositories/character-properties-overlay', () => ({
+jest.mock('../../../../../lib/wardrobe/vault-sync', () => ({ projectVaultWardrobe: jest.fn() }));
+jest.mock('../../../../../lib/characters/vault/write', () => ({
   writeCharacterVaultManagedFields: jest.fn(),
 }));
 jest.mock('../../../../../lib/repositories/factory', () => ({ getRepositories: jest.fn() }));

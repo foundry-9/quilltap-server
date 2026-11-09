@@ -43,9 +43,10 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: jest.fn(async () => 'folder-id'),
 }));
 
-import { parseScenarioFile } from '@/lib/database/repositories/vault-overlay/parsers';
-import { projectArrayIntoVaultFolder } from '@/lib/database/repositories/vault-overlay/vault-projection';
-import { buildScenarioFile, sanitizeFileName } from '@/lib/mount-index/character-vault';
+import { parseScenarioFile } from '@/lib/characters/vault/parsers';
+import { projectArrayIntoVaultFolder } from '@/lib/mount-index/vault-projection';
+import { buildScenarioFile } from '@/lib/characters/vault/layout';
+import { sanitizeFileName } from '@/lib/mount-index/character-vault';
 import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios';
 import type { CharacterScenario } from '@/lib/schemas/character.types';
 import type { DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
@@ -115,13 +116,13 @@ describe('buildScenarioFile', () => {
     updatedAt: '2026-01-01T00:00:00.000Z',
   } as CharacterScenario;
 
-  it('emits no frontmatter for a plain active scenario', () => {
-    expect(buildScenarioFile(base)).toBe('# The Tavern\n\nBody.');
+  it('emits only the id for a plain active scenario', () => {
+    expect(buildScenarioFile(base)).toBe('---\nid: id-1\n---\n\n# The Tavern\n\nBody.');
   });
 
   it('emits `archived: true` when archived', () => {
     expect(buildScenarioFile({ ...base, archived: true }))
-      .toBe('---\narchived: true\n---\n\n# The Tavern\n\nBody.');
+      .toBe('---\nid: id-1\narchived: true\n---\n\n# The Tavern\n\nBody.');
   });
 
   it('round-trips title, description and archived through the parser', () => {
@@ -168,7 +169,7 @@ describe('scenario projection — archived files survive a resave', () => {
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(
       MOUNT_ID,
       'Scenarios/Shelved.md',
-      '---\narchived: true\n---\n\n# Shelved\n\nPut away.',
+      '---\nid: id-shelved\narchived: true\n---\n\n# Shelved\n\nPut away.',
     );
   });
 

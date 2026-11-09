@@ -36,9 +36,9 @@ import {
   WARDROBE_FOLDER_RULES,
   type WardrobeFolder,
 } from '@/lib/wardrobe/folders';
-import { hasStableWardrobeItemId, isWardrobeItemDocument } from './parsers';
-import { readCharacterVaultWardrobe } from './vault-readers';
-import { projectVaultWardrobe } from './wardrobe-sync';
+import { hasStableWardrobeItemId, isWardrobeItemDocument } from '@/lib/wardrobe/vault-parsers';
+import { readCharacterVaultWardrobe } from '@/lib/wardrobe/vault-readers';
+import { projectVaultWardrobe } from '@/lib/wardrobe/vault-sync';
 import {
   chainKey,
   createFolderIn,
@@ -51,7 +51,7 @@ import {
   type ItemFolderTree,
   type VaultFolderMount,
   type VaultFolderMountScope,
-} from './item-folder-ops';
+} from '@/lib/mount-index/item-folder-ops';
 
 /** The four wardrobe tiers. */
 export type WardrobeMountScope = VaultFolderMountScope;

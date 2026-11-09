@@ -43,7 +43,7 @@ import { resolveCustomToolRoster } from '@/lib/pascal/custom-tools';
 import { QtapCustomToolSchema } from '@/lib/pascal/custom-tool.types';
 import { postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
-import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
+import { CharacterVaultUnavailableError } from '@/lib/characters/vault/layout';
 
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;
 const resolveRosterMock = resolveCustomToolRoster as jest.Mock;

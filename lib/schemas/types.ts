@@ -136,6 +136,10 @@ export {
   PhysicalDescriptionSchema,
   ClothingRecordSchema,
   CharacterSchema,
+  CharacterRowSchema,
+  CharacterManagedFieldsSchema,
+  CHARACTER_MANAGED_FIELDS,
+  characterManagedDefaults,
 } from './character.types';
 
 export type {
@@ -144,6 +148,8 @@ export type {
   PhysicalDescription,
   ClothingRecord,
   Character,
+  CharacterRow,
+  CharacterManagedField,
   CharacterInput,
 } from './character.types';
 

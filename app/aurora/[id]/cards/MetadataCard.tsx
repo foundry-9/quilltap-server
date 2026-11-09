@@ -7,10 +7,11 @@
  * a modal with the JSON (a modal, so it has the page's one kind of Save).
  *
  * The reserved `progressions` key is the Progressions card's to edit, so it is
- * kept out of the editor. The PUT replaces the whole object, so Save re-reads
- * the character first and carries its *current* progressions across — never a
- * snapshot this card has been holding (the rule `useCharacterProgressions`
- * follows from the other side).
+ * kept out of the editor. Save sends a key-level patch
+ * (`?action=patch-metadata`): the keys the editor holds are set, the keys it
+ * opened with and no longer holds are unset, and nothing else is touched — so
+ * the progressions, and any key a character's doc_* edit or a Pascal write
+ * added meanwhile, survive, and this card cannot race the Progressions card.
  *
  * @module app/aurora/[id]/cards/MetadataCard
  */
@@ -59,10 +60,12 @@ export function parseMetadataDraft(text: string): { value: MetadataObject } | { 
   return { value: parsed as MetadataObject }
 }
 
-/** The stored object: the edited keys plus the character's current progressions. */
-export function mergeMetadataForSave(edited: MetadataObject, current: unknown): MetadataObject {
-  const progressions = asObject(current)[PROGRESSIONS_METADATA_KEY]
-  return progressions === undefined ? { ...edited } : { ...edited, [PROGRESSIONS_METADATA_KEY]: progressions }
+/** The key-level patch a save sends: set every edited key, unset the ones removed. */
+export function metadataPatchForSave(
+  edited: MetadataObject,
+  openedKeys: readonly string[],
+): { set: MetadataObject; unset: string[] } {
+  return { set: { ...edited }, unset: openedKeys.filter((key) => !(key in edited)) }
 }
 
 interface CharacterResponse {
@@ -75,6 +78,7 @@ export function MetadataCard() {
   const textareaId = useId()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
+  const [openedKeys, setOpenedKeys] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -91,6 +95,7 @@ export function MetadataCard() {
       // Fall back to the page's copy; Save re-reads before it writes anyway.
     }
     const current = editableMetadata(source)
+    setOpenedKeys(Object.keys(current))
     setDraft(Object.keys(current).length === 0 ? '{\n  \n}' : JSON.stringify(current, null, 2))
     setError(null)
     setOpen(true)
@@ -104,12 +109,10 @@ export function MetadataCard() {
     }
     setSaving(true)
     try {
-      const fresh = await apiFetch<CharacterResponse>(`/api/v1/characters/${characterId}`, { cache: 'no-store' })
-      const metadata = mergeMetadataForSave(parsed.value, fresh.character?.metadata)
-      await apiFetch<unknown>(`/api/v1/characters/${characterId}`, {
+      await apiFetch<unknown>(`/api/v1/characters/${characterId}?action=patch-metadata`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metadata }),
+        body: JSON.stringify(metadataPatchForSave(parsed.value, openedKeys)),
       })
       await queryClient.invalidateQueries({ queryKey: queryKeys.characters.detail(characterId) })
       await reload()

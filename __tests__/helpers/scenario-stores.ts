@@ -104,7 +104,7 @@ export function makeScenarioStores(seed: {
     characters: {
       findByIdRaw: jest.fn(async (id: string) => characters.find((c) => c.id === id) ?? null),
       findAllRaw: jest.fn(async () => characters),
-      findByDocumentMountPointIdRaw: jest.fn(
+      findByStorePointerRaw: jest.fn(
         async (mountPointId: string) =>
           characters.find((c) => c.characterDocumentMountPointId === mountPointId) ?? null,
       ),
@@ -116,14 +116,14 @@ export function makeScenarioStores(seed: {
     projects: {
       findByIdRaw: jest.fn(async (id: string) => projects.find((p) => p.id === id) ?? null),
       findAllRaw: jest.fn(async () => projects),
-      findByOfficialMountPointIdRaw: jest.fn(
+      findByStorePointerRaw: jest.fn(
         async (mountPointId: string) => projects.find((p) => p.officialMountPointId === mountPointId) ?? null,
       ),
     },
     groups: {
       findByIdRaw: jest.fn(async (id: string) => groups.find((g) => g.id === id) ?? null),
       findAllRaw: jest.fn(async () => groups),
-      findByOfficialMountPointIdRaw: jest.fn(
+      findByStorePointerRaw: jest.fn(
         async (mountPointId: string) => groups.find((g) => g.officialMountPointId === mountPointId) ?? null,
       ),
     },

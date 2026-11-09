@@ -16,7 +16,10 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
-import { getConciergeState, withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
+import {
+  getConciergeState,
+  withConciergeModeFromLegacy,
+} from '@/lib/services/dangerous-content/chat-override';
 import {
   withConciergeSettingsFromLegacy,
   type SettingsWithLegacyConcierge,
@@ -30,7 +33,10 @@ import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridg
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { rawQuery } from '@/lib/database/manager';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
+import {
+  getRawMountIndexDatabase,
+  isMountIndexDegraded,
+} from '@/lib/database/backends/sqlite/mount-index-client';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
@@ -50,15 +56,14 @@ import {
   type InventoryImagePointerFix,
   type WardrobeImagePointerFix,
 } from './uuid-remap';
-import { updateMountWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { updateInventoryManyInMount } from '@/lib/database/repositories/vault-overlay/inventory-writes';
+import { updateMountWardrobeItem } from '@/lib/wardrobe/vault-writes';
+import { updateInventoryManyInMount } from '@/lib/inventory/vault-writes';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 import { decodeIndexKeyedEmbedding } from './index-keyed-embedding';
 import { makeStoreClaimMap, type StoreClaim, type StoreOwnerKind } from './store-claims';
 import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
 import { reconcileStoreNames } from '@/lib/mount-index/reconcile-store-names';
-import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import type { Character } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
@@ -247,12 +252,14 @@ export async function restore(
         const { userId, createdAt, updatedAt, ...charData } = character;
         const claim = storeClaims.claim('character', character.id, character.characterDocumentMountPointId);
         if (claim.bound) {
-          const created = await globalRepos.characters.createBoundToVault(
+          const created = await globalRepos.characters.createBoundToStore(
             { ...charData, userId: targetUserId },
             claim.mountPointId,
             { id: character.id }
           );
-          boundCharacters.push({ character: created, mountPointId: claim.mountPointId });
+          // Keep the backup's own record: it carries the content, which the
+          // fallback at 22a-i needs if the vault fails to arrive.
+          boundCharacters.push({ character: { ...created, ...charData, id: created.id }, mountPointId: claim.mountPointId });
         } else {
           noteStoreFallback('character', character.id, character.name, claim);
           await repos.characters.create(charData, { id: character.id });
@@ -666,7 +673,9 @@ export async function restore(
         continue;
       }
       try {
-        await ensureCharacterVault({ ...character, characterDocumentMountPointId: null });
+        // The backup's own record carries the content; a fresh vault gets it
+        // (the same provisioning a create performs — never a raw row, #148).
+        await globalRepos.characters.provisionOfficialStore({ ...character, characterDocumentMountPointId: null });
         warnings.push(`The character "${character.name}" was given a fresh vault because its own could not be restored`);
         moduleLogger.warn('Re-provisioned a character vault whose archived store failed to restore', { characterId: character.id, mountPointId });
       } catch (error) {

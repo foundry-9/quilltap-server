@@ -39,7 +39,7 @@ jest.mock('@/lib/api/middleware', () => ({
   withActionDispatch: jest.requireActual('@/lib/api/middleware/actions').withActionDispatch,
 }));
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
+jest.mock('@/lib/wardrobe/vault-writes', () => {
   class WardrobeComponentCycleError extends Error {
     constructor(itemId: string) {
       super(`Wardrobe item ${itemId} would create a component cycle`);
@@ -62,7 +62,7 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
   };
 });
 
-jest.mock('@/lib/database/repositories/characters.repository', () => {
+jest.mock('@/lib/characters/archive-guard', () => {
   class CharacterArchivedError extends Error {
     constructor(characterId: string) {
       super(`Character ${characterId} is archived`);
@@ -113,8 +113,8 @@ import {
   createFolderInMount,
   renameFolderInMount,
   deleteFolderInMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+} from '@/lib/wardrobe/vault-writes';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';

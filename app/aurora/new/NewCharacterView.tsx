@@ -172,8 +172,8 @@ export function NewCharacterView() {
     setError(null)
 
     try {
-      const now = new Date().toISOString()
       const opening = prose.scenario.trim()
+      // One create carries everything, the vault-kept facts included.
       const body = {
         name: name.trim(),
         title: title.trim() || undefined,
@@ -184,8 +184,12 @@ export function NewCharacterView() {
         firstMessage: prose.firstMessage,
         exampleDialogues: prose.exampleDialogues,
         defaultConnectionProfileId: defaultConnectionProfileId || undefined,
-        systemPrompts: systemPromptsForCreate(prose.systemPrompt, now),
+        systemPrompts: systemPromptsForCreate(prose.systemPrompt),
         scenarios: opening ? [{ title: FIRST_SCENARIO_TITLE, content: opening }] : undefined,
+        ...(aliases.length > 0 && { aliases }),
+        ...(pronouns && { pronouns }),
+        ...(birthday && { birthday }),
+        ...(kind !== DEFAULT_CHARACTER_KIND && { kind }),
       }
       console.debug('[NewCharacter] creating', {
         hasSystemPrompt: body.systemPrompts.length > 0,
@@ -203,24 +207,6 @@ export function NewCharacterView() {
       }
       const data = await res.json()
       const characterId = data.character.id as string
-
-      // The vault-kept facts the POST does not take.
-      const facts: Record<string, unknown> = {}
-      if (aliases.length > 0) facts.aliases = aliases
-      if (pronouns) facts.pronouns = pronouns
-      if (birthday) facts.birthday = birthday
-      if (kind !== DEFAULT_CHARACTER_KIND) facts.kind = kind
-      if (Object.keys(facts).length > 0) {
-        const factsRes = await fetch(`/api/v1/characters/${characterId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(facts),
-        })
-        if (!factsRes.ok) {
-          console.error('Failed to save the new character’s facts', { status: factsRes.status })
-          showErrorToast('Character created, but their aliases, pronouns, birthday or kind did not save')
-        }
-      }
 
       if (pendingScenarios.current && pendingScenarios.current.length > 0) {
         await saveGeneratedScenarios(characterId, pendingScenarios.current)

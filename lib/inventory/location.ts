@@ -41,7 +41,7 @@ import {
   updateInventoryManyInMount,
   type InventoryMount,
   type InventoryRecordPatch,
-} from '@/lib/database/repositories/vault-overlay/inventory-writes';
+} from '@/lib/inventory/vault-writes';
 import { groupMountsFor, groupOriginMap, resolveOwnerStore } from '@/lib/mount-index/reach';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {

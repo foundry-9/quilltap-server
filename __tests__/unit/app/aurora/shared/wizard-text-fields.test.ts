@@ -35,16 +35,8 @@ describe('aurora wizard text field helpers', () => {
     expect(generatedSystemPrompt({})).toBeNull()
   })
 
-  it('folds a create-form system prompt into one default named prompt (#146)', () => {
-    const prompts = systemPromptsForCreate(' You are Friday. ', '2026-11-06T00:00:00.000Z')
-    expect(prompts).toHaveLength(1)
-    expect(prompts[0]).toMatchObject({
-      name: 'Default',
-      content: 'You are Friday.',
-      isDefault: true,
-      createdAt: '2026-11-06T00:00:00.000Z',
-    })
-    expect(prompts[0].id).toMatch(/^[0-9a-f-]{36}$/)
+  it('folds a create-form system prompt into one named prompt (#146); the server owns its id and default', () => {
+    expect(systemPromptsForCreate(' You are Friday. ')).toEqual([{ name: 'Default', content: 'You are Friday.' }])
     expect(systemPromptsForCreate('  ')).toEqual([])
   })
 

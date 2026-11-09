@@ -74,7 +74,7 @@ jest.mock('@/lib/wardrobe/item-images', () => {
   }
 })
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
+jest.mock('@/lib/wardrobe/vault-writes', () => {
   const updateInMount = jest.fn()
   return {
     WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
@@ -109,7 +109,7 @@ import {
   deleteInMount,
   readMountItems,
   updateInMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
+} from '@/lib/wardrobe/vault-writes'
 
 const GROUP_ID = 'group-1'
 const MOUNT_ID = 'group-mount-1'

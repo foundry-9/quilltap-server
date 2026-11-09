@@ -27,8 +27,8 @@ describe('buildCharacterPatch', () => {
 
   it('sends the physical description whole, with only the drafted fields changed', () => {
     const { body } = buildCharacterPatch({ 'physicalDescription.shortPrompt': 'very tall' }, stored)
+    expect(body.physicalDescription).not.toHaveProperty('id') // the server owns it
     expect(body.physicalDescription).toMatchObject({
-      id: 'pd1',
       shortPrompt: 'very tall',
       mediumPrompt: 'tall, dark',
       humanoid: false,
@@ -39,6 +39,7 @@ describe('buildCharacterPatch', () => {
     const pd = mergePhysicalDescription(null, { longPrompt: 'x' })
     expect(pd).not.toHaveProperty('name')
     expect(pd).not.toHaveProperty('usageContext')
+    expect(pd).not.toHaveProperty('id')
     expect(pd.humanoid).toBe(true)
     expect(pd.longPrompt).toBe('x')
     expect(pd.shortPrompt).toBeNull()

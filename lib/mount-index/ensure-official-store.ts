@@ -4,8 +4,9 @@
  * Single implementation of the "find / adopt / create" flow that provisions an
  * entity's canonical "official" document store and persists the FK on the
  * entity row. `ensure-owner-store.ts` builds an {@link EnsureOfficialStoreConfig}
- * per owner kind (project, group) and delegates here; the two differ only in
- * entity/prefix names and which repository methods they call.
+ * per owner kind (project, group) and `character-vault.ts` builds one for a
+ * character's vault; they differ in naming, store shape, how they adopt (by
+ * link for owners, by name for vaults) and what a fresh store is seeded with.
  *
  * Imports the repository factory (for `findAll` / `create`), which transitively
  * pulls in node-only modules. Kept separate from the `*-store-naming.ts`
@@ -23,31 +24,65 @@ export interface OfficialStoreEntityRow {
   officialMountPointId?: string | null;
 }
 
+/** A store a flow may adopt instead of creating one. */
+export interface AdoptableStore {
+  id: string;
+  name: string;
+}
+
 /**
  * Per-entity wiring for {@link ensureOfficialStore}. Everything that differs
- * between the project and group variants is expressed here; the resolution
- * order, create payload, and logging are owned by the shared core.
+ * between the owners — projects, groups, character vaults — is expressed here;
+ * the resolution order, the create payload, and logging are owned by the core.
  */
 export interface EnsureOfficialStoreConfig {
-  /** Lowercase entity noun used in log messages, e.g. `'project'` / `'group'`. */
+  /** Lowercase entity noun used in log messages, e.g. `'project'` / `'character'`. */
   entityLabel: string;
-  /** Capitalised entity noun used in log messages, e.g. `'Project'` / `'Group'`. */
+  /** Capitalised entity noun used in log messages, e.g. `'Project'` / `'Character'`. */
   entityLabelCapitalized: string;
-  /** Log-context key for the entity id, e.g. `'projectId'` / `'groupId'`. */
+  /** Log-context key for the entity id, e.g. `'projectId'` / `'characterId'`. */
   entityIdLogKey: string;
-  /** Name prefix for a freshly-created store, e.g. `'Project Files: '`. */
-  storeNamePrefix: string;
-
+  /** The name a fresh store is given (before collision suffixing). */
+  storeNameFor(entityName: string): string;
+  /** `storeType` and `includePatterns` of a fresh store. */
+  storeShape: { storeType: 'documents' | 'character'; includePatterns: string[] };
   /** Read the RAW entity row (never the overlay-applied read). */
   findEntityRaw(entityId: string): Promise<OfficialStoreEntityRow | null>;
-  /** Raw FK write — must not re-read the store overlay. */
+  /**
+   * When the row's pointer names a mount point that does not exist: `'heal'`
+   * provisions a fresh store (projects, groups); `'trust'` returns the pointer
+   * as it is (character vaults — a mount-index read can miss mid cloud
+   * materialisation, and re-pointing a character away from its real vault on
+   * a transient miss would orphan it).
+   */
+  stalePointer: 'heal' | 'trust';
+  /** A store to adopt before creating one, or null. */
+  findAdoptable(entityId: string, entityName: string): Promise<AdoptableStore | null>;
+  /** FK write — must not re-read the store overlay; may verify the write stuck. */
   setOfficialMountPointId(entityId: string, mountPointId: string): Promise<void>;
-  /** All mount-point links for the entity. */
-  findLinks(entityId: string): Promise<Array<{ mountPointId: string }>>;
-  /** Link a mount point to the entity. */
-  link(entityId: string, mountPointId: string): Promise<unknown>;
-  /** True when `name` matches this entity's own-store naming convention. */
-  isOwnStoreName(name: string): boolean;
+  /** Link a freshly created store to the entity, where the owner keeps link rows. */
+  link?(entityId: string, mountPointId: string): Promise<unknown>;
+  /** Populate a freshly created store's structure (a character vault's scaffold). */
+  afterCreate?(mountPointId: string): Promise<unknown>;
+}
+
+/**
+ * The project / group adoption rule: an existing link to a database-backed
+ * `documents` store, preferring one that carries the owner's own-store name.
+ */
+export async function findAdoptableLinkedStore(
+  links: Array<{ mountPointId: string }>,
+  isOwnStoreName: (name: string) => boolean,
+): Promise<AdoptableStore | null> {
+  if (links.length === 0) return null;
+  const repos = getRepositories();
+  const linkedStores = await Promise.all(links.map(l => repos.docMountPoints.findById(l.mountPointId)));
+  const eligible = linkedStores.filter(
+    (s): s is NonNullable<typeof s> =>
+      !!s && s.mountType === 'database' && (s.storeType ?? 'documents') === 'documents',
+  );
+  const adoptable = eligible.find(s => isOwnStoreName(s.name)) ?? eligible[0] ?? null;
+  return adoptable ? { id: adoptable.id, name: adoptable.name } : null;
 }
 
 /**
@@ -70,7 +105,7 @@ export async function ensureOfficialStore(
   config: EnsureOfficialStoreConfig,
   entityId: string,
   entityName: string,
-): Promise<{ mountPointId: string; created: boolean } | null> {
+): Promise<{ mountPointId: string; created: boolean; adopted?: boolean } | null> {
   const repos = getRepositories();
 
   // Read the RAW row, never the overlay-applied `findById`. Provisioning runs
@@ -89,6 +124,9 @@ export async function ensureOfficialStore(
 
   // 1. Existing FK still valid?
   if (entity.officialMountPointId) {
+    if (config.stalePointer === 'trust') {
+      return { mountPointId: entity.officialMountPointId, created: false };
+    }
     const existing = await repos.docMountPoints.findById(entity.officialMountPointId);
     if (existing) {
       return { mountPointId: existing.id, created: false };
@@ -99,33 +137,22 @@ export async function ensureOfficialStore(
     });
   }
 
-  // 2. Adopt an existing linked store if one matches.
-  const links = await config.findLinks(entityId);
-  if (links.length > 0) {
-    const linkedStores = await Promise.all(
-      links.map(l => repos.docMountPoints.findById(l.mountPointId)),
-    );
-    const eligible = linkedStores.filter(
-      (s): s is NonNullable<typeof s> =>
-        !!s && s.mountType === 'database' && (s.storeType ?? 'documents') === 'documents',
-    );
-    const adoptable = eligible.find(s => config.isOwnStoreName(s.name)) ?? eligible[0] ?? null;
-    if (adoptable) {
-      // Raw FK write — must not re-read the store overlay. On the create path
-      // the adopted store may have no properties.json yet; the overlay-applying
-      // `update()` would throw *StoreUnavailableError. See setOfficialMountPointId.
-      await config.setOfficialMountPointId(entityId, adoptable.id);
-      logger.info(`Adopted existing linked store as ${config.entityLabel} official`, {
-        [config.entityIdLogKey]: entityId,
-        mountPointId: adoptable.id,
-        storeName: adoptable.name,
-      });
-      return { mountPointId: adoptable.id, created: false };
-    }
+  // 2. Adopt an existing store if the owner's rule finds one.
+  const adoptable = await config.findAdoptable(entityId, entityName);
+  if (adoptable) {
+    // FK write that must not re-read the store overlay: on the create path the
+    // adopted store may have no properties.json yet. See setOfficialMountPointId.
+    await config.setOfficialMountPointId(entityId, adoptable.id);
+    logger.info(`Adopted an existing store as ${config.entityLabel} official`, {
+      [config.entityIdLogKey]: entityId,
+      mountPointId: adoptable.id,
+      storeName: adoptable.name,
+    });
+    return { mountPointId: adoptable.id, created: false, adopted: true };
   }
 
-  // 3. Create a fresh `<prefix><name>` store and link it.
-  const desiredName = `${config.storeNamePrefix}${(entityName || 'Untitled').trim()}`.slice(0, 200);
+  // 3. Create a fresh store and link it.
+  const desiredName = config.storeNameFor((entityName || 'Untitled').trim()).slice(0, 200);
   const all = await repos.docMountPoints.findAll();
   const taken = new Set(all.map(mp => mp.name));
   const finalName = nextUniqueMountPointName(taken, desiredName);
@@ -134,8 +161,8 @@ export async function ensureOfficialStore(
     name: finalName,
     basePath: '',
     mountType: 'database',
-    storeType: 'documents',
-    includePatterns: [],
+    storeType: config.storeShape.storeType,
+    includePatterns: config.storeShape.includePatterns,
     excludePatterns: ['.git', 'node_modules', '.obsidian', '.trash'],
     enabled: true,
     lastScannedAt: null,
@@ -148,7 +175,8 @@ export async function ensureOfficialStore(
     totalSizeBytes: 0,
   });
 
-  await config.link(entityId, mountPoint.id);
+  await config.afterCreate?.(mountPoint.id);
+  await config.link?.(entityId, mountPoint.id);
   // Raw FK write — `create()` populates the store files (properties.json et al.)
   // only AFTER this returns, so the overlay-applying `update()` would throw
   // *StoreUnavailableError on its closing re-read. See setOfficialMountPointId.

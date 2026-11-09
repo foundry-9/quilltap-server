@@ -9,9 +9,9 @@
  * sibling `physical-prompts.json` carrying the four prompt tiers as JSON.
  *
  * This migration runs at startup after the character-vault backfill. For each
- * character whose vault is missing `physical-prompts.json`, it regenerates
- * `physical-description.md` from the DB's primary physical description and
- * writes a fresh `physical-prompts.json` alongside. The presence of
+ * character whose vault is missing `physical-prompts.json`, it seeds a fresh
+ * one (every prompt null) and seeds `physical-description.md` only if that is
+ * absent too — an existing description is never overwritten. The presence of
  * `physical-prompts.json` is the idempotency marker, so repeated runs are
  * no-ops.
  *
@@ -30,17 +30,15 @@
  * @module startup/migrate-vault-physical-files
  */
 
+import { CHARACTER_PHYSICAL_PROMPTS_JSON_PATH } from '@/lib/characters/vault/layout';
+import { ensureCharacterPhysicalFiles } from '@/lib/characters/vault/scaffold';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import {
-  writeDatabaseDocument,
-  deleteDatabaseDocument,
-} from '@/lib/mount-index/database-store';
+import { deleteDatabaseDocument } from '@/lib/mount-index/database-store';
 
 const logger = createServiceLogger('Startup:VaultPhysicalFileMigration');
 
-const PHYSICAL_DESCRIPTION_PATH = 'physical-description.md';
-const PHYSICAL_PROMPTS_PATH = 'physical-prompts.json';
+const PHYSICAL_PROMPTS_PATH = CHARACTER_PHYSICAL_PROMPTS_JSON_PATH;
 const LEGACY_PHYSICAL_PROMPTS_PATH = 'physical-prompts.md';
 
 export interface VaultPhysicalMigrationResult {
@@ -101,29 +99,13 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
         continue;
       }
 
-      const primary = character.physicalDescription ?? null;
-
-      await writeDatabaseDocument(
-        mountPointId,
-        PHYSICAL_DESCRIPTION_PATH,
-        primary?.fullDescription ?? '',
-      );
-
-      await writeDatabaseDocument(
-        mountPointId,
-        PHYSICAL_PROMPTS_PATH,
-        JSON.stringify(
-          {
-            headAndShoulders: primary?.headAndShouldersPrompt ?? null,
-            short: primary?.shortPrompt ?? null,
-            medium: primary?.mediumPrompt ?? null,
-            long: primary?.longPrompt ?? null,
-            complete: primary?.completePrompt ?? null,
-          },
-          null,
-          2,
-        ),
-      );
+      // Seed what is absent; never overwrite. The raw row carries no physical
+      // description (the column went in the 4.6 cutover), so there is nothing
+      // to "regenerate" — and writing it would lay '' over a description the
+      // user wrote whenever physical-prompts.json happened to be missing, the
+      // same hollowing as #148.
+      const seeded = await ensureCharacterPhysicalFiles(mountPointId);
+      logger.debug('Seeded absent physical files', { characterId: character.id, mountPointId, seeded });
 
       result.migrated++;
     } catch (err) {

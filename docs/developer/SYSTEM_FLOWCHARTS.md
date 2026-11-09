@@ -17,6 +17,7 @@ These diagrams use [Mermaid](https://mermaid.js.org/) syntax and render in GitHu
 7. [Unified Message Lifecycle](#7-unified-message-lifecycle)
 8. [Salon Turn Pipeline](#8-salon-turn-pipeline)
 9. [Context Build](#9-context-build)
+10. [Character Write](#10-character-write)
 
 ---
 
@@ -624,6 +625,38 @@ Snapshot whispers (the Commonplace Book's per-turn whisper, Aurora's Core whispe
 
 ---
 
+## 10. Character Write
+
+How a change to a character reaches its row and its vault. A character is one slim `characters` row plus one vault; `CharactersRepository` is a binding of `AbstractStoreBackedRepository` (`lib/database/repositories/store-backed.repository.ts`, binding `lib/characters/vault/binding.ts`), and which field lives in which vault file is `CHARACTER_VAULT_LAYOUT` (`lib/characters/vault/layout.ts`). Prompts and scenarios never ride `update()`; they are written one file each.
+
+```mermaid
+flowchart TD
+    PUT["PUT /api/v1/characters/[id]<br/>strict schema derived from the entity<br/><i>lib/characters/api-schemas.ts</i>"] --> DEF{"defaultSystemPromptId?"}
+    DEF -->|routed| SETDEF["setDefaultSystemPrompt()<br/>flags + column together"]
+    PUT --> UPD["repository.update(id, patch)"]
+    META["PUT ?action=patch-metadata<br/>{ set, unset }"] --> PATCH["patchMetadata()<br/>merged under the character's write chain"] --> UPD
+    UPD --> RAW["findByIdRaw() — one raw read"]
+    RAW --> GUARD["guardUpdate()<br/>archive tombstone; refuses<br/>systemPrompts / scenarios"]
+    GUARD --> ROUTE["applyDocumentStoreWriteOverlay()<br/>each layout entry the patch touches<br/>renders its file(s)<br/><i>lib/characters/vault/write.ts</i>"]
+    ROUTE --> PROPS["properties.json<br/>read-modify-write, strict:<br/>invalid file → throw, never seed over it"]
+    ROUTE --> MD["identity / description / manifesto /<br/>personality / example-dialogues .md"]
+    ROUTE --> PHYS["physical-description.md + physical-prompts.json<br/>null = Clear (humanoid kept)"]
+    ROUTE --> MJ["metadata.json (whole object)"]
+    ROUTE --> ROW["_update(): row schema only →<br/>no managed field can reach $set"]
+    ROW --> HOOK["afterRename() → store-name reconcile"]
+    HOOK --> HYD["applyDocumentStoreOverlayOne()<br/>fold over the layout table<br/><i>lib/characters/vault/hydrate.ts</i>"]
+    HYD --> RT["publishRealtime('characters', id)"]
+
+    ITEM["/prompts, /scenarios routes"] --> OPS["addSystemPrompt / updateSystemPrompt / …<br/>raw row + folder listing, archive guard"]
+    OPS --> ONE["one file, found by frontmatter id:<br/>write · rename via renameDocument + sweep · delete<br/><i>lib/characters/vault/items.ts</i>"]
+    OPS --> COL["defaultSystemPromptId kept in step"]
+    ONE --> RT
+```
+
+Create is the base's `create()`: write the row, `provisionOfficialStore()` (the binding's `ensureCharacterVault(…, { adopt: false })` scaffolds a fresh vault, then `writeCharacterVaultManagedFields()` projects the in-memory character), `afterCreate()` reconciles store names. The startup heal and `?action=repair-vault` seed only an absent `properties.json` / `metadata.json`; a present file is never rewritten (#148).
+
+---
+
 ## File Reference Index
 
 | System | Key Files |
@@ -637,6 +670,7 @@ Snapshot whispers (the Commonplace Book's per-turn whisper, Aurora's Core whispe
 | **The Concierge** | `lib/services/chat-message/danger-orchestrator.service.ts`, `lib/services/dangerous-content/gatekeeper.service.ts`, `lib/services/dangerous-content/provider-routing.service.ts`, `lib/background-jobs/handlers/chat-danger-classification.ts`, `lib/background-jobs/scheduled-danger-scan.ts` |
 | **Background Jobs** | `lib/background-jobs/queue-service.ts`, `lib/background-jobs/processor.ts`, `lib/background-jobs/handlers/index.ts` |
 | **Context Build** | `lib/chat/context-manager.ts`, `lib/chat/context/turn-system-prompt.ts`, `turn-compression.ts`, `turn-scene-state.ts`, `turn-recall.ts`, `turn-whispers.ts`, `turn-trailing.ts`, `turn-history.ts`, `turn-transcript.ts` (all in `lib/chat/context/`), `lib/chat/whisper-sweep.ts` |
+| **Character Write** | `lib/database/repositories/characters.repository.ts`, `lib/database/repositories/store-backed.repository.ts`, `lib/characters/vault/` (`layout.ts`, `hydrate.ts`, `write.ts`, `items.ts`, `binding.ts`, `health.ts`), `lib/characters/api-schemas.ts`, `lib/mount-index/character-vault.ts`, `lib/mount-index/ensure-official-store.ts` |
 | **Salon Turn Pipeline** | `lib/services/chat-message/orchestrator.service.ts`, `turn-stream.ts`, `turn-holds.service.ts`, `turn-preparation.service.ts`, `operator-post.service.ts`, `turn-tools.service.ts`, `turn-extras.ts`, `turn-outcome.service.ts`, `turn-orchestrator.service.ts` (all in `lib/services/chat-message/`) |
 | **Streaming** | `lib/services/chat-message/streaming.service.ts` |
 | **Templates** | `lib/templates/processor.ts` |

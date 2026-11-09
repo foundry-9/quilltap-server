@@ -21,7 +21,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
-import { projectVaultWardrobe } from '@/lib/database/repositories/character-properties-overlay';
+import { projectVaultWardrobe } from '@/lib/wardrobe/vault-sync';
 import { readLegacyWardrobeRows } from '@/migrations/lib/legacy-wardrobe-rows';
 
 const logger = createServiceLogger('Startup:VaultWardrobeRefresh');

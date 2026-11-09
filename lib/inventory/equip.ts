@@ -42,7 +42,7 @@ import { logger } from '@/lib/logger';
 import { publishRealtime } from '@/lib/realtime/bus';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import { runSerialized } from '@/lib/database/repositories/vault-overlay/item-folder-ops';
+import { runSerialized } from '@/lib/mount-index/item-folder-ops';
 import {
   InventoryCapExceededError,
   InventoryInvalidParentError,

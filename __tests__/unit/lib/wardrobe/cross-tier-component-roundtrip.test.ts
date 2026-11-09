@@ -85,13 +85,13 @@ jest.mock('@/lib/wardrobe/pool', () => {
   return { ...actual, loadWearablePool: (...args: unknown[]) => mockLoadWearablePool(...args) };
 });
 
-const { readCharacterVaultWardrobe } = require('@/lib/database/repositories/vault-overlay/vault-readers');
-const { projectVaultWardrobe } = require('@/lib/database/repositories/vault-overlay/wardrobe-sync');
+const { readCharacterVaultWardrobe } = require('@/lib/wardrobe/vault-readers');
+const { projectVaultWardrobe } = require('@/lib/wardrobe/vault-sync');
 const {
   createInMount,
   updateInMount,
   WardrobeComponentCycleError,
-} = require('@/lib/database/repositories/vault-overlay/wardrobe-writes');
+} = require('@/lib/wardrobe/vault-writes');
 const { buildWearablePool } = require('@/lib/wardrobe/pool');
 const { resolveEquippedOutfitForCharacter } = require('@/lib/wardrobe/resolve-equipped');
 

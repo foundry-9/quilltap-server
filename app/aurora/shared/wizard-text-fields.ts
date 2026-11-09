@@ -45,24 +45,14 @@ export const FIRST_SYSTEM_PROMPT_NAME = 'Default'
 
 /**
  * A create-form system prompt as the `systemPrompts` array the character POST
- * accepts: one named prompt, the default. Empty text is no prompt at all.
+ * accepts: one named prompt. The server mints its id and timestamps and makes
+ * it the default (a character's first prompt always is). Empty text is no
+ * prompt at all.
  */
-export function systemPromptsForCreate(
-  content: string,
-  now: string = new Date().toISOString(),
-): Array<{ id: string; name: string; content: string; isDefault: boolean; createdAt: string; updatedAt: string }> {
+export function systemPromptsForCreate(content: string): Array<{ name: string; content: string }> {
   const trimmed = content.trim()
   if (!trimmed) return []
-  return [
-    {
-      id: crypto.randomUUID(),
-      name: FIRST_SYSTEM_PROMPT_NAME,
-      content: trimmed,
-      isDefault: true,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
+  return [{ name: FIRST_SYSTEM_PROMPT_NAME, content: trimmed }]
 }
 
 export function buildWizardCurrentData(data: {
