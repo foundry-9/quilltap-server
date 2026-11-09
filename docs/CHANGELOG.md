@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Fix: Inventory pool lists consulted stores in tier order (#155)
+
+- `loadInventoryPool` read its four tiers concurrently and every tier pushed into one shared `consulted` / `unread` array, so `consultedMounts` (and the title lint's Census `pools` DEBUG line) interleaved tiers in read-settlement order. `readTier` (`lib/inventory/pool.ts`) now returns its own records, consulted and unread lists, and the pool concatenates them in tier order (own, group, project, General) after the reads settle. Reads stay concurrent; the lint's verdict was never affected.
+- Test: `pool-order.test.ts` pins the consulted order.
+
 #### Theme: Madman's Box backdrops for the Concierge, Pascal, Saquel and Brahma
 
 - Madman's Box replaced only eight subsystem backdrops; the Settings redesign made the Concierge's, Pascal's, Saquel's and Brahma's visible (as group and lens backdrops), so they showed the default art. Added `textures/{concierge,pascal,saquel,brahma}-bg.webp` (2731×1536, WebP q75, 700–890 KB) and their `subsystems` entries in `theme.json`; theme bumped to 1.1.11.
