@@ -8,6 +8,7 @@
 import path from 'path';
 import { getAccessibleMountPoints, resolveMountPointRef, parseQtapUri } from '@/lib/doc-edit';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
+import { ownVaultCoreRefusal } from '@/lib/characters/vault/core-guard';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   postLibrarianBlobWriteAnnouncement,
@@ -22,6 +23,8 @@ import {
   type DocEditToolContext,
   collectPeerCharacterIdsForReads,
   actingCharacterIsOpaqueToVaults,
+  assertOwnVaultFileOpen,
+  ownVaultEntryFilter,
   assertWriteDoesNotTargetPeerVault,
   docStoreUriFor,
   buildDocStoreUriResolver,
@@ -51,34 +54,34 @@ function resolveBlobTarget(input: { uri?: string; mount_point?: string; path?: s
 async function resolveBlobMountPointForRead(
   mountPointRef: string,
   context: DocEditToolContext
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; ownVaultGuarded?: boolean } | null> {
   if (!context.projectId && !context.characterId && !context.mountPool) return null;
   // Translate the reserved self-token to the acting character's own vault ID so
   // `mount_point: "self"` resolves here too, mirroring the path resolver.
   const effectiveRef = await resolveMountPointRef(mountPointRef, context.characterId);
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
   // The covenant applies to enumeration as well as resolution (bug 153): an
-  // opaque character finds no vault here, her own included, so the self-token
-  // translated above stays unresolvable.
-  const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+  // opaque character finds no peer vault here, and her own comes back
+  // `ownVaultGuarded` so its core paths are refused by the callers.
+  const guardOwnVault = await actingCharacterIsOpaqueToVaults(context);
   const mountPoints = await getAccessibleMountPoints({
     projectId: context.projectId,
     characterId: context.characterId,
-    extraCharacterIds: peerCharacterIds,
-    hideCharacterVaults,
+    extraCharacterIds: guardOwnVault ? undefined : peerCharacterIds,
+    guardOwnVault,
     mountPool: context.mountPool,
   });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
     mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef
   );
-  return found ? { id: found.id, name: found.name } : null;
+  return found ? { id: found.id, name: found.name, ownVaultGuarded: found.ownVaultGuarded } : null;
 }
 
 async function resolveBlobMountPointForWrite(
   mountPointRef: string,
   context: DocEditToolContext
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; ownVaultGuarded?: boolean } | null> {
   if (!context.projectId && !context.characterId && !context.mountPool) return null;
   // Translate the reserved self-token before matching. "self" is always the
   // acting character's own vault, never a peer's, so the peer-vault guard below
@@ -89,18 +92,36 @@ async function resolveBlobMountPointForWrite(
   // before we even enumerate accessible mounts.
   await assertWriteDoesNotTargetPeerVault(mountPointRef, peerCharacterIds);
   // See the read helper (bug 153).
-  const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+  const guardOwnVault = await actingCharacterIsOpaqueToVaults(context);
   const mountPoints = await getAccessibleMountPoints({
     projectId: context.projectId,
     characterId: context.characterId,
-    hideCharacterVaults,
+    guardOwnVault,
     mountPool: context.mountPool,
   });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
     mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef
   );
-  return found ? { id: found.id, name: found.name } : null;
+  return found ? { id: found.id, name: found.name, ownVaultGuarded: found.ownVaultGuarded } : null;
+}
+
+/**
+ * The own-vault core guard for a blob path: a refusal result when an opaque
+ * character addresses a root-level file or a core folder of her own vault,
+ * else null.
+ */
+function ownVaultBlobRefusal(
+  mp: { id: string; ownVaultGuarded?: boolean },
+  relativePath: string,
+  context: DocEditToolContext
+): { success: false; error: string } | null {
+  try {
+    assertOwnVaultFileOpen({ ownVaultGuarded: mp.ownVaultGuarded, relativePath, mountPointId: mp.id }, context);
+    return null;
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 export async function handleWriteBlob(
@@ -132,6 +153,8 @@ export async function handleWriteBlob(
 
   const transcoded = await transcodeToWebP(rawBytes, input.mime_type);
   const finalPath = normaliseBlobRelativePath(target.path, transcoded.storedMimeType);
+  const refusal = ownVaultBlobRefusal(mp, finalPath, context);
+  if (refusal) return refusal;
 
   const repos = getRepositories();
   const stored = await repos.docMountBlobs.create({
@@ -198,6 +221,8 @@ export async function handleReadBlob(
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${target.mountPoint}` };
   }
+  const readRefusal = ownVaultBlobRefusal(mp, target.path, context);
+  if (readRefusal) return readRefusal;
   const repos = getRepositories();
   const meta = await repos.docMountBlobs.findByMountPointAndPath(mp.id, target.path);
   if (!meta) {
@@ -255,11 +280,17 @@ export async function handleListBlobs(
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${mountPointRef}` };
   }
+  // The core of an opaque character's own vault is left out of the listing,
+  // and listing a core folder lists nothing.
+  const isOwnVaultCore = ownVaultEntryFilter(mp);
+  if (folder && isOwnVaultCore(folder, 'folder')) {
+    return { success: false, error: ownVaultCoreRefusal(folder) };
+  }
   const repos = getRepositories();
-  const metas = await repos.docMountBlobs.listByMountPoint(
+  const metas = (await repos.docMountBlobs.listByMountPoint(
     mp.id,
     folder ? { folder } : {}
-  );
+  )).filter(m => !isOwnVaultCore(m.relativePath, 'file'));
   const uriResolver = await buildDocStoreUriResolver();
   const result: DocListBlobsOutput = {
     mount_point: mp.name,
@@ -298,6 +329,8 @@ export async function handleDeleteBlob(
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${target.mountPoint}` };
   }
+  const deleteRefusal = ownVaultBlobRefusal(mp, target.path, context);
+  if (deleteRefusal) return deleteRefusal;
   const repos = getRepositories();
   const deleted = await repos.docMountBlobs.deleteByMountPointAndPath(mp.id, target.path);
   if (!deleted) {

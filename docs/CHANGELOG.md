@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Feature: characters without system transparency may use their own vault's non-core folders
+
+- The doc-tool opacity rule hid every character vault, the acting character's own included, from a character with `systemTransparency !== true`. It now hides only peer vaults; the character's own vault is reachable with its core guarded: every root-level file, and the `Prompts`, `Wardrobe`, `Outfits`, `Inventory`, `Mail` and `images` folders (with their contents), can be neither read nor written, and those folders and the root cannot be deleted or moved. Everything else (Scenarios, Knowledge, Tools, lore, files, and folders the character creates) is open to the full `doc_*` and `doc_*_blob` toolset. A new root-level folder may be created; a new root-level file may not.
+- New pure module `lib/characters/vault/core-guard.ts` (`CHARACTER_VAULT_CORE_FOLDERS`, `isOwnVaultCorePath`, `isOwnVaultEntryHidden`, `ownVaultCoreRefusal`) is the one statement of the rule.
+- `PathResolutionContext.hideCharacterVaults` / `AccessibleMountPointsQuery.hideCharacterVaults` are replaced by `guardOwnVault`: the participant tier is dropped, the character tier kept. The resolver refuses the vault root and core folders (`ACCESS_DENIED`, with a message naming the boundary) and tags the result `ownVaultGuarded`; `assertCharacterMayRead` / `assertCharacterMayWrite` refuse root-level files through `assertOwnVaultFileOpen`, before the new-file early return. `getAccessibleMountPoints` tags the guarded vault; `doc_list_files`, `doc_grep` and `doc_list_blobs` drop its core entries via `ownVaultEntryFilter`; `doc_read_blob` / `doc_write_blob` / `doc_delete_blob` refuse core paths. The `self` token resolves for opaque characters again.
+- Tests: new `lib/doc-edit/__tests__/own-vault-core-guard.test.ts`; the two `path-resolver-opacity-*` suites updated to the new rule.
+- Help: `character-system-transparency.md`, `document-editing-tools.md`, `character-editing.md`.
+
 #### Feature: the Green Room panel can be closed and docks into the transcript
 
 - The Green Room panel stayed pinned above the Salon transcript for the rest of the session. It now has a close button; closing it docks the room as a collapsed card inside the message list, placed after the last message that was on the page when the room began (the top for an opening), so it scrolls with the conversation. The card's disclosure shows the wardrobe, packing and activity record as before.

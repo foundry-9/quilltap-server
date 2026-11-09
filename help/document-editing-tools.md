@@ -35,6 +35,8 @@ doc_list_files(mount_point: "self")
 
 The convenience is twofold. A character need not recall the formal title its vault was christened with, and should that title ever change, `"self"` keeps pointing true. The vault's actual name and identifier continue to work exactly as before — `"self"` is an addition, never a replacement. The shorthand resolves only for the character acting as itself; an operator or a non-character caller falls through to ordinary name-and-identifier matching, so a store one has genuinely *named* "self" remains reachable in those contexts.
 
+A character without [System Transparency](character-system-transparency.md) holds the same latchkey to a smaller study: her own vault's root-level files and its **Prompts**, **Wardrobe**, **Outfits**, **Inventory**, **Mail** and **images** folders stay locked to her (and unlisted), while **Scenarios**, **Knowledge**, **Tools**, **lore**, **files** and any folder of her own making are hers to use as freely as any other store.
+
 ## A single address for any document: the `qtap://` URI
 
 Where the older custom hands one a *bundle* of parameters — a scope here, a mount point there, a path besides — there is now a single, tidy way to name any document the Scriptorium can reach: the **`qtap://` URI**. It is, simply, all three particulars folded into one address-card:

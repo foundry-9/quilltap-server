@@ -10,6 +10,10 @@
  * refused them. The listing leaked, and the disagreement read to a model as a
  * broken tool rather than a boundary.
  *
+ * Since the own-vault core guard, an opaque character's OWN vault is listed
+ * again — flagged `ownVaultGuarded`, with its root files and core folders
+ * filtered out — while peer vaults stay hidden.
+ *
  * Sibling of `path-resolver-opacity-group-stores.test.ts` (bug 152), and built
  * the same way: against the REAL tiered-mount-pool, mocking only the
  * repositories, the instance-settings singleton, and the database-store reader,
@@ -161,19 +165,20 @@ const PEERS = [PEER];
 beforeEach(() => jest.clearAllMocks());
 
 describe('getAccessibleMountPoints honours the covenant', () => {
-  it('omits BOTH vault tiers for an opaque character', async () => {
+  it('omits the peer vault and keeps her own, guarded, for an opaque character', async () => {
     mockWorld();
 
     const listed = await getAccessibleMountPoints({
       projectId: 'proj-1',
       characterId: ACTING,
       extraCharacterIds: PEERS,
-      hideCharacterVaults: true,
+      guardOwnVault: true,
     });
 
     const ids = listed.map((mp) => mp.id);
-    expect(ids).not.toContain(OWN_VAULT.id);
     expect(ids).not.toContain(PEER_VAULT.id);
+    expect(listed.find((mp) => mp.id === OWN_VAULT.id)).toMatchObject({ ownVaultGuarded: true });
+    expect(listed.find((mp) => mp.id === GROUP_STORE.id)?.ownVaultGuarded).toBeUndefined();
   });
 
   it('keeps the group and project tiers (bug 152 must not regress)', async () => {
@@ -183,7 +188,7 @@ describe('getAccessibleMountPoints honours the covenant', () => {
       projectId: 'proj-1',
       characterId: ACTING,
       extraCharacterIds: PEERS,
-      hideCharacterVaults: true,
+      guardOwnVault: true,
     });
 
     expect(listed.map((mp) => mp.id)).toEqual(expect.arrayContaining([GROUP_STORE.id, PROJECT_STORE.id]));
@@ -205,13 +210,13 @@ describe('getAccessibleMountPoints honours the covenant', () => {
 
   it('agrees with resolution: everything listed also opens', async () => {
     mockWorld();
-    const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(toolContext);
+    const guardOwnVault = await actingCharacterIsOpaqueToVaults(toolContext);
 
     const listed = await getAccessibleMountPoints({
       projectId: 'proj-1',
       characterId: ACTING,
       extraCharacterIds: PEERS,
-      hideCharacterVaults,
+      guardOwnVault,
     });
 
     expect(listed.length).toBeGreaterThan(0);
@@ -225,7 +230,7 @@ describe('getAccessibleMountPoints honours the covenant', () => {
 });
 
 describe('doc_list_files does not advertise a vault it cannot open', () => {
-  it('leaves both vault names out of the listing', async () => {
+  it('leaves the peer vault, and her own root-level files, out of the listing', async () => {
     mockWorld();
 
     const res = await handleListFiles({ scope: 'document_store' }, toolContext);
@@ -237,7 +242,7 @@ describe('doc_list_files does not advertise a vault it cannot open', () => {
     expect(mounts).toContain(GROUP_STORE.name);
   });
 
-  it('returns nothing for mount_point "self"', async () => {
+  it('returns no root-level files for mount_point "self"', async () => {
     mockWorld();
 
     const res = await handleListFiles({ scope: 'document_store', mount_point: SELF_VAULT_TOKEN }, toolContext);
@@ -246,7 +251,7 @@ describe('doc_list_files does not advertise a vault it cannot open', () => {
     expect(res.result?.files ?? []).toHaveLength(0);
   });
 
-  it('returns nothing for the acting character own vault by name', async () => {
+  it('returns no root-level files for the acting character own vault by name', async () => {
     mockWorld();
 
     const res = await handleListFiles({ scope: 'document_store', mount_point: OWN_VAULT.name }, toolContext);
@@ -267,7 +272,7 @@ describe('doc_list_files does not advertise a vault it cannot open', () => {
 });
 
 describe('doc_grep does not search or name a hidden vault', () => {
-  it('omits vault hits for an opaque character', async () => {
+  it('omits peer-vault hits and own-vault root-file hits for an opaque character', async () => {
     mockWorld();
 
     const res = await handleGrep({ query: 'quarry' }, toolContext);
@@ -279,7 +284,7 @@ describe('doc_grep does not search or name a hidden vault', () => {
     expect(mounts).toContain(GROUP_STORE.name);
   });
 
-  it('finds nothing when restricted to "self"', async () => {
+  it('finds nothing in root-level files when restricted to "self"', async () => {
     mockWorld();
 
     const res = await handleGrep({ query: 'quarry', mount_point: SELF_VAULT_TOKEN }, toolContext);
@@ -300,7 +305,7 @@ describe('doc_grep does not search or name a hidden vault', () => {
 });
 
 describe('the blob tools resolve mounts under the same covenant', () => {
-  it('refuses a read from the acting character own vault, and from "self"', async () => {
+  it('refuses a read of a root-level blob in her own vault, by name and by "self"', async () => {
     mockWorld();
 
     await expect(
@@ -319,7 +324,7 @@ describe('the blob tools resolve mounts under the same covenant', () => {
     ).resolves.toMatchObject({ success: false });
   });
 
-  it('refuses a write to the acting character own vault', async () => {
+  it('refuses a root-level write to the acting character own vault', async () => {
     mockWorld();
 
     await expect(
