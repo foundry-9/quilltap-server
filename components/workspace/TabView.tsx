@@ -95,7 +95,16 @@ function renderView(tab: WorkspaceTab) {
       return <ScriptoriumView initialStoreId={(tab.payload as ScriptoriumTabPayload | undefined)?.storeId} />
     case 'settings': {
       const payload = (tab.payload as SettingsTabPayload | undefined) ?? {}
-      return <SettingsView tab={payload.tab} section={payload.section} />
+      return (
+        <SettingsView
+          group={payload.group}
+          tab={payload.tab}
+          section={payload.section}
+          persona={payload.persona}
+          q={payload.q}
+          provider={payload.provider}
+        />
+      )
     }
     case 'files':
       return <FilesView />

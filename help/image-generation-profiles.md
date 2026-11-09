@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=images&section=image-profiles
+url: /settings?section=image-profiles
 ---
 
 # Image Generation Profiles
 
-> **[Open this page in Quilltap](/settings?tab=images&section=image-profiles)**
+> **[Open this page in Quilltap](/settings?section=image-profiles)**
 
 Image Generation Profiles configure services that can create images during chats. With an image generation profile set up, you can ask an AI to generate images as part of your conversations.
 
@@ -77,20 +77,28 @@ The reading is discarded the moment you edit the Source, on the grounds that fac
 
 **On the subject of NanoGPT**, whose arcade is the first to be wired for this: the `flux-2-dev-lora` pair will take four adapters, the wider Flux 2 Klein, Z-Image and Krea families three, and the `flux-lora` and Pruna families one apiece. Should NanoGPT advertise a LoRA-capable model whose particular dialect Quilltap does not yet know, the panel will still offer you a single adapter — but the establishment declines to guess at the wording and will say so in the logs rather than post an order the model would silently ignore.
 
-## Accessing Image Generation Profiles
+## Finding Your Image Profiles
+
+Image profiles are kept with the providers that paint them, under **Settings → Connections → Providers**:
 
 1. Click **Settings** (gear icon) in the left sidebar
-2. Click the **Image Profiles** tab
-3. You'll see any existing profiles and an option to create new ones
+2. Choose the **Connections** group and open the **Providers** card
+3. With the view set to **By provider** (the default), open the card of the provider you paint with — OpenAI, Google, NanoGPT and so on
 
-## Viewing Image Profiles
+Inside, beneath the provider's keys, every profile that uses that provider is listed in one column — connection, image and embedding alike. Image profiles wear an **Image** badge and the Lantern's portrait, for the Lantern is the member of staff who answers for pictures. Click a row to open it.
 
-The profiles list shows:
+### The other way of looking at it: By kind
 
-- **Profile Name** — Name you gave the profile
-- **Provider** — Which image service (OpenAI, Google, Grok, OpenRouter, Z.AI, NanoGPT)
+To see every image profile you own in one gallery, regardless of who paints it, click **By kind** at the top of the Providers card and open **Image Profiles**. That list is the one Quilltap has always shown, with its **New Profile** button, its edit and delete buttons, and the full set of badges. A link straight to this page (the one above, for instance) opens *By kind* with **Image Profiles** already unfolded. Quilltap remembers whichever view you chose last, on this browser.
+
+## What a Profile Shows
+
+On a provider's card, each image profile row shows its **name**, its **model**, the **Image** kind badge and the Lantern's badge. The *By kind* list adds:
+
 - **Default Badge** — If this is the default image generation profile
-- **Status** — Whether configuration is complete
+- **Uncensored Badge** — If the profile is marked as willing to paint what more delicate establishments decline
+- **Provider** — Which image service (OpenAI, Google, Grok, OpenRouter, Z.AI, NanoGPT), and a missing-key warning should the profile have lost its key
+- **Parameters** — The settings the profile sends along
 - **Actions** — Buttons to edit or delete the profile
 
 ## Creating a New Image Generation Profile
@@ -132,18 +140,16 @@ First, obtain an API key from one of the image generation providers Quilltap act
 
 ### Step 2: Add the Key to Quilltap
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
-2. Click **Add API Key**
-3. Select the image provider from the dropdown
-4. Enter your API key
-5. Click Save
-6. Test the key to verify it works
+1. If the provider already has a card under **Settings → Connections → Providers**, open it and choose **+ Add → API key**; the provider is filled in for you. If it has no card yet, use **Add an API key** on the **Add a provider** card at the end of the list and pick the provider yourself
+2. Give the key a label, paste the key, and click **Create API Key**
+3. Click **Test** on the new key row to verify it works
+
+See [API Keys](api-keys-settings.md) for the whole ceremony.
 
 ### Step 3: Create the Image Profile
 
-1. Go back to Settings → **Image Profiles** tab
-2. Click **Add Image Profile**
-3. A form appears with these fields:
+1. On the provider's card, click **+ Add** and choose **Image profile**. The form opens with that provider already selected, its first model filled in, and — if the provider holds exactly one key — that key chosen as well. (The **Image profile** entry is greyed out on the card of a provider that paints nothing, such as Ollama.) From *By kind*, the **New Profile** button on the Image Profiles list opens the same form with OpenAI selected, and you choose the provider yourself.
+2. The form's fields:
 
    **Basic Information:**
    - **Profile Name** — Name this configuration (e.g., "DALL-E Production", "Stable Diffusion Fast")
@@ -168,21 +174,20 @@ First, obtain an API key from one of the image generation providers Quilltap act
 
    **LoRA Adapters:** present only when the chosen model accepts them — see *Adapters, or the Borrowing of Another Hand* above.
 
-4. Click **Save** to create the profile
+3. Click **Save** to create the profile
 
 ## Editing an Image Profile
 
 To modify an existing profile:
 
-1. Find the profile in the list
-2. Click **Edit** button (pencil icon)
-3. Update any settings:
+1. Click its row on the provider's card — or, in *By kind*, its **Edit** button
+2. Update any settings:
    - Profile name
    - API key (switch to different key)
    - Model (switch to different model — the options below rearrange themselves to suit it, keeping what you had set)
    - Size, quality, or style defaults
    - LoRA adapters, where the model accepts them
-4. Click **Save Changes**
+3. Click **Save Changes**
 
 ## Setting a Default Profile
 
@@ -193,9 +198,9 @@ Your default profile is used when:
 
 To set as default:
 
-1. Find the profile in the list
-2. Click **Set as Default**
-3. A checkmark shows this is now the default
+1. Open the profile (its row on the provider's card, or **Edit** in *By kind*)
+2. Tick **Set as default profile** and save
+3. The *By kind* list marks it with a **Default** badge
 4. Other profiles become secondary options
 
 **Why have a default:**
@@ -208,8 +213,8 @@ To set as default:
 
 To remove a profile:
 
-1. Find the profile in the list
-2. Click **Delete** button (trash icon)
+1. Switch the Providers card to **By kind** and open **Image Profiles** — deletion is done from the full list
+2. Click **Delete** on the profile
 3. Confirm the deletion
 4. Profile is removed
 5. Any chats using it will need a new profile
@@ -338,7 +343,7 @@ Should you set a dial the chosen model has never heard of — an Extra High qual
 ### Before First Use
 
 1. Create API key with image provider
-2. Add API key to Quilltap (API Keys tab)
+2. Add API key to Quilltap (on the provider's card, or **Add a provider** if it has none)
 3. Create image generation profile
 4. Test profile works
 5. Set as default (optional)
@@ -362,13 +367,13 @@ Should you set a dial the chosen model has never heard of — an Extra High qual
 
 ### The provider declined the picture
 
-Most image providers keep a safety filter of their own, and a commission it dislikes comes back refused rather than painted. When the Concierge is on duty, he tries once more on an uncensored image profile — the one named on his desk (`/settings?tab=concierge&section=uncensored-desk`), or failing that any image profile with **Uncensored-compatible** ticked — and posts a short note in the chat saying who declined and who obliged. That tick is all an image profile needs to be a candidate; naming it on the Concierge's desk merely makes it the first choice. The same applies to the Lantern's backdrops and Aurora's portraits, in any chat that is not **Locked**. On a Locked chat, or with nobody to ask, the Concierge's note says so instead. See [The Concierge](the-concierge.md).
+Most image providers keep a safety filter of their own, and a commission it dislikes comes back refused rather than painted. When the Concierge is on duty, he tries once more on an uncensored image profile — the one named on his desk (`/settings?section=uncensored-desk`), or failing that any image profile with **Uncensored-compatible** ticked — and posts a short note in the chat saying who declined and who obliged. That tick is all an image profile needs to be a candidate; naming it on the Concierge's desk merely makes it the first choice. The same applies to the Lantern's backdrops and Aurora's portraits, in any chat that is not **Locked**. On a Locked chat, or with nobody to ask, the Concierge's note says so instead. See [The Concierge](the-concierge.md).
 
 ### API key validation failed
 
 **Solution:**
 
-- Verify API key in API Keys tab
+- Verify the API key with **Test** on the provider's card
 - Test key directly with provider
 - Check that key has image generation permission
 - Some API keys may have restricted permissions
@@ -399,7 +404,7 @@ Most image providers keep a safety filter of their own, and a commission it disl
 **Solutions:**
 
 - Create or select an image profile
-- Verify API key in API Keys tab
+- Verify the API key with **Test** on the provider's card
 - Check provider account status and credits
 - Try a different model
 
@@ -461,7 +466,7 @@ The notice above the composer and the toast both carry the reason verbatim, so t
 
 ## Wardrobe Images
 
-The **Wardrobe Images** card on the same tab names the profile that draws pictures of wardrobe items and outfits; left at its default, your default image profile does the work. See [Wardrobe Images](wardrobe-images.md), or navigate there with `help_navigate(url: "/settings?tab=images&section=wardrobe-images")`.
+The **Wardrobe Images** card in the Images group names the profile that draws pictures of wardrobe items and outfits; left at its default, your default image profile does the work. See [Wardrobe Images](wardrobe-images.md), or navigate there with `help_navigate(url: "/settings?section=wardrobe-images")`.
 
 ## In-Chat Settings Access
 
@@ -471,12 +476,12 @@ Characters with help tools enabled can read your configured image profiles and s
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=images&section=image-profiles")`
+`help_navigate(url: "/settings?section=image-profiles")`
 
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for image providers
-- [The Concierge](the-concierge.md) — His tab (`/settings?tab=concierge`) holds the uncensored image profile and the image-prompt crafter; governs whether story-background prompts are drafted candidly, and reroutes a refused picture to an uncensored image profile
+- [The Concierge](the-concierge.md) — His tab (`/settings?group=moderation`) holds the uncensored image profile and the image-prompt crafter; governs whether story-background prompts are drafted candidly, and reroutes a refused picture to an uncensored image profile
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

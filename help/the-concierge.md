@@ -1,26 +1,26 @@
 ---
-url: /settings?tab=concierge
+url: /settings?group=moderation
 ---
 
 # The Concierge
 
-> **[Open this page in Quilltap](/settings?tab=concierge)**
+> **[Open this page in Quilltap](/settings?group=moderation)**
 
 Every establishment of any standing keeps a Concierge: a discreet gentleman at the front desk who knows which tradesmen will take which commissions, and who — when the usual firm declines an errand on grounds of propriety — knows a less squeamish firm across the street. Quilltap's Concierge does precisely this for your conversations. When an ordinary provider refuses a turn, a background errand or a picture on content grounds, he carries the matter to the **uncensored desk**, says so in the chat, and, should the refusals pile up, moves the whole conversation there himself.
 
-He now keeps an office of his own: a Settings tab labelled **The Concierge** (`/settings?tab=concierge`), with five cards.
+He now keeps an office of his own: a Settings group labelled **Moderation** (`/settings?group=moderation`), with four cards — **On Duty**, **The Uncensored Desk**, **When a Provider Refuses** and **Display** — and a fifth, **Pre-Screening**, folded away under Advanced.
 
 | Card | What it governs | Deep link |
 |---|---|---|
-| **On Duty** | One switch: whether the Concierge works at all | `/settings?tab=concierge&section=on-duty` |
-| **The Uncensored Desk** | Who is asked when the usual providers refuse — text, pictures, image descriptions, and the image-prompt crafter | `/settings?tab=concierge&section=uncensored-desk` |
-| **When a Provider Refuses** | How many refusals before he switches a chat, and what posture new chats begin in | `/settings?tab=concierge&section=refusals` |
-| **Display** | How flagged or Unmoderated content looks: show, blur or collapse, and warning badges | `/settings?tab=concierge&section=display` |
-| **Pre-screening** (advanced) | The optional classifier that reads messages and chat summaries *before* anything is refused | `/settings?tab=concierge&section=pre-screening` |
+| **On Duty** | One switch: whether the Concierge works at all | `/settings?section=on-duty` |
+| **The Uncensored Desk** | Who is asked when the usual providers refuse — text, pictures, image descriptions, and the image-prompt crafter | `/settings?section=uncensored-desk` |
+| **When a Provider Refuses** | How many refusals before he switches a chat, and what posture new chats begin in | `/settings?section=refusals` |
+| **Display** | How flagged or Unmoderated content looks: show, blur or collapse, and warning badges | `/settings?section=display` |
+| **Pre-screening** (advanced) | The optional classifier that reads messages and chat summaries *before* anything is refused | `/settings?section=pre-screening` |
 
 ## Where His Papers Used to Be
 
-Formerly the Concierge's controls were scattered about the house like a butler's spare keys: a **Dangerous Content** card on the Chat tab, an uncensored fallback tucked into the Chat tab's **Image Description** card, and an "Image Prompt Expansion LLM" filed under the cheap-LLM settings. All three have moved into his office, and the Chat tab no longer carries any of them.
+Formerly the Concierge's controls were scattered about the house like a butler's spare keys: a **Dangerous Content** card on the old Chat tab, an uncensored fallback tucked into that tab's **Image Description** card, and an "Image Prompt Expansion LLM" filed under the cheap-LLM settings. All three have moved into his office, and the Chat settings no longer carry any of them.
 
 His old global mode — **Off**, **Detect Only**, **Auto-Route** — has been retired rather than renamed. Your settings were carried across as follows:
 
@@ -74,7 +74,7 @@ Each change of posture is announced in the chat history by the Concierge himself
 
 A single switch. **On** (the default) and the Concierge does everything this page describes. **Off** and he does nothing whatsoever: no failover, no announcements, no auto-switch, no pre-screening. Every chat, whatever its posture, goes to its usual providers and a refusal is simply a refusal.
 
-While he is off duty, the per-chat Concierge control in the Salon sidebar and on the new-chat form is shown but disabled, with a note pointing back here — *"The Concierge is off duty — turn him on in Settings → The Concierge."* A disabled control tells you where the switch is; a missing one would only leave you hunting.
+While he is off duty, a small chip appears in the **attention strip** at the head of the Settings page — and, should you click it, you are carried straight to the **On Duty** card, where the switch lives. The per-chat Concierge control in the Salon sidebar and on the new-chat form is shown but disabled, with a note pointing back here — *"The Concierge is off duty — turn him on in Settings → Moderation → On Duty."* A disabled control tells you where the switch is; a missing one would only leave you hunting.
 
 ## Card Two: The Uncensored Desk
 
@@ -82,15 +82,15 @@ The firm across the street — which profiles the Concierge turns to when an ord
 
 - **Uncensored text profile** — the connection profile that takes a refused text turn or background errand, and that answers every turn in an Unmoderated chat.
 - **Uncensored image profile** — the image profile that paints a refused picture, and every picture in an Unmoderated chat.
-- **Uncensored vision profile** — the describer of last resort for attached pictures. When the primary image describer (Chat tab → **Image Description**) refuses to describe an attachment, or returns something so hedged it reads as a refusal, this profile is given its turn. Unlike the text and image pickers it never auto-detects — the vision understudy stands in only when you name one. (It lived on the Chat tab's Image Description card until now.)
+- **Uncensored vision profile** — the describer of last resort for attached pictures. When the primary image describer (Settings → Images → **Image Description**) refuses to describe an attachment, or returns something so hedged it reads as a refusal, this profile is given its turn. Unlike the text and image pickers it never auto-detects — the vision understudy stands in only when you name one. (It lived on the old Chat tab's Image Description card until now.)
 - **Image-prompt crafter** — the language model that turns an image request into a finished prompt when the picture is bound for the uncensored desk: resolving character placeholders into visual descriptions and drafting the scene. Unlike the other three it may be **any** connection profile; left unset, your ordinary cheap LLM does the drafting. (This was the "Image Prompt Expansion LLM" on the Chat tab.)
 
 The text and image pickers offer **auto-detect**, which takes the first profile you have ticked **Uncensored-compatible**. Naming a profile outright merely makes it the first choice; the tick alone is enough to make a profile a candidate for any reroute.
 
 That **Uncensored-compatible** tick lives where it always has, on the profile forms themselves:
 
-1. For text: **AI Providers** tab → **Connection Profiles** (`/settings?tab=providers&section=connection-profiles`), edit the profile, tick **Uncensored-compatible**, save.
-2. For pictures: **Images** tab → **Image Profiles** (`/settings?tab=images&section=image-profiles`), likewise.
+1. For text: **Connections** group → **Providers** → **Connection Profiles** (`/settings?section=connection-profiles`), edit the profile, tick **Uncensored-compatible**, save.
+2. For pictures: **Images** tab → **Image Profiles** (`/settings?section=image-profiles`), likewise.
 
 If no profile is ticked, the desk card says so and links you to both.
 
@@ -238,15 +238,15 @@ Characters with help tools enabled can read the Concierge's settings during a co
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=concierge")`
+`help_navigate(url: "/settings?group=moderation")`
 
 Or straight to a particular card:
 
-- `help_navigate(url: "/settings?tab=concierge&section=on-duty")`
-- `help_navigate(url: "/settings?tab=concierge&section=uncensored-desk")`
-- `help_navigate(url: "/settings?tab=concierge&section=refusals")`
-- `help_navigate(url: "/settings?tab=concierge&section=display")`
-- `help_navigate(url: "/settings?tab=concierge&section=pre-screening")`
+- `help_navigate(url: "/settings?section=on-duty")`
+- `help_navigate(url: "/settings?section=uncensored-desk")`
+- `help_navigate(url: "/settings?section=refusals")`
+- `help_navigate(url: "/settings?section=display")`
+- `help_navigate(url: "/settings?section=pre-screening")`
 
 ## Related Topics
 

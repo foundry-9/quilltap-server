@@ -175,7 +175,7 @@ version left on display — the swipe counter advances to it, and the line it
 replaced remains one swipe to the left.
 
 If the character's model shows its thinking (see
-[Chat Settings](chat-settings.md)), that too appears live while the re-roll runs.
+[Chat Settings](chat-settings.md), under Composer & Display), that too appears live while the re-roll runs.
 
 Should the whole business fail — a provider that refuses, or one that accepts
 the request and then falls silent — you are told so in a notice, the old line is
@@ -308,9 +308,9 @@ When deleting such messages, you may see:
 
 ### Configuring Behavior
 
-Set your default preference in Chat Settings:
+Set your default preference in Settings:
 
-1. Go to **Settings** > **Chat Settings**
+1. Go to **Settings** > **Context & Memory**
 2. Find **Memory Cascade** settings
 3. Choose default behavior for deletions
 

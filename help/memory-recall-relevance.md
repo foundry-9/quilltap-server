@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory&section=memory-recall
+url: /settings?section=memory-recall
 ---
 
 # Recall Relevance
 
-> **[Open this page in Quilltap](/settings?tab=memory&section=memory-recall)**
+> **[Open this page in Quilltap](/settings?section=memory-recall)**
 
 A character's memories are not all of a piece. Some are true of them wherever they go — that they are a coward in matters of the heart, that they cannot abide a poorly steeped tea. Others are true only within the walls of a particular project or story — a vow sworn to a figure who exists only in *that* tale, a fact about a city that stands only in *that* world. The Commonplace Book has, for some time now, quietly noted which of the two each memory is. *Recall Relevance* is where you decide what Quilltap does with that note when a memory tries to surface in a conversation it may not belong to.
 
@@ -150,7 +150,7 @@ This is the Book's own housekeeping and asks nothing of you. You will see the ch
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory&section=memory-recall")`
+`help_navigate(url: "/settings?section=memory-recall")`
 
 ## Related Settings
 

@@ -40,7 +40,7 @@ describe('labelFromUrl', () => {
 
   // Tab query parameter tests
   it('adds tab to settings path', () => {
-    expect(labelFromUrl('/settings?tab=chat')).toBe('Settings → Chat')
+    expect(labelFromUrl('/settings?tab=chat')).toBe('Settings → Composer & Display')
   })
 
   it('adds tab to appearance', () => {
@@ -48,12 +48,14 @@ describe('labelFromUrl', () => {
   })
 
   it('labels the Concierge tab', () => {
-    expect(labelFromUrl('/settings?tab=concierge')).toBe('Settings → Concierge')
-    expect(labelFromUrl('/settings?tab=concierge&section=uncensored-desk')).toBe('Settings → Concierge → Uncensored Desk')
+    expect(labelFromUrl('/settings?tab=concierge')).toBe('Settings → Moderation')
+    expect(labelFromUrl('/settings?tab=concierge&section=uncensored-desk')).toBe('Settings → Moderation → The Uncensored Desk')
+    expect(labelFromUrl('/settings?section=uncensored-desk')).toBe('Settings → Moderation → The Uncensored Desk')
+    expect(labelFromUrl('/settings?group=security')).toBe('Settings → Security')
   })
 
   it('capitalizes tab name', () => {
-    expect(labelFromUrl('/settings?tab=system')).toBe('Settings → System')
+    expect(labelFromUrl('/settings?tab=system')).toBe('Settings → Data & Maintenance')
   })
 
   // Tab with hyphens
@@ -63,15 +65,15 @@ describe('labelFromUrl', () => {
 
   // Section query parameter tests
   it('adds section after tab', () => {
-    expect(labelFromUrl('/settings?tab=chat&section=dangerous-content')).toBe('Settings → Chat → Dangerous Content')
+    expect(labelFromUrl('/settings?tab=chat&section=dangerous-content')).toBe('Settings → Composer & Display')
   })
 
   it('capitalizes section words', () => {
-    expect(labelFromUrl('/settings?tab=system&section=data-management')).toBe('Settings → System → Data Management')
+    expect(labelFromUrl('/settings?tab=system&section=data-management')).toBe('Settings → Data & Maintenance')
   })
 
   it('handles multiple hyphens in section', () => {
-    expect(labelFromUrl('/settings?tab=appearance&section=theme-color-palette')).toBe('Settings → Appearance → Theme Color Palette')
+    expect(labelFromUrl('/settings?tab=appearance&section=theme-color-palette')).toBe('Settings → Appearance')
   })
 
   // Section without tab
@@ -80,7 +82,7 @@ describe('labelFromUrl', () => {
   })
 
   it('capitalizes single-word section', () => {
-    expect(labelFromUrl('/settings?section=appearance')).toBe('Settings → Appearance')
+    expect(labelFromUrl('/settings?section=appearance')).toBe('Settings → Appearance → Appearance')
   })
 
   // Edge cases
@@ -93,11 +95,11 @@ describe('labelFromUrl', () => {
   })
 
   it('ignores unrelated query parameters', () => {
-    expect(labelFromUrl('/settings?other=value&tab=chat')).toBe('Settings → Chat')
+    expect(labelFromUrl('/settings?other=value&tab=chat')).toBe('Settings → Composer & Display')
   })
 
   it('handles query parameters in different order', () => {
-    expect(labelFromUrl('/settings?section=test&tab=chat')).toBe('Settings → Chat → Test')
+    expect(labelFromUrl('/settings?section=test&tab=chat')).toBe('Settings → Composer & Display')
   })
 
   // More complex scenarios

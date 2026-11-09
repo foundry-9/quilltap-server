@@ -1,12 +1,12 @@
 ---
-url: /settings?tab=templates&section=prompts
+url: /settings?section=prompts
 ---
 
 # Prompts
 
-> **[Open this page in Quilltap](/settings?tab=templates&section=prompts)**
+> **[Open this page in Quilltap](/settings?section=prompts)**
 
-The Prompts tab lets you create and manage reusable prompt templates. These templates can be used with characters and in chats to provide consistent instructions to the AI.
+The **Prompts** card (in the Characters & Prompts group of Settings) lets you create and manage reusable prompt templates. These templates can be used with characters and in chats to provide consistent instructions to the AI.
 
 ## Understanding Prompts
 
@@ -445,7 +445,7 @@ Writing Aids:
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=templates&section=prompts")`
+`help_navigate(url: "/settings?section=prompts")`
 
 ## Related Settings
 

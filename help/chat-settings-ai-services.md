@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=chat&section=context-compression
+url: /settings?section=context-compression
 ---
 
 # Chat Settings — The Staff Behind the Scenes
 
-> **[Open this page in Quilltap](/settings?tab=chat&section=context-compression)**
+> **[Open this page in Quilltap](/settings?section=context-compression)**
 
 A good house runs on staff one seldom sees. These are the Chat Settings that govern them: the thrifty understudy who handles the errands, the describer who looks at your pictures, the archivist who minds the memories when a message is struck out, the clerk who trims a long conversation down to size, and the bookkeepers who count tokens and keep the logs. The rest of the page is described in [Chat Settings](chat-settings.md) and [The Composer and Your Typing](chat-settings-composer.md).
 
@@ -27,7 +27,7 @@ Image description is *not* among them, though it is thrifty by disposition: it n
 **How to configure:**
 
 1. Click **Enable Cheap LLM**
-2. Choose a connection profile from the dropdown (must be created in Connection Profiles tab)
+2. Choose a connection profile from the dropdown (must first be created under Settings → Connections → Providers → Connection Profiles)
 3. The selected profile is used for cost-saving operations
 4. Your main profile is used for actual chat interactions
 
@@ -74,13 +74,13 @@ These settings govern which model is called upon to do the describing.
 **Setting Options:**
 
 - **Primary image description profile** — the model that describes your images. Only profiles with the vision checkbox ticked appear in the list. Leaving it on **Auto-select vision-capable profile** does *not* disable descriptions; it lets Quilltap choose for you, preferring a profile you have marked **Cheap** and otherwise taking the first sighted profile it finds. Since the choice is then somewhat arbitrary, naming one explicitly is the wiser course.
-- **The uncensored fallback has moved.** The describer of last resort — consulted only when the primary refuses the commission or returns something unusable — is now the **Uncensored vision profile** on the Concierge's desk (**The Concierge** tab, `/settings?tab=concierge&section=uncensored-desk`). A more permissive model is the usual choice: a local Ollama LLaVA variant, an uncensored model by way of OpenRouter. See [The Concierge](the-concierge.md).
+- **The uncensored fallback has moved.** The describer of last resort — consulted only when the primary refuses the commission or returns something unusable — is now the **Uncensored vision profile** on the Concierge's desk (**The Concierge** tab, `/settings?section=uncensored-desk`). A more permissive model is the usual choice: a local Ollama LLaVA variant, an uncensored model by way of OpenRouter. See [The Concierge](the-concierge.md).
 
 **How to configure:**
 
 1. Tick **Supports image attachments (vision input)** on at least one connection profile whose model can actually read pictures — otherwise the dropdown will be empty.
 2. Select that profile as your **primary**. Small, quick, inexpensive models do this job admirably: `gpt-4o-mini`, `claude-haiku-4-5`, `gemini-2.0-flash`. Reasoning models are a poor fit — slow, dear, and inclined to spend their whole allowance thinking rather than answering.
-3. Optionally name an **Uncensored vision profile** on the Concierge's tab, if your chats venture where a well-mannered describer will decline to follow.
+3. Optionally name an **Uncensored vision profile** on the Concierge's desk (the Moderation group of Settings), if your chats venture where a well-mannered describer will decline to follow.
 
 **What happens:**
 
@@ -325,7 +325,7 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 - Confirm at least one connection profile has **Supports image attachments (vision input)** ticked — with none, the describer dropdown is empty and no description can be produced
 - Confirm that profile's model can genuinely read images; a ticked box on a sightless model yields an empty answer, which Quilltap reports rather than passes off as a description
-- If the description reads like a polite refusal, name an **Uncensored vision profile** on the Concierge's tab (`/settings?tab=concierge&section=uncensored-desk`) — without one, a refusal is final
+- If the description reads like a polite refusal, name an **Uncensored vision profile** on the Concierge's desk (the Moderation group of Settings) (`/settings?section=uncensored-desk`) — without one, a refusal is final
 - If descriptions appear for uploads but a Quilltap-generated image seems described oddly, remember that generated images are described by the prompt that painted them rather than by any describer
 - If nothing appears and no error does either, check the LLM logs for an **IMAGE_DESCRIPTION** entry: a minute-long call that ends in a timeout means the describing model is too slow for inline duty
 - Reasoning models (`o1`, `o3`, `gpt-5`, and kin) make poor describers — they spend their tokens thinking. Prefer `gpt-4o-mini`, `claude-haiku-4-5`, or `gemini-2.0-flash`
@@ -334,7 +334,7 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=chat&section=context-compression")`
+`help_navigate(url: "/settings?section=context-compression")`
 
 ## Related Settings
 

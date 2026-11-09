@@ -31,6 +31,13 @@ interface ProfileModalProps {
    * understudies, which is the right answer rather than a crash.
    */
   allProfiles?: ConnectionProfile[]
+  /**
+   * Provider to preselect on a *new* profile (the per-provider card's Add
+   * menu). Applied through the same path as picking it from the select, so
+   * the base-URL default and capability seeds follow; its key is chosen too
+   * when the provider has exactly one. Ignored when editing.
+   */
+  initialProvider?: string
   form: {
     formData: ProfileFormData
     setField: (name: keyof ProfileFormData, value: any) => void
@@ -62,6 +69,7 @@ export function ProfileModal({
   providers,
   takenNames,
   allProfiles = [],
+  initialProvider,
   form,
   operations,
 }: ProfileModalProps) {
@@ -342,6 +350,19 @@ export function ProfileModal({
       form.setField('multiCharacterPrefill', defaultMultiCharacterPrefill(newProvider))
     }
   }
+
+  // Preselect the provider on opening a new profile from a provider card.
+  useEffect(() => {
+    if (!isOpen || profile?.id || !initialProvider) return
+    console.debug('[ProfileModal] Preselecting provider for new profile', { provider: initialProvider })
+    handleProviderChange(initialProvider)
+    const keysForProvider = apiKeys.filter((k) => k.provider === initialProvider)
+    if (keysForProvider.length === 1) {
+      form.setField('apiKeyId', keysForProvider[0].id)
+    }
+    // Once per opening: re-running on every render would undo the user's own choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialProvider, profile?.id])
 
   // Handle model change - auto-fill name if empty (new profile only)
   const handleModelChange = (modelName: string) => {

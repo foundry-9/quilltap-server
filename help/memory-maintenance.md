@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory&section=memory-maintenance
+url: /settings?section=memory-maintenance
 ---
 
 # Memory Maintenance
 
-> **[Open this page in Quilltap](/settings?tab=memory&section=memory-maintenance)**
+> **[Open this page in Quilltap](/settings?section=memory-maintenance)**
 
 The Commonplace Book grows. Every conversation adds entries, underlines old ones, and pins related observations together. Left entirely to its own devices, a much-loved character's shelves can run to tens of thousands of items — a splendid predicament, but rather a heavy one for a local machine to lift at every turn, and a muddle besides: five notes about one long evening stay five notes, none of them aware of the others.
 
@@ -125,7 +125,7 @@ If your instance predates Quilltap 4.3, run **Repair Missing Embeddings** (just 
 
 ## Memories About Others
 
-> Deep link: [/settings?tab=memory&section=memory-extraction-grain](/settings?tab=memory&section=memory-extraction-grain)
+> Deep link: [/settings?section=memory-extraction-grain](/settings?section=memory-extraction-grain)
 
 The **Extraction Grain** card changes how often a character writes down what they notice about *other* characters. A note every turn meant a four-person room could produce a dozen fragments a turn about one thread of conversation. Now:
 
@@ -155,7 +155,7 @@ In a character's memory list:
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory&section=memory-maintenance")`
+`help_navigate(url: "/settings?section=memory-maintenance")`
 
 ## Related Settings
 

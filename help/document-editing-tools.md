@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat
+url: /settings?group=composer-display
 ---
 
 # Document Editing Tools
@@ -136,5 +136,5 @@ Document editing tools appear as a group in the **Tool Settings** panel (accessi
 To navigate to the chat settings where tools can be configured:
 
 ```
-help_navigate(url: "/settings?tab=chat")
+help_navigate(url: "/settings?group=composer-display")
 ```

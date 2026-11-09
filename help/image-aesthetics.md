@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=images&section=default-aesthetics
+url: /settings?section=default-aesthetics
 ---
 
 # Default Aesthetics — A House Style for Every Picture
@@ -15,7 +15,7 @@ The two resolve **independently**, so you may dress your people in one tradition
 
 ## Where they live
 
-Both fields await you on the **Images** settings tab, in the **Default Aesthetics** card. Each is a proper Markdown editor; write as plainly or as floridly as you please, and press **Save**. Clearing a field and saving removes the instruction altogether.
+Both fields await you in the **Images** group of Settings, on the **Default Aesthetics** card. Each is a proper Markdown editor; write as plainly or as floridly as you please, and press **Save**. Clearing a field and saving removes the instruction altogether.
 
 These are not hidden settings squirreled away in some ledger — each field is simply a tidy view onto a file in your **Quilltap General** document store (`lantern-aesthetics.md` and `aurora-aesthetics.md`). Should you prefer to drop those files in by hand, through the Scriptorium or otherwise, they will be honored exactly the same.
 
@@ -38,5 +38,5 @@ A few points of etiquette worth remembering:
 ## In-Chat Navigation
 
 ```
-help_navigate(url: "/settings?tab=images&section=default-aesthetics")
+help_navigate(url: "/settings?section=default-aesthetics")
 ```

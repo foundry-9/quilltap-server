@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory&section=embedding-profiles
+url: /settings?section=embedding-profiles
 ---
 
 # Embedding Provider Profiles
 
-> **[Open this page in Quilltap](/settings?tab=memory&section=embedding-profiles)**
+> **[Open this page in Quilltap](/settings?section=embedding-profiles)**
 
 Embedding Provider Profiles configure services that transform text into numerical representations (embeddings) for semantic search. Embeddings enable Quilltap to intelligently search through memories and find relevant context based on meaning, not just keywords.
 
@@ -19,17 +19,24 @@ Embeddings are a way to represent text numerically so that similar concepts have
 
 For example, a search for "cat" would find memories mentioning "feline" because embeddings understand that these are related.
 
-## Accessing Embedding Profiles
+## Finding Your Embedding Profiles
+
+Embedding profiles are filed with the providers that compute them, under **Settings → Connections → Providers**:
 
 1. Click **Settings** (gear icon) in the left sidebar
-2. Click the **Embedding Profiles** tab
-3. You'll see any existing profiles and options to create new ones
+2. Choose the **Connections** group and open the **Providers** card
+3. With the view set to **By provider** (the default), open the card of the provider that does your embedding — OpenAI, Ollama, NanoGPT, OpenRouter, or **BUILTIN** for the in-house clerk who needs no provider at all
 
-## Viewing Embedding Profiles
+On each provider's card, below its keys, every profile that uses the provider is listed together. Embedding profiles wear an **Embedding** badge and the Commonplace Book's portrait, since it is the Commonplace Book whose memory they serve. A keyless provider — Ollama on your own machine, or the Built-in embedder — still has a card of its own the moment any profile names it, though its key shelf is, naturally, bare. Click a row to open the profile.
 
-The profiles list shows:
+### The other way of looking at it: By kind
 
-- **Profile Name** — Name you gave the profile
+To see every embedding profile at once, with their vocabulary and embedding-status figures, click **By kind** at the top of the Providers card and open **Embedding Profiles**. This is the list Quilltap has always kept, with its **New Profile** button and its edit, delete and re-embed controls. A link straight to this page — the one above, say — opens *By kind* with **Embedding Profiles** already unfolded, and Quilltap remembers which view you chose last, on this browser.
+
+## What a Profile Shows
+
+On a provider's card, each embedding profile row shows its **name**, its **model**, the **Embedding** kind badge and the Commonplace Book's badge. The *By kind* list adds:
+
 - **Provider** — Which embedding service (OpenAI, Ollama, etc.)
 - **Status** — Whether configuration is complete
 - **Vocabulary Stats** — How many embeddings are stored
@@ -90,18 +97,14 @@ The profiles list shows:
 
 For cloud providers only:
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
-2. Click **Add API Key**
-3. Select "OpenAI" (or relevant provider)
-4. Enter your API key
-5. Test to verify it works
-6. Return to Embedding Profiles tab
+1. Under **Settings → Connections → Providers**, open the provider's card and choose **+ Add → API key** — the provider is already filled in. If the provider has no card yet, use **Add an API key** on the **Add a provider** card at the end of the list
+2. Give the key a label, paste it, and click **Create API Key**
+3. Click **Test** on the new key row to verify it works
 
 ### Step 4: Create the Profile
 
-1. In Settings → **Embedding Profiles** tab
-2. Click **Add Embedding Profile**
-3. A form appears with these fields:
+1. On the provider's card, click **+ Add** and choose **Embedding profile**. The form opens with that provider selected — and its key, if it holds exactly one. The entry is greyed out on the card of a provider that offers no embeddings. (From *By kind*, the **New Profile** button on the Embedding Profiles list opens the same form, and you pick the provider yourself.)
+2. The form's fields:
 
    **Basic Information:**
    - **Profile Name** — Name this configuration (e.g., "OpenAI Embeddings", "Local Ollama")
@@ -117,15 +120,14 @@ For cloud providers only:
    - **Base URL** — URL where Ollama is running (e.g., <http://localhost:11434>)
    - **Model** — Select which embedding model (must be installed)
 
-4. Click **Save** to create the profile
+3. Click **Save** to create the profile
 
 ## Editing an Embedding Profile
 
 To modify an existing profile:
 
-1. Find the profile in the list
-2. Click **Edit** button (pencil icon)
-3. Update settings:
+1. Click its row on the provider's card — or, in *By kind*, its **Edit** button
+2. Update settings:
    - Profile name
    - API key (cloud providers)
    - Base URL (local providers)
@@ -133,7 +135,7 @@ To modify an existing profile:
    - **Dimensions** — what to ask the provider for. Honoured by OpenAI's `text-embedding-3-*`; ignored by Ollama (which always returns the model's native length).
    - **Truncate output to (Matryoshka)** — a clever bit of mathematics, explained below.
    - **Normalise to unit length** — keep this on unless you have a specific reason to disable it.
-4. Click **Save Changes**
+3. Click **Save Changes**
 
 ## Matryoshka Truncation & Unit Normalisation
 
@@ -192,7 +194,7 @@ The Built-in (TF-IDF) profile is a counting-house clerk rather than a poet: it t
 
 - **It ignores the margin notes.** Each memory carries a small anchor line recording when and where it happened. A neural model reads that as helpful context; the clerk, counting words, found the dates and place names drowning out the memory itself, so that one fact told on two different days looked like two strangers. Under the Built-in profile the anchor line is left out of the tally. When it happened is still minded — two accounts more than a week apart are still kept as separate occasions — it simply no longer muddles the arithmetic.
 - **Its own thresholds for duplicates.** When a fresh memory arrives, the Book decides whether it repeats, reinforces or merely relates to one already on file. Under the Built-in profile those decisions use cut-offs fitted to the clerk's sparser figures, so a restatement reinforces the original instead of filing a near-twin beside it. Cloud profiles keep their own measures unchanged.
-- **Its own consolidation threshold.** See **Cluster threshold (Built-in)** in [Memory Consolidation](/settings?tab=memory&section=memory-maintenance).
+- **Its own consolidation threshold.** See **Cluster threshold (Built-in)** in [Memory Consolidation](/settings?section=memory-maintenance).
 - **Its vocabulary is refreshed only when it has grown stale.** The clerk's ledger of words is built from all your memories and the help pages. It used to be rebuilt — and every memory re-copied — whenever a single memory was written or edited by hand. Now a new memory is filed against the ledger already open, and the ledger is rebuilt only when a good many memories (twenty-five, or a tenth of the collection, whichever is larger) have arrived since it was last drawn up, when an import brings in a crate of them, or on the first start after this improvement arrived, so that every memory is re-copied once without its anchor line. The **Emb** badge shows that one-time re-copy draining.
 - **The help pages are indexed promptly.** On a Built-in instance the help pages were once skipped at startup because the indexing clerk arrived for work before his ledger had been unlocked; he now waits for it.
 
@@ -200,8 +202,8 @@ The Built-in (TF-IDF) profile is a counting-house clerk rather than a poet: it t
 
 To remove a profile:
 
-1. Find the profile in the list
-2. Click **Delete** button (trash icon)
+1. Switch the Providers card to **By kind** and open **Embedding Profiles** — deletion is done from the full list
+2. Click **Delete** on the profile
 3. Confirm the deletion
 4. Profile is removed (any dependent features may need reconfiguration)
 
@@ -236,8 +238,8 @@ Most embedding profile selection is automatic:
 1. The first embedding profile you create becomes active
 2. It's used automatically for memory operations
 3. To change:
-   - Edit Memory settings in Chat Settings tab
-   - Select different embedding profile if multiple exist
+   - Open the profile you want and tick **Set as default**
+   - Quilltap offers to re-embed your memories with it, since vectors from different profiles do not mix
 
 ### Vocabulary Management
 
@@ -273,7 +275,7 @@ Embeddings maintain a vocabulary of indexed memories:
 
 **Configuration:**
 
-- Requires OpenAI API key in API Keys tab
+- Requires an OpenAI API key (kept on OpenAI's provider card)
 - Choose between small and large models
 - Large model = higher quality, higher cost
 
@@ -356,7 +358,7 @@ Some installations support additional providers:
 
 **Monitor vocabulary size:**
 
-- Check Stats tab in Embedding Profiles
+- Check the vocabulary figures in the Embedding Profiles list (*By kind*)
 - Growing vocabulary = more memories indexed
 
 **When to refresh:**
@@ -389,7 +391,7 @@ Some installations support additional providers:
 
 **Solutions:**
 
-- Verify key in API Keys tab
+- Verify the key with **Test** on the provider's card
 - Test key directly with OpenAI
 - Check that key hasn't expired
 - Confirm account has credits
@@ -469,7 +471,7 @@ Characters with help tools enabled can read your configured embedding profiles d
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory&section=embedding-profiles")`
+`help_navigate(url: "/settings?section=embedding-profiles")`
 
 ## Related Settings
 

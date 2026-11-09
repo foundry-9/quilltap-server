@@ -629,7 +629,7 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
       const data = await createMutation.mutateAsync(body)
       if (autonomousEnabled) {
         showSuccessToast('Autonomous room created!')
-        navigate('/settings?tab=chat&section=autonomous-rooms')
+        navigate('/settings?section=autonomous-rooms')
       } else {
         showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
         // In the workspace this opens the new chat as a tab in place; the

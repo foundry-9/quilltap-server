@@ -273,6 +273,12 @@ export function workspaceReducer(
     case 'OPEN_TAB': {
       const focus = action.focus ?? true
       const identity = tabIdentity({ kind: action.kind, payload: action.payload })
+      // A settings deep link titles its tab by where it points, unless the opener names it.
+      const derivedTitle =
+        action.title ??
+        (action.kind === 'settings' && action.payload !== undefined
+          ? defaultTabMeta(action.kind, action.payload).title
+          : undefined)
       const existing = Object.values(state.tabs).find(
         (t) => tabIdentity(t) === identity
       )
@@ -283,14 +289,14 @@ export function workspaceReducer(
         let tabs = state.tabs
         if (
           (action.payload !== undefined && !payloadEqual(existing.payload, action.payload)) ||
-          (action.title !== undefined && action.title !== existing.title)
+          (derivedTitle !== undefined && derivedTitle !== existing.title)
         ) {
           tabs = {
             ...state.tabs,
             [existing.id]: {
               ...existing,
               payload: action.payload !== undefined ? action.payload : existing.payload,
-              title: action.title ?? existing.title,
+              title: derivedTitle ?? existing.title,
             },
           }
         }
@@ -317,7 +323,7 @@ export function workspaceReducer(
       // Defensive: focused pane could reference a collapsed right pane.
       if (targetPane === 'right' && !panes.right) targetPane = 'left'
 
-      const meta = defaultTabMeta(action.kind)
+      const meta = defaultTabMeta(action.kind, action.payload)
       const tab: WorkspaceTab = {
         id: action.id,
         kind: action.kind,

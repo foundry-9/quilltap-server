@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers
+url: /settings?group=connections
 ---
 
 # Configuring Chat Tools
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?group=connections)**
 
 This guide explains how to enable and disable AI tools for individual chats in Quilltap.
 
@@ -122,7 +122,7 @@ Some tools show as unavailable (grayed out). This means the tool **cannot be use
 **Search Web - Unavailable**
 
 - Reason: Web search is not enabled in the connection profile, or no search provider API key is configured
-- Solution: Enable web search in your connection profile settings and add a search provider API key (e.g., Serper) in Settings > API Keys
+- Solution: Enable web search in your connection profile settings and add a search provider API key (e.g., Serper) in Settings → Connections → Providers → API Keys
 
 If a tool you need is unavailable, the dialog shows the reason. Take the suggested action to make it available.
 
@@ -212,7 +212,7 @@ An MCP server's tools inherit one effect, which you set in the MCP plugin's conf
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=providers")`
+`help_navigate(url: "/settings?group=connections")`
 
 ## Related Topics
 

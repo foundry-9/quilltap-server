@@ -71,7 +71,7 @@ export function ImageDescriptionSettings({
         <p className="qt-text-xs">
           The uncensored fallback, for when this profile refuses to describe an image, now keeps company with the
           Concierge: see its vision profile under{' '}
-          <Link href="/settings?tab=concierge&section=uncensored-desk" className="qt-link">
+          <Link href="/settings?section=uncensored-desk" className="qt-link">
             The Concierge → The Uncensored Desk
           </Link>.
         </p>

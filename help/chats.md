@@ -105,7 +105,7 @@ One consequence follows, as surely as a headache follows a particularly long din
 
 A conversation's *roleplay template* decides how prose, dialogue, and murmured asides are dressed — and until now it was a matter to be discovered after the fact, by opening the sidebar of a chat already in progress and adjusting it there. No longer. The new-chat form carries a **Roleplay Template** dropdown of its own, sitting quietly beneath **Play As**.
 
-It arrives already set to whatever this conversation would have chosen for itself: the project's preferred template when you are filing the chat under a project, your own default from **Settings → Templates** otherwise, and **No Template** when you keep no default at all. The option that would have been chosen for you is marked *(default)*, so you may see at a glance whether you are agreeing with the house or overruling it.
+It arrives already set to whatever this conversation would have chosen for itself: the project's preferred template when you are filing the chat under a project, your own default from **Settings → Characters & Prompts → Roleplay Templates** otherwise, and **No Template** when you keep no default at all. The option that would have been chosen for you is marked *(default)*, so you may see at a glance whether you are agreeing with the house or overruling it.
 
 Change it and the new conversation begins in that style — no visit to the sidebar required. Leave it be and nothing whatever is different from before. And should you think better of it once the conversation is under way, the **Roleplay Template** dropdown in the chat's own sidebar remains where it always was, ready to be reconsidered.
 
@@ -123,7 +123,7 @@ Some conversations announce their character before the first syllable is spoken,
 
 The new-chat form therefore carries **The Concierge** directly above **Starting Scenario**, offering the same three postures as the chat's own sidebar:
 
-- *Moderated* — the default, and the state of every chat created without a word on the subject (unless you have told the Concierge that **New chats start as** Unmoderated, on his tab at `/settings?tab=concierge&section=refusals`). The usual providers first; the uncensored desk only when one of them refuses.
+- *Moderated* — the default, and the state of every chat created without a word on the subject (unless you have told the Concierge that **New chats start as** Unmoderated, on his **When a Provider Refuses** card at `/settings?section=refusals`). The usual providers first; the uncensored desk only when one of them refuses.
 - *Unmoderated* — the uncensored desk and nowhere else.
 - *Locked* — the usual providers only, and a refusal stands.
 

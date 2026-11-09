@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system&section=backup-restore
+url: /settings?section=backup-restore
 ---
 
 # Backup & Restore
 
-> **[Open this page in Quilltap](/settings?tab=system&section=backup-restore)**
+> **[Open this page in Quilltap](/settings?section=backup-restore)**
 
 The Backup & Restore tool lets you create complete backups of your Quilltap system and restore from previous backups.
 
@@ -69,7 +69,7 @@ Certain data is intentionally excluded from backups:
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=backup-restore`)
 
 2. **Find the Backup & Restore card**
 
@@ -131,7 +131,7 @@ problem: a thin pipe, a full disc, a mail attachment that will not have it.
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=backup-restore`)
 
 2. **Find the Backup & Restore card**
 
@@ -361,7 +361,7 @@ Untick the box to have the wipe take the archive shelf too.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=backup-restore")`
+`help_navigate(url: "/settings?section=backup-restore")`
 
 ## Related Topics
 

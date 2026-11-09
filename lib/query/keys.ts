@@ -180,6 +180,10 @@ export const queryKeys = {
   },
   embeddingProfiles: {
     all: ['embedding-profiles'] as const,
+    /** The static embedding-model catalogue (`?action=list-models`) the profile modal offers. */
+    models: ['embedding-profiles', 'models'] as const,
+    /** The embedding providers the profile modal's picker offers (`?action=list-providers`). */
+    providerNames: ['embedding-profiles', 'provider-names'] as const,
   },
   imageProfiles: {
     all: ['image-profiles'] as const,

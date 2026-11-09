@@ -42,6 +42,17 @@ interface ImageProfileFormProps {
   apiKeys: ApiKey[]
   onSuccess?: () => void
   onCancel?: () => void
+  /**
+   * Provider to preselect on a new profile (the per-provider card's Add menu).
+   * May be a key provider name: it is matched to an image provider by value or
+   * by `apiKeyProvider` once the provider list loads. Ignored when editing.
+   */
+  initialProvider?: string
+}
+
+/** The image provider a preselected (key-)provider name means, if any. */
+function matchImageProvider(name: string, providers: ImageProviderInfo[]): ImageProviderInfo | undefined {
+  return providers.find((p) => p.value === name) ?? providers.find((p) => p.apiKeyProvider === name)
 }
 
 // Fallback providers when API is unavailable
@@ -77,15 +88,22 @@ export function ImageProfileForm({
   apiKeys,
   onSuccess,
   onCancel,
+  initialProvider,
 }: ImageProfileFormProps) {
   const id = useId()
+  const presetProvider = !profile && initialProvider
+    ? matchImageProvider(initialProvider, FALLBACK_PROVIDERS)
+    : undefined
+  const presetKeys = !profile && initialProvider
+    ? apiKeys.filter((k) => k.provider === (presetProvider?.apiKeyProvider ?? initialProvider))
+    : []
   const [formData, setFormData] = useState({
     name: profile?.name || '',
     // Provider will be normalized after providers are loaded
-    provider: profile?.provider || 'OPENAI',
-    apiKeyId: profile?.apiKeyId || '',
+    provider: profile?.provider || (initialProvider ? presetProvider?.value ?? initialProvider : 'OPENAI'),
+    apiKeyId: profile?.apiKeyId || (presetKeys.length === 1 ? presetKeys[0].id : ''),
     baseUrl: profile?.baseUrl || '',
-    modelName: profile?.modelName || 'dall-e-3',
+    modelName: profile?.modelName || (initialProvider ? presetProvider?.defaultModels?.[0] ?? '' : 'dall-e-3'),
     parameters: profile?.parameters || {},
     isDefault: profile?.isDefault || false,
     isDangerousCompatible: profile?.isDangerousCompatible || false,
@@ -126,6 +144,27 @@ export function ImageProfileForm({
 
     fetchProviders()
   }, [])
+
+  // A preselected provider the fallback list did not know is matched again
+  // against the loaded list (a plugin image provider, or a key-provider name
+  // that differs from the image provider's own), once.
+  const [presetResolved, setPresetResolved] = useState(!initialProvider || !!profile || !!presetProvider)
+  useEffect(() => {
+    if (presetResolved || isFetchingProviders || !initialProvider) return
+    const match = matchImageProvider(initialProvider, imageProviders)
+    console.debug('[ImageProfileForm] Resolving preselected provider', { initialProvider, match: match?.value ?? null })
+    if (match) {
+      const keys = apiKeys.filter((k) => k.provider === match.apiKeyProvider || k.provider === match.value)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot reconciliation of a preset against the provider list that just loaded
+      setFormData((prev) => ({
+        ...prev,
+        provider: match.value,
+        modelName: match.defaultModels?.[0] || '',
+        apiKeyId: prev.apiKeyId || (keys.length === 1 ? keys[0].id : ''),
+      }))
+    }
+    setPresetResolved(true)
+  }, [presetResolved, isFetchingProviders, initialProvider, imageProviders, apiKeys])
 
   // Normalize legacy provider names after providers are loaded
   useEffect(() => {

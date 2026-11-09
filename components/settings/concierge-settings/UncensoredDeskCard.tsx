@@ -105,10 +105,11 @@ export function UncensoredDeskCard({
         <div className="qt-alert-warning">
           <p className="qt-text-small">
             No profile is marked uncensored-compatible yet, so the desk has no one to send for. Tick
-            &ldquo;Uncensored-compatible&rdquo; on a connection profile in{' '}
-            <Link href="/settings?tab=providers" className="qt-link">AI Providers</Link>{' '}
-            or on an image profile in{' '}
-            <Link href="/settings?tab=images" className="qt-link">Images</Link>.
+            &ldquo;Uncensored-compatible&rdquo; on a{' '}
+            <Link href="/settings?section=connection-profiles" className="qt-link">connection profile</Link>{' '}
+            or an{' '}
+            <Link href="/settings?section=image-profiles" className="qt-link">image profile</Link>, both kept under
+            Connections.
           </p>
         </div>
       )}

@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=templates&section=core-whisper
+url: /settings?section=core-whisper
 ---
 
 # Aurora's Core Whisper — The Plumb Line, Periodically Offered
@@ -41,7 +41,7 @@ The whisper is not re-fired on continuation or nudge turns — a continuation is
 
 Aurora's Core whisper is configured at three levels; lower levels override higher ones.
 
-- **Global defaults** — `/settings?tab=templates&section=core-whisper`. Master switch, the cadence (assistant turns between whispers), the silence threshold, a soft token budget for assembled `Core/` packets, and whether to fire after major context transitions.
+- **Global defaults** — `/settings?section=core-whisper`. Master switch, the cadence (assistant turns between whispers), the silence threshold, a soft token budget for assembled `Core/` packets, and whether to fire after major context transitions.
 - **Per-chat override** — inside any chat, the chat-settings panel offers a Core whisper toggle and an interval override. Leave them empty to inherit.
 - **Per-character override** — on the character's page, in the **Trust & perception** card of the **Abilities** section beside system transparency, you may declare a particular character either out of bounds for the Core whisper or always in scope.
 
@@ -62,5 +62,5 @@ No whisper fires. There is no error, no fallback, no automatic prompt — simply
 ## In-Chat Navigation
 
 ```
-help_navigate(url: "/settings?tab=templates&section=core-whisper")
+help_navigate(url: "/settings?section=core-whisper")
 ```

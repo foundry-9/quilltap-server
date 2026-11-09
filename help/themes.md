@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=appearance&section=appearance
+url: /settings?section=appearance
 ---
 
 # Themes
 
-> **[Open this page in Quilltap](/settings?tab=appearance&section=appearance)**
+> **[Open this page in Quilltap](/settings?section=appearance)**
 
 Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins or `.qtap-theme` bundles, and customize your preferred color mode (light, dark, or system).
 
@@ -233,7 +233,7 @@ Custom fonts are loaded automatically when you select a theme.
 
 ### Appearance Settings
 
-The **Appearance** tab in Settings gives you full control:
+The **Appearance** group in Settings gives you full control:
 
 - **Theme Selection** — Choose from default and installed plugin themes
 - **Theme Preview** — See how each theme looks
@@ -356,7 +356,7 @@ The `npx quilltap themes validate` command checks the `icons` block as part of i
 
 ### Page Backgrounds
 
-Each of Quilltap's principal halls keeps a faint backdrop behind its furniture — Aurora has its portrait gallery, the Salon its parlour, the Scriptorium its stacks, and so on, with the Settings page changing its scene to suit whichever tab is presently in hand. Like the icons, these backdrops are yours to redress. A theme may hang its own painting in any of these rooms, or strip the walls bare entirely, and the swap is as silent and immediate as the rest.
+Each of Quilltap's principal halls keeps a faint backdrop behind its furniture — Aurora has its portrait gallery, the Salon its parlour, the Scriptorium its stacks, and so on, with the Settings page changing its scene to suit whichever group is presently in hand. Like the icons, these backdrops are yours to redress. A theme may hang its own painting in any of these rooms, or strip the walls bare entirely, and the swap is as silent and immediate as the rest.
 
 #### Declaring Background Overrides
 
@@ -503,7 +503,7 @@ Every time you log in, Quilltap remembers your theme selections.
 - Ensure the theme plugin is installed
 - Try refreshing the browser
 - Check that the plugin is enabled in your system
-- Look in Settings → Plugins to verify installation
+- Look in Settings → Data & Maintenance → Plugins to verify installation
 
 ### Colors Look Wrong
 
@@ -530,6 +530,6 @@ Every time you log in, Quilltap remembers your theme selections.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=appearance&section=appearance")`
+`help_navigate(url: "/settings?section=appearance")`
 
 Themes are a powerful way to personalize Quilltap and make it work for your creative style and environment!

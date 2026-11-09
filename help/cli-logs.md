@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=system
+url: /settings?group=data-maintenance
 ---
 
 # The Command Line and the Logs
@@ -112,4 +112,4 @@ If you run into a large log file and want to archive it, you can delete or move 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system")`
+`help_navigate(url: "/settings?group=data-maintenance")`

@@ -44,7 +44,7 @@ A roleplay character is never offered `submit_final_response`.
 Agent mode settings follow a cascade from global to specific:
 
 ```
-Global Chat Settings (default for all chats)
+Global Settings → Games & Tools → Agent Mode (default for all chats)
     ↓
 Character Setting (null = inherit from global)
     ↓

@@ -88,7 +88,7 @@ export function ChatDefaultsSection() {
         {profiles.length === 0 && (
           <p className="text-sm qt-text-warning">
             No connection profiles yet.{' '}
-            <Link href="/settings?tab=providers" className="underline hover:no-underline">
+            <Link href="/settings?group=connections" className="underline hover:no-underline">
               Create one in AI Providers
             </Link>
             .

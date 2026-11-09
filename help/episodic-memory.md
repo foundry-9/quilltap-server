@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=memory
+url: /settings?group=context-memory
 ---
 
 # The Book Remembers When and Where
 
-> **[Open this page in Quilltap](/settings?tab=memory)**
+> **[Open this page in Quilltap](/settings?group=context-memory)**
 
 For the longest time, the Commonplace Book kept splendid notes on *what* happened and rather shabby ones on *when* and *where*. Ask a character "remember that place we visited last week?" and the poor thing was left rifling through undated pages — it might draw a blank, or worse, invent an answer with perfect confidence. No longer. The Book has taken up the habits of a proper diarist: every memory now carries the date the thing *happened* (not merely the date it was written down), the places and persons involved, and — for stories that keep their own calendar — the in-story hour as well.
 
@@ -42,7 +42,7 @@ The `quilltap recall-replay <chatId>` command (with the dev server running) repl
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=memory")`
+`help_navigate(url: "/settings?group=context-memory")`
 
 ## Related Settings
 

@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system&section=tasks-queue
+url: /settings?section=tasks-queue
 ---
 
 # Managing Tasks
 
-> **[Open this page in Quilltap](/settings?tab=system&section=tasks-queue)**
+> **[Open this page in Quilltap](/settings?section=tasks-queue)**
 
 The Tasks Queue shows all background jobs running in your Quilltap system. These include memory extraction, imports, exports, and other long-running operations.
 
@@ -27,7 +27,7 @@ The Tasks Queue shows all background jobs running in your Quilltap system. These
 
 ## Viewing the Tasks Queue
 
-**Go to the **Data & System** tab in Settings** (`/settings?tab=system&section=tasks-queue`) and expand the **Tasks Queue** card.
+**Go to the Data & Maintenance group of Settings** (`/settings?section=tasks-queue`) and expand the **Tasks Queue** card.
 
 The Tasks Queue displays:
 
@@ -424,7 +424,7 @@ badges](autonomous-rooms.md) rather than crowding these.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=tasks-queue")`
+`help_navigate(url: "/settings?section=tasks-queue")`
 
 ## Related Topics
 

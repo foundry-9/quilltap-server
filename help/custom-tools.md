@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=chat&section=custom-tools
+url: /settings?section=custom-tools
 ---
 
 # Custom Tools — Pascal's Table
 
-> **[Open this setting in Quilltap](/settings?tab=chat&section=custom-tools)**
+> **[Open this setting in Quilltap](/settings?section=custom-tools)**
 
 There comes a moment in every story when the outcome ought not to be anybody's decision. Can she pick the lock? Does the detector register anything at all? What, precisely, does one draw from a deck of many things? You could decide. Your characters could decide. But a story in which the interesting questions are settled by whoever is most eager to settle them is not, in the end, a story with much suspense in it.
 
@@ -473,7 +473,7 @@ Up to eight phrases per tool, each between three and eighty characters. When a m
 
 **A word on echoes.** Pascal never hears himself, but a character who *repeats* Pascal's announcement in their own reply will say whatever words it contains — and if those include the tool's own trigger, the tool goes off again on that reply, and possibly again on the next. The Workbench warns you when an outcome message, the chip label or an oracle prompt quotes one of the tool's own phrases. Heed it.
 
-**It must be switched on.** All of this sleeps until you turn on **Auto-Run Custom Tools on Trigger Phrases** under Settings → Chat → Automation. It is off by default — being overheard is a surprise the first time — and it does nothing at all while Custom Tools itself is switched off. The phrases are never shown to any model; `run_custom` remains a character's own way to reach for the tool.
+**It must be switched on.** All of this sleeps until you turn on **Auto-Run Custom Tools on Trigger Phrases** under Settings → Games & Tools → Automation. It is off by default — being overheard is a surprise the first time — and it does nothing at all while Custom Tools itself is switched off. The phrases are never shown to any model; `run_custom` remains a character's own way to reach for the tool.
 
 ## Recording consequences — side effects
 
@@ -785,7 +785,7 @@ The keys are `roll`, `value`, `llmPrompt`, `llmAnswer`, `outcome`, `message`, `s
 
 **When it holds, and when it does not.** A run reached by a character's `run_custom`, or by a trigger phrase, is held. Your own runs from the gutter dialog are not — you set those figures yourself. Neither are runs in autonomous rooms, where nobody is watching.
 
-**A held roll waits for you indefinitely.** There is no timeout; the turn stands quietly open until you answer, so leave a chat unattended with care. Reload the page or open a second tab and the dialog simply reappears; several held rolls are shown one at a time, oldest first. Pressing **Stop** while a roll is held sets it aside. To let every roll go ahead as dealt without editing a single file, untick **Hold intervenable rolls for me** under Settings → Chat → Automation.
+**A held roll waits for you indefinitely.** There is no timeout; the turn stands quietly open until you answer, so leave a chat unattended with care. Reload the page or open a second tab and the dialog simply reappears; several held rolls are shown one at a time, oldest first. Pressing **Stop** while a roll is held sets it aside. To let every roll go ahead as dealt without editing a single file, untick **Hold intervenable rolls for me** under Settings → Games & Tools → Automation.
 
 **The same honest caveat as for the odds.** The `intervention` block hides nothing from a character who can read the store the file lives in: it is an ordinary document. A character with read access may learn that a tool is intervenable, though never what you did with any particular roll.
 
@@ -869,9 +869,9 @@ Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, e
 
 ## Turning it off
 
-The **Custom tools** setting on Settings → Chat governs the whole arrangement. Switched off, neither `run_custom` nor `edit_custom_tool` is offered to any model, the gutter button goes away, and no trigger phrase is listened for. Your files stay exactly where they are.
+The **Custom Tools** card in the Games & Tools group of Settings governs the whole arrangement. Switched off, neither `run_custom` nor `edit_custom_tool` is offered to any model, the gutter button goes away, and no trigger phrase is listened for. Your files stay exactly where they are.
 
-Trigger phrases have a switch of their own besides — **Auto-Run Custom Tools on Trigger Phrases**, under Settings → Chat → Automation, off unless you turn it on.
+Trigger phrases have a switch of their own besides — **Auto-Run Custom Tools on Trigger Phrases**, under Settings → Games & Tools → Automation, off unless you turn it on.
 
 Held rolls have one too — **Hold intervenable rolls for me**, beside it, on unless you turn it off. Off, every intervenable tool simply deals as rolled and no dialog opens. See [Taking a Hand in the Deal](custom-tools.md#taking-a-hand-in-the-deal--intervention).
 
@@ -879,10 +879,10 @@ Held rolls have one too — **Hold intervenable rolls for me**, beside it, on un
 
 Characters with help tools enabled can navigate directly to this setting:
 
-`help_navigate(url: "/settings?tab=chat&section=custom-tools")`
+`help_navigate(url: "/settings?section=custom-tools")`
 
 ## Related Settings
 
 - **[Pascal's Workbench](pascals-workbench.md)** — the visual editor, library, and proving bench at `/custom-tools`.
-- **Settings → Chat → Automation** — auto-detection of dice rolls (`2d6`, `3d6+2`) written plainly in a message.
+- **Settings → Games & Tools → Automation** — auto-detection of dice rolls (`2d6`, `3d6+2`) written plainly in a message.
 - **The Scriptorium** — the document stores your `Tools/` folders live in.

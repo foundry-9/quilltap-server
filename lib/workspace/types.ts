@@ -27,7 +27,7 @@ export type TabKind =
   | 'aurora'
   | 'prospero'
   | 'scriptorium'
-  | 'settings' // payload: { tab?: string; section?: string } (deep-link target)
+  | 'settings' // payload: SettingsTabPayload (deep-link target)
   | 'files'
   | 'photos'
   | 'scenarios'
@@ -157,9 +157,16 @@ export interface AuroraTabPayload {
   groupId?: string
 }
 
+/** A settings deep link — see `resolveSettingsLink` (`lib/settings/registry.ts`). */
 export interface SettingsTabPayload {
+  group?: string
+  /** Legacy eight-tab id, bridged to a group. */
   tab?: string
   section?: string
+  persona?: string
+  q?: string
+  /** A provider card to open inside Connections → Providers. */
+  provider?: string
 }
 export interface WardrobeTabPayload {
   characterId?: string

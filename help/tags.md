@@ -51,7 +51,7 @@ Use the global search bar to find content by tag:
 
 ### In Settings
 
-The **Tags customization tab** in Settings is your central hub for managing all tags and their appearance:
+The **Tags** card in the Appearance group of Settings is your central hub for managing all tags and their appearance:
 
 - View all tags in your system
 - Customize how each tag looks
@@ -154,7 +154,7 @@ Quick-hide is temporary and non-destructive:
 
 ### Tag List
 
-In the Tags customization tab, you'll see:
+In the Tags card, you'll see:
 
 - **All tags** in your system listed in order
 - **Tag preview** showing how each tag appears with its customization
@@ -163,7 +163,7 @@ In the Tags customization tab, you'll see:
 
 ### Deleting Tags
 
-The **Tag Management** section at the bottom of the Tags tab lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](tags-customization.md) page for full details.
+The **Tag Management** section at the bottom of the Tags card lets you delete any tag. Each tag shows its usage count across all entity types. When deleted, the tag is automatically removed from all characters, chats, profiles, and files that use it. See the [Tag Customization](tags-customization.md) page for full details.
 
 ### Organizing Your Tags
 

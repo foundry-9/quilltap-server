@@ -1,14 +1,14 @@
 ---
-url: /settings?tab=chat&section=composer-slash-commands
+url: /settings?section=composer-slash-commands
 ---
 
-# Chat Settings — The Composer and Your Typing
+# Composer & Display — The Composer and Your Typing
 
-> **[Open this page in Quilltap](/settings?tab=chat&section=composer-slash-commands)**
+> **[Open this page in Quilltap](/settings?section=composer-slash-commands)**
 
-Everything on the Chat Settings page that concerns the business end of the pen: how a new chat greets your first keystroke, what the composer does with a colon and a word, what a slash at the start of a word may summon, which of your abbreviations it quietly expands, and whether your straight quotes are permitted to curl. The rest of the page is described in [Chat Settings](chat-settings.md) and [The Staff Behind the Scenes](chat-settings-ai-services.md).
+Everything in the Composer & Display group that concerns the business end of the pen: how a new chat greets your first keystroke, what the composer does with a colon and a word, what a slash at the start of a word may summon, which of your abbreviations it quietly expands, and whether your straight quotes are permitted to curl. The rest of the page is described in [Chat Settings](chat-settings.md) and [The Staff Behind the Scenes](chat-settings-ai-services.md).
 
-All of these cards live on **Settings → Chat Settings**, and each applies to every chat unless noted otherwise.
+All of these cards live in the **Composer & Display** group of **Settings**, and each applies to every chat unless noted otherwise.
 
 ## Composition Mode
 
@@ -20,7 +20,7 @@ Decides whether each new chat is delivered to your blotter pre-poised for prose.
 
 **How to configure:**
 
-1. Tick or untick the box at the top of the Chat tab in Settings
+1. Tick or untick the box at the top of the **Composition Mode** card, in the Composer & Display group of Settings
 2. The change applies to chats created after the toggle, not to existing ones
 3. The composer's toolbar still lets you flip the mode for any individual chat at any time
 
@@ -52,7 +52,7 @@ When running inside the desktop application, Quilltap also discreetly feeds the 
 
 **How to configure:**
 
-1. Open the **Composer** card on the Chat tab in Settings
+1. Open the **Composer** card in the Composer & Display group of Settings
 2. Tick or untick the box
 3. The change applies at once to all open composers; no reload required
 
@@ -87,7 +87,7 @@ The emoji catalogue is fetched only the first time you actually want it — inst
 
 **How to configure:**
 
-1. Open the **Composer** card on the Chat tab in Settings
+1. Open the **Composer** card in the Composer & Display group of Settings
 2. Tick or untick **Emoji shortcuts**
 3. The change applies at once; no reload required
 
@@ -123,7 +123,7 @@ There is a **button** in the formatting toolbar as well (the small `Ω`), which 
 
 **How to configure:**
 
-1. Open the **Composer** card on the Chat tab in Settings
+1. Open the **Composer** card in the Composer & Display group of Settings
 2. Tick or untick **Symbol shortcuts**
 3. The change applies at once; no reload required
 
@@ -151,7 +151,7 @@ It fires only for seats taken with **Impersonate**. Speaking as yourself — or 
 
 **How to configure:**
 
-1. Open the **Composer** card on the Chat tab in Settings
+1. Open the **Composer** card in the Composer & Display group of Settings
 2. Choose one of the three
 3. The change applies at once to open chats; no reload required
 
@@ -166,7 +166,7 @@ It fires only for seats taken with **Impersonate**. Speaking as yourself — or 
 - You are a careful stylist and the dialog is an extra step between you and the room
 - The model reliably mangles a notation you depend on (the per-send **Send as written** door covers the occasional case)
 
-The full account — what the character is told, what they are not, and the honest caveat that the line is model-written and worth reading — is at [In their own words](/settings?tab=chat&section=composer-spellcheck).
+The full account — what the character is told, what they are not, and the honest caveat that the line is model-written and worth reading — is at [In their own words](/settings?section=composer-spellcheck).
 
 ## Slash Commands
 
@@ -195,7 +195,7 @@ After those, **every tool in Run Tool is a command under its own name** — `/wa
 
 **How to configure:**
 
-1. Open the **Slash Commands** card on the Chat tab in Settings
+1. Open the **Slash Commands** card in the Composer & Display group of Settings
 2. Tick or untick **Slash commands**
 3. The change applies at once; no reload required
 
@@ -224,7 +224,7 @@ Two courtesies are constant in either mode: dispatching a message of your own se
 
 **How to configure:**
 
-1. Open the **Auto-Scroll** card on the Chat tab in Settings
+1. Open the **Auto-Scroll** card in the Composer & Display group of Settings
 2. Tick or untick the box
 3. The change applies at once to open chats; no reload required
 
@@ -250,7 +250,7 @@ The feature is, at present, deliberately modest: literal triggers, literal repla
 
 **How to configure:**
 
-1. Open the **Text Replacement** card on the Chat tab in Settings
+1. Open the **Text Replacement** card in the Composer & Display group of Settings
 2. Tick the master toggle on (it is on by default)
 3. Add rules one at a time, or edit the rows already present
 4. Test in the **Try it** box, or stroll over to the Salon composer or Document Mode
@@ -315,7 +315,7 @@ Rest the pointer on a tinted mark and a small note explains the objection. **Not
 
 **How to configure:**
 
-1. Open the **Smart Typography** card on the Chat tab in Settings
+1. Open the **Smart Typography** card in the Composer & Display group of Settings
 2. Tick or untick each toggle as suits you
 3. The quote setting applies to every message at once — the Salon, the help chat, thinking blocks, the Brahma console alike
 4. The dash and ellipsis settings apply to the next thing you type
@@ -344,7 +344,7 @@ Rest the pointer on a tinted mark and a small note explains the objection. **Not
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=chat&section=composer-slash-commands")`
+`help_navigate(url: "/settings?section=composer-slash-commands")`
 
 ## Related Settings
 

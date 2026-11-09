@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { getSettingsCard, getSettingsGroup, resolveSettingsHref } from '@/lib/settings/registry'
 
 export interface NavigationLink {
   url: string
@@ -32,10 +33,19 @@ interface UseHelpChatStreamingOptions {
 
 /**
  * Generate a human-readable label from a Quilltap internal URL.
- * e.g., "/settings?tab=concierge&section=uncensored-desk" → "Settings → Concierge → Uncensored Desk"
+ * e.g., "/settings?section=uncensored-desk" → "Settings → Moderation → The Uncensored Desk"
  */
 export function labelFromUrl(url: string): string {
   const [path, query] = url.split('?')
+
+  // Settings addresses (new or legacy) are named by the registry: the group,
+  // then the card when one is addressed.
+  const settingsLink = resolveSettingsHref(url)
+  if (settingsLink) {
+    const group = getSettingsGroup(settingsLink.group)
+    const card = getSettingsCard(settingsLink.card)
+    return ['Settings', group?.title, card?.title].filter(Boolean).join(' → ')
+  }
 
   const pathNames: Record<string, string> = {
     '/settings': 'Settings',

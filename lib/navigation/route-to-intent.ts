@@ -117,7 +117,14 @@ export function parseHrefToIntent(href: string): TabIntent | null {
       const sp = new URLSearchParams(query)
       return {
         kind: 'settings',
-        payload: { tab: sp.get('tab') ?? undefined, section: sp.get('section') ?? undefined },
+        payload: {
+          group: sp.get('group') ?? undefined,
+          tab: sp.get('tab') ?? undefined,
+          section: sp.get('section') ?? undefined,
+          persona: sp.get('persona') ?? undefined,
+          q: sp.get('q') ?? undefined,
+          provider: sp.get('provider') ?? undefined,
+        },
       }
     }
     default:

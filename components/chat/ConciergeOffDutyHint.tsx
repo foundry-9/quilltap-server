@@ -9,7 +9,7 @@
 
 import Link from 'next/link'
 
-export const CONCIERGE_OFF_DUTY_SETTINGS_URL = '/settings?tab=concierge&section=on-duty'
+export const CONCIERGE_OFF_DUTY_SETTINGS_URL = '/settings?section=on-duty'
 
 export function ConciergeOffDutyHint({ className }: { className?: string }) {
   return (

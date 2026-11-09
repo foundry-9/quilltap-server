@@ -32,7 +32,53 @@ interface CollapsibleCardProps {
   isOpen?: boolean
   /** Controlled-mode setter. Called with the next desired open state. */
   onOpenChange?: (open: boolean) => void
+  /** A small element shown before the title (the settings page's persona badge). */
+  badge?: ReactNode
+  /** Terms to mark (`<mark>`) in the title and description, case- and accent-insensitively. */
+  highlight?: readonly string[]
   children: ReactNode
+}
+
+function foldChar(ch: string): string {
+  return ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+/**
+ * Wrap every occurrence of any of `terms` in `<mark>`. Matching folds case and
+ * diacritics per character, so offsets in the folded text line up with the
+ * original (a precomposed letter folds to one character).
+ */
+export function highlightText(text: string, terms: readonly string[] | undefined): ReactNode {
+  const needles = (terms ?? []).map((t) => t.trim()).filter(Boolean).map((t) => Array.from(t).map(foldChar).join(''))
+  if (needles.length === 0 || !text) return text
+  const chars = Array.from(text)
+  const folded = chars.map(foldChar)
+  const marked = new Array<boolean>(chars.length).fill(false)
+  for (let i = 0; i < chars.length; i++) {
+    for (const needle of needles) {
+      const len = Array.from(needle).length
+      if (folded.slice(i, i + len).join('') === needle) {
+        for (let j = i; j < i + len; j++) marked[j] = true
+      }
+    }
+  }
+  const out: ReactNode[] = []
+  let run = ''
+  let runMarked = marked[0]
+  const flush = (key: number) => {
+    if (!run) return
+    out.push(runMarked ? <mark key={key}>{run}</mark> : run)
+    run = ''
+  }
+  chars.forEach((ch, i) => {
+    if (marked[i] !== runMarked) {
+      flush(i)
+      runMarked = marked[i]
+    }
+    run += ch
+  })
+  flush(chars.length)
+  return out
 }
 
 /**
@@ -77,6 +123,8 @@ export function CollapsibleCard({
   forceOpen = false,
   isOpen: controlledIsOpen,
   onOpenChange,
+  badge,
+  highlight,
   children,
 }: CollapsibleCardProps) {
   const { isOpen: uncontrolledIsOpen, setOpen, toggle } = useOpenState(defaultOpen || forceOpen)
@@ -124,9 +172,10 @@ export function CollapsibleCard({
       >
         <div className="flex items-center gap-3 min-w-0">
           {icon && <span className="qt-collapsible-card-icon">{icon}</span>}
+          {badge}
           <div className="min-w-0">
-            <h3 className="qt-card-title">{title}</h3>
-            {description && <p className="qt-card-description">{description}</p>}
+            <h3 className="qt-card-title">{highlightText(title, highlight)}</h3>
+            {description && <p className="qt-card-description">{highlightText(description, highlight)}</p>}
           </div>
         </div>
         <Icon

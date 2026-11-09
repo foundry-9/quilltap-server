@@ -1133,7 +1133,7 @@ exports[`tool definitions: derived OpenAI parameters helpNavigate: parameters sn
   "additionalProperties": false,
   "properties": {
     "url": {
-      "description": "The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?tab=concierge&section=uncensored-desk", "/settings?tab=appearance", "/aurora", "/salon"",
+      "description": "The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?section=uncensored-desk" (a card), "/settings?group=appearance" (a group), "/settings?persona=pascal" (one persona's settings), "/settings?q=password" (the settings page, searched), "/aurora", "/salon"",
       "minLength": 1,
       "type": "string",
     },

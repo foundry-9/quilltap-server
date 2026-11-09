@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=system
+url: /settings?group=data-maintenance
 ---
 
 # The Command Line and Migrations
@@ -80,4 +80,4 @@ A migration, once signed into the ledger, is never asked again—so a document-s
 
 ## In-Chat Navigation
 
-- **Help navigate** to settings: `help_navigate(url: "/settings?tab=system")`
+- **Help navigate** to settings: `help_navigate(url: "/settings?group=data-maintenance")`

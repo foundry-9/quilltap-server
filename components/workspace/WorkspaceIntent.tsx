@@ -67,7 +67,16 @@ export function WorkspaceIntent() {
 
       let payload: unknown
       if (CHAT_KINDS.has(kind)) payload = chatId ? { chatId } : undefined
-      else if (kind === 'settings') payload = { tab, section }
+      else if (kind === 'settings') {
+        payload = {
+          group: searchParams.get('group') || undefined,
+          tab,
+          section,
+          persona: searchParams.get('persona') || undefined,
+          q: searchParams.get('q') || undefined,
+          provider: searchParams.get('provider') || undefined,
+        }
+      }
       else if (kind === 'custom-tools') {
         const mountPointId = searchParams.get('mount') || undefined
         const path = searchParams.get('path') || undefined

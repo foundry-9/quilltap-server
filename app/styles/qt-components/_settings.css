@@ -1,0 +1,385 @@
+/**
+ * The Foundry (the Settings page) — the rail, the search field, the persona
+ * row and badges, the attention strip, and the provider cards.
+ *
+ *   qt-settings-layout           — rail + column grid
+ *   qt-settings-rail             — the <nav> of groups (hidden below md)
+ *   qt-settings-rail-item        — one group button (aria-current="page" when selected)
+ *   qt-settings-rail-count       — a group's match count while searching
+ *   qt-settings-rail-select      — the <select> that stands in for the rail below md
+ *   qt-settings-search           — the search field's wrapper
+ *   qt-settings-persona-row      — the persona chips above the rail (the hub)
+ *   qt-settings-persona-chip     — one persona chip (aria-pressed when it is the lens)
+ *   qt-settings-persona-badge    — the small avatar a card wears in its header
+ *   qt-settings-lens-banner      — "Showing <persona>'s settings" + Show everything
+ *   qt-settings-attention        — the strip of lit conditions; qt-settings-attention-chip one of them
+ *   qt-settings-advanced-divider — the "Advanced" rule inside a group
+ *   qt-settings-provider-card    — one provider's card in Connections → Providers
+ *
+ * Plain CSS (no @apply) so the theme-storybook mirror is the same text. Every
+ * colour reads a --qt-settings-* hook with a token fallback.
+ *
+ * Component: app/settings/SettingsView.tsx
+ */
+
+@layer components {
+  .qt-settings-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 768px) {
+    .qt-settings-layout {
+      grid-template-columns: 14rem minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+
+  .qt-settings-rail {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+    position: sticky;
+    top: 1rem;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--qt-settings-rail-border, var(--color-border));
+    background: var(--qt-settings-rail-bg, color-mix(in srgb, var(--color-background) 88%, transparent));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  @media (min-width: 768px) {
+    .qt-settings-rail {
+      display: flex;
+    }
+  }
+
+  .qt-settings-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--qt-settings-rail-fg, var(--color-foreground));
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .qt-settings-rail-item:hover {
+    background: var(--qt-settings-rail-hover-bg, var(--color-accent));
+    color: var(--qt-settings-rail-hover-fg, var(--color-accent-foreground));
+  }
+
+  .qt-settings-rail-item:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  .qt-settings-rail-item[aria-current="page"] {
+    background: var(--qt-settings-rail-active-bg, var(--color-primary));
+    color: var(--qt-settings-rail-active-fg, var(--color-primary-foreground));
+    font-weight: 600;
+  }
+
+  .qt-settings-rail-item[aria-current="page"]:hover {
+    background: var(--qt-settings-rail-active-bg, var(--color-primary));
+    color: var(--qt-settings-rail-active-fg, var(--color-primary-foreground));
+  }
+
+  .qt-settings-rail-count {
+    margin-left: auto;
+    min-width: 1.5rem;
+    padding: 0 0.375rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    text-align: center;
+    background: var(--qt-settings-rail-count-bg, var(--color-muted));
+    color: var(--qt-settings-rail-count-fg, var(--color-foreground));
+  }
+
+  .qt-settings-rail-select {
+    display: block;
+    width: 100%;
+  }
+
+  @media (min-width: 768px) {
+    .qt-settings-rail-select {
+      display: none;
+    }
+  }
+
+  .qt-settings-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .qt-settings-search > .qt-icon {
+    position: absolute;
+    left: 0.75rem;
+    width: 1rem;
+    height: 1rem;
+    color: var(--color-muted-foreground);
+    pointer-events: none;
+  }
+
+  .qt-settings-search > input {
+    width: 100%;
+    padding-left: 2.25rem;
+  }
+
+  .qt-settings-search mark,
+  .qt-collapsible-card-header mark {
+    background: var(--qt-settings-mark-bg, color-mix(in srgb, var(--color-warning) 35%, transparent));
+    color: inherit;
+    border-radius: 0.125rem;
+    padding: 0 0.0625rem;
+  }
+
+  .qt-settings-persona-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .qt-settings-persona-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-settings-chip-border, var(--color-border));
+    background: var(--qt-settings-chip-bg, color-mix(in srgb, var(--color-background) 88%, transparent));
+    color: var(--qt-settings-chip-fg, var(--color-foreground));
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+
+  .qt-settings-persona-chip:hover {
+    background: var(--qt-settings-chip-hover-bg, var(--color-accent));
+    color: var(--qt-settings-chip-hover-fg, var(--color-accent-foreground));
+  }
+
+  .qt-settings-persona-chip:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  .qt-settings-persona-chip[aria-pressed="true"] {
+    border-color: var(--qt-settings-chip-active-border, var(--color-primary));
+    background: var(--qt-settings-chip-active-bg, var(--color-primary));
+    color: var(--qt-settings-chip-active-fg, var(--color-primary-foreground));
+  }
+
+  .qt-settings-persona-chip img {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    object-fit: cover;
+  }
+
+  .qt-settings-persona-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 1px solid var(--qt-settings-badge-border, var(--color-border));
+    background: var(--qt-settings-badge-bg, var(--color-muted));
+    color: var(--color-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .qt-settings-persona-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .qt-settings-lens-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--qt-settings-lens-border, var(--color-primary));
+    background: var(--qt-settings-lens-bg, color-mix(in srgb, var(--color-background) 88%, transparent));
+  }
+
+  .qt-settings-attention {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .qt-settings-attention-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-settings-attention-border, var(--color-warning));
+    background: var(--qt-settings-attention-bg, color-mix(in srgb, var(--color-background) 80%, var(--color-warning) 20%));
+    color: var(--qt-settings-attention-fg, var(--color-foreground));
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+
+  .qt-settings-attention-chip:hover {
+    background: var(--qt-settings-attention-hover-bg, color-mix(in srgb, var(--color-background) 65%, var(--color-warning) 35%));
+  }
+
+  .qt-settings-attention-chip:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  .qt-settings-advanced-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.5rem 0 1rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .qt-settings-advanced-divider::before,
+  .qt-settings-advanced-divider::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--color-border);
+  }
+
+  /* --- Provider cards (Connections → Providers → By provider) --- */
+
+  .qt-settings-provider-card {
+    border-radius: 0.5rem;
+    border: 1px solid var(--qt-settings-provider-border, var(--color-border));
+    background: var(--qt-settings-provider-bg, var(--color-card));
+    color: var(--color-card-foreground);
+  }
+
+  .qt-settings-provider-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .qt-settings-provider-card-header:hover {
+    background: var(--qt-settings-provider-hover-bg, color-mix(in srgb, var(--color-card) 85%, var(--color-foreground) 15%));
+  }
+
+  .qt-settings-provider-card-header:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  .qt-settings-provider-card-title {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .qt-settings-provider-card-summary {
+    color: var(--color-muted-foreground);
+    font-size: 0.8125rem;
+  }
+
+  .qt-settings-provider-card-chevron {
+    flex-shrink: 0;
+    transition: transform 150ms ease;
+  }
+
+  .qt-settings-provider-card-chevron-open {
+    transform: rotate(180deg);
+  }
+
+  .qt-settings-provider-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0 1rem 1rem;
+    border-top: 1px solid var(--qt-settings-provider-border, var(--color-border));
+    padding-top: 1rem;
+  }
+
+  .qt-settings-provider-card-add {
+    border-style: dashed;
+  }
+
+  .qt-settings-provider-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .qt-settings-provider-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .qt-settings-provider-profile-row:hover {
+    border-color: var(--qt-settings-provider-border, var(--color-border));
+    background: var(--qt-settings-provider-hover-bg, color-mix(in srgb, var(--color-card) 85%, var(--color-foreground) 15%));
+  }
+
+  .qt-settings-provider-profile-row:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  .qt-settings-provider-kind-badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    min-width: 6.5rem;
+    justify-content: center;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-settings-provider-kind-border, var(--color-border));
+    background: var(--qt-settings-provider-kind-bg, var(--color-muted));
+    color: var(--qt-settings-provider-kind-fg, var(--color-foreground));
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .qt-settings-provider-profile-model {
+    color: var(--color-muted-foreground);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=system
+url: /settings?section=encryption-passphrase
 ---
 
 # Database Protection
@@ -28,11 +28,11 @@ There is exactly **one** key file per instance, and all three databases open wit
 
 For those who require a second bolt on the door, Quilltap supports **locked mode**: the `.dbkey` file itself may be protected with a passphrase. When a passphrase is set, Quilltap cannot open the database at startup until the passphrase is supplied — the application will wait at the locked screen, like a very well-trained butler who knows better than to admit anyone without the password.
 
-Locked mode is configured via environment variable. Consult the [Data & System settings](/settings?tab=system) for details.
+Locked mode is configured via environment variable. Consult the [Security settings](/settings?section=encryption-passphrase) for details.
 
 ### Changing or Removing Your Passphrase
 
-Should you wish to rotate your passphrase — an exercise in security hygiene that the prudent practitioner undertakes with the same regularity as winding a pocket watch — you may do so from **Settings > Data & System > Encryption Passphrase**. This operation re-wraps the encryption key inside a fresh `.dbkey` file; it does *not* re-encrypt the database itself (there is no need, as the underlying key remains unchanged).
+Should you wish to rotate your passphrase — an exercise in security hygiene that the prudent practitioner undertakes with the same regularity as winding a pocket watch — you may do so from **Settings > Security > Encryption Passphrase**. This operation re-wraps the encryption key inside a fresh `.dbkey` file; it does *not* re-encrypt the database itself (there is no need, as the underlying key remains unchanged).
 
 You may also *remove* a passphrase entirely, should you decide that the convenience of automatic unlocking outweighs the additional protection. Simply leave the "New Passphrase" field empty when changing. Conversely, you may *add* a passphrase where none existed before by leaving the "Current Passphrase" field empty and providing a new one.
 
@@ -64,7 +64,7 @@ Should a database decline, the command declines with it. This is deliberate and 
 Two provisos, neither of which is fine print:
 
 - **The server must be down.** A running Quilltap holds the key in memory and will not notice a file rewritten beneath it; the command refuses while the instance lock is held, and says so.
-- **Archived characters are keyed to the passphrase, not to the key.** If you rebuild with a *different* passphrase than the one in force when a character was packed away, that bundle still wants the old one — and this offline route cannot rewrite it. Rotating a passphrase you still remember is therefore better done from **Settings > Data & System**, which re-encrypts every archive as it goes.
+- **Archived characters are keyed to the passphrase, not to the key.** If you rebuild with a *different* passphrase than the one in force when a character was packed away, that bundle still wants the old one — and this offline route cannot rewrite it. Rotating a passphrase you still remember is therefore better done from **Settings > Security > Encryption Passphrase**, which re-encrypts every archive as it goes.
 
 Without the key, there is no such rescue, and no one — ourselves emphatically included — can furnish one. Write it down. Put it somewhere that is not the machine.
 
@@ -78,7 +78,7 @@ Every ledger is shuttered when the lock falls — the main database, the convers
 
 **To configure auto-lock:**
 
-1. Navigate to **Settings > Data & System > Auto-Lock** (or use the navigation tool below)
+1. Navigate to **Settings > Security > Auto-Lock** (or use the navigation tool below)
 2. Enable the "Automatically lock after idle period" toggle
 3. Set the desired number of minutes (default: 15, minimum: 1)
 
@@ -312,4 +312,4 @@ For the most complete protection, use both: let physical backups run automatical
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system")`
+`help_navigate(url: "/settings?section=encryption-passphrase")`

@@ -78,7 +78,7 @@ function NewChatPage() {
             <p className="font-medium">No connection profiles available</p>
             <p className="mt-1 text-sm">
               You need to create a connection profile before starting a chat.{' '}
-              <Link href="/settings?tab=providers" className="underline hover:no-underline">
+              <Link href="/settings?group=connections" className="underline hover:no-underline">
                 Go to AI Providers
               </Link>
             </p>

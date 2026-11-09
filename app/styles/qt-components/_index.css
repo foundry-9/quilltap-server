@@ -40,6 +40,7 @@
 @import "./_green-room.css";   /* The Green Room: the opening's narration panel in the Salon */
 @import "./_intervention.css";  /* Pascal operator intervention: hold dialog, toggles, badge */
 @import "./_content.css";      /* Badges, avatars, code blocks */
+@import "./_settings.css";     /* The Foundry: settings rail, search, personas, attention strip */
 @import "./_typography.css";   /* Semantic typography classes */
 @import "./_workspace.css";    /* Tabbed workspace: panes, tab strip, divider, drop-zones */
 @import "./_utilities.css";    /* Background, border, text color utilities */

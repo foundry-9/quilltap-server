@@ -461,7 +461,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
           <div className="rounded-lg border qt-border-warning/50 qt-bg-warning/10 p-3 qt-text-warning">
             <p className="qt-label">No connection profiles available</p>
             <p className="mt-1 qt-body-sm">
-              <Link href="/settings?tab=providers" className="underline hover:no-underline">
+              <Link href="/settings?group=connections" className="underline hover:no-underline">
                 Add an AI provider
               </Link>{' '}
               to start a chat.

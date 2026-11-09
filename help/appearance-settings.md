@@ -1,17 +1,17 @@
 ---
-url: /settings?tab=appearance
+url: /settings?group=appearance
 ---
 
 # Appearance Settings
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?group=appearance)**
 
-The Appearance settings tab is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), enable the theme quick-switcher, and adjust sidebar width.
+The Appearance group of Settings is where you customize how Quilltap looks and feels. Here you can change themes, select your preferred color mode (light/dark/system), enable the theme quick-switcher, and adjust sidebar width.
 
 ## Accessing Appearance Settings
 
 1. Click **Settings** in the sidebar (gear icon)
-2. Look for the **Appearance** tab
+2. Open the **Appearance** group in the left rail
 3. You'll see options for themes, color modes, and layout controls
 
 ## Theme Selection
@@ -297,7 +297,7 @@ The very first press of Tab on any page now offers a **Skip to content** link, s
 
 **Solutions:**
 
-- Make sure theme plugins are installed in Settings → Plugins
+- Make sure theme plugins are installed in Settings → Data & Maintenance → Plugins
 - Refresh the page
 - Restart Quilltap if plugin installation required a restart
 - Check that theme plugins are enabled
@@ -364,7 +364,7 @@ Characters with help tools enabled can read your current appearance settings dur
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=appearance")`
+`help_navigate(url: "/settings?group=appearance")`
 
 ## Related Help
 

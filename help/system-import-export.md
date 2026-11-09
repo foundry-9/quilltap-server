@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system&section=import-export
+url: /settings?section=import-export
 ---
 
 # Import & Export Data
 
-> **[Open this page in Quilltap](/settings?tab=system&section=import-export)**
+> **[Open this page in Quilltap](/settings?section=import-export)**
 
 The Import & Export tool lets you save your Quilltap data to files and load data from files back into your system.
 
@@ -44,7 +44,7 @@ cellar with no bell-pull:
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=import-export`)
 
 2. **Find the Import / Export card**
 
@@ -101,7 +101,7 @@ Import lets you load exported data from `.quilltap` files back into your system.
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=import-export`)
 
 2. **Find the Import / Export card**
 
@@ -359,7 +359,7 @@ instance cannot reach the outside world; otherwise a refresh knows better.
   embedding profile rather than arriving with the sender's. Check the Tasks
   Queue — search over them warms up as the re-indexing jobs drain
 - If the import warned that no embedding profile is configured, set one in the
-  Commonplace Book tab; the memories are indexed once one exists
+  Connections group of Settings (under Providers, By kind: Embedding Profiles); the memories are indexed once one exists
 - The memories themselves are present and readable throughout; it is only
   semantic search that has to catch up
 
@@ -413,7 +413,7 @@ instance cannot reach the outside world; otherwise a refresh knows better.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=import-export")`
+`help_navigate(url: "/settings?section=import-export")`
 
 ## Related Topics
 

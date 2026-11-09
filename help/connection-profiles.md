@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers&section=connection-profiles
+url: /settings?section=connection-profiles
 ---
 
 # Connection Profiles
 
-> **[Open this page in Quilltap](/settings?tab=providers&section=connection-profiles)**
+> **[Open this page in Quilltap](/settings?section=connection-profiles)**
 
 Connection Profiles are where you configure your AI language models (LLMs) for use in Quilltap chats. A connection profile links together an API key, a provider, and a specific model, allowing Quilltap to communicate with the AI service.
 
@@ -24,15 +24,23 @@ You can create multiple profiles for different purposes, such as:
 - A profile for specialized tasks (coding, creative writing)
 - Different profiles for different API accounts
 
-## Accessing Connection Profiles
+## Finding Your Connection Profiles
+
+Connection profiles live with the providers they telephone, under **Settings → Connections → Providers**:
 
 1. Click **Settings** (gear icon) in the left sidebar
-2. Click the **Connection Profiles** tab
-3. You'll see existing profiles (if any) and options to create new ones
+2. Choose the **Connections** group and open the **Providers** card
+3. With the view set to **By provider** (the default), open the card of the provider in question — Anthropic, OpenAI, Ollama, and so forth
 
-## Viewing Connection Profiles
+A provider gets a card if it holds a key *or* if any profile names it, so a keyless establishment such as Ollama on your own machine is listed as readily as the grand hotels. Inside each card the provider's keys come first, and below them every profile that uses the provider — connection, image and embedding alike — in one column. Connection profiles wear a **Connection** badge and the Forge's portrait, the Forge being the member of staff who keeps the wires humming. Each row shows the profile's name and model; click it to open the profile.
 
-The profiles list shows:
+### The other way of looking at it: By kind
+
+When you want the whole switchboard at once — every connection profile, whatever its provider — click **By kind** at the top of the Providers card and open **Connection Profiles**. That is the list Quilltap has always shown: drag-to-reorder, health badges, tags, auto-configure and all. A link straight to this page (the one at the top, for example) opens *By kind* with **Connection Profiles** already unfolded, and Quilltap remembers whichever view you chose last, on this browser.
+
+## What the By-Kind List Shows
+
+The full Connection Profiles list shows:
 
 - **Profile Name** — The name you gave the profile
 - **Provider** — Which AI service (OpenAI, Anthropic, etc.)
@@ -54,17 +62,18 @@ Should an import or a restoration arrive bearing a name already taken, Quilltap 
 
 ### Step 1: Prepare Your API Key
 
-Before creating a connection profile, you need an API key:
+Before creating a connection profile for a hosted provider, you need an API key (a local provider such as Ollama needs none — skip ahead):
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
+1. If the provider already has a card under **Settings → Connections → Providers**, open it and choose **+ Add → API key**; otherwise use **Add an API key** on the **Add a provider** card at the end of the list
 2. Add your API key from the provider
-3. Test the key to verify it works
-4. Return to Connection Profiles tab
+3. Click **Test** on the new key row to verify it works
+
+See [API Keys](api-keys-settings.md) for the particulars. If you would rather be walked through key, model and profile in one guided promenade, the **Setup Wizard** (on the same **Add a provider** card, and in its own card above Providers) will do the lot.
 
 ### Step 2: Create the Profile
 
-1. Click **Add Connection Profile**
-2. A form appears with these fields:
+1. On the provider's card, click **+ Add** and choose **Connection profile**. The form opens with that provider already selected — exactly as though you had picked it from the dropdown yourself, so a provider's default base URL and tool-use habits are filled in — and, if the provider holds exactly one key, that key is chosen too. (From *By kind*, the **Add Connection Profile** button opens the same form with no provider chosen.)
+2. The form's fields:
 
    **Basic Information:**
    - **Profile Name** — Give this configuration a name (e.g., "GPT-4 Production", "Claude Fast"). It must be unique — see [A Note on Names](#a-note-on-names) above. (Leave it blank and Quilltap will suggest one for you, suffixing a numeral should the obvious choice already be taken.)
@@ -95,8 +104,8 @@ Before creating a connection profile, you need an API key:
 
 Before using in chats, verify it works:
 
-1. Find your new profile in the list
-2. Click **Test Connection** button
+1. Open your new profile — its row on the provider's card, or **Edit** in *By kind*
+2. Click **Test Connection**
 3. Quilltap sends a test message to verify:
    - ✓ API key is valid
    - ✓ Model is accessible
@@ -107,24 +116,23 @@ Before using in chats, verify it works:
 
 To change an existing profile:
 
-1. Find the profile in the list
-2. Click **Edit** button (pencil icon)
-3. Update any of these settings:
+1. Click its row on the provider's card — or, in *By kind*, its **Edit** button
+2. Update any of these settings:
    - Profile name
    - API key (switch to a different one)
    - Model (select a different model)
    - Advanced settings (temperature, tokens, etc.)
    - Tags for organization
-4. Click **Save Changes**
+3. Click **Save Changes**
 
 ## Deleting a Connection Profile
 
 To remove a profile:
 
-1. Find the profile in the list
-2. Click **Delete** button (trash icon)
-3. A confirmation dialog appears (showing if it's in use)
-4. Click **Confirm Delete** to remove it
+1. Switch the Providers card to **By kind** and open **Connection Profiles** — deletion is done from the full list
+2. Click **Delete** on the profile
+3. A confirmation appears (showing if it's in use)
+4. Confirm to remove it
 
 **Warning:** If the profile is used in active chats, those chats will need a new profile assigned.
 
@@ -291,7 +299,7 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 ### OpenAI-Compatible Endpoints (llama-server, vLLM, LM Studio, and kin)
 
 - Point *Base URL* at your server's OpenAI-compatible route — `http://localhost:8080/v1` for `llama-server`, and whatever your runtime advertises otherwise. An API key is optional.
-- **And optional now means offered, as of 4.9.** This is the one provider that keeps a foot in both camps — the unbolted llama.cpp on your own desk, and a hosted service that will not exchange a syllable without a bearer token — and until now Quilltap had only one word for the matter and used it wrongly. Because no key was *required*, the *API Key* field was not shown at all, and **OpenAI-Compatible** was absent from the Add-New-API-Key list besides, so no such key could be brought into existence in the first place. Anyone aiming this provider at Together, Fireworks, Groq, DeepInfra, a vLLM behind a door, or a corporate gateway was answered with a flat 401 and given nothing to do about it. The two questions are now asked separately: the field appears, unstarred, and you may fill it or leave it empty as your endpoint requires. Create the key first under **Settings → AI Providers → API Keys**, choosing **OpenAI-Compatible** as its provider, and then select it here. A local server that wants no key wants none still — leave the field on *None* and nothing is sent.
+- **And optional now means offered, as of 4.9.** This is the one provider that keeps a foot in both camps — the unbolted llama.cpp on your own desk, and a hosted service that will not exchange a syllable without a bearer token — and until now Quilltap had only one word for the matter and used it wrongly. Because no key was *required*, the *API Key* field was not shown at all, and **OpenAI-Compatible** was absent from the Add-New-API-Key list besides, so no such key could be brought into existence in the first place. Anyone aiming this provider at Together, Fireworks, Groq, DeepInfra, a vLLM behind a door, or a corporate gateway was answered with a flat 401 and given nothing to do about it. The two questions are now asked separately: the field appears, unstarred, and you may fill it or leave it empty as your endpoint requires. Create the key first — **+ Add → API key** on the OpenAI-Compatible card under **Settings → Connections → Providers**, or **Add an API key** on the **Add a provider** card if it has none yet — and then select it here. A local server that wants no key wants none still — leave the field on *None* and nothing is sent.
 - **Endpoint Options** — a group of provider settings that, until 4.9, this provider had never had at all. *Reasoning Effort* (from *None* through *Extra high*) tells a reasoning model how long it may think; *Top K*, *Min P*, *Repeat Penalty*, *Presence Penalty*, *Frequency Penalty* and *Seed* are the sampling settings your model's publisher specifies; *Reuse Cached Prompt* is an escape hatch for servers that do not already reuse the part of a prompt they have processed before (`llama-server` does, so most people can leave it alone). Everything here is sent only when you fill it in, and an endpoint that does not recognise a setting generally ignores it.
 - **Tool use is now yours to grant.** Because this provider points at an endpoint of unknown character, new profiles start with *Allow tool use* unticked and Prospero falls back to its pseudo-tool formats. If your server does speak native function calling — `llama-server --jinja`, vLLM, LM Studio — tick the box, and Quilltap will send the tool definitions and act on the calls that come back. Should the endpoint prove to have been boasting, the error is shown rather than swallowed.
 - **Strict chat templates no longer strangle the conversation at the second turn.** Certain model templates — the Qwen family most insistently, and a number of Llama- and Gemma-derived ones — will accept a system message only as the very first item on the programme and raise a formal objection to any that follows. Quilltap assembles the head of a turn in up to three separate system blocks, for excellent reasons to do with prompt caching on the hosted services, and the consequence was a chat that greeted you charmingly and then fell silent forever: every turn after the opening was refused outright by the server before a single token was generated. The blocks are now folded into one on their way to a local endpoint, in the order they were written and with nothing left out. The hosted providers keep their three, and their caches with them.
@@ -614,7 +622,7 @@ Check your provider's documentation for the exact list of supported file types a
 
 **Solution:**
 
-- Check API Keys tab — make sure you created the key
+- Open the provider's card and check its key is there — and press **Test** on it
 - Verify the key is still valid with your provider
 - Delete and re-add the key from the provider's website
 
@@ -640,15 +648,14 @@ Check your provider's documentation for the exact list of supported file types a
 - Use a different provider
 - Use a "cheap" profile for fast responses
 
-### Can't create new profiles (greyed out button)
+### Can't add a profile (greyed-out menu entry)
 
-**Reason:** No API keys available
+**Reason:** On a provider's card, an **+ Add** entry is greyed out when the provider cannot do that kind of work — *Connection profile* on a search-only provider, *Image profile* on one that paints nothing, *API key* on one that takes no key.
 
 **Solution:**
 
-- Go to API Keys tab
-- Add at least one API key
-- Return to Connection Profiles
+- Pick a provider that offers what you want, or add one with the **Add a provider** card
+- A hosted provider needs a key before its profile can connect: add one with **+ Add → API key** first
 
 ## In-Chat Settings Access
 
@@ -658,7 +665,7 @@ Characters with help tools enabled can read your configured connection profiles 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=providers&section=connection-profiles")`
+`help_navigate(url: "/settings?section=connection-profiles")`
 
 ## Related Settings
 

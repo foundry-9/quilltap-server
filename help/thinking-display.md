@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat&section=thinking-display
+url: /settings?section=thinking-display
 ---
 
 # The Thinking, Shown — A Glimpse Behind the Curtain
@@ -26,7 +26,7 @@ It exists to be read, or to be left folded away — and that is the whole of its
 
 Visibility is yours to set, at two levels.
 
-- **Global default** — Settings → Chat → *Thinking / Reasoning*. Decide whether new chats reveal thinking at all, and whether the fold begins open or closed. Out of the box, thinking is **shown but collapsed**: present and one click away, without crowding the page.
+- **Global default** — Settings → Composer & Display → *Thinking / Reasoning*. Decide whether new chats reveal thinking at all, and whether the fold begins open or closed. Out of the box, thinking is **shown but collapsed**: present and one click away, without crowding the page.
 - **Per-chat override** — inside any chat, the **Visibility** panel in the sidebar offers a *Thinking* control with three settings: **Inherit** (defer to the global default), **Show**, or **Hide**. Choose Hide and the reasoning is simply never rendered in that chat — though it is still quietly captured and stored, so a later change of heart costs you nothing.
 
 Note well: these settings govern only the *showing*. The reasoning is captured all the same, whichever way the dial is turned.
@@ -40,5 +40,5 @@ A particular word on Google's latest: the **Gemini 3** family (including the rol
 ## In-Chat Navigation
 
 ```
-help_navigate(url: "/settings?tab=chat&section=thinking-display")
+help_navigate(url: "/settings?section=thinking-display")
 ```

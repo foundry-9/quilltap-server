@@ -1,16 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { ProfileList } from './ProfileList'
-import { ProfileModal } from './ProfileModal'
 import { useConnectionProfiles } from './hooks/useConnectionProfiles'
-import { useProfileForm } from './hooks/useProfileForm'
+import { useConnectionProfileModal } from './useConnectionProfileModal'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { normalizeProfileName } from '@/lib/llm/connection-profile-names'
-import type { ConnectionProfile } from './types'
 
 /**
  * Main connection profiles component
@@ -35,27 +32,6 @@ export default function ConnectionProfilesTab() {
     resetSort,
   } = useConnectionProfiles()
 
-  // Form state and operations
-  const {
-    form,
-    saveOp,
-    connectOp,
-    fetchModelsOp,
-    testMessageOp,
-    autoConfigureOp,
-    getProviderRequirements,
-    resetForm,
-    loadProfileIntoForm,
-    handleConnect,
-    handleFetchModels,
-    handleTestMessage,
-    handleAutoConfigure,
-    handleSubmit,
-  } = useProfileForm(providers, apiKeys)
-
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
   const [autoConfiguringId, setAutoConfiguringId] = useState<string | null>(null)
 
@@ -74,31 +50,19 @@ export default function ConnectionProfilesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleEdit = useCallback(
-    (profile: ConnectionProfile) => {
-      loadProfileIntoForm(profile)
-      setEditingProfile(profile)
-      setIsModalOpen(true)
-    },
-    [loadProfileIntoForm]
-  )
-
-  const handleOpenModal = useCallback(() => {
-    resetForm()
-    setEditingProfile(null)
-    setIsModalOpen(true)
-  }, [resetForm])
-
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false)
-    setEditingProfile(null)
-    resetForm()
-  }, [resetForm])
-
   const handleModalSuccess = useCallback(() => {
     fetchProfiles()
     fetchApiKeys()
   }, [fetchProfiles, fetchApiKeys])
+
+  // The modal, its form and its editing target (shared with the provider view)
+  const { openNew, openEdit, modal } = useConnectionProfileModal({
+    profiles,
+    apiKeys,
+    providers,
+    onSuccess: handleModalSuccess,
+  })
+  const handleOpenModal = useCallback(() => openNew(), [openNew])
 
   const handleDeleteClick = useCallback(
     async (profileId: string) => {
@@ -106,18 +70,6 @@ export default function ConnectionProfilesTab() {
       setDeleteConfirming(null)
     },
     [handleDelete]
-  )
-
-  // Normalized names already in use, excluding the profile being edited — feeds
-  // the modal's inline duplicate-name validation and unique auto-name suggestion.
-  const takenNames = useMemo(
-    () =>
-      new Set(
-        profiles
-          .filter((p) => p.id !== editingProfile?.id)
-          .map((p) => normalizeProfileName(p.name))
-      ),
-    [profiles, editingProfile]
   )
 
   const handleAutoConfigureCard = useCallback(async (profileId: string) => {
@@ -171,7 +123,7 @@ export default function ConnectionProfilesTab() {
         showForm={false}
         deleteConfirming={deleteConfirming}
         isDeleting={deleteOp.loading}
-        onEdit={handleEdit}
+        onEdit={openEdit}
         onDelete={handleDeleteClick}
         onDeleteConfirmChange={setDeleteConfirming}
         onAddClick={handleOpenModal}
@@ -181,38 +133,8 @@ export default function ConnectionProfilesTab() {
         autoConfiguringId={autoConfiguringId}
       />
 
-      {/* Profile Modal - key ensures remount when switching profiles */}
-      <ProfileModal
-        key={editingProfile?.id || 'new'}
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSuccess={handleModalSuccess}
-        profile={editingProfile}
-        apiKeys={apiKeys}
-        providers={providers}
-        takenNames={takenNames}
-        allProfiles={profiles}
-        form={{
-          formData: form.formData,
-          setField: form.setField,
-          handleChange: form.handleChange,
-          resetForm: resetForm,
-        }}
-        operations={{
-          saveLoading: saveOp.loading,
-          connectLoading: connectOp.loading,
-          connectError: connectOp.error,
-          fetchModelsLoading: fetchModelsOp.loading,
-          testMessageLoading: testMessageOp.loading,
-          autoConfigureLoading: autoConfigureOp.loading,
-          handleConnect,
-          handleFetchModels,
-          handleTestMessage,
-          handleAutoConfigure,
-          handleSubmit,
-          getProviderRequirements,
-        }}
-      />
+      {/* Profile Modal */}
+      {modal}
     </div>
   )
 }

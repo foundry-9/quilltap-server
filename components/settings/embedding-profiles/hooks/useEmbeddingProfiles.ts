@@ -70,6 +70,21 @@ const PROVIDER_METADATA: Record<string, Omit<EmbeddingProviderInfo, 'name'>> = {
   },
 }
 
+/**
+ * Provider names (from `?action=list-providers`, or the keys of the models map)
+ * as the modal's provider picker wants them.
+ */
+export function toEmbeddingProviderInfo(names: string[]): EmbeddingProviderInfo[] {
+  return names.map(name => ({
+    name: name as EmbeddingProvider,
+    ...PROVIDER_METADATA[name] || {
+      displayName: name,
+      requiresApiKey: true,
+      requiresBaseUrl: false,
+    },
+  }))
+}
+
 export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
   const [profiles, setProfiles] = useState<EmbeddingProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
@@ -109,26 +124,10 @@ export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
 
       // Build providers list from API response or fall back to models keys
       if (providersRes.ok && providersRes.data?.providers) {
-        const providers = providersRes.data.providers.map(name => ({
-          name: name as EmbeddingProvider,
-          ...PROVIDER_METADATA[name] || {
-            displayName: name,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-          },
-        }))
-        setEmbeddingProviders(providers)
+        setEmbeddingProviders(toEmbeddingProviderInfo(providersRes.data.providers))
       } else if (modelsRes.data) {
         // Fallback: derive providers from models response
-        const providers = Object.keys(modelsRes.data).map(name => ({
-          name: name as EmbeddingProvider,
-          ...PROVIDER_METADATA[name] || {
-            displayName: name,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-          },
-        }))
-        setEmbeddingProviders(providers)
+        setEmbeddingProviders(toEmbeddingProviderInfo(Object.keys(modelsRes.data)))
       }
 
       if (profilesRes.data?.profiles) {

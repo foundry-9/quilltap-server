@@ -95,7 +95,7 @@ Consulted this way, the Console keeps all of its console powers — the read-onl
 
 ### Choosing the engine for `@Brahma`
 
-The floating Console has its own model picker; the Salon line does not, so it is told which engine to use. In **Settings → Chat → Brahma Console**, the picker labelled **Engine for `@Brahma` in the Salon** names the connection profile that answers. Leave it at **Use my default profile** and Brahma borrows your default, as it always has.
+The floating Console has its own model picker; the Salon line does not, so it is told which engine to use. In **Settings → Games & Tools → Brahma Console**, the picker labelled **Engine for `@Brahma` in the Salon** names the connection profile that answers. Leave it at **Use my default profile** and Brahma borrows your default, as it always has.
 
 A project may overrule that choice for its own conversations: open the project, find the **Model Behavior** card, and set **Inline Brahma Engine** (see [Project Settings](project-settings.md)). The order of precedence is plain — the project's choice, then the global setting, then your default profile — and should a chosen profile since have been deleted, Brahma quietly moves down the list rather than falling silent.
 
@@ -105,7 +105,7 @@ Enquiries of this sort reward a capable engine. A model that handles tools deftl
 
 A thorny question — *"where in all these ledgers is the airship first mentioned?"* — is rarely answered in a single stroke. The Console works such a problem the way any diligent clerk would: one step at a time, a query here, a document read there, each step a **turn** at the telegraph key. It takes as many turns as the question demands, up to a ceiling you set — and only you set it — at which point it must lay down its tools and report whatever it has gathered so far.
 
-That ceiling lives in **Settings → Chat → Brahma Console**, as **"Let the Console take up to N turns"** (any whole number from 1 upward, with no upper limit; the default is 10). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
+That ceiling lives in **Settings → Games & Tools → Brahma Console**, as **"Let the Console take up to N turns"** (any whole number from 1 upward, with no upper limit; the default is 10). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
 
 A generous ceiling costs nothing on questions the Console dispatches quickly, and it carries no risk of a runaway search: should the engine fall to asking the very same question twice, Quilltap recognises it chasing its own tail and calls a halt at once — no matter how high the ceiling stands. The dial buys patience for genuine progress, never licence to spin.
 
@@ -127,7 +127,7 @@ help_navigate(url: "/")
 
 To take the user straight to the Console's settings (the turn budget and the engine for `@Brahma` in the Salon):
 ```
-help_navigate(url: "/settings?tab=chat&section=brahma-console")
+help_navigate(url: "/settings?section=brahma-console")
 ```
 
 ## Related Pages

@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=chat&section=data-retention
+url: /settings?section=data-retention
 ---
 
 # Data Retention — The Nightly Tidying of Quiet Rooms
 
-> **[Open this setting in Quilltap](/settings?tab=chat&section=data-retention)**
+> **[Open this setting in Quilltap](/settings?section=data-retention)**
 
 Every conversation you keep, Quilltap keeps in full — every word, forever, or until you say otherwise. But a conversation also gathers a certain amount of behind-the-scenes paraphernalia as it goes: compression caches, pre-rendered pages, and the models' own scratch-work and thinking traces. In a busy establishment, the quiet rooms end up storing rather a lot of this — none of it part of the story, all of it faithfully rebuilt on demand.
 
@@ -32,7 +32,7 @@ Unlike the caches above, a conversation's semantic-search fingerprints are never
 
 ## Configuring the window
 
-1. Open **Settings → Chat Settings → Data Retention**
+1. Open **Settings → Context & Memory → Data Retention**
 2. Set **"Keep inactive chats' working data for N days"** (1–3650; the default is 30)
 3. The setting applies to the entire establishment — there is deliberately no per-chat dial
 
@@ -74,7 +74,7 @@ rather than returned to your disk.
 
 Characters with help tools enabled can navigate directly to this setting:
 
-`help_navigate(url: "/settings?tab=chat&section=data-retention")`
+`help_navigate(url: "/settings?section=data-retention")`
 
 ## Related Settings
 

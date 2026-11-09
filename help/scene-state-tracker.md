@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat
+url: /settings?group=composer-display
 ---
 
 # Scene State Tracker
@@ -45,7 +45,7 @@ For **Unmoderated** chats (whether the Concierge or you set them so), the scene 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=chat")`
+`help_navigate(url: "/settings?group=composer-display")`
 
 ## Related Topics
 

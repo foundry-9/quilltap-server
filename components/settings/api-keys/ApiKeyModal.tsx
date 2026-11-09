@@ -33,6 +33,11 @@ interface ApiKeyModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  /**
+   * Provider to preselect when the modal opens (the per-provider card's Add
+   * menu). Absent, the picker starts empty as it always has.
+   */
+  initialProvider?: string
 }
 
 interface ProviderOption {
@@ -40,7 +45,7 @@ interface ProviderOption {
   label: string
 }
 
-export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
+export function ApiKeyModal({ isOpen, onClose, onSuccess, initialProvider }: ApiKeyModalProps) {
   const [providers, setProviders] = useState<ProviderOption[]>([])
   const [providersLoading, setProvidersLoading] = useState(true)
 
@@ -85,6 +90,18 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
     }
     fetchProviders()
   }, [])
+
+  // Preselect the provider each time the modal opens with one. The form
+  // persists across openings (it is reset on close), so this runs on the
+  // open transition rather than at mount.
+  const { setField } = form
+  useEffect(() => {
+    if (isOpen && initialProvider) {
+      console.debug('[ApiKeyModal] Preselecting provider', { provider: initialProvider })
+      setField('provider', initialProvider)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialProvider])
 
   const createKey = useAsyncOperation<ApiKeyResponse>()
 

@@ -19,6 +19,11 @@ interface ProfileModalProps {
   apiKeys: ApiKey[]
   embeddingModels: Record<string, EmbeddingModel[]>
   embeddingProviders: EmbeddingProviderInfo[]
+  /**
+   * Provider to preselect on a new profile (the per-provider card's Add menu);
+   * honoured only when it is one of `embeddingProviders`. Ignored when editing.
+   */
+  initialProvider?: string
 }
 
 export function ProfileModal({
@@ -29,6 +34,7 @@ export function ProfileModal({
   apiKeys,
   embeddingModels,
   embeddingProviders,
+  initialProvider,
 }: ProfileModalProps) {
   const id = useId()
   const {
@@ -46,11 +52,13 @@ export function ProfileModal({
 
   // Default to first available provider or 'BUILTIN'
   const defaultProvider = embeddingProviders[0]?.name || 'BUILTIN'
+  const presetProvider = embeddingProviders.find((p) => p.name === initialProvider)?.name
+  const presetKeys = presetProvider ? apiKeys.filter((k) => k.provider === presetProvider) : []
 
   const form = useFormState<EmbeddingProfileFormData>({
     name: profile?.name || '',
-    provider: profile?.provider || defaultProvider,
-    apiKeyId: profile?.apiKeyId || '',
+    provider: profile?.provider || presetProvider || defaultProvider,
+    apiKeyId: profile?.apiKeyId || (presetKeys.length === 1 ? presetKeys[0].id : ''),
     baseUrl: profile?.baseUrl || '',
     modelName: profile?.modelName || '',
     dimensions: profile?.dimensions?.toString() || '',

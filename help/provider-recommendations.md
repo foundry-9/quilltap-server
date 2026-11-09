@@ -1,11 +1,11 @@
 ---
-url: /settings?tab=providers
+url: /settings?group=connections
 tags: [providers, recommendations, models, setup, openai, anthropic, google, grok, openrouter]
 ---
 
 # Provider Recommendations
 
-> **[Open Providers Settings](/settings?tab=providers)**
+> **[Open Providers Settings](/settings?group=connections)**
 
 ## Choosing Your AI Providers
 
@@ -15,12 +15,12 @@ Quilltap uses AI models for several different jobs, and no single provider is th
 
 | Role | What It Does | Where to Set It Up |
 |------|-------------|-------------------|
-| **Chat** | Your characters' conversations, personalities, and responses | [Connection Profiles](/settings?tab=providers&section=connection-profiles) |
-| **Background Tasks** | Memory extraction, summarisation, scene tracking, titles | [Chat Settings > Cheap LLM](/settings?tab=chat&section=cheap-llm) |
-| **Image Generation** | Character portraits, scene illustrations, story backgrounds | [Image Profiles](/settings?tab=images) |
-| **Embeddings** | Semantic search for the Commonplace Book memory system | [Embedding Profiles](/settings?tab=providers&section=embedding-profiles) |
-| **Moderation** | Optional content pre-screening for the Concierge | [The Concierge > Pre-screening](/settings?tab=concierge&section=pre-screening) |
-| **Uncensored Desk** | Taking over when an ordinary provider refuses on content grounds | [The Concierge > The Uncensored Desk](/settings?tab=concierge&section=uncensored-desk) |
+| **Chat** | Your characters' conversations, personalities, and responses | [Connection Profiles](/settings?section=connection-profiles) |
+| **Background Tasks** | Memory extraction, summarisation, scene tracking, titles | [Settings → Connections → Cheap LLM Settings](/settings?section=cheap-llm) |
+| **Image Generation** | Character portraits, scene illustrations, story backgrounds | [Image Profiles](/settings?group=images) |
+| **Embeddings** | Semantic search for the Commonplace Book memory system | [Embedding Profiles](/settings?section=embedding-profiles) |
+| **Moderation** | Optional content pre-screening for the Concierge | [The Concierge > Pre-screening](/settings?section=pre-screening) |
+| **Uncensored Desk** | Taking over when an ordinary provider refuses on content grounds | [The Concierge > The Uncensored Desk](/settings?section=uncensored-desk) |
 
 ## Our Recommendations
 
@@ -98,7 +98,7 @@ The main thing OpenRouter doesn't cover is **embeddings** and **moderation** ---
 To navigate to the providers settings page from within a chat, you may use the help tool:
 
 ```
-help_navigate(url: "/settings?tab=providers")
+help_navigate(url: "/settings?group=connections")
 ```
 
 ## Related Topics

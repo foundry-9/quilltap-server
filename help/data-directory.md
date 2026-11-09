@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=system
+url: /settings?group=data-maintenance
 ---
 
 # Data Directory
@@ -98,7 +98,7 @@ For more comprehensive backup strategies, see the Backup and Restore documentati
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system")`
+`help_navigate(url: "/settings?group=data-maintenance")`
 
 ## Related Topics
 
