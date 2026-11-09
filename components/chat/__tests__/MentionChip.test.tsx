@@ -63,16 +63,26 @@ describe('MentionChip in MessageContent', () => {
     expect(container.textContent).not.toMatch(/[-]/)
   })
 
-  it('shows the card on focus', () => {
-    render(<MessageContent content="Abby came by." mentions={[abby]} />)
-    act(() => {
-      fireEvent.focus(screen.getByRole('button', { name: 'Abigail, not in this conversation' }))
-    })
-    const tooltip = screen.getByRole('tooltip', { hidden: true })
-    expect(tooltip.textContent).toContain('Abigail')
-    expect(tooltip.textContent).toContain('Abby, True North')
-    expect(tooltip.textContent).toContain('she/her/her')
-    expect(tooltip.textContent).toContain('Abigail keeps the records.')
+  it('shows the card on keyboard focus', () => {
+    // The tooltip opens on focus only when it is :focus-visible, which jsdom
+    // never reports; stand in for a Tab onto the chip.
+    const realMatches = Element.prototype.matches
+    const matches = jest.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selector: string) {
+      return selector === ':focus-visible' ? true : realMatches.call(this, selector)
+    } as typeof Element.prototype.matches)
+    try {
+      render(<MessageContent content="Abby came by." mentions={[abby]} />)
+      act(() => {
+        fireEvent.focus(screen.getByRole('button', { name: 'Abigail, not in this conversation' }))
+      })
+      const tooltip = screen.getByRole('tooltip', { hidden: true })
+      expect(tooltip.textContent).toContain('Abigail')
+      expect(tooltip.textContent).toContain('Abby, True North')
+      expect(tooltip.textContent).toContain('she/her/her')
+      expect(tooltip.textContent).toContain('Abigail keeps the records.')
+    } finally {
+      matches.mockRestore()
+    }
   })
 
   it('renders plainly without mentions', () => {

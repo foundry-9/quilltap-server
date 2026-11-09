@@ -4,6 +4,15 @@
 
 ### 4.13-dev
 
+#### Fix: Custom tooltips no longer stick open
+
+- `components/ui/Tooltip.tsx` closed only on the anchor's own `pointerleave` or `blur`. Neither fires when the trigger re-renders or vanishes under the pointer, when an overlay covers it, or when the window loses focus mid-hover, so the bubble could stay up indefinitely.
+- While a bubble is open, a document-level `pointermove` listener now starts the close grace period whenever the pointer is outside the anchor and bubble (unless pinned, or opened by keyboard focus that is still inside the anchor). It also closes on any `pointerdown` outside the bubble (pinned or not), on window `blur`, and when the document is hidden.
+- Focus opens the bubble only when it is `:focus-visible`. Before, a mouse click on a trigger, or `useDialogFocus` restoring focus to a trigger when a dialog closed, opened a tooltip that nothing would close until the next blur.
+- Touch `pointerenter` no longer opens a bubble; pinnable triggers still open on click.
+- Docs: `help/appearance-settings.md` (A Word on Tooltips).
+- Tests: new cases in `__tests__/unit/components/tooltip.test.tsx`; `MentionChip.test.tsx` now simulates keyboard focus.
+
 #### Fix: Folder moves match folder paths case-insensitively (#147)
 
 - A filesystem store's `move-folder` typed in another casing (`notes` for `Notes/`) renamed the directory on a case-insensitive disk but left every `doc_mount_folders` row and `doc_mount_file_links` row at the old path, so the next scan dropped the files (chunks, embeddings, descriptions) and re-added them as new. `moveFolderWithinMount` (`lib/mount-index/folder-ops.ts`) now matches the source row and the descendant prefixes case-insensitively, as `under()` and the database store's NOCASE lookups already did.

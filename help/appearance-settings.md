@@ -224,6 +224,10 @@ Your sidebar can be collapsed to show only icons:
 4. Icons show labels on hover
 5. Your collapse preference is saved
 
+### A Word on Tooltips
+
+The little labels that appear when you rest the pointer on a button are Quilltap's own, not the browser's. They arrive after a short pause, and they take their leave the moment the pointer wanders elsewhere, you click anywhere, press **Esc**, or step away to another window. Reach a control by **Tab** and its label appears and stays put until you move on; a mouse click, or a dialog handing focus back to the button that opened it, summons no label at all. On a touch screen, a tap does not raise one.
+
 ## Debug and Development Features
 
 ### Development Settings (if visible)
