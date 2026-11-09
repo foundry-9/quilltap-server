@@ -4,6 +4,7 @@
  * POST /api/v1/chats/[id]?action=... - Action dispatch
  */
 
+import { handleOpenChat } from '../actions/open';
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { notFound } from '@/lib/api/responses';
@@ -136,6 +137,7 @@ export async function handlePost(
     'impersonation-voice-preview': () => handleImpersonationVoicePreview(req, chatId, chat, ctx),
     'send-mail': () => handleSendMail(req, chatId, chat, ctx),
     'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
+    open: () => handleOpenChat(chatId, ctx),
     scenario: () => handleSetScenario(req, chatId, ctx),
     'save-image': () => handleSaveGalleryImage(req, chatId, ctx),
     'storyteller-run': () => handleStorytellerRunAction(req, chatId, ctx),

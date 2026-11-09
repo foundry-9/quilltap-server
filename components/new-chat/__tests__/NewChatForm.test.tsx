@@ -16,11 +16,13 @@ import { screen, fireEvent, within, waitFor } from '@testing-library/react'
 import React from 'react'
 import { renderWithQuery } from '@/__tests__/helpers/renderWithQuery'
 import { NewChatForm } from '../NewChatForm'
+import { NewChatFormContext, type NewChatFormContextValue } from '../NewChatFormContext'
 import { CONCIERGE_STATE_PRESENTATION } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type {
   Character,
   GeneralScenarioOption,
   NewChatFormState,
+  NewChatOverrides,
   RoleplayTemplateOption,
   SelectedCharacter,
 } from '../types'
@@ -126,10 +128,8 @@ function makeState(overrides: Partial<NewChatFormState> = {}): NewChatFormState 
     imageProfileId: '',
     conciergeState: 'moderated',
     roleplayTemplateId: null,
-    roleplayTemplateTouched: false,
     scenario: '',
     scenarioSelection: { kind: 'custom' },
-    scenarioTouched: false,
     timestampConfig: null,
     avatarGenerationEnabled: false,
     outfitSelections: [],
@@ -157,23 +157,69 @@ const GENERAL_SCENARIO: GeneralScenarioOption = {
   body: 'A foggy moor at dawn.',
 }
 
-function renderForm(stateOverrides: Partial<NewChatFormState> = {}, props: Record<string, unknown> = {}) {
-  const setState = jest.fn()
+/**
+ * The form reads everything from the New Chat context. Build one from a shown
+ * state and any context fields a test cares about; `setOverrides` and
+ * `setSelectedCharacters` are spies whose functional updaters the tests apply.
+ */
+function makeContext(
+  stateOverrides: Partial<NewChatFormState> = {},
+  fields: Partial<NewChatFormContextValue> = {},
+): NewChatFormContextValue {
+  return {
+    loading: false,
+    creating: false,
+    characters: [],
+    profiles: [],
+    imageProfiles: [],
+    userControlledCharacters: [],
+    project: null,
+    projectScenarios: [],
+    generalScenarios: [],
+    groupScenarios: [],
+    roleplayTemplates: [],
+    availableProjects: [],
+    selectedProjectId: null,
+    setSelectedProjectId: jest.fn(),
+    showArchivedScenarios: false,
+    setShowArchivedScenarios: jest.fn(),
+    refetchScenarioTiers: jest.fn().mockResolvedValue({ general: null, project: null, group: null }),
+    defaults: null,
+    defaultRoleplayTemplateId: null,
+    conciergeDefaultState: 'moderated',
+    conciergeOnDuty: true,
+    outfitModes: {},
+    previousOutfitSummary: null,
+    autonomousSettingsHint: undefined,
+    continuationFromChatId: null,
+    selectedCharacters: [],
+    setSelectedCharacters: jest.fn(),
+    state: makeState(stateOverrides),
+    overrides: {},
+    setOverrides: jest.fn(),
+    setAutonomousEnabled: jest.fn(),
+    handleCastChanged: jest.fn(),
+    handleCreateChat: jest.fn(),
+    ...fields,
+  }
+}
+
+function renderForm(stateOverrides: Partial<NewChatFormState> = {}, fields: Partial<NewChatFormContextValue> = {}) {
+  const value = makeContext(stateOverrides, fields)
   renderWithQuery(
-    <NewChatForm
-      profiles={[]}
-      imageProfiles={[]}
-      userControlledCharacters={[]}
-      selectedCharacters={[]}
-      setSelectedCharacters={jest.fn()}
-      state={makeState(stateOverrides)}
-      setState={setState}
-      project={null}
-      creating={false}
-      {...props}
-    />
+    <NewChatFormContext.Provider value={value}>
+      <NewChatForm />
+    </NewChatFormContext.Provider>
   )
-  return { setState }
+  return { setOverrides: value.setOverrides as jest.Mock, value }
+}
+
+/** Apply every override updater the form handed out, starting from `start`. */
+function appliedOverrides(setOverrides: jest.Mock, start: NewChatOverrides = {}): NewChatOverrides {
+  return setOverrides.mock.calls.reduce(
+    (acc: NewChatOverrides, [u]: [(p: NewChatOverrides) => NewChatOverrides]) => u(acc),
+    start,
+  )
 }
 
 // --- Tests -----------------------------------------------------------------
@@ -200,7 +246,7 @@ describe('NewChatForm scenario layering', () => {
   })
 
   it('does NOT clear typed free text when a preset is selected from the dropdown', () => {
-    const { setState } = renderForm(
+    const { setOverrides } = renderForm(
       { scenario: 'typed notes' },
       { generalScenarios: [GENERAL_SCENARIO] }
     )
@@ -210,15 +256,15 @@ describe('NewChatForm scenario layering', () => {
     const select = document.getElementById('new-chat-scenario-select') as HTMLSelectElement
     fireEvent.change(select, { target: { value: `general:${GENERAL_SCENARIO.path}` } })
 
-    // handleScenarioSelectChange calls setState with a functional updater.
-    expect(setState).toHaveBeenCalledTimes(1)
-    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    const next = updater(makeState({ scenario: 'typed notes' }))
-
-    // The preset is set and pinned, but the free text survives (no `scenario: ''` reset).
-    expect(next.scenarioSelection).toEqual({ kind: 'general', path: GENERAL_SCENARIO.path })
-    expect(next.scenarioTouched).toBe(true)
-    expect(next.scenario).toBe('typed notes')
+    // The scenario is one override: the preset is set, and the notes survive.
+    expect(setOverrides).toHaveBeenCalledTimes(1)
+    const next = appliedOverrides(setOverrides, {
+      scenario: { selection: { kind: 'custom' }, notes: 'typed notes' },
+    })
+    expect(next.scenario).toEqual({
+      selection: { kind: 'general', path: GENERAL_SCENARIO.path },
+      notes: 'typed notes',
+    })
   })
 })
 
@@ -245,21 +291,8 @@ function renderPlayAs(
   userControlledCharacters: Character[] = [],
   stateOverrides: Partial<NewChatFormState> = {}
 ) {
-  const setSelectedCharacters = jest.fn()
-  renderWithQuery(
-    <NewChatForm
-      profiles={[]}
-      imageProfiles={[]}
-      userControlledCharacters={userControlledCharacters}
-      selectedCharacters={selectedCharacters}
-      setSelectedCharacters={setSelectedCharacters}
-      state={makeState(stateOverrides)}
-      setState={jest.fn()}
-      project={null}
-      creating={false}
-    />
-  )
-  return { setSelectedCharacters }
+  const { value } = renderForm(stateOverrides, { selectedCharacters, userControlledCharacters })
+  return { setSelectedCharacters: value.setSelectedCharacters as jest.Mock }
 }
 
 /** Apply the functional updater the dropdown handed to setSelectedCharacters. */
@@ -399,32 +432,26 @@ describe('NewChatForm roleplay template picker', () => {
     expect(screen.getByRole('option', { name: 'No Template (default)' })).toBeInTheDocument()
   })
 
-  it('records an explicit pick as touched so reference reloads cannot re-seed it', () => {
-    const { setState } = renderForm(
+  it('records an explicit pick as an override', () => {
+    const { setOverrides } = renderForm(
       { roleplayTemplateId: 'tpl-house' },
       { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
     )
 
     fireEvent.change(templateSelect(), { target: { value: 'tpl-classic' } })
 
-    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    const next = updater(makeState({ roleplayTemplateId: 'tpl-house' }))
-    expect(next.roleplayTemplateId).toBe('tpl-classic')
-    expect(next.roleplayTemplateTouched).toBe(true)
+    expect(appliedOverrides(setOverrides)).toEqual({ roleplayTemplateId: 'tpl-classic' })
   })
 
-  it('turns "No Template" into a null id, still marked as touched', () => {
-    const { setState } = renderForm(
+  it('turns "No Template" into an explicit null override', () => {
+    const { setOverrides } = renderForm(
       { roleplayTemplateId: 'tpl-house' },
       { roleplayTemplates: TEMPLATES, defaultRoleplayTemplateId: 'tpl-house' }
     )
 
     fireEvent.change(templateSelect(), { target: { value: '' } })
 
-    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    const next = updater(makeState({ roleplayTemplateId: 'tpl-house' }))
-    expect(next.roleplayTemplateId).toBeNull()
-    expect(next.roleplayTemplateTouched).toBe(true)
+    expect(appliedOverrides(setOverrides)).toEqual({ roleplayTemplateId: null })
   })
 })
 
@@ -463,14 +490,19 @@ describe('NewChatForm Concierge picker', () => {
     }
   )
 
-  it('records the chosen state on the form state', () => {
-    const { setState } = renderForm()
+  it('records the chosen state as an override', () => {
+    const { setOverrides } = renderForm()
 
     fireEvent.change(conciergeSelect(), { target: { value: 'unmoderated' } })
 
-    expect(setState).toHaveBeenCalledTimes(1)
-    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    expect(updater(makeState()).conciergeState).toBe('unmoderated')
+    expect(setOverrides).toHaveBeenCalledTimes(1)
+    expect(appliedOverrides(setOverrides)).toEqual({ conciergeState: 'unmoderated' })
+  })
+
+  it("labels the server's default state, whichever it is", () => {
+    renderForm({ conciergeState: 'unmoderated' }, { conciergeDefaultState: 'unmoderated' })
+    expect(screen.getByRole('option', { name: 'Unmoderated (default)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Moderated' })).toBeInTheDocument()
   })
 })
 
@@ -508,7 +540,7 @@ describe('NewChatForm — Ask the Host to set the scene', () => {
   })
 
   it("fills state.scenario from the builder's scene and clears every preset pointer, and remounts the editor", () => {
-    const { setState } = renderForm(
+    const { setOverrides } = renderForm(
       {
         scenario: 'old notes',
         scenarioSelection: { kind: 'group', groupId: 'group-1', path: 'group/z.md' },
@@ -525,20 +557,14 @@ describe('NewChatForm — Ask the Host to set the scene', () => {
     // The stub's "Use" button fires onUse('A scene from the Host.').
     fireEvent.click(screen.getByRole('button', { name: 'Use built scene' }))
 
-    expect(setState).toHaveBeenCalledTimes(1)
-    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    const next = updater(
-      makeState({
-        scenario: 'old notes',
-        scenarioSelection: { kind: 'group', groupId: 'group-1', path: 'group/z.md' },
-      })
-    )
-    expect(next.scenario).toBe('A scene from the Host.')
-    expect(next.scenarioSelection).toEqual({ kind: 'custom' })
-    expect(next.scenarioTouched).toBe(true)
+    expect(setOverrides).toHaveBeenCalledTimes(1)
+    expect(appliedOverrides(setOverrides).scenario).toEqual({
+      selection: { kind: 'custom' },
+      notes: 'A scene from the Host.',
+    })
 
-    // scenarioEditorKey is real internal state (setState above is a spy that
-    // never applies), so the remount happens regardless of the mocked setState.
+    // scenarioEditorKey is real internal state (setOverrides above is a spy
+    // that never applies), so the remount happens regardless.
     const editorAfter = screen.getByLabelText('Additional scenario notes')
     expect(editorAfter.getAttribute('data-remount-key')).not.toBe(keyBefore)
   })
@@ -557,49 +583,47 @@ describe('NewChatForm — selecting a scene the Host just filed', () => {
 
   async function saveWith(target: unknown, fresh: unknown) {
     ;(globalThis as { __savedTarget?: unknown }).__savedTarget = target
-    const onScenarioTiersChanged = jest.fn().mockResolvedValue(fresh)
-    const view = renderForm({ scenario: 'old notes' }, { profiles: [connectionProfile()], onScenarioTiersChanged })
+    const refetchScenarioTiers = jest.fn().mockResolvedValue(fresh)
+    const view = renderForm({ scenario: 'old notes' }, { profiles: [connectionProfile()], refetchScenarioTiers })
     fireEvent.click(hostButton())
     fireEvent.click(screen.getByRole('button', { name: 'Saved built scene' }))
-    await waitFor(() => expect(onScenarioTiersChanged).toHaveBeenCalled())
+    await waitFor(() => expect(refetchScenarioTiers).toHaveBeenCalled())
     // Let the handler's continuation after the awaited refetch run.
     await new Promise((r) => setTimeout(r, 0))
     return view
   }
 
-  const applyAll = (setState: jest.Mock) =>
-    setState.mock.calls.reduce(
-      (acc: NewChatFormState, [u]: [(p: NewChatFormState) => NewChatFormState]) => u(acc),
-      makeState({ scenario: 'old notes' }),
-    )
+  const applyAll = (setOverrides: jest.Mock) =>
+    appliedOverrides(setOverrides, { scenario: { selection: { kind: 'custom' }, notes: 'old notes' } })
 
   it('selects a group preset the re-read tiers now offer, and clears the custom text', async () => {
-    const { setState } = await saveWith(
+    const { setOverrides } = await saveWith(
       { kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path },
       { general: [], project: null, group: [GROUP_OPTION] },
     )
-    const next = applyAll(setState)
-    expect(next.scenarioSelection).toEqual({ kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path })
-    expect(next.scenarioTouched).toBe(true)
-    expect(next.scenario).toBe('')
+    expect(applyAll(setOverrides).scenario).toEqual({
+      selection: { kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path },
+      notes: '',
+    })
   })
 
   it('leaves the form alone when the saved tier is not offered here', async () => {
-    const { setState } = await saveWith(
+    const { setOverrides } = await saveWith(
       { kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path },
       { general: [], project: null, group: null },
     )
-    expect(setState).not.toHaveBeenCalled()
+    expect(setOverrides).not.toHaveBeenCalled()
   })
 
   it('selects a general preset when the re-read general tier carries it', async () => {
-    const { setState } = await saveWith(
+    const { setOverrides } = await saveWith(
       { kind: 'general', path: GENERAL_SCENARIO.path },
       { general: [GENERAL_SCENARIO], project: null, group: null },
     )
-    const next = applyAll(setState)
-    expect(next.scenarioSelection).toEqual({ kind: 'general', path: GENERAL_SCENARIO.path })
-    expect(next.scenario).toBe('')
+    expect(applyAll(setOverrides).scenario).toEqual({
+      selection: { kind: 'general', path: GENERAL_SCENARIO.path },
+      notes: '',
+    })
   })
 })
 
@@ -635,7 +659,7 @@ describe('NewChatForm — the scenario selection drives the display', () => {
   })
 
   it('offers the character default as a switch when the project default is held', () => {
-    const { setState } = renderForm(
+    const { setOverrides } = renderForm(
       { scenarioSelection: { kind: 'project', path: PROJECT_DEFAULT.path }, scenario: 'notes' },
       { selectedCharacters: [llm(alice)], projectScenarios: [PROJECT_DEFAULT] },
     )
@@ -644,10 +668,10 @@ describe('NewChatForm — the scenario selection drives the display', () => {
     expect(screen.getByText('Glass overhead.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: STUDY.title }))
 
-    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    const next = updater(makeState({ scenario: 'notes' }))
-    expect(next.scenarioSelection).toEqual({ kind: 'character', scenarioId: STUDY.id })
-    expect(next.scenarioTouched).toBe(true)
+    expect(appliedOverrides(setOverrides).scenario).toEqual({
+      selection: { kind: 'character', scenarioId: STUDY.id },
+      notes: '',
+    })
   })
 
   it('always renders the dropdown, with Browse, even when no tier has anything to offer', () => {
@@ -659,7 +683,7 @@ describe('NewChatForm — the scenario selection drives the display', () => {
   })
 
   it('treats "Browse all scenarios…" as an action, never a selection', () => {
-    const { setState } = renderForm({}, { generalScenarios: [GENERAL_SCENARIO] })
+    const { setOverrides } = renderForm({}, { generalScenarios: [GENERAL_SCENARIO] })
     // The browser fetches the catalogue on open; give it an empty one.
     ;(global.fetch as jest.Mock).mockImplementation(async () => ({
       ok: true,
@@ -669,7 +693,7 @@ describe('NewChatForm — the scenario selection drives the display', () => {
 
     fireEvent.change(scenarioSelect(), { target: { value: '__browse__' } })
 
-    expect(setState).not.toHaveBeenCalled()
+    expect(setOverrides).not.toHaveBeenCalled()
     expect(scenarioSelect().value).toBe('__custom__')
   })
 

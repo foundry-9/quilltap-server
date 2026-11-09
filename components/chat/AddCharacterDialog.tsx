@@ -26,6 +26,7 @@ import SummonFromLoreModal from './SummonFromLoreModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { OutfitSelector } from '@/components/wardrobe'
 import type { OutfitSelection } from '@/components/wardrobe'
+import type { OutfitSelectionMode } from '@/lib/schemas/wardrobe.types'
 import { Icon } from '@/components/ui/icon'
 
 interface CharacterOption {
@@ -56,6 +57,12 @@ interface AddCharacterDialogProps {
   chatId: string
   existingCharacterIds: string[] // Characters already in the chat
   onCharacterAdded: () => void // Callback to refresh chat data
+  /**
+   * When given, the join is narrated: the server answers with the Green Room's
+   * stream (dressing, packing, the welcome), which this hands to the Salon to
+   * read while the dialog closes at once.
+   */
+  onArrivalStream?: (response: Response, characterName: string) => void
 }
 
 // Special constant for user impersonation selection
@@ -67,6 +74,7 @@ export default function AddCharacterDialog({
   chatId,
   existingCharacterIds,
   onCharacterAdded,
+  onArrivalStream,
 }: AddCharacterDialogProps) {
   const id = useId()
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
@@ -205,10 +213,15 @@ export default function AddCharacterDialog({
         participantData.joinScenario = joinScenario.trim()
       }
 
-      // Forward the chosen starting outfit. The server defaults to
-      // `mode: 'default'` when nothing is sent, matching the new-chat flow.
+      // Forward the chosen starting outfit. When nothing is sent the server
+      // applies its one default rule, the same as at a chat's opening.
       if (outfitSelection) {
         participantData.outfitSelection = outfitSelection
+      }
+
+      // The Salon is watching: ask for the arrival to be narrated.
+      if (onArrivalStream) {
+        participantData.narrate = true
       }
 
       const response = await fetch(`/api/v1/chats/${chatId}?action=add-participant`, {
@@ -226,6 +239,10 @@ export default function AddCharacterDialog({
 
       showSuccessToast(`${selectedCharacter?.name || 'Character'} has joined the chat`)
 
+      if (onArrivalStream && response.headers.get('content-type')?.includes('text/event-stream')) {
+        onArrivalStream(response, selectedCharacter?.name || 'A newcomer')
+      }
+
       onCharacterAdded()
       onClose()
     } catch (error) {
@@ -241,6 +258,26 @@ export default function AddCharacterDialog({
   const handleOutfitSelectionsChange = useCallback((selections: OutfitSelection[]) => {
     setOutfitSelection(selections[0] ?? null)
   }, [])
+
+  // The server's one outfit rule for this arrival (`defaultOutfitMode`), shown
+  // as the starting mode; nothing is sent unless the operator changes it.
+  const addAsUser = selectedConnectionProfileId === USER_IMPERSONATION_VALUE
+  const { data: arrivalDefaults } = useQuery({
+    queryKey: queryKeys.casting.defaults({
+      characterIds: selectedCharacterId ?? '',
+      userCharacterIds: addAsUser ? selectedCharacterId ?? '' : '',
+      projectId: null,
+      continuationFromChatId: null,
+      chatType: 'salon',
+    }),
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({ action: 'casting-defaults', characterIds: selectedCharacterId ?? '' })
+      if (addAsUser && selectedCharacterId) params.set('userCharacterIds', selectedCharacterId)
+      return apiFetch<{ defaults: { outfitModes: Record<string, OutfitSelectionMode> } }>(`/api/v1/chats?${params.toString()}`, { signal })
+    },
+    select: (data) => data.defaults.outfitModes,
+    enabled: isOpen && !!selectedCharacterId,
+  })
 
   const outfitCharacters = useMemo(() => {
     if (!selectedCharacter) return []
@@ -587,6 +624,7 @@ export default function AddCharacterDialog({
                   onSelectionsChange={handleOutfitSelectionsChange}
                   disabled={isAdding}
                   chatId={chatId}
+                  defaultModes={arrivalDefaults ?? null}
                 />
               )}
             </div>

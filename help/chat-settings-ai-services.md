@@ -33,7 +33,7 @@ Image description is *not* among them, though it is thrifty by disposition: it n
 
 **Green Room Wardrobe Model**
 
-When a character is left to choose their own opening outfit, the cheap LLM does the choosing unless you name someone better. This setting accepts any connection profile, cheap or dear: matching a wardrobe to a scene is a matter of taste, and taste is seldom the cheapest thing in the house. It is one call per character per chat opening. Leave it at **Use the cheap LLM** to keep things as they were. See [Outfit Selection When Starting a Chat](wardrobe.md#outfit-selection-when-starting-a-chat).
+When a character is left to choose their own opening outfit, the cheap LLM does the choosing unless you name someone better. This setting accepts any connection profile, cheap or dear: matching a wardrobe to a scene is a matter of taste, and taste is seldom the cheapest thing in the house. It is one call per character per arrival — at a chat's opening, or when such a character joins one already under way. Leave it at **Use the cheap LLM** to keep things as they were. See [Outfit Selection When Starting a Chat](wardrobe.md#outfit-selection-when-starting-a-chat).
 
 **Allow a Similar-Tier Stand-In**
 

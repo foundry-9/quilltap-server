@@ -53,6 +53,8 @@ export interface TrailingSections {
   closingEcho: string
   turnSkip: string
   turnYield: string
+  /** The chat's first line: the opening note (`buildOpeningInstruction`); '' otherwise. */
+  turnOpening?: string
   storyteller?: string
 }
 
@@ -69,6 +71,7 @@ function orderedSections(s: TrailingSections): string[] {
     s.closingEcho,
     s.turnSkip,
     s.turnYield,
+    s.turnOpening,
     s.storyteller,
   ].filter((section): section is string => !!section)
 }
@@ -109,17 +112,31 @@ export function composeTrailingMessage(input: {
 }
 
 /**
+ * The opening note: the chat is beginning, and this character speaks first.
+ * Ephemeral, in the register of the other Turn notes — never in system block 1,
+ * never persisted. Model-facing, so plain.
+ */
+export function buildOpeningInstruction(operatorName: string): string {
+  return `[Turn note from the Salon — not spoken by any character]
+The chat is beginning now, and you speak first. Open in character, briefly and
+in keeping with the scene, and invite ${operatorName} to engage. Speak only for
+yourself.`
+}
+
+/**
  * The ephemeral Turn notes — never persisted, read last of all. The skip note
  * when the orchestrator has decided this character may pass; the yield note
- * when the operator has raised a hand and this is the character asked.
+ * when the operator has raised a hand and this is the character asked; the
+ * opening note on a chat's first line.
  */
 export function buildTurnNotes(input: {
   turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
   offerYield?: boolean
+  opening?: boolean
   operatorName: string
   chatId: string
   participantId?: string
-}): { turnSkip: string; turnYield: string } {
+}): { turnSkip: string; turnYield: string; turnOpening: string } {
   const turnSkip = input.turnSkip?.offerSkip
     ? buildTurnSkipInstruction(input.turnSkip.characterName, input.turnSkip.recentlyAddressed)
     : ''
@@ -130,7 +147,14 @@ export function buildTurnNotes(input: {
       participantId: input.participantId,
     })
   }
-  return { turnSkip, turnYield }
+  const turnOpening = input.opening ? buildOpeningInstruction(input.operatorName) : ''
+  if (turnOpening) {
+    logger.debug('[Opening] Adding the opening note to the first line\'s context', {
+      chatId: input.chatId,
+      participantId: input.participantId,
+    })
+  }
+  return { turnSkip, turnYield, turnOpening }
 }
 
 /**

@@ -99,7 +99,9 @@ import {
   ChatModals,
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
-import { NewChatModal } from '@/components/new-chat/NewChatModal'
+import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
+import { GreenRoomPanel } from './components/GreenRoomPanel'
+import { useGreenRoom } from './hooks/useGreenRoom'
 import { MergeConversationModal } from '@/components/chat/MergeConversationModal'
 import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
@@ -582,7 +584,11 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   }, [id, storytellerQueryClient])
 
   // --- SSE Streaming hook ---
+  // The Green Room: a chat cast but not yet opened is opened here, narrated at
+  // the head of the transcript; a watched join narrates the same way.
+  const greenRoom = useGreenRoom()
   const sseStreaming = useSSEStreaming({
+    onGreenRoom: greenRoom.onEvent,
     chatId: id,
     chat,
     messages,
@@ -633,6 +639,54 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
       }
     },
   })
+
+  // Open a chat that was cast but not yet opened — once per chat per visit.
+  // The server walks the opening on this stream (resuming a broken-off one
+  // where it stopped) and the greeting streams beneath the Green Room panel.
+  const { openChat } = sseStreaming
+  const { begin: beginGreenRoom, end: endGreenRoom } = greenRoom
+  const openedChatRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (loading || !chat || chat.id !== id) return
+    if (!chat.openingState || chat.openingState === 'done') return
+    if (openedChatRef.current === id) return
+    openedChatRef.current = id
+    beginGreenRoom('The Green Room')
+    // The panel folds when the stream says `done`; if the stream ends without
+    // one (an error, a dropped connection) it folds when the request settles.
+    void openChat().finally(endGreenRoom)
+  }, [loading, chat, id, openChat, beginGreenRoom, endGreenRoom])
+
+  // Continue Elsewhere opens the one New Chat dialog, in continuation mode,
+  // pre-filled from this chat.
+  const newChatModal = useNewChatModalOptional()
+  useEffect(() => {
+    if (!modals.continueChatModalOpen || !chat) return
+    modals.closeContinueChat()
+    if (!newChatModal) {
+      showErrorToast('The New Chat dialog is not available here.')
+      return
+    }
+    const opener = chat.participants.find((p) => p.controlledBy !== 'user')?.character
+    newChatModal.open({
+      characterId: opener?.id,
+      characterName: opener?.name,
+      projectId: chat.projectId ?? undefined,
+      continuationFromChatId: id,
+      initialSelectedCharacterIds: chat.participants
+        .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && !p.removedAt)
+        .map((p) => p.character?.id)
+        .filter((cid): cid is string => typeof cid === 'string' && cid.length > 0),
+      initialUserCharacterId: chat.participants
+        .find((p) => p.type === 'CHARACTER' && p.controlledBy === 'user' && !p.removedAt)
+        ?.character?.id ?? null,
+      initialImageProfileId: chat.imageProfileId ?? null,
+      initialAvatarGenerationEnabled: chat.avatarGenerationEnabled ?? false,
+      // A spicy conversation that changes venue stays spicy by default — and
+      // the new chat's Concierge bubble says so. Overridable on the form.
+      initialConciergeState: getConciergeState(chat),
+    })
+  }, [modals, chat, id, newChatModal])
 
   // Keep refs in sync with SSE streaming state
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
@@ -1732,6 +1786,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onCloseTerminal={terminalModeHook.hidePane}
           chatContent={
             <>
+        <GreenRoomPanel state={greenRoom.state} />
         <VirtualizedMessageList
           messages={renderMessages}
           renderItems={renderItems}
@@ -2094,35 +2149,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           }}
         />
 
-        {/* Continue Elsewhere — fork this conversation into a new chat with a
-            different scenario or project. Reuses the standard new-chat modal
-            in continuation mode, which posts continuationFromChatId to the
-            create endpoint so the server backfills the new chat with the
-            tail of this one. */}
-        {chat && (
-          <NewChatModal
-            isOpen={modals.continueChatModalOpen}
-            onClose={modals.closeContinueChat}
-            characterId={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.id || ''}
-            characterName={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.name || ''}
-            projectId={chat.projectId ?? undefined}
-            continuationFromChatId={id}
-            initialSelectedCharacterIds={chat.participants
-              .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && !p.removedAt)
-              .map((p) => p.character?.id)
-              .filter((cid): cid is string => typeof cid === 'string' && cid.length > 0)}
-            initialUserCharacterId={chat.participants
-              .find((p) => p.type === 'CHARACTER' && p.controlledBy === 'user' && !p.removedAt)
-              ?.character?.id ?? null}
-            initialImageProfileId={chat.imageProfileId ?? null}
-            initialAvatarGenerationEnabled={chat.avatarGenerationEnabled ?? false}
-            /* A spicy conversation that changes venue stays spicy by default —
-               and the new chat's Concierge bubble says so, which the replayed
-               history alone would not. Overridable on the form. */
-            initialConciergeState={getConciergeState(chat)}
-          />
-        )}
-
         {/* Merge In… — fold another conversation's characters and summary into
             this one at the latest point. The inverse of Continue Elsewhere.
             Mounted only while open so its state starts fresh each time. */}
@@ -2199,6 +2225,10 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
           getFirstUserCharacter={participantsWithImpersonation.getFirstUserCharacter}
           onCharacterAdded={chatControls.handleCharacterAdded}
+          onArrivalStream={(response, characterName) => {
+            greenRoom.begin(`${characterName} arrives`)
+            void sseStreaming.readGreenRoomStream(response)
+          }}
           onReattributed={handleReattributed}
           onConfirmStopImpersonation={impersonation.handleConfirmStopImpersonation}
           memoryCascadeConfirmation={messageActions.memoryCascadeConfirmation}

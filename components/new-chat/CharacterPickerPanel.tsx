@@ -5,22 +5,14 @@ import { Icon } from '@/components/ui/icon'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
-import type {
-  Character,
-  ConnectionProfile,
-  SelectedCharacter,
-} from './types'
+import type { Character } from './types'
 import { USER_CONTROLLED_PROFILE } from './types'
+import { useNewChatForm } from './NewChatFormContext'
 import { SubpromptPicker } from '@/components/subprompts'
 import { resolveDefaultSystemPrompt } from '@/lib/characters/default-system-prompt'
 
 interface CharacterPickerPanelProps {
-  characters: Character[]
-  profiles: ConnectionProfile[]
-  selectedCharacters: SelectedCharacter[]
-  onSelectedCharactersChange: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
-  onCharactersChanged?: () => void
-  disabled?: boolean
+  /** Layout only: focus the search box on mount (the full-page form). */
   autoFocusSearch?: boolean
 }
 
@@ -32,15 +24,16 @@ function getAvatarSrc(character: Character): string | null {
   return character.avatarUrl || null
 }
 
-export function CharacterPickerPanel({
-  characters,
-  profiles,
-  selectedCharacters,
-  onSelectedCharactersChange,
-  onCharactersChanged,
-  disabled,
-  autoFocusSearch,
-}: CharacterPickerPanelProps) {
+/** The New Chat dialog's cast picker; reads and writes the cast through {@link useNewChatForm}. */
+export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelProps) {
+  const {
+    characters,
+    profiles,
+    selectedCharacters,
+    setSelectedCharacters: onSelectedCharactersChange,
+    handleCastChanged: onCharactersChanged,
+    creating: disabled,
+  } = useNewChatForm()
   const id = useId()
   const { style } = useAvatarDisplay()
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -94,7 +87,7 @@ export function CharacterPickerPanel({
   }, [characters, searchQuery])
 
   const handleSelect = (character: Character) => {
-    onCharactersChanged?.()
+    onCharactersChanged()
     if (selectedIds.has(character.id)) {
       onSelectedCharactersChange((prev) => prev.filter((sc) => sc.character.id !== character.id))
     } else {
@@ -113,7 +106,7 @@ export function CharacterPickerPanel({
   }
 
   const handleRemove = (characterId: string) => {
-    onCharactersChanged?.()
+    onCharactersChanged()
     onSelectedCharactersChange((prev) => prev.filter((sc) => sc.character.id !== characterId))
   }
 

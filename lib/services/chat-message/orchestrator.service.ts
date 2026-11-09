@@ -97,6 +97,10 @@ import {
 } from './turn-preparation.service'
 import { buildTurnToolContext, resolveTurnToolSlate, runTurnTextToolPasses, type TurnToolSlate } from './turn-tools.service'
 import { settleTurn } from './turn-outcome.service'
+import { runOpening, waitForOpening } from '@/lib/chat/opening/run'
+import { frameNarrator } from '@/lib/chat/opening/narrator-frames'
+import { finalizeScriptedOpener } from './message-finalizer.service'
+import { processCharacterTemplates } from '@/lib/templates/processor'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -170,6 +174,11 @@ export const continueMessageSchema = z.object({
    * true, the "nothing to add" skip option is withheld for this turn.
    */
   nudge: z.boolean().optional(),
+  /**
+   * Open the chat: run its opening (the Green Room, the staff's posts, the
+   * greeting) on this stream. See `SendMessageOptions.opening`.
+   */
+  opening: z.boolean().optional(),
 })
 
 /**
@@ -181,10 +190,16 @@ export async function handleSendMessage(
   userId: string,
   options: SendMessageOptions
 ): Promise<ReadableStream<Uint8Array>> {
+  if (options.opening && options.continueMode) {
+    return openChatStream(repos, chatId, userId, options)
+  }
+
   // The whole stream — first turn, chain, post-chain triggers — runs under one
   // turn-control handle (openTurnStream), so the operator's Stop and raised
   // hand reach every turn it carries.
   return openTurnStream(chatId, async (controller, encoder, ledger) => {
+    // A chat still opening finishes first: its greeting is the first line.
+    await waitForOpening(chatId)
     const isWhisper = isOperatorWhisperSend(options)
     if (isWhisper) {
       const waitedOn = await waitForEarlierTurns(chatId)
@@ -246,6 +261,60 @@ export async function handleSendMessage(
         sceneTracking: result.sceneTrackingContext,
       })
     }
+  })
+}
+
+/**
+ * Open a chat on a Salon stream: the opening's phases narrated as `greenRoom`
+ * frames, then (for a Salon chat) the greeting as a single continue-mode turn
+ * with `purpose: 'opening'` — the participant resolver draws the speaker and
+ * the finalizer records them. Runs under the stream's turn-control handle, so
+ * the Salon's Stop reaches it and a send made meanwhile waits for it. Always
+ * closes with a `chainComplete`, so the Salon settles whether or not anyone
+ * spoke.
+ */
+function openChatStream(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  userId: string,
+  options: SendMessageOptions,
+): ReadableStream<Uint8Array> {
+  return openTurnStream(chatId, async (controller, encoder, ledger) => {
+    const greetingOptions: SendMessageOptions = {
+      continueMode: true,
+      purpose: 'opening',
+      speakingAsParticipantId: options.speakingAsParticipantId,
+      browserUserAgent: options.browserUserAgent,
+    }
+    let opener: ProcessMessageResult | null = null
+    await runOpening({
+      repos,
+      chatId,
+      userId,
+      trigger: 'open',
+      narrator: frameNarrator(controller, encoder),
+      greet: async () => {
+        const result = await processMessage(repos, chatId, userId, greetingOptions, controller, encoder, ledger)
+        opener = result
+        // One opener: the chain does not run on from the greeting.
+        await executeTurnChain({
+          repos,
+          chatId,
+          userId,
+          initialResult: result,
+          initialContinueMode: true,
+          controller,
+          encoder,
+          processChainedMessage: (chainOptions) => processMessage(repos, chatId, userId, chainOptions, controller, encoder, ledger),
+          singleTurn: true,
+        })
+      },
+    })
+    const spoken = opener as ProcessMessageResult | null
+    if (spoken?.hasContent) {
+      await triggerAfterTurnsHousekeeping(repos, { chatId, userId, sceneTracking: spoken.sceneTrackingContext })
+    }
+    safeEnqueue(controller, encodeChainCompleteEvent(encoder, { reason: 'user_turn', nextSpeakerId: null, chainDepth: 0 }))
   })
 }
 
@@ -516,6 +585,43 @@ async function processMessage(
   const chatSettings = await repos.chatSettings.findByUserId(userId)
   const project = chat.projectId ? await repos.projects.findById(chat.projectId) : null
 
+  // The opener with a scripted first message says it, templated, instead of
+  // asking the model — posted through the finalizer's own tail so the two
+  // kinds of opener leave the same state behind.
+  const isOpening = options.purpose === 'opening'
+  const scriptedOpener = isOpening && !hold && character.firstMessage?.trim()
+    ? processCharacterTemplates({
+        character,
+        userCharacter: { name: userCharacter.name, description: userCharacter.description },
+        scenario: chat.scenarioText ?? null,
+      }).firstMessage.trim()
+    : ''
+  if (scriptedOpener) {
+    logger.info('[Orchestrator] Opening with the character\'s scripted first message', {
+      chatId,
+      characterId: character.id,
+      participantId: characterParticipant.id,
+    })
+    return finalizeScriptedOpener({
+      repos,
+      chatId,
+      userId,
+      chat,
+      character,
+      characterParticipant,
+      userParticipantId,
+      isMultiCharacter,
+      content: scriptedOpener,
+      connectionProfile,
+      chatSettings,
+      participantCharacters: isMultiCharacter
+        ? (await loadAllParticipantData(repos, chat, character)).participantCharacters
+        : new Map(),
+      controller,
+      encoder,
+    })
+  }
+
   const agentMode = resolveAgentModeSetting(chat, project, character, chatSettings)
   // A new user message starts the agent's turn count over.
   if (!isContinueMode && agentMode.enabled) {
@@ -585,7 +691,8 @@ async function processMessage(
     characterParticipant,
     isStorytellerTurn: !!storytellerTurn,
     isBid,
-    summoned: options.nudge === true || options.chainSelectionReason === 'queue',
+    // A voice the operator summoned, or the chat's first line, is not offered a pass.
+    summoned: options.nudge === true || options.chainSelectionReason === 'queue' || isOpening,
   })
 
   // Raised hand: the first LLM-voiced turn built after the operator raised a
@@ -789,7 +896,7 @@ async function processMessage(
       offerYield,
       // A bid builds dry and delivers no recall; the bid or plan section
       // trails everything else.
-      purpose: isBid ? 'bid' : 'turn',
+      purpose: isBid ? 'bid' : isOpening ? 'opening' : 'turn',
       storytellerSection,
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,

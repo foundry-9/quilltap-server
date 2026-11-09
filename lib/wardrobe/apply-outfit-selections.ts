@@ -51,7 +51,7 @@ import {
   resolveGreenRoomSubprompts,
   selectGreenRoomLLM,
   withGreenRoomTimeout,
-} from '@/lib/wardrobe/green-room-model';
+} from '@/lib/chat/opening/green-room/model';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -59,10 +59,7 @@ import { createSharedTierLoader, loadWearablePool, type WearablePool } from '@/l
 import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
 import { filterByPronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 import { loadRecentOpenings } from '@/lib/wardrobe/recent-openings';
-import type {
-  CreationProgressEmitter,
-  OutfitPreviewSlots,
-} from '@/lib/chat/creation-progress';
+import type { GreenRoomNarrator, OutfitPreviewSlots } from '@/lib/chat/opening/narrator';
 
 type Repos = RepositoryContainer;
 
@@ -93,12 +90,12 @@ export interface OutfitSelectionContext {
    */
   sourceChatId?: string | null;
   /**
-   * Optional progress emitter for the chat-creation status dialog. Only the
+   * The Green Room's narrator (`lib/chat/opening/narrator.ts`). Only the
    * `llm_choose` mode narrates (it's the slow, LLM-backed path): it announces
    * "consulting the wardrobe for <name>" before the call and publishes the
-   * decided four-slot outfit afterwards. Inert when absent.
+   * decided outfit afterwards. Silent when absent.
    */
-  progress?: CreationProgressEmitter;
+  narrator?: GreenRoomNarrator;
   /**
    * Why these characters are being dressed, for the wear ledger: a new chat
    * (`'chat-start'`, the default), a seat added or reactivated
@@ -142,7 +139,7 @@ function outfitSlotCount(slots: EquippedSlots): number {
 
 /**
  * Map a resolved outfit's per-slot leaf items into the lightweight preview DTO
- * the status dialog renders (no full `WardrobeItem` payloads over the wire).
+ * the Green Room panel renders (no full `WardrobeItem` payloads over the wire).
  */
 function toOutfitPreviewSlots(
   leafItemsBySlot: Record<WardrobeItemType, WardrobeItem[]>,
@@ -209,22 +206,22 @@ export async function applyOutfitSelections(
     return pending;
   };
 
-  /** Publish a resolved outfit to the status dialog. Never throws. */
+  /** Publish a resolved outfit to the Green Room. Never throws. */
   const publishPreview = async (
     characterId: string,
     characterName: string,
     slots: EquippedSlots,
   ): Promise<void> => {
-    if (!context?.progress) return;
+    if (!context?.narrator) return;
     try {
       const resolved = resolveEquippedOutfitForCharacter(await getPool(characterId), slots);
-      context.progress.wardrobeResult(
+      context.narrator.wardrobeResult(
         characterId,
         characterName,
         toOutfitPreviewSlots(resolved.leafItemsBySlot),
       );
     } catch (resolveError) {
-      logger.warn('[applyOutfitSelections] Failed to resolve outfit for progress preview', {
+      logger.warn('[applyOutfitSelections] Failed to resolve outfit for the Green Room preview', {
         chatId,
         characterId,
         error: getErrorMessage(resolveError, 'Unknown error'),
@@ -328,7 +325,7 @@ export async function applyOutfitSelections(
                 // wardrobe for <name>…" until the result lands.
                 consulted = true;
                 consultedName = character.name;
-                context.progress?.wardrobeStart(characterId, character.name);
+                context.narrator?.wardrobeStart(characterId, character.name);
 
                 // Optional dressing instructions: nearest tier's
                 // `Wardrobe/instructions.md` wins (character > group >
@@ -463,7 +460,7 @@ export async function applyOutfitSelections(
               chatId,
               characterId,
             });
-            context?.progress?.log(`${consultedName} chose to wear nothing at all.`, 'info');
+            context?.narrator?.log(`${consultedName} chose to wear nothing at all.`, 'info');
           }
           await publishPreview(characterId, consultedName, chosen.slots);
           return chosen;
@@ -472,8 +469,8 @@ export async function applyOutfitSelections(
         const fallback = buildDefaultOutfitWithCredit((await getPool(characterId)).wearable());
         // If we already told the dialog we were consulting this character,
         // resolve their panel with the default we fell back to (and note it).
-        if (consulted && context?.progress) {
-          context.progress.log(`${consultedName} settled on their usual attire.`, 'warn');
+        if (consulted && context?.narrator) {
+          context.narrator.log(`${consultedName} settled on their usual attire.`, 'warn');
           await publishPreview(characterId, consultedName, fallback.slots);
         }
         return fallback;

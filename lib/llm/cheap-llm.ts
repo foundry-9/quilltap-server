@@ -48,7 +48,7 @@ export interface CheapLLMConfig {
   /**
    * The Green Room's own profile for choosing opening outfits (`llm_choose`).
    * Unset = the cheap LLM. Read only by `selectGreenRoomLLM`
-   * (`lib/wardrobe/green-room-model.ts`); the ladder ignores it.
+   * (`lib/chat/opening/green-room/model.ts`); the ladder ignores it.
    */
   outfitSelectionProfileId?: string
 }

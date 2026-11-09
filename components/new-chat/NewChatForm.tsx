@@ -7,7 +7,7 @@ import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePick
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { OutfitSelector } from '@/components/wardrobe'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
-import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
+import type { OutfitSelection } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import { CONCIERGE_STATES, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
@@ -17,20 +17,8 @@ import {
   conciergeToneTextClass,
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import { AutonomousRoomCard } from './AutonomousRoomCard'
-import type {
-  ConnectionProfile,
-  GeneralScenarioOption,
-  GroupScenarioOption,
-  ImageProfile,
-  NewChatAutonomousState,
-  NewChatFormState,
-  Project,
-  ProjectScenarioOption,
-  RoleplayTemplateOption,
-  SelectedCharacter,
-  UserControlledCharacter,
-} from './types'
-import type { ProjectListEntry, RefetchedScenarioTiers } from './hooks/useNewChat'
+import type { NewChatAutonomousState } from './types'
+import { useNewChatForm } from './NewChatFormContext'
 import { ScenarioSelect } from '@/components/scenario/ScenarioSelect'
 import { ScenarioBrowserDialog, useScenarioRefBody } from '@/components/scenario/ScenarioBrowserDialog'
 import type { ScenarioSelection } from '@/components/scenario/types'
@@ -49,121 +37,51 @@ const ScenarioBuilderDialog = dynamic(
 )
 
 interface NewChatFormProps {
-  profiles: ConnectionProfile[]
-  imageProfiles: ImageProfile[]
-  userControlledCharacters: UserControlledCharacter[]
-  selectedCharacters: SelectedCharacter[]
-  setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
-  state: NewChatFormState
-  setState: React.Dispatch<React.SetStateAction<NewChatFormState>>
-  project: Project | null
-  /** Project scenarios from `/api/v1/projects/[id]/scenarios`; empty when no project. */
-  projectScenarios?: ProjectScenarioOption[]
-  /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
-  generalScenarios?: GeneralScenarioOption[]
-  /** Group scenarios from `/api/v1/groups/scenarios?characterIds=...`; fetched when characters are selected. */
-  groupScenarios?: GroupScenarioOption[]
   /**
-   * "Show archived" plumbing for the scenario picker. Supplied together;
-   * omitting the setter hides the checkbox (the form is then a pure consumer
-   * of whatever tiers it was handed).
-   */
-  showArchivedScenarios?: boolean
-  onShowArchivedScenariosChange?: (next: boolean) => void
-  /**
-   * Roleplay templates from `/api/v1/roleplay-templates`. When non-empty the
-   * form renders a template dropdown, pre-set to whatever the chat would have
-   * defaulted to (`state.roleplayTemplateId`, seeded by useNewChat).
-   */
-  roleplayTemplates?: RoleplayTemplateOption[]
-  /**
-   * The template the chat would use if the dropdown were left alone (project
-   * default > user/global default > none). Used only to mark that option as
-   * the default in the list.
-   */
-  defaultRoleplayTemplateId?: string | null
-  /**
-   * In-form project picker plumbing. When `availableProjects` is non-empty and
-   * `onSelectedProjectIdChange` is supplied, the form renders a dropdown so the
-   * user can file the chat under any of their projects (or none) at submit
-   * time. Callers that render their own picker (NewChatModal's continuation
-   * mode) can omit these.
-   */
-  availableProjects?: ProjectListEntry[]
-  selectedProjectId?: string | null
-  onSelectedProjectIdChange?: (id: string | null) => void
-  creating: boolean
-  /**
-   * When true, renders connection-profile and system-prompt selects inline for a
-   * single LLM-controlled character (used by the modal when the picker is collapsed).
-   * When false, the caller is expected to render those controls in a picker panel.
+   * Layout only: when true, renders connection-profile, system-prompt and
+   * subprompt controls inline for a single LLM character (the modal with its
+   * picker collapsed). When false, the picker panel carries those controls.
    */
   showSingleCharacterControls?: boolean
-  /**
-   * Continuation mode: source chat ID forwarded to OutfitSelector so it can
-   * render the "Same as last conversation" option and default to it.
-   */
-  continuationFromChatId?: string | null
-  /**
-   * Continuation mode: per-character per-slot preview of what each
-   * character was wearing at the end of the source chat.
-   */
-  previousOutfitSummary?: PreviousOutfitSummary | null
-  /**
-   * Optional hints from the user's chat_settings.autonomousRoomSettings.
-   * Used to label "Inherit" radio with the current default, and to disable
-   * the destructive-tools checkbox when the user-level policy is the
-   * always-refuse ceiling.
-   */
-  autonomousSettingsHint?: {
-    visibilityDefault?: 'owner_only' | 'household' | 'open'
-    destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
-    defaultFreshnessHours?: number
-  }
-  /**
-   * Re-read the scenario tiers after the Scenario Builder files a new one
-   * (`useNewChat().refetchScenarioTiers`). Without it a saved scene still
-   * works as custom text; it just can't be selected as a preset.
-   */
-  onScenarioTiersChanged?: () => Promise<RefetchedScenarioTiers>
-  /**
-   * False when the Concierge is off duty globally: the Concierge select is
-   * disabled and points at Settings → The Concierge. Defaults to true.
-   */
-  conciergeOnDuty?: boolean
-  /** The state a chat gets when none is named (`newChatsStartAs`); labelled "(default)". */
-  conciergeDefaultState?: ConciergeState
 }
 
-export function NewChatForm({
-  profiles,
-  imageProfiles,
-  // Retained as a prop for caller compatibility, but the "Play As" dropdown now
-  // draws only from the selected cast, so it is no longer read here.
-  selectedCharacters,
-  setSelectedCharacters,
-  state,
-  setState,
-  project,
-  projectScenarios = [],
-  generalScenarios = [],
-  groupScenarios = [],
-  showArchivedScenarios = false,
-  onShowArchivedScenariosChange,
-  roleplayTemplates = [],
-  defaultRoleplayTemplateId = null,
-  availableProjects,
-  selectedProjectId,
-  onSelectedProjectIdChange,
-  creating,
-  showSingleCharacterControls = false,
-  continuationFromChatId,
-  previousOutfitSummary,
-  autonomousSettingsHint,
-  onScenarioTiersChanged,
-  conciergeOnDuty = true,
-  conciergeDefaultState = 'moderated',
-}: NewChatFormProps) {
+/**
+ * The New Chat form. Every value it shows and every change it makes goes
+ * through {@link useNewChatForm}: what it shows is the server's casting
+ * defaults with the operator's overrides laid over them, and each control
+ * writes an override — never a default.
+ */
+export function NewChatForm({ showSingleCharacterControls = false }: NewChatFormProps) {
+  const {
+    profiles,
+    imageProfiles,
+    selectedCharacters,
+    setSelectedCharacters,
+    state,
+    setOverrides,
+    setAutonomousEnabled,
+    project,
+    projectScenarios,
+    generalScenarios,
+    groupScenarios,
+    showArchivedScenarios,
+    setShowArchivedScenarios,
+    roleplayTemplates,
+    defaultRoleplayTemplateId,
+    availableProjects,
+    selectedProjectId,
+    setSelectedProjectId,
+    creating,
+    continuationFromChatId,
+    previousOutfitSummary,
+    outfitModes,
+    autonomousSettingsHint,
+    refetchScenarioTiers,
+    conciergeOnDuty,
+    conciergeDefaultState,
+  } = useNewChatForm()
+  // A continuation files its project in the dialog's own picker, above.
+  const showProjectPicker = !continuationFromChatId
   const { formatCharacterName } = useUserCharacterDisplayName()
 
   const llmSelected = useMemo(
@@ -255,8 +173,17 @@ export function NewChatForm({
   }, [singleLlm, singleCharacterScenarios])
   const showOverrideNote = scenarioSelection.kind === 'project' && Boolean(characterDefaultScenario)
 
+  // The scenario is one override — preset and notes together, as the server
+  // takes it. Touching either pins both.
   const handleScenarioSelectionChange = (selection: ScenarioSelection) => {
-    setState((prev) => ({ ...prev, scenarioSelection: selection, scenarioTouched: true }))
+    setOverrides((prev) => ({ ...prev, scenario: { selection, notes: prev.scenario?.notes ?? '' } }))
+  }
+
+  const handleScenarioNotesChange = (notes: string) => {
+    setOverrides((prev) => {
+      if (notes === (prev.scenario?.notes ?? '')) return prev
+      return { ...prev, scenario: { selection: prev.scenario?.selection ?? scenarioSelection, notes } }
+    })
   }
 
   // --- The scenario browser ------------------------------------------------
@@ -286,12 +213,7 @@ export function NewChatForm({
     (project && project.id === builderProjectId ? project.name : null)
 
   const handleUseBuiltScene = (scene: string) => {
-    setState((prev) => ({
-      ...prev,
-      scenario: scene,
-      scenarioSelection: { kind: 'custom' },
-      scenarioTouched: true,
-    }))
+    setOverrides((prev) => ({ ...prev, scenario: { selection: { kind: 'custom' }, notes: scene } }))
     setScenarioEditorKey((k) => k + 1)
   }
 
@@ -301,7 +223,7 @@ export function NewChatForm({
   // character's own list only when exactly one LLM character is cast), and
   // clear the custom text it replaces. Otherwise the text stays as custom.
   const handleBuiltSceneSaved = async (target: SavedScenarioTarget) => {
-    const fresh = await onScenarioTiersChanged?.()
+    const fresh = await refetchScenarioTiers()
     let selection: ScenarioSelection | null = null
     if (target.kind === 'general') {
       if (fresh?.general?.some((s) => s.path === target.path)) {
@@ -337,19 +259,15 @@ export function NewChatForm({
       selection = { kind: 'character', scenarioId: target.scenarioId }
     }
     if (!selection) return
-    handleScenarioSelectionChange(selection)
-    setState((prev) => ({ ...prev, scenario: '' }))
+    const picked = selection
+    setOverrides((prev) => ({ ...prev, scenario: { selection: picked, notes: '' } }))
     setScenarioEditorKey((k) => k + 1)
   }
 
   const switchToCharacterDefault = () => {
     if (!characterDefaultScenario) return
-    setState((prev) => ({
-      ...prev,
-      scenarioSelection: { kind: 'character', scenarioId: characterDefaultScenario.id },
-      scenarioTouched: true,
-      scenario: '',
-    }))
+    const scenarioId = characterDefaultScenario.id
+    setOverrides((prev) => ({ ...prev, scenario: { selection: { kind: 'character', scenarioId }, notes: '' } }))
   }
 
   const handleSingleProfileChange = (profileId: string) => {
@@ -387,14 +305,12 @@ export function NewChatForm({
       id: sc.character.id,
       name: sc.character.name,
       isUserControlled: false,
-      canChooseOutfit: sc.character.canChooseOutfit ?? false,
     }))
     if (userEntry) {
       list.push({
         id: userEntry.character.id,
         name: userEntry.character.name,
         isUserControlled: true,
-        canChooseOutfit: userEntry.character.canChooseOutfit ?? false,
       })
     }
     return list
@@ -437,36 +353,42 @@ export function NewChatForm({
     [setSelectedCharacters]
   )
 
+  // The selector reports only the seats the operator changed; the rest take
+  // the server's mode, so they are left out of the request.
   const handleOutfitSelectionsChange = useCallback(
     (selections: OutfitSelection[]) => {
-      setState((prev) => ({ ...prev, outfitSelections: selections }))
+      setOverrides((prev) => {
+        if (selections.length === 0) {
+          if (!prev.outfitSelections) return prev
+          const next = { ...prev }
+          delete next.outfitSelections
+          return next
+        }
+        return { ...prev, outfitSelections: selections }
+      })
     },
-    [setState]
+    [setOverrides]
   )
 
   const handleRoleplayTemplateChange = useCallback(
     (value: string) => {
-      setState((prev) => ({
-        ...prev,
-        roleplayTemplateId: value || null,
-        roleplayTemplateTouched: true,
-      }))
+      setOverrides((prev) => ({ ...prev, roleplayTemplateId: value || null }))
     },
-    [setState]
+    [setOverrides]
   )
 
   const handleImageProfileChange = useCallback(
     (id: string | null) => {
-      setState((prev) => ({ ...prev, imageProfileId: id || '' }))
+      setOverrides((prev) => ({ ...prev, imageProfileId: id || null }))
     },
-    [setState]
+    [setOverrides]
   )
 
   const handleConciergeStateChange = useCallback(
     (next: ConciergeState) => {
-      setState((prev) => ({ ...prev, conciergeState: next }))
+      setOverrides((prev) => ({ ...prev, conciergeState: next }))
     },
-    [setState]
+    [setOverrides]
   )
 
   // Label, icon, tone and helper sentence all come from the shared presentation
@@ -478,29 +400,19 @@ export function NewChatForm({
   const isAutonomous = state.autonomous.enabled
   const updateAutonomous = useCallback(
     (patch: Partial<NewChatAutonomousState>) => {
-      setState((prev) => ({
-        ...prev,
-        autonomous: { ...prev.autonomous, ...patch },
-      }))
+      const { enabled, ...fields } = patch
+      if (enabled !== undefined) setAutonomousEnabled(enabled)
+      if (Object.keys(fields).length === 0) return
+      setOverrides((prev) => ({ ...prev, autonomous: { ...prev.autonomous, ...fields } }))
     },
-    [setState]
-  )
-
-  const handleAutonomousToggle = useCallback(
-    (next: boolean) => {
-      setState((prev) => ({
-        ...prev,
-        autonomous: { ...prev.autonomous, enabled: next },
-      }))
-    },
-    [setState]
+    [setOverrides, setAutonomousEnabled]
   )
 
   const handleTimestampConfigChange = useCallback(
     (config: TimestampConfig) => {
-      setState((prev) => ({ ...prev, timestampConfig: config }))
+      setOverrides((prev) => ({ ...prev, timestampConfig: config }))
     },
-    [setState]
+    [setOverrides]
   )
 
   const showSystemPromptDropdown =
@@ -517,7 +429,7 @@ export function NewChatForm({
           <input
             type="checkbox"
             checked={isAutonomous}
-            onChange={(e) => handleAutonomousToggle(e.target.checked)}
+            onChange={(e) => setAutonomousEnabled(e.target.checked)}
             className="qt-checkbox mt-1"
             disabled={creating || hasUserControlled}
           />
@@ -757,18 +669,16 @@ export function NewChatForm({
               onPick={handleScenarioSelectionChange}
             />
           )}
-          {onShowArchivedScenariosChange && (
-            <label className="mb-2 flex items-center gap-2 text-xs qt-text-muted">
-              <input
-                type="checkbox"
-                checked={showArchivedScenarios}
-                onChange={(e) => onShowArchivedScenariosChange(e.target.checked)}
-                disabled={creating}
-                className="qt-checkbox"
-              />
-              Show archived
-            </label>
-          )}
+          <label className="mb-2 flex items-center gap-2 text-xs qt-text-muted">
+            <input
+              type="checkbox"
+              checked={showArchivedScenarios}
+              onChange={(e) => setShowArchivedScenarios(e.target.checked)}
+              disabled={creating}
+              className="qt-checkbox"
+            />
+            Show archived
+          </label>
           {showOverrideNote && characterDefaultScenario && (
             <p className="mb-2 text-xs qt-text-muted">
               Using the project default. Character default:{' '}
@@ -795,7 +705,7 @@ export function NewChatForm({
           )}
           <MarkdownLexicalEditor
             value={state.scenario}
-            onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
+            onChange={handleScenarioNotesChange}
             disabled={creating}
             remountKey={scenarioEditorKey}
             namespace="NewChatForm.scenario"
@@ -820,9 +730,10 @@ export function NewChatForm({
             characters={outfitCharacters}
             onSelectionsChange={handleOutfitSelectionsChange}
             disabled={creating}
-            sourceChatId={continuationFromChatId ?? null}
-            previousOutfitSummary={previousOutfitSummary ?? null}
-            projectId={selectedProjectId ?? null}
+            sourceChatId={continuationFromChatId}
+            previousOutfitSummary={previousOutfitSummary}
+            defaultModes={outfitModes}
+            projectId={selectedProjectId}
           />
         )}
 
@@ -833,7 +744,7 @@ export function NewChatForm({
                 type="checkbox"
                 checked={state.avatarGenerationEnabled}
                 onChange={(e) =>
-                  setState((prev) => ({ ...prev, avatarGenerationEnabled: e.target.checked }))
+                  setOverrides((prev) => ({ ...prev, avatarGenerationEnabled: e.target.checked }))
                 }
                 className="qt-checkbox"
                 disabled={creating}
@@ -867,7 +778,7 @@ export function NewChatForm({
         </div>
       )}
 
-      {onSelectedProjectIdChange && availableProjects && availableProjects.length > 0 ? (
+      {showProjectPicker && availableProjects.length > 0 ? (
         <div className="md:col-span-2 rounded-lg border qt-border-default qt-bg-card/50 p-3 space-y-2">
           <label htmlFor="new-chat-project-select" className="qt-text-xs qt-text-muted">
             File this chat under a project
@@ -885,7 +796,7 @@ export function NewChatForm({
             <select
               id="new-chat-project-select"
               value={selectedProjectId ?? ''}
-              onChange={(e) => onSelectedProjectIdChange(e.target.value || null)}
+              onChange={(e) => setSelectedProjectId(e.target.value || null)}
               disabled={creating}
               className="qt-select flex-1 min-w-0"
             >

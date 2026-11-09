@@ -1619,7 +1619,7 @@ describe('Context Manager', () => {
         restore('@/lib/chat/context/user-narration-anchor', narrationAnchor as any, ['buildUserNarrationAnchor'])
       })
 
-      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean; continueMode?: boolean }) => {
+      const build = async (opts: { newUserMessage: string | null; recall: boolean; inform: boolean; offerSkip: boolean; continueMode?: boolean; purpose?: 'opening' }) => {
         mockedGetRepositories.mockReturnValue({
           memories: {
             findByCharacterAboutCharacters: jest.fn().mockResolvedValue(opts.recall ? [memory] : []),
@@ -1666,8 +1666,50 @@ describe('Context Manager', () => {
           ],
           turnSkip: opts.offerSkip ? { offerSkip: true, characterName: 'Lyra', recentlyAddressed: false } : undefined,
           isContinueMode: opts.continueMode ?? false,
+          purpose: opts.purpose,
         } as any)
       }
+
+      // The opener (purpose: 'opening', refactor-green-room-and-opening.md D2):
+      // a continue-mode turn that is nonetheless offered the Core whisper and
+      // carries the ephemeral opening note last.
+      it('offers the opener the Core whisper although no user message is new', async () => {
+        enable({ core: true })
+        const plain = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false, continueMode: true })
+        expect(plain.messages[plain.messages.length - 1].content as string).not.toContain(CORE)
+
+        enable({ core: true })
+        const opener = await build({ newUserMessage: null, recall: false, inform: false, offerSkip: false, continueMode: true, purpose: 'opening' })
+        expect(opener.messages[opener.messages.length - 1].content as string).toContain(CORE)
+      })
+
+      it('golden: the opener\'s trailing message, every section in its one order, the opening note last', async () => {
+        enable({ everything: true })
+        const opener = await build({ newUserMessage: null, recall: true, inform: true, offerSkip: false, continueMode: true, purpose: 'opening' })
+        const tail = opener.messages[opener.messages.length - 1]
+        expect(tail.role).toBe('user')
+        const sections = (tail.content as string).split('\n\n---\n\n')
+        const kinds = sections.map((section) => {
+          if (section === ANCHOR) return 'scene-note'
+          if (section === CORE) return 'core-whisper'
+          if (section.includes('You also recall about the others present')) return 'recall'
+          if (section.includes('Suparṇā of the Post Office')) return 'mail'
+          if (section === PROGRESSIONS) return 'progressions'
+          if (section === INVENTORY) return 'inventory'
+          if (section.includes(INFORM_BLOCK_HEADER)) return 'inform'
+          if (section.includes('The chat is beginning now')) return 'opening-note'
+          return `other: ${section.slice(0, 40)}`
+        })
+        expect(kinds).toEqual(['scene-note', 'core-whisper', 'recall', 'mail', 'progressions', 'inventory', 'inform', 'opening-note'])
+        expect(sections[sections.length - 1]).toBe([
+          '[Turn note from the Salon — not spoken by any character]',
+          'The chat is beginning now, and you speak first. Open in character, briefly and',
+          'in keeping with the scene, and invite Alex to engage. Speak only for',
+          'yourself.',
+        ].join('\n'))
+        // The opening note never reaches system block 1.
+        expect(opener.messages[0].content as string).not.toContain('The chat is beginning now')
+      })
 
       it('carries the Inventory on a continue-mode turn (a chained speaker, a nudge, an autonomous room)', async () => {
         ;(inventorySection.buildInventorySection as jest.Mock).mockResolvedValue(INVENTORY)

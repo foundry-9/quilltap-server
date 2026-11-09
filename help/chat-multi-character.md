@@ -59,9 +59,9 @@ You'll be asked:
   - **Let character choose** — A cheap LLM peeks at the scenario and chooses something fitting from all three wardrobe tiers (not offered to characters you're impersonating). It may deliberately choose nothing at all where the scene calls for it; an *undeclared* empty answer, or a consultation that runs past a minute, falls back to their defaults
   - **Start undressed** — Every slot empty, for entrances best left to imagination
 
-  The dialog now settles on a sensible opening choice for each character on its own, so you need only overrule it when your taste differs:
+  The house settles on a sensible opening choice for each character on its own — the very same rule whether you start a chat, add a character, or merge one in, and whether you use the dialog or not — so you need only overrule it when your taste differs:
 
-  - Carrying on from an earlier conversation? Everyone keeps to **Same as last conversation**.
+  - Carrying on from an earlier conversation, or merging one in? A character who was dressed there keeps to **Same as last conversation**.
   - A character marked to choose their own attire — the `canChooseOutfit` flag in their vault `properties.json` — opens on **Let character choose**.
   - A character with a proper default outfit on file (at least one garment marked default) opens on **Use defaults**.
   - A character with no default outfit to speak of opens on **Compose outfit**, with their panel already unfolded so the empty slots are plain to see.

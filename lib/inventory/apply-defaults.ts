@@ -42,7 +42,7 @@ import {
 } from '@/lib/inventory/equip';
 import { equippedIdsOf, hasEquippedEntry } from '@/lib/inventory/equipped-set';
 import { loadInventoryPool } from '@/lib/inventory/pool';
-import { chooseArrivalInventory, type InventoryGreenRoomOptions } from '@/lib/inventory/green-room';
+import { chooseArrivalInventory, type InventoryGreenRoomOptions } from '@/lib/chat/opening/green-room/inventory';
 
 export type InventoryArrivalSource = 'chat-start' | 'participant-added' | 'merge';
 
@@ -165,7 +165,7 @@ async function applyDefaultsUnguarded(
   if (opts.choose && choosing.size > 0) {
     const askFor = arriving.filter((id) => choosing.has(id) && !hasEquippedEntry(chat, id));
     if (askFor.length > 0) {
-      opts.choose.progress?.status('Packing everyone’s pockets…');
+      opts.choose.narrator?.status('Packing everyone’s pockets…');
       const choices = await Promise.all(
         askFor.map((id) => chooseArrivalInventory(repos, chat, id, opts.userId, opts.choose!)),
       );

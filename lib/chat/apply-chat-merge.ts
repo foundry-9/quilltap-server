@@ -7,8 +7,9 @@
  *   1. Add every character from the source chat that isn't already a
  *      participant of the target chat, as an LLM-controlled participant
  *      (the target keeps its own user-controlled character as the operator's
- *      voice). Each join posts a Host welcome bubble, compiles the identity
- *      stack, and applies the chosen starting outfit.
+ *      voice). Each one arrives through `seatArrival` — dressed (by default as
+ *      they were in the merged chat), packed, compiled, welcomed by the Host,
+ *      announced by Aurora and drawn — exactly as an opener does.
  *   2. Post a Host recap bubble at the tail of the target chat — it links back
  *      to the source chat and carries the source's rolling summary, so both the
  *      operator and the characters pick up the newcomers' thread.
@@ -30,15 +31,10 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
 import {
-  postHostAddAnnouncement,
   postHostMergeFromAnnouncement,
   postHostMergeToAnnouncement,
 } from '@/lib/services/host-notifications/writer';
-import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
-import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections';
-import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults';
-import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
-import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
+import { seatArrival } from '@/lib/chat/opening/arrival';
 
 type Repos = RepositoryContainer;
 
@@ -159,13 +155,6 @@ export async function applyChatMerge(
     return true;
   });
 
-  const chatSettings = await repos.chatSettings.findByUserId(userId);
-  const cheapLLMConfig = buildCheapLLMConfig(chatSettings);
-
-  // Project wardrobe tier for the target chat. Hoisted out of the per-character
-  // loop — it's the same for every merged character.
-  const projectMountPointIds = await resolveProjectMountPointIds(targetChat.projectId ?? null);
-
   // Character tags to fold into the chat's tag set, mirroring the add-character
   // flow (handleAddParticipant) so merged characters surface under the chat's
   // tags too. Applied once after all joins.
@@ -217,69 +206,22 @@ export async function applyChatMerge(
       result.mergedCharacterIds.push(characterId);
       for (const tagId of character.tags ?? []) tagsToMerge.add(tagId);
 
-      // Host welcome bubble — same announcement the add-participant action posts.
-      await postHostAddAnnouncement({
-        chatId: targetChatId,
-        character,
-        participantId: newParticipant.id,
-        initialStatus: newParticipant.status,
-      });
-
-      try {
-        await compileIdentityStackForParticipant(updatedChat, newParticipant.id);
-      } catch (error) {
-        logger.warn('[ChatMerge] Failed to compile identity stack for merged participant', {
-          targetChatId,
-          participantId: newParticipant.id,
-          error: getErrorMessage(error),
-        });
-      }
-
-      // Apply the chosen starting outfit. Default to "Same as last conversation"
-      // (`previous_chat`, sourced from the merged chat) when the modal sent
-      // nothing for this character — that's the merge's natural intent.
-      const selection: OutfitSelection =
-        outfitSelections.find((s) => s.characterId === characterId) ?? {
-          characterId,
-          mode: 'previous_chat',
-        };
-      try {
-        await applyOutfitSelections(targetChatId, [selection], repos, {
-          userId,
-          projectMountPointIds,
-          scenarioText: targetChat.scenarioText ?? null,
-          cheapLLMConfig,
-          sourceChatId,
-          // A merge changes nobody's clothes: the slots are written, no wear is credited.
-          source: 'merge',
-        });
-      } catch (error) {
-        logger.error('[ChatMerge] Failed to apply outfit for merged participant', {
-          targetChatId,
-          characterId,
-          mode: selection.mode,
-          error: getErrorMessage(error),
-        });
-      }
-
-      // A merge brings what the character carried in the merged chat along
-      // (or their defaults, when they carried nothing there). Never throws.
-      // A character left to choose their outfit chooses their objects too.
-      await applyInventoryDefaults(repos, targetChatId, [characterId], {
-        source: 'merge',
-        userId,
-        sourceChatId,
-        choose: selection.mode === 'llm_choose'
-          ? { characterIds: [characterId], scenarioText: targetChat.scenarioText ?? null, cheapLLMConfig }
-          : undefined,
-      });
+      // The one arrival: dressed (by default as they were in the merged chat),
+      // packed, compiled, welcomed, announced and drawn. A merge changes
+      // nobody's clothes, so the wear ledger credits nothing.
+      const selection = outfitSelections.find((s) => s.characterId === characterId);
+      await seatArrival(repos, targetChatId, {
+        characterId,
+        outfitSelection: selection,
+        redress: true,
+      }, { source: 'merge', userId, sourceChatId });
 
       logger.info('[ChatMerge] Merged character into chat', {
         targetChatId,
         sourceChatId,
         characterId,
         participantId: newParticipant.id,
-        outfitMode: selection.mode,
+        outfitMode: selection?.mode ?? 'default rule',
       });
     } catch (error) {
       logger.error('[ChatMerge] Failed to merge character', {

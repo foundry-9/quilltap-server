@@ -518,6 +518,97 @@ export async function finalizeMessageResponse({
     })
   }
 
+  return closePersistedReply({
+    repos,
+    chatId,
+    userId,
+    chat,
+    character,
+    characterParticipant,
+    userParticipantId,
+    isMultiCharacter,
+    assistantMessageId,
+    closedCycle,
+    controller,
+    encoder,
+    connectionProfile,
+    effectiveProfile,
+    chatSettings,
+    participantCharacters,
+    storyteller,
+    done: {
+      usage,
+      cacheUsage,
+      attachmentResults,
+      toolsExecuted: toolMessages.length > 0,
+      routeTrail,
+      reasoningContent: reasoningContent || null,
+      reasoningSegments: rebasedReasoning,
+    },
+  })
+}
+
+/** What the `done` frame of a persisted reply carries beyond its ids. */
+interface PersistedReplyDone {
+  usage: StreamingState['usage']
+  cacheUsage: StreamingState['cacheUsage']
+  attachmentResults: StreamingState['attachmentResults']
+  toolsExecuted: boolean
+  routeTrail: ReturnType<typeof buildRouteTrail>
+  reasoningContent: string | null
+  reasoningSegments: ReasoningSegment[] | null | undefined
+}
+
+interface ClosePersistedReplyOptions {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  userId: string
+  chat: ChatMetadataBase
+  character: Character
+  characterParticipant: { id: string; status?: string }
+  userParticipantId: string | null
+  isMultiCharacter: boolean
+  assistantMessageId: string
+  closedCycle: boolean
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+  connectionProfile: ConnectionProfile
+  effectiveProfile: ConnectionProfile
+  chatSettings: TriggerContext['chatSettings']
+  participantCharacters: TriggerContext['participantCharacters']
+  storyteller?: StorytellerTurnContext
+  done: PersistedReplyDone
+}
+
+/**
+ * Everything after a character's reply is saved: the next-speaker read, the
+ * `done` frame, token accounting, and the housekeeping the reply triggers —
+ * memory extraction, the context-summary fold (with the auto-title check and
+ * the Lantern's scene cue) and the danger classification. Shared by a
+ * generated reply (`finalizeMessageResponse`) and a scripted opener
+ * (`finalizeScriptedOpener`), so the two leave the same state behind.
+ */
+async function closePersistedReply({
+  repos,
+  chatId,
+  userId,
+  chat,
+  character,
+  characterParticipant,
+  userParticipantId,
+  isMultiCharacter,
+  assistantMessageId,
+  closedCycle,
+  controller,
+  encoder,
+  connectionProfile,
+  effectiveProfile,
+  chatSettings,
+  participantCharacters,
+  storyteller,
+  done,
+}: ClosePersistedReplyOptions): Promise<ProcessMessageResult> {
+  const { usage } = done
   await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
 
   const turnInfo = await calculateNextSpeaker(
@@ -533,19 +624,19 @@ export async function finalizeMessageResponse({
     messageId: assistantMessageId,
     participantId: characterParticipant.id,
     usage,
-    cacheUsage,
-    attachmentResults,
-    toolsExecuted: toolMessages.length > 0,
+    cacheUsage: done.cacheUsage,
+    attachmentResults: done.attachmentResults,
+    toolsExecuted: done.toolsExecuted,
     turn: turnInfo,
     provider: effectiveProfile.provider,
     modelName: effectiveProfile.modelName,
     // Ride the done event so the client's optimistic message carries the trail
     // without waiting for the post-turn fetchChat().
-    routeTrail,
+    routeTrail: done.routeTrail,
     isSilentMessage: characterParticipant.status === 'silent' || undefined,
     // Reasoning ("thinking") for the optimistic client push — DISPLAY ONLY.
-    reasoningContent: reasoningContent || null,
-    reasoningSegments: rebasedReasoning,
+    reasoningContent: done.reasoningContent,
+    reasoningSegments: done.reasoningSegments,
   }))
 
   // Cost estimation + token tracking are intentionally fire-and-forget so a
@@ -644,6 +735,53 @@ export async function finalizeMessageResponse({
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,
   }
+}
+
+/**
+ * A scripted first message (`character.firstMessage`, templated) posted as the
+ * opener's line. No model produced it, so there is nothing to clean, confirm
+ * or roll dice for; it is saved and then closed exactly as a generated reply
+ * is (`closePersistedReply`), so the speaker is recorded, the title check is
+ * scheduled and the Lantern gets its cue.
+ */
+export async function finalizeScriptedOpener(params: {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  userId: string
+  chat: ChatMetadataBase
+  character: Character
+  characterParticipant: { id: string; status?: string }
+  userParticipantId: string | null
+  isMultiCharacter: boolean
+  content: string
+  connectionProfile: ConnectionProfile
+  chatSettings: TriggerContext['chatSettings']
+  participantCharacters: TriggerContext['participantCharacters']
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<ProcessMessageResult> {
+  const { repos, chatId, character, characterParticipant } = params
+  const closedCycle = await readTurnClosesCycle(repos, chatId, characterParticipant.id)
+  const assistantMessageId = await saveAssistantMessage(
+    repos, chatId, character, characterParticipant, params.content,
+    null, null, undefined, [], [],
+  )
+  logger.info('Scripted opener posted', { chatId, characterId: character.id, messageId: assistantMessageId })
+  return closePersistedReply({
+    ...params,
+    assistantMessageId,
+    closedCycle,
+    effectiveProfile: params.connectionProfile,
+    done: {
+      usage: null,
+      cacheUsage: null,
+      attachmentResults: null,
+      toolsExecuted: false,
+      routeTrail: null,
+      reasoningContent: null,
+      reasoningSegments: null,
+    },
+  })
 }
 
 /**

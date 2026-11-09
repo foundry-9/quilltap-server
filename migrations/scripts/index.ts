@@ -468,6 +468,7 @@ import { addProfileMaxImagesPerRequestMigration } from './add-profile-max-images
 // Tool-result elision window: connection_profiles.toolResultVerbatimTurns
 import { addProfileToolResultVerbatimTurnsMigration } from './add-profile-tool-result-verbatim-turns-v1';
 import { addChatAvatarTimelineTableMigration } from './add-chat-avatar-timeline-table-v1';
+import { addChatOpeningStateMigration } from './add-chat-opening-state-v1';
 
 /**
  * All available migrations.
@@ -965,6 +966,8 @@ export const migrations: Migration[] = [
   addProfileToolResultVerbatimTurnsMigration,
   // Salon avatar timeline: chat_avatar_timeline (each bubble keeps the look it was written in)
   addChatAvatarTimelineTableMigration,
+  // The opening: chats.openingState / openingPhase (a chat is cast, then opened)
+  addChatOpeningStateMigration,
 ];
 
 export {
@@ -1432,5 +1435,6 @@ export {
   addProfileMaxImagesPerRequestMigration,
   addProfileToolResultVerbatimTurnsMigration,
   addChatAvatarTimelineTableMigration,
+  addChatOpeningStateMigration,
 };
 

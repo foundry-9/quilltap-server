@@ -18,12 +18,13 @@ These diagrams use [Mermaid](https://mermaid.js.org/) syntax and render in GitHu
 8. [Salon Turn Pipeline](#8-salon-turn-pipeline)
 9. [Context Build](#9-context-build)
 10. [Character Write](#10-character-write)
+11. [Casting and the Opening](#11-casting-and-the-opening)
 
 ---
 
 ## 1. Initial Chat System Prompt Assembly
 
-How the system prompt is constructed for the **first message** in a chat with an LLM character.
+How the system prompt is constructed for the **first operator message** in a chat with an LLM character. The chat's own first line — the greeting — is a turn too, built the same way with `purpose: 'opening'`; see [§11](#11-casting-and-the-opening).
 
 Key files: `lib/chat/context/system-prompt-builder.ts`, `lib/chat/context-manager.ts`, `lib/services/chat-message/orchestrator.service.ts`, `lib/services/chat-message/context-builder.service.ts`
 
@@ -598,6 +599,8 @@ flowchart TD
 
 Every path that records an operator post — an answered turn, a paused chat, a storyteller round, the fair-rotation pause — goes through `recordOperatorPost()`, so a held post is the same post an answered one is.
 
+A chat's greeting runs this same pipeline as a continue-mode turn with `purpose: 'opening'` (no operator post to record): the Core whisper is offered, the skip is withheld, the recap pool runs, the opening note trails the context, and a character with a scripted `firstMessage` skips GENERATE and is closed by `finalizeScriptedOpener()` — the same tail as `finalizeMessageResponse()`. See [§11](#11-casting-and-the-opening).
+
 ---
 
 ## 9. Context Build
@@ -657,6 +660,36 @@ Create is the base's `create()`: write the row, `provisionOfficialStore()` (the 
 
 ---
 
+## 11. Casting and the Opening
+
+How a chat comes to be: a quick, model-free **cast**, then an **opening** run on whatever first needs the chat opened. Design of record: `docs/developer/features/refactor-green-room-and-opening.md`.
+
+```mermaid
+flowchart TD
+    POST["POST /api/v1/chats"] --> CAST["castChat()<br/><i>lib/chat/opening/cast.ts</i>"]
+    CAST --> DEF["resolveCastingDefaults()<br/>title, timestamp, image profile, template,<br/>tools, avatars, Concierge, scenario, outfit modes<br/><i>defaults.ts</i>"]
+    DEF --> ROW["chats.create() + setOpeningState('pending', plan)"]
+    ROW --> CON["applyRequestedConciergeState()<br/><i>concierge.ts</i>"]
+    CON --> CONT{"continuation?"}
+    CONT -->|yes| BACK["applyChatContinuation()"] --> R201
+    CONT -->|no| R201(["201 { chat, openingState: 'pending' }"])
+
+    SALON["Salon opens a chat not 'done'<br/>POST …/messages { continueMode, opening }"] --> RUN
+    ACTION["POST …?action=open"] --> RUN
+    AUTO["beginAutonomousRun()"] --> RUN
+    RUN["runOpening()<br/>under the stream's turn control;<br/>resumes after openingPhase<br/><i>run.ts</i>"] --> P1["stacks"] --> P2["prospero<br/>briefing + per-seat whispers"] --> P3["host-scenario"] --> P4["host-user-character"]
+    P4 --> P5["arrivals — seatArrivals()<br/>outfit → inventory → stack → Host welcome<br/>→ Aurora whisper → avatar<br/><i>arrival.ts</i>"]
+    P5 --> FLAV{"flavour"}
+    FLAV -->|salon| GREET["greeting: processMessage()<br/>purpose 'opening' (see §8)"]
+    FLAV -->|continuation| DONE
+    FLAV -->|autonomous| DONEA["mark 'done'"] --> START["autonomous-start<br/>(ad hoc, opened for its own sake)"]
+    GREET --> DONE["setOpeningState('done')<br/>publishRealtime('chats')"]
+```
+
+Every phase narrates through a `GreenRoomNarrator` (`narrator.ts`) — `greenRoom` stream frames in the Salon (`narrator-frames.ts`), silence elsewhere. A seat added or merged mid-chat arrives through the same `seatArrival()`.
+
+---
+
 ## File Reference Index
 
 | System | Key Files |
@@ -670,6 +703,7 @@ Create is the base's `create()`: write the row, `provisionOfficialStore()` (the 
 | **The Concierge** | `lib/services/chat-message/danger-orchestrator.service.ts`, `lib/services/dangerous-content/gatekeeper.service.ts`, `lib/services/dangerous-content/provider-routing.service.ts`, `lib/background-jobs/handlers/chat-danger-classification.ts`, `lib/background-jobs/scheduled-danger-scan.ts` |
 | **Background Jobs** | `lib/background-jobs/queue-service.ts`, `lib/background-jobs/processor.ts`, `lib/background-jobs/handlers/index.ts` |
 | **Context Build** | `lib/chat/context-manager.ts`, `lib/chat/context/turn-system-prompt.ts`, `turn-compression.ts`, `turn-scene-state.ts`, `turn-recall.ts`, `turn-whispers.ts`, `turn-trailing.ts`, `turn-history.ts`, `turn-transcript.ts` (all in `lib/chat/context/`), `lib/chat/whisper-sweep.ts` |
+| **Casting and the Opening** | `lib/chat/opening/` (`schema.ts`, `cast.ts`, `defaults.ts`, `concierge.ts`, `run.ts`, `staff.ts`, `arrival.ts`, `narrator.ts`, `narrator-frames.ts`, `green-room/`), `app/salon/[id]/components/GreenRoomPanel.tsx` |
 | **Character Write** | `lib/database/repositories/characters.repository.ts`, `lib/database/repositories/store-backed.repository.ts`, `lib/characters/vault/` (`layout.ts`, `hydrate.ts`, `write.ts`, `items.ts`, `binding.ts`, `health.ts`), `lib/characters/api-schemas.ts`, `lib/mount-index/character-vault.ts`, `lib/mount-index/ensure-official-store.ts` |
 | **Salon Turn Pipeline** | `lib/services/chat-message/orchestrator.service.ts`, `turn-stream.ts`, `turn-holds.service.ts`, `turn-preparation.service.ts`, `operator-post.service.ts`, `turn-tools.service.ts`, `turn-extras.ts`, `turn-outcome.service.ts`, `turn-orchestrator.service.ts` (all in `lib/services/chat-message/`) |
 | **Streaming** | `lib/services/chat-message/streaming.service.ts` |

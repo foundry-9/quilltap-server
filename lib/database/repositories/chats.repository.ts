@@ -62,6 +62,22 @@ const EQUIPPED_INVENTORY_FIELD = 'equippedInventory';
  */
 const TURN_MODE_FIELD = 'turnMode';
 
+/** How far a chat's opening has got (`lib/chat/opening/run.ts`). */
+export type OpeningState = 'pending' | 'running' | 'done';
+
+function readOpeningState(value: unknown): OpeningState {
+  return value === 'pending' || value === 'running' ? value : 'done';
+}
+
+function readOpeningPlan(value: unknown): unknown {
+  if (typeof value !== 'string' || value.length === 0) return value ?? null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Chats repository with database abstraction layer backend
  */
@@ -685,6 +701,89 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       hasVerdict: !!verdict,
     });
     return updated;
+  }
+
+  // ============================================================================
+  // THE OPENING
+  // ============================================================================
+  //
+  // `openingState` ('pending' | 'running' | 'done') and `openingPhase` (the
+  // last opening phase completed) say how far a chat's opening has got — see
+  // `lib/chat/opening/run.ts`; `openingPlan` holds what casting asked of the
+  // opening (the operator's outfit choices, a continuation's source chat) as
+  // JSON until the opening finishes. Like the refusal ledger they are deliberately
+  // NOT declared in `ChatMetadataSchema`: a whole-row `update` can never carry
+  // a stale copy back, and neither travels in an export or a backup (a
+  // restored or imported chat reads as opened, the column's default). The one
+  // writer is `setOpeningState`, called only from `lib/chat/opening/` (a
+  // grep-test holds it).
+
+  /** How far a chat's opening has got. A chat that predates the column reads as opened. */
+  async getOpeningState(chatId: string): Promise<{ state: OpeningState; phase: string | null; plan: unknown }> {
+    return this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter) as
+        { openingState?: unknown; openingPhase?: unknown; openingPlan?: unknown } | null;
+      return {
+        state: readOpeningState(row?.openingState),
+        phase: typeof row?.openingPhase === 'string' ? row.openingPhase : null,
+        plan: readOpeningPlan(row?.openingPlan),
+      };
+    }, 'Failed to read the opening state', { chatId }, { state: 'done' as OpeningState, phase: null, plan: null });
+  }
+
+  /**
+   * Record how far a chat's opening has got. `phase` is the last phase
+   * completed and `plan` what casting asked of the opening; omit either to
+   * leave it as stored (null clears it). Returns whether a row was written.
+   * Parent-only: the opening never runs in the job child.
+   */
+  async setOpeningState(
+    chatId: string,
+    state: OpeningState,
+    phase?: string | null,
+    plan?: unknown,
+  ): Promise<boolean> {
+    const set: Record<string, unknown> = { openingState: state };
+    if (phase !== undefined) set.openingPhase = phase;
+    if (plan !== undefined) set.openingPlan = plan === null ? null : JSON.stringify(plan);
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateOne({ id: chatId } as QueryFilter, { $set: set } as never);
+      return result.matchedCount > 0;
+    }, 'Failed to write the opening state', { chatId, state }, false);
+    logger.debug('Opening state write', { chatId, state, phase: phase ?? '(unchanged)', written, context: 'opening' });
+    return written;
+  }
+
+  /** The chats whose opening has not finished, by id — for the list's "not yet opened". */
+  async findUnopenedChatStates(): Promise<Map<string, OpeningState>> {
+    return this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const rows = await collection.find({ openingState: { $in: ['pending', 'running'] } } as QueryFilter) as
+        Array<{ id?: unknown; openingState?: unknown }>;
+      const states = new Map<string, OpeningState>();
+      for (const row of rows) {
+        if (typeof row.id === 'string') states.set(row.id, readOpeningState(row.openingState));
+      }
+      return states;
+    }, 'Failed to list unopened chats', {}, new Map<string, OpeningState>());
+  }
+
+  /**
+   * Return openings left `'running'` since before `olderThan` to `'pending'`,
+   * keeping their phase, so the next open resumes them. The startup
+   * reconciler's one write. Returns how many were reset.
+   */
+  async resetStaleOpenings(olderThan: string): Promise<number> {
+    return this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateMany(
+        { openingState: 'running', updatedAt: { $lt: olderThan } } as QueryFilter,
+        { $set: { openingState: 'pending' } } as never,
+      );
+      return result.modifiedCount;
+    }, 'Failed to reset stale openings', { olderThan }, 0);
   }
 
   // ============================================================================

@@ -298,7 +298,7 @@ describe('applyOutfitSelections — deliberate nudity', () => {
     expect((state.a as Record<string, string[]>).top).toEqual(['house-coat'])
   })
 
-  it('tells the status dialog the character chose to wear nothing', async () => {
+  it('tells the Green Room the character chose to wear nothing', async () => {
     mockChooseLLMOutfit.mockResolvedValue(chose({}, true))
 
     const progress = {
@@ -315,7 +315,7 @@ describe('applyOutfitSelections — deliberate nudity', () => {
       'chat-1',
       [{ characterId: 'a', mode: 'llm_choose' }],
       repos as never,
-      { userId: 'u1', projectMountPointIds: [], progress: progress as never },
+      { userId: 'u1', projectMountPointIds: [], narrator: progress as never },
     )
 
     expect(progress.log).toHaveBeenCalledWith(

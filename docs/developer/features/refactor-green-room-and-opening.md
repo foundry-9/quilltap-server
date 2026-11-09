@@ -1,6 +1,6 @@
 # Refactor — The Green Room, casting, and the opening
 
-**Status:** Proposed 2026-11-09 (4.13-dev); the §9 questions were answered the same day, so every decision in §5 is settled. Nothing implemented. Written to be run by an implementing model: §5 holds the decisions, which are settled; the mechanics under each phase in §6 are the implementer's to work out. Where the code contradicts a decision in §5, stop and report rather than improvise around it.
+**Status:** Implemented and verified live on V4test 2026-11-09 (4.13-dev), all six phases in one change — see §10 for what landed and where it departed. Proposed the same day; the §9 questions were answered then, so every decision in §5 is settled. Written to be run by an implementing model: §5 holds the decisions, which are settled; the mechanics under each phase in §6 are the implementer's to work out. Where the code contradicts a decision in §5, stop and report rather than improvise around it.
 
 **Scope:** everything between the operator choosing to start a chat and the first character speaking in the Salon. Server: `app/api/v1/chats/route.ts` (`handleCreate` and its helpers), `lib/chat/initialize.ts`, `lib/chat/initial-greeting.ts`, `lib/chat/first-message-context.ts`, `lib/chat/creation-progress.ts`, `app/api/v1/chats/creation-progress/route.ts`, `lib/wardrobe/apply-outfit-selections.ts` and `lib/inventory/apply-defaults.ts` (their call sites, not their algorithms), `lib/wardrobe/green-room-model.ts`, `lib/inventory/green-room.ts`, the arrival halves of `app/api/v1/chats/[id]/actions/participants.ts` and `lib/chat/apply-chat-merge.ts`. Client: `components/new-chat/**`, `components/providers/new-chat-provider.tsx`, `components/providers/creation-progress-provider.tsx`, `app/salon/new/*`, the New Chat modal mounts in `app/salon/[id]/SalonView.tsx`, `app/aurora/[id]/CharacterPage.tsx` and `components/homepage/CharacterCard.tsx`, and a new Green Room panel in the Salon. The outfit and inventory *choosers* (`chooseLLMOutfit`, `chooseArrivalInventory`, slot-ops, recent openings, the roster gate) move with their callers and are not redesigned.
 
@@ -197,4 +197,72 @@ The seven questions this proposal raised were put to the human on 2026-11-09 and
 
 ## 10. As built
 
-(Empty until implemented. Record per phase what landed and where it departed from §5–6, the route-test mock counts before and after Phase 0, the `messages[0]` findings from D3, and whether a second join-time outfit announcement route existed and was removed under D4.)
+Landed 2026-11-09 as one working-tree change rather than six phase commits (the phases share files too closely for the intermediate states to be worth committing on their own); the order of work followed §6.
+
+### Route-test mock counts (Phase 0)
+
+| test | before | after |
+|---|---|---|
+| `route.concierge-state.test.ts` | 19 | deleted → `__tests__/unit/lib/chat/opening/cast.test.ts` |
+| `route.continuation-autonomous.test.ts` | 18 | deleted → `cast.test.ts`, `run.test.ts` |
+| `route.roleplay-template.test.ts` | 18 | deleted → `cast.test.ts` |
+| `route.scenario-seed.test.ts` | 19 | deleted → `cast.test.ts` |
+| `route.greeting-stall.test.ts` | 18 | deleted (D2); the opener is an ordinary `processMessage` turn under `withStallWatchdog` |
+| `route.get.test.ts` | 1 | 1 |
+| `route.create.test.ts` (new) | — | 2 |
+
+Fence (f) in `opening-chokepoints.test.ts` holds every `route.*` test at five mocks or fewer. `app/api/v1/chats/route.ts` is 250 lines (was 1,671).
+
+### What landed
+
+- `lib/chat/opening/`: `schema.ts` (participant object `.strict()`, no per-seat `imageProfileId`, no `progressId`; the scenario keys are one override, `SCENARIO_KEYS`), `defaults.ts` (`resolveCastingDefaults`, served as `GET /api/v1/chats?action=casting-defaults`), `cast.ts` (`castChat`), `concierge.ts`, `arrival.ts` (`seatArrival` / `seatArrivals`, `defaultOutfitMode`), `staff.ts`, `run.ts` (`OPENING_PHASES`, `runOpening`, the in-process one-opening-per-chat registry, `waitForOpening`, `reconcileStaleOpeningsAtStartup`), `narrator.ts` / `narrator-frames.ts`, and `green-room/` (the moved `model.ts` and `inventory.ts`).
+- The greeting is `processMessage` with `purpose: 'opening'` on the Salon's stream (`openChatStream` in the orchestrator): Core whisper offered, skip withheld, recap pool forced, `buildOpeningInstruction` as the last trailing section. A scripted `firstMessage` is templated in `processMessage` and closed by `finalizeScriptedOpener`; the finalizer's post-save tail is now `closePersistedReply`, shared by both.
+- Deleted: `lib/chat/initialize.ts`, `initial-greeting.ts`, `first-message-context.ts`, `creation-progress.ts`, `app/api/v1/chats/creation-progress/`, `writeSystemPromptMessage`, `pickWeightedRandom` in casting, and their tests.
+- Salon: `GreenRoomPanel` above the transcript (`useGreenRoom` folds `greenRoom` frames), `useSSEStreaming.openChat()` fired once per visit when `openingState !== 'done'`, Continue Elsewhere opens the one `NewChatProvider`.
+- Migration `add-chat-opening-state-v1`; `ChatsRepository.getOpeningState` / `setOpeningState` / `findUnopenedChatStates` / `resetStaleOpenings`; list and detail GET carry `openingState`.
+
+### Departures from §5–6
+
+1. **A third column, `openingPlan`.** The operator's outfit choices (and a continuation's source chat) must survive from casting to an opening that runs in a later request; §5 named only two columns. `openingPlan` is JSON, patch-only and outside the schema like the other two, written by `castChat` and cleared when the opening finishes.
+2. **A join narrates over its own stream, not the dialog's emitter.** Phase 1's interim `progressId` on Add Participant was skipped (it would have been deleted again in Phase 3). Instead `?action=add-participant` takes `narrate: true` and answers with a `greenRoom` SSE stream that the Salon reads into the same panel. A merge arrives through `seatArrival` too but the Merge dialog does not ask for narration, so a merge is announced and drawn but not narrated live.
+3. **The title rule is the client's old `generateTitle`** ("Chat with A", "A and B", "A, B, and C", "Group Chat (n characters)"), without the user character's name; D5 asked for both "the user character's name" and "matching what the client produces today", and those disagree.
+4. **Identity stacks compile twice at a chat's opening** — the `stacks` phase (D6) and each arrival (D4). Both are D's; the second is a harmless rewrite.
+5. **The Host introduces the operator's character from the user-controlled seat**, not from that character's default `controlledBy` (the old `buildChatContext` quirk that skipped the introduction for an LLM-default character played by the operator).
+6. **On a join, the join-scenario whisper now follows the arrival** (after Aurora's whisper) rather than directly after the Host's welcome.
+7. **Staff posts are idempotent by `systemSender`/`systemKind` when the opening is resuming; Aurora's opening-outfit whisper is not** (it carries no structured character key), so an arrivals phase broken off half-way and re-run may announce an already-announced seat a second time. The seat's outfit and inventory are not redone (the arrival checks the seat's entries).
+8. **The reconciler returns stale `'running'` rows to `'pending'`** rather than re-running them headless; the next visit (or run start) resumes from `openingPhase`. A `'running'` row with no in-process opening is resumable on the next open whatever its age.
+9. **`buildRecentConversationsBlock`** stays in `recap.ts` as D2 says, but nothing outside its tests calls it now.
+
+### Second announcement route on a join (D4)
+
+None existed: Add Participant never posted an opening-outfit whisper and did not call `scheduleWardrobeAnnouncement`; the arrival's whisper is the only one.
+
+### `messages[0]` audit (D3)
+
+Nothing indexes the first row as the SYSTEM prompt. Every reader filters by role: `chats-messages.ops.ts:250` (message count), `lib/sillytavern/chat.ts:145,164`, `lib/export/markdown-transcript.ts:72`, `lib/photos/chat-gallery.ts:750`, `chat-danger-classification.ts:109`, `app/api/v1/characters/[id]/handlers/get.ts:228`, `app/salon/[id]/hooks/transcript-reconcile.ts:243`. The continuation backfill, swipe groups and `revealMessageId` address rows by id. The help chat still writes its own SYSTEM row (out of scope).
+
+### D12 (Phase 5)
+
+Attempted and kept, smaller than drafted: the row defaults already live in `ChatMetadataBaseSchema` (`.default()` / `.nullable().optional()`), so no `NewChatInput` type was needed. The hand-spelled empties were removed from casting, the help chat and the Brahma console; the importers already relied on the schema, and restore and the qtap importer (which pass a whole payload and an `{ id }`) are unchanged.
+
+### Tests and goldens
+
+- `__tests__/unit/lib/chat/opening/`: `arrival.test.ts` (the default rule; each door asks a `canChooseOutfit` seat to choose; join with avatars on → one whisper + one refresh, off → whisper alone; the one order), `cast.test.ts`, `run.test.ts` (order, plan, resume, Stop, one-at-a-time, flavours, autonomous start), `opening-chokepoints.test.ts` (fences a–f).
+- Golden stream `__tests__/fixtures/salon-stream/opening.legacy.json`, replayed by `useSSEStreaming-golden.test.tsx` and covered by the frame-kind check in `stream-frames.test.ts`.
+- The opener's request: a golden of its trailing message (every section in order, the opening note last, never in system block 1) and the Core-whisper-on-continue case in `context-management.test.ts`; the scripted opener's finalizer side effects in `message-finalizer.service.test.ts`.
+- **Not built:** a golden of the opener's full request through `processMessage` (system blocks included) and orchestrator-level tests that an Unmoderated opener routes to the frank desk and a Locked one is not rerouted — there is no `processMessage` harness to hang them on. The opener takes the same `resolveMessageDangerState` → `provider-failover.service.ts` path as every turn, which `provider-failover-*.test.ts` and `stream-watchdog.test.ts` cover.
+
+### Live verification on V4test (2026-11-09)
+
+Done against V4test on :3005. Seen working: the New Chat dialog closing on `201` and the Salon opening the chat; the Green Room panel narrating the staff posts, a "Let character choose" consultation resolving into the slot preview, and what was packed; the greeting streaming beneath as a turn and the panel folding; the opener recorded (the rotation moved to the operator's seat); the greeting logged as a `CHAT_MESSAGE` whose request carries the identity stack, the chosen outfit and the opening note, with no skip offer; Stop mid-greeting leaving `openingState: 'done'`, the staff rows and no opener row; `POST /api/v1/chats` over HTTP answering in 28 ms, `'pending'`, server-named, with the General default scenario applied, and the retired per-seat `imageProfileId` a 400; `?action=open` running the whole opening headless; a continuation cast with its history already present and defaulting to `previous_chat`; reopening a chat whose opening never ran, which resumed it without a second greeting; and a narrated join from the Add Character dialog. Not exercised live: the `canChooseOutfit` default (no V4test character carries the flag; covered by `arrival.test.ts`) and an autonomous room.
+
+Two bugs it found, both fixed:
+
+1. `buildContinueMessageOptions` (`request-helpers.ts`) dropped the new `opening` flag, so the Salon's opening request ran as a plain continue: no staff posts, no arrivals, no Green Room. Test added in `request-helpers.test.ts`.
+2. The staff phases skipped a post the chat "already had", and a continuation's replayed history carries the source chat's Host scenario and Prospero rows, so a continuation lost them. The check now runs only when the opening is resuming (`StaffPhaseOptions.resuming`; `staff.test.ts`).
+
+Also adjusted from looking at it: the panel's body is capped lower (`max-h-64`) so the greeting stays visible on a small window, and the panel folds when the opening request settles even if no `done` frame arrived.
+
+### Still owed
+
+- Nothing. The four §1.7 defects were filed as #151 (§1.7.1), #152 (§1.7.2), #153 (§1.7.3) and #154 (§1.7.4) and are fixed by this change.

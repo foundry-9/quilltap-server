@@ -348,6 +348,8 @@ async function handleGetChat(
     // The Concierge's tally, for the helper text of a chat he moved after
     // refusals ("after N refusals"). Emptied when the chat returns to Moderated.
     const conciergeLedger = await repos.chats.getModerationRefusalLedger(chatId);
+    // How far the chat's opening has got; the Salon opens a chat that is not 'done'.
+    const opening = await repos.chats.getOpeningState(chatId);
     const resolvedAgentMode = resolveAgentModeSetting(chatMetadata, project, primaryCharacter, chatSettings);
 
     const chat = {
@@ -356,6 +358,7 @@ async function handleGetChat(
       // Surfaced so the Salon sidebar can gate the "Edit Enclave" control to
       // autonomous rooms. Defaults to 'salon' for legacy rows without the column.
       chatType: chatMetadata.chatType ?? 'salon',
+      openingState: opening.state,
       contextSummary: chatMetadata.contextSummary,
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
       imageProfileId: chatMetadata.imageProfileId ?? null,

@@ -5,7 +5,7 @@
  */
 
 import { applyOutfitSelections } from '../apply-outfit-selections'
-import type { CreationProgressEmitter } from '@/lib/chat/creation-progress'
+import type { GreenRoomNarrator } from '@/lib/chat/opening/narrator'
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import { historyDouble, ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
@@ -39,14 +39,15 @@ const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<
   typeof resolveEquippedOutfitForCharacter
 >
 
-function makeProgress(): jest.Mocked<CreationProgressEmitter> {
+function makeProgress(): jest.Mocked<GreenRoomNarrator> {
   return {
     status: jest.fn(),
     log: jest.fn(),
     wardrobeStart: jest.fn(),
     wardrobeResult: jest.fn(),
-    finish: jest.fn(),
-    fail: jest.fn(),
+    phase: jest.fn(),
+    inventory: jest.fn(),
+    done: jest.fn(),
   }
 }
 
@@ -116,7 +117,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       'chat-1',
       [{ characterId: 'c1', mode: 'llm_choose' }],
       repos as any,
-      { userId: 'u1', projectMountPointIds: [], progress },
+      { userId: 'u1', projectMountPointIds: [], narrator: progress },
     )
 
     expect(progress.wardrobeStart).toHaveBeenCalledWith('c1', 'Bertie')
@@ -154,7 +155,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       'chat-1',
       [{ characterId: 'c1', mode: 'llm_choose' }],
       repos as any,
-      { userId: 'u1', projectMountPointIds: [], progress },
+      { userId: 'u1', projectMountPointIds: [], narrator: progress },
     )
 
     expect(progress.wardrobeStart).toHaveBeenCalledWith('c1', 'Bertie')
@@ -171,7 +172,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       'chat-1',
       [{ characterId: 'c1', mode: 'default' }],
       repos as any,
-      { userId: 'u1', projectMountPointIds: [], progress },
+      { userId: 'u1', projectMountPointIds: [], narrator: progress },
     )
 
     expect(progress.wardrobeStart).not.toHaveBeenCalled()
@@ -194,7 +195,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
         },
       ],
       repos as any,
-      { userId: 'u1', projectMountPointIds: [], progress },
+      { userId: 'u1', projectMountPointIds: [], narrator: progress },
     )
 
     expect(progress.wardrobeStart).not.toHaveBeenCalled()

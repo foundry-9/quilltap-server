@@ -25,8 +25,8 @@ jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('@/lib/services/pascal/writer', () => ({ postPascalInventoryChange: jest.fn(async () => ({ id: 'm' })) }))
 jest.mock('@/lib/wardrobe/outfit-change-effects', () => ({ refreshAvatarForAppearance: jest.fn(async () => undefined) }))
 jest.mock('@/lib/memory/cheap-llm-tasks/inventory-selection', () => ({ chooseLLMInventory: jest.fn() }))
-jest.mock('@/lib/wardrobe/green-room-model', () => {
-  const actual = jest.requireActual('@/lib/wardrobe/green-room-model')
+jest.mock('@/lib/chat/opening/green-room/model', () => {
+  const actual = jest.requireActual('@/lib/chat/opening/green-room/model')
   return {
     ...actual,
     selectGreenRoomLLM: jest.fn(() => ({ selection: { provider: 'test' }, source: 'cheap' })),
@@ -37,12 +37,12 @@ jest.mock('@/lib/wardrobe/green-room-model', () => {
 
 import { postPascalInventoryChange } from '@/lib/services/pascal/writer'
 import { chooseLLMInventory } from '@/lib/memory/cheap-llm-tasks/inventory-selection'
-import { GREEN_ROOM_TIMED_OUT, withGreenRoomTimeout } from '@/lib/wardrobe/green-room-model'
+import { GREEN_ROOM_TIMED_OUT, withGreenRoomTimeout } from '@/lib/chat/opening/green-room/model'
 import { addCharacter, getFakeRepos, putOffRoster, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location'
 import { createInventoryItem } from '@/lib/inventory/item-mutations'
 import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults'
-import { greenRoomCandidates } from '@/lib/inventory/green-room'
+import { greenRoomCandidates } from '@/lib/chat/opening/green-room/inventory'
 import type { InventoryCreateBody, ResolvedInventoryItem } from '@/lib/schemas/inventory.types'
 
 const mockChoose = chooseLLMInventory as jest.Mock

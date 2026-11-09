@@ -102,6 +102,12 @@ export const queryKeys = {
      * so a scenario change — which posts the Host's announcement — refreshes it.
      */
     scenarioSource: (id: string) => ['chats', id, 'scenario-source'] as const,
+    /**
+     * An autonomous room's schedule, budgets and run settings
+     * (`/api/v1/chats/{id}/autonomous-room`), as the Edit Enclave dialog edits
+     * them. Under the chat so a `chats` sweep refreshes it.
+     */
+    autonomousRoom: (id: string) => ['chats', id, 'autonomous-room'] as const,
   },
   /**
    * Scenario option lists, per tier. Read by the New Chat dialog and the
@@ -136,6 +142,25 @@ export const queryKeys = {
     state: (id: string) => ['groups', id, 'state'] as const,
     /** Groups any of these characters belongs to; keyed by comma-joined, sorted ids. */
     byCharacters: (characterIdsKey: string) => ['groups', 'by-characters', characterIdsKey] as const,
+  },
+  /**
+   * What a prospective cast would get if the operator changed nothing
+   * (`GET /api/v1/chats?action=casting-defaults`) — the New Chat dialog's
+   * shown defaults. Keyed by the cast, which of it the operator plays, the
+   * project, the continuation source and the chat type. Its own namespace
+   * rather than under `chats`: no chat exists yet, and the `chats` topic's
+   * per-message churn has nothing to say about it. The dialog re-reads it on
+   * the `characters`, `projects` and `wardrobe` topics.
+   */
+  casting: {
+    all: ['casting'] as const,
+    defaults: (filters: {
+      characterIds: string
+      userCharacterIds: string
+      projectId: string | null
+      continuationFromChatId: string | null
+      chatType: 'salon' | 'autonomous'
+    }) => ['casting', 'defaults', filters] as const,
   },
   /** The Host's Scenario Builder — only its capability probe is cached; runs are streams. */
   scenarioBuilder: {

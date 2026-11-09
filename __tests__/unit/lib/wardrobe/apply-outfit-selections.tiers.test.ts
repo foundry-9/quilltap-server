@@ -390,7 +390,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       'chat-1',
       [{ characterId: CHAR_ID, mode: 'llm_choose' }],
       repos as never,
-      { userId: 'u1', projectMountPointIds: ['mp-a'], progress: progress as never },
+      { userId: 'u1', projectMountPointIds: ['mp-a'], narrator: progress as never },
     )
     const passed = mockChooseLLMOutfit.mock.calls[0][4] as Array<WardrobeItem & { origin: { scope: string; id: string | null } }>
     expect(passed).toHaveLength(1)
@@ -436,7 +436,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       'chat-1',
       [{ characterId: CHAR_ID, mode: 'llm_choose' }],
       repos as never,
-      { userId: 'u1', projectMountPointIds: ['mp-a', 'mp-b'], progress: progress as never },
+      { userId: 'u1', projectMountPointIds: ['mp-a', 'mp-b'], narrator: progress as never },
     )
 
     // Read weakest-first (the repository shadows later over earlier), so the

@@ -1,21 +1,22 @@
 /**
- * useNewChat — what the create request actually carries.
+ * useNewChat — what the create request carries, and what the form shows.
  *
- * The New Chat form gained a Concierge picker whose default (Moderated) is
- * deliberately *omitted* from `POST /api/v1/chats`, so a plain create stays
- * byte-identical to what it has always been. This suite pins that: absent on
- * Moderated, present verbatim on the other two.
- *
- * `jest.setup.ts` leaves `global.fetch` as a bare stub with no `ok`, so this
- * suite installs its own reference-data responder.
+ * The form shows the server's casting defaults (`?action=casting-defaults`)
+ * with the operator's overrides laid over them, and the create request carries
+ * the cast plus the overrides alone: absent means "use the default". This
+ * suite pins that an untouched form sends nothing but the cast (and the
+ * project / continuation / chat type it was opened with), that each override
+ * appears only once changed, that the scenario travels as one unit, and that a
+ * cast change re-seeds the shown defaults without touching an override.
  *
  * Uses global jest (not @jest/globals) so the bare jest.mock factories hoist.
  */
 
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { useNewChat } from '../hooks/useNewChat'
-import type { SelectedCharacter } from '../types'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { createQueryWrapper } from '@/__tests__/helpers/renderWithQuery'
+import { useNewChat, type UseNewChatOptions } from '../hooks/useNewChat'
+import type { Character, SelectedCharacter } from '../types'
+import type { CastingDefaults } from '@/lib/chat/opening/defaults'
 
 // --- Stub the ambient app shell the hook reaches for ----------------------
 
@@ -24,8 +25,8 @@ jest.mock('@/components/workspace/useWorkspaceNavigate', () => ({
   useWorkspaceNavigate: () => navigate,
 }))
 
-jest.mock('@/components/providers/creation-progress-provider', () => ({
-  useCreationProgress: () => null,
+jest.mock('@/hooks/useRealtime', () => ({
+  useRealtimeTopic: () => undefined,
 }))
 
 jest.mock('@/lib/toast', () => ({
@@ -35,281 +36,316 @@ jest.mock('@/lib/toast', () => ({
 
 // --- Fixtures --------------------------------------------------------------
 
-const CHAR_ID = 'char-alice'
+const ALICE_ID = '11111111-1111-4111-8111-111111111111'
+const BOB_ID = '22222222-2222-4222-8222-222222222222'
 const PROFILE_ID = 'profile-1'
+const PROJECT_ID = '33333333-3333-4333-8333-333333333333'
+const SOURCE_CHAT_ID = '44444444-4444-4444-8444-444444444444'
 const NEW_CHAT_ID = 'chat-new'
 
-const ALICE: SelectedCharacter = {
-  character: { id: CHAR_ID, name: 'Alice' },
-  connectionProfileId: PROFILE_ID,
-  controlledBy: 'llm',
-}
+const ALICE_CHAR: Character = { id: ALICE_ID, name: 'Alice' }
+const BOB_CHAR: Character = { id: BOB_ID, name: 'Bob' }
 
-/**
- * Answer every reference-data GET with an empty-but-valid payload, and the one
- * create POST with a chat id. Every list the hook reads is keyed off a
- * different property name, so one object satisfies them all.
- */
-function installFetchStub(): jest.Mock {
-  const stub = jest.fn(async (_url: string, init?: RequestInit) => ({
-    ok: true,
-    status: init?.method === 'POST' ? 201 : 200,
-    json: async () => ({
-      chat: { id: NEW_CHAT_ID },
-      characters: [],
-      profiles: [],
-      projects: [],
-      scenarios: [],
-      templates: [],
-    }),
-  }))
-  global.fetch = stub as unknown as typeof fetch
-  return stub
+const ALICE: SelectedCharacter = { character: ALICE_CHAR, connectionProfileId: PROFILE_ID, controlledBy: 'llm' }
+const BOB: SelectedCharacter = { character: BOB_CHAR, connectionProfileId: PROFILE_ID, controlledBy: 'llm' }
+
+/** The server's defaults: Alice alone opens on the moor; with Bob, in the atrium. */
+function defaultsFor(characterIds: string[]): CastingDefaults {
+  const both = characterIds.includes(BOB_ID)
+  return {
+    title: 'Chat with Alice',
+    timestampConfig: null,
+    imageProfileId: null,
+    roleplayTemplateId: both ? 'tpl-duet' : 'tpl-solo',
+    avatarGenerationEnabled: null,
+    toolDefaults: { disabledTools: [], disabledToolGroups: [] },
+    documentEditingMode: false,
+    conciergeState: 'moderated',
+    scenario: both ? { kind: 'general', path: 'Scenarios/atrium.md' } : { kind: 'general', path: 'Scenarios/moor.md' },
+    outfitModes: Object.fromEntries(characterIds.map((id) => [id, 'default'])),
+    previousOutfits: null,
+  }
 }
 
 let fetchStub: jest.Mock
 
+function installFetchStub(): jest.Mock {
+  const stub = jest.fn(async (url: string, init?: RequestInit) => {
+    const body = (() => {
+      if (init?.method === 'POST') return { chat: { id: NEW_CHAT_ID } }
+      if (url.includes('action=casting-defaults')) {
+        const ids = new URL(url, 'http://x').searchParams.get('characterIds')!.split(',')
+        return { defaults: defaultsFor(ids) }
+      }
+      if (url.startsWith('/api/v1/characters')) return { characters: [ALICE_CHAR, BOB_CHAR] }
+      if (url.startsWith('/api/v1/connection-profiles')) return { profiles: [{ id: PROFILE_ID, name: 'P' }] }
+      if (url.startsWith('/api/v1/image-profiles')) return { profiles: [] }
+      if (url.startsWith('/api/v1/projects')) return { projects: [], scenarios: [] }
+      if (url.startsWith('/api/v1/roleplay-templates')) return []
+      if (url.startsWith('/api/v1/settings/chat')) return {}
+      if (url.startsWith('/api/v1/groups/scenarios')) return { groupScenarios: [] }
+      return { scenarios: [] }
+    })()
+    return {
+      ok: true,
+      status: init?.method === 'POST' ? 201 : 200,
+      statusText: 'OK',
+      json: async () => body,
+    }
+  })
+  global.fetch = stub as unknown as typeof fetch
+  return stub
+}
+
 /** The body of the one POST /api/v1/chats the hook sent. */
 function createdBody(): Record<string, unknown> {
-  const call = fetchStub.mock.calls.find(
-    ([, init]) => (init as RequestInit | undefined)?.method === 'POST'
-  )
+  const call = fetchStub.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
   expect(call).toBeDefined()
   return JSON.parse((call![1] as RequestInit).body as string)
 }
 
-async function createWith(conciergeState: ConciergeState) {
-  const { result } = renderHook(() => useNewChat())
-  await waitFor(() => expect(result.current.loading).toBe(false))
+async function renderLoaded(options: UseNewChatOptions = {}) {
+  const { wrapper } = createQueryWrapper()
+  const hook = renderHook(() => useNewChat(options), { wrapper })
+  await waitFor(() => expect(hook.result.current.loading).toBe(false))
+  return hook
+}
 
+async function withCast(result: { current: ReturnType<typeof useNewChat> }, cast: SelectedCharacter[]) {
   act(() => {
-    result.current.setSelectedCharacters([ALICE])
-    result.current.setState((prev) => ({ ...prev, conciergeState }))
+    result.current.setSelectedCharacters(cast)
   })
+  await waitFor(() => expect(result.current.defaults).not.toBeNull())
+}
 
+async function submit(result: { current: ReturnType<typeof useNewChat> }) {
   await act(async () => {
     await result.current.handleCreateChat()
   })
-
   return createdBody()
 }
 
-// --- Tests -----------------------------------------------------------------
-
-describe('useNewChat create request — Concierge state', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    fetchStub = installFetchStub()
-  })
-
-  it('defaults to Moderated on the form', async () => {
-    const { result } = renderHook(() => useNewChat())
-    await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.state.conciergeState).toBe('moderated')
-  })
-
-  it('omits conciergeState entirely when Moderated', async () => {
-    const body = await createWith('moderated')
-    expect(body).not.toHaveProperty('conciergeState')
-    // The rest of the request is unchanged — the participant still rides along.
-    expect(body.participants).toHaveLength(1)
-  })
-
-  it.each(['unmoderated', 'locked'] as const)(
-    'sends conciergeState verbatim when %s',
-    async (state) => {
-      const body = await createWith(state)
-      expect(body.conciergeState).toBe(state)
-    }
-  )
+beforeEach(() => {
+  jest.clearAllMocks()
+  fetchStub = installFetchStub()
 })
 
-describe('useNewChat create request — subprompts', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    fetchStub = installFetchStub()
-  })
+// --- Absent means default --------------------------------------------------
 
-  async function createWithCast(cast: SelectedCharacter[]) {
-    const { result } = renderHook(() => useNewChat())
-    await waitFor(() => expect(result.current.loading).toBe(false))
-    act(() => {
-      result.current.setSelectedCharacters(cast)
-    })
-    await act(async () => {
-      await result.current.handleCreateChat()
-    })
-    return createdBody()
-  }
-
-  it('omits selectedSubpromptIds when none are ticked, so a plain create is unchanged', async () => {
-    const body = await createWithCast([ALICE])
-    const [participant] = body.participants as Array<Record<string, unknown>>
-    expect(participant).not.toHaveProperty('selectedSubpromptIds')
-  })
-
-  it('sends the ticked subprompt ids verbatim for an LLM seat', async () => {
-    const body = await createWithCast([{ ...ALICE, selectedSubpromptIds: ['terse', 'verse'] }])
-    const [participant] = body.participants as Array<Record<string, unknown>>
-    expect(participant.selectedSubpromptIds).toEqual(['terse', 'verse'])
-  })
-
-  it('never sends subprompts for a user-controlled seat', async () => {
-    const body = await createWithCast([
-      { ...ALICE, selectedSubpromptIds: ['terse'] },
-      {
-        character: { id: 'char-bob', name: 'Bob' },
-        connectionProfileId: '',
-        controlledBy: 'user',
-        selectedSubpromptIds: ['stray'],
-      },
-    ])
-    const participants = body.participants as Array<Record<string, unknown>>
-    expect(participants[0].selectedSubpromptIds).toEqual(['terse'])
-    expect(participants[1]).not.toHaveProperty('selectedSubpromptIds')
-  })
-})
-
-describe('useNewChat create request — scenario', () => {
-  const PROJECT_ID = 'proj-1'
-  const PROJECT_DEFAULT = {
-    path: 'Scenarios/atrium.md',
-    filename: 'atrium.md',
-    name: 'The Atrium',
-    isDefault: true,
-    body: 'Glass overhead.',
-  }
-  const GENERAL_DEFAULT = {
-    path: 'Scenarios/moor.md',
-    filename: 'moor.md',
-    name: 'The Moor',
-    isDefault: true,
-    body: 'Fog at dawn.',
-  }
-  const STUDY = { id: 'sc-study', title: 'Her Study', content: 'Books to the ceiling.' }
-  const ALICE_WITH_DEFAULT: SelectedCharacter = {
-    ...ALICE,
-    character: { ...ALICE.character, scenarios: [STUDY], defaultScenarioId: STUDY.id },
-  }
-
-  /** Like installFetchStub, but each scenario tier answers with its own default. */
-  function installScenarioStub(): jest.Mock {
-    const stub = jest.fn(async (url: string, init?: RequestInit) => {
-      const body = (() => {
-        if (init?.method === 'POST') return { chat: { id: NEW_CHAT_ID } }
-        if (url.startsWith(`/api/v1/projects/${PROJECT_ID}/scenarios`)) return { scenarios: [PROJECT_DEFAULT] }
-        if (url.startsWith(`/api/v1/projects/${PROJECT_ID}`)) return { project: { id: PROJECT_ID, name: 'Glasshouse' } }
-        if (url.startsWith('/api/v1/scenarios')) return { scenarios: [GENERAL_DEFAULT] }
-        return { characters: [], profiles: [], projects: [], scenarios: [], templates: [], groupScenarios: [] }
-      })()
-      return { ok: true, status: init?.method === 'POST' ? 201 : 200, json: async () => body }
-    })
-    global.fetch = stub as unknown as typeof fetch
-    return stub
-  }
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-    fetchStub = installScenarioStub()
-  })
-
-  async function renderLoaded(projectId?: string) {
-    const hook = renderHook(() => useNewChat(projectId ? { projectId } : {}))
-    await waitFor(() => expect(hook.result.current.loading).toBe(false))
-    return hook
-  }
-
-  async function submit(result: { current: ReturnType<typeof useNewChat> }) {
-    await act(async () => {
-      await result.current.handleCreateChat()
-    })
-    return createdBody()
-  }
-
-  it("shows and sends the character's default over the project's (regression: display and submit agreed to differ)", async () => {
-    const { result } = await renderLoaded(PROJECT_ID)
-    act(() => {
-      result.current.setSelectedCharacters([ALICE_WITH_DEFAULT])
-    })
-
-    await waitFor(() =>
-      expect(result.current.state.scenarioSelection).toEqual({ kind: 'character', scenarioId: STUDY.id }),
-    )
-
-    const body = await submit(result)
-    expect(body.scenarioId).toBe(STUDY.id)
-    expect(body).not.toHaveProperty('projectScenarioPath')
-    expect(body).not.toHaveProperty('generalScenarioPath')
-    expect(body).not.toHaveProperty('scenarioRef')
-  })
-
-  it('falls to the project default when the character has none', async () => {
-    const { result } = await renderLoaded(PROJECT_ID)
-    act(() => {
-      result.current.setSelectedCharacters([ALICE])
-    })
-    await waitFor(() =>
-      expect(result.current.state.scenarioSelection).toEqual({ kind: 'project', path: PROJECT_DEFAULT.path }),
-    )
-
-    const body = await submit(result)
-    expect(body.projectScenarioPath).toBe(PROJECT_DEFAULT.path)
-    expect(body).not.toHaveProperty('scenarioId')
-    expect(body).not.toHaveProperty('generalScenarioPath')
-  })
-
-  it('falls to the general default with no project', async () => {
+describe('useNewChat create request — absent means default', () => {
+  it('sends only the cast for an untouched form, while showing the server defaults', async () => {
     const { result } = await renderLoaded()
-    act(() => {
-      result.current.setSelectedCharacters([ALICE])
-    })
-    await waitFor(() =>
-      expect(result.current.state.scenarioSelection).toEqual({ kind: 'general', path: GENERAL_DEFAULT.path }),
-    )
+    await withCast(result, [ALICE])
+
+    expect(result.current.state.roleplayTemplateId).toBe('tpl-solo')
+    expect(result.current.state.scenarioSelection).toEqual({ kind: 'general', path: 'Scenarios/moor.md' })
+    expect(result.current.state.conciergeState).toBe('moderated')
 
     const body = await submit(result)
-    expect(body.generalScenarioPath).toBe(GENERAL_DEFAULT.path)
+    expect(Object.keys(body)).toEqual(['participants'])
+    expect(body.participants).toEqual([
+      { type: 'CHARACTER', characterId: ALICE_ID, connectionProfileId: PROFILE_ID, controlledBy: 'llm' },
+    ])
+    expect(navigate).toHaveBeenCalledWith(`/salon/${NEW_CHAT_ID}`)
   })
 
-  it('never re-seeds a selection the user picked by hand', async () => {
-    const { result } = await renderLoaded(PROJECT_ID)
-    act(() => {
-      result.current.setState((prev) => ({
-        ...prev,
-        scenarioSelection: { kind: 'custom' },
-        scenarioTouched: true,
-        scenario: 'My own scene.',
-      }))
-    })
-    // A cast change brings a character default along; the hand pick stands.
-    act(() => {
-      result.current.setSelectedCharacters([ALICE_WITH_DEFAULT])
-    })
-    await waitFor(() => expect(result.current.selectedCharacters).toHaveLength(1))
-    expect(result.current.state.scenarioSelection).toEqual({ kind: 'custom' })
-
+  it('adds only projectId, continuation and chat type when the dialog was opened with them', async () => {
+    const { result } = await renderLoaded({ projectId: PROJECT_ID, continuationFromChatId: SOURCE_CHAT_ID })
+    await withCast(result, [ALICE])
     const body = await submit(result)
-    expect(body.scenario).toBe('My own scene.')
-    for (const key of ['scenarioId', 'projectScenarioPath', 'generalScenarioPath', 'groupScenarioPath', 'scenarioRef']) {
+    expect(Object.keys(body).sort()).toEqual(['continuationFromChatId', 'participants', 'projectId'])
+
+    fetchStub = installFetchStub()
+    const auto = await renderLoaded({ initialAutonomous: true })
+    await withCast(auto.result, [ALICE, BOB])
+    const autoBody = await submit(auto.result)
+    expect(Object.keys(autoBody).sort()).toEqual(['chatType', 'participants'])
+    expect(autoBody.chatType).toBe('autonomous')
+  })
+
+  it('reads the defaults for the cast, the operator\'s seat and the project', async () => {
+    const { result } = await renderLoaded({ projectId: PROJECT_ID })
+    await withCast(result, [ALICE, { ...BOB, controlledBy: 'user', connectionProfileId: '' }])
+    const call = fetchStub.mock.calls.find(([u]) => String(u).includes('action=casting-defaults'))
+    const params = new URL(String(call![0]), 'http://x').searchParams
+    expect(params.get('characterIds')).toBe(`${ALICE_ID},${BOB_ID}`)
+    expect(params.get('userCharacterIds')).toBe(BOB_ID)
+    expect(params.get('projectId')).toBe(PROJECT_ID)
+    expect(params.get('chatType')).toBe('salon')
+  })
+})
+
+// --- Each override appears once changed -------------------------------------
+
+describe('useNewChat create request — overrides', () => {
+  it.each(['moderated', 'unmoderated', 'locked'] as const)('sends a chosen Concierge state (%s)', async (state) => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() => result.current.setOverrides((prev) => ({ ...prev, conciergeState: state })))
+    const body = await submit(result)
+    expect(body.conciergeState).toBe(state)
+  })
+
+  it('sends a chosen roleplay template, including an explicit "no template"', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() => result.current.setOverrides((prev) => ({ ...prev, roleplayTemplateId: null })))
+    expect(result.current.state.roleplayTemplateId).toBeNull()
+    const body = await submit(result)
+    expect(body).toHaveProperty('roleplayTemplateId', null)
+  })
+
+  it('sends timestamp, image profile, avatar generation and outfit choices only once changed', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() =>
+      result.current.setOverrides((prev) => ({
+        ...prev,
+        timestampConfig: { mode: 'NONE' } as never,
+        imageProfileId: '55555555-5555-4555-8555-555555555555',
+        avatarGenerationEnabled: false,
+        outfitSelections: [{ characterId: ALICE_ID, mode: 'none' }],
+      })),
+    )
+    const body = await submit(result)
+    expect(body.timestampConfig).toEqual({ mode: 'NONE' })
+    expect(body.imageProfileId).toBe('55555555-5555-4555-8555-555555555555')
+    expect(body.avatarGenerationEnabled).toBe(false)
+    expect(body.outfitSelections).toEqual([{ characterId: ALICE_ID, mode: 'none' }])
+  })
+
+  it('sends only the autonomous fields the operator changed', async () => {
+    const { result } = await renderLoaded({ initialAutonomous: true })
+    await withCast(result, [ALICE, BOB])
+    act(() =>
+      result.current.setOverrides((prev) => ({ ...prev, autonomous: { budgetMaxTurns: 12, scheduleFreshnessHours: 2 } })),
+    )
+    const body = await submit(result)
+    expect(body.budgetMaxTurns).toBe(12)
+    expect(body.scheduleFreshnessWindowMs).toBe(2 * 60 * 60 * 1000)
+    for (const key of ['scheduleCron', 'budgetMaxTokens', 'runVisibility', 'runDestructiveToolsAllowed', 'budgetExcludeCacheHits']) {
       expect(body).not.toHaveProperty(key)
     }
   })
 
-  it('sends a store pick as a scenarioRef, with the notes beside it', async () => {
-    const { result } = await renderLoaded()
-    act(() => {
-      result.current.setSelectedCharacters([ALICE])
-      result.current.setState((prev) => ({
-        ...prev,
-        scenarioSelection: { kind: 'store', mountPointId: 'mp-9', path: 'Scenarios/borrowed.md', label: 'Bob › Borrowed' },
-        scenarioTouched: true,
-        scenario: 'And it is raining.',
-      }))
+  it('sends a continuation\'s carried-over choices as overrides', async () => {
+    const { result } = await renderLoaded({
+      continuationFromChatId: SOURCE_CHAT_ID,
+      initialConciergeState: 'unmoderated',
+      initialAvatarGenerationEnabled: true,
     })
+    await withCast(result, [ALICE])
+    const body = await submit(result)
+    expect(body.conciergeState).toBe('unmoderated')
+    expect(body.avatarGenerationEnabled).toBe(true)
+  })
+})
 
+// --- The scenario is one unit ------------------------------------------------
+
+describe('useNewChat create request — the scenario is one unit', () => {
+  const SCENARIO_KEYS = ['scenario', 'scenarioRef', 'scenarioId', 'projectScenarioPath', 'groupScenarioPath', 'groupScenarioGroupId', 'generalScenarioPath']
+
+  it('sends no scenario key while the picker is untouched', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    const body = await submit(result)
+    for (const key of SCENARIO_KEYS) expect(body).not.toHaveProperty(key)
+  })
+
+  it('sends a picked preset alone, with no notes key', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() =>
+      result.current.setOverrides((prev) => ({
+        ...prev,
+        scenario: { selection: { kind: 'store', mountPointId: 'mp-9', path: 'Scenarios/borrowed.md', label: 'Bob › Borrowed' }, notes: '' },
+      })),
+    )
     const body = await submit(result)
     expect(body.scenarioRef).toEqual({ mountPointId: 'mp-9', path: 'Scenarios/borrowed.md' })
-    expect(body.scenario).toBe('And it is raining.')
+    expect(body).not.toHaveProperty('scenario')
     expect(body).not.toHaveProperty('generalScenarioPath')
+  })
+
+  it('sends notes with the shown preset beside them', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() =>
+      result.current.setOverrides((prev) => ({
+        ...prev,
+        scenario: { selection: result.current.state.scenarioSelection, notes: 'And it is raining.' },
+      })),
+    )
+    const body = await submit(result)
+    expect(body.generalScenarioPath).toBe('Scenarios/moor.md')
+    expect(body.scenario).toBe('And it is raining.')
+  })
+
+  it('sends an empty scenario for Custom with no notes — an explicit "no scenario"', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() => result.current.setOverrides((prev) => ({ ...prev, scenario: { selection: { kind: 'custom' }, notes: '' } })))
+    const body = await submit(result)
+    expect(body).toHaveProperty('scenario', '')
+    for (const key of SCENARIO_KEYS.filter((k) => k !== 'scenario')) expect(body).not.toHaveProperty(key)
+  })
+
+  it("drops a character's own scenario when the cast changes, keeping the notes", async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() =>
+      result.current.setOverrides((prev) => ({
+        ...prev,
+        scenario: { selection: { kind: 'character', scenarioId: 'sc-1' }, notes: 'notes' },
+      })),
+    )
+    act(() => result.current.handleCastChanged())
+    expect(result.current.overrides.scenario).toEqual({ selection: { kind: 'custom' }, notes: 'notes' })
+  })
+})
+
+// --- A cast change re-seeds the defaults, never an override -----------------
+
+describe('useNewChat — a cast change', () => {
+  it('re-seeds the shown defaults without touching an override', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    act(() => result.current.setOverrides((prev) => ({ ...prev, conciergeState: 'locked' })))
+    expect(result.current.state.roleplayTemplateId).toBe('tpl-solo')
+
+    act(() => result.current.setSelectedCharacters([ALICE, BOB]))
+    await waitFor(() => expect(result.current.state.roleplayTemplateId).toBe('tpl-duet'))
+    expect(result.current.state.scenarioSelection).toEqual({ kind: 'general', path: 'Scenarios/atrium.md' })
+    expect(result.current.state.conciergeState).toBe('locked')
+    expect(result.current.overrides).toEqual({ conciergeState: 'locked' })
+
+    const body = await submit(result)
+    expect(body).not.toHaveProperty('roleplayTemplateId')
+    expect(body.conciergeState).toBe('locked')
+  })
+})
+
+// --- Subprompts ride on the seat --------------------------------------------
+
+describe('useNewChat create request — subprompts', () => {
+  it('omits selectedSubpromptIds when none are ticked', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [ALICE])
+    const body = await submit(result)
+    const [participant] = body.participants as Array<Record<string, unknown>>
+    expect(participant).not.toHaveProperty('selectedSubpromptIds')
+  })
+
+  it('sends ticked subprompt ids for an LLM seat, never for a user seat', async () => {
+    const { result } = await renderLoaded()
+    await withCast(result, [
+      { ...ALICE, selectedSubpromptIds: ['terse', 'verse'] },
+      { ...BOB, controlledBy: 'user', connectionProfileId: '', selectedSubpromptIds: ['stray'] },
+    ])
+    const body = await submit(result)
+    const participants = body.participants as Array<Record<string, unknown>>
+    expect(participants[0].selectedSubpromptIds).toEqual(['terse', 'verse'])
+    expect(participants[1]).not.toHaveProperty('selectedSubpromptIds')
   })
 })

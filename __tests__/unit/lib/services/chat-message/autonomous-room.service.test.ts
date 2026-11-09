@@ -58,6 +58,7 @@ const makeRepos = (chat: Record<string, unknown> | null) => {
   const messages: Array<{ chatId: string; message: Record<string, unknown> }> = []
   const repos = {
     chats: {
+      getOpeningState: jest.fn(async () => ({ state: 'done', phase: null, plan: null })),
       findById: jest.fn(async () => (chat ? { ...chat } : null)),
       update: jest.fn(async (_id: string, patch: Record<string, unknown>) => {
         updates.push({ ...patch })
@@ -260,6 +261,7 @@ describe('reconcileAutonomousRunsAtStartup', () => {
     const updates: Array<{ id: string; patch: Record<string, unknown> }> = []
     const repos = {
       chats: {
+        getOpeningState: jest.fn(async () => ({ state: 'done', phase: null, plan: null })),
         findAll: jest.fn(async () => chats.map((c) => ({ ...c }))),
         update: jest.fn(async (id: string, patch: Record<string, unknown>) => {
           updates.push({ id, patch: { ...patch } })

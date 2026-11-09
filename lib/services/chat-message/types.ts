@@ -46,6 +46,21 @@ export interface SendMessageOptions {
    */
   nudge?: boolean
   /**
+   * Open the chat (continue mode only): run its opening — the Green Room's
+   * dressing and packing, the staff's posts — narrated on this stream with
+   * `greenRoom` frames, ending with the greeting as a turn. A chat already
+   * opened gets an empty, closed stream. See `lib/chat/opening/run.ts`.
+   */
+  opening?: boolean
+  /**
+   * What this turn is for. `'opening'`: the chat's first line — the Core
+   * whisper is offered (as it is not on a plain continue), the skip option is
+   * withheld, an ephemeral opening note trails the context, and a character
+   * with a scripted `firstMessage` posts it instead of calling the model. Set
+   * only by the opening; never on the wire.
+   */
+  purpose?: 'opening'
+  /**
    * How a chained turn's speaker was chosen: `queue` (popped from the manual
    * turn queue — treated as summoned) or `algorithm` (weighted rotation — the
    * skip option is offered). Threaded from the turn orchestrator into chained

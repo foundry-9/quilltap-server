@@ -23,7 +23,8 @@
  * POST /api/v1/chats/[id]?action=impersonate - Start impersonating
  * POST /api/v1/chats/[id]?action=set-active-speaker - Set active typing participant
  * POST /api/v1/chats/[id]?action=turn - Turn action (nudge/queue/dequeue)
- * POST /api/v1/chats/[id]?action=add-participant - Add participant
+ * POST /api/v1/chats/[id]?action=open - Open a chat cast but not yet opened (the CLI, a script)
+ * POST /api/v1/chats/[id]?action=add-participant - Add participant (`narrate: true` streams the Green Room)
  * POST /api/v1/chats/[id]?action=update-participant - Update participant
  * POST /api/v1/chats/[id]?action=remove-participant - Remove participant
  * POST /api/v1/chats/[id]?action=bulk-reattribute - Re-attribute multiple messages

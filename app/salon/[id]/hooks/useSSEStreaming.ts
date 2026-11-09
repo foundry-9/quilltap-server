@@ -19,6 +19,7 @@ import {
   type DoneFrame,
   type FrameOf,
   type PostedFrame,
+  type GreenRoomEvent,
   type ResponseStatus,
   type StreamFrame,
   type ToolResultFrame,
@@ -223,6 +224,8 @@ interface UseSSEStreamingParams {
   onToolResult?: (name: string, success: boolean, result: unknown) => void
   /** Storyteller: the board's frames (round opened, bid landed, round open for choosing). */
   onStorytellerEvent?: (event: StorytellerStreamEvent) => void
+  /** The Green Room narrating a chat's opening or a watched join (`greenRoom` frames). */
+  onGreenRoom?: (event: GreenRoomEvent) => void
 }
 
 /**
@@ -290,7 +293,12 @@ export function useSSEStreaming({
   setPauseState,
   onToolResult: onToolResultCallback,
   onStorytellerEvent,
+  onGreenRoom,
 }: UseSSEStreamingParams) {
+  const onGreenRoomRef = useRef(onGreenRoom)
+  useEffect(() => {
+    onGreenRoomRef.current = onGreenRoom
+  }, [onGreenRoom])
   // Storyteller: live bubbles for concurrent turns, keyed by participant.
   const [concurrentStreams, setConcurrentStreams] = useState<ConcurrentStream[]>([])
   const onStorytellerEventRef = useRef(onStorytellerEvent)
@@ -732,6 +740,7 @@ export function useSSEStreaming({
         case 'pendingExternalTurn':
         case 'confirmationResult':
         case 'swipeDone':
+        case 'greenRoom':
           return
         default:
           assertNever(frame)
@@ -868,6 +877,10 @@ export function useSSEStreaming({
             paused: frame.paused === true,
             heldUserTurn: frame.heldUserTurn === true,
           })
+          return
+
+        case 'greenRoom':
+          onGreenRoomRef.current?.(frame.greenRoom)
           return
 
         // Not frames a Salon send carries.
@@ -1315,6 +1328,126 @@ export function useSSEStreaming({
   }, [chatId, sending, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, restoreUnpersistedSubmission, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
+   * Open a chat that was cast but not yet opened: the server runs the opening
+   * on this stream — the Green Room's `greenRoom` frames, then (for a Salon
+   * chat) the greeting as an ordinary turn, which streams like any other. The
+   * Salon's Stop reaches it; a chat already opened answers with an empty,
+   * closed stream.
+   */
+  const openChat = useCallback(async () => {
+    if (abortControllerRef.current) return
+    setWaitingForResponse(true)
+    setStreaming(false)
+    resetStreamingContent()
+    setStreamingToolBatches([])
+    let currentParticipantId: string | null = null
+    try {
+      abortControllerRef.current = new AbortController()
+      const res = await fetch(`/api/v1/chats/${chatId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          continueMode: true,
+          opening: true,
+          speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+        }),
+        signal: abortControllerRef.current.signal,
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'The curtain would not rise')
+      }
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+      await readSSEStream(reader, {
+        participantId: '',
+        onToolsDetected: trackToolsDetected,
+        onToolResult: trackToolResult,
+        onSurfacedMessage: surfaceMessage,
+        onConfirmationResult: applyConfirmationResult,
+        onDone: (fullContent, data) => {
+          setResponseStatus(null)
+          clearPendingToolExecutionStatus()
+          if (doneLeavesNoReply(data.outcome)) {
+            finishSkippedTurn()
+            return
+          }
+          if (fullContent.trim() && currentParticipantId) {
+            setMessages(prev => [...prev, assistantMessageFromDone(data, fullContent, {
+              participantId: currentParticipantId as string,
+              id: `opening-${Date.now()}`,
+            })])
+          }
+        },
+        onTurnStart: (event) => {
+          currentParticipantId = event.participantId
+          setRespondingParticipantId(event.participantId)
+          resetStreamingContent()
+          setStreamingToolBatches([])
+          setWaitingForResponse(true)
+          setStreaming(false)
+        },
+        onChainComplete: async () => {
+          resetStreamingContent()
+          setStreaming(false)
+          setWaitingForResponse(false)
+          setRespondingParticipantId(null)
+          scrollOnStreamComplete()
+          await fetchChat()
+          focusInput()
+        },
+      })
+    } catch (err) {
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      if (!isAbort) showErrorToast(extractErrorMessage(err))
+    } finally {
+      setStreaming(false)
+      setWaitingForResponse(false)
+      resetStreamingContent()
+      setRespondingParticipantId(null)
+      setResponseStatus(null)
+      abortControllerRef.current = null
+      setHandStatus(settleHandAtStreamEnd)
+      stoppingRef.current = false
+      setStopping(false)
+      await fetchChat()
+      focusInput()
+    }
+  }, [chatId, setMessages, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, scrollOnStreamComplete, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+
+  /**
+   * Read a narration-only stream — a join the operator is watching
+   * (`?action=add-participant` with `narrate: true`) — into the Green Room,
+   * then refresh the chat. Never throws.
+   */
+  const readGreenRoomStream = useCallback(async (res: Response) => {
+    try {
+      const reader = res.body?.getReader()
+      if (!reader) return
+      const decoder = new TextDecoder()
+      let buffer = ''
+      const handle = (line: string) => {
+        if (!line.startsWith('data: ')) return
+        const frame = parseFrame(line.slice(6))
+        if (frame?.kind === 'greenRoom') onGreenRoomRef.current?.(frame.greenRoom)
+      }
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
+        buffer = split.rest
+        split.lines.forEach(handle)
+      }
+      (buffer + decoder.decode()).split('\n').forEach(handle)
+    } catch (err) {
+      showErrorToast(`The arrival went quiet: ${getErrorMessage(err)}`)
+    } finally {
+      onGreenRoomRef.current?.({ event: 'done' })
+      await fetchChat()
+    }
+  }, [fetchChat])
+
+  /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
    *
    * Deliberately works while the chat is paused: every caller is an explicit
@@ -1699,6 +1832,8 @@ export function useSSEStreaming({
     abortControllerRef,
     sendMessage,
     triggerContinueMode,
+    openChat,
+    readGreenRoomStream,
     runStorytellerSelection,
     concurrentStreams,
     stopStreaming,

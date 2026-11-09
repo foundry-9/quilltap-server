@@ -2468,27 +2468,34 @@ List all chats for authenticated user.
 
 #### `POST /api/v1/chats`
 
-Create a new chat.
+Cast a new chat. Casting is quick and calls no model: the server validates the request, resolves every default once (`resolveCastingDefaults`), resolves the scenario, creates the row and its seats, applies the requested Concierge state and — for a continuation — replays the source chat's history, then answers `201 { chat }` with `chat.openingState: 'pending'`. The **opening** (dressing and packing in the Green Room, the staff's posts, the greeting) runs afterwards, when the Salon opens the chat (`POST /api/v1/chats/[id]/messages` with `{ continueMode: true, opening: true }`), when an autonomous room's run starts, or on `POST /api/v1/chats/[id]?action=open`. See `lib/chat/opening/`.
 
-**Request Body**:
+**Request Body** (only `participants` is required; every other key the client did not change is simply left out):
 
 ```json
 {
-  "characterId": "char-uuid",
-  "connectionProfileId": "profile-uuid",
-  "userCharacterId": "user-char-uuid",
-  "title": "Chat with Alice",
-  "scenario": "Optional custom scenario"
+  "participants": [
+    { "type": "CHARACTER", "characterId": "char-uuid", "connectionProfileId": "profile-uuid", "controlledBy": "llm" },
+    { "type": "CHARACTER", "characterId": "user-char-uuid", "controlledBy": "user" }
+  ],
+  "projectId": "project-uuid",
+  "outfitSelections": [{ "characterId": "char-uuid", "mode": "llm_choose" }]
 }
 ```
 
-**Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
+**Note**: an absent key means "use the default"; `GET /api/v1/chats?action=casting-defaults` (below) shows what each default would be. The server names the chat from its LLM cast unless `title` is sent.
+
+**Note**: each participant object is **strict** — an unknown key is a `400`. The per-seat `imageProfileId` (documented "ignored" before 4.13, but consulted) is gone; the chat's image profile is `imageProfileId` on the body, else the project's default, else the primary character's `defaultImageProfileId`.
+
+**Note**: the scenario keys (`scenario`, `scenarioRef`, `scenarioId`, `projectScenarioPath`, `groupScenarioPath` + `groupScenarioGroupId`, `generalScenarioPath`) are **one override**. Send any of them and exactly what was sent is used (an empty `scenario` alone means "no scenario"); send none and the default applies — the single LLM character's default scenario, else the project's, else Quilltap General's.
+
+**Note**: `outfitSelections` is optional. A seat it does not name arrives in the one default mode: `previous_chat` when a continuation's source chat has an outfit for the character, else `llm_choose` for an LLM-controlled character with `canChooseOutfit`, else `default` (`defaultOutfitMode`, `lib/chat/opening/arrival.ts`). The choices are kept on the row (`openingPlan`) until the opening dresses everyone.
 
 **Note**: `roleplayTemplateId` is optional and tri-state. Omit the key to fall back to the default chain (project default > user/global default > none). Send a template UUID to force that template, or send an explicit `null` for "no template" — both beat the defaults. A UUID that doesn't resolve returns `400 Roleplay template not found`.
 
-**Note**: `conciergeState` is optional — `'moderated' | 'unmoderated' | 'locked'`, the same wire enum as the sidebar's `PUT /api/v1/chats/[id]`. Omitted, it defaults to the user's `conciergeSettings.newChatsStartAs`. `'moderated'` leaves the chat Moderated (no write, no announcement). Any other value is applied through the one transition chokepoint, `applyConciergeFlip`, *after* the system-prompt message and *before* any staff announcement or greeting — so the Concierge's bubble sits where the history says the state was set, and the opening greeting is generated under the chosen state (an Unmoderated chat's greeting goes to the uncensored desk first; a Locked chat's is never rerouted, even after a content filter). A value outside the three — including the retired `'monitored' | 'flagged' | 'vouched' | 'uncensored'` — is a `400` validation error. The `201` response's `chat` carries `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` as they stand after the state is applied.
+**Note**: `conciergeState` is optional — `'moderated' | 'unmoderated' | 'locked'`, the same wire enum as the sidebar's `PUT /api/v1/chats/[id]`. Omitted, it defaults to the user's `conciergeSettings.newChatsStartAs` (when the Concierge is on duty). `'moderated'` leaves the chat Moderated (no write, no announcement). Any other value is applied through the one transition chokepoint, `applyConciergeFlip`, while the chat is cast — before the opening's staff posts and greeting — so the greeting is composed under the chosen state (it is an ordinary turn, so an Unmoderated chat's greeting goes to the uncensored desk and a Locked chat's is never rerouted). A value outside the three is a `400` validation error. The `201` response's `chat` carries `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` as they stand after the state is applied.
 
-**Note**: `progressId` is optional — a client-generated UUID. When present, the handler publishes creation progress (setup milestones and per-character LLM wardrobe choices) to an in-memory bus keyed by that id, which the "Green Room" status dialog subscribes to via `GET /api/v1/chats/creation-progress?id=…` (below). Omit it and creation behaves exactly as before, returning the same JSON.
+**Note**: `progressId` is gone (4.13): the Green Room narrates inside the Salon, over the chat's own stream.
 
 To create an autonomous room, include `chatType: "autonomous"` and autonomous-room fields:
 
@@ -2531,25 +2538,19 @@ Import a SillyTavern chat (JSONL format).
 }
 ```
 
-#### `GET /api/v1/chats/creation-progress?id=<progressId>`
+#### `GET /api/v1/chats?action=casting-defaults`
 
-Server-Sent Events stream for the chat-creation status dialog ("The Green Room"). The client opens this just before `POST /api/v1/chats` (carrying the same `progressId`) and relays each event to the blocking status dialog. The in-memory bus buffers events per id and replays the backlog on connect, so a subscriber that attaches a beat late loses nothing (including a terminal `done`/`error`, which closes the stream).
+The defaults a prospective cast would get — what the New Chat dialog shows before the operator changes anything. Casting resolves the same way, so what the form shows is what the chat gets.
 
-Each SSE frame is `data: <json>\n\n` where the payload is one of:
+**Query**: `characterIds` (comma-separated, required), `userCharacterIds` (comma-separated subset the operator plays), `projectId`, `continuationFromChatId`, `chatType` (`salon` | `autonomous`).
 
-```
-{ "kind": "status", "message": "Consulting the wardrobe…", "ts": 0 }
-{ "kind": "log", "message": "…", "level": "info|warn|error", "ts": 0 }
-{ "kind": "wardrobe-start", "characterId": "…", "characterName": "…", "ts": 0 }
-{ "kind": "wardrobe-result", "characterId": "…", "characterName": "…",
-  "slots": { "top": [{ "id": "…", "title": "…", "isComposite": false }], "bottom": [], "footwear": [], "accessories": [], "hair": [] }, "ts": 0 }
-{ "kind": "done", "ts": 0 }
-{ "kind": "error", "message": "…", "ts": 0 }
-```
+**Response**: `{ defaults: { title, timestampConfig, imageProfileId, roleplayTemplateId, avatarGenerationEnabled, toolDefaults, documentEditingMode, conciergeState, scenario, outfitModes, previousOutfits } }` — `scenario` is `{ kind: 'custom' } | { kind: 'character', scenarioId } | { kind: 'project', path } | { kind: 'general', path }`; `outfitModes` maps each character id to its default outfit mode; `previousOutfits` is a continuation's source-chat outfit summary (the `?action=outfit-summary` shape), else `null`. An unknown character, project or source chat is a `404`.
+
+The chat-creation progress route (`GET /api/v1/chats/creation-progress`) was removed in 4.13.
 
 #### `GET /api/v1/chats/[id]`
 
-Get a chat with full message history. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`), and the chat's Concierge posture, derived server-side: `conciergeState` (`'moderated' | 'unmoderated' | 'locked'`), `conciergeSetBy` (`'operator' | 'concierge' | null`), `conciergeReason` (`'manual' | 'refusals' | 'classifier' | 'migration' | null`) and `conciergeRefusalCount` (the refusal ledger's count). `isDangerousChat` and `dangerCategories` remain as the classifier's telemetry; the legacy `conciergeOverride` is not returned.
+Get a chat with full message history. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`), `openingState` (`'pending' | 'running' | 'done'` — the Salon opens a chat that is not `'done'`; list payloads carry it too), and the chat's Concierge posture, derived server-side: `conciergeState` (`'moderated' | 'unmoderated' | 'locked'`), `conciergeSetBy` (`'operator' | 'concierge' | null`), `conciergeReason` (`'manual' | 'refusals' | 'classifier' | 'migration' | null`) and `conciergeRefusalCount` (the refusal ledger's count). `isDangerousChat` and `dangerCategories` remain as the classifier's telemetry; the legacy `conciergeOverride` is not returned.
 
 #### `PUT /api/v1/chats/[id]`
 
@@ -2639,6 +2640,14 @@ Remove a tag from a chat.
 }
 ```
 
+#### `POST /api/v1/chats/[id]?action=open`
+
+Open a chat that was cast but not yet opened, for a caller that is not the Salon (the CLI, a script). Runs the same opening the Salon runs — Green Room, staff posts, and for a Salon chat the greeting as a turn — draining the stream server-side, and answers `{ openingState }` once it is done. A chat already opened answers at once.
+
+#### `POST /api/v1/chats/[id]/messages` with `{ "continueMode": true, "opening": true }`
+
+The Salon's opening stream. The server walks the opening's phases (`OPENING_PHASES`, resuming after the last recorded `openingPhase`), narrating each as a `greenRoom` stream frame — `{ kind: 'greenRoom', greenRoom: { event: 'phase' | 'status' | 'log' | 'wardrobeStart' | 'wardrobeResult' | 'inventory' | 'done', … } }` — and for a Salon chat ends with the greeting as an ordinary continue-mode turn (`purpose: 'opening'`; `turnStart` / `content` / `done`), then one `chainComplete`. It runs under the chat's turn-control handle: the Salon's Stop skips the greeting and the chat is marked opened; a send made meanwhile waits for it. A chat already opened answers with a bare `chainComplete`.
+
 #### `POST /api/v1/chats/[id]?action=add-participant`
 
 Add a character to the chat.
@@ -2665,7 +2674,9 @@ Add a character to the chat.
 - `controlledBy` accepts `"llm"` (default) or `"user"` (a seat the human owns and types for directly). `connectionProfileId` is required for LLM control and ignored for user control. Note this is durable seat **ownership** and is distinct from impersonation, which overlays a seat via `impersonatingParticipantIds` without changing `controlledBy` (see `action=impersonate`).
 - `hasHistoryAccess` (default `false`) controls whether the new participant sees messages from before they joined.
 - `joinScenario` is optional context describing how the character entered; surfaced as a Host announcement targeted at the new participant when `hasHistoryAccess` is false.
-- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object, and optionally `wornBundleIds` — the outfits the composer dissolved into those slots, so the wear ledger credits them), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object, and optionally `wornBundleIds` — the outfits the composer dissolved into those slots, so the wear ledger credits them), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add applies the one default rule (`llm_choose` for an LLM-controlled `canChooseOutfit` character, else `default`); on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- The seat arrives through `seatArrival` (`lib/chat/opening/arrival.ts`), exactly as an opener does: outfit → inventory → identity stack → Host welcome → Aurora's opening-outfit whisper → avatar refresh (when the chat generates avatars).
+- `narrate` (optional, `true`): the seat is created at once and the response is `text/event-stream` — the Green Room's `greenRoom` frames while the character is dressed, packed and announced, ending with `{ greenRoom: { event: 'done' } }`. Validation errors still answer JSON. Without it the action answers `{ participant, chat }` once the arrival is complete.
 - `mode: "llm_choose"` consults a cheap LLM per character. Consults for all characters in one request run concurrently; each is bounded by a 60s timeout. The model may return `"deliberate": true` alongside empty slots to dress the character in nothing on purpose; an all-empty response *without* that flag, a failure, or a timeout falls back to `default`.
 - `mode: "default"` resolves across **all three wardrobe tiers** — the character's own vault, the project stores linked to the chat's project, and Quilltap General. Items marked `isDefault` in any tier are equipped and **layer** in the same slot (ordered by `createdAt` ascending). Tiers are merged before the `isDefault` filter, so a character's own copy of a shared item shadows it by id: a personal `isDefault: false` override means the shared default is not worn. `llm_choose` draws its candidate list from that same merged pool.
 

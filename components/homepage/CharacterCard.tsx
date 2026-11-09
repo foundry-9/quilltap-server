@@ -4,14 +4,15 @@
  * CharacterCard
  *
  * Individual character card for the homepage 2x2 grid.
- * Clicking opens a quick chat dialog.
+ * Clicking Chat opens the workspace's New Chat dialog (or, outside the
+ * workspace, the `/salon/new` page) seeded with this character.
  */
 
-import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
-import { NewChatModal } from '@/components/new-chat'
+import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import type { HomepageCharacter } from './types'
@@ -21,7 +22,15 @@ interface CharacterCardProps {
 }
 
 export function CharacterCard({ character }: CharacterCardProps) {
-  const [showDialog, setShowDialog] = useState(false)
+  const newChat = useNewChatModalOptional()
+  const router = useRouter()
+  const startChat = () => {
+    if (newChat) {
+      newChat.open({ characterId: character.id, characterName: character.name })
+    } else {
+      router.push(`/salon/new?characterId=${encodeURIComponent(character.id)}`)
+    }
+  }
   const { getProfileProvider } = useConnectionProfiles()
   const profileInfo = character.defaultConnectionProfileId
     ? getProfileProvider(character.defaultConnectionProfileId)
@@ -40,53 +49,42 @@ export function CharacterCard({ character }: CharacterCardProps) {
   })()
 
   return (
-    <>
-      <div className="qt-character-card">
-        <Link
-          href={`/aurora/${character.id}`}
-          className="flex flex-col items-center gap-2 flex-grow hover:opacity-80 transition-opacity"
-        >
-          <Avatar
-            name={character.name}
-            src={character}
-            size="md"
-          />
-          <div className="text-center min-w-0 w-full">
-            <p className="qt-card-title truncate">
-              {character.name}
-            </p>
-            <p className="qt-card-subtitle line-clamp-2 italic min-h-[2.5rem]">
-              {character.title || '\u00A0'}
-            </p>
-            {profileInfo && (
-              <ProviderModelBadge
-                provider={profileInfo.provider}
-                modelName={profileDisplayName}
-                title={`${profileInfo.name || profileInfo.provider}: ${profileInfo.modelName}`}
-                size="sm"
-                compact
-              />
-            )}
-          </div>
-        </Link>
-        <button
-          onClick={() => setShowDialog(true)}
-          className="mt-auto w-full qt-button-success qt-button-sm"
-          title={`Start a chat with ${character.name}`}
-        >
-          <Icon name="chat" className="w-3.5 h-3.5" />
-          Chat
-        </button>
-      </div>
-
-      {showDialog && (
-        <NewChatModal
-          characterId={character.id}
-          characterName={character.name}
-          isOpen={true}
-          onClose={() => setShowDialog(false)}
+    <div className="qt-character-card">
+      <Link
+        href={`/aurora/${character.id}`}
+        className="flex flex-col items-center gap-2 flex-grow hover:opacity-80 transition-opacity"
+      >
+        <Avatar
+          name={character.name}
+          src={character}
+          size="md"
         />
-      )}
-    </>
+        <div className="text-center min-w-0 w-full">
+          <p className="qt-card-title truncate">
+            {character.name}
+          </p>
+          <p className="qt-card-subtitle line-clamp-2 italic min-h-[2.5rem]">
+            {character.title || '\u00A0'}
+          </p>
+          {profileInfo && (
+            <ProviderModelBadge
+              provider={profileInfo.provider}
+              modelName={profileDisplayName}
+              title={`${profileInfo.name || profileInfo.provider}: ${profileInfo.modelName}`}
+              size="sm"
+              compact
+            />
+          )}
+        </div>
+      </Link>
+      <button
+        onClick={startChat}
+        className="mt-auto w-full qt-button-success qt-button-sm"
+        title={`Start a chat with ${character.name}`}
+      >
+        <Icon name="chat" className="w-3.5 h-3.5" />
+        Chat
+      </button>
+    </div>
   )
 }

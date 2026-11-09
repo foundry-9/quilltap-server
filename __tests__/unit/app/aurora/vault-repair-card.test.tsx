@@ -27,7 +27,8 @@ jest.mock('@/components/providers/quick-hide-provider', () => ({
 }))
 
 // The loaded page's dialogs never render on the 503 branch; stub the heavy ones.
-jest.mock('@/components/new-chat', () => ({ NewChatModal: () => null }))
+jest.mock('@/components/providers/new-chat-provider', () => ({ useNewChatModalOptional: () => null }))
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 jest.mock('react-markdown', () => ({ __esModule: true, default: () => null }))
 jest.mock('remark-gfm', () => ({ __esModule: true, default: () => null }))
 

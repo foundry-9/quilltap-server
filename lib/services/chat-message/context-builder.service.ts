@@ -121,8 +121,11 @@ export interface BuildMessageContextOptions {
    * note (`buildTurnYieldInstruction`). Ephemeral, never persisted.
    */
   offerYield?: boolean
-  /** `'bid'` for a storyteller bid's dry build (see `BuildContextOptions.purpose`). */
-  purpose?: 'turn' | 'bid'
+  /**
+   * `'bid'` for a storyteller bid's dry build, `'opening'` for a chat's first
+   * line (see `BuildContextOptions.purpose`).
+   */
+  purpose?: 'turn' | 'bid' | 'opening'
   /** The storyteller bid or plan section, appended as the last trailing section. */
   storytellerSection?: string
   /**
@@ -1184,8 +1187,10 @@ export async function buildMessageContext(
     )
   )
 
-  // Generate memory recap on first message or character join, unless explicitly overridden
-  const shouldGenerateRecap = requestMemoryRecap ?? isCharacterFirstResponse
+  // Generate memory recap on first message or character join, unless explicitly
+  // overridden. A chat's opening line is always a first response: the staff's
+  // opening whispers already sit in history, which is why it is named outright.
+  const shouldGenerateRecap = requestMemoryRecap ?? (options.purpose === 'opening' || isCharacterFirstResponse)
 
   // Get timestamp config from chat or user defaults
   const timestampConfig = chat.timestampConfig || chatSettings?.defaultTimestampConfig || null

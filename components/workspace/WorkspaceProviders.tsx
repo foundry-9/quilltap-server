@@ -26,7 +26,6 @@ import { WorkspacePortalRegistryProvider } from '@/components/workspace/workspac
 import { WorkspaceBackdropProvider } from '@/components/workspace/workspace-backdrop'
 import { WorkspaceLinkInterceptor } from '@/components/workspace/WorkspaceLinkInterceptor'
 import { NewChatProvider } from '@/components/providers/new-chat-provider'
-import { CreationProgressProvider } from '@/components/providers/creation-progress-provider'
 
 export function WorkspaceProviders({ children }: { children: ReactNode }) {
   return (
@@ -36,20 +35,17 @@ export function WorkspaceProviders({ children }: { children: ReactNode }) {
           <WorkspaceBackdropProvider>
             {/* NewChatProvider is inside WorkspaceProvider so its modal's
                 useWorkspaceNavigate opens a tab in place; the interceptor (a
-                child) opens it for /salon/new links. CreationProgressProvider
-                wraps it so the "Green Room" status dialog outlives the
-                NewChatModal closing at create time. */}
-            <CreationProgressProvider>
-              <NewChatProvider>
-                {/* Keep every in-app link keep-alive-safe while in the workspace. */}
-                <WorkspaceLinkInterceptor />
-                {/* Surface the focused tab's contextual toolbar into the global
-                    header (mounted above the tab tree, so it targets the global
-                    page toolbar, not a per-tab one). */}
-                <WorkspaceToolbarBridge />
-                {children}
-              </NewChatProvider>
-            </CreationProgressProvider>
+                child) opens it for /salon/new links. The dialog closes the
+                moment the chat exists — the Salon runs the opening. */}
+            <NewChatProvider>
+              {/* Keep every in-app link keep-alive-safe while in the workspace. */}
+              <WorkspaceLinkInterceptor />
+              {/* Surface the focused tab's contextual toolbar into the global
+                  header (mounted above the tab tree, so it targets the global
+                  page toolbar, not a per-tab one). */}
+              <WorkspaceToolbarBridge />
+              {children}
+            </NewChatProvider>
           </WorkspaceBackdropProvider>
         </WorkspacePortalRegistryProvider>
       </TabToolbarRegistryProvider>

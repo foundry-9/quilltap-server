@@ -1,0 +1,40 @@
+[
+  { "greenRoom": { "event": "phase", "key": "stacks", "label": "Committing everyone’s particulars to memory…" } },
+  { "greenRoom": { "event": "status", "message": "Committing everyone’s particulars to memory…" } },
+  { "greenRoom": { "event": "phase", "key": "arrivals", "label": "Consulting the wardrobe…" } },
+  { "greenRoom": { "event": "status", "message": "Consulting the wardrobe…" } },
+  { "greenRoom": { "event": "wardrobeStart", "characterId": "char-a", "characterName": "Ada" } },
+  {
+    "greenRoom": {
+      "event": "wardrobeResult",
+      "characterId": "char-a",
+      "characterName": "Ada",
+      "slots": {
+        "top": [{ "id": "w-1", "title": "Velvet waistcoat", "isComposite": false }],
+        "bottom": [],
+        "footwear": [],
+        "accessories": [],
+        "hair": []
+      }
+    }
+  },
+  { "greenRoom": { "event": "inventory", "characterId": "char-a", "characterName": "Ada", "items": ["a pocket watch"] } },
+  { "greenRoom": { "event": "log", "message": "Ada takes up a pocket watch.", "level": "info" } },
+  { "greenRoom": { "event": "phase", "key": "greeting", "label": "The curtain rises…" } },
+  { "greenRoom": { "event": "status", "message": "The curtain rises…" } },
+  { "turnStart": true, "participantId": "p-ada", "characterName": "Ada", "chainDepth": 0 },
+  { "content": "Ah — you're early. " },
+  { "content": "Do come in." },
+  {
+    "done": true,
+    "messageId": "m-open",
+    "participantId": "p-ada",
+    "usage": null,
+    "cacheUsage": null,
+    "attachmentResults": null,
+    "toolsExecuted": false,
+    "turn": { "nextSpeakerId": null, "reason": "user_turn", "cycleComplete": false, "isUsersTurn": true }
+  },
+  { "greenRoom": { "event": "done" } },
+  { "chainComplete": true, "reason": "user_turn", "nextSpeakerId": null, "chainDepth": 0 }
+]

@@ -17,7 +17,7 @@ jest.mock('@/lib/llm/cheap-llm-user-selection', () => ({
   selectCheapLLMFromProfiles: jest.fn(),
 }));
 
-const { selectGreenRoomLLM } = require('@/lib/wardrobe/green-room-model');
+const { selectGreenRoomLLM } = require('@/lib/chat/opening/green-room/model');
 const { selectCheapLLMFromProfiles } = require('@/lib/llm/cheap-llm-user-selection');
 const { buildCheapLLMConfig } = require('@/lib/llm/cheap-llm');
 

@@ -47,6 +47,9 @@ export interface MockPersonasRepository {
 }
 
 export interface MockChatsRepository {
+  getOpeningState: jest.Mock<(chatId: string) => Promise<{ state: 'pending' | 'running' | 'done'; phase: string | null; plan: unknown }>>;
+  setOpeningState: jest.Mock<(chatId: string, state: 'pending' | 'running' | 'done', phase?: string | null, plan?: unknown) => Promise<boolean>>;
+  findUnopenedChatStates: jest.Mock<() => Promise<Map<string, 'pending' | 'running' | 'done'>>>;
   findById: jest.Mock<(id: string) => Promise<ChatMetadata | null>>;
   findAll: jest.Mock<() => Promise<ChatMetadata[]>>;
   create: jest.Mock<(data: Partial<ChatMetadata>) => Promise<ChatMetadata>>;
@@ -260,6 +263,12 @@ export function createMockChatsRepository(): MockChatsRepository {
     delete: jest.fn<(id: string) => Promise<boolean>>().mockResolvedValue(true),
     getMessages: jest.fn<(chatId: string) => Promise<ChatEvent[]>>().mockResolvedValue([]),
     addMessage: jest.fn<(chatId: string, message: MessageEvent) => Promise<void>>().mockResolvedValue(),
+    // The opening (lib/chat/opening/run.ts): every chat reads as opened unless a test says otherwise.
+    getOpeningState: jest.fn<(chatId: string) => Promise<{ state: 'pending' | 'running' | 'done'; phase: string | null; plan: unknown }>>()
+      .mockResolvedValue({ state: 'done', phase: null, plan: null }),
+    setOpeningState: jest.fn<(chatId: string, state: 'pending' | 'running' | 'done', phase?: string | null, plan?: unknown) => Promise<boolean>>()
+      .mockResolvedValue(true),
+    findUnopenedChatStates: jest.fn<() => Promise<Map<string, 'pending' | 'running' | 'done'>>>().mockResolvedValue(new Map()),
   };
 }
 

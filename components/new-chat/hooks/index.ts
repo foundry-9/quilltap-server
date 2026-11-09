@@ -1,1 +1,2 @@
-export { useNewChat } from './useNewChat'
+export { useNewChat, useCastingDefaults } from './useNewChat'
+export type { UseNewChatOptions, UseNewChatReturn } from './useNewChat'

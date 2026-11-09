@@ -119,6 +119,7 @@ describe('chats [id] GET handler', () => {
           getTranscriptVersion: jest.fn().mockResolvedValue(0),
           // The Concierge's refusal tally, for the helper text under the state.
           getModerationRefusalLedger: jest.fn().mockResolvedValue({ count: 0, lastAt: null }),
+          getOpeningState: jest.fn().mockResolvedValue({ state: 'done', phase: null, plan: null }),
         },
         files: {
           findByLinkedTo: jest.fn().mockResolvedValue([]),

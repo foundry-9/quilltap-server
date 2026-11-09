@@ -40,6 +40,7 @@ import { logger } from '@/lib/logger'
 import type { MessageEvent } from '@/lib/schemas/types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { StorytellerBid, StorytellerRound } from '@/lib/schemas/storyteller.types'
+import type { OutfitPreviewSlots } from '@/lib/chat/opening/narrator'
 
 // ---------------------------------------------------------------------------
 // Pieces
@@ -121,6 +122,35 @@ const FileProcessingInfoSchema = z.object({
   usedImageDescriptionLLM: z.boolean(),
   error: z.string().optional(),
 })
+
+/**
+ * What the Green Room says while a chat opens (`lib/chat/opening/narrator.ts`):
+ * the phase that began, the headline, an activity line, one character's
+ * outfit choice starting and landing, what a character packed, and the
+ * opening's end. A union of its own on `event`, dispatched by the Salon's
+ * Green Room panel with its own exhaustive switch.
+ */
+export const GreenRoomEventSchema = z.discriminatedUnion('event', [
+  z.object({ event: z.literal('phase'), key: z.string(), label: z.string() }),
+  z.object({ event: z.literal('status'), message: z.string() }),
+  z.object({ event: z.literal('log'), message: z.string(), level: z.enum(['info', 'warn', 'error']) }),
+  z.object({ event: z.literal('wardrobeStart'), characterId: z.string(), characterName: z.string() }),
+  z.object({
+    event: z.literal('wardrobeResult'),
+    characterId: z.string(),
+    characterName: z.string(),
+    slots: z.custom<OutfitPreviewSlots>(isObject),
+  }),
+  z.object({
+    event: z.literal('inventory'),
+    characterId: z.string(),
+    characterName: z.string(),
+    items: z.array(z.string()),
+  }),
+  /** The opening is complete (or was stopped); the panel collapses to its "Opened" row. */
+  z.object({ event: z.literal('done') }),
+])
+export type GreenRoomEvent = z.infer<typeof GreenRoomEventSchema>
 
 /** Every variant may carry a seat tag (concurrent Storyteller turns). */
 const seat = { seat: SeatTagSchema.optional() }
@@ -295,6 +325,8 @@ export const StreamFrameSchema = z.discriminatedUnion('kind', [
   }),
   /** A swipe regeneration finished; `message` is the persisted swipe. */
   z.object({ kind: z.literal('swipeDone'), message: PostedMessageSchema, ...seat }),
+  /** The Green Room narrating a chat's opening (D7 of the opening spec). */
+  z.object({ kind: z.literal('greenRoom'), greenRoom: GreenRoomEventSchema, ...seat }),
 ])
 
 export type StreamFrame = z.infer<typeof StreamFrameSchema>
@@ -308,6 +340,7 @@ export type ConfirmationResultFrame = FrameOf<'confirmationResult'>
 export type PostedFrame = FrameOf<'posted'>
 export type ToolsDetectedFrame = FrameOf<'toolsDetected'>
 export type ToolResultFrame = FrameOf<'toolResult'>
+export type GreenRoomFrame = FrameOf<'greenRoom'>
 
 /** Exhaustiveness guard for `switch (frame.kind)` / `switch (outcome)`. */
 export function assertNever(value: never): never {
@@ -508,6 +541,7 @@ function legacyBagOf(frame: StreamFrame): Record<string, unknown> {
       return { confirmationResult }
     }
     case 'swipeDone': return { done: true, message: frame.message }
+    case 'greenRoom': return { greenRoom: frame.greenRoom }
     default: return assertNever(frame)
   }
 }

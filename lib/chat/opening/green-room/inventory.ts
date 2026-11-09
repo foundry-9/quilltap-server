@@ -18,14 +18,14 @@
  *
  * Server-only.
  *
- * @module lib/inventory/green-room
+ * @module chat/opening/green-room/inventory
  */
 
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
-import type { CreationProgressEmitter } from '@/lib/chat/creation-progress';
+import type { GreenRoomNarrator } from '@/lib/chat/opening/narrator';
 import { DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { chooseLLMInventory } from '@/lib/memory/cheap-llm-tasks/inventory-selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
@@ -35,7 +35,7 @@ import {
   resolveGreenRoomSubprompts,
   selectGreenRoomLLM,
   withGreenRoomTimeout,
-} from '@/lib/wardrobe/green-room-model';
+} from '@/lib/chat/opening/green-room/model';
 import { loadWearablePool } from '@/lib/wardrobe/pool';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
@@ -50,8 +50,8 @@ export interface InventoryGreenRoomOptions {
   characterIds: readonly string[];
   scenarioText?: string | null;
   cheapLLMConfig?: CheapLLMConfig;
-  /** The chat-creation status dialog; inert when absent. */
-  progress?: CreationProgressEmitter;
+  /** The Green Room's narrator; silent when absent. */
+  narrator?: GreenRoomNarrator;
 }
 
 /** The objects a character may choose from: carriable objects and kits within their own reach. */
@@ -200,7 +200,8 @@ export async function chooseArrivalInventory(
         elapsedMs: Date.now() - startedAt,
         context: 'inventory',
       });
-      opts.progress?.log(
+      opts.narrator?.inventory(characterId, character.name, labels);
+      opts.narrator?.log(
         labels.length > 0
           ? `${character.name} takes up ${listing(labels)}.`
           : `${character.name} walks on empty-handed.`,
@@ -216,6 +217,6 @@ export async function chooseArrivalInventory(
       error: getErrorMessage(error, 'Unknown error'),
     });
   }
-  if (consulted) opts.progress?.log(`${characterName} gathers up their usual effects.`, 'warn');
+  if (consulted) opts.narrator?.log(`${characterName} gathers up their usual effects.`, 'warn');
   return null;
 }

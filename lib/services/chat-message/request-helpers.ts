@@ -57,6 +57,8 @@ export function buildContinueMessageOptions(
     respondingParticipantId: parsed.respondingParticipantId,
     speakingAsParticipantId: parsed.speakingAsParticipantId,
     nudge: parsed.nudge,
+    // Open the chat: the Green Room's phases, then the greeting (lib/chat/opening/run.ts).
+    opening: parsed.opening || undefined,
     browserUserAgent: extras.browserUserAgent,
   }
 }

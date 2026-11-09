@@ -75,7 +75,7 @@ export const CheapLLMSettingsSchema = z.object({
    * wardrobe to a scenario, a personality and a run of recent openings is
    * more than a flash model does well. null/undefined = the cheap LLM; a stale
    * id falls back the same way. Resolved by `selectGreenRoomLLM`
-   * (`lib/wardrobe/green-room-model.ts`).
+   * (`lib/chat/opening/green-room/model.ts`).
    */
   outfitSelectionProfileId: UUIDSchema.nullable().optional(),
 });

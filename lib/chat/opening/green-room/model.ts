@@ -12,7 +12,7 @@
  * that no longer exists falls back to the cheap LLM rather than failing.
  * The inventory pass uses the same model.
  *
- * @module wardrobe/green-room-model
+ * @module chat/opening/green-room/model
  */
 
 import { logger } from '@/lib/logger';

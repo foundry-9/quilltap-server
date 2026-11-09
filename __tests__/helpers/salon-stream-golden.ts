@@ -21,6 +21,7 @@ export const GOLDEN_STREAMS = [
   'courier-external',
   'failures',
   'swipe',
+  'opening',
 ] as const
 export type GoldenStream = (typeof GOLDEN_STREAMS)[number]
 
@@ -66,6 +67,7 @@ function strip<T extends Record<string, unknown>>(bag: T, ...keys: string[]): Re
 }
 
 function translate(bag: Record<string, unknown>): StreamFrame {
+  if (bag.greenRoom) return { kind: 'greenRoom', greenRoom: bag.greenRoom } as StreamFrame
   if (bag.handAsked) return { kind: 'handAsked', ...strip(bag, 'handAsked') } as StreamFrame
   if (bag.handAnswered) return { kind: 'handAnswered', ...strip(bag, 'handAnswered') } as StreamFrame
   if (bag.storytellerRound) return { kind: 'storytellerRound', round: bag.storytellerRound } as StreamFrame

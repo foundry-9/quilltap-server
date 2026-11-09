@@ -1,11 +1,16 @@
 'use client'
 
+/**
+ * `/salon/new` — the full-page fallback for the New Chat dialog, used outside
+ * the workspace. It renders the same {@link NewChatDialogBody} the modal does,
+ * fed by the same form context.
+ */
+
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Icon } from '@/components/ui/icon'
-import { CharacterPickerPanel, NewChatForm, useNewChat } from '@/components/new-chat'
-import { toAutonomousSettingsHint } from '@/components/new-chat/autonomous-settings-hint'
-import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { NewChatFormProvider, useNewChatForm } from '@/components/new-chat/NewChatFormContext'
+import { NewChatDialogBody, useNewChatCanSubmit } from '@/components/new-chat/NewChatDialogBody'
 
 export function NewChatPageClient() {
   const searchParams = useSearchParams()
@@ -13,40 +18,22 @@ export function NewChatPageClient() {
   const characterIdParam = searchParams.get('characterId') || undefined
   const autonomousParam = searchParams.get('autonomous') === '1'
 
-  const { data: autonomousHint } = useChatSettingsQuery(toAutonomousSettingsHint)
+  return (
+    <NewChatFormProvider
+      options={{
+        initialCharacterId: characterIdParam,
+        projectId: projectIdParam,
+        initialAutonomous: autonomousParam,
+      }}
+    >
+      <NewChatPage />
+    </NewChatFormProvider>
+  )
+}
 
-  const {
-    loading,
-    creating,
-    characters,
-    profiles,
-    imageProfiles,
-    userControlledCharacters,
-    project,
-    projectScenarios,
-    generalScenarios,
-    groupScenarios,
-    showArchivedScenarios,
-    setShowArchivedScenarios,
-    refetchScenarioTiers,
-    roleplayTemplates,
-    defaultRoleplayTemplateId,
-    availableProjects,
-    selectedProjectId,
-    setSelectedProjectId,
-    selectedCharacters,
-    setSelectedCharacters,
-    state,
-    setState,
-    handleCreateChat,
-    conciergeOnDuty,
-    conciergeDefaultState,
-  } = useNewChat({
-    initialCharacterId: characterIdParam,
-    projectId: projectIdParam,
-    initialAutonomous: autonomousParam,
-  })
-
+function NewChatPage() {
+  const { loading, creating, profiles, project, state, handleCreateChat } = useNewChatForm()
+  const canSubmit = useNewChatCanSubmit()
   const isAutonomous = state.autonomous.enabled
 
   if (loading) {
@@ -56,16 +43,6 @@ export function NewChatPageClient() {
       </div>
     )
   }
-
-  const llmCount = selectedCharacters.filter((sc) => sc.controlledBy === 'llm').length
-  const hasUserCharacter = selectedCharacters.some((sc) => sc.controlledBy === 'user')
-  const canSubmit =
-    !creating &&
-    selectedCharacters.length > 0 &&
-    llmCount > 0 &&
-    !selectedCharacters.some((sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId) &&
-    profiles.length > 0 &&
-    (!isAutonomous || (llmCount >= 2 && !hasUserCharacter))
 
   return (
     <div className="qt-page-container min-h-screen text-foreground">
@@ -108,44 +85,7 @@ export function NewChatPageClient() {
           </div>
         )}
 
-        <CharacterPickerPanel
-          characters={characters}
-          profiles={profiles}
-          selectedCharacters={selectedCharacters}
-          onSelectedCharactersChange={setSelectedCharacters}
-          onCharactersChanged={() => setState((prev) => ({ ...prev, scenarioId: null }))}
-          disabled={creating}
-          autoFocusSearch
-        />
-
-        <div className="mt-6">
-          <NewChatForm
-            profiles={profiles}
-            imageProfiles={imageProfiles}
-            userControlledCharacters={userControlledCharacters}
-            selectedCharacters={selectedCharacters}
-            setSelectedCharacters={setSelectedCharacters}
-            state={state}
-            setState={setState}
-            project={project}
-            projectScenarios={projectScenarios}
-            generalScenarios={generalScenarios}
-            groupScenarios={groupScenarios}
-            showArchivedScenarios={showArchivedScenarios}
-            onShowArchivedScenariosChange={setShowArchivedScenarios}
-            roleplayTemplates={roleplayTemplates}
-            defaultRoleplayTemplateId={defaultRoleplayTemplateId}
-            availableProjects={availableProjects}
-            selectedProjectId={selectedProjectId}
-            onSelectedProjectIdChange={setSelectedProjectId}
-            creating={creating}
-            showSingleCharacterControls={false}
-            autonomousSettingsHint={autonomousHint}
-            onScenarioTiersChanged={refetchScenarioTiers}
-            conciergeOnDuty={conciergeOnDuty}
-            conciergeDefaultState={conciergeDefaultState}
-          />
-        </div>
+        <NewChatDialogBody pickerExpanded autoFocusSearch />
 
         <div className="mt-6 flex justify-end gap-3">
           <Link

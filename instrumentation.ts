@@ -901,6 +901,19 @@ export async function register() {
           });
         }
 
+        // Chats whose opening a restart broke off go back to 'pending', so the
+        // next visit (or run start) resumes them from the phase they reached.
+        try {
+          const { reconcileStaleOpeningsAtStartup } = await import('./lib/chat/opening/run');
+          const { getRepositories } = await import('./lib/repositories/factory');
+          await reconcileStaleOpeningsAtStartup(getRepositories());
+        } catch (openingError) {
+          logger.warn('Failed to reconcile broken-off chat openings at startup, continuing', {
+            context: 'instrumentation.register',
+            error: openingError instanceof Error ? openingError.message : String(openingError),
+          });
+        }
+
         const { scheduleAutonomousRooms } = await import('./lib/background-jobs/scheduled-autonomous-rooms');
         scheduleAutonomousRooms();
 

@@ -418,9 +418,12 @@ export interface BuildContextOptions {
    * anti-repetition ring). The bid runs inside a dry scope
    * (`lib/repositories/dry-scope.ts`), which discards every other write the
    * build would make — staff whispers included, though their text still
-   * reaches this context. Default `'turn'`.
+   * reaches this context. `'opening'` builds a chat's first line: the Core
+   * whisper is offered although no user message is new (a plain continue
+   * skips it), and the ephemeral opening note trails the context
+   * (`buildOpeningInstruction`). Default `'turn'`.
    */
-  purpose?: 'turn' | 'bid'
+  purpose?: 'turn' | 'bid' | 'opening'
   /**
    * A storyteller section (the bid instructions, or a speaking turn's plan),
    * appended as the LAST trailing section. Ephemeral, never persisted.
@@ -667,7 +670,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     character,
     userId,
     respondingParticipant,
-    isContinueMode: options.isContinueMode ?? false,
+    // The opener is exactly who the Core whisper is for, continue mode or not.
+    isContinueMode: (options.isContinueMode ?? false) && options.purpose !== 'opening',
     transcript,
   })
 
@@ -760,6 +764,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const notes = buildTurnNotes({
     turnSkip: options.turnSkip,
     offerYield: options.offerYield,
+    opening: options.purpose === 'opening',
     operatorName: userCharacter?.name || 'The User',
     chatId: chat.id,
     participantId: respondingParticipant?.id,
@@ -784,6 +789,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     closingEcho: referents.closingEcho,
     turnSkip: notes.turnSkip,
     turnYield: notes.turnYield,
+    turnOpening: notes.turnOpening,
     storyteller: options.storytellerSection,
   }
   const newUserName = newUserMessage && cast

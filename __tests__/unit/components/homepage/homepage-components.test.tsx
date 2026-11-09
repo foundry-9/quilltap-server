@@ -74,26 +74,18 @@ jest.mock('@/components/ui/Avatar', () => {
   }
 })
 
-// Mock NewChatModal
-jest.mock('@/components/new-chat', () => ({
-  NewChatModal: function MockNewChatModal({
-    characterId,
-    characterName,
-    isOpen,
-    onClose,
-  }: any) {
-    if (!isOpen) return null
-    return (
-      <div
-        data-testid="new-chat-modal"
-        data-character-id={characterId}
-        data-character-name={characterName}
-        role="dialog"
-      >
-        <button onClick={onClose} type="button">Close</button>
-      </div>
-    )
-  },
+// The card opens the workspace's New Chat dialog through the provider, or
+// falls back to the /salon/new page outside it.
+const mockOpenNewChat = jest.fn()
+let mockNewChatProvider: { open: jest.Mock } | null = { open: mockOpenNewChat }
+jest.mock('@/components/providers/new-chat-provider', () => ({
+  useNewChatModalOptional: () => mockNewChatProvider,
+}))
+
+const mockRouterPush = jest.fn()
+jest.mock('next/navigation', () => ({
+  ...jest.requireActual('next/navigation'),
+  useRouter: () => ({ push: mockRouterPush }),
 }))
 
 // Mock CreateProjectDialog
@@ -1051,39 +1043,27 @@ describe('CharacterCard', () => {
     expect(chatButton).toBeInTheDocument()
   })
 
-  it('opens quick chat dialog when chat button is clicked', async () => {
+  it('opens the New Chat dialog for this character when chat button is clicked', () => {
+    mockNewChatProvider = { open: mockOpenNewChat }
+    mockOpenNewChat.mockClear()
     const character = createMockCharacter({ id: 'char-123', name: 'Alice' })
     render(<CharacterCard character={character} />)
 
-    const chatButton = screen.getByRole('button', { name: /Chat/i })
-    fireEvent.click(chatButton)
+    fireEvent.click(screen.getByRole('button', { name: /Chat/i }))
 
-    await waitFor(() => {
-      expect(screen.getByTestId('new-chat-modal')).toBeInTheDocument()
-    })
-    expect(screen.getByTestId('new-chat-modal')).toHaveAttribute(
-      'data-character-id',
-      'char-123'
-    )
+    expect(mockOpenNewChat).toHaveBeenCalledWith({ characterId: 'char-123', characterName: 'Alice' })
   })
 
-  it('closes quick chat dialog when close button is clicked', async () => {
-    const character = createMockCharacter()
+  it('falls back to the /salon/new page outside the workspace', () => {
+    mockNewChatProvider = null
+    mockRouterPush.mockClear()
+    const character = createMockCharacter({ id: 'char-123', name: 'Alice' })
     render(<CharacterCard character={character} />)
 
-    const chatButton = screen.getByRole('button', { name: /Chat/i })
-    fireEvent.click(chatButton)
+    fireEvent.click(screen.getByRole('button', { name: /Chat/i }))
 
-    await waitFor(() => {
-      expect(screen.getByTestId('new-chat-modal')).toBeInTheDocument()
-    })
-
-    const closeButton = screen.getByRole('button', { name: /Close/i })
-    fireEvent.click(closeButton)
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('new-chat-modal')).not.toBeInTheDocument()
-    })
+    expect(mockRouterPush).toHaveBeenCalledWith('/salon/new?characterId=char-123')
+    mockNewChatProvider = { open: mockOpenNewChat }
   })
 
   it('applies card styling classes', () => {

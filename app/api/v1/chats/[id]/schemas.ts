@@ -91,10 +91,18 @@ export const addParticipantSchema = z.object({
   joinScenario: z.string().nullish(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   /**
-   * Starting outfit selection for the added character. When omitted, the
-   * server applies the character's default wardrobe (`mode: 'default'`).
+   * Starting outfit selection for the added character. When omitted, the seat
+   * arrives in the one default mode (`defaultOutfitMode`,
+   * `lib/chat/opening/arrival.ts`).
    */
   outfitSelection: OutfitSelectionSchema.optional(),
+  /**
+   * Narrate the arrival: the seat is created at once and the response is an
+   * SSE stream of the Green Room's `greenRoom` frames while the character is
+   * dressed, packed and announced, ending with `done`. Without it the action
+   * answers with JSON once the arrival is complete.
+   */
+  narrate: z.boolean().optional(),
 });
 
 export const removeParticipantSchema = z.object({

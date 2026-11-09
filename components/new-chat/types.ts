@@ -88,13 +88,11 @@ export interface ImageProfile {
  */
 export type UserControlledCharacter = Character
 
+/** A project as the New Chat dialog shows it (from the project list). */
 export interface Project {
   id: string
   name: string
   color?: string | null
-  defaultAvatarGenerationEnabled?: boolean | null
-  defaultImageProfileId?: string | null
-  defaultRoleplayTemplateId?: string | null
 }
 
 /**
@@ -144,45 +142,44 @@ export interface NewChatAutonomousState {
   budgetExcludeCacheHits: boolean
 }
 
+/**
+ * What the form shows: the casting defaults the server resolved for this cast
+ * (`?action=casting-defaults`), with the operator's {@link NewChatOverrides}
+ * laid over them. Derived on every render — never stored — so a cast change
+ * re-seeds every default the operator has not touched.
+ */
 export interface NewChatFormState {
+  /** '' = no image profile. */
   imageProfileId: string
-  /**
-   * The Concierge state the chat is created with — the sidebar's four-state
-   * control, moved earlier in time so the choice is in force for the opening
-   * greeting. `'moderated'` is the default and is omitted from the create
-   * request; anything else is applied server-side through `applyConciergeFlip`
-   * right after the system-prompt message.
-   */
+  /** The Concierge state the chat is created with. */
   conciergeState: ConciergeState
-  /**
-   * Roleplay template for the new chat. Seeded with whatever the chat would
-   * have defaulted to (project default > user/global default), and sent
-   * verbatim at create time — `null` means "no template".
-   */
+  /** Roleplay template for the new chat; `null` means "no template". */
   roleplayTemplateId: string | null
-  /**
-   * Set once the user picks a template by hand. Reference data reloads
-   * (adding a character, switching projects) re-seed the default only while
-   * this is false, so an explicit choice is never quietly overwritten.
-   */
-  roleplayTemplateTouched: boolean
   /** Free-text notes — layered beneath the preset, or the whole scene under Custom. */
   scenario: string
-  /**
-   * The one preset pointer — what the dropdown shows and exactly what is
-   * submitted (`scenarioSelectionToPayload`), so display and submit cannot
-   * disagree. Seeded character default > project default > general default.
-   */
+  /** The one preset pointer — what the dropdown shows. */
   scenarioSelection: ScenarioSelection
-  /**
-   * Set once the user picks a scenario by hand. Reference-data reloads (a new
-   * cast, a different project) re-seed the default only while this is false.
-   */
-  scenarioTouched: boolean
   timestampConfig: TimestampConfig | null
   avatarGenerationEnabled: boolean
+  /** The outfit choices the operator made; seats not named take the server's mode. */
   outfitSelections: OutfitSelection[]
   autonomous: NewChatAutonomousState
+}
+
+/**
+ * Only what the operator changed. Every key absent here is absent from the
+ * create request, and the server applies its default — the same one the form
+ * showed. The scenario (preset + notes) is one unit, as the server treats it.
+ */
+export interface NewChatOverrides {
+  scenario?: { selection: ScenarioSelection; notes: string }
+  roleplayTemplateId?: string | null
+  conciergeState?: ConciergeState
+  timestampConfig?: TimestampConfig | null
+  imageProfileId?: string | null
+  avatarGenerationEnabled?: boolean
+  outfitSelections?: OutfitSelection[]
+  autonomous?: Partial<Omit<NewChatAutonomousState, 'enabled'>>
 }
 
 export const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'

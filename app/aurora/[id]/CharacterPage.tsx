@@ -21,7 +21,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { EntityTabs, type Tab } from '@/components/tabs'
 import { Icon } from '@/components/ui/icon'
-import { NewChatModal } from '@/components/new-chat'
+import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
+import { useRouter } from 'next/navigation'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
@@ -116,8 +117,6 @@ function LoadedCharacterPage({
   const [externalToken, setExternalToken] = useState(0)
   const pendingAnchor = useRef<string | null>(null)
 
-  const [showChat, setShowChat] = useState(false)
-  const [chatFromQuery, setChatFromQuery] = useState(false)
   const [showAvatarSelector, setShowAvatarSelector] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
@@ -142,14 +141,25 @@ function LoadedCharacterPage({
     if (initialSection) setSection(initialSection)
   }
 
+  // The New Chat dialog is the workspace's one mount; outside the workspace,
+  // the /salon/new page stands in for it. Closing it leaves the operator here.
+  const newChat = useNewChatModalOptional()
+  const router = useRouter()
+  const startChat = useCallback(() => {
+    if (newChat) {
+      newChat.open({ characterId, characterName: character.name })
+    } else {
+      router.push(`/salon/new?characterId=${encodeURIComponent(characterId)}`)
+    }
+  }, [newChat, router, characterId, character.name])
+
   const chatOpened = useRef(false)
   useEffect(() => {
     if (openChatOnMount && !chatOpened.current) {
       chatOpened.current = true
-      setChatFromQuery(true)
-      setShowChat(true)
+      startChat()
     }
-  }, [openChatOnMount])
+  }, [openChatOnMount, startChat])
 
   const reload = useCallback(async () => {
     await Promise.all([
@@ -402,10 +412,7 @@ function LoadedCharacterPage({
           avatarStyle={avatarStyle}
           rehydrating={rehydrating}
           onBack={onBack}
-          onStartChat={() => {
-            setChatFromQuery(false)
-            setShowChat(true)
-          }}
+          onStartChat={startChat}
           onChooseAvatar={() => setShowAvatarSelector(true)}
           onUploadAvatar={() => setShowUpload(true)}
           onGeneratePortrait={() => wardrobeDialog?.open({ characterId })}
@@ -468,16 +475,6 @@ function LoadedCharacterPage({
           }
         </EntityTabs>
       </div>
-
-      {showChat && (
-        <NewChatModal
-          isOpen
-          onClose={() => setShowChat(false)}
-          characterId={characterId}
-          characterName={character.name}
-          openedFromQuery={chatFromQuery}
-        />
-      )}
 
       <AvatarSelector
         isOpen={showAvatarSelector}
