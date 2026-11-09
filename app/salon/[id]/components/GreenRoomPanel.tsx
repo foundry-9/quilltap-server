@@ -40,41 +40,36 @@ export function GreenRoomPanel({ state }: { state: GreenRoomState }) {
   const open = state.running || expanded
 
   return (
-    <section className="qt-card mx-auto my-3 w-full max-w-3xl p-3" aria-label={state.title}>
+    <section className="qt-card qt-green-room" aria-label={state.title}>
       {state.running ? (
-        <div className="flex items-center gap-2" role="status" aria-live="polite">
-          <span className="qt-bg-accent inline-block h-2 w-2 flex-shrink-0 animate-pulse rounded-full" aria-hidden="true" />
-          <span className="qt-text-primary text-sm font-semibold">{state.title}</span>
-          <span className="qt-text-secondary text-sm">{state.status || 'Setting the stage…'}</span>
+        <div className="qt-green-room-headline" role="status" aria-live="polite">
+          <span className="qt-green-room-pulse" aria-hidden="true" />
+          <span className="qt-green-room-title">{state.title}</span>
+          <span className="qt-green-room-status">{state.status || 'Setting the stage…'}</span>
         </div>
       ) : (
         <button
           type="button"
-          className="qt-text-secondary flex w-full items-center gap-2 text-left text-sm"
+          className="qt-green-room-disclosure"
           aria-expanded={expanded}
           aria-controls={bodyId}
           disabled={!hasRecord}
           onClick={() => setExpanded((v) => !v)}
         >
           <span aria-hidden="true">{hasRecord ? (expanded ? '▾' : '▸') : '•'}</span>
-          <span className="qt-text-primary font-semibold">{state.title}</span>
+          <span className="qt-green-room-title">{state.title}</span>
           <span>— the curtain is up.</span>
         </button>
       )}
 
       {open && hasRecord && (
-        <div id={bodyId} className="mt-3 flex max-h-64 flex-col gap-3 overflow-y-auto">
+        <div id={bodyId} className="qt-green-room-body">
           {state.wardrobe.map((panel) => (
-            <div key={panel.characterId} className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                {panel.slots === null && (
-                  <span
-                    className="border-t-transparent inline-block h-3 w-3 animate-spin rounded-full border-2 border-current opacity-70"
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="qt-text-primary text-sm font-semibold">{panel.characterName}</span>
-                <span className="qt-text-secondary text-xs">
+            <div key={panel.characterId} className="qt-green-room-character">
+              <div className="qt-green-room-character-line">
+                {panel.slots === null && <span className="qt-green-room-spinner" aria-hidden="true" />}
+                <span className="qt-green-room-character-name">{panel.characterName}</span>
+                <span className="qt-green-room-character-note">
                   {panel.slots === null ? 'consulting the wardrobe…' : 'is wearing'}
                 </span>
               </div>
@@ -83,10 +78,10 @@ export function GreenRoomPanel({ state }: { state: GreenRoomState }) {
           ))}
 
           {state.packed.length > 0 && (
-            <ul className="flex flex-col gap-1 text-sm">
+            <ul className="qt-green-room-packed">
               {state.packed.map((p) => (
-                <li key={p.characterId} className="qt-text-secondary">
-                  <span className="qt-text-primary font-semibold">{p.characterName}</span>{' '}
+                <li key={p.characterId}>
+                  <span className="qt-green-room-character-name">{p.characterName}</span>{' '}
                   {p.items.length > 0 ? `carries ${p.items.join(', ')}` : 'carries nothing at all'}
                 </li>
               ))}
@@ -94,13 +89,13 @@ export function GreenRoomPanel({ state }: { state: GreenRoomState }) {
           )}
 
           {state.logs.length > 0 && (
-            <div className="qt-divider border-t pt-2">
-              <div className="qt-text-secondary mb-1 text-xs uppercase tracking-wide">Activity</div>
-              <div ref={logRef} className="max-h-40 overflow-y-auto pr-1">
-                <ul className="flex flex-col gap-1 text-sm">
+            <div className="qt-green-room-activity">
+              <div className="qt-green-room-activity-label">Activity</div>
+              <div ref={logRef} className="qt-green-room-log">
+                <ul className="qt-green-room-log-list">
                   {state.logs.map((entry, i) => (
                     <li key={`${entry.ts}-${i}`} className={logColor(entry.level)}>
-                      <span className="qt-text-secondary mr-2 tabular-nums">
+                      <span className="qt-green-room-log-time">
                         {new Date(entry.ts).toLocaleTimeString()}
                       </span>
                       {entry.message}

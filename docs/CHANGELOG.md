@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Style: The Green Room panel on `qt-*` classes
+
+- `GreenRoomPanel` used Tailwind utilities directly. It now uses `qt-green-room*` classes from the new `app/styles/qt-components/_green-room.css` (plain CSS; colours, widths and heights read `--qt-green-room-*` hooks with token fallbacks; the pulse and spinner stop under `prefers-reduced-motion`).
+- `packages/theme-storybook` regenerated and bumped to 1.0.105.
+
 #### Refactor: Casting, the opening, and the Green Room in the Salon
 
 - Implements `docs/developer/features/refactor-green-room-and-opening.md` (all six phases; §10 records departures).
