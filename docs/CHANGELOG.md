@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Docs: spec for refactoring the character repository, the vault and Aurora's writes
+
+- New spec `docs/developer/features/refactor-character-repository-and-vault.md`. `CharactersRepository` re-implements about 250 lines of `AbstractStoreBackedRepository` (the base projects and groups share), the vault layout is spelled in nine places, prompt and scenario ids are path hashes that change on rename, and every sub-collection save re-projects the whole folder and deletes any file it does not recognise. Twelve decisions of record: a `CharacterRow` type distinct from `Character`, one store-backed base with the pointer column and the archive guard as parameters, one declarative layout table in `lib/characters/vault/` that every reader, writer, seed, keystone list and keep-set derives from, frontmatter `id:` on prompt and scenario files, per-item writes, derived strict API schemas, a vault-health / repair action, a server-side key-level `metadata` patch for the HTTP route, and the client's copies of server rules deleted. Eight phases; the last (projects and groups on the same engine) is gated. No code changed.
+- Three defects found while writing it are filed: #148 (the startup vault backfill writes blank content and sweeps every prompt and scenario when `properties.json` is invalid), #149 (clearing a physical description is a no-op), #150 (a whole-array scenarios PUT un-archives scenarios and drops descriptions). Phase 0 of the spec fixes them.
+- `docs/developer/features/ROADMAP.md` and `.claude/commands/update-documentation.md` list the spec.
+
 #### Fix: Custom tooltips no longer stick open
 
 - `components/ui/Tooltip.tsx` closed only on the anchor's own `pointerleave` or `blur`. Neither fires when the trigger re-renders or vanishes under the pointer, when an overlay covers it, or when the window loses focus mid-hover, so the bubble could stay up indefinitely.

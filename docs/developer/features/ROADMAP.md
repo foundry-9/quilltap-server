@@ -117,6 +117,7 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Salon stream frames as a tagged union ([spec](refactor-4-12-salon-stream-frames.md))
   - [ ] the browser family finished, and the `FileBrowser` retirement decisions ([spec](refactor-4-12-browser-family.md))
   - [x] one recursive watcher core under both filesystem watchers ([spec](refactor-4-12-native-watcher-core.md))
+- [ ] Refactor — the character repository, the vault and Aurora's writes: one store-backed base for characters, projects and groups; one declarative vault layout table; stable prompt and scenario ids; per-item sub-collection writes; derived strict API schemas; the startup heal that could blank a vault ([spec](refactor-character-repository-and-vault.md))
 
 ### Virgil: Setup & Onboarding
 
