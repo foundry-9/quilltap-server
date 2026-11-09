@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Theme: Madman's Box backdrops for the Concierge, Pascal, Saquel and Brahma
+
+- Madman's Box replaced only eight subsystem backdrops; the Settings redesign made the Concierge's, Pascal's, Saquel's and Brahma's visible (as group and lens backdrops), so they showed the default art. Added `textures/{concierge,pascal,saquel,brahma}-bg.webp` (2731×1536, WebP q75, 700–890 KB) and their `subsystems` entries in `theme.json`; theme bumped to 1.1.11.
+
 #### Feature: The Foundry, rebuilt — a settings page organised by what things do, with search
 
 - Implements `docs/developer/features/complete/settings-redesign.md` (phases 0–5).
