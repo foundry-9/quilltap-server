@@ -354,7 +354,6 @@ export function ProfileModal({
   // Preselect the provider on opening a new profile from a provider card.
   useEffect(() => {
     if (!isOpen || profile?.id || !initialProvider) return
-    console.debug('[ProfileModal] Preselecting provider for new profile', { provider: initialProvider })
     handleProviderChange(initialProvider)
     const keysForProvider = apiKeys.filter((k) => k.provider === initialProvider)
     if (keysForProvider.length === 1) {

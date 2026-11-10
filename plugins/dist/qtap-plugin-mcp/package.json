@@ -10,7 +10,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@quilltap/plugin-types": "^2.10.0",
-    "@quilltap/plugin-utils": "^2.7.4",
+    "@quilltap/plugin-utils": "^2.7.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
