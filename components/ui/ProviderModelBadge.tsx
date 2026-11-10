@@ -34,7 +34,7 @@ export function ProviderModelBadge({ provider, modelName, size = 'xs', title: ti
   const { icon: iconClass, text: textClass } = sizeConfig[size]
 
   return (
-    <span className={`inline-flex items-center gap-1 opacity-60 ${textClass}`} title={titleOverride || `${provider}: ${modelName || 'unknown'}`}>
+    <span className={`inline-flex items-center gap-1 qt-text-secondary ${textClass}`} title={titleOverride || `${provider}: ${modelName || 'unknown'}`}>
       <ProviderIcon provider={provider} iconData={iconData || undefined} className={iconClass} />
       {modelName && <span className={`truncate ${compact ? 'max-w-[6rem]' : 'max-w-[8rem]'}`}>{modelName}</span>}
     </span>

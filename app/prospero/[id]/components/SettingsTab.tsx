@@ -64,7 +64,7 @@ export function SettingsTab({
           aria-label="Allow Any Character"
           onClick={onToggleAllowAnyCharacter}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            project.allowAnyCharacter ? 'qt-bg-primary' : 'qt-bg-muted'
+            project.allowAnyCharacter ? 'qt-bg-primary' : 'qt-toggle-off'
           }`}
         >
           <span

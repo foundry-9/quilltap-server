@@ -268,35 +268,35 @@
 
   /* Entity-type badge colors — warm-tinted variants */
   --qt-badge-character-bg: hsl(20 45% 25% / 0.15);
-  --qt-badge-character-fg: hsl(20 45% 38%);
+  --qt-badge-character-fg: hsl(20 45% 36.5%);
   --qt-badge-user-character-bg: hsl(43 75% 55% / 0.15);
-  --qt-badge-user-character-fg: hsl(43 70% 35%);
+  --qt-badge-user-character-fg: hsl(43 70% 30%);
   --qt-badge-chat-bg: hsl(142 65% 38% / 0.15);
-  --qt-badge-chat-fg: hsl(142 65% 30%);
+  --qt-badge-chat-fg: hsl(142 65% 27%);
   --qt-badge-tag-bg: hsl(25 85% 53% / 0.15);
-  --qt-badge-tag-fg: hsl(25 85% 40%);
+  --qt-badge-tag-fg: hsl(25 85% 34.5%);
   --qt-badge-memory-bg: hsl(330 70% 55% / 0.15);
   --qt-badge-memory-fg: hsl(330 70% 40%);
   --qt-badge-message-bg: hsl(45 65% 48% / 0.12);
-  --qt-badge-message-fg: hsl(45 65% 35%);
+  --qt-badge-message-fg: hsl(45 65% 30%);
   --qt-badge-project-bg: hsl(43 75% 55% / 0.12);
-  --qt-badge-project-fg: hsl(43 70% 35%);
+  --qt-badge-project-fg: hsl(43 70% 30%);
 
   /* Status badge colors */
   --qt-badge-enabled-bg: hsl(142 65% 38% / 0.15);
-  --qt-badge-enabled-fg: hsl(142 65% 30%);
+  --qt-badge-enabled-fg: hsl(142 65% 27%);
   --qt-badge-related-bg: hsl(43 75% 55% / 0.15);
-  --qt-badge-related-fg: hsl(43 70% 35%);
+  --qt-badge-related-fg: hsl(43 70% 30%);
   --qt-badge-manual-bg: hsl(43 75% 55% / 0.15);
-  --qt-badge-manual-fg: hsl(43 70% 35%);
+  --qt-badge-manual-fg: hsl(43 70% 30%);
 
   /* Plugin source badge colors */
   --qt-badge-source-included-bg: hsl(43 75% 55% / 0.15);
-  --qt-badge-source-included-fg: hsl(43 70% 35%);
+  --qt-badge-source-included-fg: hsl(43 70% 30%);
   --qt-badge-source-npm-bg: hsl(0 60% 48% / 0.15);
   --qt-badge-source-npm-fg: hsl(0 60% 40%);
   --qt-badge-source-git-bg: hsl(20 45% 25% / 0.15);
-  --qt-badge-source-git-fg: hsl(20 45% 38%);
+  --qt-badge-source-git-fg: hsl(20 45% 36.5%);
 
   /* Capability badge colors */
   --qt-badge-capability-bg: hsl(20 45% 25% / 0.1);
@@ -519,7 +519,7 @@
   --qt-badge-tag-bg: hsl(25 85% 53% / 0.3);
   --qt-badge-tag-fg: hsl(25 85% 65%);
   --qt-badge-memory-bg: hsl(330 70% 55% / 0.3);
-  --qt-badge-memory-fg: hsl(330 70% 68%);
+  --qt-badge-memory-fg: hsl(330 70% 71%);
   --qt-badge-message-bg: hsl(45 65% 50% / 0.25);
   --qt-badge-message-fg: hsl(45 65% 68%);
   --qt-badge-project-bg: hsl(43 75% 55% / 0.2);

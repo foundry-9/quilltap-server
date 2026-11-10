@@ -76,8 +76,8 @@ export function TemplateTools() {
 
   const buttonClass =
     'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 qt-label qt-shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50'
-  const charClass = `${buttonClass} qt-border-primary/40 qt-bg-primary/10 text-primary hover:qt-bg-primary/15`
-  const userClass = `${buttonClass} qt-border-success/40 qt-bg-success/10 qt-text-success hover:qt-bg-success/20`
+  const charClass = `${buttonClass} qt-border-primary/40 qt-bg-primary/10 qt-text hover:qt-bg-primary/15`
+  const userClass = `${buttonClass} qt-border-success/40 qt-bg-success/10 qt-text hover:qt-bg-success/20`
   const disabled = readOnly || busy !== null
 
   const nothingToDo =

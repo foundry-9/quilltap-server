@@ -219,6 +219,19 @@ the label it is meant to flatter. Secondary text inside a notice (a warning, an
 error, a bit of good news) takes the notice's own colour, and any link within it
 is underlined rather than left to be told apart by hue alone.
 
+The little coloured labels that festoon the place — a character's badge, a tag,
+a memory, a "related" or "manual" marker, the success and warning pills in the
+Scriptorium — are inked a shade deeper in light mode (and a shade brighter in
+dark) than they once were, so each reads at that same 4.5 against its card.
+A switch that stands **off** now wears a fine outline round its track, rather
+than fading into the card like a ghost at a séance, and the theme cards on this
+very page pick a dark or a light hand for their lettering by which of the two
+actually stands out, not by guesswork.
+
+Should the window be drawn very narrow, or the text enlarged to twice its size,
+the formatting toolbar and the buttons along a character's header fold onto a
+second line rather than slipping off the edge.
+
 ### Typography
 
 Themes specify:

@@ -1227,6 +1227,18 @@
     background-color: var(--qt-toggle-knob-bg, white);
   }
 
+  /**
+   * Toggle switch track, off state. The muted fill alone sits at ~1.1:1 on a
+   * card, so an "off" switch all but vanished (WCAG 1.4.11); the inset edge in
+   * the muted-foreground colour outlines the track at 3:1 or better in every
+   * bundled theme without moving the knob.
+   * Usage: ${on ? 'qt-bg-primary' : 'qt-toggle-off'} on the track element.
+   */
+  .qt-toggle-off {
+    background-color: var(--color-muted);
+    box-shadow: inset 0 0 0 1px var(--color-muted-foreground);
+  }
+
   /* ==========================================================================
      PROSE DARK MODE UTILITY
      Absorbs dark:prose-invert into a single qt-* class

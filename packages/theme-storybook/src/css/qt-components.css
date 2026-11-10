@@ -53,8 +53,12 @@
 /* ============================================================================
    QT-* VARIABLE DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
    Themes override any of these in their own [data-theme="<name>"] blocks.
+   :root is listed so the defaults resolve before the theme injector sets
+   data-theme — the startup, instance-lock and version-guard screens render
+   then, and without it their .qt-card had no background, leaving dark text
+   on the dark bootstrap art.
    ============================================================================ */
-[data-theme], [data-theme].dark, [data-theme].light {
+:root, [data-theme], [data-theme].dark, [data-theme].light {
   --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --theme-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
   --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -102,27 +106,15 @@
     --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
   }
   --qt-status-success-bg: var(--color-success);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-success-bg: color-mix(in srgb, var(--color-success) 85%, transparent);
-  }
   --qt-status-success-fg: var(--color-success-foreground);
   --qt-status-success-border: var(--color-success);
   --qt-status-warning-bg: var(--color-warning);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 85%, transparent);
-  }
   --qt-status-warning-fg: var(--color-warning-foreground);
   --qt-status-warning-border: var(--color-warning);
   --qt-status-info-bg: var(--color-info);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-info-bg: color-mix(in srgb, var(--color-info) 85%, transparent);
-  }
   --qt-status-info-fg: var(--color-info-foreground);
   --qt-status-info-border: var(--color-info);
   --qt-status-danger-bg: var(--color-destructive);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
-  }
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
   --qt-punctuation-warning-bg: var(--color-warning);
@@ -423,11 +415,11 @@
   --qt-badge-chat-bg: hsl(152 50% 38% / 0.12);
   --qt-badge-chat-fg: hsl(152 50% 30%);
   --qt-badge-tag-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-tag-fg: hsl(25 70% 38%);
+  --qt-badge-tag-fg: hsl(25 70% 36.5%);
   --qt-badge-memory-bg: hsl(330 55% 52% / 0.12);
   --qt-badge-memory-fg: hsl(330 55% 38%);
   --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
-  --qt-badge-message-fg: hsl(45 70% 35%);
+  --qt-badge-message-fg: hsl(45 70% 29.5%);
   --qt-badge-project-bg: hsl(185 55% 38% / 0.12);
   --qt-badge-project-fg: hsl(185 55% 30%);
   --qt-badge-enabled-bg: hsl(152 50% 38% / 0.12);
@@ -445,7 +437,7 @@
   --qt-badge-source-npm-bg: hsl(0 60% 50% / 0.12);
   --qt-badge-source-npm-fg: hsl(0 60% 38%);
   --qt-badge-source-git-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-source-git-fg: hsl(25 70% 38%);
+  --qt-badge-source-git-fg: hsl(25 70% 36.5%);
   --qt-badge-source-manual-bg: var(--color-muted);
   --qt-badge-source-manual-fg: var(--color-muted-foreground);
   --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
@@ -453,7 +445,7 @@
   --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
   --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
   --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
-  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 32%);
   --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
   --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
   --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);
@@ -6797,8 +6789,12 @@
   /**
    * Formatting toolbar container - shown above textarea in document editing mode
    */
+  /* Wraps rather than overflowing: at 320px or 200% text a single row runs
+     past its card, whose overflow:hidden then clips the last buttons
+     (WCAG 1.4.4 / 1.4.10). */
   .qt-formatting-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: calc(var(--spacing, 0.25rem) * 2);
@@ -6815,6 +6811,7 @@
    */
   .qt-formatting-toolbar-section {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--spacing, 0.25rem);
   }
@@ -8389,13 +8386,14 @@
     border: 1px solid var(--qt-status-warning-border);
   }
   /**
-   * Spoken position badge - dimmed
+   * Spoken position badge - receded, but still legible. A dashed outline on
+   * the page colour marks "already spoke"; the number stays at full
+   * muted-foreground strength (WCAG 1.4.3) rather than fading to half opacity.
    */
   .qt-participant-position-spoken {
-    background: var(--color-muted);
+    background: var(--color-background);
     color: var(--color-muted-foreground);
-    border: 1px solid var(--color-border);
-    opacity: 0.5;
+    border: 1px dashed var(--color-muted-foreground);
   }
   /**
    * Inactive participant card styling - dimmed/greyed
@@ -14157,6 +14155,17 @@
    */
   .qt-bg-toggle-knob {
     background-color: var(--qt-toggle-knob-bg, white);
+  }
+  /**
+   * Toggle switch track, off state. The muted fill alone sits at ~1.1:1 on a
+   * card, so an "off" switch all but vanished (WCAG 1.4.11); the inset edge in
+   * the muted-foreground colour outlines the track at 3:1 or better in every
+   * bundled theme without moving the knob.
+   * Usage: ${on ? 'qt-bg-primary' : 'qt-toggle-off'} on the track element.
+   */
+  .qt-toggle-off {
+    background-color: var(--color-muted);
+    box-shadow: inset 0 0 0 1px var(--color-muted-foreground);
   }
   /* ==========================================================================
      PROSE DARK MODE UTILITY
