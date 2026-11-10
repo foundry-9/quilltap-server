@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Feature: Save an Atlas entry's picture to a document store
+
+- The full-screen Atlas picture viewer now has Save to a document store, like Wardrobe and Inventory pictures. `SaveImageDialog`'s `SaveImageTarget` gains an `atlas` kind; the three item doors share one `itemImagesUrl` helper and post to the item's own images route (`save-targets` / `save-to-store`, already served by `createItemImagesRoute`).
+- Tests: `save-image-dialog-item-doors.test.tsx` (all three item doors' URLs), Atlas case in `item-image-viewer.test.tsx`.
+- Help: `atlas.md`.
+
 #### Feature: The Atlas — named things, what they look like and what is known of them
 
 - New `Atlas/` folder in each of the four tiers (character vault, group store, project store, Quilltap General). One Markdown file per entry: frontmatter carries `id`, `name`, `aliases`, `graphicPrompt`, `imageFileId`, `metadata`, `archivedAt` and timestamps; the body is `knowledge`. Identity is the frontmatter `id`. Schema `lib/schemas/atlas.types.ts`; code in `lib/atlas/`.

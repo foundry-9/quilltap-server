@@ -64,6 +64,8 @@ Avatars, wardrobe and Inventory pictures, and an entry's own picture never consu
 
 Each entry keeps a small gallery: **Upload** one, or **Generate** one from its graphic prompt (the Concierge's usual arrangements apply). Choose which is current; the current one appears on the entry's row, in the editor, full-screen, and in the chip's card. These pictures are for you — they are never shown to a painter as a reference.
 
+Open a picture full-screen and three buttons wait in the corner. **Save to a document store** (the bookmark) files a copy in the `photos/` folder of whichever store you choose — a character's vault, a project's files, any document store you keep, or Quilltap General, which is offered first — with an optional caption; leave it blank and the entry's name is used. Should the store already hold that very picture, you are told when it was filed rather than handed a duplicate. **Download** and **Copy** do precisely what they say. The entry's own gallery is not disturbed by any of it.
+
 ## Filing, moving and putting away
 
 Everything the Inventory's browser does, the Atlas's does too: **folders** (make, rename, delete, file into), **select several** at once, **duplicate**, **move or copy to a folder**, **move or copy to another shelf** (pictures travel along; a move keeps the entry's identity, and a shelf that already holds a live entry of that name declines it), **archive** (an archived entry is told to no one and chipped nowhere, and **Show archived** brings it back into view) and **delete**.

@@ -5,8 +5,8 @@
  *
  * The shared `FullScreenImageViewer` frame with three buttons: Save (the
  * Salon's `SaveImageDialog`, offered every document store, filing a copy in
- * the chosen store's `photos/` — the Wardrobe and the Inventory only; the
- * save dialog has no Atlas target), Download, and Copy. Opened from a row
+ * the chosen store's `photos/` through the kind's images route), Download,
+ * and Copy. Opened from a row
  * thumbnail and from the item editor's picture section, where Previous / Next
  * walk the item's pictures.
  *
@@ -113,10 +113,6 @@ export function ItemImageViewer({
   const filename = pictureFilename(itemTitle, spec.fallbackStem)
   const queryClient = useQueryClient()
 
-  // The Salon's save dialog knows the Wardrobe's and the Inventory's images
-  // routes; an Atlas picture is downloaded or copied instead.
-  const saveKind = kind === 'atlas' ? null : kind
-
   const handleMissingCleanup = async () => {
     await spec.deleteMissing(itemId, container, fileId)
     await queryClient.invalidateQueries({ queryKey: spec.refreshKey })
@@ -150,7 +146,7 @@ export function ItemImageViewer({
         keyboardActive={!saving}
         zIndexClassName="z-[90]"
         actions={[
-          ...(saveKind ? [{ icon: 'bookmark' as const, label: 'Save to a document store', onClick: () => setSaving(true) }] : []),
+          { icon: 'bookmark', label: 'Save to a document store', onClick: () => setSaving(true) },
           { icon: 'download', label: 'Download', onClick: () => void guard('download', () => downloadImageUrl(src, filename)) },
           {
             icon: 'copy',
@@ -165,11 +161,11 @@ export function ItemImageViewer({
           </>
         }
       />
-      {saving && saveKind && (
+      {saving && (
         <SaveImageDialog
           isOpen={true}
           onClose={() => setSaving(false)}
-          target={{ kind: saveKind, itemId, container, fileId }}
+          target={{ kind, itemId, container, fileId }}
           attachments={[{ id: fileId, filename, filepath: src, mimeType: 'image/webp' }]}
           overlayClassName="z-[100]"
           onSaved={(info) => showSuccessToast(`Saved to ${info.mountPoint}`)}
