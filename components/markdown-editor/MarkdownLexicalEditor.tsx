@@ -37,6 +37,9 @@ import {
   COMPOSER_TRANSFORMERS,
 } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
+import { CharTypeaheadPlugin } from '@/components/chat/lexical/plugins/CharTypeaheadPlugin'
+import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
+import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import { TemplateTokenHighlightPlugin } from './TemplateTokenHighlightPlugin'
 
@@ -131,6 +134,11 @@ function EditorBody({
         initialMarkdown={value}
       />
       <FormattingCommandPlugin />
+      {/* The `:` emoji and `\` symbol typeaheads, as in the Salon composer and
+          Document Mode — each still honours its composer setting. The `/`
+          command menu and `@` mentions are chat-only and deliberately absent. */}
+      <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
+      <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
       {templateHighlight && (
         <TemplateTokenHighlightPlugin
           characterName={templateHighlight.characterName}

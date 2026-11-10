@@ -4,7 +4,8 @@
  * Tests form validation, creation, and editing of memories
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
+import { renderWithQuery as render } from '../../../helpers/renderWithQuery';
 import { describe, it, expect, jest } from '@jest/globals';
 import { MemoryEditor } from '@/components/memory/memory-editor';
 

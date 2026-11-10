@@ -77,7 +77,9 @@ What lands in your document is **the plain Unicode character itself** — not a 
 
 No trailing space is added — an emoji sits closer to punctuation than to a word, and `word😄` and `😄😄` are both perfectly respectable constructions we decline to interfere with.
 
-There is also a **button** in the formatting toolbar (the small `☺`), which opens a searchable picker with a browsable grid and a **Recently used** row of your last two dozen selections. A caution worth stating plainly: that toolbar appears only in composition and document-editing modes, so the button is a convenience rather than the feature proper. The colon is always at your disposal; the button is not. Your recents are kept in this browser alone, and are quite deliberately never sent anywhere.
+There is also a **button** in the formatting toolbar (the small `☺`), which opens a searchable picker with a browsable grid and a **Recently used** row of your last two dozen selections. A caution worth stating plainly: in the Salon that toolbar appears only in composition and document-editing modes, so there the button is a convenience rather than the feature proper. Your recents are kept in this browser alone, and are quite deliberately never sent anywhere.
+
+**Not the Salon alone.** The colon menu and the `☺` button keep company with every Markdown editor in the house — a character's fields, system prompts, scenarios, memories, wardrobe and inventory descriptions, a letter to the Post Office, an announcement, an inform, the Scenario Builder, and the rest of their kind — in Document Mode, and in every dialog besides. The `\` symbol menu and its `Ω` button below travel with them. The `/` command menu and the `@` character register, being matters of conversation, stay at home in the Salon's composer.
 
 The emoji catalogue is fetched only the first time you actually want it — instances whose correspondents never type a colon never pay for it at all. Should the catalogue prove unreachable, nothing whatever is impeded: the menu simply declines to appear, the picker says so, and your typing proceeds unmolested.
 

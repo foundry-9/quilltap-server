@@ -3086,9 +3086,9 @@
      element, so these classes own appearance only, never placement. */
   .qt-typeahead-menu {
     position: absolute;
-    z-index: 50;
     overflow-y: auto;
     padding: var(--spacing, 0.25rem);
+    z-index: 200;
     top: 100%;
     left: 0;
     min-width: 14rem;

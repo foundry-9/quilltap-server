@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Feature: emoji and symbol typeaheads in every Markdown editor
+
+- `MarkdownLexicalEditor` (character fields, prompts, scenarios, memories, wardrobe and inventory editors, mail, announcements, informs, Scenario Builder, and the other form and dialog editors) now mounts `CharTypeaheadPlugin` for `EMOJI_PROFILE` and `UNICODE_PROFILE`, so `:name` and `\name` work there as they do in the Salon composer and Document Mode. Each still obeys its composer setting. The toolbar's `☺` and `Ω` buttons were already present in all three editors. The `/` command menu and `@` mentions remain composer-only.
+- `.qt-typeahead-menu` z-index raised from 50 to 200. Lexical mounts the menu anchor on `<body>`, so at 50 it rendered under every modal overlay (60–101); 200 keeps it below toasts (1000). `packages/theme-storybook` regenerated and bumped to 1.0.108.
+- Test: `memory-editor.test.tsx` now renders through `renderWithQuery`, since the editor reads chat settings.
+- Help: `chat-settings-composer.md`.
+
 #### Feature: characters without system transparency may use their own vault's non-core folders
 
 - The doc-tool opacity rule hid every character vault, the acting character's own included, from a character with `systemTransparency !== true`. It now hides only peer vaults; the character's own vault is reachable with its core guarded: every root-level file, and the `Prompts`, `Wardrobe`, `Outfits`, `Inventory`, `Mail` and `images` folders (with their contents), can be neither read nor written, and those folders and the root cannot be deleted or moved. Everything else (Scenarios, Knowledge, Tools, lore, files, and folders the character creates) is open to the full `doc_*` and `doc_*_blob` toolset. A new root-level folder may be created; a new root-level file may not.

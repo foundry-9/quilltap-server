@@ -1037,7 +1037,12 @@
      element, so these classes own appearance only, never placement. */
 
   .qt-typeahead-menu {
-    @apply absolute z-50 overflow-y-auto p-1;
+    @apply absolute overflow-y-auto p-1;
+    /* Lexical mounts the anchor on <body>, so the menu competes with every
+       modal overlay (z 60–101) in the root stacking context. Stay above them
+       — the editors in dialogs carry the same typeaheads — but under toasts
+       (1000) and the startup gates (9999). */
+    z-index: 200;
     /* Anchored to the caret element Lexical positions for us. `top: 100%` clears
        the caret's own line rather than covering it. */
     top: 100%;
