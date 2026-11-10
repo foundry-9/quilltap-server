@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Docs: CLI README (release checklist 12)
+
+- No CLI command or flag changes since 4.12.2; help text and the bash / zsh / fish completions were already current.
+- `packages/quilltap/README.md` now documents `instances set-passphrase` (in `--help` and completions since 4.5.0, never in the README), `instances show`, `instances path`, and the `rm` / `delete` aliases of `instances remove`.
+
 #### Chore: Dead code sweep (release checklist 5)
 
 - Deleted importer-less barrels `components/new-chat/index.ts`, `components/new-chat/hooks/index.ts`, `lib/characters/vault/index.ts`.
