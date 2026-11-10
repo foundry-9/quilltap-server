@@ -97,7 +97,6 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess, initialProvider }: Api
   const { setField } = form
   useEffect(() => {
     if (isOpen && initialProvider) {
-      console.debug('[ApiKeyModal] Preselecting provider', { provider: initialProvider })
       setField('provider', initialProvider)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

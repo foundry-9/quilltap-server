@@ -58,7 +58,6 @@ export function VaultRepairCard({ characterId, onBack }: VaultRepairCardProps) {
       const res = await fetch(`/api/v1/characters/${characterId}?action=repair-vault`, { method: 'POST' })
       const body = (await res.json().catch(() => ({}))) as { seeded?: string[]; error?: string }
       if (!res.ok) throw new Error(body.error || 'The vault could not be repaired.')
-      console.debug('[VaultRepairCard] Repaired', { characterId, seeded: body.seeded })
       showSuccessToast(
         body.seeded && body.seeded.length > 0
           ? `Restored ${body.seeded.join(' and ')} to their factory settings.`

@@ -152,7 +152,6 @@ export function ImageProfileForm({
   useEffect(() => {
     if (presetResolved || isFetchingProviders || !initialProvider) return
     const match = matchImageProvider(initialProvider, imageProviders)
-    console.debug('[ImageProfileForm] Resolving preselected provider', { initialProvider, match: match?.value ?? null })
     if (match) {
       const keys = apiKeys.filter((k) => k.provider === match.apiKeyProvider || k.provider === match.value)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot reconciliation of a preset against the provider list that just loaded
