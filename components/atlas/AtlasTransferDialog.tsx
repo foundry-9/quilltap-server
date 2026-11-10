@@ -74,7 +74,7 @@ export function AtlasTransferDialog({ entry, mode, from, catalogue, actions, onC
           ? 'The entry keeps its identity and its pictures; its folder comes along. Whoever can reach the destination is told of it from now on.'
           : 'The copy is a new entry with its own identity and copies of the pictures, filed in the same folder at the destination.'}
       </p>
-      <label className="text-sm text-foreground" htmlFor="atlas-transfer-target">Destination</label>
+      <label className="text-sm qt-text" htmlFor="atlas-transfer-target">Destination</label>
       <ContainerSelect
         id="atlas-transfer-target"
         className="qt-select w-full mt-1"

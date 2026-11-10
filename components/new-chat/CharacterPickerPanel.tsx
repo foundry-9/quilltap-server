@@ -202,7 +202,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
                     className={
                       'flex h-6 w-6 items-center justify-center rounded-full border-2 ' +
                       (isSelected
-                        ? 'qt-border-primary bg-primary text-primary-foreground'
+                        ? 'qt-border-primary qt-bg-primary qt-text-on-primary'
                         : 'border-muted-foreground')
                     }
                   >

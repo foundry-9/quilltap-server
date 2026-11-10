@@ -82,7 +82,7 @@ export function AtlasAliasInput({ id, label, aliases, onChange, name = '', disab
 
   return (
     <div className="space-y-1">
-      <label className="text-sm text-foreground" htmlFor={id}>{label}</label>
+      <label className="text-sm qt-text" htmlFor={id}>{label}</label>
       <p id={hintId} className="qt-text-xs qt-text-secondary">
         Other words it answers to — &ldquo;lander&rdquo;, &ldquo;the car&rdquo;. Press Enter or a comma after each; Backspace in an
         empty field takes the last one off. Plurals are yours to add.

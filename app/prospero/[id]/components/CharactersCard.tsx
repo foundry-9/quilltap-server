@@ -138,7 +138,7 @@ export function CharactersCard({
             <button
               onClick={onToggleAllowAnyCharacter}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                project.allowAnyCharacter ? 'bg-primary' : 'qt-bg-muted'
+                project.allowAnyCharacter ? 'qt-bg-primary' : 'qt-bg-muted'
               }`}
               role="switch"
               aria-checked={project.allowAnyCharacter}

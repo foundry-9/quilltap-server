@@ -217,7 +217,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
       <button
         type="button"
         onClick={props.onBack}
-        className="mb-2 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
+        className="mb-2 inline-flex items-center qt-action"
       >
         ← Back to Characters
       </button>
@@ -313,7 +313,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
                   key={g.id}
                   href={`/aurora/groups/${g.id}`}
                   title={`${g.description?.trim() || g.name} — membership is managed on the group's page`}
-                  className="group inline-flex items-center gap-1.5 rounded-full border qt-border-default qt-bg-muted px-2 py-0.5 text-xs font-medium text-foreground transition hover:qt-border-primary/50"
+                  className="group inline-flex items-center gap-1.5 rounded-full border qt-border-default qt-bg-muted px-2 py-0.5 text-xs font-medium qt-text transition hover:qt-border-primary/50"
                 >
                   <span
                     className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] leading-none"
@@ -339,15 +339,15 @@ export function CharacterHeader(props: CharacterHeaderProps) {
                   )}
                   {s.href ? (
                     <Link href={s.href} title={s.tip} className="hover:underline">
-                      <strong className="font-semibold text-foreground">{s.value}</strong> {s.label}
+                      <strong className="font-semibold qt-text">{s.value}</strong> {s.label}
                     </Link>
                   ) : s.onClick ? (
                     <button type="button" onClick={s.onClick} title={s.tip} className="hover:underline">
-                      <strong className="font-semibold text-foreground">{s.value}</strong> {s.label}
+                      <strong className="font-semibold qt-text">{s.value}</strong> {s.label}
                     </button>
                   ) : (
                     <span title={s.tip}>
-                      <strong className="font-semibold text-foreground">{s.value}</strong> {s.label}
+                      <strong className="font-semibold qt-text">{s.value}</strong> {s.label}
                     </span>
                   )}
                 </Fragment>

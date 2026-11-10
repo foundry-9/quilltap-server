@@ -116,7 +116,7 @@ export function AtlasEntryRow({ entry, manageable, actions, selection, folderCru
         onOpen={actions.onOpenImage ? () => actions.onOpenImage?.(entry) : undefined}
       />
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-foreground truncate" title={entry.name}>
+        <div className="text-sm qt-text truncate" title={entry.name}>
           {entry.name}
           {aliases.length > 0 && (
             <span className="qt-text-xs qt-text-secondary ml-1">also {aliases.join(', ')}</span>

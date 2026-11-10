@@ -209,7 +209,7 @@ export function ImagePromptOptimizerModal({
                 type="button"
                 onClick={onClose}
                 disabled={busy}
-                className="qt-text-secondary hover:text-foreground"
+                className="qt-text-secondary hover:qt-text"
               >
                 <Icon name="close" className="w-5 h-5" />
               </button>
@@ -220,7 +220,7 @@ export function ImagePromptOptimizerModal({
             {error && <div className="qt-alert-error rounded px-3 py-2 text-sm">{error}</div>}
 
             {(stage === 'intro' || stage === 'reviewing') && (
-              <div className="space-y-3 text-sm text-foreground">
+              <div className="space-y-3 text-sm qt-text">
                 <p>
                   A brisk clerk of modest wages will go through {whose} wardrobe, garment by garment, and
                   compare each portrait cue — the short phrase whispered to the portraitist and the Lantern —
@@ -245,7 +245,7 @@ export function ImagePromptOptimizerModal({
 
             {(stage === 'decide' || stage === 'choose') && summary && (
               <>
-                <div className="text-sm text-foreground space-y-1">
+                <div className="text-sm qt-text space-y-1">
                   <p>
                     {summary.examined === 0
                       ? 'There was nothing in the wardrobe to examine.'
@@ -287,7 +287,7 @@ export function ImagePromptOptimizerModal({
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-baseline gap-x-2">
-                              <span className="text-sm font-medium text-foreground">{rec.title}</span>
+                              <span className="text-sm font-medium qt-text">{rec.title}</span>
                               <span className="text-xs qt-text-secondary">{rec.types.join(', ')}</span>
                               <span className="qt-badge text-xs">{KIND_LABEL[rec.kind]}</span>
                             </div>

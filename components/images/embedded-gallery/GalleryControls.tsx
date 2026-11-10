@@ -39,7 +39,7 @@ export function GalleryControls({
           onClick={() => {
             onUploadClick()
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:qt-bg-primary/90 rounded-md transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium qt-text-on-primary qt-bg-primary hover:qt-bg-primary/90 rounded-md transition-colors"
         >
           <Icon name="upload" className="w-4 h-4" />
           Upload

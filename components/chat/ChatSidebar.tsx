@@ -1508,7 +1508,7 @@ function VisibilitySection({
           <button
             onClick={onToggleAllWhispers}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+              showAllWhispers ? 'qt-bg-primary' : 'qt-bg-muted'
             }`}
             role="switch"
             aria-checked={!!showAllWhispers}
@@ -1530,7 +1530,7 @@ function VisibilitySection({
           <button
             onClick={onToggleCrossCharacterVaultReads}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              allowCrossCharacterVaultReads ? 'bg-primary' : 'qt-bg-muted'
+              allowCrossCharacterVaultReads ? 'qt-bg-primary' : 'qt-bg-muted'
             }`}
             role="switch"
             aria-checked={!!allowCrossCharacterVaultReads}
@@ -1556,7 +1556,7 @@ function VisibilitySection({
           <button
             onClick={() => onSetTurnSkippingEnabled(turnSkippingEnabled === false ? true : false)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              turnSkippingEnabled !== false ? 'bg-primary' : 'qt-bg-muted'
+              turnSkippingEnabled !== false ? 'qt-bg-primary' : 'qt-bg-muted'
             }`}
             role="switch"
             aria-checked={turnSkippingEnabled !== false}

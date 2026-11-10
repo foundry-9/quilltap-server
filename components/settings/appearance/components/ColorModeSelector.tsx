@@ -70,7 +70,7 @@ export function ColorModeSelector({
               flex-1 flex items-center justify-center gap-2 px-3 py-2 qt-label
               border rounded-lg transition-colors
               ${isSelected
-                ? 'qt-border-primary bg-primary text-primary-foreground'
+                ? 'qt-border-primary qt-bg-primary qt-text-on-primary'
                 : 'qt-border-default qt-bg-card qt-hover-accent text-foreground'
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}

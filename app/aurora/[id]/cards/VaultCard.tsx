@@ -55,13 +55,13 @@ export function VaultCard() {
         {folders.map((f) => (
           <div key={f.label} className="rounded-lg border qt-border-default p-3" title={f.hint}>
             <dt className="qt-text-xs">{f.label}/</dt>
-            <dd className="qt-heading-4 text-foreground">{f.count ?? '—'}</dd>
+            <dd className="qt-heading-4 qt-text">{f.count ?? '—'}</dd>
           </div>
         ))}
       </dl>
       {stats && (
         <p className="qt-text-small">
-          <strong className="text-foreground">
+          <strong className="qt-text">
             {stats.characterFiles}/{stats.characterFilesTotal}
           </strong>{' '}
           managed character files present

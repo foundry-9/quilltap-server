@@ -37,7 +37,7 @@ export function ArchiveCharacterDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+    <div className="qt-dialog-overlay p-4">
       <div
         ref={dialogRef}
         role="alertdialog"
@@ -49,7 +49,7 @@ export function ArchiveCharacterDialog({
       >
         <div className="px-6 py-4 border-b qt-border-default flex items-center gap-3 flex-shrink-0">
           <Icon name="folder" className="w-6 h-6 qt-text-secondary" />
-          <h3 id={titleId} className="qt-dialog-title text-foreground">
+          <h3 id={titleId} className="qt-dialog-title qt-text">
             Set {characterName} resting in the archive?
           </h3>
         </div>

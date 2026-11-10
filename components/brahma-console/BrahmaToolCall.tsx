@@ -71,7 +71,7 @@ export function BrahmaToolCall({ data }: { data: BrahmaSqlToolCallData }) {
       >
         <Icon name="chevron-right" className="qt-tool-card-chevron w-3 h-3 qt-text-secondary" />
         <Icon name="database" className="w-3.5 h-3.5 qt-text-secondary" />
-        <span className="font-semibold text-foreground">{pending ? 'Running SQL' : 'Ran SQL'}</span>
+        <span className="font-semibold qt-text">{pending ? 'Running SQL' : 'Ran SQL'}</span>
         <span className="px-1.5 py-0.5 rounded qt-bg-default border qt-border-default font-mono qt-text-xs qt-text-secondary">
           {database}
         </span>
@@ -107,7 +107,7 @@ export function BrahmaToolCall({ data }: { data: BrahmaSqlToolCallData }) {
               <div className="qt-text-secondary italic">No rows returned.</div>
             ) : (
               <>
-                <div className="overflow-auto max-h-80 rounded border qt-border-default bg-background">
+                <div className="overflow-auto max-h-80 rounded border qt-border-default qt-bg-default">
                   <table className="w-full border-collapse text-xs">
                     <thead className="sticky top-0 qt-bg-muted">
                       <tr>
@@ -129,7 +129,7 @@ export function BrahmaToolCall({ data }: { data: BrahmaSqlToolCallData }) {
                             return (
                               <td
                                 key={col}
-                                className={`px-2 py-1 align-top whitespace-pre-wrap break-words font-mono ${cell.isNull ? 'qt-text-secondary italic' : 'text-foreground'}`}
+                                className={`px-2 py-1 align-top whitespace-pre-wrap break-words font-mono ${cell.isNull ? 'qt-text-secondary italic' : 'qt-text'}`}
                               >
                                 {cell.text}
                               </td>

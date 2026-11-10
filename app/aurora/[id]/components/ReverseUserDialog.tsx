@@ -58,7 +58,7 @@ export function ReverseUserDialog({ characters, onClose, onConfirm }: ReverseUse
           aria-label="User-controlled character"
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 qt-text qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
           {characters.map((char) => (
             <option key={char.id} value={char.id}>
