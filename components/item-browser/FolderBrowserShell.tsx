@@ -99,6 +99,12 @@ export interface FolderBrowserShellProps<T extends Item> {
   manageFolders?: boolean
   /** Cap the list's height (a dialog) instead of letting it grow (a card). */
   scrollList?: boolean
+  /**
+   * `list` (default) stacks folder and item rows; `grid` lays folders and
+   * items out as square tiles (a picture view). In `grid`, `renderItem`
+   * should draw a tile.
+   */
+  layout?: 'list' | 'grid'
   /** Anything else inside the section (dialogs the browser mounts). */
   children?: ReactNode
 }
@@ -121,6 +127,7 @@ export function FolderBrowserShell<T extends Item>({
   folderEntries,
   manageFolders,
   scrollList = true,
+  layout = 'list',
   children,
 }: FolderBrowserShellProps<T>) {
   const {
@@ -143,6 +150,42 @@ export function FolderBrowserShell<T extends Item>({
   } = state
   const managed = stateManaged && (manageFolders ?? true)
   const copyBlocked = folderFiling?.copyBlocked?.(selectedItems)
+  const grid = layout === 'grid'
+
+  const folderNodes = folderRows.map((row) => (
+    <ItemFolderRow
+      key={row.path}
+      row={row}
+      manageable={managed}
+      onOpen={() => navigate(currentTier, row.path)}
+      onRename={(name) => folderHandlers.renameFolder(row.path, name)}
+      onDelete={() => void folderHandlers.deleteFolder(row.path)}
+      extraEntries={folderEntries?.(row)}
+      testId={`${testIdPrefix}-folder-row`}
+      countNoun={countNoun}
+      tile={grid}
+    />
+  ))
+  const tierNodes = sharedTierRows.map((row) => {
+    const node = (
+      <ItemTierRow
+        key={row.key}
+        label={row.label}
+        scope={row.scope}
+        itemCount={row.itemCount}
+        onOpen={() => navigate(row.key, '')}
+        testId={`${testIdPrefix}-tier-row`}
+        countNoun={countNoun}
+      />
+    )
+    return grid ? <div key={row.key} className="col-span-full">{node}</div> : node
+  })
+  const emptyNode = folderIsEmpty ? (
+    <div className="text-sm qt-text-secondary px-3 py-4">{text.folderEmpty}</div>
+  ) : visible.length === 0 && folderRows.length === 0 && sharedTierRows.length === 0 ? (
+    <div className="text-sm qt-text-secondary px-3 py-4">{text.noMatch}</div>
+  ) : null
+  const itemNodes = emptyNode ? null : visible.map((item) => renderItem(item))
 
   return (
     <section className="flex flex-col min-h-0 relative">
@@ -214,36 +257,26 @@ export function FolderBrowserShell<T extends Item>({
           <div className="text-sm qt-text-secondary px-3 py-4">Loading…</div>
         ) : (
           <>
-            {folderRows.map((row) => (
-              <ItemFolderRow
-                key={row.path}
-                row={row}
-                manageable={managed}
-                onOpen={() => navigate(currentTier, row.path)}
-                onRename={(name) => folderHandlers.renameFolder(row.path, name)}
-                onDelete={() => void folderHandlers.deleteFolder(row.path)}
-                extraEntries={folderEntries?.(row)}
-                testId={`${testIdPrefix}-folder-row`}
-                countNoun={countNoun}
-              />
-            ))}
-            {sharedTierRows.map((row) => (
-              <ItemTierRow
-                key={row.key}
-                label={row.label}
-                scope={row.scope}
-                itemCount={row.itemCount}
-                onOpen={() => navigate(row.key, '')}
-                testId={`${testIdPrefix}-tier-row`}
-                countNoun={countNoun}
-              />
-            ))}
-            {folderIsEmpty ? (
-              <div className="text-sm qt-text-secondary px-3 py-4">{text.folderEmpty}</div>
-            ) : visible.length === 0 && folderRows.length === 0 && sharedTierRows.length === 0 ? (
-              <div className="text-sm qt-text-secondary px-3 py-4">{text.noMatch}</div>
+            {grid ? (
+              <>
+                {(folderNodes.length > 0 || tierNodes.length > 0 || (itemNodes?.length ?? 0) > 0) && (
+                  <div
+                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
+                    data-testid={`${testIdPrefix}-grid`}
+                  >
+                    {folderNodes}
+                    {tierNodes}
+                    {itemNodes}
+                  </div>
+                )}
+                {emptyNode}
+              </>
             ) : (
-              visible.map((item) => renderItem(item))
+              <>
+                {folderNodes}
+                {tierNodes}
+                {emptyNode ?? itemNodes}
+              </>
             )}
             {selectMode && (
               <ItemSelectBar

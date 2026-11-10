@@ -1,64 +1,23 @@
 'use client'
 
 /**
- * One file in a document-store browser: a thumbnail or type glyph, the name
- * (click to view), size and modified time, chips for a hard link and a
- * conversion that is pending or failed, and the ⋮ menu of
- * the actions `documentFileActions` granted. Rename happens in place.
+ * One file in a document-store browser's list view: a thumbnail or type
+ * glyph, the name (click to view), size and modified time, chips for a hard
+ * link and a conversion that is pending or failed, and the ⋮ menu of the
+ * actions `documentFileActions` granted. Rename happens in place. The
+ * picture view's counterpart is `DocumentTile`; both share `document-item`.
  *
  * @module components/document-browser/DocumentRow
  */
 
-import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import type { IconName } from '@/components/ui/icons/icon-registry'
-import { ItemActionMenu, type MenuEntryLike } from '@/components/item-browser/ItemActionMenu'
+import { ItemActionMenu } from '@/components/item-browser/ItemActionMenu'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { folderCrumb } from '@/lib/mount-index/item-folders'
-import { documentPreviewKind, type BrowserAction } from '@/lib/folder-browser/document-actions'
-import type { PreviewKind } from '@/lib/folder-browser/preview-kind'
 import { buildMountFileRawUrl } from '@/components/files/mountBlobUrl'
-import type { DocumentEntry } from './useDocumentStoreSource'
+import { DocumentRenameInput, formatModified, KIND_ICONS, useDocumentItem, type DocumentItemProps } from './document-item'
 
-const KIND_ICONS: Record<PreviewKind, IconName> = {
-  image: 'image',
-  pdf: 'file',
-  docx: 'file',
-  markdown: 'book',
-  text: 'file',
-  unsupported: 'file',
-}
-
-const ACTION_LABELS: Record<BrowserAction, string> = {
-  open: 'Open',
-  rename: 'Rename',
-  move: 'Move to…',
-  copy: 'Copy to…',
-  link: 'Hard link to…',
-  'show-links': 'Where else this appears…',
-  unlink: 'Unlink from its twins',
-  describe: 'Edit description…',
-  workbench: "Open in Pascal's Workbench",
-  download: 'Download',
-  delete: 'Delete',
-}
-
-export interface DocumentRowProps {
-  entry: DocumentEntry
-  actions: readonly BrowserAction[]
-  /** Run an action other than rename (which the row does itself). */
-  onAction: (action: BrowserAction, entry: DocumentEntry) => void
-  onRename: (entry: DocumentEntry, name: string) => Promise<boolean>
-  selectMode: boolean
-  selected: boolean
-  onToggle: () => void
-  /** Show the folder under the name (a search hit). */
-  showFolder: boolean
-}
-
-function formatModified(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
+export type DocumentRowProps = DocumentItemProps
 
 export function DocumentRow({
   entry,
@@ -70,32 +29,7 @@ export function DocumentRow({
   onToggle,
   showFolder,
 }: DocumentRowProps) {
-  const [renaming, setRenaming] = useState(false)
-  const [name, setName] = useState(entry.fileName)
-  const kind = documentPreviewKind(entry)
-
-  const submit = async (): Promise<void> => {
-    const next = name.trim()
-    if (!next || next === entry.fileName) {
-      setRenaming(false)
-      return
-    }
-    if (await onRename(entry, next)) setRenaming(false)
-  }
-
-  const entries: MenuEntryLike[] = actions.map((action) => ({
-    key: action,
-    label: ACTION_LABELS[action],
-    destructive: action === 'delete',
-    onSelect: () => {
-      if (action === 'rename') {
-        setName(entry.fileName)
-        setRenaming(true)
-      } else {
-        onAction(action, entry)
-      }
-    },
-  }))
+  const { kind, renaming, name, setName, submit, cancel, menuEntries } = useDocumentItem({ entry, actions, onAction, onRename })
 
   return (
     <div className="qt-card-interactive py-2 px-3 flex items-center gap-3" data-testid="document-row" data-path={entry.relativePath}>
@@ -120,23 +54,12 @@ export function DocumentRow({
       )}
       <div className="flex-1 min-w-0">
         {renaming ? (
-          <input
-            type="text"
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void submit()
-              } else if (e.key === 'Escape') {
-                e.stopPropagation()
-                setName(entry.fileName)
-                setRenaming(false)
-              }
-            }}
-            onBlur={() => void submit()}
-            aria-label={`Rename ${entry.fileName}`}
+          <DocumentRenameInput
+            entry={entry}
+            name={name}
+            setName={setName}
+            submit={submit}
+            cancel={cancel}
             className="qt-input qt-input-sm w-full"
           />
         ) : (
@@ -172,7 +95,7 @@ export function DocumentRow({
       <span className="qt-text-xs qt-text-secondary flex-shrink-0 w-24 text-right hidden md:inline">
         {formatModified(entry.lastModified)}
       </span>
-      <ItemActionMenu label={`Actions for ${entry.fileName}`} entries={entries} disabled={selectMode} />
+      <ItemActionMenu label={`Actions for ${entry.fileName}`} entries={menuEntries} disabled={selectMode} />
     </div>
   )
 }

@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Feature: Picture view for document-store file browsers
+
+- `DocumentStoreBrowser` has a List / Pictures toggle beside the search box. Pictures lays folders and files out as square tiles (`DocumentTile`): image files show the image, other files and folders show a generic icon, and the name and modified date are overlaid on the tile (`qt-gallery-caption`). The ⋮ menu, select checkboxes and in-place rename work in both views. Applies everywhere the browser is used, including the Salon's attach-from-library picker, where browsing hundreds of images as thin rows was impractical.
+- The choice is stored per browser in `localStorage` (`quilltap.documentBrowser.layout`) and read through `useSyncExternalStore`, so a server render is always the list view.
+- `FolderBrowserShell` takes `layout: 'list' | 'grid'`; `ItemFolderRow` takes `tile`. Row/tile shared logic (menu labels, kind icons, rename state) moved to `components/document-browser/document-item.tsx`.
+- Test: picture-view case in `document-store-browser.test.tsx`.
+- Help: `mount-points.md`, `scriptorium.md`.
+
 #### Feature: Save an Atlas entry's picture to a document store
 
 - The full-screen Atlas picture viewer now has Save to a document store, like Wardrobe and Inventory pictures. `SaveImageDialog`'s `SaveImageTarget` gains an `atlas` kind; the three item doors share one `itemImagesUrl` helper and post to the item's own images route (`save-targets` / `save-to-store`, already served by `createItemImagesRoute`).
