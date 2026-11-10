@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Backup/restore: 4.13 coverage tests
+
+- New tests: `avatar-timeline-backup.test.ts` (backup file and manifest count, restore via `upsertRows`, pre-4.13 archive, new-account remap of ids and `imageId`, rows for missing characters dropped), `backup-4-13-remap.test.ts` (`cheapLLMSettings.outfitSelectionProfileId` remap; Atlas entry ids verbatim and `imageFileId` pointer fix), and a 4.13 block in `restore-field-fidelity.test.ts` (`toolResultVerbatimTurns` carried, `0` kept, default 3 for older archives).
+- `chats.openingState` / `openingPhase` / `openingPlan` are now listed as a deliberate backup exclusion in `help/system-backup-restore.md` and in the release checklist's sanctioned list. A restored chat reads as `'done'`.
+
 #### Chore: Release checklist 7 — raw Tailwind colors to `qt-*` utilities
 
 - New `qt-text-brand` / `hover:qt-text-brand` utilities (`--color-primary` as a text color; `qt-text-primary` remains the main foreground color). `packages/theme-storybook` regenerated and bumped to 1.0.111.
