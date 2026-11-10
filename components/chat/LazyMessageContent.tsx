@@ -4,7 +4,7 @@ import { memo } from 'react'
 import MessageContent from './MessageContent'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
-import type { AbsentMentionChip } from './MentionChip'
+import type { MentionChipData } from './MentionChip'
 import { hasDiagramFence, type DiagramStyle } from '@/lib/markdown/diagrams'
 
 interface LazyMessageContentProps {
@@ -22,7 +22,7 @@ interface LazyMessageContentProps {
   /** Server-side pre-rendered HTML for simple messages */
   renderedHtml?: string | null
   /** Name chips for absent characters first named here (see MessageContent) */
-  mentions?: ReadonlyArray<AbsentMentionChip>
+  mentions?: ReadonlyArray<MentionChipData>
   /**
    * The authoring character's diagram style; `clean` for the operator and the
    * Staff. Diagram fences are drawn on every LazyMessageContent (it is the

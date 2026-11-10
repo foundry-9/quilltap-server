@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger'
 import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
 import { stripCodeFences } from '@/lib/llm/llm-json'
 import { executeCheapLLMTask } from './core-execution'
+import { renderKnownThings } from '@/lib/atlas/image-reference'
 import type {
   AppearanceResolutionItem,
   AppearanceSanitizeMode,
@@ -338,7 +339,14 @@ const STORY_BACKGROUND_PROMPT_CLOSING = `Respond with ONLY the final prompt - no
  *   Concierge uncensored image provider, which swaps cinematic concealment for
  *   a candid depiction. Defaults to false: concealment is the default.
  */
-function buildStoryBackgroundPrompt(uncensoredImageTarget: boolean): string {
+/**
+ * Taught only when the request carries the Atlas's known-things block, so a
+ * background that names nothing is crafted exactly as before.
+ */
+const STORY_BACKGROUND_KNOWN_THINGS = `KNOWN THINGS:
+You may also receive a list of known things (a vehicle, a house, a device, a place) with what each looks like. It is a reference, not a shopping list: if one of them is in the scene you are depicting, describe it exactly as given; if it is not in the scene, leave it out — never add a thing merely because it is listed.`
+
+function buildStoryBackgroundPrompt(uncensoredImageTarget: boolean, hasKnownThings = false): string {
   const intimacy = uncensoredImageTarget
     ? STORY_BACKGROUND_CANDID_INTIMACY
     : STORY_BACKGROUND_CONCEALED_INTIMACY
@@ -349,6 +357,7 @@ function buildStoryBackgroundPrompt(uncensoredImageTarget: boolean): string {
     STORY_BACKGROUND_PROMPT_HEAD,
     intimacy,
     STORY_BACKGROUND_PROMPT_TAIL,
+    ...(hasKnownThings ? [STORY_BACKGROUND_KNOWN_THINGS] : []),
     example,
     STORY_BACKGROUND_PROMPT_CLOSING,
   ].join('\n\n')
@@ -571,6 +580,9 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
 
   // Default aesthetics + the Ariel Clause (empty unless any are set).
   const aestheticSection = buildAestheticSection(expansionContext)
+  // Atlas things the prompt names (empty unless any): what each looks like.
+  const knownThings = renderKnownThings(expansionContext.knownThings)
+  const knownThingsSection = knownThings ? `\n${knownThings}\n` : ''
 
   const llmMessages: LLMMessage[] = [
     {
@@ -582,8 +594,8 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
       content: `Original prompt: ${expansionContext.originalPrompt}
 
 Available descriptions:
-${placeholderDetails}
-${styleTriggerSection}${aestheticSection}
+${placeholderDetails || (knownThings ? '(no characters named)' : '')}
+${styleTriggerSection}${aestheticSection}${knownThingsSection}
 Target length: ${expansionContext.targetLength} characters (for ${expansionContext.provider})
 
 Create the final image prompt (maximize detail while staying under the limit):`,
@@ -855,17 +867,20 @@ export async function craftStoryBackgroundPrompt(
 
   // Default aesthetics + the Ariel Clause (empty unless any are set).
   const aestheticSection = buildAestheticSection(context)
+  // Atlas things named around the scene, beside the aesthetic (empty unless any).
+  const knownThings = renderKnownThings(context.knownThings)
+  const knownThingsSection = knownThings ? `\n${knownThings}\n` : ''
 
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
-      content: buildStoryBackgroundPrompt(context.uncensoredImageTarget === true),
+      content: buildStoryBackgroundPrompt(context.uncensoredImageTarget === true, !!knownThings),
     },
     {
       role: 'user',
       content: `Scene context: ${context.sceneContext}
 ${characterSection}
-${aestheticSection}
+${aestheticSection}${knownThingsSection}
 Provider: ${context.provider}
 ${lengthGuidance}
 

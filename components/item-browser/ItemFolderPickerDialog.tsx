@@ -20,6 +20,7 @@
 import { useState, type ReactNode } from 'react'
 import { folderCrumb, isSameFolder } from '@/lib/mount-index/item-folders'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { pluralWord, pluralize as plural } from '@/lib/folder-browser/view'
 import { DestinationPickerDialog } from './DestinationPickerDialog'
 import type { ItemContainer } from './ItemControlDialogShell'
 
@@ -76,7 +77,6 @@ export interface ItemFolderPickerDialogProps<T extends FileableItem, C> {
   onFiled?: () => void
 }
 
-const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export function ItemFolderPickerDialog<T extends FileableItem, C = never>({
   mode,
@@ -111,7 +111,7 @@ export function ItemFolderPickerDialog<T extends FileableItem, C = never>({
       onFiled?.()
       onClose()
     } catch (error) {
-      const noun = `${wording.noun}s`
+      const noun = pluralWord(wording.noun)
       showErrorToast(wording.describeError(error, `The ${noun} would not be ${copying ? 'copied' : 'moved'}`))
     } finally {
       setWorking(false)

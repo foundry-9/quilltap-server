@@ -85,6 +85,18 @@ export const queryKeys = {
      */
     absentMentions: (id: string) => ['chats', id, 'absent-mentions'] as const,
     /**
+     * Prefix of every `atlasMentions(...)` key. Kept outside `['chats', id]`
+     * so the `atlas` topic can refresh every chat's chips with one prefix.
+     */
+    atlasMentionLists: ['atlas-mentions'] as const,
+    /**
+     * Atlas entries of the cast view named in one conversation, from
+     * `?action=atlas-mentions`: the message that first names each, and its
+     * card. Rides the `chats` topic (a new message) and the `atlas` topic (an
+     * edited entry).
+     */
+    atlasMentions: (id: string) => ['atlas-mentions', id] as const,
+    /**
      * The chat's current storyteller round (open, running, or the last closed
      * one for the summary line), from `?action=storyteller-round`.
      */
@@ -424,6 +436,25 @@ export const queryKeys = {
     equippedLists: ['inventory', 'equipped'] as const,
     /** What every cast member carries in one chat (`?action=inventory`). The `chats` topic refetches it. */
     equipped: (chatId: string) => ['inventory', 'equipped', chatId] as const,
+  },
+  /**
+   * The Atlas: named things in four tiers. `tierKey` is
+   * `encodeWardrobeContainer`'s `scope:id`.
+   */
+  atlas: {
+    all: ['atlas'] as const,
+    /** Prefix of every `list(...)` key. */
+    lists: ['atlas', 'list'] as const,
+    list: (tierKey: string, filters: { includeArchived: boolean }) => ['atlas', 'list', tierKey, filters] as const,
+    /** Prefix of every `folders(...)` key. */
+    folderLists: ['atlas', 'folders'] as const,
+    folders: (tierKey: string) => ['atlas', 'folders', tierKey] as const,
+    /** Prefix of every `overlaps(...)` key. */
+    overlapLists: ['atlas', 'overlaps'] as const,
+    /** Terms a tier's entries share with other reachable entries or with characters. */
+    overlaps: (tierKey: string) => ['atlas', 'overlaps', tierKey] as const,
+    /** One entry's pictures. */
+    images: (entryId: string) => ['atlas', 'images', entryId] as const,
   },
   mailbox: {
     all: ['mailbox'] as const,

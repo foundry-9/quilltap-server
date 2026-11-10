@@ -35,6 +35,7 @@ export const LLMLogTypeEnum = z.enum([
   'WARDROBE_IMAGE_ANALYSIS',
   'WARDROBE_ITEM_IMAGE',
   'INVENTORY_ITEM_IMAGE',
+  'ATLAS_ENTRY_IMAGE',
   'ANSWER_CONFIRMATION',
   'CUSTOM_TOOL_CONSULT',
   'VOICE_REWRITE',
@@ -50,7 +51,7 @@ export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
  * else. A wardrobe item's picture (and an Inventory object's) keeps its own
  * type so the Inspector can tell it apart, but it is spend all the same (bug 196).
  */
-export const IMAGE_SPEND_LOG_TYPES = ['IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE', 'INVENTORY_ITEM_IMAGE'] as const satisfies readonly LLMLogType[];
+export const IMAGE_SPEND_LOG_TYPES = ['IMAGE_GENERATION', 'WARDROBE_ITEM_IMAGE', 'INVENTORY_ITEM_IMAGE', 'ATLAS_ENTRY_IMAGE'] as const satisfies readonly LLMLogType[];
 
 /** An image-provider call's log type. */
 export type ImageSpendLogType = (typeof IMAGE_SPEND_LOG_TYPES)[number];

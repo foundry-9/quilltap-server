@@ -46,6 +46,7 @@ import {
   resolveCharacterAppearances,
   sanitizeAppearancesIfNeeded,
 } from '@/lib/image-gen/appearance-resolution'
+import { loadImageAtlasView } from '@/lib/atlas/image-reference'
 
 jest.mock('@/lib/logger', () => {
   const makeLogger = () => ({
@@ -96,6 +97,10 @@ jest.mock('@/lib/image-gen/appearance-resolution', () => ({
 }))
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),
+}))
+jest.mock('@/lib/atlas/image-reference', () => ({
+  ...jest.requireActual('@/lib/atlas/image-reference'),
+  loadImageAtlasView: jest.fn(async () => ({ entries: [], shadowedCount: 0 })),
 }))
 jest.mock('@/lib/services/lantern-notifications/writer', () => ({
   postLanternImageNotification: jest.fn().mockResolvedValue(undefined),
@@ -645,5 +650,33 @@ describe('story-background handler — moderation reroute', () => {
     await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(/429/)
     expect(mockResolveReroute).not.toHaveBeenCalled()
     expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+  })
+})
+
+describe('story-background handler — Atlas things (atlas spec §5.8)', () => {
+  const origin = { scope: 'project' as const, id: 'project-1', name: 'The Quest' }
+  const convertible = {
+    id: 'conv', name: 'Convertible', aliases: ['car'], graphicPrompt: "A 1930's roadster, silver.", knowledge: null,
+    imageFileId: null, metadata: {}, folder: '', archivedAt: null, createdAt: 'x', updatedAt: 'x', origin, mountPointId: 'mp',
+  }
+
+  it('crafts exactly as before when nothing is named (no knownThings key)', async () => {
+    await handleStoryBackgroundGeneration(makeJob())
+    expect(mockCraftPrompt.mock.calls[0][0]).not.toHaveProperty('knownThings')
+  })
+
+  it('offers a thing the scenario names to the crafter, without appending it', async () => {
+    jest.mocked(loadImageAtlasView).mockResolvedValueOnce({ entries: [convertible], shadowedCount: 0 } as never)
+    const repos = mockGetRepositories() as never as { chats: { findById: jest.Mock } }
+    repos.chats.findById.mockResolvedValue({
+      id: CHAT_ID, projectId: 'project-1', title: 'Indoors', sceneState: null, messageCount: 0, contextSummary: null,
+      scenarioText: 'They arrive in the convertible.',
+    })
+    await handleStoryBackgroundGeneration(makeJob([], { sceneContext: 'the drawing room by the fire' }))
+    expect(mockCraftPrompt.mock.calls[0][0]).toMatchObject({
+      knownThings: [{ name: 'Convertible', aliases: ['car'], look: "A 1930's roadster, silver." }],
+    })
+    const generated = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
+    expect(generated.prompt).not.toContain('roadster')
   })
 })

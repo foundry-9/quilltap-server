@@ -16,6 +16,8 @@ import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import MessageContent from '@/components/chat/MessageContent'
 import { useAbsentMentions } from '@/hooks/useAbsentMentions'
+import { useAtlasMentions } from '@/hooks/useAtlasMentions'
+import type { MentionChipData } from '@/components/chat/MentionChip'
 import { assignMentionsToRuns } from '@/lib/chat/mention-markers'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
@@ -211,8 +213,15 @@ function MessageRowInner({
   regeneration = null,
 }: MessageRowProps) {
   const imagesHidden = useImagesHidden()
-  // Name chips: absent characters whose first mention in the chat is here.
-  const mentions = useAbsentMentions(chatId, message.id)
+  // Name chips: absent characters whose first mention in the chat is here,
+  // then Atlas things. People come first, so a person's chip wins a run the
+  // two would share (the marker pass never marks inside a marked run).
+  const personMentions = useAbsentMentions(chatId, message.id)
+  const thingMentions = useAtlasMentions(chatId, message.id)
+  const mentions = useMemo<ReadonlyArray<MentionChipData>>(
+    () => (thingMentions.length === 0 ? personMentions : [...personMentions, ...thingMentions]),
+    [personMentions, thingMentions],
+  )
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
   // Diagrams are drawn in their author's hand (see resolveMessageDiagramStyle).
   const diagramStyle = useMemo(

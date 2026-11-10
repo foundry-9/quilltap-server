@@ -85,6 +85,10 @@ export function WorkspaceIntent() {
       }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
       else if (kind === 'inventory') payload = characterId ? { characterId } : undefined
+      else if (kind === 'atlas') {
+        const projectId = searchParams.get('projectId') || undefined
+        payload = characterId || projectId ? { ...(characterId && { characterId }), ...(projectId && { projectId }) } : undefined
+      }
       else if (kind === 'character') {
         const sectionId = resolveCharacterPageSection(section, tab)
         payload = characterId ? { characterId, ...(sectionId ? { section: sectionId } : {}) } : undefined

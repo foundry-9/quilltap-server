@@ -27,6 +27,7 @@ import {
   ScenariosCard,
   WardrobeCard,
   InventoryCard,
+  AtlasCard,
 } from './components'
 
 export interface ProjectDetailViewProps {
@@ -200,6 +201,11 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
           projectId={projectId}
           expanded={cardState.inventory}
           onToggle={() => toggleCard('inventory')}
+        />
+        <AtlasCard
+          projectId={projectId}
+          expanded={cardState.atlas}
+          onToggle={() => toggleCard('atlas')}
         />
         <CharactersCard
           project={project}

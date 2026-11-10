@@ -62,6 +62,7 @@ import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash';
 import { isWardrobeItemDocumentPath, wardrobeItemIdForDocument } from '@/lib/wardrobe/vault-parsers';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { isInventoryItemDocumentPath } from '@/lib/inventory/folders';
+import { isAtlasEntryDocumentPath } from '@/lib/atlas/folders';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -208,80 +209,127 @@ export function planWardrobeImagePointerFixes(
 }
 
 /**
- * The Inventory's documents in a backup: each object file under `Inventory/` (any depth)
- * with its parsed JSON, skipping pictures and anything that does not
- * parse into an object carrying an id.
+ * A tiered item kind whose item id and current picture (`imageFileId`) live
+ * in its own file, travelling verbatim through a restore: the Inventory's
+ * `.json` objects and the Atlas's `.md` entries. One descriptor per kind, so
+ * the id protection and the picture-pointer repair are written once.
  */
-function inventoryDocuments(
-  data: BackupData
-): Array<{ link: DocMountFileLink; json: Record<string, unknown>; id: string }> {
+export interface ItemFileKind {
+  /** For log lines and warnings. */
+  noun: string;
+  isDocumentPath(relativePath: string): boolean;
+  /** The file's id and current picture, or null when it is not an item. */
+  read(content: string): { id: string; imageFileId: unknown } | null;
+}
+
+export const INVENTORY_ITEM_FILE_KIND: ItemFileKind = {
+  noun: 'inventory',
+  isDocumentPath: isInventoryItemDocumentPath,
+  read(content) {
+    try {
+      const json: unknown = JSON.parse(content);
+      if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+      const { id, imageFileId } = json as Record<string, unknown>;
+      return typeof id === 'string' && id.length > 0 ? { id, imageFileId } : null;
+    } catch {
+      return null;
+    }
+  },
+};
+
+export const ATLAS_ITEM_FILE_KIND: ItemFileKind = {
+  noun: 'atlas',
+  isDocumentPath: isAtlasEntryDocumentPath,
+  read(content) {
+    const data = parseFrontmatter(content.replace(/\r\n/g, '\n')).data;
+    const id = data?.id;
+    return typeof id === 'string' && id.length > 0 ? { id, imageFileId: data?.imageFileId } : null;
+  },
+};
+
+/** Every kind whose ids travel verbatim. */
+export const ITEM_FILE_KINDS: readonly ItemFileKind[] = [INVENTORY_ITEM_FILE_KIND, ATLAS_ITEM_FILE_KIND];
+
+/** One kind's item documents in a backup, with what each file says. */
+function itemFileDocuments(
+  data: BackupData,
+  kind: ItemFileKind,
+): Array<{ link: DocMountFileLink; id: string; imageFileId: unknown }> {
   const contentByFileId = new Map<string, unknown>(
     (data.docMountDocuments || []).map((doc) => [doc.fileId, doc.content])
   );
-  const out: Array<{ link: DocMountFileLink; json: Record<string, unknown>; id: string }> = [];
+  const out: Array<{ link: DocMountFileLink; id: string; imageFileId: unknown }> = [];
   for (const link of data.docMountFileLinks || []) {
-    if (!isInventoryItemDocumentPath(link.relativePath)) continue;
+    if (!kind.isDocumentPath(link.relativePath)) continue;
     const content = contentByFileId.get(link.fileId);
     if (typeof content !== 'string') continue;
-    try {
-      const json: unknown = JSON.parse(content);
-      if (!json || typeof json !== 'object' || Array.isArray(json)) continue;
-      const id = (json as Record<string, unknown>).id;
-      if (typeof id !== 'string' || id.length === 0) continue;
-      out.push({ link, json: json as Record<string, unknown>, id });
-    } catch {
-      continue;
-    }
+    const read = kind.read(content);
+    if (read) out.push({ link, ...read });
   }
   return out;
 }
 
 /**
- * Inventory object ids in a backup. Like a wardrobe frontmatter id, an
- * object's id lives in its file and travels verbatim (as do the `parentId`
- * and kit `itemIds` that name other objects), so these ids are never remapper
- * keys: a picture's `files.linkedTo` and a chat's `equippedInventory` keep
- * naming them as they are.
+ * Item ids in a backup that live in their own files (Inventory objects, Atlas
+ * entries). Like a wardrobe frontmatter id, such an id travels verbatim (as do
+ * the `parentId` and kit `itemIds` that name other objects), so these ids are
+ * never remapper keys: a picture's `files.linkedTo` and a chat's
+ * `equippedInventory` keep naming them as they are.
  */
-function inventoryItemIds(data: BackupData): Set<string> {
-  return new Set(inventoryDocuments(data).map((doc) => doc.id));
+function verbatimItemIds(data: BackupData): Set<string> {
+  const ids = new Set<string>();
+  for (const kind of ITEM_FILE_KINDS) for (const doc of itemFileDocuments(data, kind)) ids.add(doc.id);
+  return ids;
 }
 
-/** One Inventory object whose current-picture pointer must follow its file's new id. */
-export interface InventoryImagePointerFix {
-  /** The object's mount, already remapped. */
+/** One item whose current-picture pointer must follow its file's new id. */
+export interface ItemImagePointerFix {
+  /** The item's mount, already remapped. */
   mountPointId: string;
-  /** The object's mount as the backup named it (before the remap). */
+  /** The item's mount as the backup named it (before the remap). */
   sourceMountPointId: string;
-  /** The object's id (unchanged by the remap). */
+  /** The item's id (unchanged by the remap). */
   itemId: string;
   /** The picture's remapped `files` id. */
   imageFileId: string;
 }
 
+/** One Inventory object's pointer fix (the kind-neutral shape). */
+export type InventoryImagePointerFix = ItemImagePointerFix;
+
 /**
- * The Inventory analogue of {@link planWardrobeImagePointerFixes}: an
- * object's `imageFileId` lives in its JSON file, which the remap never
- * rewrites, so list the pointers the restore must repoint once the vaults
- * have landed. Pass the ORIGINAL backup data and the same remapper.
+ * The analogue of {@link planWardrobeImagePointerFixes} for a kind whose
+ * `imageFileId` lives in a file the remap never rewrites: list the pointers
+ * the restore must repoint once the vaults have landed. Pass the ORIGINAL
+ * backup data and the same remapper.
  */
-export function planInventoryImagePointerFixes(
+export function planItemImagePointerFixes(
   original: BackupData,
-  remapper: UuidRemapper
-): InventoryImagePointerFix[] {
+  remapper: UuidRemapper,
+  kind: ItemFileKind,
+): ItemImagePointerFix[] {
   const fileIds = new Set((original.files || []).map((f) => f.id));
-  const fixes: InventoryImagePointerFix[] = [];
-  for (const { link, json, id } of inventoryDocuments(original)) {
-    const pointer = json.imageFileId;
-    if (typeof pointer !== 'string' || !fileIds.has(pointer)) continue;
+  const fixes: ItemImagePointerFix[] = [];
+  for (const { link, id, imageFileId } of itemFileDocuments(original, kind)) {
+    if (typeof imageFileId !== 'string' || !fileIds.has(imageFileId)) continue;
     fixes.push({
       mountPointId: remapper.remap(link.mountPointId),
       sourceMountPointId: link.mountPointId,
       itemId: id,
-      imageFileId: remapper.remap(pointer),
+      imageFileId: remapper.remap(imageFileId),
     });
   }
   return fixes;
+}
+
+/** The Inventory's pointer fixes. */
+export function planInventoryImagePointerFixes(original: BackupData, remapper: UuidRemapper): ItemImagePointerFix[] {
+  return planItemImagePointerFixes(original, remapper, INVENTORY_ITEM_FILE_KIND);
+}
+
+/** The Atlas's pointer fixes. */
+export function planAtlasImagePointerFixes(original: BackupData, remapper: UuidRemapper): ItemImagePointerFix[] {
+  return planItemImagePointerFixes(original, remapper, ATLAS_ITEM_FILE_KIND);
 }
 
 /**
@@ -328,10 +376,10 @@ export function remapBackupData(
   // Built up front: a wardrobe picture's `files` row names its item in
   // `linkedTo` / `tags`, and those must follow the item, not mint a stranger.
   const wardrobeItemIdRemap = buildWardrobeItemIdRemap(data, remapper);
-  // Inventory object ids travel verbatim, so a picture naming one keeps it.
-  const inventoryIds = inventoryItemIds(data);
+  // Inventory object and Atlas entry ids travel verbatim, so a picture naming one keeps it.
+  const verbatimIds = verbatimItemIds(data);
   const remapLinkId = (id: string): string =>
-    inventoryIds.has(id) ? id : wardrobeItemIdRemap.get(id) ?? remapper.remap(id);
+    verbatimIds.has(id) ? id : wardrobeItemIdRemap.get(id) ?? remapper.remap(id);
 
   // Remap files
   // IMPORTANT: Chain remapFields → array remaps so array spread doesn't overwrite remapped scalar fields

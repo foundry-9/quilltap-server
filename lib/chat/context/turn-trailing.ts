@@ -36,7 +36,8 @@ const TRAILING_SECTION_SEPARATOR = '\n\n---\n\n'
  * carrying (progressions, then the Inventory), what the operator says is so
  * (the inform block — after recall, so a memory that contradicts it comes
  * first — then the established facts posted since the seat last spoke, so
- * the operator's vouched words travel together), who the conversation is about (the referent ledger), the line being
+ * the operator's vouched words travel together), who the conversation is about (the referent ledger), what it is
+ * about (the Atlas: things named in the scene), the line being
  * answered (the closing echo), and the turn notes last. Empty-is-absent: an
  * empty section adds nothing, not even a separator.
  */
@@ -50,6 +51,8 @@ export interface TrailingSections {
   /** Established facts since this seat last spoke (`established-fact-reminder.ts`); '' when none. */
   establishedFacts?: string
   referentLedger: string
+  /** The things being spoken of (`lib/atlas/prompt-section.ts`); '' when none. Right after the people. */
+  atlas?: string
   closingEcho: string
   turnSkip: string
   turnYield: string
@@ -68,6 +71,7 @@ function orderedSections(s: TrailingSections): string[] {
     s.inform,
     s.establishedFacts,
     s.referentLedger,
+    s.atlas,
     s.closingEcho,
     s.turnSkip,
     s.turnYield,
@@ -163,6 +167,43 @@ export function buildTurnNotes(input: {
  * last thing the model reads about the conversation. Reads only, and never
  * fails the turn (`referent-ledger.ts`).
  */
+/** One spoken line in the recent window, as {@link recentSpokenLines} returns it. */
+export interface RecentSpokenLine {
+  content: string
+  role?: string
+  participantId?: string | null
+  /** True for the new user message, appended because it is not yet persisted. */
+  isNewUserMessage?: boolean
+}
+
+/**
+ * The recent window both the referent ledger and the Atlas section read: the
+ * last {@link REFERENT_LEDGER_WINDOW_LINES} spoken lines (`spokenText`),
+ * oldest first, plus the new user message when it is not yet persisted (it is
+ * still the line being answered). One read of the shared transcript, so both
+ * sections agree on the window.
+ */
+export async function recentSpokenLines(input: {
+  transcript: TurnTranscript
+  newUserMessage?: string
+}): Promise<RecentSpokenLine[]> {
+  const events = await input.transcript.events()
+  const lines: RecentSpokenLine[] = []
+  for (let i = events.length - 1; i >= 0 && lines.length < REFERENT_LEDGER_WINDOW_LINES; i--) {
+    const m = events[i] as Parameters<typeof spokenText>[0] & { participantId?: string | null }
+    const content = spokenText(m)
+    if (content) lines.unshift({ content, role: m.role, participantId: m.participantId ?? null })
+  }
+  const latest = lines[lines.length - 1]
+  if (input.newUserMessage && latest?.content.trim() !== input.newUserMessage.trim()) {
+    lines.push({ content: input.newUserMessage, role: 'USER', isNewUserMessage: true })
+  }
+  return lines
+}
+
+/** A workspace character as the trailing sections read them. */
+export type WorkspacePerson = Awaited<ReturnType<ReturnType<typeof getRepositories>['characters']['findByUserId']>>[number]
+
 export async function buildReferentSections(input: {
   chat: ChatMetadataBase
   userId: string
@@ -173,6 +214,10 @@ export async function buildReferentSections(input: {
   activeUserParticipantId?: string | null
   newUserMessage?: string
   transcript: TurnTranscript
+  /** The recent window, when the caller has it (shared with the Atlas section). */
+  recentLines?: Promise<RecentSpokenLine[]>
+  /** The workspace's characters, when the caller has them (shared with the Atlas section). */
+  workspaceCharacters?: Promise<WorkspacePerson[]>
 }): Promise<{ referentLedger: string; closingEcho: string }> {
   const { chat, respondingParticipant } = input
   try {
@@ -192,21 +237,13 @@ export async function buildReferentSections(input: {
         ? m.participantId === respondingParticipant.id
         : (m.role || '').toUpperCase() === 'ASSISTANT'
 
-    const events = await input.transcript.events()
-    const spoken: ReferentLedgerLine[] = []
-    for (let i = events.length - 1; i >= 0 && spoken.length < REFERENT_LEDGER_WINDOW_LINES; i--) {
-      const m = events[i] as Parameters<typeof spokenText>[0] & SpokenRow
-      const content = spokenText(m)
-      if (content) spoken.unshift({ speaker: labelFor(m), isResponder: isResponderLine(m), content })
-    }
-
     // The new user message is normally persisted before the context is built;
     // when it is not (or not yet), it is still the line being answered.
     const userSpeaker = (input.activeUserParticipantId && speakerNames.get(input.activeUserParticipantId)) || userName
-    const latestSpoken = spoken[spoken.length - 1]
-    if (input.newUserMessage && latestSpoken?.content.trim() !== input.newUserMessage.trim()) {
-      spoken.push({ speaker: userSpeaker, isResponder: false, content: input.newUserMessage })
-    }
+    const recent = await (input.recentLines ?? recentSpokenLines({ transcript: input.transcript, newUserMessage: input.newUserMessage }))
+    const spoken: ReferentLedgerLine[] = recent.map(line => line.isNewUserMessage
+      ? { speaker: userSpeaker, isResponder: false, content: line.content }
+      : { speaker: labelFor(line), isResponder: isResponderLine(line), content: line.content })
 
     // The same presence rule the Salon's name chips use: seated characters,
     // and an unseated persona wherever the operator speaks without a seat.
@@ -215,7 +252,7 @@ export async function buildReferentSections(input: {
       chatType: chat.chatType,
       personaName: input.userCharacter?.name,
     })
-    const people = (await getRepositories().characters.findByUserId(input.userId)).map(c => {
+    const people = (await (input.workspaceCharacters ?? getRepositories().characters.findByUserId(input.userId))).map(c => {
       const inRoom = isInRoom(c)
       return {
         id: c.id,

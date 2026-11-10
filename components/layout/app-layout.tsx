@@ -24,6 +24,8 @@ import { WardrobeDialogProvider } from '@/components/providers/wardrobe-dialog-p
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
 import { InventoryDialogProvider } from '@/components/providers/inventory-dialog-provider'
 import { InventoryControlDialog } from '@/components/inventory/inventory-control-dialog'
+import { AtlasDialogProvider } from '@/components/providers/atlas-dialog-provider'
+import { AtlasControlDialog } from '@/components/atlas/atlas-control-dialog'
 import { LeftSidebar } from './left-sidebar'
 import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
@@ -129,19 +131,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <BrahmaConsoleProvider>
         <WardrobeDialogProvider>
           <InventoryDialogProvider>
-            <DictionaryFeedMount />
-            {isWorkspaceTabsEnabled() ? (
-              <WorkspaceProviders>
+            <AtlasDialogProvider>
+              <DictionaryFeedMount />
+              {isWorkspaceTabsEnabled() ? (
+                <WorkspaceProviders>
+                  <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
+                </WorkspaceProviders>
+              ) : (
                 <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-              </WorkspaceProviders>
-            ) : (
-              <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-            )}
-            <HelpChatDialog />
-            <BrahmaConsoleDialog />
-            <BrahmaConsoleLauncher />
-            <WardrobeControlDialog />
-            <InventoryControlDialog />
+              )}
+              <HelpChatDialog />
+              <BrahmaConsoleDialog />
+              <BrahmaConsoleLauncher />
+              <WardrobeControlDialog />
+              <InventoryControlDialog />
+              <AtlasControlDialog />
+            </AtlasDialogProvider>
           </InventoryDialogProvider>
         </WardrobeDialogProvider>
       </BrahmaConsoleProvider>

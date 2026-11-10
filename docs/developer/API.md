@@ -2424,6 +2424,40 @@ The wardrobe item images route's shape — the same `createItemImagesRoute` (`li
 - `POST /api/v1/chats/[id]?action=inventory-equip` / `inventory-unequip` — `{ characterId, ids }` (objects or kits). Equip answers `{ equipped, created, skipped, alreadyEquipped }`; unequip `{ unequipped, notEquipped }`. One Pascal line per call.
 - `POST /api/v1/chats/[id]?action=inventory-reset-defaults` — `{ characterId }`: clear the character's entry and re-apply the equipped-by-default set. Answers `{ equipped }`.
 
+
+---
+
+### Atlas
+
+One `.md` file per entry under a tier's `Atlas/` folder (frontmatter: `id`, `name`, `aliases`, `graphicPrompt`, `imageFileId`, `metadata`, `archivedAt`, timestamps; body: `knowledge`); four tiers, one route factory (`lib/atlas/routes/atlas-route-factory.ts`) on the shared item-route preamble. Item 404s name the tier: `Atlas entry`, `Group atlas entry`, `Project atlas entry`, `General atlas entry`. Every entry on the wire carries its `origin` (`{ scope, id, name }`) and `mountPointId`. Refusals answer with `details.code`: `NAME_TAKEN` (409; a live entry in the tier already has that canonical name, case-insensitively — with `name`, `existingId`), `INVALID_SHAPE` (400). A write to an archived character's vault is `409`. An unknown `?action=` is `400` on every verb.
+
+#### Collection — `/api/v1/characters/[id]/atlas`, `/api/v1/groups/[id]/atlas`, `/api/v1/projects/[id]/atlas`, `/api/v1/atlas` (Quilltap General)
+
+- `GET` — `{ mountPointId, entries }` (`?includeArchived=true` adds archived ones). A read probe; nothing is provisioned.
+- `GET ?action=folders` — `{ folders: [{ path, name, itemCount }] }`.
+- `GET ?action=overlaps` — `{ overlaps: [{ term, entryId, kind: 'entry' | 'character', otherName, otherOrigin? }] }`: terms this tier's live entries share with another entry reachable from the tier (a character's own pool; a shared tier plus General) or with any workspace character's name or alias. For the editor's notices.
+- `POST` — `createAtlasEntrySchema`: `name`, `aliases`, `graphicPrompt`, `knowledge`, `metadata`, `folder`. Aliases are trimmed, de-duplicated case-insensitively and never repeat the name. No length limit on `graphicPrompt` (the editor warns past 200). Answers `201 { entry }`.
+- `POST ?action=duplicate` — `{ entryId }`: a copy beside the original named "(copy)", no picture. `201 { entry }`.
+- `POST ?action=create-folder` / `rename-folder` / `delete-folder` — the shared folder rules.
+- `POST ?action=move-items` / `copy-items` — `{ entryIds, folder }` → `{ entries }`. Copies are named "(copy)" (the name rule).
+
+#### Item — `…/atlas/[entryId]`
+
+- `GET` — `{ entry }`.
+- `PUT` — `updateAtlasEntrySchema` (any field, nothing defaulted; `archived` archives; `imageFileId` must be one of the entry's own pictures). A rename or restore into a live name is `NAME_TAKEN`. Answers `{ entry }`.
+- `DELETE` — deletes the entry and its pictures. `{ success }`.
+
+#### `POST /api/v1/atlas/transfers`
+
+`{ action: 'move' | 'copy', entryId, from: { scope, id }, to: { scope, id } }`. A move keeps the id, a copy mints one; folder path kept; pictures travel. A live entry of the same name at the destination is `NAME_TAKEN`. Answers `{ entry }`.
+
+#### `/api/v1/atlas/[entryId]/images?scope=<scope>&id=<containerId>`
+
+`createItemImagesRoute` over `Atlas/images/<entryId>/`: `GET`, `POST ?action=generate` (subject `graphicPrompt ?? name`; log type `ATLAS_ENTRY_IMAGE`), `upload`, `set-current`, `delete-image`, `GET ?action=save-targets`, `POST ?action=save-to-store`. Pictures are never sent to an image model as references.
+
+#### Chat action
+
+- `GET /api/v1/chats/[id]?action=atlas-mentions` — `{ mentions: [{ messageId, entryId, text, card: { entryId, name, aliases, graphicPrompt, knowledge, origin, imageFileId } }] }`: for each entry of the chat's cast view (present seats' vaults, the cast's groups, the project, General; shadowed by canonical name), the first spoken line or Host `scenario` / `scenario-change` row that names it. Terms a workspace character answers to are excluded.
 ---
 
 ### Chats

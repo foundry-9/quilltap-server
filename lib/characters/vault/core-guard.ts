@@ -32,6 +32,7 @@ export const CHARACTER_VAULT_CORE_FOLDERS: readonly string[] = [
   'Wardrobe',
   'Outfits',
   'Inventory',
+  'Atlas',
   'Mail',
   'images',
 ];

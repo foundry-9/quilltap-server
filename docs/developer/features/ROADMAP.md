@@ -65,6 +65,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ### Content & Worldbuilding (The Commonplace Book)
 
+- [x] The Atlas — named things that are not characters (a vehicle, a house, a place) in four tiers of `Atlas/` Markdown entries: told to the characters who can reach them when named, chipped for the operator on first mention, and handed to the image prompt crafters as a reference (design: [complete/atlas.md](complete/atlas.md))
 - [x] Memory system refactor — one candidate shape, one extraction context, parent-side admission, three named scores, one clock, one recall pipeline with delivery, one maintenance job, one deletion chokepoint; `vector_entries` retired for memories (design: [memory-system-refactor.md](complete/memory-system-refactor.md))
 - [x] Inner-circle recall — importance rubric recalibrated (work ceiling 0.65, "score the fact, not the telling"), group members get reserved full-text lines in the frozen archive, and operator-marked keystone memories are always recalled in full and never folded, consolidated or demoted (design: [inner-circle-recall.md](complete/inner-circle-recall.md))
 - [ ] Worldbook/Lore system

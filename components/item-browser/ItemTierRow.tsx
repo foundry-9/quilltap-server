@@ -8,6 +8,7 @@
  */
 
 import { Icon } from '@/components/ui/icon'
+import { pluralize as plural } from '@/lib/folder-browser/view'
 
 export interface ItemTierRowProps {
   label: string
@@ -19,7 +20,6 @@ export interface ItemTierRowProps {
   countNoun?: string
 }
 
-const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export function ItemTierRow({ label, scope, itemCount, onOpen, testId, countNoun = 'item' }: ItemTierRowProps) {
   return (

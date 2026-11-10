@@ -5,6 +5,7 @@
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { TargetingTags } from '../candidate'
+import type { KnownThing } from '@/lib/atlas/image-reference'
 
 /**
  * A memory as an extractor's parser yields it: the model's part of a
@@ -150,6 +151,12 @@ export interface ImagePromptExpansionContext {
   characterAesthetic?: string | null
   /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
   depictionGuidelines?: Array<{ characterName: string; content: string }> | null
+  /**
+   * Atlas things the prompt names, with what they look like
+   * (`lib/atlas/image-reference.ts`). Absent or empty: the request is as it
+   * always was.
+   */
+  knownThings?: KnownThing[] | null
 }
 
 /**
@@ -221,6 +228,13 @@ export interface StoryBackgroundPromptContext {
    * headed for a moderated provider still gets the concealment treatment.
    */
   uncensoredImageTarget?: boolean
+  /**
+   * Atlas things named in the scene, the scenario or the recent conversation,
+   * with what they look like — a reference the crafter uses only if the thing
+   * is in the picture (`lib/atlas/image-reference.ts`). Rides this object, so
+   * a retry or re-craft carries it. Absent or empty: the request is unchanged.
+   */
+  knownThings?: KnownThing[] | null
 }
 
 /**

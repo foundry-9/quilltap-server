@@ -17,7 +17,7 @@ When enabled, Quilltap generates a landscape scene image featuring your characte
    - **Scene State Tracker** (preferred): After every chat turn, a lightweight background task automatically tracks the current scene — where characters are, what they're doing, and what they look like. When this data is fresh (within 5 messages), the Lantern uses it directly, saving an extra LLM call.
    - **On-demand derivation** (fallback): If no recent scene state exists, the system reads your recent messages and asks a cheap LLM to describe the scene, much as a particularly attentive stage manager might.
 3. **Casting**: Only characters presently in the scene are painted into it. A participant marked **Silent** is still standing there and duly appears; one marked **Absent**, or one shown the door altogether, does not — the Lantern declines to sketch a figure who has excused themselves from the room. Should every last participant have wandered off, no background is attempted at all, on the sensible grounds that an empty room furnishes poor atmosphere.
-4. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on the scene context and character appearances
+4. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on the scene context and character appearances. When the scene, its state, the recent conversation or the scenario names a thing kept in [the Atlas](atlas.md) — a vehicle, a house, a contraption — the artist is handed that thing's appearance as a reference: drawn exactly so *if* it is in the scene, left out if it is not. A Convertible mentioned in the scenario is therefore not parked in every drawing room, but is the same silver roadster whenever it is at the kerb. The things are drawn from everything the company present can reach between them.
 5. **Image Generation**: The prompt is sent to your configured image generation profile
 6. **Display**: The generated image appears as a semi-transparent background (30% opacity) behind your chat content
 
@@ -114,6 +114,8 @@ Characters with help tools enabled can navigate directly to this page:
 `help_navigate(url: "/settings?section=story-backgrounds")`
 
 ## Related Topics
+
+- [The Atlas](atlas.md) — the named things a background is told how to draw
 
 - [Image Generation Profiles](image-generation-profiles.md)
 - [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md#story-backgrounds-settings)

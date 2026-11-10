@@ -21,6 +21,7 @@
  * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
  * GET /api/v1/chats/[id]?action=scenario-source - Where the scene came from, and whether its file has changed
  * GET /api/v1/chats/[id]?action=absent-mentions - Absent characters named in the chat: first mention and card
+ * GET /api/v1/chats/[id]?action=atlas-mentions - Atlas entries named in the chat (cast view): first mention and card
  *
  * An unregistered `?action=` answers 400 with the list above; it never falls
  * through to the chat body.
@@ -56,6 +57,7 @@ import {
   handleGetStoryBackground,
   handleGetScenarioSource,
   handleGetAbsentMentions,
+  handleGetAtlasMentions,
 } from '../actions';
 import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -94,6 +96,7 @@ export async function handleGet(
       'gallery': () => handleGallery(req, ctx, chatId),
       'scenario-source': () => handleGetScenarioSource(chatId, ctx),
       'absent-mentions': () => handleGetAbsentMentions(chatId, ctx),
+      'atlas-mentions': () => handleGetAtlasMentions(chatId, ctx),
       'cost': () => handleCost(req, ctx, chatId),
     },
     () => handleGetChat(req, ctx, chatId)

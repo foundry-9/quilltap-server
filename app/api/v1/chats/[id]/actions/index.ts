@@ -31,6 +31,7 @@ export { handleGetStoryBackground, handleRegenerateBackground } from './story-ba
 export { handleReclassifyDanger } from './danger-classification';
 export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot, handleGetWardrobeHistory, handleWardrobeRollback } from './outfit';
 export { handleGetAbsentMentions } from './absent-mentions';
+export { handleGetAtlasMentions } from './atlas-mentions';
 export { handleGetInventory, handleInventoryEquip, handleInventoryResetDefaults } from './inventory';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';

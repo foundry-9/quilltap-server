@@ -50,14 +50,16 @@ import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
 import { deleteUserData } from './delete-service';
 import {
+  planAtlasImagePointerFixes,
   planInventoryImagePointerFixes,
   planWardrobeImagePointerFixes,
   remapBackupData,
-  type InventoryImagePointerFix,
+  type ItemImagePointerFix,
   type WardrobeImagePointerFix,
 } from './uuid-remap';
 import { updateMountWardrobeItem } from '@/lib/wardrobe/vault-writes';
 import { updateInventoryManyInMount } from '@/lib/inventory/vault-writes';
+import { updateAtlasManyInMount } from '@/lib/atlas/vault-writes';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 import { decodeIndexKeyedEmbedding } from './index-keyed-embedding';
@@ -116,13 +118,15 @@ export async function restore(
 
     // For new-account mode, remap all UUIDs
     let wardrobeImagePointerFixes: WardrobeImagePointerFix[] = [];
-    let inventoryImagePointerFixes: InventoryImagePointerFix[] = [];
+    let inventoryImagePointerFixes: ItemImagePointerFix[] = [];
+    let atlasImagePointerFixes: ItemImagePointerFix[] = [];
     if (mode === 'new-account') {
       const remapper = new UuidRemapper();
       // Planned against the original data with the same remapper, so each
       // pointer resolves to the id its `files` row is about to receive.
       wardrobeImagePointerFixes = planWardrobeImagePointerFixes(data, remapper);
       inventoryImagePointerFixes = planInventoryImagePointerFixes(data, remapper);
+      atlasImagePointerFixes = planAtlasImagePointerFixes(data, remapper);
       data = remapBackupData(data, targetUserId, remapper);
     }
 
@@ -985,34 +989,54 @@ export async function restore(
       });
     }
 
-    // 22f-quater. Inventory picture pointers (new-account mode) — the same
-    // repair for the objects' `imageFileId`, through the mount-scoped
-    // Inventory writer, one batch per mount. Tombstoned vaults are skipped.
-    let inventoryImagePointersFixed = 0;
-    const inventoryFixesByMount = new Map<string, InventoryImagePointerFix[]>();
-    for (const fix of inventoryImagePointerFixes) {
-      if (tombstonedVaults.has(fix.mountPointId) || tombstonedVaults.has(fix.sourceMountPointId)) continue;
-      const list = inventoryFixesByMount.get(fix.mountPointId) ?? [];
-      list.push(fix);
-      inventoryFixesByMount.set(fix.mountPointId, list);
-    }
-    for (const [mountPointId, fixes] of inventoryFixesByMount) {
-      try {
-        const updated = await updateInventoryManyInMount(
+    // 22f-quater. Inventory and Atlas picture pointers (new-account mode) —
+    // the same repair for each item's `imageFileId`, through each kind's
+    // mount-scoped writer, one batch per mount. Tombstoned vaults are skipped.
+    const itemPointerKinds: Array<{
+      noun: string;
+      fixes: ItemImagePointerFix[];
+      write: (mountPointId: string, fixes: ItemImagePointerFix[]) => Promise<unknown[]>;
+    }> = [
+      {
+        noun: 'Inventory',
+        fixes: inventoryImagePointerFixes,
+        write: (mountPointId, fixes) => updateInventoryManyInMount(
           { mountPointId, scope: 'project', characterId: null },
           fixes.map((fix) => ({ id: fix.itemId, patch: { imageFileId: fix.imageFileId } })),
-        );
-        inventoryImagePointersFixed += updated.length;
-      } catch (error) {
-        warnings.push(`Failed to repoint Inventory pictures in a restored store (${mountPointId}): ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to repoint Inventory pictures after restore', { mountPointId, count: fixes.length, error });
+        ),
+      },
+      {
+        noun: 'Atlas',
+        fixes: atlasImagePointerFixes,
+        write: (mountPointId, fixes) => updateAtlasManyInMount(
+          { mountPointId, scope: 'project', characterId: null },
+          fixes.map((fix) => ({ id: fix.itemId, patch: { imageFileId: fix.imageFileId } })),
+        ),
+      },
+    ];
+    for (const kind of itemPointerKinds) {
+      let fixed = 0;
+      const byMount = new Map<string, ItemImagePointerFix[]>();
+      for (const fix of kind.fixes) {
+        if (tombstonedVaults.has(fix.mountPointId) || tombstonedVaults.has(fix.sourceMountPointId)) continue;
+        const list = byMount.get(fix.mountPointId) ?? [];
+        list.push(fix);
+        byMount.set(fix.mountPointId, list);
       }
-    }
-    if (inventoryImagePointerFixes.length > 0) {
-      moduleLogger.info('Repointed Inventory pictures after new-account restore', {
-        planned: inventoryImagePointerFixes.length,
-        fixed: inventoryImagePointersFixed,
-      });
+      for (const [mountPointId, fixes] of byMount) {
+        try {
+          fixed += (await kind.write(mountPointId, fixes)).length;
+        } catch (error) {
+          warnings.push(`Failed to repoint ${kind.noun} pictures in a restored store (${mountPointId}): ${error instanceof Error ? error.message : String(error)}`);
+          moduleLogger.warn(`Failed to repoint ${kind.noun} pictures after restore`, { mountPointId, count: fixes.length, error });
+        }
+      }
+      if (kind.fixes.length > 0) {
+        moduleLogger.info(`Repointed ${kind.noun} pictures after new-account restore`, {
+          planned: kind.fixes.length,
+          fixed,
+        });
+      }
     }
 
     // 22g. Document store embedded chunks. The repo's create() accepts the

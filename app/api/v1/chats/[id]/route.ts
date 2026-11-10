@@ -52,6 +52,7 @@
  * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
  * GET /api/v1/chats/[id]?action=scenario-source - Where the scene came from, and whether its file has changed
  * GET /api/v1/chats/[id]?action=absent-mentions - Absent characters named in the chat: first mention and card
+ * GET /api/v1/chats/[id]?action=atlas-mentions - Atlas entries named in the chat (cast view): first mention and card
  * POST /api/v1/chats/[id]?action=send-mail - Post a letter as a player-character (The Post Office)
  * GET /api/v1/chats/[id]?action=mailbox&characterId=… - List a player-character's mailbox letters
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)

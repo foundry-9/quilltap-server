@@ -39,6 +39,10 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   queryKeys.inventory.equippedLists,
   queryKeys.wardrobe.lists,
   queryKeys.wardrobe.folderLists,
+  queryKeys.atlas.lists,
+  queryKeys.atlas.folderLists,
+  queryKeys.atlas.overlapLists,
+  queryKeys.chats.atlasMentionLists,
   // Held custom-tool runs (operator intervention). Also under the custom-tools
   // namespace the popup reads, which a reconnect may as well refresh too.
   queryKeys.customTools.all,
@@ -85,6 +89,9 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // Name chips for absent characters. A new message — the only
             // thing that can name someone — publishes `chats`.
             queryKeys.chats.absentMentions(id),
+            // Atlas chips. A new message (or a scenario row) is what can name
+            // a thing, and it publishes `chats`.
+            queryKeys.chats.atlasMentions(id),
             // What everyone in the chat is wearing. An LLM's wardrobe_* call
             // or an Aurora announcement lands as a message, which publishes
             // `chats` — without this a tool-driven outfit change left the
@@ -150,6 +157,18 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
         queryKeys.inventory.folderLists,
         queryKeys.inventory.archetypeLists,
         queryKeys.inventory.equippedLists,
+      ]
+
+    case 'atlas':
+      // An Atlas entry or folder was written — through any Atlas location, or
+      // by a job child's document write under `Atlas/`. The browser's lists,
+      // folders and overlap notices re-read, and so does every chat's chips,
+      // whose popups show the entries' text.
+      return [
+        queryKeys.atlas.lists,
+        queryKeys.atlas.folderLists,
+        queryKeys.atlas.overlapLists,
+        queryKeys.chats.atlasMentionLists,
       ]
 
     case 'wardrobe':

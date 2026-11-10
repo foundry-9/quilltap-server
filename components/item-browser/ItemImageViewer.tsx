@@ -1,11 +1,12 @@
 'use client'
 
 /**
- * A Wardrobe item's or Inventory object's picture, full screen.
+ * A Wardrobe item's, Inventory object's or Atlas entry's picture, full screen.
  *
  * The shared `FullScreenImageViewer` frame with three buttons: Save (the
  * Salon's `SaveImageDialog`, offered every document store, filing a copy in
- * the chosen store's `photos/`), Download, and Copy. Opened from a row
+ * the chosen store's `photos/` — the Wardrobe and the Inventory only; the
+ * save dialog has no Atlas target), Download, and Copy. Opened from a row
  * thumbnail and from the item editor's picture section, where Previous / Next
  * walk the item's pictures.
  *
@@ -35,6 +36,8 @@ import { queryKeys } from '@/lib/query/keys'
 import { deleteWardrobeItemImage, wardrobeImageUrl } from '@/lib/wardrobe/item-images-client'
 import { inventoryImagesUrl } from '@/lib/inventory/container'
 import { inventoryRequest } from '@/lib/inventory/request'
+import { atlasImagesUrl } from '@/lib/atlas/container'
+import { atlasRequest } from '@/lib/atlas/request'
 import type { ItemKind } from '@/lib/folder-browser/item-kind'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 
@@ -62,6 +65,13 @@ const KIND_SPECS: Record<ItemKind, KindSpec> = {
     deleteMissing: (itemId, container, fileId) =>
       inventoryRequest(inventoryImagesUrl(container, itemId, 'delete-image'), 'POST', { fileId }),
     refreshKey: queryKeys.inventory.all,
+  },
+  atlas: {
+    fallbackStem: 'atlas_entry',
+    label: 'atlas picture',
+    deleteMissing: (entryId, container, fileId) =>
+      atlasRequest(atlasImagesUrl(container, entryId, 'delete-image'), 'POST', { fileId }),
+    refreshKey: queryKeys.atlas.all,
   },
 }
 
@@ -103,6 +113,10 @@ export function ItemImageViewer({
   const filename = pictureFilename(itemTitle, spec.fallbackStem)
   const queryClient = useQueryClient()
 
+  // The Salon's save dialog knows the Wardrobe's and the Inventory's images
+  // routes; an Atlas picture is downloaded or copied instead.
+  const saveKind = kind === 'atlas' ? null : kind
+
   const handleMissingCleanup = async () => {
     await spec.deleteMissing(itemId, container, fileId)
     await queryClient.invalidateQueries({ queryKey: spec.refreshKey })
@@ -136,7 +150,7 @@ export function ItemImageViewer({
         keyboardActive={!saving}
         zIndexClassName="z-[90]"
         actions={[
-          { icon: 'bookmark', label: 'Save to a document store', onClick: () => setSaving(true) },
+          ...(saveKind ? [{ icon: 'bookmark' as const, label: 'Save to a document store', onClick: () => setSaving(true) }] : []),
           { icon: 'download', label: 'Download', onClick: () => void guard('download', () => downloadImageUrl(src, filename)) },
           {
             icon: 'copy',
@@ -151,11 +165,11 @@ export function ItemImageViewer({
           </>
         }
       />
-      {saving && (
+      {saving && saveKind && (
         <SaveImageDialog
           isOpen={true}
           onClose={() => setSaving(false)}
-          target={{ kind, itemId, container, fileId }}
+          target={{ kind: saveKind, itemId, container, fileId }}
           attachments={[{ id: fileId, filename, filepath: src, mimeType: 'image/webp' }]}
           overlayClassName="z-[100]"
           onSaved={(info) => showSuccessToast(`Saved to ${info.mountPoint}`)}

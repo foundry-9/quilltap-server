@@ -101,6 +101,7 @@ const GET_ACTIONS = [
   'gallery',
   'scenario-source',
   'absent-mentions',
+  'atlas-mentions',
   'cost',
 ]
 

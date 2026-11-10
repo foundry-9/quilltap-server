@@ -23,6 +23,7 @@ const NAMED_FILTER_GROUPS = {
     'WARDROBE_IMAGE_ANALYSIS',
     'WARDROBE_ITEM_IMAGE',
     'INVENTORY_ITEM_IMAGE',
+    'ATLAS_ENTRY_IMAGE',
   ],
   safety: ['DANGER_CLASSIFICATION'],
 } satisfies Record<Exclude<FilterCategory, 'all' | 'other'>, LLMLogType[]>

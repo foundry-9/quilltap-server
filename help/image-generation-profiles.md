@@ -356,6 +356,10 @@ Should you set a dial the chosen model has never heard of — an Extra High qual
 4. Generated image appears in chat
 5. Can ask AI to modify, regenerate, or create variations
 
+### Things the Prompt Names
+
+Should a prompt mention something kept in [the Atlas](atlas.md) — *"the convertible parked by the lighthouse"* — the prompt artist is handed each thing's appearance and paints it accordingly, even when no character is named at all. A placeholder such as `{{Convertible}}` that names no character but does name an Atlas entry is read as that entry (characters always win a placeholder). If the artist is indisposed, the appearances are simply added to the end of the prompt; and in the plain image dialog, where no artist is engaged, a thing you name is added to your prompt the same way. A prompt that names nothing goes out exactly as written.
+
 ### After Generation
 
 - Images are saved in chat history
@@ -485,3 +489,4 @@ Characters with help tools enabled can navigate directly to this page:
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history
+- [The Atlas](atlas.md) — named things whose appearance a prompt that mentions them is given

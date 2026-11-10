@@ -893,6 +893,34 @@
     outline-offset: 2px;
   }
 
+  /* A thing from the Atlas: the same chip, a dashed rule instead of a dotted
+     one, so a thing is told from a person by shape as well as by the popup. */
+  .qt-mention-chip-thing {
+    border-bottom-style: dashed;
+  }
+
+  /* The Atlas chip's popup: the entry's current picture, and its knowledge
+     rendered as Markdown inside the bubble. */
+  .qt-tooltip-image {
+    display: block;
+    max-width: 100%;
+    max-height: 9rem;
+    margin: 0.35rem 0;
+    border-radius: 0.375rem;
+    object-fit: contain;
+  }
+
+  .qt-tooltip-markdown p,
+  .qt-tooltip-markdown ul,
+  .qt-tooltip-markdown ol {
+    margin: 0.25rem 0;
+  }
+
+  .qt-tooltip-markdown ul,
+  .qt-tooltip-markdown ol {
+    padding-left: 1.1rem;
+  }
+
   /* ==========================================================================
      MARKDOWN ELEMENT SPACING
      Since @tailwindcss/typography is not installed in v4, we define all

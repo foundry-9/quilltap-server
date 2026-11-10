@@ -12,6 +12,7 @@
 import { useState } from 'react'
 import { ItemActionMenu, type MenuEntryLike } from './ItemActionMenu'
 import { Icon } from '@/components/ui/icon'
+import { pluralize as plural } from '@/lib/folder-browser/view'
 
 export interface ItemFolderRowView {
   path: string
@@ -34,7 +35,6 @@ export interface ItemFolderRowProps {
   extraEntries?: readonly MenuEntryLike[]
 }
 
-const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export function ItemFolderRow({
   row,

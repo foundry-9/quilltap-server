@@ -48,6 +48,7 @@ import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notificat
 import type { MailAlertsOwed } from '@/lib/post-office/mailbox'
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
 import { buildInventorySection } from '@/lib/inventory/prompt-section'
+import { buildAtlasSection } from '@/lib/atlas/prompt-section'
 import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/timestamp-utils'
 import { lazyAsync } from '@/lib/utils/lazy-async'
 import { logger } from '@/lib/logger'
@@ -69,7 +70,7 @@ import { createTurnTranscript, minutesSinceLastHostTimestamp, type TurnTranscrip
 import { buildEstablishedFactReminder } from './context/established-fact-reminder'
 import { resolveSpeakerNames } from './speaker-names'
 import { announceTurnMail, offerCoreWhisper, postCommonplaceWhispers, postTurnTimestamp } from './context/turn-whispers'
-import { buildReferentSections, buildTurnNotes, composeTrailingMessage } from './context/turn-trailing'
+import { buildReferentSections, buildTurnNotes, composeTrailingMessage, recentSpokenLines } from './context/turn-trailing'
 import {
   buildLeadingSystemBlocks,
   historyContextMessages,
@@ -709,7 +710,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // autonomous room), and the design of record wants both on all of them.
   // The inform block is the operator's passages for this seat, verbatim under
   // their one vouching header; empty-is-absent.
-  const [progressions, inventory, referents, inform, establishedFacts] = await Promise.all([
+  // The recent spoken window and the workspace's characters are read once
+  // and shared: the referent ledger names the people, the Atlas the things,
+  // and both must agree on the window (and on which terms are people's).
+  const recentLines = recentSpokenLines({ transcript, newUserMessage })
+  // An async thunk, so even a synchronous throw reaches the readers as a rejection they fail soft on.
+  const workspaceCharacters = (async () => getRepositories().characters.findByUserId(userId))()
+  // Each reader awaits these inside its own try and fails soft; mark them
+  // handled so a rejection that lands before a reader awaits is not reported.
+  recentLines.catch(() => {})
+  workspaceCharacters.catch(() => {})
+  const [progressions, inventory, referents, inform, establishedFacts, atlas] = await Promise.all([
     buildProgressionsSection({
       character,
       // A thunk: a character carrying no progressions — nearly all of them —
@@ -730,6 +741,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       activeUserParticipantId: options.activeUserParticipantId,
       newUserMessage,
       transcript,
+      recentLines,
+      workspaceCharacters,
     }),
     respondingParticipant
       ? buildInformBlock({
@@ -760,6 +773,19 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           return ''
         })
       : Promise.resolve(''),
+    // The things being spoken of: entries this character can reach, named in
+    // the recent window (or, on their first turn under the scenario, in the
+    // scenario). Reads only; empty-is-absent; never throws.
+    buildAtlasSection({
+      chat,
+      characterId: character.id,
+      respondingParticipantId: respondingParticipant?.id ?? null,
+      recentLines,
+      loadEvents: transcript.events,
+      regenerationOfMessageIds: options.regenerationOfMessageIds,
+      workspaceCharacters,
+      repos: getRepositories(),
+    }),
   ])
   const notes = buildTurnNotes({
     turnSkip: options.turnSkip,
@@ -786,6 +812,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     inform: inform.content,
     establishedFacts,
     referentLedger: referents.referentLedger,
+    atlas,
     closingEcho: referents.closingEcho,
     turnSkip: notes.turnSkip,
     turnYield: notes.turnYield,

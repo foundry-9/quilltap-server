@@ -60,6 +60,7 @@ import {
   resolveDepictionGuidelines,
   getProjectOfficialMountPointId,
 } from '@/lib/image-gen/aesthetic';
+import { appendKnownThings, loadImageAtlasView, resolveAtlasImageReferences, resolveAtlasPlaceholders, type KnownThing } from '@/lib/atlas/image-reference';
 
 /** The part of a chat the Concierge reads: its state. */
 type ConciergeChat = { conciergeMode?: ConciergeState | null; chatType?: string | null };
@@ -443,6 +444,54 @@ interface PromptExpansionOptions {
   styleName?: string;
 }
 
+/** Placeholders that always name a person, never a thing. */
+const PERSON_PLACEHOLDERS = new Set(['me', 'i', 'char', 'user']);
+
+/**
+ * The Atlas's part in an image prompt: `{{Name}}` placeholders that name an
+ * Atlas term and no character rewritten to the entry's canonical name, and
+ * the things the prompt names that have a graphic prompt. The view is the
+ * chat's cast view, or General without a chat. Never throws — a failure is no
+ * reference, and the prompt is left as it was.
+ */
+async function resolvePromptAtlas(
+  prompt: string,
+  userId: string,
+  chatId?: string,
+): Promise<{ prompt: string; knownThings: KnownThing[] }> {
+  try {
+    const repos = getRepositories();
+    const chat = chatId ? await repos.chats.findById(chatId) : null;
+    const view = await loadImageAtlasView(repos, { chat, projectId: chat?.projectId ?? null, path: 'generate-image' });
+    if (view.entries.length === 0) return { prompt, knownThings: [] };
+    const people = (await repos.characters.findByUserId(userId)).map(c => ({ name: c.name, aliases: c.aliases ?? [] }));
+    const personKeys = new Set<string>();
+    for (const person of people) {
+      for (const term of [person.name, ...person.aliases]) if (term?.trim()) personKeys.add(term.trim().toLowerCase());
+    }
+    const isCharacter = (name: string) => {
+      const key = name.trim().toLowerCase();
+      return PERSON_PLACEHOLDERS.has(key) || personKeys.has(key);
+    };
+    const rewritten = resolveAtlasPlaceholders(prompt, view, isCharacter);
+    const knownThings = resolveAtlasImageReferences({ view, texts: [rewritten.prompt], people, path: 'generate-image' });
+    if (rewritten.names.length > 0 || knownThings.length > 0) {
+      logger.debug('[Image Generation] Atlas things named in the prompt', {
+        chatId,
+        placeholders: rewritten.names,
+        things: knownThings.map(t => t.name),
+      });
+    }
+    return { prompt: rewritten.names.length > 0 ? rewritten.prompt : prompt, knownThings };
+  } catch (error) {
+    logger.warn('[Image Generation] Could not read the Atlas for the prompt; continuing without it', {
+      chatId,
+      error: getErrorMessage(error),
+    });
+    return { prompt, knownThings: [] };
+  }
+}
+
 /**
  * Expand prompt with character/user character placeholders using cheap LLM
  */
@@ -462,25 +511,34 @@ async function expandPromptWithDescriptions(
     // Map ImageProvider string to the enum type
     const imageProvider = provider as 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN';
 
+    // The Atlas: things the prompt names, with what each looks like. A
+    // `{{Name}}` that names no character but an Atlas term becomes the
+    // entry's canonical name. With no reference the call is exactly as it was.
+    const atlas = await resolvePromptAtlas(originalPrompt, userId, chatId);
+    const workingPrompt = atlas.prompt;
+    const knownThings = atlas.knownThings;
+
     // Parse and resolve placeholders
-    const rawPlaceholders = parsePlaceholders(originalPrompt);
-    if (rawPlaceholders.length === 0) {
+    const rawPlaceholders = parsePlaceholders(workingPrompt);
+    if (rawPlaceholders.length === 0 && knownThings.length === 0) {
       return {
         expandedPrompt: originalPrompt,
         wasExpanded: false,
       };
     }
 
-    const resolvedPlaceholders = await resolvePlaceholders(
-      rawPlaceholders,
-      userId,
-      chatId,
-      callingParticipantId
-    );
+    const resolvedPlaceholders = rawPlaceholders.length > 0
+      ? await resolvePlaceholders(
+          rawPlaceholders,
+          userId,
+          chatId,
+          callingParticipantId
+        )
+      : [];
 
     // Build expansion context, injecting resolved appearances if available
     const expansionContext = buildExpansionContext(
-      originalPrompt,
+      workingPrompt,
       resolvedPlaceholders,
       imageProvider,
       resolvedAppearances
@@ -523,11 +581,11 @@ async function expandPromptWithDescriptions(
       const resolved = selectCheapLLMFromProfiles(allProfiles, buildCheapLLMConfig({ cheapLLMSettings }));
 
       if (!resolved) {
-        // No profiles available, return original prompt
-        return {
-          expandedPrompt: originalPrompt,
-          wasExpanded: false,
-        };
+        // No profiles available: the original prompt, with any Atlas things'
+        // looks appended (no crafter will place them).
+        return knownThings.length > 0
+          ? { expandedPrompt: appendKnownThings(workingPrompt, knownThings), wasExpanded: true }
+          : { expandedPrompt: originalPrompt, wasExpanded: false };
       }
 
       cheapLLMSelection = resolved.selection;
@@ -578,6 +636,7 @@ async function expandPromptWithDescriptions(
         sceneAesthetic,
         characterAesthetic,
         depictionGuidelines,
+        ...(knownThings.length > 0 && { knownThings }),
       },
       cheapLLMSelection,
       userId,
@@ -592,7 +651,7 @@ async function expandPromptWithDescriptions(
     }
 
     // If crafting failed, fall back to simple substitution using the longest available description
-    let fallbackPrompt = originalPrompt;
+    let fallbackPrompt = workingPrompt;
     for (const placeholder of expansionContext.placeholders) {
       const description =
         placeholder.tiers.complete ||
@@ -602,6 +661,14 @@ async function expandPromptWithDescriptions(
         placeholder.name;
 
       fallbackPrompt = fallbackPrompt.replace(placeholder.placeholder, description);
+    }
+    // No crafter placed the Atlas things, so their looks ride at the end.
+    if (knownThings.length > 0) {
+      logger.debug('[Image Generation] Crafter unavailable; appending Atlas things to the substituted prompt', {
+        chatId,
+        things: knownThings.map(t => t.name),
+      });
+      fallbackPrompt = appendKnownThings(fallbackPrompt, knownThings);
     }
 
     return {

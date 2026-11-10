@@ -17,6 +17,7 @@ export { DocumentStoresCard } from './DocumentStoresCard'
 export { ScenariosCard } from './ScenariosCard'
 export { WardrobeCard } from './WardrobeCard'
 export { InventoryCard } from './InventoryCard'
+export { AtlasCard } from './AtlasCard'
 
 // Legacy tab components (kept for backwards compatibility)
 export { ProjectTabs } from './ProjectTabs'

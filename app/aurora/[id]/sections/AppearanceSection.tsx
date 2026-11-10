@@ -3,7 +3,7 @@
 /**
  * Appearance — *What do they look like, and what do they wear?* Photos, the
  * physical description (autosaved, no Save button), depiction guidelines, the
- * wardrobe and the inventory.
+ * wardrobe, the inventory and the character's own Atlas.
  *
  * @module app/aurora/[id]/sections/AppearanceSection
  */
@@ -13,6 +13,8 @@ import { AestheticEditorField } from '@/components/settings/AestheticEditorField
 import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import { useInventoryDialogOptional } from '@/components/providers/inventory-dialog-provider'
+import { useAtlasDialogOptional } from '@/components/providers/atlas-dialog-provider'
+import { useAtlasList } from '@/lib/hooks/use-atlas'
 import { useWardrobeTier } from '@/lib/hooks/use-wardrobe-tier'
 import { useInventoryList } from '@/lib/hooks/use-inventory'
 import { GENERAL_CONTAINER } from '@/lib/wardrobe/wardrobe-container'
@@ -117,6 +119,35 @@ function InventoryCard() {
   )
 }
 
+function AtlasCard() {
+  const { characterId, character, readOnly } = useCharacterPage()
+  const atlasDialog = useAtlasDialogOptional()
+  const { entries } = useAtlasList({ scope: 'character', id: characterId }, { includeArchived: false })
+
+  return (
+    <SectionCard
+      title="The Atlas"
+      anchor="atlas"
+      description={`${plural(entries.length, 'entry', 'entries')} in ${character.name}'s private atlas.`}
+      actions={
+        <button
+          type="button"
+          onClick={() => atlasDialog?.open({ characterId })}
+          disabled={!atlasDialog || readOnly}
+          className="qt-button-primary"
+        >
+          Open atlas
+        </button>
+      }
+    >
+      <p className="qt-text-small qt-text-secondary">
+        Things only {character.name} knows of — a private motorcar, a hidden room. When one is spoken of, {character.name}{' '}
+        alone is told what is written here; the project&rsquo;s and General&rsquo;s atlases are told to everyone seated.
+      </p>
+    </SectionCard>
+  )
+}
+
 export function AppearanceSection() {
   const { characterId, character, reload, autosave } = useCharacterPage()
   const depictionAutosave = {
@@ -156,6 +187,7 @@ export function AppearanceSection() {
 
       <WardrobeCard />
       <InventoryCard />
+      <AtlasCard />
     </div>
   )
 }
