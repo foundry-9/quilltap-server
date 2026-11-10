@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Tests: Release checklist 2 pass
+
+- Regression test for the `node:crypto` client-bundle fix: `__tests__/unit/lib/characters/vault-paths-client-safe.test.ts` walks the static value-import graph from `character-field-semantics.ts`, `field-hints.ts` and the Aurora new-character page and fails on any reachable `node:` import; it also checks `paths.ts` imports nothing and `layout.ts` re-exports its constants. Fails with the old `layout.ts` import restored.
+- Unit test for `resolveChatExtractionProfileId` (queue-memories and edit-regenerate): seat profile order, cheap default, `USER_DEFINED` pick, foreign or missing profiles skipped. `__tests__/unit/lib/memory/extraction/resolve-chat-extraction-profile.test.ts`.
+- Confirmed the tests shipped with every other fix since 4.12.2 fail with that fix reverted.
+
 #### Feature: Picture view for document-store file browsers
 
 - `DocumentStoreBrowser` has a List / Pictures toggle beside the search box. Pictures lays folders and files out as square tiles (`DocumentTile`): image files show the image, other files and folders show a generic icon, and the name and modified date are overlaid on the tile (`qt-gallery-caption`). The ⋮ menu, select checkboxes and in-place rename work in both views. Applies everywhere the browser is used, including the Salon's attach-from-library picker, where browsing hundreds of images as thin rows was impractical.
