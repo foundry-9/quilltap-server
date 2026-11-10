@@ -151,7 +151,7 @@ export function ContextCompressionSettingsComponent({
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
               compressionSettings.enabled
                 ? 'qt-bg-primary'
-                : 'qt-bg-muted'
+                : 'qt-toggle-off'
             } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             role="switch"
             aria-checked={compressionSettings.enabled}

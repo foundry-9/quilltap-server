@@ -14,12 +14,32 @@
 - 4.13.0 release notes: theme-storybook 1.0.111, the shared dialog overlay and `qt-text-brand`, and the opening state's exclusion from backups.
 - Restored the root `package.json` requirement on `@quilltap/plugin-utils` to `^2.7.5`; the dead-code sweep commit had reverted it to `^2.7.4` while the lockfile stayed at `^2.7.5`.
 
+#### Docs: CLI README (release checklist 12)
+
+- No CLI command or flag changes since 4.12.2; help text and the bash / zsh / fish completions were already current.
+- `packages/quilltap/README.md` now documents `instances set-passphrase` (in `--help` and completions since 4.5.0, never in the README), `instances show`, `instances path`, and the `rm` / `delete` aliases of `instances remove`.
+
 #### Chore: Dead code sweep (release checklist 5)
 
 - Deleted importer-less barrels `components/new-chat/index.ts`, `components/new-chat/hooks/index.ts`, `lib/characters/vault/index.ts`.
 - Removed `buildRecentConversationsBlock`, `calculateRecentConversationsLimit` and the `RECENT_CONVERSATIONS_*` constants from `lib/memory/recall/recap.ts`; their only caller was the legacy greeting builder removed when the greeting became a turn. The bug-158 tests now run against `generateMemoryRecap`.
 - Removed unused `resolveUserCharacterParticipant` (`turn-transcript.ts`), `isOpeningInFlight` (`lib/chat/opening/run.ts`), `InventoryImagePointerFix` (`uuid-remap.ts`) and `DocumentStoreOps` (`useDocumentStoreSource.ts`).
 - Details in `docs/developer/DEAD-CODE-REPORT.md`.
+
+#### UI: Release checklist 13 — WCAG 2.2 AA pass
+
+- Startup, instance-lock and version-guard screens: the `--qt-*` component defaults are now declared on `:root` as well as `[data-theme]`. These screens render before a theme is set, so `.qt-card` had no background and the dark text sat directly on the dark startup art.
+- Status badges (`qt-badge-success` / `-warning` / `-info` / `-destructive`, queued and user-turn position badges): `--qt-status-*-bg` is the status color at full strength instead of an 85% mix. White on the mixed color measured 3.7–4.1:1 in the default light theme.
+- Tinted badge text (character, user-character, chat, tag, memory, message, project, enabled, related, manual, source, capability, wardrobe): 76 foreground values across the default theme and five bundled themes moved darker (light mode) or lighter (dark mode) at the same hue to reach 4.5:1 on the theme's card and page colors. Art Deco light was the worst case at 2.4:1. Earl Grey and Rains also get their own `--qt-status-info-fg` for light and dark, and Earl Grey light an info background of its own. Bundled theme versions: Art Deco 1.0.15, Earl Grey 1.3.12, Great Estate 1.0.12, Old School 1.0.16, Rains 1.3.16.
+- Toggle switches: new `qt-toggle-off` utility (muted track with an inset muted-foreground edge) on all eight hand-built switches. The plain muted track was about 1.1:1 against a card.
+- Theme cards in Appearance: the white/dark text picker now chooses by contrast ratio and reads `hsl()` colors as real luminance rather than HSL lightness. The "Active" badge uses it (it was white on the default theme's blue at 2.85:1), and the "Quilltap" wordmark in a card description takes the card's ink through `--qt-brand-fg` (it kept the page's dark foreground on the dark card, 1.1:1). Rains sets its wordmark color through `--qt-brand-fg` instead of overriding `.qt-font-brand`.
+- Salon: the "already spoken" turn-position badge keeps its number at full strength and shows its state with a dashed outline instead of 50% opacity. The provider/model badge under an avatar uses `qt-text-secondary` instead of `opacity-60`.
+- Pascal's Workbench: a disabled tool's card is no longer faded to 60% (it stays fully operable; the "disabled" badge marks it).
+- Aurora template tools: the swap buttons and their `{{char}}` / `{{user}}` chips use foreground text on the tinted button instead of green or blue text on stacked tints.
+- Avatar fallback initials (`lib/avatar-styles.ts`): `qt-bg-muted` / `qt-text-secondary` instead of raw `bg-gray-300` / `text-gray-600` with `dark:` variants, which read 2.1:1 in Madman's Box (a dark palette under the `light` class).
+- Reflow (320 px) and text zoom (200%): the formatting toolbar wraps instead of being clipped by its card; the Aurora character header's avatar is capped at the pane width and its action buttons wrap; the color-mode buttons, theme-card badge row and display-option toggle row wrap.
+- Toasts: the polite live region is mounted empty before the first toast renders into it, so the first toast of a session is announced. Test: `__tests__/unit/lib/toast-live-region.test.tsx`.
+- `packages/theme-storybook` regenerated and bumped to 1.0.112; `create-quilltap-theme` bundle template defaults updated, 2.0.24.
 
 #### Backup/restore: 4.13 coverage tests
 

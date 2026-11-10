@@ -2,6 +2,14 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.112] - 2026-11-10
+
+### Fixed
+- Component variable defaults (`--qt-*`) are declared on `:root` as well as `[data-theme]`, so a page that renders before a theme is chosen still gets card backgrounds, radii and padding.
+- Status backgrounds (`--qt-status-{success,warning,info,danger}-bg`) are the status colour at full strength rather than an 85% mix, so white-on-colour badges meet 4.5:1.
+- Default-theme tinted badge inks (chat, tag, message, project, enabled, source-git, wardrobe bottom/footwear in light; memory, source-npm, wardrobe-shared in dark) are a step deeper or lighter to meet 4.5:1 on cards.
+- The "already spoke" participant position badge keeps legible text and marks its state with a dashed outline instead of 50% opacity.
+
 ## [1.0.100] - 2026-11-03
 
 ### Fixed

@@ -1753,8 +1753,11 @@
   /**
    * Formatting toolbar container - shown above textarea in document editing mode
    */
+  /* Wraps rather than overflowing: at 320px or 200% text a single row runs
+     past its card, whose overflow:hidden then clips the last buttons
+     (WCAG 1.4.4 / 1.4.10). */
   .qt-formatting-toolbar {
-    @apply flex items-center justify-center gap-2;
+    @apply flex flex-wrap items-center justify-center gap-2;
     padding: 0.375rem 0.5rem;
     background: color-mix(in srgb, var(--color-muted) 50%, transparent);
     border-radius: var(--radius-md);
@@ -1765,7 +1768,7 @@
    * Section groups buttons together
    */
   .qt-formatting-toolbar-section {
-    @apply flex items-center gap-1;
+    @apply flex flex-wrap items-center gap-1;
   }
 
   /**
@@ -3157,13 +3160,14 @@
   }
 
   /**
-   * Spoken position badge - dimmed
+   * Spoken position badge - receded, but still legible. A dashed outline on
+   * the page colour marks "already spoke"; the number stays at full
+   * muted-foreground strength (WCAG 1.4.3) rather than fading to half opacity.
    */
   .qt-participant-position-spoken {
-    background: var(--color-muted);
+    background: var(--color-background);
     color: var(--color-muted-foreground);
-    border: 1px solid var(--color-border);
-    opacity: 0.5;
+    border: 1px dashed var(--color-muted-foreground);
   }
 
   /**

@@ -53,7 +53,7 @@ export function ColorModeSelector({
   disabled,
 }: ColorModeSelectorProps) {
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       {COLOR_MODE_OPTIONS.map((option) => {
         const isSelected = value === option.value
         const displayLabel = option.value === 'system'

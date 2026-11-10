@@ -784,16 +784,16 @@
   --qt-badge-user-character-bg: hsl(270 70% 60% / 0.15);
   --qt-badge-user-character-fg: hsl(270 70% 45%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
-  --qt-badge-chat-fg: hsl(142 76% 30%);
+  --qt-badge-chat-fg: hsl(142 76% 26%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.15);
-  --qt-badge-tag-fg: hsl(25 95% 40%);
+  --qt-badge-tag-fg: hsl(25 95% 34%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.15);
   --qt-badge-memory-fg: hsl(330 80% 40%);
   --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
-  --qt-badge-project-fg: hsl(185 80% 30%);
+  --qt-badge-project-fg: hsl(185 80% 26.5%);
 
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
-  --qt-badge-enabled-fg: hsl(142 76% 30%);
+  --qt-badge-enabled-fg: hsl(142 76% 26%);
   --qt-badge-related-bg: hsl(270 70% 60% / 0.15);
   --qt-badge-related-fg: hsl(270 70% 45%);
   --qt-badge-manual-bg: hsl(270 70% 60% / 0.15);
@@ -804,7 +804,7 @@
   --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.15);
   --qt-badge-source-npm-fg: hsl(0 84% 40%);
   --qt-badge-source-git-bg: hsl(25 95% 53% / 0.15);
-  --qt-badge-source-git-fg: hsl(25 95% 40%);
+  --qt-badge-source-git-fg: hsl(25 95% 34%);
 
   --qt-badge-capability-bg: hsl(217 91% 60% / 0.1);
   --qt-badge-capability-fg: hsl(217 91% 45%);
@@ -892,6 +892,10 @@
    DARK MODE SPECIFIC OVERRIDES
    ============================================================================ */
 [data-theme="rains"].dark {
+  /* Status ink: the -100 blue on its own dark tint is ~3.3:1; a lighter
+     step of the same hue reads at 5:1. */
+  --qt-status-info-fg: hsl(210 50% 68%);
+
   /* Dark mode specific devconsole colors */
   --qt-log-error-bg: hsl(0 40% 12%);
   --qt-log-error-fg: hsl(var(--danger-000));
@@ -976,35 +980,35 @@
 
   /* Dark mode entity badge tokens - brighter for dark backgrounds */
   --qt-badge-character-bg: hsl(217 91% 60% / 0.3);
-  --qt-badge-character-fg: hsl(217 91% 70%);
+  --qt-badge-character-fg: hsl(217 91% 77.5%);
   --qt-badge-user-character-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-user-character-fg: hsl(270 70% 70%);
+  --qt-badge-user-character-fg: hsl(270 70% 78.5%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
   --qt-badge-chat-fg: hsl(142 76% 65%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.3);
-  --qt-badge-tag-fg: hsl(25 95% 65%);
+  --qt-badge-tag-fg: hsl(25 95% 73.5%);
   --qt-badge-memory-bg: hsl(330 80% 60% / 0.3);
-  --qt-badge-memory-fg: hsl(330 80% 70%);
+  --qt-badge-memory-fg: hsl(330 80% 78.5%);
 
   /* Dark mode status badge tokens */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);
   --qt-badge-enabled-fg: hsl(142 76% 65%);
   --qt-badge-related-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-related-fg: hsl(270 70% 70%);
+  --qt-badge-related-fg: hsl(270 70% 78.5%);
   --qt-badge-manual-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-manual-fg: hsl(270 70% 70%);
+  --qt-badge-manual-fg: hsl(270 70% 78.5%);
 
   /* Dark mode plugin source badge tokens */
   --qt-badge-source-included-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-source-included-fg: hsl(270 70% 70%);
+  --qt-badge-source-included-fg: hsl(270 70% 78.5%);
   --qt-badge-source-npm-bg: hsl(0 84% 60% / 0.3);
-  --qt-badge-source-npm-fg: hsl(0 84% 70%);
+  --qt-badge-source-npm-fg: hsl(0 84% 79%);
   --qt-badge-source-git-bg: hsl(25 95% 53% / 0.3);
-  --qt-badge-source-git-fg: hsl(25 95% 65%);
+  --qt-badge-source-git-fg: hsl(25 95% 73.5%);
 
   /* Dark mode capability badge tokens */
   --qt-badge-capability-bg: hsl(217 91% 60% / 0.2);
-  --qt-badge-capability-fg: hsl(217 91% 70%);
+  --qt-badge-capability-fg: hsl(217 91% 73.5%);
 
   /* Dark mode queue status badge tokens */
   --qt-queue-badge-memory-bg: hsl(217 91% 53%);
@@ -1048,6 +1052,7 @@
   --qt-status-warning-fg: hsl(38 92% 28%);
   --qt-status-danger-fg: hsl(0 70% 40%);
   --qt-status-success-fg: hsl(142 70% 26%);
+  --qt-status-info-fg: hsl(210 70% 38%);
 
   /* Whisper — warm slate-blue for light mode */
   --qt-chat-whisper-bg: hsl(240 18% 90%);
@@ -1252,9 +1257,10 @@
   color: hsl(var(--text-000));
 }
 
-/* Brand text */
-[data-theme="rains"] .qt-font-brand {
-  color: hsl(var(--text-000));
+/* Brand text — through the --qt-brand-fg hook, so a surface that paints its
+   own colours (the theme cards in Appearance) can re-ink the wordmark. */
+[data-theme="rains"] {
+  --qt-brand-fg: hsl(var(--text-000));
 }
 
 /* Empty state title - Serif font */

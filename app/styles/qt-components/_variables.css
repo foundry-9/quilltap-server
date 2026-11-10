@@ -33,7 +33,12 @@
 /* ============================================================================
    QT-* VARIABLE DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
    Themes override any of these in their own [data-theme="<name>"] blocks.
+   :root is listed so the defaults resolve before the theme injector sets
+   data-theme — the startup, instance-lock and version-guard screens render
+   then, and without it their .qt-card had no background, leaving dark text
+   on the dark bootstrap art.
    ============================================================================ */
+:root,
 [data-theme],
 [data-theme].dark,
 [data-theme].light {
@@ -82,20 +87,23 @@
 
   /* ==========================================================================
      STATUS TOKENS
+     Backgrounds are the status colour at full strength: each X / XForeground
+     token pair is held to 4.5:1, and the old 85% mix let the page show
+     through and dropped white-on-colour badges to ~3.7:1 (WCAG 1.4.3).
      ========================================================================== */
-  --qt-status-success-bg: color-mix(in srgb, var(--color-success) 85%, transparent);
+  --qt-status-success-bg: var(--color-success);
   --qt-status-success-fg: var(--color-success-foreground);
   --qt-status-success-border: var(--color-success);
 
-  --qt-status-warning-bg: color-mix(in srgb, var(--color-warning) 85%, transparent);
+  --qt-status-warning-bg: var(--color-warning);
   --qt-status-warning-fg: var(--color-warning-foreground);
   --qt-status-warning-border: var(--color-warning);
 
-  --qt-status-info-bg: color-mix(in srgb, var(--color-info) 85%, transparent);
+  --qt-status-info-bg: var(--color-info);
   --qt-status-info-fg: var(--color-info-foreground);
   --qt-status-info-border: var(--color-info);
 
-  --qt-status-danger-bg: color-mix(in srgb, var(--color-destructive) 85%, transparent);
+  --qt-status-danger-bg: var(--color-destructive);
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
 
@@ -491,11 +499,11 @@
   --qt-badge-chat-bg: hsl(152 50% 38% / 0.12);
   --qt-badge-chat-fg: hsl(152 50% 30%);
   --qt-badge-tag-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-tag-fg: hsl(25 70% 38%);
+  --qt-badge-tag-fg: hsl(25 70% 36.5%);
   --qt-badge-memory-bg: hsl(330 55% 52% / 0.12);
   --qt-badge-memory-fg: hsl(330 55% 38%);
   --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
-  --qt-badge-message-fg: hsl(45 70% 35%);
+  --qt-badge-message-fg: hsl(45 70% 29.5%);
   --qt-badge-project-bg: hsl(185 55% 38% / 0.12);
   --qt-badge-project-fg: hsl(185 55% 30%);
 
@@ -517,7 +525,7 @@
   --qt-badge-source-npm-bg: hsl(0 60% 50% / 0.12);
   --qt-badge-source-npm-fg: hsl(0 60% 38%);
   --qt-badge-source-git-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-source-git-fg: hsl(25 70% 38%);
+  --qt-badge-source-git-fg: hsl(25 70% 36.5%);
   --qt-badge-source-manual-bg: var(--color-muted);
   --qt-badge-source-manual-fg: var(--color-muted-foreground);
 
@@ -527,7 +535,7 @@
   --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
   --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
   --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
-  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 32%);
   --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
   --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
   --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);

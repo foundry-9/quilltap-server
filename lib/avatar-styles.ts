@@ -36,9 +36,9 @@ export function getAvatarClasses(
 
   if (style === 'CIRCULAR') {
     return {
-      wrapperClass: `${config.w} ${config.h} rounded-full bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`,
+      wrapperClass: `${config.w} ${config.h} rounded-full qt-bg-muted flex items-center justify-center flex-shrink-0`,
       imageClass: `${config.w} ${config.h} rounded-full object-cover`,
-      fallbackClass: `${config.textSize} font-bold text-gray-600 dark:text-gray-300`,
+      fallbackClass: `${config.textSize} font-bold qt-text-secondary`,
     }
   } else {
     // RECTANGULAR: 4:5 aspect ratio (width:height = 4:5)
@@ -52,9 +52,9 @@ export function getAvatarClasses(
     }
 
     return {
-      wrapperClass: `${config.w} ${heightMap[size]} bg-gray-300 dark:bg-slate-700 flex items-center justify-center flex-shrink-0`,
+      wrapperClass: `${config.w} ${heightMap[size]} qt-bg-muted flex items-center justify-center flex-shrink-0`,
       imageClass: `${config.w} ${heightMap[size]} object-cover`,
-      fallbackClass: `${config.textSize} font-bold text-gray-600 dark:text-gray-300`,
+      fallbackClass: `${config.textSize} font-bold qt-text-secondary`,
     }
   }
 }

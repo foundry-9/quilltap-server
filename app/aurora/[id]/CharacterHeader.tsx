@@ -225,7 +225,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
         {/* Avatar — a menu, not a pencil. As tall as the text beside it and
             square: the largest the avatar is shown anywhere short of a
             picture viewer. */}
-        <div className="flex-shrink-0" style={{ width: edge, height: edge }}>
+        <div className="flex-shrink-0" style={{ width: edge, maxWidth: '100%', aspectRatio: '1 / 1' }}>
           <ItemActionMenu
             label={`Change ${character.name}'s avatar`}
             disabled={readOnly}
@@ -356,7 +356,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
           )}
         </div>
 
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {archived ? (
             <button
               type="button"
