@@ -115,7 +115,7 @@ export function AboutView() {
           Calliope (themes), The Scriptorium (external document stores), The Librarian (Document Mode and file announcements),
           The Host (Salon participation announcements), Saquel Ytzama, the Keeper of Secrets (encryption and key management),
           Ariel (terminals in the Salon), Carina (the ansible &mdash; inline queries to characters), Suparṇā (the Post Office, inter-character mail),
-          Brahma (the Console, a character-less generic-LLM surface), and The Foundry (architecture) &mdash; all extensible through a plugin system.
+          Brahma (the Console, a character-less generic-LLM surface), The Atlas (named things that are not characters), and The Foundry (settings and architecture) &mdash; all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
           <BrandName /> runs as a native desktop application on macOS, Windows, and Linux. For those who
@@ -143,11 +143,11 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, personalities, subprompts and progressions, a four-tier wardrobe with folders, pictures and a wear ledger, multi-character turn management, and archiving into an encrypted bundle you can rehydrate later</span>
+            <span><strong>Aurora &ndash; Characters</strong> &ndash; one self-saving page per character, a kind for each (roleplay or assistant) that Agent Mode and the prompt generators follow, detailed profiles with pronouns, aliases, birthdays, personalities, subprompts and public or private progressions, a four-tier wardrobe with folders, pictures and a wear ledger, multi-character turn management, and archiving into an encrypted bundle you can rehydrate later</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, embedded tool messages, Inform notes from the wings, Deus Ex Machina established facts that every character knows, the Scenario Builder, and indexed message search that looks in the open conversation first</span>
+            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, embedded tool messages, Inform notes from the wings, Deus Ex Machina established facts that every character knows, an editable past with a word on what each edit disturbs, Turns mode for one round at a time, an opening narrated by the Green Room as the cast dress and pack, portraits fixed to the moment each line was written, the Scenario Builder, and indexed message search that looks in the open conversation first</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -168,6 +168,10 @@ export function AboutView() {
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
             <span><strong>Pascal the Croupier &ndash; Gaming</strong> &ndash; persistent state across four registers, dice rolls, coin flips, the Inventory of objects characters carry, stats, plus user-authored custom tools with honest server-side rolls, outcome tables, side effects, and a visual workbench to build them</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>The Atlas &ndash; Named Things</strong> &ndash; ships, swords, taverns and towns on four shelves, each with aliases, a description of how it looks, and what is known of it; told to a character when named, chipped in the transcript for you, and handed to the Lantern so it is painted as described</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -211,7 +215,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, tools, search, and storage, and the Almanack: a full system report on what this instance can actually do</span>
+            <span><strong>The Foundry &ndash; Settings &amp; Architecture</strong> &ndash; a settings page in ten groups filed by what each setting does, with search, a lens for each member of the staff and a strip of things wanting attention; plugin system for themes, providers, templates, tools, search, and storage, and the Almanack: a full system report on what this instance can actually do</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>

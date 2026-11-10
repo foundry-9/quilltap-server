@@ -25,7 +25,7 @@ quilltap/
 │   ├── salon/                # Chat UI (was /chats)
 │   ├── scenarios/            # Scenario editing surface
 │   ├── scriptorium/          # Document stores UI
-│   ├── settings/             # Tabbed settings hub (Foundry)
+│   ├── settings/             # The Foundry settings page: ten groups, search, persona lenses
 │   ├── setup/                # First-run setup wizard
 │   ├── styles/               # qt-* utility class stylesheets
 │   ├── tools/                # Tools admin / inspection
@@ -56,7 +56,7 @@ quilltap/
 │   ├── providers/            # React context providers
 │   ├── quick-hide/           # Concierge quick-hide UI
 │   ├── search/               # Search surface
-│   ├── settings/             # Settings tab components
+│   ├── settings/             # Settings card bodies (mapped by id in cards.tsx)
 │   ├── setup-wizard/         # First-run wizard pieces
 │   ├── startup/              # Startup / loading components
 │   ├── state/                # Client-side state components
@@ -69,14 +69,16 @@ quilltap/
 ├── lib/                      # Domain logic and utilities (large; see lib/ for full list)
 │   ├── api/                  # Middleware + response helpers (createContextHandler, withActionDispatch, etc.)
 │   ├── api-keys/             # Pepper Vault API-key storage (Saquel)
+│   ├── atlas/                # The Atlas: named things per tier (location, pool, matching, prompt section)
 │   ├── auth/                 # Single-user session
 │   ├── background-jobs/      # Job queue + forked child worker (see BACKGROUND_JOBS_CHILD.md)
 │   ├── backup/               # Backup / restore logic
 │   ├── brahma-console/       # Brahma: character-less LLM surface + read-only SQL
-│   ├── characters/           # Character services: vault sync, archive/rehydrate, archive-crypto
+│   ├── characters/           # Character repository binding, vault layout table (vault/layout.ts), archive/rehydrate
 │   ├── chat/                 # Salon: context-manager, turn-manager, tool execution
 │   ├── database/             # SQLite connection management (encrypted)
 │   ├── doc-edit/             # Document Mode core (open / save / rename / delete)
+│   ├── documents/core/       # The one read / write / rename / delete / create path for store documents
 │   ├── embedding/            # Embedding providers and helpers
 │   ├── encryption.ts         # Crypto primitives
 │   ├── export/               # .qtap export
@@ -85,6 +87,7 @@ quilltap/
 │   ├── help/, help-chat/, help-guide/  # User-help docs and in-app help chat
 │   ├── image-gen/            # Image generation pipeline (Lantern)
 │   ├── import/               # .qtap and SillyTavern import
+│   ├── inventory/            # Pascal's Inventory: per-tier objects, equip, refs, prompt section
 │   ├── llm/                  # LLM utilities (formatting, pricing, streaming, logging)
 │   ├── logger.ts, logging/   # Centralized logger
 │   ├── memory/               # Commonplace Book (memory + embeddings)
@@ -92,6 +95,7 @@ quilltap/
 │   ├── pascal/               # Pascal the Croupier: custom-tool loading, rolls, side effects
 │   ├── plugins/              # Plugin registry and loader
 │   ├── post-office/          # Suparṇā: inter-character mail
+│   ├── progressions/         # Character progressions: derivation engine and prompt section
 │   ├── prompts/              # Built-in system-prompt templates
 │   ├── query/                # TanStack Query keys, fetcher, provider
 │   ├── realtime/             # Invalidation bus, WebSocket handler, topic map (hints only, never data)
@@ -101,7 +105,9 @@ quilltap/
 │   ├── search-replace/       # Bulk search-and-replace tool support
 │   ├── services/             # Cross-cutting services (host-notifications, librarian-notifications, chat-message, …)
 │   ├── sillytavern/          # SillyTavern card import/export
+│   ├── settings/             # Settings-card registry and settings links (registry.ts, hrefs.ts)
 │   ├── tags/, tokens/, validation/  # Misc utilities
+│   ├── terminal/             # Ariel: PTY terminal sessions
 │   ├── themes/               # Theme registry + bundle loader + Ed25519 crypto
 │   ├── tools/                # LLM tool definitions and handlers (doc_*, self_inventory, search, …)
 │   ├── wardrobe/             # Wardrobe / outfit logic

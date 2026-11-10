@@ -4,6 +4,16 @@
 
 ### 4.13-dev
 
+#### Docs: Release checklist 14 pass
+
+- README tour: the Atlas, character kind (roleplay / assistant), the one-page character editor and birthdays, line editing, fixed-in-time portraits, Turns mode, the Green Room opening, and the rebuilt Foundry settings page.
+- About page: Atlas bullet and subsystem mention; Aurora, Salon and Foundry bullets updated for 4.13.
+- API.md: documented the custom-tool operator-intervention actions (`?action=interventions`, `intervention-preview`, `intervention-reask`, `intervention-resolve`) on `/api/v1/chats/[id]/custom-tools`.
+- DEVELOPMENT.md: project tree lists `lib/atlas`, `lib/documents/core`, `lib/inventory`, `lib/progressions`, `lib/settings` and `lib/terminal`; settings and character entries updated.
+- CLAUDE.md: chokepoint note for the Salon avatar timeline (`ChatAvatarTimelineRepository.record` / `avatarAt`).
+- 4.13.0 release notes: theme-storybook 1.0.111, the shared dialog overlay and `qt-text-brand`, and the opening state's exclusion from backups.
+- Restored the root `package.json` requirement on `@quilltap/plugin-utils` to `^2.7.5`; the dead-code sweep commit had reverted it to `^2.7.4` while the lockfile stayed at `^2.7.5`.
+
 #### Chore: Dead code sweep (release checklist 5)
 
 - Deleted importer-less barrels `components/new-chat/index.ts`, `components/new-chat/hooks/index.ts`, `lib/characters/vault/index.ts`.

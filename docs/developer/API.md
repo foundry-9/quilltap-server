@@ -3623,6 +3623,19 @@ A failed run posts **no Pascal message** — the failure is announced by Prosper
 
 **Errors**: `400` for an unknown tool (the response lists the available names), a rejected parameter, or a definition that will not run. `404` when the chat does not exist.
 
+#### Operator intervention — held runs
+
+When a tool marked intervenable is reached by a model's `run_custom` or a trigger phrase (and `customToolIntervention` is on in chat settings), the run is dealt and then **held** inside the turn until the operator settles it. These actions read and resolve the holds (`app/api/v1/chats/[id]/custom-tools/interventions.ts`; design of record [features/complete/pascal-operator-intervention.md](features/complete/pascal-operator-intervention.md)). The final run is always recomputed on the server from the frozen snapshot, never taken from the client, and an override naming a field the tool's author hid is a `400`.
+
+- `GET ?action=interventions` — `{ holds: [...] }`, this chat's pending holds, oldest first. Each hold carries `id`, `tool`, `title`, `characterName`, `entrance`, `triggerPhrase?`, `createdAt`, `eligible` (which overrides fit the run), `hasCharacter` and the visible parts of the definition.
+- `POST ?action=intervention-preview` — `{ id, overrides }`. Recomputes the run under the overrides and writes nothing. Answers `{ preview: { run, staleAnswer, promptNow?, clampedParams, warnings } }`.
+- `POST ?action=intervention-reask` — `{ id, overrides }`. Poses the tool's LLM consult again (as the prompt now renders) and recomputes; a pinned `llmAnswer` is dropped. Answers `{ preview, consults: [{ ok, output, prompt }] }`. `400` if the tool consults no oracle.
+- `POST ?action=intervention-resolve` — `{ id, decision }`, where `decision` is `{ kind: 'deal', overrides }`, `{ kind: 'as-rolled' }` or `{ kind: 'veto' }`. Answers `{ resolved: <kind> }`.
+
+`overrides` is a strict object; every key is optional: `params`, `roll`, `dice`, `value`, `llmPrompt`, `llmAnswer` (`{ ok, output }`), `outcomeIndex`, `message`, `state`, `chipLabel`, `title`, `visibility`, `announcer` (`'pascal'` / `'character'`), `effects` (keyed by effect index, each `{ mode: 'auto' | 'on' | 'off', value?, items?, log? }`). Schema: `lib/pascal/intervention/overrides.ts`.
+
+**Errors**: `400` for a malformed body or a refused override; `404` (`Held run`) for an unknown hold; `409` when the run has already been settled (first resolution wins).
+
 ---
 
 #### `GET /api/v1/custom-tools`
