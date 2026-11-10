@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Chore: dependency updates
+
+- `npm update -S` across the root, `packages/*` and `plugins/dist/*`. Root: `next` / `eslint-config-next` 16.4.6, `openai` 7.54.0, `@tanstack/react-query` (+ devtools, eslint plugin) 5.107.1, `@tanstack/react-virtual` 3.14.26, `@openrouter/sdk` 1.5.73, `@tailwindcss/postcss` 4.3.5, `ws` 8.22.2, `dotenv` 18.0.10, `@testing-library/user-event` 14.6.9, `@quilltap/plugin-utils` 2.7.4.
+- `@quilltap/plugin-utils` 2.7.5 (`openai` dev dependency); `packages/theme-storybook` 1.0.109 (Storybook 10.6.6).
+- Plugins: all now on `@quilltap/plugin-utils` ^2.7.4; `openai` ^7.54.0 in the OpenAI-based plugins; Anthropic `@anthropic-ai/sdk` ^1.7.0; OpenRouter `@openrouter/sdk` ^1.5.73. Patch versions bumped and rebuilt for every plugin except `qtap-plugin-builtin-embeddings` (unchanged).
+
 #### Feature: emoji and symbol typeaheads in every Markdown editor
 
 - `MarkdownLexicalEditor` (character fields, prompts, scenarios, memories, wardrobe and inventory editors, mail, announcements, informs, Scenario Builder, and the other form and dialog editors) now mounts `CharTypeaheadPlugin` for `EMOJI_PROFILE` and `UNICODE_PROFILE`, so `:name` and `\name` work there as they do in the Salon composer and Document Mode. Each still obeys its composer setting. The toolbar's `☺` and `Ω` buttons were already present in all three editors. The `/` command menu and `@` mentions remain composer-only.

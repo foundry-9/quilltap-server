@@ -153,9 +153,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "1.5.62",
+  sdkVersion: "1.5.73",
   genVersion: "2.950.13",
-  userAgent: "speakeasy-sdk/typescript 1.5.62 2.950.13 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 1.5.73 2.950.13 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/files.js
@@ -2575,6 +2575,7 @@ var DecisionsChoiceAnswer$inboundSchema = z33.object({
 // node_modules/@openrouter/sdk/esm/models/decisionsnoulanswer.js
 var z34 = __toESM(require("zod/v4"), 1);
 var DecisionsNoulAnswer$inboundSchema = z34.object({
+  confidence: z34.number().optional(),
   noul: z34.number(),
   type: z34.literal("noul")
 });
@@ -8865,6 +8866,7 @@ var CodeEnum = {
   CyberPolicy: "cyber_policy",
   MisalignmentPolicyViolation: "misalignment_policy_violation",
   DataResidencyMismatch: "data_residency_mismatch",
+  FlexUnavailable: "flex_unavailable",
   PermissionDenied: "permission_denied"
 };
 var CodeEnum$inboundSchema = inboundSchema(CodeEnum);
@@ -10490,6 +10492,7 @@ var OutputToolSearchServerToolItemType$outboundSchema = OutputToolSearchServerTo
 var OutputToolSearchServerToolItem$inboundSchema = z242.object({
   arguments: z242.string().optional(),
   call_id: z242.string().optional(),
+  catalog_changes: z242.string().optional(),
   catalog_index: z242.string().optional(),
   error: z242.string().optional(),
   format: OutputToolSearchServerToolItemFormat$inboundSchema.optional(),
@@ -10497,12 +10500,14 @@ var OutputToolSearchServerToolItem$inboundSchema = z242.object({
   id: z242.string().optional(),
   matches: z242.array(z242.lazy(() => Match$inboundSchema)).optional(),
   query: z242.string().optional(),
+  sources: z242.record(z242.string(), z242.array(z242.string())).optional(),
   status: FailableToolCallStatus$inboundSchema,
   turn_call_ids: z242.array(z242.string()).optional(),
   type: OutputToolSearchServerToolItemType$inboundSchema
 }).transform((v) => {
   return remap(v, {
     "call_id": "callId",
+    "catalog_changes": "catalogChanges",
     "catalog_index": "catalogIndex",
     "turn_call_ids": "turnCallIds"
   });
@@ -10510,6 +10515,7 @@ var OutputToolSearchServerToolItem$inboundSchema = z242.object({
 var OutputToolSearchServerToolItem$outboundSchema = z242.object({
   arguments: z242.string().optional(),
   callId: z242.string().optional(),
+  catalogChanges: z242.string().optional(),
   catalogIndex: z242.string().optional(),
   error: z242.string().optional(),
   format: OutputToolSearchServerToolItemFormat$outboundSchema.optional(),
@@ -10517,12 +10523,14 @@ var OutputToolSearchServerToolItem$outboundSchema = z242.object({
   id: z242.string().optional(),
   matches: z242.array(z242.lazy(() => Match$outboundSchema)).optional(),
   query: z242.string().optional(),
+  sources: z242.record(z242.string(), z242.array(z242.string())).optional(),
   status: FailableToolCallStatus$outboundSchema,
   turnCallIds: z242.array(z242.string()).optional(),
   type: OutputToolSearchServerToolItemType$outboundSchema
 }).transform((v) => {
   return remap(v, {
     callId: "call_id",
+    catalogChanges: "catalog_changes",
     catalogIndex: "catalog_index",
     turnCallIds: "turn_call_ids"
   });
@@ -14701,10 +14709,14 @@ var z365 = __toESM(require("zod/v4"), 1);
 var z362 = __toESM(require("zod/v4"), 1);
 var DeferredBm25Search$outboundSchema = z362.object({
   maxResults: z362.int().optional(),
+  missSources: z362.boolean().optional(),
+  siblings: z362.boolean().optional(),
+  spread: z362.boolean().optional(),
   type: z362.literal("bm25")
 }).transform((v) => {
   return remap(v, {
-    maxResults: "max_results"
+    maxResults: "max_results",
+    missSources: "miss_sources"
   });
 });
 
@@ -14727,10 +14739,13 @@ var DeferredCustomSearch$outboundSchema = z363.object({
 var z364 = __toESM(require("zod/v4"), 1);
 var DeferredRegexSearch$outboundSchema = z364.object({
   maxResults: z364.int().optional(),
+  missSources: z364.boolean().optional(),
+  siblings: z364.boolean().optional(),
   type: z364.literal("regex")
 }).transform((v) => {
   return remap(v, {
-    maxResults: "max_results"
+    maxResults: "max_results",
+    missSources: "miss_sources"
   });
 });
 
@@ -14742,6 +14757,10 @@ var DeferredToolsSearchStrategy$outboundSchema = z365.union([
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/deferredtoolscontrol.js
+var CascadeMode = {
+  Keywords: "keywords",
+  Native: "native"
+};
 var Interface = {
   Wrappers: "wrappers",
   CodeMode: "code_mode"
@@ -14760,18 +14779,29 @@ var DeferredToolsControlScope = {
 var Validation = {
   Runtime: "runtime"
 };
+var CascadeMode$outboundSchema = outboundSchema(CascadeMode);
 var Interface$outboundSchema = outboundSchema(Interface);
 var Profile$outboundSchema = outboundSchema(Profile);
 var Protocol$outboundSchema = z366.enum(Protocol);
 var DeferredToolsControlScope$outboundSchema = outboundSchema(DeferredToolsControlScope);
 var Validation$outboundSchema = z366.enum(Validation);
 var DeferredToolsControl$outboundSchema = z366.object({
+  announceCatalogChanges: z366.boolean().optional(),
+  cascadeMode: CascadeMode$outboundSchema.optional(),
+  hint: z366.string().optional(),
   interface: Interface$outboundSchema.optional(),
+  minDeferredTools: z366.int().optional(),
   profile: Profile$outboundSchema,
   protocol: Protocol$outboundSchema,
   scope: DeferredToolsControlScope$outboundSchema.optional(),
   search: DeferredToolsSearchStrategy$outboundSchema,
   validation: Validation$outboundSchema
+}).transform((v) => {
+  return remap(v, {
+    announceCatalogChanges: "announce_catalog_changes",
+    cascadeMode: "cascade_mode",
+    minDeferredTools: "min_deferred_tools"
+  });
 });
 
 // node_modules/@openrouter/sdk/esm/models/fileparserplugin.js
@@ -35725,10 +35755,12 @@ var CreatePresetsChatCompletionsRequest$outboundSchema = z845.object({
   appTitle: z845.string().optional(),
   appCategories: z845.string().optional(),
   slug: z845.string(),
+  workspaceId: z845.string().optional(),
   chatRequest: ChatRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id",
     chatRequest: "ChatRequest"
   });
 });
@@ -35751,6 +35783,9 @@ async function $do105(client, request, options) {
     })
   };
   const path2 = pathToFunc("/presets/{slug}/chat/completions")(pathParams);
+  const query = encodeFormQuery({
+    "workspace_id": payload.workspace_id
+  });
   const headers = new Headers(compactMap({
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -35786,6 +35821,7 @@ async function $do105(client, request, options) {
     baseURL: options?.serverURL,
     path: path2,
     headers,
+    query,
     body,
     userAgent: client._options.userAgent,
     timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
@@ -37323,10 +37359,12 @@ var CreatePresetsMessagesRequest$outboundSchema = z883.object({
   appTitle: z883.string().optional(),
   appCategories: z883.string().optional(),
   slug: z883.string(),
+  workspaceId: z883.string().optional(),
   messagesRequest: MessagesRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id",
     messagesRequest: "MessagesRequest"
   });
 });
@@ -37349,6 +37387,9 @@ async function $do106(client, request, options) {
     })
   };
   const path2 = pathToFunc("/presets/{slug}/messages")(pathParams);
+  const query = encodeFormQuery({
+    "workspace_id": payload.workspace_id
+  });
   const headers = new Headers(compactMap({
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -37384,6 +37425,7 @@ async function $do106(client, request, options) {
     baseURL: options?.serverURL,
     path: path2,
     headers,
+    query,
     body,
     userAgent: client._options.userAgent,
     timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
@@ -37419,10 +37461,12 @@ var CreatePresetsResponsesRequest$outboundSchema = z884.object({
   appTitle: z884.string().optional(),
   appCategories: z884.string().optional(),
   slug: z884.string(),
+  workspaceId: z884.string().optional(),
   responsesRequest: ResponsesRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id",
     responsesRequest: "ResponsesRequest"
   });
 });
@@ -37445,6 +37489,9 @@ async function $do107(client, request, options) {
     })
   };
   const path2 = pathToFunc("/presets/{slug}/responses")(pathParams);
+  const query = encodeFormQuery({
+    "workspace_id": payload.workspace_id
+  });
   const headers = new Headers(compactMap({
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -37480,6 +37527,7 @@ async function $do107(client, request, options) {
     baseURL: options?.serverURL,
     path: path2,
     headers,
+    query,
     body,
     userAgent: client._options.userAgent,
     timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
@@ -37514,24 +37562,125 @@ var GetPresetResponse$inboundSchema = z885.object({
   data: PresetWithDesignatedVersion$inboundSchema
 });
 
-// node_modules/@openrouter/sdk/esm/models/operations/getpreset.js
+// node_modules/@openrouter/sdk/esm/models/operations/deletepreset.js
 var z886 = __toESM(require("zod/v4"), 1);
-var GetPresetRequest$outboundSchema = z886.object({
+var DeletePresetRequest$outboundSchema = z886.object({
   httpReferer: z886.string().optional(),
   appTitle: z886.string().optional(),
   appCategories: z886.string().optional(),
-  slug: z886.string()
+  slug: z886.string(),
+  workspaceId: z886.string().optional()
 }).transform((v) => {
   return remap(v, {
-    httpReferer: "HTTP-Referer"
+    httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/funcs/presetsDelete.js
+function presetsDelete(client, request, options) {
+  return new APIPromise($do108(client, request, options));
+}
+async function $do108(client, request, options) {
+  const parsed = safeParse(request, (value) => DeletePresetRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const pathParams = {
+    slug: encodeSimple("slug", payload.slug, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/presets/{slug}")(pathParams);
+  const query = encodeFormQuery({
+    "workspace_id": payload.workspace_id
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json",
+    "HTTP-Referer": encodeSimple("HTTP-Referer", payload["HTTP-Referer"] ?? client._options.httpReferer, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Categories": encodeSimple("X-OpenRouter-Categories", payload.appCategories ?? client._options.appCategories, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Title": encodeSimple("X-OpenRouter-Title", payload.appTitle ?? client._options.appTitle, { explode: false, charEncoding: "none" })
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput, [0]);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "deletePreset",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || {
+      strategy: "backoff",
+      backoff: {
+        initialInterval: 500,
+        maxInterval: 6e4,
+        exponent: 1.5,
+        maxElapsedTime: 36e5
+      },
+      retryConnectionErrors: true
+    },
+    retryCodes: options?.retryCodes || ["5XX"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "DELETE",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    isErrorStatusCode: (statusCode) => matchStatusCode({ status: statusCode }, ["4XX", "5XX"]),
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, GetPresetResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
+// node_modules/@openrouter/sdk/esm/models/operations/getpreset.js
+var z887 = __toESM(require("zod/v4"), 1);
+var GetPresetRequest$outboundSchema = z887.object({
+  httpReferer: z887.string().optional(),
+  appTitle: z887.string().optional(),
+  appCategories: z887.string().optional(),
+  slug: z887.string(),
+  workspaceId: z887.string().optional()
+}).transform((v) => {
+  return remap(v, {
+    httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id"
   });
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsGet.js
 function presetsGet(client, request, options) {
-  return new APIPromise($do108(client, request, options));
+  return new APIPromise($do109(client, request, options));
 }
-async function $do108(client, request, options) {
+async function $do109(client, request, options) {
   const parsed = safeParse(request, (value) => GetPresetRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -37545,6 +37694,9 @@ async function $do108(client, request, options) {
     })
   };
   const path2 = pathToFunc("/presets/{slug}")(pathParams);
+  const query = encodeFormQuery({
+    "workspace_id": payload.workspace_id
+  });
   const headers = new Headers(compactMap({
     Accept: "application/json",
     "HTTP-Referer": encodeSimple("HTTP-Referer", payload["HTTP-Referer"] ?? client._options.httpReferer, { explode: false, charEncoding: "none" }),
@@ -37579,6 +37731,7 @@ async function $do108(client, request, options) {
     baseURL: options?.serverURL,
     path: path2,
     headers,
+    query,
     body,
     userAgent: client._options.userAgent,
     timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
@@ -37608,30 +37761,32 @@ async function $do108(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/getpresetversionresponse.js
-var z887 = __toESM(require("zod/v4"), 1);
-var GetPresetVersionResponse$inboundSchema = z887.object({
-  data: z887.nullable(PresetDesignatedVersion$inboundSchema)
+var z888 = __toESM(require("zod/v4"), 1);
+var GetPresetVersionResponse$inboundSchema = z888.object({
+  data: z888.nullable(PresetDesignatedVersion$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getpresetversion.js
-var z888 = __toESM(require("zod/v4"), 1);
-var GetPresetVersionRequest$outboundSchema = z888.object({
-  httpReferer: z888.string().optional(),
-  appTitle: z888.string().optional(),
-  appCategories: z888.string().optional(),
-  slug: z888.string(),
-  version: z888.string()
+var z889 = __toESM(require("zod/v4"), 1);
+var GetPresetVersionRequest$outboundSchema = z889.object({
+  httpReferer: z889.string().optional(),
+  appTitle: z889.string().optional(),
+  appCategories: z889.string().optional(),
+  slug: z889.string(),
+  version: z889.string(),
+  workspaceId: z889.string().optional()
 }).transform((v) => {
   return remap(v, {
-    httpReferer: "HTTP-Referer"
+    httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id"
   });
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsGetVersion.js
 function presetsGetVersion(client, request, options) {
-  return new APIPromise($do109(client, request, options));
+  return new APIPromise($do110(client, request, options));
 }
-async function $do109(client, request, options) {
+async function $do110(client, request, options) {
   const parsed = safeParse(request, (value) => GetPresetVersionRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -37649,6 +37804,9 @@ async function $do109(client, request, options) {
     })
   };
   const path2 = pathToFunc("/presets/{slug}/versions/{version}")(pathParams);
+  const query = encodeFormQuery({
+    "workspace_id": payload.workspace_id
+  });
   const headers = new Headers(compactMap({
     Accept: "application/json",
     "HTTP-Referer": encodeSimple("HTTP-Referer", payload["HTTP-Referer"] ?? client._options.httpReferer, { explode: false, charEncoding: "none" }),
@@ -37683,6 +37841,7 @@ async function $do109(client, request, options) {
     baseURL: options?.serverURL,
     path: path2,
     headers,
+    query,
     body,
     userAgent: client._options.userAgent,
     timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
@@ -37712,25 +37871,25 @@ async function $do109(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listpresets.js
-var z891 = __toESM(require("zod/v4"), 1);
+var z892 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/listpresetsresponse.js
-var z890 = __toESM(require("zod/v4"), 1);
+var z891 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/preset.js
-var z889 = __toESM(require("zod/v4"), 1);
-var Preset$inboundSchema = z889.object({
-  created_at: z889.string(),
-  creator_user_id: z889.nullable(z889.string()),
-  description: z889.nullable(z889.string()),
-  designated_version_id: z889.nullable(z889.string()),
-  id: z889.string(),
-  name: z889.string(),
-  slug: z889.string(),
+var z890 = __toESM(require("zod/v4"), 1);
+var Preset$inboundSchema = z890.object({
+  created_at: z890.string(),
+  creator_user_id: z890.nullable(z890.string()),
+  description: z890.nullable(z890.string()),
+  designated_version_id: z890.nullable(z890.string()),
+  id: z890.string(),
+  name: z890.string(),
+  slug: z890.string(),
   status: PresetStatus$inboundSchema,
-  status_updated_at: z889.nullable(z889.string()),
-  updated_at: z889.string(),
-  workspace_id: z889.nullable(z889.string())
+  status_updated_at: z890.nullable(z890.string()),
+  updated_at: z890.string(),
+  workspace_id: z890.nullable(z890.string())
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -37743,9 +37902,9 @@ var Preset$inboundSchema = z889.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listpresetsresponse.js
-var ListPresetsResponse$inboundSchema = z890.object({
-  data: z890.array(Preset$inboundSchema),
-  total_count: z890.int()
+var ListPresetsResponse$inboundSchema = z891.object({
+  data: z891.array(Preset$inboundSchema),
+  total_count: z891.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -37753,18 +37912,20 @@ var ListPresetsResponse$inboundSchema = z890.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listpresets.js
-var ListPresetsRequest$outboundSchema = z891.object({
-  httpReferer: z891.string().optional(),
-  appTitle: z891.string().optional(),
-  appCategories: z891.string().optional(),
-  offset: z891.nullable(z891.int().default(0)),
-  limit: z891.int().default(50)
+var ListPresetsRequest$outboundSchema = z892.object({
+  httpReferer: z892.string().optional(),
+  appTitle: z892.string().optional(),
+  appCategories: z892.string().optional(),
+  offset: z892.nullable(z892.int().default(0)),
+  limit: z892.int().default(50),
+  workspaceId: z892.string().optional()
 }).transform((v) => {
   return remap(v, {
-    httpReferer: "HTTP-Referer"
+    httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id"
   });
 });
-var ListPresetsResponse$inboundSchema2 = z891.object({
+var ListPresetsResponse$inboundSchema2 = z892.object({
   Result: ListPresetsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -37774,9 +37935,9 @@ var ListPresetsResponse$inboundSchema2 = z891.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsList.js
 function presetsList(client, request, options) {
-  return new APIPromise($do110(client, request, options));
+  return new APIPromise($do111(client, request, options));
 }
-async function $do110(client, request, options) {
+async function $do111(client, request, options) {
   const parsed = safeParse(request, (value) => ListPresetsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -37786,7 +37947,8 @@ async function $do110(client, request, options) {
   const path2 = pathToFunc("/presets")();
   const query = encodeFormQuery({
     "limit": payload?.limit,
-    "offset": payload?.offset
+    "offset": payload?.offset,
+    "workspace_id": payload?.workspace_id
   });
   const headers = new Headers(compactMap({
     Accept: "application/json",
@@ -37846,7 +38008,7 @@ async function $do110(client, request, options) {
   };
   const [result, raw] = await match(json(200, ListPresetsResponse$inboundSchema2, {
     key: "Result"
-  }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [haltIterator(result), {
       status: "complete",
@@ -37883,13 +38045,13 @@ async function $do110(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listpresetversions.js
-var z893 = __toESM(require("zod/v4"), 1);
+var z894 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/listpresetversionsresponse.js
-var z892 = __toESM(require("zod/v4"), 1);
-var ListPresetVersionsResponse$inboundSchema = z892.object({
-  data: z892.array(z892.nullable(PresetDesignatedVersion$inboundSchema)),
-  total_count: z892.int()
+var z893 = __toESM(require("zod/v4"), 1);
+var ListPresetVersionsResponse$inboundSchema = z893.object({
+  data: z893.array(z893.nullable(PresetDesignatedVersion$inboundSchema)),
+  total_count: z893.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -37897,19 +38059,21 @@ var ListPresetVersionsResponse$inboundSchema = z892.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listpresetversions.js
-var ListPresetVersionsRequest$outboundSchema = z893.object({
-  httpReferer: z893.string().optional(),
-  appTitle: z893.string().optional(),
-  appCategories: z893.string().optional(),
-  slug: z893.string(),
-  offset: z893.nullable(z893.int().default(0)),
-  limit: z893.int().default(50)
+var ListPresetVersionsRequest$outboundSchema = z894.object({
+  httpReferer: z894.string().optional(),
+  appTitle: z894.string().optional(),
+  appCategories: z894.string().optional(),
+  slug: z894.string(),
+  offset: z894.nullable(z894.int().default(0)),
+  limit: z894.int().default(50),
+  workspaceId: z894.string().optional()
 }).transform((v) => {
   return remap(v, {
-    httpReferer: "HTTP-Referer"
+    httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id"
   });
 });
-var ListPresetVersionsResponse$inboundSchema2 = z893.object({
+var ListPresetVersionsResponse$inboundSchema2 = z894.object({
   Result: ListPresetVersionsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -37919,9 +38083,9 @@ var ListPresetVersionsResponse$inboundSchema2 = z893.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/presetsListVersions.js
 function presetsListVersions(client, request, options) {
-  return new APIPromise($do111(client, request, options));
+  return new APIPromise($do112(client, request, options));
 }
-async function $do111(client, request, options) {
+async function $do112(client, request, options) {
   const parsed = safeParse(request, (value) => ListPresetVersionsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -37937,7 +38101,8 @@ async function $do111(client, request, options) {
   const path2 = pathToFunc("/presets/{slug}/versions")(pathParams);
   const query = encodeFormQuery({
     "limit": payload.limit,
-    "offset": payload.offset
+    "offset": payload.offset,
+    "workspace_id": payload.workspace_id
   });
   const headers = new Headers(compactMap({
     Accept: "application/json",
@@ -38033,6 +38198,105 @@ async function $do111(client, request, options) {
   }];
 }
 
+// node_modules/@openrouter/sdk/esm/models/operations/restorepreset.js
+var z895 = __toESM(require("zod/v4"), 1);
+var RestorePresetRequest$outboundSchema = z895.object({
+  httpReferer: z895.string().optional(),
+  appTitle: z895.string().optional(),
+  appCategories: z895.string().optional(),
+  slug: z895.string(),
+  workspaceId: z895.string().optional()
+}).transform((v) => {
+  return remap(v, {
+    httpReferer: "HTTP-Referer",
+    workspaceId: "workspace_id"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/funcs/presetsRestore.js
+function presetsRestore(client, request, options) {
+  return new APIPromise($do113(client, request, options));
+}
+async function $do113(client, request, options) {
+  const parsed = safeParse(request, (value) => RestorePresetRequest$outboundSchema.parse(value), "Input validation failed");
+  if (!parsed.ok) {
+    return [parsed, { status: "invalid" }];
+  }
+  const payload = parsed.value;
+  const body = null;
+  const pathParams = {
+    slug: encodeSimple("slug", payload.slug, {
+      explode: false,
+      charEncoding: "percent"
+    })
+  };
+  const path2 = pathToFunc("/presets/{slug}/restore")(pathParams);
+  const query = encodeFormQuery({
+    "workspace_id": payload.workspace_id
+  });
+  const headers = new Headers(compactMap({
+    Accept: "application/json",
+    "HTTP-Referer": encodeSimple("HTTP-Referer", payload["HTTP-Referer"] ?? client._options.httpReferer, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Categories": encodeSimple("X-OpenRouter-Categories", payload.appCategories ?? client._options.appCategories, { explode: false, charEncoding: "none" }),
+    "X-OpenRouter-Title": encodeSimple("X-OpenRouter-Title", payload.appTitle ?? client._options.appTitle, { explode: false, charEncoding: "none" })
+  }));
+  const secConfig = await extractSecurity(client._options.apiKey);
+  const securityInput = secConfig == null ? {} : { apiKey: secConfig };
+  const requestSecurity = resolveGlobalSecurity(securityInput, [0]);
+  const context = {
+    options: client._options,
+    baseURL: options?.serverURL ?? client._baseURL ?? "",
+    operationID: "restorePreset",
+    oAuth2Scopes: null,
+    resolvedSecurity: requestSecurity,
+    securitySource: client._options.apiKey,
+    retryConfig: options?.retries || client._options.retryConfig || {
+      strategy: "backoff",
+      backoff: {
+        initialInterval: 500,
+        maxInterval: 6e4,
+        exponent: 1.5,
+        maxElapsedTime: 36e5
+      },
+      retryConnectionErrors: true
+    },
+    retryCodes: options?.retryCodes || ["5XX"]
+  };
+  const requestRes = client._createRequest(context, {
+    security: requestSecurity,
+    method: "POST",
+    baseURL: options?.serverURL,
+    path: path2,
+    headers,
+    query,
+    body,
+    userAgent: client._options.userAgent,
+    timeoutMs: options?.timeoutMs || client._options.timeoutMs || -1
+  }, options);
+  if (!requestRes.ok) {
+    return [requestRes, { status: "invalid" }];
+  }
+  const req = requestRes.value;
+  const doResult = await client._do(req, {
+    context,
+    isErrorStatusCode: (statusCode) => matchStatusCode({ status: statusCode }, ["4XX", "5XX"]),
+    retryConfig: context.retryConfig,
+    retryCodes: context.retryCodes
+  });
+  if (!doResult.ok) {
+    return [doResult, { status: "request-error", request: req }];
+  }
+  const response = doResult.value;
+  const responseFields = {
+    HttpMeta: { Response: response, Request: req }
+  };
+  const [result] = await match(json(200, GetPresetResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  if (!result.ok) {
+    return [result, { status: "complete", request: req, response }];
+  }
+  return [result, { status: "complete", request: req, response }];
+}
+
 // node_modules/@openrouter/sdk/esm/sdk/presets.js
 var Presets = class extends ClientSDK {
   /**
@@ -38043,6 +38307,15 @@ var Presets = class extends ClientSDK {
    */
   async list(request, options) {
     return unwrapResultIterator(presetsList(this, request, options));
+  }
+  /**
+   * Delete a preset
+   *
+   * @remarks
+   * Archives a preset: it no longer resolves for inference and is hidden from get and list. The preset and its versions are kept, so the slug stays taken; restore it with `POST /presets/{slug}/restore`. Deleting an already-archived preset succeeds again. A disabled preset returns 409. Requires a read-write [management key](/docs/guides/overview/auth/management-api-keys); inference API keys are rejected. `workspace_id` may be sent as a query parameter or a JSON body field.
+   */
+  async delete(request, options) {
+    return unwrapAsync(presetsDelete(this, request, options));
   }
   /**
    * Get a preset
@@ -38057,7 +38330,7 @@ var Presets = class extends ClientSDK {
    * Create a preset from a chat-completions request body
    *
    * @remarks
-   * Creates a preset (or a new version of an existing one) from an inference request body. Only fields that overlap with the preset config are persisted; other fields (e.g. `messages`, `stream`, `prompt`) are silently ignored.
+   * Creates a preset (or a new version of an existing one) from an inference request body. Only fields that overlap with the preset config are persisted; other fields (e.g. `messages`, `stream`, `prompt`) are silently ignored. Requires a read-write [management key](/docs/guides/overview/auth/management-api-keys); inference API keys are rejected.
    */
   async createPresetsChatCompletions(request, options) {
     return unwrapAsync(presetsCreatePresetsChatCompletions(this, request, options));
@@ -38066,7 +38339,7 @@ var Presets = class extends ClientSDK {
    * Create a preset from a messages request body
    *
    * @remarks
-   * Creates a preset (or a new version of an existing one) from an inference request body. Only fields that overlap with the preset config are persisted; other fields (e.g. `messages`, `stream`, `prompt`) are silently ignored.
+   * Creates a preset (or a new version of an existing one) from an inference request body. Only fields that overlap with the preset config are persisted; other fields (e.g. `messages`, `stream`, `prompt`) are silently ignored. Requires a read-write [management key](/docs/guides/overview/auth/management-api-keys); inference API keys are rejected.
    */
   async createPresetsMessages(request, options) {
     return unwrapAsync(presetsCreatePresetsMessages(this, request, options));
@@ -38075,10 +38348,19 @@ var Presets = class extends ClientSDK {
    * Create a preset from a responses request body
    *
    * @remarks
-   * Creates a preset (or a new version of an existing one) from an inference request body. Only fields that overlap with the preset config are persisted; other fields (e.g. `messages`, `stream`, `prompt`) are silently ignored.
+   * Creates a preset (or a new version of an existing one) from an inference request body. Only fields that overlap with the preset config are persisted; other fields (e.g. `messages`, `stream`, `prompt`) are silently ignored. Requires a read-write [management key](/docs/guides/overview/auth/management-api-keys); inference API keys are rejected.
    */
   async createPresetsResponses(request, options) {
     return unwrapAsync(presetsCreatePresetsResponses(this, request, options));
+  }
+  /**
+   * Restore a preset
+   *
+   * @remarks
+   * Re-activates an archived preset so it resolves for inference again. No version is created and the designated version is unchanged. Restoring an active preset returns it unchanged. A disabled preset returns 409. Requires a read-write [management key](/docs/guides/overview/auth/management-api-keys); inference API keys are rejected. `workspace_id` may be sent as a query parameter or a JSON body field.
+   */
+  async restore(request, options) {
+    return unwrapAsync(presetsRestore(this, request, options));
   }
   /**
    * List versions of a preset
@@ -38101,10 +38383,10 @@ var Presets = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/managedprivateendpointresponse.js
-var z895 = __toESM(require("zod/v4"), 1);
+var z897 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/managedprivateendpoint.js
-var z894 = __toESM(require("zod/v4"), 1);
+var z896 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointdeclaredregion.js
 var PrivateEndpointDeclaredRegion = {
@@ -38123,17 +38405,17 @@ var PrivateEndpointStatus = {
 var PrivateEndpointStatus$inboundSchema = inboundSchema(PrivateEndpointStatus);
 
 // node_modules/@openrouter/sdk/esm/models/managedprivateendpoint.js
-var ManagedPrivateEndpoint$inboundSchema = z894.object({
-  created_at: z894.string(),
-  id: z894.string(),
-  model_name: z894.nullable(z894.string()),
-  model_permaslug: z894.string(),
-  model_slug: z894.nullable(z894.string()),
-  provider_name: z894.string(),
+var ManagedPrivateEndpoint$inboundSchema = z896.object({
+  created_at: z896.string(),
+  id: z896.string(),
+  model_name: z896.nullable(z896.string()),
+  model_permaslug: z896.string(),
+  model_slug: z896.nullable(z896.string()),
+  provider_name: z896.string(),
   status: PrivateEndpointStatus$inboundSchema,
-  declared_region: z894.nullable(PrivateEndpointDeclaredRegion$inboundSchema),
-  declared_zdr: z894.nullable(z894.boolean()),
-  max_completion_tokens: z894.nullable(z894.int()).optional()
+  declared_region: z896.nullable(PrivateEndpointDeclaredRegion$inboundSchema),
+  declared_zdr: z896.nullable(z896.boolean()),
+  max_completion_tokens: z896.nullable(z896.int()).optional()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -38148,17 +38430,17 @@ var ManagedPrivateEndpoint$inboundSchema = z894.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/managedprivateendpointresponse.js
-var ManagedPrivateEndpointResponse$inboundSchema = z895.object({
+var ManagedPrivateEndpointResponse$inboundSchema = z897.object({
   data: ManagedPrivateEndpoint$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/activateprivateendpoint.js
-var z896 = __toESM(require("zod/v4"), 1);
-var ActivatePrivateEndpointRequest$outboundSchema = z896.object({
-  httpReferer: z896.string().optional(),
-  appTitle: z896.string().optional(),
-  appCategories: z896.string().optional(),
-  id: z896.string()
+var z898 = __toESM(require("zod/v4"), 1);
+var ActivatePrivateEndpointRequest$outboundSchema = z898.object({
+  httpReferer: z898.string().optional(),
+  appTitle: z898.string().optional(),
+  appCategories: z898.string().optional(),
+  id: z898.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -38167,9 +38449,9 @@ var ActivatePrivateEndpointRequest$outboundSchema = z896.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsActivate.js
 function privateEndpointsActivate(client, request, options) {
-  return new APIPromise($do112(client, request, options));
+  return new APIPromise($do114(client, request, options));
 }
-async function $do112(client, request, options) {
+async function $do114(client, request, options) {
   const parsed = safeParse(request, (value) => ActivatePrivateEndpointRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -38246,19 +38528,19 @@ async function $do112(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/errors/createprivateendpoint.js
-var z902 = __toESM(require("zod/v4"), 1);
+var z904 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/errors/createprivateendpointvalidationfailedresponseerror.js
-var z901 = __toESM(require("zod/v4"), 1);
+var z903 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/createprivateendpointvalidationfailedresponseerror.js
-var z900 = __toESM(require("zod/v4"), 1);
+var z902 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointvalidationnullable.js
-var z899 = __toESM(require("zod/v4"), 1);
+var z901 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointcheck.js
-var z897 = __toESM(require("zod/v4"), 1);
+var z899 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointcheckreason.js
 var PrivateEndpointCheckReason = {
@@ -38282,13 +38564,13 @@ var PrivateEndpointCheckReason = {
 var PrivateEndpointCheckReason$inboundSchema = inboundSchema(PrivateEndpointCheckReason);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointcheck.js
-var PrivateEndpointCheck$inboundSchema = z897.object({
-  actual_model: z897.nullable(z897.string()).optional(),
-  name: z897.string(),
-  passed: z897.boolean(),
+var PrivateEndpointCheck$inboundSchema = z899.object({
+  actual_model: z899.nullable(z899.string()).optional(),
+  name: z899.string(),
+  passed: z899.boolean(),
   reason: PrivateEndpointCheckReason$inboundSchema.optional(),
-  upstream_message: z897.nullable(z897.string()).optional(),
-  upstream_status: z897.int().optional()
+  upstream_message: z899.nullable(z899.string()).optional(),
+  upstream_status: z899.int().optional()
 }).transform((v) => {
   return remap(v, {
     "actual_model": "actualModel",
@@ -38298,27 +38580,27 @@ var PrivateEndpointCheck$inboundSchema = z897.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointparametercheck.js
-var z898 = __toESM(require("zod/v4"), 1);
-var PrivateEndpointParameterCheck$inboundSchema = z898.object({
-  parameter: z898.string(),
-  supported: z898.boolean()
+var z900 = __toESM(require("zod/v4"), 1);
+var PrivateEndpointParameterCheck$inboundSchema = z900.object({
+  parameter: z900.string(),
+  supported: z900.boolean()
 });
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointvalidationnullable.js
-var PrivateEndpointValidationNullable$inboundSchema = z899.object({
-  checks: z899.array(PrivateEndpointCheck$inboundSchema),
-  parameters: z899.array(PrivateEndpointParameterCheck$inboundSchema).optional(),
-  passed: z899.boolean()
+var PrivateEndpointValidationNullable$inboundSchema = z901.object({
+  checks: z901.array(PrivateEndpointCheck$inboundSchema),
+  parameters: z901.array(PrivateEndpointParameterCheck$inboundSchema).optional(),
+  passed: z901.boolean()
 });
 
 // node_modules/@openrouter/sdk/esm/models/createprivateendpointvalidationfailedresponseerror.js
-var CreatePrivateEndpointValidationFailedResponseData$inboundSchema = z900.object({
+var CreatePrivateEndpointValidationFailedResponseData$inboundSchema = z902.object({
   endpoint: ManagedPrivateEndpoint$inboundSchema,
-  validation: z900.nullable(PrivateEndpointValidationNullable$inboundSchema)
+  validation: z902.nullable(PrivateEndpointValidationNullable$inboundSchema)
 });
-var CreatePrivateEndpointValidationFailedResponseError$inboundSchema = z900.object({
-  code: z900.int(),
-  message: z900.string()
+var CreatePrivateEndpointValidationFailedResponseError$inboundSchema = z902.object({
+  code: z902.int(),
+  message: z902.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/createprivateendpointvalidationfailedresponseerror.js
@@ -38332,12 +38614,12 @@ var CreatePrivateEndpointValidationFailedResponseError = class extends OpenRoute
     this.name = "CreatePrivateEndpointValidationFailedResponseError";
   }
 };
-var CreatePrivateEndpointValidationFailedResponseError$inboundSchema2 = z901.object({
-  data: z901.lazy(() => CreatePrivateEndpointValidationFailedResponseData$inboundSchema),
-  error: z901.lazy(() => CreatePrivateEndpointValidationFailedResponseError$inboundSchema),
-  request$: z901.custom((x) => x instanceof Request),
-  response$: z901.custom((x) => x instanceof Response),
-  body$: z901.string()
+var CreatePrivateEndpointValidationFailedResponseError$inboundSchema2 = z903.object({
+  data: z903.lazy(() => CreatePrivateEndpointValidationFailedResponseData$inboundSchema),
+  error: z903.lazy(() => CreatePrivateEndpointValidationFailedResponseError$inboundSchema),
+  request$: z903.custom((x) => x instanceof Request),
+  response$: z903.custom((x) => x instanceof Response),
+  body$: z903.string()
 }).transform((v) => {
   return new CreatePrivateEndpointValidationFailedResponseError(v, {
     request: v.request$,
@@ -38347,37 +38629,37 @@ var CreatePrivateEndpointValidationFailedResponseError$inboundSchema2 = z901.obj
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/createprivateendpoint.js
-var BadGateway$inboundSchema = z902.union([
+var BadGateway$inboundSchema = z904.union([
   CreatePrivateEndpointValidationFailedResponseError$inboundSchema2,
   BadGatewayResponseError$inboundSchema
 ]);
-var InternalServerError$inboundSchema = z902.union([
+var InternalServerError$inboundSchema = z904.union([
   CreatePrivateEndpointValidationFailedResponseError$inboundSchema2,
   InternalServerResponseError$inboundSchema
 ]);
-var UnprocessableEntity$inboundSchema = z902.union([
+var UnprocessableEntity$inboundSchema = z904.union([
   CreatePrivateEndpointValidationFailedResponseError$inboundSchema2,
   UnprocessableEntityResponseError$inboundSchema
 ]);
-var Conflict$inboundSchema = z902.union([
+var Conflict$inboundSchema = z904.union([
   CreatePrivateEndpointValidationFailedResponseError$inboundSchema2,
   ConflictResponseError$inboundSchema
 ]);
-var NotFound$inboundSchema = z902.union([
+var NotFound$inboundSchema = z904.union([
   CreatePrivateEndpointValidationFailedResponseError$inboundSchema2,
   NotFoundResponseError$inboundSchema
 ]);
 
 // node_modules/@openrouter/sdk/esm/models/operations/createprivateendpoint.js
-var z907 = __toESM(require("zod/v4"), 1);
+var z909 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/createprivateendpointrequest.js
-var z906 = __toESM(require("zod/v4"), 1);
+var z908 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointactivation.js
-var z903 = __toESM(require("zod/v4"), 1);
-var PrivateEndpointActivation$outboundSchema = z903.object({
-  workspaceId: z903.string()
+var z905 = __toESM(require("zod/v4"), 1);
+var PrivateEndpointActivation$outboundSchema = z905.object({
+  workspaceId: z905.string()
 }).transform((v) => {
   return remap(v, {
     workspaceId: "workspace_id"
@@ -38415,23 +38697,23 @@ var PrivateEndpointDeclaredParameter = {
 var PrivateEndpointDeclaredParameter$outboundSchema = outboundSchema(PrivateEndpointDeclaredParameter);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointpricing.js
-var z904 = __toESM(require("zod/v4"), 1);
-var PrivateEndpointPricing$inboundSchema = z904.object({
-  cache_read: z904.string().optional(),
-  cache_write: z904.string().optional(),
-  completion: z904.string(),
-  prompt: z904.string()
+var z906 = __toESM(require("zod/v4"), 1);
+var PrivateEndpointPricing$inboundSchema = z906.object({
+  cache_read: z906.string().optional(),
+  cache_write: z906.string().optional(),
+  completion: z906.string(),
+  prompt: z906.string()
 }).transform((v) => {
   return remap(v, {
     "cache_read": "cacheRead",
     "cache_write": "cacheWrite"
   });
 });
-var PrivateEndpointPricing$outboundSchema = z904.object({
-  cacheRead: z904.string().optional(),
-  cacheWrite: z904.string().optional(),
-  completion: z904.string(),
-  prompt: z904.string()
+var PrivateEndpointPricing$outboundSchema = z906.object({
+  cacheRead: z906.string().optional(),
+  cacheWrite: z906.string().optional(),
+  completion: z906.string(),
+  prompt: z906.string()
 }).transform((v) => {
   return remap(v, {
     cacheRead: "cache_read",
@@ -38440,7 +38722,7 @@ var PrivateEndpointPricing$outboundSchema = z904.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/updateprivateendpointsettingsrequest.js
-var z905 = __toESM(require("zod/v4"), 1);
+var z907 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointquantization.js
 var PrivateEndpointQuantization = {
@@ -38499,17 +38781,17 @@ var UpdatePrivateEndpointSettingsRequestExcludedParameter = {
   WebSearchOptions: "web_search_options",
   Verbosity: "verbosity"
 };
-var UpdatePrivateEndpointSettingsRequestCompletions$outboundSchema = z905.object({
-  chat: z905.nullable(z905.boolean()).optional(),
-  text: z905.nullable(z905.boolean()).optional()
+var UpdatePrivateEndpointSettingsRequestCompletions$outboundSchema = z907.object({
+  chat: z907.nullable(z907.boolean()).optional(),
+  text: z907.nullable(z907.boolean()).optional()
 });
 var UpdatePrivateEndpointSettingsRequestExcludedParameter$outboundSchema = outboundSchema(UpdatePrivateEndpointSettingsRequestExcludedParameter);
-var UpdatePrivateEndpointSettingsRequestInputs$outboundSchema = z905.object({
-  audio: z905.nullable(z905.boolean()).optional(),
-  base64Files: z905.nullable(z905.boolean()).optional(),
-  base64Images: z905.nullable(z905.boolean()).optional(),
-  fileUrls: z905.nullable(z905.boolean()).optional(),
-  imageUrls: z905.nullable(z905.boolean()).optional()
+var UpdatePrivateEndpointSettingsRequestInputs$outboundSchema = z907.object({
+  audio: z907.nullable(z907.boolean()).optional(),
+  base64Files: z907.nullable(z907.boolean()).optional(),
+  base64Images: z907.nullable(z907.boolean()).optional(),
+  fileUrls: z907.nullable(z907.boolean()).optional(),
+  imageUrls: z907.nullable(z907.boolean()).optional()
 }).transform((v) => {
   return remap(v, {
     base64Files: "base64_files",
@@ -38518,30 +38800,30 @@ var UpdatePrivateEndpointSettingsRequestInputs$outboundSchema = z905.object({
     imageUrls: "image_urls"
   });
 });
-var UpdatePrivateEndpointSettingsRequestReasoning$outboundSchema = z905.object({
-  returnMechanism: z905.nullable(PrivateEndpointReasoningReturnMechanism$outboundSchema).optional(),
-  supported: z905.boolean().optional()
+var UpdatePrivateEndpointSettingsRequestReasoning$outboundSchema = z907.object({
+  returnMechanism: z907.nullable(PrivateEndpointReasoningReturnMechanism$outboundSchema).optional(),
+  supported: z907.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     returnMechanism: "return_mechanism"
   });
 });
-var UpdatePrivateEndpointSettingsRequestToolChoice$outboundSchema = z905.object({
-  auto: z905.boolean().optional(),
-  function: z905.boolean().optional(),
-  none: z905.boolean().optional(),
-  required: z905.boolean().optional()
+var UpdatePrivateEndpointSettingsRequestToolChoice$outboundSchema = z907.object({
+  auto: z907.boolean().optional(),
+  function: z907.boolean().optional(),
+  none: z907.boolean().optional(),
+  required: z907.boolean().optional()
 });
-var UpdatePrivateEndpointSettingsRequest$outboundSchema = z905.object({
-  completions: z905.lazy(() => UpdatePrivateEndpointSettingsRequestCompletions$outboundSchema).optional(),
-  contextLength: z905.nullable(z905.int()).optional(),
-  excludedParameters: z905.array(UpdatePrivateEndpointSettingsRequestExcludedParameter$outboundSchema).optional(),
-  inputs: z905.lazy(() => UpdatePrivateEndpointSettingsRequestInputs$outboundSchema).optional(),
-  maxCompletionTokens: z905.nullable(z905.int()).optional(),
-  maxPromptTokens: z905.nullable(z905.int()).optional(),
+var UpdatePrivateEndpointSettingsRequest$outboundSchema = z907.object({
+  completions: z907.lazy(() => UpdatePrivateEndpointSettingsRequestCompletions$outboundSchema).optional(),
+  contextLength: z907.nullable(z907.int()).optional(),
+  excludedParameters: z907.array(UpdatePrivateEndpointSettingsRequestExcludedParameter$outboundSchema).optional(),
+  inputs: z907.lazy(() => UpdatePrivateEndpointSettingsRequestInputs$outboundSchema).optional(),
+  maxCompletionTokens: z907.nullable(z907.int()).optional(),
+  maxPromptTokens: z907.nullable(z907.int()).optional(),
   quantization: PrivateEndpointQuantization$outboundSchema.optional(),
-  reasoning: z905.lazy(() => UpdatePrivateEndpointSettingsRequestReasoning$outboundSchema).optional(),
-  toolChoice: z905.lazy(() => UpdatePrivateEndpointSettingsRequestToolChoice$outboundSchema).optional()
+  reasoning: z907.lazy(() => UpdatePrivateEndpointSettingsRequestReasoning$outboundSchema).optional(),
+  toolChoice: z907.lazy(() => UpdatePrivateEndpointSettingsRequestToolChoice$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     contextLength: "context_length",
@@ -38559,17 +38841,17 @@ var CreatePrivateEndpointRequestDeclaredRegion = {
   Us: "us"
 };
 var CreatePrivateEndpointRequestDeclaredRegion$outboundSchema = outboundSchema(CreatePrivateEndpointRequestDeclaredRegion);
-var CreatePrivateEndpointRequest$outboundSchema = z906.object({
+var CreatePrivateEndpointRequest$outboundSchema = z908.object({
   activate: PrivateEndpointActivation$outboundSchema.optional(),
-  baseUrl: z906.string().optional(),
-  declaredParameters: z906.array(PrivateEndpointDeclaredParameter$outboundSchema).optional(),
-  declaredRegion: z906.nullable(CreatePrivateEndpointRequestDeclaredRegion$outboundSchema).optional(),
-  declaredZdr: z906.nullable(z906.boolean()).optional(),
-  modelPermaslug: z906.string(),
+  baseUrl: z908.string().optional(),
+  declaredParameters: z908.array(PrivateEndpointDeclaredParameter$outboundSchema).optional(),
+  declaredRegion: z908.nullable(CreatePrivateEndpointRequestDeclaredRegion$outboundSchema).optional(),
+  declaredZdr: z908.nullable(z908.boolean()).optional(),
+  modelPermaslug: z908.string(),
   pricing: PrivateEndpointPricing$outboundSchema.optional(),
-  providerSlug: z906.string(),
+  providerSlug: z908.string(),
   settings: UpdatePrivateEndpointSettingsRequest$outboundSchema.optional(),
-  upstreamModelId: z906.string()
+  upstreamModelId: z908.string()
 }).transform((v) => {
   return remap(v, {
     baseUrl: "base_url",
@@ -38583,11 +38865,11 @@ var CreatePrivateEndpointRequest$outboundSchema = z906.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createprivateendpoint.js
-var CreatePrivateEndpointRequest$outboundSchema2 = z907.object({
-  httpReferer: z907.string().optional(),
-  appTitle: z907.string().optional(),
-  appCategories: z907.string().optional(),
-  idempotencyKey: z907.string().optional(),
+var CreatePrivateEndpointRequest$outboundSchema2 = z909.object({
+  httpReferer: z909.string().optional(),
+  appTitle: z909.string().optional(),
+  appCategories: z909.string().optional(),
+  idempotencyKey: z909.string().optional(),
   createPrivateEndpointRequest: CreatePrivateEndpointRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -38599,9 +38881,9 @@ var CreatePrivateEndpointRequest$outboundSchema2 = z907.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsCreate.js
 function privateEndpointsCreate(client, request, options) {
-  return new APIPromise($do113(client, request, options));
+  return new APIPromise($do115(client, request, options));
 }
-async function $do113(client, request, options) {
+async function $do115(client, request, options) {
   const parsed = safeParse(request, (value) => CreatePrivateEndpointRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -38676,26 +38958,26 @@ async function $do113(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/deleteprivateendpointresponse.js
-var z908 = __toESM(require("zod/v4"), 1);
-var DeletePrivateEndpointResponseData$inboundSchema = z908.object({
-  id: z908.string()
+var z910 = __toESM(require("zod/v4"), 1);
+var DeletePrivateEndpointResponseData$inboundSchema = z910.object({
+  id: z910.string()
 });
-var DeletePrivateEndpointResponse$inboundSchema = z908.object({
-  data: z908.lazy(() => DeletePrivateEndpointResponseData$inboundSchema)
+var DeletePrivateEndpointResponse$inboundSchema = z910.object({
+  data: z910.lazy(() => DeletePrivateEndpointResponseData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteprivateendpoint.js
-var z909 = __toESM(require("zod/v4"), 1);
+var z911 = __toESM(require("zod/v4"), 1);
 var DraftOnly = {
   True: "true",
   False: "false"
 };
 var DraftOnly$outboundSchema = outboundSchema(DraftOnly);
-var DeletePrivateEndpointRequest$outboundSchema = z909.object({
-  httpReferer: z909.string().optional(),
-  appTitle: z909.string().optional(),
-  appCategories: z909.string().optional(),
-  id: z909.string(),
+var DeletePrivateEndpointRequest$outboundSchema = z911.object({
+  httpReferer: z911.string().optional(),
+  appTitle: z911.string().optional(),
+  appCategories: z911.string().optional(),
+  id: z911.string(),
   draftOnly: DraftOnly$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -38706,9 +38988,9 @@ var DeletePrivateEndpointRequest$outboundSchema = z909.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsDelete.js
 function privateEndpointsDelete(client, request, options) {
-  return new APIPromise($do114(client, request, options));
+  return new APIPromise($do116(client, request, options));
 }
-async function $do114(client, request, options) {
+async function $do116(client, request, options) {
   const parsed = safeParse(request, (value) => DeletePrivateEndpointRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -38789,12 +39071,12 @@ async function $do114(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/disableprivateendpoint.js
-var z910 = __toESM(require("zod/v4"), 1);
-var DisablePrivateEndpointRequest$outboundSchema = z910.object({
-  httpReferer: z910.string().optional(),
-  appTitle: z910.string().optional(),
-  appCategories: z910.string().optional(),
-  id: z910.string()
+var z912 = __toESM(require("zod/v4"), 1);
+var DisablePrivateEndpointRequest$outboundSchema = z912.object({
+  httpReferer: z912.string().optional(),
+  appTitle: z912.string().optional(),
+  appCategories: z912.string().optional(),
+  id: z912.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -38803,9 +39085,9 @@ var DisablePrivateEndpointRequest$outboundSchema = z910.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsDisable.js
 function privateEndpointsDisable(client, request, options) {
-  return new APIPromise($do115(client, request, options));
+  return new APIPromise($do117(client, request, options));
 }
-async function $do115(client, request, options) {
+async function $do117(client, request, options) {
   const parsed = safeParse(request, (value) => DisablePrivateEndpointRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -38882,12 +39164,12 @@ async function $do115(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/enableprivateendpoint.js
-var z911 = __toESM(require("zod/v4"), 1);
-var EnablePrivateEndpointRequest$outboundSchema = z911.object({
-  httpReferer: z911.string().optional(),
-  appTitle: z911.string().optional(),
-  appCategories: z911.string().optional(),
-  id: z911.string()
+var z913 = __toESM(require("zod/v4"), 1);
+var EnablePrivateEndpointRequest$outboundSchema = z913.object({
+  httpReferer: z913.string().optional(),
+  appTitle: z913.string().optional(),
+  appCategories: z913.string().optional(),
+  id: z913.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -38896,9 +39178,9 @@ var EnablePrivateEndpointRequest$outboundSchema = z911.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsEnable.js
 function privateEndpointsEnable(client, request, options) {
-  return new APIPromise($do116(client, request, options));
+  return new APIPromise($do118(client, request, options));
 }
-async function $do116(client, request, options) {
+async function $do118(client, request, options) {
   const parsed = safeParse(request, (value) => EnablePrivateEndpointRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -38975,13 +39257,13 @@ async function $do116(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointresponse.js
-var z914 = __toESM(require("zod/v4"), 1);
+var z916 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpoint.js
-var z913 = __toESM(require("zod/v4"), 1);
+var z915 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointsettings.js
-var z912 = __toESM(require("zod/v4"), 1);
+var z914 = __toESM(require("zod/v4"), 1);
 var PrivateEndpointSettingsExcludedParameter = {
   Temperature: "temperature",
   TopP: "top_p",
@@ -39010,17 +39292,17 @@ var PrivateEndpointSettingsExcludedParameter = {
   WebSearchOptions: "web_search_options",
   Verbosity: "verbosity"
 };
-var PrivateEndpointSettingsCompletions$inboundSchema = z912.object({
-  chat: z912.nullable(z912.boolean()),
-  text: z912.nullable(z912.boolean())
+var PrivateEndpointSettingsCompletions$inboundSchema = z914.object({
+  chat: z914.nullable(z914.boolean()),
+  text: z914.nullable(z914.boolean())
 });
 var PrivateEndpointSettingsExcludedParameter$inboundSchema = inboundSchema(PrivateEndpointSettingsExcludedParameter);
-var PrivateEndpointSettingsInputs$inboundSchema = z912.object({
-  audio: z912.nullable(z912.boolean()),
-  base64_files: z912.nullable(z912.boolean()),
-  base64_images: z912.nullable(z912.boolean()),
-  file_urls: z912.nullable(z912.boolean()),
-  image_urls: z912.nullable(z912.boolean())
+var PrivateEndpointSettingsInputs$inboundSchema = z914.object({
+  audio: z914.nullable(z914.boolean()),
+  base64_files: z914.nullable(z914.boolean()),
+  base64_images: z914.nullable(z914.boolean()),
+  file_urls: z914.nullable(z914.boolean()),
+  image_urls: z914.nullable(z914.boolean())
 }).transform((v) => {
   return remap(v, {
     "base64_files": "base64Files",
@@ -39029,30 +39311,30 @@ var PrivateEndpointSettingsInputs$inboundSchema = z912.object({
     "image_urls": "imageUrls"
   });
 });
-var PrivateEndpointSettingsReasoning$inboundSchema = z912.object({
-  return_mechanism: z912.nullable(PrivateEndpointReasoningReturnMechanism$inboundSchema),
-  supported: z912.boolean()
+var PrivateEndpointSettingsReasoning$inboundSchema = z914.object({
+  return_mechanism: z914.nullable(PrivateEndpointReasoningReturnMechanism$inboundSchema),
+  supported: z914.boolean()
 }).transform((v) => {
   return remap(v, {
     "return_mechanism": "returnMechanism"
   });
 });
-var PrivateEndpointSettingsToolChoice$inboundSchema = z912.object({
-  auto: z912.boolean(),
-  function: z912.boolean(),
-  none: z912.boolean(),
-  required: z912.boolean()
+var PrivateEndpointSettingsToolChoice$inboundSchema = z914.object({
+  auto: z914.boolean(),
+  function: z914.boolean(),
+  none: z914.boolean(),
+  required: z914.boolean()
 });
-var PrivateEndpointSettings$inboundSchema = z912.object({
-  completions: z912.lazy(() => PrivateEndpointSettingsCompletions$inboundSchema),
-  context_length: z912.nullable(z912.int()),
-  excluded_parameters: z912.array(PrivateEndpointSettingsExcludedParameter$inboundSchema),
-  inputs: z912.lazy(() => PrivateEndpointSettingsInputs$inboundSchema),
-  max_completion_tokens: z912.nullable(z912.int()),
-  max_prompt_tokens: z912.nullable(z912.int()),
+var PrivateEndpointSettings$inboundSchema = z914.object({
+  completions: z914.lazy(() => PrivateEndpointSettingsCompletions$inboundSchema),
+  context_length: z914.nullable(z914.int()),
+  excluded_parameters: z914.array(PrivateEndpointSettingsExcludedParameter$inboundSchema),
+  inputs: z914.lazy(() => PrivateEndpointSettingsInputs$inboundSchema),
+  max_completion_tokens: z914.nullable(z914.int()),
+  max_prompt_tokens: z914.nullable(z914.int()),
   quantization: PrivateEndpointQuantization$inboundSchema,
-  reasoning: z912.lazy(() => PrivateEndpointSettingsReasoning$inboundSchema),
-  tool_choice: z912.lazy(() => PrivateEndpointSettingsToolChoice$inboundSchema)
+  reasoning: z914.lazy(() => PrivateEndpointSettingsReasoning$inboundSchema),
+  tool_choice: z914.lazy(() => PrivateEndpointSettingsToolChoice$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "context_length": "contextLength",
@@ -39064,23 +39346,23 @@ var PrivateEndpointSettings$inboundSchema = z912.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/privateendpoint.js
-var PrivateEndpoint$inboundSchema = z913.object({
-  base_url: z913.nullable(z913.string()),
-  declared_parameters: z913.array(z913.string()),
-  declared_region: z913.nullable(PrivateEndpointDeclaredRegion$inboundSchema),
-  declared_zdr: z913.nullable(z913.boolean()),
-  id: z913.string(),
-  max_completion_tokens: z913.nullable(z913.int()).optional(),
-  model_name: z913.nullable(z913.string()),
-  model_permaslug: z913.string(),
-  model_slug: z913.nullable(z913.string()),
+var PrivateEndpoint$inboundSchema = z915.object({
+  base_url: z915.nullable(z915.string()),
+  declared_parameters: z915.array(z915.string()),
+  declared_region: z915.nullable(PrivateEndpointDeclaredRegion$inboundSchema),
+  declared_zdr: z915.nullable(z915.boolean()),
+  id: z915.string(),
+  max_completion_tokens: z915.nullable(z915.int()).optional(),
+  model_name: z915.nullable(z915.string()),
+  model_permaslug: z915.string(),
+  model_slug: z915.nullable(z915.string()),
   pricing: PrivateEndpointPricing$inboundSchema,
-  provider_name: z913.string(),
-  provider_slug: z913.nullable(z913.string()),
+  provider_name: z915.string(),
+  provider_slug: z915.nullable(z915.string()),
   settings: PrivateEndpointSettings$inboundSchema,
   status: PrivateEndpointStatus$inboundSchema,
-  tested_parameters: z913.array(z913.string()),
-  upstream_model_id: z913.string()
+  tested_parameters: z915.array(z915.string()),
+  upstream_model_id: z915.string()
 }).transform((v) => {
   return remap(v, {
     "base_url": "baseUrl",
@@ -39099,17 +39381,17 @@ var PrivateEndpoint$inboundSchema = z913.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointresponse.js
-var PrivateEndpointResponse$inboundSchema = z914.object({
+var PrivateEndpointResponse$inboundSchema = z916.object({
   data: PrivateEndpoint$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getprivateendpoint.js
-var z915 = __toESM(require("zod/v4"), 1);
-var GetPrivateEndpointRequest$outboundSchema = z915.object({
-  httpReferer: z915.string().optional(),
-  appTitle: z915.string().optional(),
-  appCategories: z915.string().optional(),
-  id: z915.string()
+var z917 = __toESM(require("zod/v4"), 1);
+var GetPrivateEndpointRequest$outboundSchema = z917.object({
+  httpReferer: z917.string().optional(),
+  appTitle: z917.string().optional(),
+  appCategories: z917.string().optional(),
+  id: z917.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -39118,9 +39400,9 @@ var GetPrivateEndpointRequest$outboundSchema = z915.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsGet.js
 function privateEndpointsGet(client, request, options) {
-  return new APIPromise($do117(client, request, options));
+  return new APIPromise($do119(client, request, options));
 }
-async function $do117(client, request, options) {
+async function $do119(client, request, options) {
   const parsed = safeParse(request, (value) => GetPrivateEndpointRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -39197,17 +39479,17 @@ async function $do117(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/listprivateendpointsresponse.js
-var z917 = __toESM(require("zod/v4"), 1);
+var z919 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointsummary.js
-var z916 = __toESM(require("zod/v4"), 1);
-var PrivateEndpointSummary$inboundSchema = z916.object({
-  created_at: z916.string(),
-  id: z916.string(),
-  model_name: z916.nullable(z916.string()),
-  model_permaslug: z916.string(),
-  model_slug: z916.nullable(z916.string()),
-  provider_name: z916.string(),
+var z918 = __toESM(require("zod/v4"), 1);
+var PrivateEndpointSummary$inboundSchema = z918.object({
+  created_at: z918.string(),
+  id: z918.string(),
+  model_name: z918.nullable(z918.string()),
+  model_permaslug: z918.string(),
+  model_slug: z918.nullable(z918.string()),
+  provider_name: z918.string(),
   status: PrivateEndpointStatus$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -39220,16 +39502,16 @@ var PrivateEndpointSummary$inboundSchema = z916.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listprivateendpointsresponse.js
-var ListPrivateEndpointsResponse$inboundSchema = z917.object({
-  data: z917.array(PrivateEndpointSummary$inboundSchema)
+var ListPrivateEndpointsResponse$inboundSchema = z919.object({
+  data: z919.array(PrivateEndpointSummary$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listprivateendpoints.js
-var z918 = __toESM(require("zod/v4"), 1);
-var ListPrivateEndpointsRequest$outboundSchema = z918.object({
-  httpReferer: z918.string().optional(),
-  appTitle: z918.string().optional(),
-  appCategories: z918.string().optional()
+var z920 = __toESM(require("zod/v4"), 1);
+var ListPrivateEndpointsRequest$outboundSchema = z920.object({
+  httpReferer: z920.string().optional(),
+  appTitle: z920.string().optional(),
+  appCategories: z920.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -39238,9 +39520,9 @@ var ListPrivateEndpointsRequest$outboundSchema = z918.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsList.js
 function privateEndpointsList(client, request, options) {
-  return new APIPromise($do118(client, request, options));
+  return new APIPromise($do120(client, request, options));
 }
-async function $do118(client, request, options) {
+async function $do120(client, request, options) {
   const parsed = safeParse(request, (value) => ListPrivateEndpointsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -39311,24 +39593,24 @@ async function $do118(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateprivateendpoint.js
-var z920 = __toESM(require("zod/v4"), 1);
+var z922 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/updateprivateendpointrequest.js
-var z919 = __toESM(require("zod/v4"), 1);
+var z921 = __toESM(require("zod/v4"), 1);
 var UpdatePrivateEndpointRequestDeclaredRegion = {
   Global: "global",
   Europe: "europe",
   Us: "us"
 };
 var UpdatePrivateEndpointRequestDeclaredRegion$outboundSchema = outboundSchema(UpdatePrivateEndpointRequestDeclaredRegion);
-var UpdatePrivateEndpointRequest$outboundSchema = z919.object({
-  baseUrl: z919.string().optional(),
-  declaredParameters: z919.array(PrivateEndpointDeclaredParameter$outboundSchema).optional(),
-  declaredRegion: z919.nullable(UpdatePrivateEndpointRequestDeclaredRegion$outboundSchema).optional(),
-  declaredZdr: z919.nullable(z919.boolean()).optional(),
+var UpdatePrivateEndpointRequest$outboundSchema = z921.object({
+  baseUrl: z921.string().optional(),
+  declaredParameters: z921.array(PrivateEndpointDeclaredParameter$outboundSchema).optional(),
+  declaredRegion: z921.nullable(UpdatePrivateEndpointRequestDeclaredRegion$outboundSchema).optional(),
+  declaredZdr: z921.nullable(z921.boolean()).optional(),
   pricing: PrivateEndpointPricing$outboundSchema.optional(),
   settings: UpdatePrivateEndpointSettingsRequest$outboundSchema.optional(),
-  upstreamModelId: z919.string().optional()
+  upstreamModelId: z921.string().optional()
 }).transform((v) => {
   return remap(v, {
     baseUrl: "base_url",
@@ -39340,11 +39622,11 @@ var UpdatePrivateEndpointRequest$outboundSchema = z919.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateprivateendpoint.js
-var UpdatePrivateEndpointRequest$outboundSchema2 = z920.object({
-  httpReferer: z920.string().optional(),
-  appTitle: z920.string().optional(),
-  appCategories: z920.string().optional(),
-  id: z920.string(),
+var UpdatePrivateEndpointRequest$outboundSchema2 = z922.object({
+  httpReferer: z922.string().optional(),
+  appTitle: z922.string().optional(),
+  appCategories: z922.string().optional(),
+  id: z922.string(),
   updatePrivateEndpointRequest: UpdatePrivateEndpointRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -39355,9 +39637,9 @@ var UpdatePrivateEndpointRequest$outboundSchema2 = z920.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsUpdate.js
 function privateEndpointsUpdate(client, request, options) {
-  return new APIPromise($do119(client, request, options));
+  return new APIPromise($do121(client, request, options));
 }
-async function $do119(client, request, options) {
+async function $do121(client, request, options) {
   const parsed = safeParse(request, (value) => UpdatePrivateEndpointRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -39437,28 +39719,28 @@ async function $do119(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointvalidationresponse.js
-var z922 = __toESM(require("zod/v4"), 1);
+var z924 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointvalidation.js
-var z921 = __toESM(require("zod/v4"), 1);
-var PrivateEndpointValidation$inboundSchema = z921.object({
-  checks: z921.array(PrivateEndpointCheck$inboundSchema),
-  parameters: z921.array(PrivateEndpointParameterCheck$inboundSchema).optional(),
-  passed: z921.boolean()
+var z923 = __toESM(require("zod/v4"), 1);
+var PrivateEndpointValidation$inboundSchema = z923.object({
+  checks: z923.array(PrivateEndpointCheck$inboundSchema),
+  parameters: z923.array(PrivateEndpointParameterCheck$inboundSchema).optional(),
+  passed: z923.boolean()
 });
 
 // node_modules/@openrouter/sdk/esm/models/privateendpointvalidationresponse.js
-var PrivateEndpointValidationResponse$inboundSchema = z922.object({
+var PrivateEndpointValidationResponse$inboundSchema = z924.object({
   data: PrivateEndpointValidation$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/validateprivateendpoint.js
-var z924 = __toESM(require("zod/v4"), 1);
+var z926 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/validateprivateendpointrequest.js
-var z923 = __toESM(require("zod/v4"), 1);
-var ValidatePrivateEndpointRequest$outboundSchema = z923.object({
-  workspaceId: z923.string()
+var z925 = __toESM(require("zod/v4"), 1);
+var ValidatePrivateEndpointRequest$outboundSchema = z925.object({
+  workspaceId: z925.string()
 }).transform((v) => {
   return remap(v, {
     workspaceId: "workspace_id"
@@ -39466,11 +39748,11 @@ var ValidatePrivateEndpointRequest$outboundSchema = z923.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/validateprivateendpoint.js
-var ValidatePrivateEndpointRequest$outboundSchema2 = z924.object({
-  httpReferer: z924.string().optional(),
-  appTitle: z924.string().optional(),
-  appCategories: z924.string().optional(),
-  id: z924.string(),
+var ValidatePrivateEndpointRequest$outboundSchema2 = z926.object({
+  httpReferer: z926.string().optional(),
+  appTitle: z926.string().optional(),
+  appCategories: z926.string().optional(),
+  id: z926.string(),
   validatePrivateEndpointRequest: ValidatePrivateEndpointRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -39481,9 +39763,9 @@ var ValidatePrivateEndpointRequest$outboundSchema2 = z924.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/privateEndpointsValidate.js
 function privateEndpointsValidate(client, request, options) {
-  return new APIPromise($do120(client, request, options));
+  return new APIPromise($do122(client, request, options));
 }
-async function $do120(client, request, options) {
+async function $do122(client, request, options) {
   const parsed = safeParse(request, (value) => ValidatePrivateEndpointRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -39648,15 +39930,15 @@ var PrivateEndpoints = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/operations/createprivateprovider.js
-var z927 = __toESM(require("zod/v4"), 1);
+var z929 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/createprivateproviderrequest.js
-var z925 = __toESM(require("zod/v4"), 1);
-var CreatePrivateProviderRequest$outboundSchema = z925.object({
-  baseUrl: z925.string().optional(),
-  displayName: z925.string().optional(),
-  name: z925.string(),
-  slug: z925.string().optional()
+var z927 = __toESM(require("zod/v4"), 1);
+var CreatePrivateProviderRequest$outboundSchema = z927.object({
+  baseUrl: z927.string().optional(),
+  displayName: z927.string().optional(),
+  name: z927.string(),
+  slug: z927.string().optional()
 }).transform((v) => {
   return remap(v, {
     baseUrl: "base_url",
@@ -39665,13 +39947,13 @@ var CreatePrivateProviderRequest$outboundSchema = z925.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/privateprovider.js
-var z926 = __toESM(require("zod/v4"), 1);
-var PrivateProvider$inboundSchema = z926.object({
-  base_url: z926.nullable(z926.string()),
-  created_at: z926.string(),
-  display_name: z926.string(),
-  name: z926.string(),
-  slug: z926.string()
+var z928 = __toESM(require("zod/v4"), 1);
+var PrivateProvider$inboundSchema = z928.object({
+  base_url: z928.nullable(z928.string()),
+  created_at: z928.string(),
+  display_name: z928.string(),
+  name: z928.string(),
+  slug: z928.string()
 }).transform((v) => {
   return remap(v, {
     "base_url": "baseUrl",
@@ -39681,10 +39963,10 @@ var PrivateProvider$inboundSchema = z926.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createprivateprovider.js
-var CreatePrivateProviderRequest$outboundSchema2 = z927.object({
-  httpReferer: z927.string().optional(),
-  appTitle: z927.string().optional(),
-  appCategories: z927.string().optional(),
+var CreatePrivateProviderRequest$outboundSchema2 = z929.object({
+  httpReferer: z929.string().optional(),
+  appTitle: z929.string().optional(),
+  appCategories: z929.string().optional(),
   createPrivateProviderRequest: CreatePrivateProviderRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -39692,15 +39974,15 @@ var CreatePrivateProviderRequest$outboundSchema2 = z927.object({
     createPrivateProviderRequest: "CreatePrivateProviderRequest"
   });
 });
-var CreatePrivateProviderResponse$inboundSchema = z927.object({
+var CreatePrivateProviderResponse$inboundSchema = z929.object({
   data: PrivateProvider$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/privateProvidersCreate.js
 function privateProvidersCreate(client, request, options) {
-  return new APIPromise($do121(client, request, options));
+  return new APIPromise($do123(client, request, options));
 }
-async function $do121(client, request, options) {
+async function $do123(client, request, options) {
   const parsed = safeParse(request, (value) => CreatePrivateProviderRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -39774,29 +40056,29 @@ async function $do121(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteprivateprovider.js
-var z928 = __toESM(require("zod/v4"), 1);
-var DeletePrivateProviderRequest$outboundSchema = z928.object({
-  httpReferer: z928.string().optional(),
-  appTitle: z928.string().optional(),
-  appCategories: z928.string().optional(),
-  slug: z928.string()
+var z930 = __toESM(require("zod/v4"), 1);
+var DeletePrivateProviderRequest$outboundSchema = z930.object({
+  httpReferer: z930.string().optional(),
+  appTitle: z930.string().optional(),
+  appCategories: z930.string().optional(),
+  slug: z930.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var DeletePrivateProviderData$inboundSchema = z928.object({
-  slug: z928.string()
+var DeletePrivateProviderData$inboundSchema = z930.object({
+  slug: z930.string()
 });
-var DeletePrivateProviderResponse$inboundSchema = z928.object({
-  data: z928.lazy(() => DeletePrivateProviderData$inboundSchema)
+var DeletePrivateProviderResponse$inboundSchema = z930.object({
+  data: z930.lazy(() => DeletePrivateProviderData$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/privateProvidersDelete.js
 function privateProvidersDelete(client, request, options) {
-  return new APIPromise($do122(client, request, options));
+  return new APIPromise($do124(client, request, options));
 }
-async function $do122(client, request, options) {
+async function $do124(client, request, options) {
   const parsed = safeParse(request, (value) => DeletePrivateProviderRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -39873,26 +40155,26 @@ async function $do122(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/getprivateprovider.js
-var z929 = __toESM(require("zod/v4"), 1);
-var GetPrivateProviderRequest$outboundSchema = z929.object({
-  httpReferer: z929.string().optional(),
-  appTitle: z929.string().optional(),
-  appCategories: z929.string().optional(),
-  slug: z929.string()
+var z931 = __toESM(require("zod/v4"), 1);
+var GetPrivateProviderRequest$outboundSchema = z931.object({
+  httpReferer: z931.string().optional(),
+  appTitle: z931.string().optional(),
+  appCategories: z931.string().optional(),
+  slug: z931.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var GetPrivateProviderResponse$inboundSchema = z929.object({
+var GetPrivateProviderResponse$inboundSchema = z931.object({
   data: PrivateProvider$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/privateProvidersGet.js
 function privateProvidersGet(client, request, options) {
-  return new APIPromise($do123(client, request, options));
+  return new APIPromise($do125(client, request, options));
 }
-async function $do123(client, request, options) {
+async function $do125(client, request, options) {
   const parsed = safeParse(request, (value) => GetPrivateProviderRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -39969,25 +40251,25 @@ async function $do123(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listprivateproviders.js
-var z930 = __toESM(require("zod/v4"), 1);
-var ListPrivateProvidersRequest$outboundSchema = z930.object({
-  httpReferer: z930.string().optional(),
-  appTitle: z930.string().optional(),
-  appCategories: z930.string().optional()
+var z932 = __toESM(require("zod/v4"), 1);
+var ListPrivateProvidersRequest$outboundSchema = z932.object({
+  httpReferer: z932.string().optional(),
+  appTitle: z932.string().optional(),
+  appCategories: z932.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListPrivateProvidersResponse$inboundSchema = z930.object({
-  data: z930.array(PrivateProvider$inboundSchema)
+var ListPrivateProvidersResponse$inboundSchema = z932.object({
+  data: z932.array(PrivateProvider$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/privateProvidersList.js
 function privateProvidersList(client, request, options) {
-  return new APIPromise($do124(client, request, options));
+  return new APIPromise($do126(client, request, options));
 }
-async function $do124(client, request, options) {
+async function $do126(client, request, options) {
   const parsed = safeParse(request, (value) => ListPrivateProvidersRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -40058,13 +40340,13 @@ async function $do124(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateprivateprovider.js
-var z932 = __toESM(require("zod/v4"), 1);
+var z934 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/updateprivateproviderrequest.js
-var z931 = __toESM(require("zod/v4"), 1);
-var UpdatePrivateProviderRequest$outboundSchema = z931.object({
-  baseUrl: z931.string().optional(),
-  displayName: z931.string().optional()
+var z933 = __toESM(require("zod/v4"), 1);
+var UpdatePrivateProviderRequest$outboundSchema = z933.object({
+  baseUrl: z933.string().optional(),
+  displayName: z933.string().optional()
 }).transform((v) => {
   return remap(v, {
     baseUrl: "base_url",
@@ -40073,11 +40355,11 @@ var UpdatePrivateProviderRequest$outboundSchema = z931.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateprivateprovider.js
-var UpdatePrivateProviderRequest$outboundSchema2 = z932.object({
-  httpReferer: z932.string().optional(),
-  appTitle: z932.string().optional(),
-  appCategories: z932.string().optional(),
-  slug: z932.string(),
+var UpdatePrivateProviderRequest$outboundSchema2 = z934.object({
+  httpReferer: z934.string().optional(),
+  appTitle: z934.string().optional(),
+  appCategories: z934.string().optional(),
+  slug: z934.string(),
   updatePrivateProviderRequest: UpdatePrivateProviderRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -40085,15 +40367,15 @@ var UpdatePrivateProviderRequest$outboundSchema2 = z932.object({
     updatePrivateProviderRequest: "UpdatePrivateProviderRequest"
   });
 });
-var UpdatePrivateProviderResponse$inboundSchema = z932.object({
+var UpdatePrivateProviderResponse$inboundSchema = z934.object({
   data: PrivateProvider$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/privateProvidersUpdate.js
 function privateProvidersUpdate(client, request, options) {
-  return new APIPromise($do125(client, request, options));
+  return new APIPromise($do127(client, request, options));
 }
-async function $do125(client, request, options) {
+async function $do127(client, request, options) {
   const parsed = safeParse(request, (value) => UpdatePrivateProviderRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -40222,7 +40504,7 @@ var PrivateProviders = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/operations/listproviders.js
-var z933 = __toESM(require("zod/v4"), 1);
+var z935 = __toESM(require("zod/v4"), 1);
 var Datacenter = {
   Ad: "AD",
   Ae: "AE",
@@ -40725,10 +41007,10 @@ var Headquarters = {
   Zm: "ZM",
   Zw: "ZW"
 };
-var ListProvidersRequest$outboundSchema = z933.object({
-  httpReferer: z933.string().optional(),
-  appTitle: z933.string().optional(),
-  appCategories: z933.string().optional()
+var ListProvidersRequest$outboundSchema = z935.object({
+  httpReferer: z935.string().optional(),
+  appTitle: z935.string().optional(),
+  appCategories: z935.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -40736,14 +41018,14 @@ var ListProvidersRequest$outboundSchema = z933.object({
 });
 var Datacenter$inboundSchema = inboundSchema(Datacenter);
 var Headquarters$inboundSchema = inboundSchema(Headquarters);
-var ListProvidersData$inboundSchema = z933.object({
-  datacenters: z933.nullable(z933.array(Datacenter$inboundSchema)).optional(),
-  headquarters: z933.nullable(Headquarters$inboundSchema).optional(),
-  name: z933.string(),
-  privacy_policy_url: z933.nullable(z933.string()),
-  slug: z933.string(),
-  status_page_url: z933.nullable(z933.string()).optional(),
-  terms_of_service_url: z933.nullable(z933.string()).optional()
+var ListProvidersData$inboundSchema = z935.object({
+  datacenters: z935.nullable(z935.array(Datacenter$inboundSchema)).optional(),
+  headquarters: z935.nullable(Headquarters$inboundSchema).optional(),
+  name: z935.string(),
+  privacy_policy_url: z935.nullable(z935.string()),
+  slug: z935.string(),
+  status_page_url: z935.nullable(z935.string()).optional(),
+  terms_of_service_url: z935.nullable(z935.string()).optional()
 }).transform((v) => {
   return remap(v, {
     "privacy_policy_url": "privacyPolicyUrl",
@@ -40751,15 +41033,15 @@ var ListProvidersData$inboundSchema = z933.object({
     "terms_of_service_url": "termsOfServiceUrl"
   });
 });
-var ListProvidersResponse$inboundSchema = z933.object({
-  data: z933.array(z933.lazy(() => ListProvidersData$inboundSchema))
+var ListProvidersResponse$inboundSchema = z935.object({
+  data: z935.array(z935.lazy(() => ListProvidersData$inboundSchema))
 });
 
 // node_modules/@openrouter/sdk/esm/funcs/providersList.js
 function providersList(client, request, options) {
-  return new APIPromise($do126(client, request, options));
+  return new APIPromise($do128(client, request, options));
 }
-async function $do126(client, request, options) {
+async function $do128(client, request, options) {
   const parsed = safeParse(request, (value) => ListProvidersRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -40840,75 +41122,75 @@ var Providers = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/operations/creatererank.js
-var z934 = __toESM(require("zod/v4"), 1);
-var DocumentRequest$outboundSchema = z934.object({
-  image: z934.string().optional(),
-  text: z934.string().optional()
+var z936 = __toESM(require("zod/v4"), 1);
+var DocumentRequest$outboundSchema = z936.object({
+  image: z936.string().optional(),
+  text: z936.string().optional()
 });
-var Document$outboundSchema = z934.union([z934.string(), z934.lazy(() => DocumentRequest$outboundSchema)]);
-var CreateRerankRequestBody$outboundSchema = z934.object({
-  documents: z934.array(z934.union([z934.string(), z934.lazy(() => DocumentRequest$outboundSchema)])),
-  model: z934.string(),
-  provider: z934.nullable(ProviderPreferences$outboundSchema).optional(),
-  query: z934.string(),
-  sessionId: z934.string().optional(),
-  topN: z934.int().optional(),
+var Document$outboundSchema = z936.union([z936.string(), z936.lazy(() => DocumentRequest$outboundSchema)]);
+var CreateRerankRequestBody$outboundSchema = z936.object({
+  documents: z936.array(z936.union([z936.string(), z936.lazy(() => DocumentRequest$outboundSchema)])),
+  model: z936.string(),
+  provider: z936.nullable(ProviderPreferences$outboundSchema).optional(),
+  query: z936.string(),
+  sessionId: z936.string().optional(),
+  topN: z936.int().optional(),
   trace: TraceConfig$outboundSchema.optional(),
-  user: z934.string().optional()
+  user: z936.string().optional()
 }).transform((v) => {
   return remap(v, {
     sessionId: "session_id",
     topN: "top_n"
   });
 });
-var CreateRerankRequest$outboundSchema = z934.object({
-  httpReferer: z934.string().optional(),
-  appTitle: z934.string().optional(),
-  appCategories: z934.string().optional(),
-  requestBody: z934.lazy(() => CreateRerankRequestBody$outboundSchema)
+var CreateRerankRequest$outboundSchema = z936.object({
+  httpReferer: z936.string().optional(),
+  appTitle: z936.string().optional(),
+  appCategories: z936.string().optional(),
+  requestBody: z936.lazy(() => CreateRerankRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
     requestBody: "RequestBody"
   });
 });
-var DocumentResponse$inboundSchema = z934.object({
-  image: z934.string().optional(),
-  text: z934.string().optional()
+var DocumentResponse$inboundSchema = z936.object({
+  image: z936.string().optional(),
+  text: z936.string().optional()
 });
-var Result$inboundSchema2 = z934.object({
-  document: z934.lazy(() => DocumentResponse$inboundSchema),
-  index: z934.int(),
-  relevance_score: z934.number()
+var Result$inboundSchema2 = z936.object({
+  document: z936.lazy(() => DocumentResponse$inboundSchema),
+  index: z936.int(),
+  relevance_score: z936.number()
 }).transform((v) => {
   return remap(v, {
     "relevance_score": "relevanceScore"
   });
 });
-var CreateRerankUsage$inboundSchema = z934.object({
-  cost: z934.number().optional(),
-  search_units: z934.int().optional(),
-  total_tokens: z934.int().optional()
+var CreateRerankUsage$inboundSchema = z936.object({
+  cost: z936.number().optional(),
+  search_units: z936.int().optional(),
+  total_tokens: z936.int().optional()
 }).transform((v) => {
   return remap(v, {
     "search_units": "searchUnits",
     "total_tokens": "totalTokens"
   });
 });
-var CreateRerankResponseBody$inboundSchema = z934.object({
-  id: z934.string().optional(),
-  model: z934.string(),
-  provider: z934.string().optional(),
-  results: z934.array(z934.lazy(() => Result$inboundSchema2)),
-  usage: z934.lazy(() => CreateRerankUsage$inboundSchema).optional()
+var CreateRerankResponseBody$inboundSchema = z936.object({
+  id: z936.string().optional(),
+  model: z936.string(),
+  provider: z936.string().optional(),
+  results: z936.array(z936.lazy(() => Result$inboundSchema2)),
+  usage: z936.lazy(() => CreateRerankUsage$inboundSchema).optional()
 });
-var CreateRerankResponse$inboundSchema = z934.union([z934.lazy(() => CreateRerankResponseBody$inboundSchema), z934.string()]);
+var CreateRerankResponse$inboundSchema = z936.union([z936.lazy(() => CreateRerankResponseBody$inboundSchema), z936.string()]);
 
 // node_modules/@openrouter/sdk/esm/funcs/rerankRerank.js
 function rerankRerank(client, request, options) {
-  return new APIPromise($do127(client, request, options));
+  return new APIPromise($do129(client, request, options));
 }
-async function $do127(client, request, options) {
+async function $do129(client, request, options) {
   const parsed = safeParse(request, (value) => CreateRerankRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -41002,23 +41284,23 @@ var Responses = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/createscimgroupmappingresponse.js
-var z936 = __toESM(require("zod/v4"), 1);
+var z938 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/scimgroupmapping.js
-var z935 = __toESM(require("zod/v4"), 1);
+var z937 = __toESM(require("zod/v4"), 1);
 var ScimGroupMappingRole = {
   Admin: "admin",
   Member: "member"
 };
 var ScimGroupMappingRole$inboundSchema = inboundSchema(ScimGroupMappingRole);
-var ScimGroupMapping$inboundSchema = z935.object({
-  created_at: z935.string(),
-  id: z935.string(),
-  organization_id: z935.string(),
+var ScimGroupMapping$inboundSchema = z937.object({
+  created_at: z937.string(),
+  id: z937.string(),
+  organization_id: z937.string(),
   role: ScimGroupMappingRole$inboundSchema,
-  scim_group_id: z935.string(),
-  updated_at: z935.string(),
-  workspace_id: z935.string()
+  scim_group_id: z937.string(),
+  updated_at: z937.string(),
+  workspace_id: z937.string()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -41030,24 +41312,24 @@ var ScimGroupMapping$inboundSchema = z935.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createscimgroupmappingresponse.js
-var CreateScimGroupMappingResponse$inboundSchema = z936.object({
+var CreateScimGroupMappingResponse$inboundSchema = z938.object({
   data: ScimGroupMapping$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createscimgroupmapping.js
-var z938 = __toESM(require("zod/v4"), 1);
+var z940 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/createscimgroupmappingrequest.js
-var z937 = __toESM(require("zod/v4"), 1);
+var z939 = __toESM(require("zod/v4"), 1);
 var CreateScimGroupMappingRequestRole = {
   Admin: "admin",
   Member: "member"
 };
 var CreateScimGroupMappingRequestRole$outboundSchema = outboundSchema(CreateScimGroupMappingRequestRole);
-var CreateScimGroupMappingRequest$outboundSchema = z937.object({
+var CreateScimGroupMappingRequest$outboundSchema = z939.object({
   role: CreateScimGroupMappingRequestRole$outboundSchema,
-  scimGroupId: z937.string(),
-  workspaceId: z937.string()
+  scimGroupId: z939.string(),
+  workspaceId: z939.string()
 }).transform((v) => {
   return remap(v, {
     scimGroupId: "scim_group_id",
@@ -41056,10 +41338,10 @@ var CreateScimGroupMappingRequest$outboundSchema = z937.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createscimgroupmapping.js
-var CreateScimGroupMappingRequest$outboundSchema2 = z938.object({
-  httpReferer: z938.string().optional(),
-  appTitle: z938.string().optional(),
-  appCategories: z938.string().optional(),
+var CreateScimGroupMappingRequest$outboundSchema2 = z940.object({
+  httpReferer: z940.string().optional(),
+  appTitle: z940.string().optional(),
+  appCategories: z940.string().optional(),
   createScimGroupMappingRequest: CreateScimGroupMappingRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -41070,9 +41352,9 @@ var CreateScimGroupMappingRequest$outboundSchema2 = z938.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimCreate.js
 function scimCreate(client, request, options) {
-  return new APIPromise($do128(client, request, options));
+  return new APIPromise($do130(client, request, options));
 }
-async function $do128(client, request, options) {
+async function $do130(client, request, options) {
   const parsed = safeParse(request, (value) => CreateScimGroupMappingRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -41146,13 +41428,13 @@ async function $do128(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/createscimsyncjob.js
-var z941 = __toESM(require("zod/v4"), 1);
+var z943 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/createscimsyncjobresponse.js
-var z940 = __toESM(require("zod/v4"), 1);
+var z942 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/scimsyncjob.js
-var z939 = __toESM(require("zod/v4"), 1);
+var z941 = __toESM(require("zod/v4"), 1);
 var ScimSyncJobStatus = {
   Queued: "queued",
   Running: "running",
@@ -41160,15 +41442,15 @@ var ScimSyncJobStatus = {
   Failed: "failed"
 };
 var ScimSyncJobStatus$inboundSchema = inboundSchema(ScimSyncJobStatus);
-var ScimSyncJob$inboundSchema = z939.object({
-  created_at: z939.string(),
-  deleted_groups: z939.nullable(z939.int()),
-  error_message: z939.nullable(z939.string()),
-  finished_at: z939.nullable(z939.string()),
-  id: z939.string(),
-  started_at: z939.nullable(z939.string()),
+var ScimSyncJob$inboundSchema = z941.object({
+  created_at: z941.string(),
+  deleted_groups: z941.nullable(z941.int()),
+  error_message: z941.nullable(z941.string()),
+  finished_at: z941.nullable(z941.string()),
+  id: z941.string(),
+  started_at: z941.nullable(z941.string()),
   status: ScimSyncJobStatus$inboundSchema,
-  synced_groups: z939.nullable(z939.int())
+  synced_groups: z941.nullable(z941.int())
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -41181,22 +41463,22 @@ var ScimSyncJob$inboundSchema = z939.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createscimsyncjobresponse.js
-var CreateScimSyncJobResponse$inboundSchema = z940.object({
+var CreateScimSyncJobResponse$inboundSchema = z942.object({
   data: ScimSyncJob$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createscimsyncjob.js
-var CreateScimSyncJobRequest$outboundSchema = z941.object({
-  httpReferer: z941.string().optional(),
-  appTitle: z941.string().optional(),
-  appCategories: z941.string().optional()
+var CreateScimSyncJobRequest$outboundSchema = z943.object({
+  httpReferer: z943.string().optional(),
+  appTitle: z943.string().optional(),
+  appCategories: z943.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var CreateScimSyncJobResponse$inboundSchema2 = z941.object({
-  Headers: z941.record(z941.string(), z941.array(z941.string())).default({}),
+var CreateScimSyncJobResponse$inboundSchema2 = z943.object({
+  Headers: z943.record(z943.string(), z943.array(z943.string())).default({}),
   Result: CreateScimSyncJobResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -41207,9 +41489,9 @@ var CreateScimSyncJobResponse$inboundSchema2 = z941.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimCreateSyncJob.js
 function scimCreateSyncJob(client, request, options) {
-  return new APIPromise($do129(client, request, options));
+  return new APIPromise($do131(client, request, options));
 }
-async function $do129(client, request, options) {
+async function $do131(client, request, options) {
   const parsed = safeParse(request, (value) => CreateScimSyncJobRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -41283,25 +41565,25 @@ async function $do129(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/deletescimgroupmappingresponse.js
-var z942 = __toESM(require("zod/v4"), 1);
-var DeleteScimGroupMappingResponse$inboundSchema = z942.object({
-  deleted: z942.literal(true)
+var z944 = __toESM(require("zod/v4"), 1);
+var DeleteScimGroupMappingResponse$inboundSchema = z944.object({
+  deleted: z944.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deletescimgroupmapping.js
-var z943 = __toESM(require("zod/v4"), 1);
+var z945 = __toESM(require("zod/v4"), 1);
 var KeepMembersEnum = {
   True: "true",
   False: "false"
 };
 var KeepMembersEnum$outboundSchema = outboundSchema(KeepMembersEnum);
-var KeepMembers$outboundSchema = z943.union([KeepMembersEnum$outboundSchema, z943.boolean()]);
-var DeleteScimGroupMappingRequest$outboundSchema = z943.object({
-  httpReferer: z943.string().optional(),
-  appTitle: z943.string().optional(),
-  appCategories: z943.string().optional(),
-  id: z943.string(),
-  keepMembers: z943.union([KeepMembersEnum$outboundSchema, z943.boolean()])
+var KeepMembers$outboundSchema = z945.union([KeepMembersEnum$outboundSchema, z945.boolean()]);
+var DeleteScimGroupMappingRequest$outboundSchema = z945.object({
+  httpReferer: z945.string().optional(),
+  appTitle: z945.string().optional(),
+  appCategories: z945.string().optional(),
+  id: z945.string(),
+  keepMembers: z945.union([KeepMembersEnum$outboundSchema, z945.boolean()])
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -41311,9 +41593,9 @@ var DeleteScimGroupMappingRequest$outboundSchema = z943.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimDelete.js
 function scimDelete(client, request, options) {
-  return new APIPromise($do130(client, request, options));
+  return new APIPromise($do132(client, request, options));
 }
-async function $do130(client, request, options) {
+async function $do132(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteScimGroupMappingRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -41394,18 +41676,18 @@ async function $do130(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/getscimsyncjobresponse.js
-var z944 = __toESM(require("zod/v4"), 1);
-var GetScimSyncJobResponse$inboundSchema = z944.object({
+var z946 = __toESM(require("zod/v4"), 1);
+var GetScimSyncJobResponse$inboundSchema = z946.object({
   data: ScimSyncJob$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getscimsyncjob.js
-var z945 = __toESM(require("zod/v4"), 1);
-var GetScimSyncJobRequest$outboundSchema = z945.object({
-  httpReferer: z945.string().optional(),
-  appTitle: z945.string().optional(),
-  appCategories: z945.string().optional(),
-  id: z945.string()
+var z947 = __toESM(require("zod/v4"), 1);
+var GetScimSyncJobRequest$outboundSchema = z947.object({
+  httpReferer: z947.string().optional(),
+  appTitle: z947.string().optional(),
+  appCategories: z947.string().optional(),
+  id: z947.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -41414,9 +41696,9 @@ var GetScimSyncJobRequest$outboundSchema = z945.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimGetSyncJob.js
 function scimGetSyncJob(client, request, options) {
-  return new APIPromise($do131(client, request, options));
+  return new APIPromise($do133(client, request, options));
 }
-async function $do131(client, request, options) {
+async function $do133(client, request, options) {
   const parsed = safeParse(request, (value) => GetScimSyncJobRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -41493,20 +41775,20 @@ async function $do131(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listscimgroups.js
-var z948 = __toESM(require("zod/v4"), 1);
+var z950 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/listscimgroupsresponse.js
-var z947 = __toESM(require("zod/v4"), 1);
+var z949 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/scimgroup.js
-var z946 = __toESM(require("zod/v4"), 1);
-var ScimGroup$inboundSchema = z946.object({
-  created_at: z946.string(),
-  display_name: z946.string(),
-  external_id: z946.nullable(z946.string()),
-  id: z946.string(),
-  organization_id: z946.string(),
-  updated_at: z946.string()
+var z948 = __toESM(require("zod/v4"), 1);
+var ScimGroup$inboundSchema = z948.object({
+  created_at: z948.string(),
+  display_name: z948.string(),
+  external_id: z948.nullable(z948.string()),
+  id: z948.string(),
+  organization_id: z948.string(),
+  updated_at: z948.string()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -41518,9 +41800,9 @@ var ScimGroup$inboundSchema = z946.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listscimgroupsresponse.js
-var ListScimGroupsResponse$inboundSchema = z947.object({
-  data: z947.array(ScimGroup$inboundSchema),
-  total_count: z947.int()
+var ListScimGroupsResponse$inboundSchema = z949.object({
+  data: z949.array(ScimGroup$inboundSchema),
+  total_count: z949.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -41528,14 +41810,14 @@ var ListScimGroupsResponse$inboundSchema = z947.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listscimgroups.js
-var ListScimGroupsRequest$outboundSchema = z948.object({
-  httpReferer: z948.string().optional(),
-  appTitle: z948.string().optional(),
-  appCategories: z948.string().optional(),
-  offset: z948.nullable(z948.int().default(0)),
-  limit: z948.int().default(50),
-  displayName: z948.string().optional(),
-  externalId: z948.string().optional()
+var ListScimGroupsRequest$outboundSchema = z950.object({
+  httpReferer: z950.string().optional(),
+  appTitle: z950.string().optional(),
+  appCategories: z950.string().optional(),
+  offset: z950.nullable(z950.int().default(0)),
+  limit: z950.int().default(50),
+  displayName: z950.string().optional(),
+  externalId: z950.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -41543,7 +41825,7 @@ var ListScimGroupsRequest$outboundSchema = z948.object({
     externalId: "external_id"
   });
 });
-var ListScimGroupsResponse$inboundSchema2 = z948.object({
+var ListScimGroupsResponse$inboundSchema2 = z950.object({
   Result: ListScimGroupsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -41553,9 +41835,9 @@ var ListScimGroupsResponse$inboundSchema2 = z948.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimListGroups.js
 function scimListGroups(client, request, options) {
-  return new APIPromise($do132(client, request, options));
+  return new APIPromise($do134(client, request, options));
 }
-async function $do132(client, request, options) {
+async function $do134(client, request, options) {
   const parsed = safeParse(request, (value) => ListScimGroupsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -41664,13 +41946,13 @@ async function $do132(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listscimgroupmappings.js
-var z950 = __toESM(require("zod/v4"), 1);
+var z952 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/listscimgroupmappingsresponse.js
-var z949 = __toESM(require("zod/v4"), 1);
-var ListScimGroupMappingsResponse$inboundSchema = z949.object({
-  data: z949.array(ScimGroupMapping$inboundSchema),
-  total_count: z949.int()
+var z951 = __toESM(require("zod/v4"), 1);
+var ListScimGroupMappingsResponse$inboundSchema = z951.object({
+  data: z951.array(ScimGroupMapping$inboundSchema),
+  total_count: z951.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -41678,18 +41960,18 @@ var ListScimGroupMappingsResponse$inboundSchema = z949.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listscimgroupmappings.js
-var ListScimGroupMappingsRequest$outboundSchema = z950.object({
-  httpReferer: z950.string().optional(),
-  appTitle: z950.string().optional(),
-  appCategories: z950.string().optional(),
-  offset: z950.nullable(z950.int().default(0)),
-  limit: z950.int().default(50)
+var ListScimGroupMappingsRequest$outboundSchema = z952.object({
+  httpReferer: z952.string().optional(),
+  appTitle: z952.string().optional(),
+  appCategories: z952.string().optional(),
+  offset: z952.nullable(z952.int().default(0)),
+  limit: z952.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListScimGroupMappingsResponse$inboundSchema2 = z950.object({
+var ListScimGroupMappingsResponse$inboundSchema2 = z952.object({
   Result: ListScimGroupMappingsResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -41699,9 +41981,9 @@ var ListScimGroupMappingsResponse$inboundSchema2 = z950.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimListMappings.js
 function scimListMappings(client, request, options) {
-  return new APIPromise($do133(client, request, options));
+  return new APIPromise($do135(client, request, options));
 }
-async function $do133(client, request, options) {
+async function $do135(client, request, options) {
   const parsed = safeParse(request, (value) => ListScimGroupMappingsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -41808,18 +42090,18 @@ async function $do133(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/getscimgroupmappingresponse.js
-var z951 = __toESM(require("zod/v4"), 1);
-var GetScimGroupMappingResponse$inboundSchema = z951.object({
+var z953 = __toESM(require("zod/v4"), 1);
+var GetScimGroupMappingResponse$inboundSchema = z953.object({
   data: ScimGroupMapping$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getscimgroupmapping.js
-var z952 = __toESM(require("zod/v4"), 1);
-var GetScimGroupMappingRequest$outboundSchema = z952.object({
-  httpReferer: z952.string().optional(),
-  appTitle: z952.string().optional(),
-  appCategories: z952.string().optional(),
-  id: z952.string()
+var z954 = __toESM(require("zod/v4"), 1);
+var GetScimGroupMappingRequest$outboundSchema = z954.object({
+  httpReferer: z954.string().optional(),
+  appTitle: z954.string().optional(),
+  appCategories: z954.string().optional(),
+  id: z954.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -41828,9 +42110,9 @@ var GetScimGroupMappingRequest$outboundSchema = z952.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimRead.js
 function scimRead(client, request, options) {
-  return new APIPromise($do134(client, request, options));
+  return new APIPromise($do136(client, request, options));
 }
-async function $do134(client, request, options) {
+async function $do136(client, request, options) {
   const parsed = safeParse(request, (value) => GetScimGroupMappingRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -41907,31 +42189,31 @@ async function $do134(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/updatescimgroupmappingresponse.js
-var z953 = __toESM(require("zod/v4"), 1);
-var UpdateScimGroupMappingResponse$inboundSchema = z953.object({
+var z955 = __toESM(require("zod/v4"), 1);
+var UpdateScimGroupMappingResponse$inboundSchema = z955.object({
   data: ScimGroupMapping$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updatescimgroupmapping.js
-var z955 = __toESM(require("zod/v4"), 1);
+var z957 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/updatescimgroupmappingrequest.js
-var z954 = __toESM(require("zod/v4"), 1);
+var z956 = __toESM(require("zod/v4"), 1);
 var UpdateScimGroupMappingRequestRole = {
   Admin: "admin",
   Member: "member"
 };
 var UpdateScimGroupMappingRequestRole$outboundSchema = outboundSchema(UpdateScimGroupMappingRequestRole);
-var UpdateScimGroupMappingRequest$outboundSchema = z954.object({
+var UpdateScimGroupMappingRequest$outboundSchema = z956.object({
   role: UpdateScimGroupMappingRequestRole$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updatescimgroupmapping.js
-var UpdateScimGroupMappingRequest$outboundSchema2 = z955.object({
-  httpReferer: z955.string().optional(),
-  appTitle: z955.string().optional(),
-  appCategories: z955.string().optional(),
-  id: z955.string(),
+var UpdateScimGroupMappingRequest$outboundSchema2 = z957.object({
+  httpReferer: z957.string().optional(),
+  appTitle: z957.string().optional(),
+  appCategories: z957.string().optional(),
+  id: z957.string(),
   updateScimGroupMappingRequest: UpdateScimGroupMappingRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -41942,9 +42224,9 @@ var UpdateScimGroupMappingRequest$outboundSchema2 = z955.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/scimUpdate.js
 function scimUpdate(client, request, options) {
-  return new APIPromise($do135(client, request, options));
+  return new APIPromise($do137(client, request, options));
 }
-async function $do135(client, request, options) {
+async function $do137(client, request, options) {
   const parsed = safeParse(request, (value) => UpdateScimGroupMappingRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -42100,15 +42382,15 @@ var Scim = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/sttresponse.js
-var z960 = __toESM(require("zod/v4"), 1);
+var z962 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/sttentity.js
-var z956 = __toESM(require("zod/v4"), 1);
-var STTEntity$inboundSchema = z956.object({
-  end_char: z956.int(),
-  start_char: z956.int(),
-  text: z956.string(),
-  type: z956.string()
+var z958 = __toESM(require("zod/v4"), 1);
+var STTEntity$inboundSchema = z958.object({
+  end_char: z958.int(),
+  start_char: z958.int(),
+  text: z958.string(),
+  type: z958.string()
 }).transform((v) => {
   return remap(v, {
     "end_char": "endChar",
@@ -42117,21 +42399,21 @@ var STTEntity$inboundSchema = z956.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttsegment.js
-var z957 = __toESM(require("zod/v4"), 1);
-var STTSegment$inboundSchema = z957.object({
-  avg_logprob: z957.number().optional(),
-  channel: z957.int().optional(),
-  compression_ratio: z957.number().optional(),
-  end: z957.number(),
-  id: z957.int(),
-  no_speech_prob: z957.number().optional(),
-  seek: z957.int().optional(),
-  speaker: z957.int().optional(),
-  speaker_label: z957.string().optional(),
-  start: z957.number(),
-  temperature: z957.number().optional(),
-  text: z957.string(),
-  tokens: z957.array(z957.int()).optional()
+var z959 = __toESM(require("zod/v4"), 1);
+var STTSegment$inboundSchema = z959.object({
+  avg_logprob: z959.number().optional(),
+  channel: z959.int().optional(),
+  compression_ratio: z959.number().optional(),
+  end: z959.number(),
+  id: z959.int(),
+  no_speech_prob: z959.number().optional(),
+  seek: z959.int().optional(),
+  speaker: z959.int().optional(),
+  speaker_label: z959.string().optional(),
+  start: z959.number(),
+  temperature: z959.number().optional(),
+  text: z959.string(),
+  tokens: z959.array(z959.int()).optional()
 }).transform((v) => {
   return remap(v, {
     "avg_logprob": "avgLogprob",
@@ -42142,13 +42424,13 @@ var STTSegment$inboundSchema = z957.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttusage.js
-var z958 = __toESM(require("zod/v4"), 1);
-var STTUsage$inboundSchema = z958.object({
-  cost: z958.number().optional(),
-  input_tokens: z958.int().optional(),
-  output_tokens: z958.int().optional(),
-  seconds: z958.number().optional(),
-  total_tokens: z958.int().optional()
+var z960 = __toESM(require("zod/v4"), 1);
+var STTUsage$inboundSchema = z960.object({
+  cost: z960.number().optional(),
+  input_tokens: z960.int().optional(),
+  output_tokens: z960.int().optional(),
+  seconds: z960.number().optional(),
+  total_tokens: z960.int().optional()
 }).transform((v) => {
   return remap(v, {
     "input_tokens": "inputTokens",
@@ -42158,21 +42440,21 @@ var STTUsage$inboundSchema = z958.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttword.js
-var z959 = __toESM(require("zod/v4"), 1);
+var z961 = __toESM(require("zod/v4"), 1);
 var STTWordType = {
   Word: "word",
   AudioEvent: "audio_event"
 };
 var STTWordType$inboundSchema = inboundSchema(STTWordType);
-var STTWord$inboundSchema = z959.object({
-  channel: z959.int().optional(),
-  confidence: z959.number().optional(),
-  end: z959.number(),
-  speaker: z959.int().optional(),
-  speaker_label: z959.string().optional(),
-  start: z959.number(),
+var STTWord$inboundSchema = z961.object({
+  channel: z961.int().optional(),
+  confidence: z961.number().optional(),
+  end: z961.number(),
+  speaker: z961.int().optional(),
+  speaker_label: z961.string().optional(),
+  start: z961.number(),
   type: STTWordType$inboundSchema.optional(),
-  word: z959.string()
+  word: z961.string()
 }).transform((v) => {
   return remap(v, {
     "speaker_label": "speakerLabel"
@@ -42180,17 +42462,17 @@ var STTWord$inboundSchema = z959.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttresponse.js
-var STTResponse$inboundSchema = z960.object({
-  confidence: z960.number().optional(),
-  duration: z960.number().optional(),
-  entities: z960.array(STTEntity$inboundSchema).optional(),
-  language: z960.string().optional(),
-  language_confidence: z960.number().optional(),
-  segments: z960.array(STTSegment$inboundSchema).optional(),
-  task: z960.string().optional(),
-  text: z960.string(),
+var STTResponse$inboundSchema = z962.object({
+  confidence: z962.number().optional(),
+  duration: z962.number().optional(),
+  entities: z962.array(STTEntity$inboundSchema).optional(),
+  language: z962.string().optional(),
+  language_confidence: z962.number().optional(),
+  segments: z962.array(STTSegment$inboundSchema).optional(),
+  task: z962.string().optional(),
+  text: z962.string(),
   usage: STTUsage$inboundSchema.optional(),
-  words: z960.array(STTWord$inboundSchema).optional()
+  words: z962.array(STTWord$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     "language_confidence": "languageConfidence"
@@ -42198,30 +42480,30 @@ var STTResponse$inboundSchema = z960.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiotranscriptions.js
-var z965 = __toESM(require("zod/v4"), 1);
+var z967 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/sttrequest.js
-var z964 = __toESM(require("zod/v4"), 1);
+var z966 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/sttinputaudio.js
-var z963 = __toESM(require("zod/v4"), 1);
+var z965 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/sttinlineinputaudio.js
-var z961 = __toESM(require("zod/v4"), 1);
-var STTInlineInputAudio$outboundSchema = z961.object({
-  data: z961.string(),
-  format: z961.string()
+var z963 = __toESM(require("zod/v4"), 1);
+var STTInlineInputAudio$outboundSchema = z963.object({
+  data: z963.string(),
+  format: z963.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/stturlinputaudio.js
-var z962 = __toESM(require("zod/v4"), 1);
-var STTUrlInputAudio$outboundSchema = z962.object({
-  format: z962.string().optional(),
-  url: z962.string()
+var z964 = __toESM(require("zod/v4"), 1);
+var STTUrlInputAudio$outboundSchema = z964.object({
+  format: z964.string().optional(),
+  url: z964.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/sttinputaudio.js
-var STTInputAudio$outboundSchema = z963.union([
+var STTInputAudio$outboundSchema = z965.union([
   STTInlineInputAudio$outboundSchema,
   STTUrlInputAudio$outboundSchema
 ]);
@@ -42243,17 +42525,17 @@ var STTRequestResponseFormat = {
   VerboseJson: "verbose_json"
 };
 var STTRequestDataCollection$outboundSchema = outboundSchema(STTRequestDataCollection);
-var STTRequestIgnore$outboundSchema = z964.union([ProviderName$outboundSchema, z964.string()]);
-var STTRequestOnly$outboundSchema = z964.union([ProviderName$outboundSchema, z964.string()]);
-var STTRequestOrder$outboundSchema = z964.union([ProviderName$outboundSchema, z964.string()]);
-var STTRequestProvider$outboundSchema = z964.object({
-  allowFallbacks: z964.nullable(z964.boolean()).optional(),
-  dataCollection: z964.nullable(STTRequestDataCollection$outboundSchema).optional(),
-  ignore: z964.nullable(z964.array(z964.union([ProviderName$outboundSchema, z964.string()]))).optional(),
-  only: z964.nullable(z964.array(z964.union([ProviderName$outboundSchema, z964.string()]))).optional(),
+var STTRequestIgnore$outboundSchema = z966.union([ProviderName$outboundSchema, z966.string()]);
+var STTRequestOnly$outboundSchema = z966.union([ProviderName$outboundSchema, z966.string()]);
+var STTRequestOrder$outboundSchema = z966.union([ProviderName$outboundSchema, z966.string()]);
+var STTRequestProvider$outboundSchema = z966.object({
+  allowFallbacks: z966.nullable(z966.boolean()).optional(),
+  dataCollection: z966.nullable(STTRequestDataCollection$outboundSchema).optional(),
+  ignore: z966.nullable(z966.array(z966.union([ProviderName$outboundSchema, z966.string()]))).optional(),
+  only: z966.nullable(z966.array(z966.union([ProviderName$outboundSchema, z966.string()]))).optional(),
   options: ProviderOptions$outboundSchema.optional(),
-  order: z964.nullable(z964.array(z964.union([ProviderName$outboundSchema, z964.string()]))).optional(),
-  zdr: z964.nullable(z964.boolean()).optional()
+  order: z966.nullable(z966.array(z966.union([ProviderName$outboundSchema, z966.string()]))).optional(),
+  zdr: z966.nullable(z966.boolean()).optional()
 }).transform((v) => {
   return remap(v, {
     allowFallbacks: "allow_fallbacks",
@@ -42261,19 +42543,19 @@ var STTRequestProvider$outboundSchema = z964.object({
   });
 });
 var STTRequestResponseFormat$outboundSchema = outboundSchema(STTRequestResponseFormat);
-var STTRequest$outboundSchema = z964.object({
-  diarize: z964.boolean().optional(),
+var STTRequest$outboundSchema = z966.object({
+  diarize: z966.boolean().optional(),
   inputAudio: STTInputAudio$outboundSchema,
-  keyterms: z964.array(z964.string()).optional(),
-  language: z964.string().optional(),
-  model: z964.string(),
-  provider: z964.lazy(() => STTRequestProvider$outboundSchema).optional(),
+  keyterms: z966.array(z966.string()).optional(),
+  language: z966.string().optional(),
+  model: z966.string(),
+  provider: z966.lazy(() => STTRequestProvider$outboundSchema).optional(),
   responseFormat: STTRequestResponseFormat$outboundSchema.optional(),
-  sessionId: z964.string().optional(),
-  temperature: z964.number().optional(),
-  timestampGranularities: z964.array(STTTimestampGranularity$outboundSchema).optional(),
+  sessionId: z966.string().optional(),
+  temperature: z966.number().optional(),
+  timestampGranularities: z966.array(STTTimestampGranularity$outboundSchema).optional(),
   trace: TraceConfig$outboundSchema.optional(),
-  user: z964.string().optional()
+  user: z966.string().optional()
 }).transform((v) => {
   return remap(v, {
     inputAudio: "input_audio",
@@ -42284,10 +42566,10 @@ var STTRequest$outboundSchema = z964.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiotranscriptions.js
-var CreateAudioTranscriptionsRequest$outboundSchema = z965.object({
-  httpReferer: z965.string().optional(),
-  appTitle: z965.string().optional(),
-  appCategories: z965.string().optional(),
+var CreateAudioTranscriptionsRequest$outboundSchema = z967.object({
+  httpReferer: z967.string().optional(),
+  appTitle: z967.string().optional(),
+  appCategories: z967.string().optional(),
   sttRequest: STTRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -42298,9 +42580,9 @@ var CreateAudioTranscriptionsRequest$outboundSchema = z965.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/sttCreateTranscription.js
 function sttCreateTranscription(client, request, options) {
-  return new APIPromise($do136(client, request, options));
+  return new APIPromise($do138(client, request, options));
 }
-async function $do136(client, request, options) {
+async function $do138(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAudioTranscriptionsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -42372,7 +42654,7 @@ async function $do136(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiotranscriptionsmultipart.js
-var z966 = __toESM(require("zod/v4"), 1);
+var z968 = __toESM(require("zod/v4"), 1);
 var ResponseFormat = {
   Json: "json",
   VerboseJson: "verbose_json"
@@ -42381,31 +42663,31 @@ var TimestampGranularities = {
   Word: "word",
   Segment: "segment"
 };
-var CreateAudioTranscriptionsMultipartFile$outboundSchema = z966.object({
-  fileName: z966.string(),
-  content: z966.union([
-    z966.custom((x) => x instanceof ReadableStream),
-    z966.custom((x) => x instanceof Blob),
-    z966.custom((x) => x instanceof ArrayBuffer),
-    z966.custom((x) => x instanceof Uint8Array)
+var CreateAudioTranscriptionsMultipartFile$outboundSchema = z968.object({
+  fileName: z968.string(),
+  content: z968.union([
+    z968.custom((x) => x instanceof ReadableStream),
+    z968.custom((x) => x instanceof Blob),
+    z968.custom((x) => x instanceof ArrayBuffer),
+    z968.custom((x) => x instanceof Uint8Array)
   ])
 });
 var ResponseFormat$outboundSchema2 = outboundSchema(ResponseFormat);
 var TimestampGranularities$outboundSchema = outboundSchema(TimestampGranularities);
-var CreateAudioTranscriptionsMultipartRequestBody$outboundSchema = z966.object({
-  diarize: z966.boolean().optional(),
-  file: z966.lazy(() => CreateAudioTranscriptionsMultipartFile$outboundSchema).or(blobLikeSchema).optional(),
-  keyterms: z966.array(z966.string()).optional(),
-  language: z966.string().optional(),
-  model: z966.string(),
-  provider: z966.string().optional(),
+var CreateAudioTranscriptionsMultipartRequestBody$outboundSchema = z968.object({
+  diarize: z968.boolean().optional(),
+  file: z968.lazy(() => CreateAudioTranscriptionsMultipartFile$outboundSchema).or(blobLikeSchema).optional(),
+  keyterms: z968.array(z968.string()).optional(),
+  language: z968.string().optional(),
+  model: z968.string(),
+  provider: z968.string().optional(),
   responseFormat: ResponseFormat$outboundSchema2.optional(),
-  sessionId: z966.string().optional(),
-  sourceUrl: z966.string().optional(),
-  temperature: z966.number().optional(),
-  timestampGranularities: z966.array(TimestampGranularities$outboundSchema).optional(),
-  trace: z966.string().optional(),
-  user: z966.string().optional()
+  sessionId: z968.string().optional(),
+  sourceUrl: z968.string().optional(),
+  temperature: z968.number().optional(),
+  timestampGranularities: z968.array(TimestampGranularities$outboundSchema).optional(),
+  trace: z968.string().optional(),
+  user: z968.string().optional()
 }).transform((v) => {
   return remap(v, {
     keyterms: "keyterms[]",
@@ -42415,11 +42697,11 @@ var CreateAudioTranscriptionsMultipartRequestBody$outboundSchema = z966.object({
     timestampGranularities: "timestamp_granularities[]"
   });
 });
-var CreateAudioTranscriptionsMultipartRequest$outboundSchema = z966.object({
-  httpReferer: z966.string().optional(),
-  appTitle: z966.string().optional(),
-  appCategories: z966.string().optional(),
-  requestBody: z966.lazy(() => CreateAudioTranscriptionsMultipartRequestBody$outboundSchema)
+var CreateAudioTranscriptionsMultipartRequest$outboundSchema = z968.object({
+  httpReferer: z968.string().optional(),
+  appTitle: z968.string().optional(),
+  appCategories: z968.string().optional(),
+  requestBody: z968.lazy(() => CreateAudioTranscriptionsMultipartRequestBody$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -42429,9 +42711,9 @@ var CreateAudioTranscriptionsMultipartRequest$outboundSchema = z966.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/sttCreateTranscriptionMultipart.js
 function sttCreateTranscriptionMultipart(client, request, options) {
-  return new APIPromise($do137(client, request, options));
+  return new APIPromise($do139(client, request, options));
 }
-async function $do137(client, request, options) {
+async function $do139(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAudioTranscriptionsMultipartRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -42573,11 +42855,11 @@ var STT = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/operations/createsystemone.js
-var z967 = __toESM(require("zod/v4"), 1);
-var CreateSystemoneRequest$outboundSchema = z967.object({
-  httpReferer: z967.string().optional(),
-  appTitle: z967.string().optional(),
-  appCategories: z967.string().optional(),
+var z969 = __toESM(require("zod/v4"), 1);
+var CreateSystemoneRequest$outboundSchema = z969.object({
+  httpReferer: z969.string().optional(),
+  appTitle: z969.string().optional(),
+  appCategories: z969.string().optional(),
   decisionsRequest: DecisionsRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -42588,9 +42870,9 @@ var CreateSystemoneRequest$outboundSchema = z967.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/systemOneCreate.js
 function systemOneCreate(client, request, options) {
-  return new APIPromise($do138(client, request, options));
+  return new APIPromise($do140(client, request, options));
 }
-async function $do138(client, request, options) {
+async function $do140(client, request, options) {
   const parsed = safeParse(request, (value) => CreateSystemoneRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -42675,16 +42957,16 @@ var SystemOne = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/operations/gettool.js
-var z975 = __toESM(require("zod/v4"), 1);
+var z977 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/gettoolresponse.js
-var z974 = __toESM(require("zod/v4"), 1);
+var z976 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/servertooldetails.js
-var z973 = __toESM(require("zod/v4"), 1);
+var z975 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/servertoolengine.js
-var z969 = __toESM(require("zod/v4"), 1);
+var z971 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/servertoolexecutedby.js
 var ServerToolExecutedBy = {
@@ -42695,12 +42977,12 @@ var ServerToolExecutedBy = {
 var ServerToolExecutedBy$inboundSchema = inboundSchema(ServerToolExecutedBy);
 
 // node_modules/@openrouter/sdk/esm/models/servertoolprice.js
-var z968 = __toESM(require("zod/v4"), 1);
-var ServerToolPrice$inboundSchema = z968.object({
-  max_units_per_call: z968.int(),
-  mode: z968.nullable(z968.string()),
-  price: z968.string(),
-  unit: z968.string()
+var z970 = __toESM(require("zod/v4"), 1);
+var ServerToolPrice$inboundSchema = z970.object({
+  max_units_per_call: z970.int(),
+  mode: z970.nullable(z970.string()),
+  price: z970.string(),
+  unit: z970.string()
 }).transform((v) => {
   return remap(v, {
     "max_units_per_call": "maxUnitsPerCall"
@@ -42727,15 +43009,15 @@ var PricingSource = {
 var BYOK$inboundSchema = inboundSchema(BYOK2);
 var ServerToolEngineDataRegion$inboundSchema = inboundSchema(ServerToolEngineDataRegion);
 var PricingSource$inboundSchema = inboundSchema(PricingSource);
-var ServerToolEngine$inboundSchema = z969.object({
+var ServerToolEngine$inboundSchema = z971.object({
   byok: BYOK$inboundSchema,
-  data_regions: z969.array(ServerToolEngineDataRegion$inboundSchema),
-  default_mode: z969.nullable(z969.string()),
+  data_regions: z971.array(ServerToolEngineDataRegion$inboundSchema),
+  default_mode: z971.nullable(z971.string()),
   executed_by: ServerToolExecutedBy$inboundSchema,
-  id: z969.nullable(z969.string()),
-  name: z969.string(),
-  pricing: z969.array(ServerToolPrice$inboundSchema),
-  pricing_doc_url: z969.nullable(z969.string()),
+  id: z971.nullable(z971.string()),
+  name: z971.string(),
+  pricing: z971.array(ServerToolPrice$inboundSchema),
+  pricing_doc_url: z971.nullable(z971.string()),
   pricing_source: PricingSource$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -42748,20 +43030,20 @@ var ServerToolEngine$inboundSchema = z969.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/servertoolinputname.js
-var z971 = __toESM(require("zod/v4"), 1);
+var z973 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/servertooloutputname.js
-var z970 = __toESM(require("zod/v4"), 1);
+var z972 = __toESM(require("zod/v4"), 1);
 var ServerToolOutputNameApiFormat = {
   Responses: "responses",
   ChatCompletions: "chat-completions",
   AnthropicMessages: "anthropic-messages"
 };
 var ServerToolOutputNameApiFormat$inboundSchema = inboundSchema(ServerToolOutputNameApiFormat);
-var ServerToolOutputName$inboundSchema = z970.object({
+var ServerToolOutputName$inboundSchema = z972.object({
   api_format: ServerToolOutputNameApiFormat$inboundSchema,
-  name: z970.string().optional(),
-  type: z970.string()
+  name: z972.string().optional(),
+  type: z972.string()
 }).transform((v) => {
   return remap(v, {
     "api_format": "apiFormat"
@@ -42775,10 +43057,10 @@ var ServerToolInputNameApiFormat = {
   AnthropicMessages: "anthropic-messages"
 };
 var ServerToolInputNameApiFormat$inboundSchema = inboundSchema(ServerToolInputNameApiFormat);
-var ServerToolInputName$inboundSchema = z971.object({
-  api_formats: z971.array(ServerToolInputNameApiFormat$inboundSchema),
-  output_names: z971.array(ServerToolOutputName$inboundSchema),
-  type: z971.string()
+var ServerToolInputName$inboundSchema = z973.object({
+  api_formats: z973.array(ServerToolInputNameApiFormat$inboundSchema),
+  output_names: z973.array(ServerToolOutputName$inboundSchema),
+  type: z973.string()
 }).transform((v) => {
   return remap(v, {
     "api_formats": "apiFormats",
@@ -42787,10 +43069,10 @@ var ServerToolInputName$inboundSchema = z971.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/servertoolnativemodel.js
-var z972 = __toESM(require("zod/v4"), 1);
-var ServerToolNativeModel$inboundSchema = z972.object({
-  providers: z972.array(z972.string()),
-  slug: z972.string()
+var z974 = __toESM(require("zod/v4"), 1);
+var ServerToolNativeModel$inboundSchema = z974.object({
+  providers: z974.array(z974.string()),
+  slug: z974.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/servertooldetails.js
@@ -42803,10 +43085,10 @@ var ServerToolDetailsSupportedApiFormat = {
   ChatCompletions: "chat-completions",
   AnthropicMessages: "anthropic-messages"
 };
-var NativeSupport$inboundSchema = z973.object({
-  endpoint_count: z973.int(),
-  model_count: z973.int(),
-  models: z973.array(ServerToolNativeModel$inboundSchema)
+var NativeSupport$inboundSchema = z975.object({
+  endpoint_count: z975.int(),
+  model_count: z975.int(),
+  models: z975.array(ServerToolNativeModel$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "endpoint_count": "endpointCount",
@@ -42815,22 +43097,22 @@ var NativeSupport$inboundSchema = z973.object({
 });
 var ServerToolDetailsStatus$inboundSchema = inboundSchema(ServerToolDetailsStatus);
 var ServerToolDetailsSupportedApiFormat$inboundSchema = inboundSchema(ServerToolDetailsSupportedApiFormat);
-var ServerToolDetails$inboundSchema = z973.object({
-  aliases: z973.array(ServerToolInputName$inboundSchema),
-  default_engine: z973.nullable(z973.string()),
-  docs_url: z973.string(),
-  engines: z973.array(ServerToolEngine$inboundSchema),
-  fallback_engine: z973.nullable(z973.string()),
-  id: z973.string(),
-  input_schema: z973.record(z973.string(), z973.any()),
-  name: z973.string(),
-  native_support: z973.lazy(() => NativeSupport$inboundSchema),
-  output_schema: z973.nullable(z973.record(z973.string(), z973.any())),
-  parameters_schema: z973.record(z973.string(), z973.any()),
+var ServerToolDetails$inboundSchema = z975.object({
+  aliases: z975.array(ServerToolInputName$inboundSchema),
+  default_engine: z975.nullable(z975.string()),
+  docs_url: z975.string(),
+  engines: z975.array(ServerToolEngine$inboundSchema),
+  fallback_engine: z975.nullable(z975.string()),
+  id: z975.string(),
+  input_schema: z975.record(z975.string(), z975.any()),
+  name: z975.string(),
+  native_support: z975.lazy(() => NativeSupport$inboundSchema),
+  output_schema: z975.nullable(z975.record(z975.string(), z975.any())),
+  parameters_schema: z975.record(z975.string(), z975.any()),
   status: ServerToolDetailsStatus$inboundSchema,
-  summary: z973.string(),
-  supported_api_formats: z973.array(ServerToolDetailsSupportedApiFormat$inboundSchema),
-  tool_description: z973.string()
+  summary: z975.string(),
+  supported_api_formats: z975.array(ServerToolDetailsSupportedApiFormat$inboundSchema),
+  tool_description: z975.string()
 }).transform((v) => {
   return remap(v, {
     "default_engine": "defaultEngine",
@@ -42846,26 +43128,26 @@ var ServerToolDetails$inboundSchema = z973.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/gettoolresponse.js
-var GetToolResponse$inboundSchema = z974.object({
+var GetToolResponse$inboundSchema = z976.object({
   data: ServerToolDetails$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/gettool.js
-var GetToolSecurity$outboundSchema = z975.object({
-  bearer: z975.string()
+var GetToolSecurity$outboundSchema = z977.object({
+  bearer: z977.string()
 });
-var GetToolRequest$outboundSchema = z975.object({
-  httpReferer: z975.string().optional(),
-  appTitle: z975.string().optional(),
-  appCategories: z975.string().optional(),
-  name: z975.string()
+var GetToolRequest$outboundSchema = z977.object({
+  httpReferer: z977.string().optional(),
+  appTitle: z977.string().optional(),
+  appCategories: z977.string().optional(),
+  name: z977.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var GetToolResponse$inboundSchema2 = z975.object({
-  Headers: z975.record(z975.string(), z975.array(z975.string())).default({}),
+var GetToolResponse$inboundSchema2 = z977.object({
+  Headers: z977.record(z977.string(), z977.array(z977.string())).default({}),
   Result: GetToolResponse$inboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -42876,9 +43158,9 @@ var GetToolResponse$inboundSchema2 = z975.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/toolsGetTool.js
 function toolsGetTool(client, security, request, options) {
-  return new APIPromise($do139(client, security, request, options));
+  return new APIPromise($do141(client, security, request, options));
 }
-async function $do139(client, security, request, options) {
+async function $do141(client, security, request, options) {
   const parsed = safeParse(request, (value) => GetToolRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -42963,16 +43245,16 @@ async function $do139(client, security, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/listtoolsresponse.js
-var z978 = __toESM(require("zod/v4"), 1);
+var z980 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/servertool.js
-var z977 = __toESM(require("zod/v4"), 1);
+var z979 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/servertoolnativesupport.js
-var z976 = __toESM(require("zod/v4"), 1);
-var ServerToolNativeSupport$inboundSchema = z976.object({
-  endpoint_count: z976.int(),
-  model_count: z976.int()
+var z978 = __toESM(require("zod/v4"), 1);
+var ServerToolNativeSupport$inboundSchema = z978.object({
+  endpoint_count: z978.int(),
+  model_count: z978.int()
 }).transform((v) => {
   return remap(v, {
     "endpoint_count": "endpointCount",
@@ -42992,22 +43274,22 @@ var ServerToolSupportedApiFormat = {
 };
 var ServerToolStatus$inboundSchema = inboundSchema(ServerToolStatus);
 var ServerToolSupportedApiFormat$inboundSchema = inboundSchema(ServerToolSupportedApiFormat);
-var ServerTool$inboundSchema = z977.object({
-  aliases: z977.array(ServerToolInputName$inboundSchema),
-  default_engine: z977.nullable(z977.string()),
-  docs_url: z977.string(),
-  engines: z977.array(ServerToolEngine$inboundSchema),
-  fallback_engine: z977.nullable(z977.string()),
-  id: z977.string(),
-  input_schema: z977.record(z977.string(), z977.any()),
-  name: z977.string(),
+var ServerTool$inboundSchema = z979.object({
+  aliases: z979.array(ServerToolInputName$inboundSchema),
+  default_engine: z979.nullable(z979.string()),
+  docs_url: z979.string(),
+  engines: z979.array(ServerToolEngine$inboundSchema),
+  fallback_engine: z979.nullable(z979.string()),
+  id: z979.string(),
+  input_schema: z979.record(z979.string(), z979.any()),
+  name: z979.string(),
   native_support: ServerToolNativeSupport$inboundSchema,
-  output_schema: z977.nullable(z977.record(z977.string(), z977.any())),
-  parameters_schema: z977.record(z977.string(), z977.any()),
+  output_schema: z979.nullable(z979.record(z979.string(), z979.any())),
+  parameters_schema: z979.record(z979.string(), z979.any()),
   status: ServerToolStatus$inboundSchema,
-  summary: z977.string(),
-  supported_api_formats: z977.array(ServerToolSupportedApiFormat$inboundSchema),
-  tool_description: z977.string()
+  summary: z979.string(),
+  supported_api_formats: z979.array(ServerToolSupportedApiFormat$inboundSchema),
+  tool_description: z979.string()
 }).transform((v) => {
   return remap(v, {
     "default_engine": "defaultEngine",
@@ -43023,13 +43305,13 @@ var ServerTool$inboundSchema = z977.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/listtoolsresponse.js
-var ListToolsResponseLinks$inboundSchema = z978.object({
-  next: z978.nullable(z978.string())
+var ListToolsResponseLinks$inboundSchema = z980.object({
+  next: z980.nullable(z980.string())
 });
-var ListToolsResponse$inboundSchema = z978.object({
-  data: z978.array(ServerTool$inboundSchema),
-  links: z978.lazy(() => ListToolsResponseLinks$inboundSchema),
-  total_count: z978.int()
+var ListToolsResponse$inboundSchema = z980.object({
+  data: z980.array(ServerTool$inboundSchema),
+  links: z980.lazy(() => ListToolsResponseLinks$inboundSchema),
+  total_count: z980.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -43037,22 +43319,22 @@ var ListToolsResponse$inboundSchema = z978.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listtools.js
-var z979 = __toESM(require("zod/v4"), 1);
+var z981 = __toESM(require("zod/v4"), 1);
 var ApiFormat = {
   Responses: "responses",
   ChatCompletions: "chat-completions",
   AnthropicMessages: "anthropic-messages"
 };
-var ListToolsSecurity$outboundSchema = z979.object({
-  bearer: z979.string()
+var ListToolsSecurity$outboundSchema = z981.object({
+  bearer: z981.string()
 });
 var ApiFormat$outboundSchema = outboundSchema(ApiFormat);
-var ListToolsRequest$outboundSchema = z979.object({
-  httpReferer: z979.string().optional(),
-  appTitle: z979.string().optional(),
-  appCategories: z979.string().optional(),
-  offset: z979.nullable(z979.int().default(0)),
-  limit: z979.int().default(50),
+var ListToolsRequest$outboundSchema = z981.object({
+  httpReferer: z981.string().optional(),
+  appTitle: z981.string().optional(),
+  appCategories: z981.string().optional(),
+  offset: z981.nullable(z981.int().default(0)),
+  limit: z981.int().default(50),
   apiFormat: ApiFormat$outboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -43063,9 +43345,9 @@ var ListToolsRequest$outboundSchema = z979.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/toolsListTools.js
 function toolsListTools(client, security, request, options) {
-  return new APIPromise($do140(client, security, request, options));
+  return new APIPromise($do142(client, security, request, options));
 }
-async function $do140(client, security, request, options) {
+async function $do142(client, security, request, options) {
   const parsed = safeParse(request, (value) => ListToolsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -43168,46 +43450,46 @@ var Tools = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/funcs/ttsCreateSpeech.js
-var z990 = __toESM(require("zod/v4"), 1);
+var z992 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiospeech.js
-var z989 = __toESM(require("zod/v4"), 1);
+var z991 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/speechrequest.js
-var z988 = __toESM(require("zod/v4"), 1);
+var z990 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/speechinput.js
-var z981 = __toESM(require("zod/v4"), 1);
-
-// node_modules/@openrouter/sdk/esm/models/speechturn.js
-var z980 = __toESM(require("zod/v4"), 1);
-var SpeechTurn$outboundSchema = z980.object({
-  instructions: z980.string().optional(),
-  text: z980.string(),
-  voice: z980.string().optional()
-});
-
-// node_modules/@openrouter/sdk/esm/models/speechinput.js
-var SpeechInput$outboundSchema = z981.union([z981.string(), z981.array(SpeechTurn$outboundSchema)]);
-
-// node_modules/@openrouter/sdk/esm/models/speechinputreference.js
-var z987 = __toESM(require("zod/v4"), 1);
-
-// node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudio.js
 var z983 = __toESM(require("zod/v4"), 1);
 
-// node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudioinput.js
+// node_modules/@openrouter/sdk/esm/models/speechturn.js
 var z982 = __toESM(require("zod/v4"), 1);
-var SpeechInputReferenceAudioInput$outboundSchema = z982.object({
-  data: z982.string().optional(),
-  format: z982.string().optional(),
-  url: z982.string().optional()
+var SpeechTurn$outboundSchema = z982.object({
+  instructions: z982.string().optional(),
+  text: z982.string(),
+  voice: z982.string().optional()
+});
+
+// node_modules/@openrouter/sdk/esm/models/speechinput.js
+var SpeechInput$outboundSchema = z983.union([z983.string(), z983.array(SpeechTurn$outboundSchema)]);
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreference.js
+var z989 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudio.js
+var z985 = __toESM(require("zod/v4"), 1);
+
+// node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudioinput.js
+var z984 = __toESM(require("zod/v4"), 1);
+var SpeechInputReferenceAudioInput$outboundSchema = z984.object({
+  data: z984.string().optional(),
+  format: z984.string().optional(),
+  url: z984.string().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/speechinputreferenceaudio.js
-var SpeechInputReferenceAudio$outboundSchema = z983.object({
+var SpeechInputReferenceAudio$outboundSchema = z985.object({
   inputAudio: SpeechInputReferenceAudioInput$outboundSchema,
-  type: z983.literal("input_audio")
+  type: z985.literal("input_audio")
 }).transform((v) => {
   return remap(v, {
     inputAudio: "input_audio"
@@ -43215,18 +43497,18 @@ var SpeechInputReferenceAudio$outboundSchema = z983.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/speechinputreferenceimage.js
-var z985 = __toESM(require("zod/v4"), 1);
+var z987 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/speechinputreferenceimageinput.js
-var z984 = __toESM(require("zod/v4"), 1);
-var SpeechInputReferenceImageInput$outboundSchema = z984.object({
-  url: z984.string()
+var z986 = __toESM(require("zod/v4"), 1);
+var SpeechInputReferenceImageInput$outboundSchema = z986.object({
+  url: z986.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/speechinputreferenceimage.js
-var SpeechInputReferenceImage$outboundSchema = z985.object({
+var SpeechInputReferenceImage$outboundSchema = z987.object({
   imageUrl: SpeechInputReferenceImageInput$outboundSchema,
-  type: z985.literal("image_url")
+  type: z987.literal("image_url")
 }).transform((v) => {
   return remap(v, {
     imageUrl: "image_url"
@@ -43234,14 +43516,14 @@ var SpeechInputReferenceImage$outboundSchema = z985.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/speechinputreferencetext.js
-var z986 = __toESM(require("zod/v4"), 1);
-var SpeechInputReferenceText$outboundSchema = z986.object({
-  text: z986.string(),
-  type: z986.literal("text")
+var z988 = __toESM(require("zod/v4"), 1);
+var SpeechInputReferenceText$outboundSchema = z988.object({
+  text: z988.string(),
+  type: z988.literal("text")
 });
 
 // node_modules/@openrouter/sdk/esm/models/speechinputreference.js
-var SpeechInputReference$outboundSchema = z987.union([
+var SpeechInputReference$outboundSchema = z989.union([
   SpeechInputReferenceImage$outboundSchema,
   SpeechInputReferenceAudio$outboundSchema,
   SpeechInputReferenceText$outboundSchema
@@ -43257,17 +43539,17 @@ var SpeechRequestResponseFormat = {
   Pcm: "pcm"
 };
 var SpeechRequestDataCollection$outboundSchema = outboundSchema(SpeechRequestDataCollection);
-var SpeechRequestIgnore$outboundSchema = z988.union([ProviderName$outboundSchema, z988.string()]);
-var SpeechRequestOnly$outboundSchema = z988.union([ProviderName$outboundSchema, z988.string()]);
-var SpeechRequestOrder$outboundSchema = z988.union([ProviderName$outboundSchema, z988.string()]);
-var SpeechRequestProvider$outboundSchema = z988.object({
-  allowFallbacks: z988.nullable(z988.boolean()).optional(),
-  dataCollection: z988.nullable(SpeechRequestDataCollection$outboundSchema).optional(),
-  ignore: z988.nullable(z988.array(z988.union([ProviderName$outboundSchema, z988.string()]))).optional(),
-  only: z988.nullable(z988.array(z988.union([ProviderName$outboundSchema, z988.string()]))).optional(),
+var SpeechRequestIgnore$outboundSchema = z990.union([ProviderName$outboundSchema, z990.string()]);
+var SpeechRequestOnly$outboundSchema = z990.union([ProviderName$outboundSchema, z990.string()]);
+var SpeechRequestOrder$outboundSchema = z990.union([ProviderName$outboundSchema, z990.string()]);
+var SpeechRequestProvider$outboundSchema = z990.object({
+  allowFallbacks: z990.nullable(z990.boolean()).optional(),
+  dataCollection: z990.nullable(SpeechRequestDataCollection$outboundSchema).optional(),
+  ignore: z990.nullable(z990.array(z990.union([ProviderName$outboundSchema, z990.string()]))).optional(),
+  only: z990.nullable(z990.array(z990.union([ProviderName$outboundSchema, z990.string()]))).optional(),
   options: ProviderOptions$outboundSchema.optional(),
-  order: z988.nullable(z988.array(z988.union([ProviderName$outboundSchema, z988.string()]))).optional(),
-  zdr: z988.nullable(z988.boolean()).optional()
+  order: z990.nullable(z990.array(z990.union([ProviderName$outboundSchema, z990.string()]))).optional(),
+  zdr: z990.nullable(z990.boolean()).optional()
 }).transform((v) => {
   return remap(v, {
     allowFallbacks: "allow_fallbacks",
@@ -43275,18 +43557,18 @@ var SpeechRequestProvider$outboundSchema = z988.object({
   });
 });
 var SpeechRequestResponseFormat$outboundSchema = outboundSchema(SpeechRequestResponseFormat);
-var SpeechRequest$outboundSchema = z988.object({
+var SpeechRequest$outboundSchema = z990.object({
   input: SpeechInput$outboundSchema,
-  inputReferences: z988.array(SpeechInputReference$outboundSchema).optional(),
-  instructions: z988.string().optional(),
-  model: z988.string(),
-  provider: z988.lazy(() => SpeechRequestProvider$outboundSchema).optional(),
+  inputReferences: z990.array(SpeechInputReference$outboundSchema).optional(),
+  instructions: z990.string().optional(),
+  model: z990.string(),
+  provider: z990.lazy(() => SpeechRequestProvider$outboundSchema).optional(),
   responseFormat: SpeechRequestResponseFormat$outboundSchema.default("pcm"),
-  sessionId: z988.string().optional(),
-  speed: z988.number().optional(),
+  sessionId: z990.string().optional(),
+  speed: z990.number().optional(),
   trace: TraceConfig$outboundSchema.optional(),
-  user: z988.string().optional(),
-  voice: z988.string().optional()
+  user: z990.string().optional(),
+  voice: z990.string().optional()
 }).transform((v) => {
   return remap(v, {
     inputReferences: "input_references",
@@ -43296,10 +43578,10 @@ var SpeechRequest$outboundSchema = z988.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createaudiospeech.js
-var CreateAudioSpeechRequest$outboundSchema = z989.object({
-  httpReferer: z989.string().optional(),
-  appTitle: z989.string().optional(),
-  appCategories: z989.string().optional(),
+var CreateAudioSpeechRequest$outboundSchema = z991.object({
+  httpReferer: z991.string().optional(),
+  appTitle: z991.string().optional(),
+  appCategories: z991.string().optional(),
   speechRequest: SpeechRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -43310,9 +43592,9 @@ var CreateAudioSpeechRequest$outboundSchema = z989.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/ttsCreateSpeech.js
 function ttsCreateSpeech(client, request, options) {
-  return new APIPromise($do141(client, request, options));
+  return new APIPromise($do143(client, request, options));
 }
-async function $do141(client, request, options) {
+async function $do143(client, request, options) {
   const parsed = safeParse(request, (value) => CreateAudioSpeechRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -43376,7 +43658,7 @@ async function $do141(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(stream(200, z990.custom((x) => x instanceof ReadableStream), { ctype: "audio/*" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(402, PaymentRequiredResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(413, PayloadTooLargeResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(524, EdgeNetworkTimeoutResponseError$inboundSchema), jsonErr(529, ProviderOverloadedResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(stream(200, z992.custom((x) => x instanceof ReadableStream), { ctype: "audio/*" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(402, PaymentRequiredResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(413, PayloadTooLargeResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(524, EdgeNetworkTimeoutResponseError$inboundSchema), jsonErr(529, ProviderOverloadedResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -43397,15 +43679,15 @@ var TTS = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/vaultsecretcopyresponse.js
-var z992 = __toESM(require("zod/v4"), 1);
+var z994 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/vaultsecret.js
-var z991 = __toESM(require("zod/v4"), 1);
-var VaultSecret$inboundSchema = z991.object({
-  created_at: z991.iso.datetime({ offset: true }).transform((v) => new Date(v)),
-  fingerprint: z991.nullable(z991.string()),
-  hosts: z991.nullable(z991.array(z991.string())),
-  name: z991.string()
+var z993 = __toESM(require("zod/v4"), 1);
+var VaultSecret$inboundSchema = z993.object({
+  created_at: z993.iso.datetime({ offset: true }).transform((v) => new Date(v)),
+  fingerprint: z993.nullable(z993.string()),
+  hosts: z993.nullable(z993.array(z993.string())),
+  name: z993.string()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt"
@@ -43413,25 +43695,25 @@ var VaultSecret$inboundSchema = z991.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/vaultsecretcopyresponse.js
-var VaultSecretCopyResponse$inboundSchema = z992.object({
-  data: z992.array(VaultSecret$inboundSchema)
+var VaultSecretCopyResponse$inboundSchema = z994.object({
+  data: z994.array(VaultSecret$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/copyvaultsecretstointern.js
-var z994 = __toESM(require("zod/v4"), 1);
+var z996 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/vaultsecretcopyrequest.js
-var z993 = __toESM(require("zod/v4"), 1);
-var VaultSecretCopyRequest$outboundSchema = z993.object({
-  names: z993.array(z993.string())
+var z995 = __toESM(require("zod/v4"), 1);
+var VaultSecretCopyRequest$outboundSchema = z995.object({
+  names: z995.array(z995.string())
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/copyvaultsecretstointern.js
-var CopyVaultSecretsToInternRequest$outboundSchema = z994.object({
-  httpReferer: z994.string().optional(),
-  appTitle: z994.string().optional(),
-  appCategories: z994.string().optional(),
-  internId: z994.string(),
+var CopyVaultSecretsToInternRequest$outboundSchema = z996.object({
+  httpReferer: z996.string().optional(),
+  appTitle: z996.string().optional(),
+  appCategories: z996.string().optional(),
+  internId: z996.string(),
   vaultSecretCopyRequest: VaultSecretCopyRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -43442,9 +43724,9 @@ var CopyVaultSecretsToInternRequest$outboundSchema = z994.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultCopyVaultSecretsToIntern.js
 function vaultCopyVaultSecretsToIntern(client, request, options) {
-  return new APIPromise($do142(client, request, options));
+  return new APIPromise($do144(client, request, options));
 }
-async function $do142(client, request, options) {
+async function $do144(client, request, options) {
   const parsed = safeParse(request, (value) => CopyVaultSecretsToInternRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -43524,16 +43806,16 @@ async function $do142(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultDeleteInternVaultSecret.js
-var z996 = __toESM(require("zod/v4"), 1);
+var z998 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteinternvaultsecret.js
-var z995 = __toESM(require("zod/v4"), 1);
-var DeleteInternVaultSecretRequest$outboundSchema = z995.object({
-  httpReferer: z995.string().optional(),
-  appTitle: z995.string().optional(),
-  appCategories: z995.string().optional(),
-  internId: z995.string(),
-  name: z995.string()
+var z997 = __toESM(require("zod/v4"), 1);
+var DeleteInternVaultSecretRequest$outboundSchema = z997.object({
+  httpReferer: z997.string().optional(),
+  appTitle: z997.string().optional(),
+  appCategories: z997.string().optional(),
+  internId: z997.string(),
+  name: z997.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -43542,9 +43824,9 @@ var DeleteInternVaultSecretRequest$outboundSchema = z995.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultDeleteInternVaultSecret.js
 function vaultDeleteInternVaultSecret(client, request, options) {
-  return new APIPromise($do143(client, request, options));
+  return new APIPromise($do145(client, request, options));
 }
-async function $do143(client, request, options) {
+async function $do145(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteInternVaultSecretRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -43617,7 +43899,7 @@ async function $do143(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(nil(204, z996.void()), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(408, RequestTimeoutResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(504, GatewayTimeoutResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(nil(204, z998.void()), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(408, RequestTimeoutResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(504, GatewayTimeoutResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -43625,15 +43907,15 @@ async function $do143(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultDeleteVaultSecret.js
-var z998 = __toESM(require("zod/v4"), 1);
+var z1000 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/operations/deletevaultsecret.js
-var z997 = __toESM(require("zod/v4"), 1);
-var DeleteVaultSecretRequest$outboundSchema = z997.object({
-  httpReferer: z997.string().optional(),
-  appTitle: z997.string().optional(),
-  appCategories: z997.string().optional(),
-  name: z997.string()
+var z999 = __toESM(require("zod/v4"), 1);
+var DeleteVaultSecretRequest$outboundSchema = z999.object({
+  httpReferer: z999.string().optional(),
+  appTitle: z999.string().optional(),
+  appCategories: z999.string().optional(),
+  name: z999.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -43642,9 +43924,9 @@ var DeleteVaultSecretRequest$outboundSchema = z997.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultDeleteVaultSecret.js
 function vaultDeleteVaultSecret(client, request, options) {
-  return new APIPromise($do144(client, request, options));
+  return new APIPromise($do146(client, request, options));
 }
-async function $do144(client, request, options) {
+async function $do146(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteVaultSecretRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -43713,7 +43995,7 @@ async function $do144(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(nil(204, z998.void()), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(408, RequestTimeoutResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(504, GatewayTimeoutResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(nil(204, z1000.void()), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(408, RequestTimeoutResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(429, TooManyRequestsResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), jsonErr(504, GatewayTimeoutResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -43721,10 +44003,10 @@ async function $do144(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listinternconnections.js
-var z1000 = __toESM(require("zod/v4"), 1);
+var z1002 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/vaultroutingtable.js
-var z999 = __toESM(require("zod/v4"), 1);
+var z1001 = __toESM(require("zod/v4"), 1);
 var CustomOriginState = {
   Usable: "usable",
   NoCredential: "no_credential",
@@ -43770,14 +44052,14 @@ var SecretScope = {
   Workspace: "workspace"
 };
 var CustomOriginState$inboundSchema = inboundSchema(CustomOriginState);
-var CustomOriginStatus$inboundSchema = z999.object({
-  failure: z999.nullable(z999.string()),
+var CustomOriginStatus$inboundSchema = z1001.object({
+  failure: z1001.nullable(z1001.string()),
   state: CustomOriginState$inboundSchema
 });
-var CustomOrigin$inboundSchema = z999.object({
-  host: z999.string(),
-  path_prefix: z999.nullable(z999.string()),
-  status: z999.lazy(() => CustomOriginStatus$inboundSchema)
+var CustomOrigin$inboundSchema = z1001.object({
+  host: z1001.string(),
+  path_prefix: z1001.nullable(z1001.string()),
+  status: z1001.lazy(() => CustomOriginStatus$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "path_prefix": "pathPrefix"
@@ -43785,9 +44067,9 @@ var CustomOrigin$inboundSchema = z999.object({
 });
 var AccountType$inboundSchema = inboundSchema(AccountType);
 var Selection$inboundSchema = inboundSchema(Selection);
-var Coverage$inboundSchema = z999.object({
-  checked_at: z999.iso.datetime({ offset: true }).transform((v) => new Date(v)),
-  repository_count: z999.nullable(z999.int()),
+var Coverage$inboundSchema = z1001.object({
+  checked_at: z1001.iso.datetime({ offset: true }).transform((v) => new Date(v)),
+  repository_count: z1001.nullable(z1001.int()),
   selection: Selection$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -43796,15 +44078,15 @@ var Coverage$inboundSchema = z999.object({
   });
 });
 var ShadowedBy$inboundSchema = inboundSchema(ShadowedBy);
-var Installation$inboundSchema = z999.object({
-  account: z999.string(),
-  account_type: z999.nullable(AccountType$inboundSchema),
-  coverage: z999.nullable(z999.lazy(() => Coverage$inboundSchema)),
-  credential_id: z999.string(),
-  holds_token: z999.boolean(),
-  is_enabled: z999.boolean(),
-  is_off_for_intern: z999.boolean(),
-  shadowed_by: z999.nullable(ShadowedBy$inboundSchema)
+var Installation$inboundSchema = z1001.object({
+  account: z1001.string(),
+  account_type: z1001.nullable(AccountType$inboundSchema),
+  coverage: z1001.nullable(z1001.lazy(() => Coverage$inboundSchema)),
+  credential_id: z1001.string(),
+  holds_token: z1001.boolean(),
+  is_enabled: z1001.boolean(),
+  is_off_for_intern: z1001.boolean(),
+  shadowed_by: z1001.nullable(ShadowedBy$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "account_type": "accountType",
@@ -43816,9 +44098,9 @@ var Installation$inboundSchema = z999.object({
   });
 });
 var Via$inboundSchema = inboundSchema(Via);
-var AppMemberLink$inboundSchema = z999.object({
-  holds_token: z999.boolean(),
-  login: z999.string(),
+var AppMemberLink$inboundSchema = z1001.object({
+  holds_token: z1001.boolean(),
+  login: z1001.string(),
   via: Via$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -43826,11 +44108,11 @@ var AppMemberLink$inboundSchema = z999.object({
   });
 });
 var AppScope$inboundSchema = inboundSchema(AppScope);
-var App$inboundSchema = z999.object({
-  app_id: z999.nullable(z999.string()),
-  app_slug: z999.nullable(z999.string()),
-  installations: z999.array(z999.lazy(() => Installation$inboundSchema)),
-  member_links: z999.array(z999.lazy(() => AppMemberLink$inboundSchema)),
+var App$inboundSchema = z1001.object({
+  app_id: z1001.nullable(z1001.string()),
+  app_slug: z1001.nullable(z1001.string()),
+  installations: z1001.array(z1001.lazy(() => Installation$inboundSchema)),
+  member_links: z1001.array(z1001.lazy(() => AppMemberLink$inboundSchema)),
   scope: AppScope$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -43840,11 +44122,11 @@ var App$inboundSchema = z999.object({
   });
 });
 var TokenScope$inboundSchema = inboundSchema(TokenScope);
-var Token$inboundSchema = z999.object({
-  holds_token: z999.boolean(),
-  login: z999.string(),
-  owner: z999.nullable(z999.string()),
-  repository_count: z999.nullable(z999.int()),
+var Token$inboundSchema = z1001.object({
+  holds_token: z1001.boolean(),
+  login: z1001.string(),
+  owner: z1001.nullable(z1001.string()),
+  repository_count: z1001.nullable(z1001.int()),
   scope: TokenScope$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -43852,16 +44134,16 @@ var Token$inboundSchema = z999.object({
     "repository_count": "repositoryCount"
   });
 });
-var Github$inboundSchema = z999.object({
-  apps: z999.array(z999.lazy(() => App$inboundSchema)),
-  tokens: z999.array(z999.lazy(() => Token$inboundSchema))
+var Github$inboundSchema = z1001.object({
+  apps: z1001.array(z1001.lazy(() => App$inboundSchema)),
+  tokens: z1001.array(z1001.lazy(() => Token$inboundSchema))
 });
 var AccountScope$inboundSchema = inboundSchema(AccountScope);
-var Account$inboundSchema = z999.object({
-  delegated_capabilities: z999.array(z999.string()),
-  email: z999.string(),
-  holds_grant: z999.boolean(),
-  is_delegated_to_intern: z999.boolean(),
+var Account$inboundSchema = z1001.object({
+  delegated_capabilities: z1001.array(z1001.string()),
+  email: z1001.string(),
+  holds_grant: z1001.boolean(),
+  is_delegated_to_intern: z1001.boolean(),
   scope: AccountScope$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -43870,38 +44152,38 @@ var Account$inboundSchema = z999.object({
     "is_delegated_to_intern": "isDelegatedToIntern"
   });
 });
-var Google$inboundSchema = z999.object({
-  accounts: z999.array(z999.lazy(() => Account$inboundSchema))
+var Google$inboundSchema = z1001.object({
+  accounts: z1001.array(z1001.lazy(() => Account$inboundSchema))
 });
-var HostRule$inboundSchema = z999.object({
-  holds_secret: z999.boolean(),
-  host: z999.string(),
-  secret_name: z999.string()
+var HostRule$inboundSchema = z1001.object({
+  holds_secret: z1001.boolean(),
+  host: z1001.string(),
+  secret_name: z1001.string()
 }).transform((v) => {
   return remap(v, {
     "holds_secret": "holdsSecret",
     "secret_name": "secretName"
   });
 });
-var Route$inboundSchema = z999.object({
-  host: z999.string(),
-  path_prefix: z999.nullable(z999.string())
+var Route$inboundSchema = z1001.object({
+  host: z1001.string(),
+  path_prefix: z1001.nullable(z1001.string())
 }).transform((v) => {
   return remap(v, {
     "path_prefix": "pathPrefix"
   });
 });
 var McpOriginState$inboundSchema = inboundSchema(McpOriginState);
-var McpOriginStatus$inboundSchema = z999.object({
-  failure: z999.nullable(z999.string()),
+var McpOriginStatus$inboundSchema = z1001.object({
+  failure: z1001.nullable(z1001.string()),
   state: McpOriginState$inboundSchema
 });
-var McpOrigin$inboundSchema = z999.object({
-  account_key: z999.nullable(z999.string()),
-  host: z999.string(),
-  is_personal: z999.boolean(),
-  routes: z999.array(z999.lazy(() => Route$inboundSchema)),
-  status: z999.nullable(z999.lazy(() => McpOriginStatus$inboundSchema))
+var McpOrigin$inboundSchema = z1001.object({
+  account_key: z1001.nullable(z1001.string()),
+  host: z1001.string(),
+  is_personal: z1001.boolean(),
+  routes: z1001.array(z1001.lazy(() => Route$inboundSchema)),
+  status: z1001.nullable(z1001.lazy(() => McpOriginStatus$inboundSchema))
 }).transform((v) => {
   return remap(v, {
     "account_key": "accountKey",
@@ -43909,42 +44191,42 @@ var McpOrigin$inboundSchema = z999.object({
   });
 });
 var SecretScope$inboundSchema = inboundSchema(SecretScope);
-var Secret$inboundSchema = z999.object({
-  created_at: z999.string(),
-  hosts: z999.nullable(z999.array(z999.string())),
-  name: z999.string(),
+var Secret$inboundSchema = z1001.object({
+  created_at: z1001.string(),
+  hosts: z1001.nullable(z1001.array(z1001.string())),
+  name: z1001.string(),
   scope: SecretScope$inboundSchema
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt"
   });
 });
-var SlackMemberLink$inboundSchema = z999.object({
-  holds_token: z999.boolean(),
-  slack_user_id: z999.string()
+var SlackMemberLink$inboundSchema = z1001.object({
+  holds_token: z1001.boolean(),
+  slack_user_id: z1001.string()
 }).transform((v) => {
   return remap(v, {
     "holds_token": "holdsToken",
     "slack_user_id": "slackUserId"
   });
 });
-var Slack$inboundSchema = z999.object({
-  member_links: z999.array(z999.lazy(() => SlackMemberLink$inboundSchema))
+var Slack$inboundSchema = z1001.object({
+  member_links: z1001.array(z1001.lazy(() => SlackMemberLink$inboundSchema))
 }).transform((v) => {
   return remap(v, {
     "member_links": "memberLinks"
   });
 });
-var VaultRoutingTable$inboundSchema = z999.object({
-  agent_id: z999.string(),
-  custom_origins: z999.array(z999.lazy(() => CustomOrigin$inboundSchema)),
-  github: z999.lazy(() => Github$inboundSchema),
-  google: z999.lazy(() => Google$inboundSchema),
-  host_rules: z999.array(z999.lazy(() => HostRule$inboundSchema)),
-  mcp_origins: z999.array(z999.lazy(() => McpOrigin$inboundSchema)),
-  read_at: z999.iso.datetime({ offset: true }).transform((v) => new Date(v)),
-  secrets: z999.array(z999.lazy(() => Secret$inboundSchema)),
-  slack: z999.lazy(() => Slack$inboundSchema)
+var VaultRoutingTable$inboundSchema = z1001.object({
+  agent_id: z1001.string(),
+  custom_origins: z1001.array(z1001.lazy(() => CustomOrigin$inboundSchema)),
+  github: z1001.lazy(() => Github$inboundSchema),
+  google: z1001.lazy(() => Google$inboundSchema),
+  host_rules: z1001.array(z1001.lazy(() => HostRule$inboundSchema)),
+  mcp_origins: z1001.array(z1001.lazy(() => McpOrigin$inboundSchema)),
+  read_at: z1001.iso.datetime({ offset: true }).transform((v) => new Date(v)),
+  secrets: z1001.array(z1001.lazy(() => Secret$inboundSchema)),
+  slack: z1001.lazy(() => Slack$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "agent_id": "agentId",
@@ -43956,23 +44238,23 @@ var VaultRoutingTable$inboundSchema = z999.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listinternconnections.js
-var ListInternConnectionsRequest$outboundSchema = z1000.object({
-  httpReferer: z1000.string().optional(),
-  appTitle: z1000.string().optional(),
-  appCategories: z1000.string().optional(),
-  internId: z1000.string()
+var ListInternConnectionsRequest$outboundSchema = z1002.object({
+  httpReferer: z1002.string().optional(),
+  appTitle: z1002.string().optional(),
+  appCategories: z1002.string().optional(),
+  internId: z1002.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListInternConnectionsData$inboundSchema = z1000.object({
-  key: z1000.string()
+var ListInternConnectionsData$inboundSchema = z1002.object({
+  key: z1002.string()
 });
-var ListInternConnectionsResponse$inboundSchema = z1000.object({
-  data: z1000.array(z1000.lazy(() => ListInternConnectionsData$inboundSchema)),
-  routing: z1000.nullable(VaultRoutingTable$inboundSchema),
-  routing_text: z1000.nullable(z1000.string())
+var ListInternConnectionsResponse$inboundSchema = z1002.object({
+  data: z1002.array(z1002.lazy(() => ListInternConnectionsData$inboundSchema)),
+  routing: z1002.nullable(VaultRoutingTable$inboundSchema),
+  routing_text: z1002.nullable(z1002.string())
 }).transform((v) => {
   return remap(v, {
     "routing_text": "routingText"
@@ -43981,9 +44263,9 @@ var ListInternConnectionsResponse$inboundSchema = z1000.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultListInternConnections.js
 function vaultListInternConnections(client, request, options) {
-  return new APIPromise($do145(client, request, options));
+  return new APIPromise($do147(client, request, options));
 }
-async function $do145(client, request, options) {
+async function $do147(client, request, options) {
   const parsed = safeParse(request, (value) => ListInternConnectionsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -44060,21 +44342,21 @@ async function $do145(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/vaulteffectivesecretlistresponse.js
-var z1002 = __toESM(require("zod/v4"), 1);
+var z1004 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/vaulteffectivesecret.js
-var z1001 = __toESM(require("zod/v4"), 1);
+var z1003 = __toESM(require("zod/v4"), 1);
 var VaultEffectiveSecretScope = {
   Intern: "intern",
   Attached: "attached",
   Workspace: "workspace"
 };
 var VaultEffectiveSecretScope$inboundSchema = inboundSchema(VaultEffectiveSecretScope);
-var VaultEffectiveSecret$inboundSchema = z1001.object({
-  created_at: z1001.iso.datetime({ offset: true }).transform((v) => new Date(v)),
-  fingerprint: z1001.nullable(z1001.string()),
-  hosts: z1001.nullable(z1001.array(z1001.string())),
-  name: z1001.string(),
+var VaultEffectiveSecret$inboundSchema = z1003.object({
+  created_at: z1003.iso.datetime({ offset: true }).transform((v) => new Date(v)),
+  fingerprint: z1003.nullable(z1003.string()),
+  hosts: z1003.nullable(z1003.array(z1003.string())),
+  name: z1003.string(),
   scope: VaultEffectiveSecretScope$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -44083,9 +44365,9 @@ var VaultEffectiveSecret$inboundSchema = z1001.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/vaulteffectivesecretlistresponse.js
-var VaultEffectiveSecretListResponse$inboundSchema = z1002.object({
-  data: z1002.array(VaultEffectiveSecret$inboundSchema),
-  has_more: z1002.boolean()
+var VaultEffectiveSecretListResponse$inboundSchema = z1004.object({
+  data: z1004.array(VaultEffectiveSecret$inboundSchema),
+  has_more: z1004.boolean()
 }).transform((v) => {
   return remap(v, {
     "has_more": "hasMore"
@@ -44093,14 +44375,14 @@ var VaultEffectiveSecretListResponse$inboundSchema = z1002.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listinterneffectivevaultsecrets.js
-var z1003 = __toESM(require("zod/v4"), 1);
-var ListInternEffectiveVaultSecretsRequest$outboundSchema = z1003.object({
-  httpReferer: z1003.string().optional(),
-  appTitle: z1003.string().optional(),
-  appCategories: z1003.string().optional(),
-  internId: z1003.string(),
-  limit: z1003.int().default(100),
-  offset: z1003.int().default(0)
+var z1005 = __toESM(require("zod/v4"), 1);
+var ListInternEffectiveVaultSecretsRequest$outboundSchema = z1005.object({
+  httpReferer: z1005.string().optional(),
+  appTitle: z1005.string().optional(),
+  appCategories: z1005.string().optional(),
+  internId: z1005.string(),
+  limit: z1005.int().default(100),
+  offset: z1005.int().default(0)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -44109,9 +44391,9 @@ var ListInternEffectiveVaultSecretsRequest$outboundSchema = z1003.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultListInternEffectiveVaultSecrets.js
 function vaultListInternEffectiveVaultSecrets(client, request, options) {
-  return new APIPromise($do146(client, request, options));
+  return new APIPromise($do148(client, request, options));
 }
-async function $do146(client, request, options) {
+async function $do148(client, request, options) {
   const parsed = safeParse(request, (value) => ListInternEffectiveVaultSecretsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -44193,10 +44475,10 @@ async function $do146(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/vaultsecretlistresponse.js
-var z1004 = __toESM(require("zod/v4"), 1);
-var VaultSecretListResponse$inboundSchema = z1004.object({
-  data: z1004.array(VaultSecret$inboundSchema),
-  has_more: z1004.boolean()
+var z1006 = __toESM(require("zod/v4"), 1);
+var VaultSecretListResponse$inboundSchema = z1006.object({
+  data: z1006.array(VaultSecret$inboundSchema),
+  has_more: z1006.boolean()
 }).transform((v) => {
   return remap(v, {
     "has_more": "hasMore"
@@ -44204,14 +44486,14 @@ var VaultSecretListResponse$inboundSchema = z1004.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listinternvaultsecrets.js
-var z1005 = __toESM(require("zod/v4"), 1);
-var ListInternVaultSecretsRequest$outboundSchema = z1005.object({
-  httpReferer: z1005.string().optional(),
-  appTitle: z1005.string().optional(),
-  appCategories: z1005.string().optional(),
-  internId: z1005.string(),
-  limit: z1005.int().default(100),
-  offset: z1005.int().default(0)
+var z1007 = __toESM(require("zod/v4"), 1);
+var ListInternVaultSecretsRequest$outboundSchema = z1007.object({
+  httpReferer: z1007.string().optional(),
+  appTitle: z1007.string().optional(),
+  appCategories: z1007.string().optional(),
+  internId: z1007.string(),
+  limit: z1007.int().default(100),
+  offset: z1007.int().default(0)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -44220,9 +44502,9 @@ var ListInternVaultSecretsRequest$outboundSchema = z1005.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultListInternVaultSecrets.js
 function vaultListInternVaultSecrets(client, request, options) {
-  return new APIPromise($do147(client, request, options));
+  return new APIPromise($do149(client, request, options));
 }
-async function $do147(client, request, options) {
+async function $do149(client, request, options) {
   const parsed = safeParse(request, (value) => ListInternVaultSecretsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -44304,13 +44586,13 @@ async function $do147(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listvaultsecrets.js
-var z1006 = __toESM(require("zod/v4"), 1);
-var ListVaultSecretsRequest$outboundSchema = z1006.object({
-  httpReferer: z1006.string().optional(),
-  appTitle: z1006.string().optional(),
-  appCategories: z1006.string().optional(),
-  limit: z1006.int().default(100),
-  offset: z1006.int().default(0)
+var z1008 = __toESM(require("zod/v4"), 1);
+var ListVaultSecretsRequest$outboundSchema = z1008.object({
+  httpReferer: z1008.string().optional(),
+  appTitle: z1008.string().optional(),
+  appCategories: z1008.string().optional(),
+  limit: z1008.int().default(100),
+  offset: z1008.int().default(0)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -44319,9 +44601,9 @@ var ListVaultSecretsRequest$outboundSchema = z1006.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultListVaultSecrets.js
 function vaultListVaultSecrets(client, request, options) {
-  return new APIPromise($do148(client, request, options));
+  return new APIPromise($do150(client, request, options));
 }
-async function $do148(client, request, options) {
+async function $do150(client, request, options) {
   const parsed = safeParse(request, (value) => ListVaultSecretsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -44397,28 +44679,28 @@ async function $do148(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/vaultsecretresponse.js
-var z1007 = __toESM(require("zod/v4"), 1);
-var VaultSecretResponse$inboundSchema = z1007.object({
+var z1009 = __toESM(require("zod/v4"), 1);
+var VaultSecretResponse$inboundSchema = z1009.object({
   data: VaultSecret$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/storeinternvaultsecret.js
-var z1009 = __toESM(require("zod/v4"), 1);
+var z1011 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/vaultsecretwriterequest.js
-var z1008 = __toESM(require("zod/v4"), 1);
-var VaultSecretWriteRequest$outboundSchema = z1008.object({
-  hosts: z1008.array(z1008.string()),
-  value: z1008.string()
+var z1010 = __toESM(require("zod/v4"), 1);
+var VaultSecretWriteRequest$outboundSchema = z1010.object({
+  hosts: z1010.array(z1010.string()),
+  value: z1010.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/storeinternvaultsecret.js
-var StoreInternVaultSecretRequest$outboundSchema = z1009.object({
-  httpReferer: z1009.string().optional(),
-  appTitle: z1009.string().optional(),
-  appCategories: z1009.string().optional(),
-  internId: z1009.string(),
-  name: z1009.string(),
+var StoreInternVaultSecretRequest$outboundSchema = z1011.object({
+  httpReferer: z1011.string().optional(),
+  appTitle: z1011.string().optional(),
+  appCategories: z1011.string().optional(),
+  internId: z1011.string(),
+  name: z1011.string(),
   vaultSecretWriteRequest: VaultSecretWriteRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -44429,9 +44711,9 @@ var StoreInternVaultSecretRequest$outboundSchema = z1009.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultStoreInternVaultSecret.js
 function vaultStoreInternVaultSecret(client, request, options) {
-  return new APIPromise($do149(client, request, options));
+  return new APIPromise($do151(client, request, options));
 }
-async function $do149(client, request, options) {
+async function $do151(client, request, options) {
   const parsed = safeParse(request, (value) => StoreInternVaultSecretRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -44515,12 +44797,12 @@ async function $do149(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/storevaultsecret.js
-var z1010 = __toESM(require("zod/v4"), 1);
-var StoreVaultSecretRequest$outboundSchema = z1010.object({
-  httpReferer: z1010.string().optional(),
-  appTitle: z1010.string().optional(),
-  appCategories: z1010.string().optional(),
-  name: z1010.string(),
+var z1012 = __toESM(require("zod/v4"), 1);
+var StoreVaultSecretRequest$outboundSchema = z1012.object({
+  httpReferer: z1012.string().optional(),
+  appTitle: z1012.string().optional(),
+  appCategories: z1012.string().optional(),
+  name: z1012.string(),
   vaultSecretWriteRequest: VaultSecretWriteRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -44531,9 +44813,9 @@ var StoreVaultSecretRequest$outboundSchema = z1010.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/vaultStoreVaultSecret.js
 function vaultStoreVaultSecret(client, request, options) {
-  return new APIPromise($do150(client, request, options));
+  return new APIPromise($do152(client, request, options));
 }
-async function $do150(client, request, options) {
+async function $do152(client, request, options) {
   const parsed = safeParse(request, (value) => StoreVaultSecretRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -44698,13 +44980,13 @@ var Vault = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/videogenerationresponse.js
-var z1012 = __toESM(require("zod/v4"), 1);
+var z1014 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/videogenerationusage.js
-var z1011 = __toESM(require("zod/v4"), 1);
-var VideoGenerationUsage$inboundSchema = z1011.object({
-  cost: z1011.nullable(z1011.number()).optional(),
-  is_byok: z1011.boolean().optional()
+var z1013 = __toESM(require("zod/v4"), 1);
+var VideoGenerationUsage$inboundSchema = z1013.object({
+  cost: z1013.nullable(z1013.number()).optional(),
+  is_byok: z1013.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "is_byok": "isByok"
@@ -44721,15 +45003,15 @@ var VideoGenerationResponseStatus = {
   Expired: "expired"
 };
 var VideoGenerationResponseStatus$inboundSchema = inboundSchema(VideoGenerationResponseStatus);
-var VideoGenerationResponse$inboundSchema = z1012.object({
-  error: z1012.string().optional(),
-  expires_at: z1012.int().optional(),
-  generation_id: z1012.string().optional(),
-  id: z1012.string(),
-  polling_url: z1012.string(),
+var VideoGenerationResponse$inboundSchema = z1014.object({
+  error: z1014.string().optional(),
+  expires_at: z1014.int().optional(),
+  generation_id: z1014.string().optional(),
+  id: z1014.string(),
+  polling_url: z1014.string(),
   status: VideoGenerationResponseStatus$inboundSchema,
-  unsigned_urls: z1012.array(z1012.string()).optional(),
-  urls: z1012.array(z1012.string()).optional(),
+  unsigned_urls: z1014.array(z1014.string()).optional(),
+  urls: z1014.array(z1014.string()).optional(),
   usage: VideoGenerationUsage$inboundSchema.optional()
 }).transform((v) => {
   return remap(v, {
@@ -44741,13 +45023,13 @@ var VideoGenerationResponse$inboundSchema = z1012.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createvideos.js
-var z1018 = __toESM(require("zod/v4"), 1);
+var z1020 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/videogenerationrequest.js
-var z1017 = __toESM(require("zod/v4"), 1);
+var z1019 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/frameimage.js
-var z1013 = __toESM(require("zod/v4"), 1);
+var z1015 = __toESM(require("zod/v4"), 1);
 var FrameImageType = {
   ImageUrl: "image_url"
 };
@@ -44755,13 +45037,13 @@ var FrameType = {
   FirstFrame: "first_frame",
   LastFrame: "last_frame"
 };
-var FrameImageImageUrl$outboundSchema = z1013.object({
-  url: z1013.string()
+var FrameImageImageUrl$outboundSchema = z1015.object({
+  url: z1015.string()
 });
-var FrameImageType$outboundSchema = z1013.enum(FrameImageType);
+var FrameImageType$outboundSchema = z1015.enum(FrameImageType);
 var FrameType$outboundSchema = outboundSchema(FrameType);
-var FrameImage$outboundSchema = z1013.object({
-  imageUrl: z1013.lazy(() => FrameImageImageUrl$outboundSchema),
+var FrameImage$outboundSchema = z1015.object({
+  imageUrl: z1015.lazy(() => FrameImageImageUrl$outboundSchema),
   type: FrameImageType$outboundSchema,
   frameType: FrameType$outboundSchema
 }).transform((v) => {
@@ -44772,16 +45054,16 @@ var FrameImage$outboundSchema = z1013.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/inputreference.js
-var z1016 = __toESM(require("zod/v4"), 1);
+var z1018 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/contentpartaudio.js
-var z1014 = __toESM(require("zod/v4"), 1);
-var AudioUrl$outboundSchema = z1014.object({
-  url: z1014.string()
+var z1016 = __toESM(require("zod/v4"), 1);
+var AudioUrl$outboundSchema = z1016.object({
+  url: z1016.string()
 });
-var ContentPartAudio$outboundSchema = z1014.object({
-  audioUrl: z1014.lazy(() => AudioUrl$outboundSchema),
-  type: z1014.literal("audio_url")
+var ContentPartAudio$outboundSchema = z1016.object({
+  audioUrl: z1016.lazy(() => AudioUrl$outboundSchema),
+  type: z1016.literal("audio_url")
 }).transform((v) => {
   return remap(v, {
     audioUrl: "audio_url"
@@ -44789,13 +45071,13 @@ var ContentPartAudio$outboundSchema = z1014.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/contentpartvideo.js
-var z1015 = __toESM(require("zod/v4"), 1);
-var VideoUrl$outboundSchema = z1015.object({
-  url: z1015.string()
+var z1017 = __toESM(require("zod/v4"), 1);
+var VideoUrl$outboundSchema = z1017.object({
+  url: z1017.string()
 });
-var ContentPartVideo$outboundSchema = z1015.object({
-  type: z1015.literal("video_url"),
-  videoUrl: z1015.lazy(() => VideoUrl$outboundSchema)
+var ContentPartVideo$outboundSchema = z1017.object({
+  type: z1017.literal("video_url"),
+  videoUrl: z1017.lazy(() => VideoUrl$outboundSchema)
 }).transform((v) => {
   return remap(v, {
     videoUrl: "video_url"
@@ -44803,9 +45085,9 @@ var ContentPartVideo$outboundSchema = z1015.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/inputreference.js
-var InputReference$outboundSchema = z1016.union([
+var InputReference$outboundSchema = z1018.union([
   ContentPartAudio$outboundSchema,
-  ContentPartImage$outboundSchema.and(z1016.object({ type: z1016.literal("image_url") })),
+  ContentPartImage$outboundSchema.and(z1018.object({ type: z1018.literal("image_url") })),
   ContentPartVideo$outboundSchema
 ]);
 
@@ -44832,164 +45114,164 @@ var VideoGenerationRequestResolution = {
   FourK: "4K"
 };
 var VideoGenerationRequestAspectRatio$outboundSchema = outboundSchema(VideoGenerationRequestAspectRatio);
-var VideoGenerationRequestIgnore$outboundSchema = z1017.union([ProviderName$outboundSchema, z1017.string()]);
-var VideoGenerationRequestOnly$outboundSchema = z1017.union([ProviderName$outboundSchema, z1017.string()]);
-var VideoGenerationRequestOptions$outboundSchema = z1017.object({
-  oneai: z1017.record(z1017.string(), z1017.any()).optional(),
-  ai21: z1017.record(z1017.string(), z1017.any()).optional(),
-  aionLabs: z1017.record(z1017.string(), z1017.any()).optional(),
-  akashml: z1017.record(z1017.string(), z1017.any()).optional(),
-  alibaba: z1017.record(z1017.string(), z1017.any()).optional(),
-  amazonBedrock: z1017.record(z1017.string(), z1017.any()).optional(),
-  amazonBedrockClaudeOnAws: z1017.record(z1017.string(), z1017.any()).optional(),
-  amazonNova: z1017.record(z1017.string(), z1017.any()).optional(),
-  ambient: z1017.record(z1017.string(), z1017.any()).optional(),
-  antdigital: z1017.record(z1017.string(), z1017.any()).optional(),
-  anthropic: z1017.record(z1017.string(), z1017.any()).optional(),
-  anthropic2: z1017.record(z1017.string(), z1017.any()).optional(),
-  anyscale: z1017.record(z1017.string(), z1017.any()).optional(),
-  arceeAi: z1017.record(z1017.string(), z1017.any()).optional(),
-  assemblyai: z1017.record(z1017.string(), z1017.any()).optional(),
-  atlasCloud: z1017.record(z1017.string(), z1017.any()).optional(),
-  atoma: z1017.record(z1017.string(), z1017.any()).optional(),
-  avian: z1017.record(z1017.string(), z1017.any()).optional(),
-  azure: z1017.record(z1017.string(), z1017.any()).optional(),
-  baidu: z1017.record(z1017.string(), z1017.any()).optional(),
-  baseten: z1017.record(z1017.string(), z1017.any()).optional(),
-  blackForestLabs: z1017.record(z1017.string(), z1017.any()).optional(),
-  byteplus: z1017.record(z1017.string(), z1017.any()).optional(),
-  centml: z1017.record(z1017.string(), z1017.any()).optional(),
-  cerebras: z1017.record(z1017.string(), z1017.any()).optional(),
-  chutes: z1017.record(z1017.string(), z1017.any()).optional(),
-  cirrascale: z1017.record(z1017.string(), z1017.any()).optional(),
-  clarifai: z1017.record(z1017.string(), z1017.any()).optional(),
-  claudeOnAws: z1017.record(z1017.string(), z1017.any()).optional(),
-  cloudflare: z1017.record(z1017.string(), z1017.any()).optional(),
-  cohere: z1017.record(z1017.string(), z1017.any()).optional(),
-  coreweave: z1017.record(z1017.string(), z1017.any()).optional(),
-  cosine: z1017.record(z1017.string(), z1017.any()).optional(),
-  crofai: z1017.record(z1017.string(), z1017.any()).optional(),
-  crucible: z1017.record(z1017.string(), z1017.any()).optional(),
-  crusoe: z1017.record(z1017.string(), z1017.any()).optional(),
-  darkbloom: z1017.record(z1017.string(), z1017.any()).optional(),
-  databricks: z1017.record(z1017.string(), z1017.any()).optional(),
-  decart: z1017.record(z1017.string(), z1017.any()).optional(),
-  deepgram: z1017.record(z1017.string(), z1017.any()).optional(),
-  deepinfra: z1017.record(z1017.string(), z1017.any()).optional(),
-  deepseek: z1017.record(z1017.string(), z1017.any()).optional(),
-  dekallm: z1017.record(z1017.string(), z1017.any()).optional(),
-  digitalocean: z1017.record(z1017.string(), z1017.any()).optional(),
-  elevenlabs: z1017.record(z1017.string(), z1017.any()).optional(),
-  enfer: z1017.record(z1017.string(), z1017.any()).optional(),
-  fakeProvider: z1017.record(z1017.string(), z1017.any()).optional(),
-  featherless: z1017.record(z1017.string(), z1017.any()).optional(),
-  fireworks: z1017.record(z1017.string(), z1017.any()).optional(),
-  fishAudio: z1017.record(z1017.string(), z1017.any()).optional(),
-  friendli: z1017.record(z1017.string(), z1017.any()).optional(),
-  gmicloud: z1017.record(z1017.string(), z1017.any()).optional(),
-  googleAiStudio: z1017.record(z1017.string(), z1017.any()).optional(),
-  googleVertex: z1017.record(z1017.string(), z1017.any()).optional(),
-  gopomelo: z1017.record(z1017.string(), z1017.any()).optional(),
-  groq: z1017.record(z1017.string(), z1017.any()).optional(),
-  heygen: z1017.record(z1017.string(), z1017.any()).optional(),
-  huggingface: z1017.record(z1017.string(), z1017.any()).optional(),
-  hyperbolic: z1017.record(z1017.string(), z1017.any()).optional(),
-  hyperbolicQuantized: z1017.record(z1017.string(), z1017.any()).optional(),
-  inception: z1017.record(z1017.string(), z1017.any()).optional(),
-  inceptron: z1017.record(z1017.string(), z1017.any()).optional(),
-  inferactVllm: z1017.record(z1017.string(), z1017.any()).optional(),
-  inferenceNet: z1017.record(z1017.string(), z1017.any()).optional(),
-  infermatic: z1017.record(z1017.string(), z1017.any()).optional(),
-  inflection: z1017.record(z1017.string(), z1017.any()).optional(),
-  inocloud: z1017.record(z1017.string(), z1017.any()).optional(),
-  ioNet: z1017.record(z1017.string(), z1017.any()).optional(),
-  ionstream: z1017.record(z1017.string(), z1017.any()).optional(),
-  klusterai: z1017.record(z1017.string(), z1017.any()).optional(),
-  krea: z1017.record(z1017.string(), z1017.any()).optional(),
-  kt: z1017.record(z1017.string(), z1017.any()).optional(),
-  lambda: z1017.record(z1017.string(), z1017.any()).optional(),
-  lepton: z1017.record(z1017.string(), z1017.any()).optional(),
-  liquid: z1017.record(z1017.string(), z1017.any()).optional(),
-  lynn: z1017.record(z1017.string(), z1017.any()).optional(),
-  lynnPrivate: z1017.record(z1017.string(), z1017.any()).optional(),
-  makora: z1017.record(z1017.string(), z1017.any()).optional(),
-  mancer: z1017.record(z1017.string(), z1017.any()).optional(),
-  mancerOld: z1017.record(z1017.string(), z1017.any()).optional(),
-  mara: z1017.record(z1017.string(), z1017.any()).optional(),
-  meta: z1017.record(z1017.string(), z1017.any()).optional(),
-  minimax: z1017.record(z1017.string(), z1017.any()).optional(),
-  mistral: z1017.record(z1017.string(), z1017.any()).optional(),
-  modal: z1017.record(z1017.string(), z1017.any()).optional(),
-  modelrun: z1017.record(z1017.string(), z1017.any()).optional(),
-  modular: z1017.record(z1017.string(), z1017.any()).optional(),
-  moonshotai: z1017.record(z1017.string(), z1017.any()).optional(),
-  morph: z1017.record(z1017.string(), z1017.any()).optional(),
-  ncompass: z1017.record(z1017.string(), z1017.any()).optional(),
-  nearAi: z1017.record(z1017.string(), z1017.any()).optional(),
-  nebius: z1017.record(z1017.string(), z1017.any()).optional(),
-  nexAgi: z1017.record(z1017.string(), z1017.any()).optional(),
-  nextbit: z1017.record(z1017.string(), z1017.any()).optional(),
-  nineteen: z1017.record(z1017.string(), z1017.any()).optional(),
-  novita: z1017.record(z1017.string(), z1017.any()).optional(),
-  nvidia: z1017.record(z1017.string(), z1017.any()).optional(),
-  octoai: z1017.record(z1017.string(), z1017.any()).optional(),
-  ollama: z1017.record(z1017.string(), z1017.any()).optional(),
-  openInference: z1017.record(z1017.string(), z1017.any()).optional(),
-  openai: z1017.record(z1017.string(), z1017.any()).optional(),
-  parallel: z1017.record(z1017.string(), z1017.any()).optional(),
-  parasail: z1017.record(z1017.string(), z1017.any()).optional(),
-  paretoAlpha: z1017.record(z1017.string(), z1017.any()).optional(),
-  particleAi: z1017.record(z1017.string(), z1017.any()).optional(),
-  pearlResearch: z1017.record(z1017.string(), z1017.any()).optional(),
-  perceptron: z1017.record(z1017.string(), z1017.any()).optional(),
-  perplexity: z1017.record(z1017.string(), z1017.any()).optional(),
-  phala: z1017.record(z1017.string(), z1017.any()).optional(),
-  poolside: z1017.record(z1017.string(), z1017.any()).optional(),
-  primalabs: z1017.record(z1017.string(), z1017.any()).optional(),
-  primeintellect: z1017.record(z1017.string(), z1017.any()).optional(),
-  quiver: z1017.record(z1017.string(), z1017.any()).optional(),
-  recraft: z1017.record(z1017.string(), z1017.any()).optional(),
-  recursal: z1017.record(z1017.string(), z1017.any()).optional(),
-  recursive: z1017.record(z1017.string(), z1017.any()).optional(),
-  reflection: z1017.record(z1017.string(), z1017.any()).optional(),
-  reka: z1017.record(z1017.string(), z1017.any()).optional(),
-  relace: z1017.record(z1017.string(), z1017.any()).optional(),
-  replicate: z1017.record(z1017.string(), z1017.any()).optional(),
-  respan: z1017.record(z1017.string(), z1017.any()).optional(),
-  river: z1017.record(z1017.string(), z1017.any()).optional(),
-  runway: z1017.record(z1017.string(), z1017.any()).optional(),
-  sailResearch: z1017.record(z1017.string(), z1017.any()).optional(),
-  sakana: z1017.record(z1017.string(), z1017.any()).optional(),
-  sakanaAi: z1017.record(z1017.string(), z1017.any()).optional(),
-  sambanova: z1017.record(z1017.string(), z1017.any()).optional(),
-  sambanovaCloaked: z1017.record(z1017.string(), z1017.any()).optional(),
-  scaledown: z1017.record(z1017.string(), z1017.any()).optional(),
-  seed: z1017.record(z1017.string(), z1017.any()).optional(),
-  sfCompute: z1017.record(z1017.string(), z1017.any()).optional(),
-  siliconflow: z1017.record(z1017.string(), z1017.any()).optional(),
-  sourceful: z1017.record(z1017.string(), z1017.any()).optional(),
-  stealth: z1017.record(z1017.string(), z1017.any()).optional(),
-  stepfun: z1017.record(z1017.string(), z1017.any()).optional(),
-  streamlake: z1017.record(z1017.string(), z1017.any()).optional(),
-  switchpoint: z1017.record(z1017.string(), z1017.any()).optional(),
-  targon: z1017.record(z1017.string(), z1017.any()).optional(),
-  tencent: z1017.record(z1017.string(), z1017.any()).optional(),
-  tenstorrent: z1017.record(z1017.string(), z1017.any()).optional(),
-  thinkingmachines: z1017.record(z1017.string(), z1017.any()).optional(),
-  together: z1017.record(z1017.string(), z1017.any()).optional(),
-  togetherLite: z1017.record(z1017.string(), z1017.any()).optional(),
-  typesafe: z1017.record(z1017.string(), z1017.any()).optional(),
-  ubicloud: z1017.record(z1017.string(), z1017.any()).optional(),
-  unbiased: z1017.record(z1017.string(), z1017.any()).optional(),
-  upstage: z1017.record(z1017.string(), z1017.any()).optional(),
-  venice: z1017.record(z1017.string(), z1017.any()).optional(),
-  voyageai: z1017.record(z1017.string(), z1017.any()).optional(),
-  wafer: z1017.record(z1017.string(), z1017.any()).optional(),
-  wandb: z1017.record(z1017.string(), z1017.any()).optional(),
-  wandbLegacy: z1017.record(z1017.string(), z1017.any()).optional(),
-  xai: z1017.record(z1017.string(), z1017.any()).optional(),
-  xiaomi: z1017.record(z1017.string(), z1017.any()).optional(),
-  zAi: z1017.record(z1017.string(), z1017.any()).optional()
+var VideoGenerationRequestIgnore$outboundSchema = z1019.union([ProviderName$outboundSchema, z1019.string()]);
+var VideoGenerationRequestOnly$outboundSchema = z1019.union([ProviderName$outboundSchema, z1019.string()]);
+var VideoGenerationRequestOptions$outboundSchema = z1019.object({
+  oneai: z1019.record(z1019.string(), z1019.any()).optional(),
+  ai21: z1019.record(z1019.string(), z1019.any()).optional(),
+  aionLabs: z1019.record(z1019.string(), z1019.any()).optional(),
+  akashml: z1019.record(z1019.string(), z1019.any()).optional(),
+  alibaba: z1019.record(z1019.string(), z1019.any()).optional(),
+  amazonBedrock: z1019.record(z1019.string(), z1019.any()).optional(),
+  amazonBedrockClaudeOnAws: z1019.record(z1019.string(), z1019.any()).optional(),
+  amazonNova: z1019.record(z1019.string(), z1019.any()).optional(),
+  ambient: z1019.record(z1019.string(), z1019.any()).optional(),
+  antdigital: z1019.record(z1019.string(), z1019.any()).optional(),
+  anthropic: z1019.record(z1019.string(), z1019.any()).optional(),
+  anthropic2: z1019.record(z1019.string(), z1019.any()).optional(),
+  anyscale: z1019.record(z1019.string(), z1019.any()).optional(),
+  arceeAi: z1019.record(z1019.string(), z1019.any()).optional(),
+  assemblyai: z1019.record(z1019.string(), z1019.any()).optional(),
+  atlasCloud: z1019.record(z1019.string(), z1019.any()).optional(),
+  atoma: z1019.record(z1019.string(), z1019.any()).optional(),
+  avian: z1019.record(z1019.string(), z1019.any()).optional(),
+  azure: z1019.record(z1019.string(), z1019.any()).optional(),
+  baidu: z1019.record(z1019.string(), z1019.any()).optional(),
+  baseten: z1019.record(z1019.string(), z1019.any()).optional(),
+  blackForestLabs: z1019.record(z1019.string(), z1019.any()).optional(),
+  byteplus: z1019.record(z1019.string(), z1019.any()).optional(),
+  centml: z1019.record(z1019.string(), z1019.any()).optional(),
+  cerebras: z1019.record(z1019.string(), z1019.any()).optional(),
+  chutes: z1019.record(z1019.string(), z1019.any()).optional(),
+  cirrascale: z1019.record(z1019.string(), z1019.any()).optional(),
+  clarifai: z1019.record(z1019.string(), z1019.any()).optional(),
+  claudeOnAws: z1019.record(z1019.string(), z1019.any()).optional(),
+  cloudflare: z1019.record(z1019.string(), z1019.any()).optional(),
+  cohere: z1019.record(z1019.string(), z1019.any()).optional(),
+  coreweave: z1019.record(z1019.string(), z1019.any()).optional(),
+  cosine: z1019.record(z1019.string(), z1019.any()).optional(),
+  crofai: z1019.record(z1019.string(), z1019.any()).optional(),
+  crucible: z1019.record(z1019.string(), z1019.any()).optional(),
+  crusoe: z1019.record(z1019.string(), z1019.any()).optional(),
+  darkbloom: z1019.record(z1019.string(), z1019.any()).optional(),
+  databricks: z1019.record(z1019.string(), z1019.any()).optional(),
+  decart: z1019.record(z1019.string(), z1019.any()).optional(),
+  deepgram: z1019.record(z1019.string(), z1019.any()).optional(),
+  deepinfra: z1019.record(z1019.string(), z1019.any()).optional(),
+  deepseek: z1019.record(z1019.string(), z1019.any()).optional(),
+  dekallm: z1019.record(z1019.string(), z1019.any()).optional(),
+  digitalocean: z1019.record(z1019.string(), z1019.any()).optional(),
+  elevenlabs: z1019.record(z1019.string(), z1019.any()).optional(),
+  enfer: z1019.record(z1019.string(), z1019.any()).optional(),
+  fakeProvider: z1019.record(z1019.string(), z1019.any()).optional(),
+  featherless: z1019.record(z1019.string(), z1019.any()).optional(),
+  fireworks: z1019.record(z1019.string(), z1019.any()).optional(),
+  fishAudio: z1019.record(z1019.string(), z1019.any()).optional(),
+  friendli: z1019.record(z1019.string(), z1019.any()).optional(),
+  gmicloud: z1019.record(z1019.string(), z1019.any()).optional(),
+  googleAiStudio: z1019.record(z1019.string(), z1019.any()).optional(),
+  googleVertex: z1019.record(z1019.string(), z1019.any()).optional(),
+  gopomelo: z1019.record(z1019.string(), z1019.any()).optional(),
+  groq: z1019.record(z1019.string(), z1019.any()).optional(),
+  heygen: z1019.record(z1019.string(), z1019.any()).optional(),
+  huggingface: z1019.record(z1019.string(), z1019.any()).optional(),
+  hyperbolic: z1019.record(z1019.string(), z1019.any()).optional(),
+  hyperbolicQuantized: z1019.record(z1019.string(), z1019.any()).optional(),
+  inception: z1019.record(z1019.string(), z1019.any()).optional(),
+  inceptron: z1019.record(z1019.string(), z1019.any()).optional(),
+  inferactVllm: z1019.record(z1019.string(), z1019.any()).optional(),
+  inferenceNet: z1019.record(z1019.string(), z1019.any()).optional(),
+  infermatic: z1019.record(z1019.string(), z1019.any()).optional(),
+  inflection: z1019.record(z1019.string(), z1019.any()).optional(),
+  inocloud: z1019.record(z1019.string(), z1019.any()).optional(),
+  ioNet: z1019.record(z1019.string(), z1019.any()).optional(),
+  ionstream: z1019.record(z1019.string(), z1019.any()).optional(),
+  klusterai: z1019.record(z1019.string(), z1019.any()).optional(),
+  krea: z1019.record(z1019.string(), z1019.any()).optional(),
+  kt: z1019.record(z1019.string(), z1019.any()).optional(),
+  lambda: z1019.record(z1019.string(), z1019.any()).optional(),
+  lepton: z1019.record(z1019.string(), z1019.any()).optional(),
+  liquid: z1019.record(z1019.string(), z1019.any()).optional(),
+  lynn: z1019.record(z1019.string(), z1019.any()).optional(),
+  lynnPrivate: z1019.record(z1019.string(), z1019.any()).optional(),
+  makora: z1019.record(z1019.string(), z1019.any()).optional(),
+  mancer: z1019.record(z1019.string(), z1019.any()).optional(),
+  mancerOld: z1019.record(z1019.string(), z1019.any()).optional(),
+  mara: z1019.record(z1019.string(), z1019.any()).optional(),
+  meta: z1019.record(z1019.string(), z1019.any()).optional(),
+  minimax: z1019.record(z1019.string(), z1019.any()).optional(),
+  mistral: z1019.record(z1019.string(), z1019.any()).optional(),
+  modal: z1019.record(z1019.string(), z1019.any()).optional(),
+  modelrun: z1019.record(z1019.string(), z1019.any()).optional(),
+  modular: z1019.record(z1019.string(), z1019.any()).optional(),
+  moonshotai: z1019.record(z1019.string(), z1019.any()).optional(),
+  morph: z1019.record(z1019.string(), z1019.any()).optional(),
+  ncompass: z1019.record(z1019.string(), z1019.any()).optional(),
+  nearAi: z1019.record(z1019.string(), z1019.any()).optional(),
+  nebius: z1019.record(z1019.string(), z1019.any()).optional(),
+  nexAgi: z1019.record(z1019.string(), z1019.any()).optional(),
+  nextbit: z1019.record(z1019.string(), z1019.any()).optional(),
+  nineteen: z1019.record(z1019.string(), z1019.any()).optional(),
+  novita: z1019.record(z1019.string(), z1019.any()).optional(),
+  nvidia: z1019.record(z1019.string(), z1019.any()).optional(),
+  octoai: z1019.record(z1019.string(), z1019.any()).optional(),
+  ollama: z1019.record(z1019.string(), z1019.any()).optional(),
+  openInference: z1019.record(z1019.string(), z1019.any()).optional(),
+  openai: z1019.record(z1019.string(), z1019.any()).optional(),
+  parallel: z1019.record(z1019.string(), z1019.any()).optional(),
+  parasail: z1019.record(z1019.string(), z1019.any()).optional(),
+  paretoAlpha: z1019.record(z1019.string(), z1019.any()).optional(),
+  particleAi: z1019.record(z1019.string(), z1019.any()).optional(),
+  pearlResearch: z1019.record(z1019.string(), z1019.any()).optional(),
+  perceptron: z1019.record(z1019.string(), z1019.any()).optional(),
+  perplexity: z1019.record(z1019.string(), z1019.any()).optional(),
+  phala: z1019.record(z1019.string(), z1019.any()).optional(),
+  poolside: z1019.record(z1019.string(), z1019.any()).optional(),
+  primalabs: z1019.record(z1019.string(), z1019.any()).optional(),
+  primeintellect: z1019.record(z1019.string(), z1019.any()).optional(),
+  quiver: z1019.record(z1019.string(), z1019.any()).optional(),
+  recraft: z1019.record(z1019.string(), z1019.any()).optional(),
+  recursal: z1019.record(z1019.string(), z1019.any()).optional(),
+  recursive: z1019.record(z1019.string(), z1019.any()).optional(),
+  reflection: z1019.record(z1019.string(), z1019.any()).optional(),
+  reka: z1019.record(z1019.string(), z1019.any()).optional(),
+  relace: z1019.record(z1019.string(), z1019.any()).optional(),
+  replicate: z1019.record(z1019.string(), z1019.any()).optional(),
+  respan: z1019.record(z1019.string(), z1019.any()).optional(),
+  river: z1019.record(z1019.string(), z1019.any()).optional(),
+  runway: z1019.record(z1019.string(), z1019.any()).optional(),
+  sailResearch: z1019.record(z1019.string(), z1019.any()).optional(),
+  sakana: z1019.record(z1019.string(), z1019.any()).optional(),
+  sakanaAi: z1019.record(z1019.string(), z1019.any()).optional(),
+  sambanova: z1019.record(z1019.string(), z1019.any()).optional(),
+  sambanovaCloaked: z1019.record(z1019.string(), z1019.any()).optional(),
+  scaledown: z1019.record(z1019.string(), z1019.any()).optional(),
+  seed: z1019.record(z1019.string(), z1019.any()).optional(),
+  sfCompute: z1019.record(z1019.string(), z1019.any()).optional(),
+  siliconflow: z1019.record(z1019.string(), z1019.any()).optional(),
+  sourceful: z1019.record(z1019.string(), z1019.any()).optional(),
+  stealth: z1019.record(z1019.string(), z1019.any()).optional(),
+  stepfun: z1019.record(z1019.string(), z1019.any()).optional(),
+  streamlake: z1019.record(z1019.string(), z1019.any()).optional(),
+  switchpoint: z1019.record(z1019.string(), z1019.any()).optional(),
+  targon: z1019.record(z1019.string(), z1019.any()).optional(),
+  tencent: z1019.record(z1019.string(), z1019.any()).optional(),
+  tenstorrent: z1019.record(z1019.string(), z1019.any()).optional(),
+  thinkingmachines: z1019.record(z1019.string(), z1019.any()).optional(),
+  together: z1019.record(z1019.string(), z1019.any()).optional(),
+  togetherLite: z1019.record(z1019.string(), z1019.any()).optional(),
+  typesafe: z1019.record(z1019.string(), z1019.any()).optional(),
+  ubicloud: z1019.record(z1019.string(), z1019.any()).optional(),
+  unbiased: z1019.record(z1019.string(), z1019.any()).optional(),
+  upstage: z1019.record(z1019.string(), z1019.any()).optional(),
+  venice: z1019.record(z1019.string(), z1019.any()).optional(),
+  voyageai: z1019.record(z1019.string(), z1019.any()).optional(),
+  wafer: z1019.record(z1019.string(), z1019.any()).optional(),
+  wandb: z1019.record(z1019.string(), z1019.any()).optional(),
+  wandbLegacy: z1019.record(z1019.string(), z1019.any()).optional(),
+  xai: z1019.record(z1019.string(), z1019.any()).optional(),
+  xiaomi: z1019.record(z1019.string(), z1019.any()).optional(),
+  zAi: z1019.record(z1019.string(), z1019.any()).optional()
 }).transform((v) => {
   return remap(v, {
     oneai: "01ai",
@@ -45027,33 +45309,33 @@ var VideoGenerationRequestOptions$outboundSchema = z1017.object({
     zAi: "z-ai"
   });
 });
-var VideoGenerationRequestOrder$outboundSchema = z1017.union([ProviderName$outboundSchema, z1017.string()]);
-var VideoGenerationRequestProvider$outboundSchema = z1017.object({
-  ignore: z1017.nullable(z1017.array(z1017.union([ProviderName$outboundSchema, z1017.string()]))).optional(),
-  only: z1017.nullable(z1017.array(z1017.union([ProviderName$outboundSchema, z1017.string()]))).optional(),
-  options: z1017.lazy(() => VideoGenerationRequestOptions$outboundSchema).optional(),
-  order: z1017.nullable(z1017.array(z1017.union([ProviderName$outboundSchema, z1017.string()]))).optional()
+var VideoGenerationRequestOrder$outboundSchema = z1019.union([ProviderName$outboundSchema, z1019.string()]);
+var VideoGenerationRequestProvider$outboundSchema = z1019.object({
+  ignore: z1019.nullable(z1019.array(z1019.union([ProviderName$outboundSchema, z1019.string()]))).optional(),
+  only: z1019.nullable(z1019.array(z1019.union([ProviderName$outboundSchema, z1019.string()]))).optional(),
+  options: z1019.lazy(() => VideoGenerationRequestOptions$outboundSchema).optional(),
+  order: z1019.nullable(z1019.array(z1019.union([ProviderName$outboundSchema, z1019.string()]))).optional()
 });
 var VideoGenerationRequestResolution$outboundSchema = outboundSchema(VideoGenerationRequestResolution);
-var VideoGenerationRequest$outboundSchema = z1017.object({
+var VideoGenerationRequest$outboundSchema = z1019.object({
   aspectRatio: VideoGenerationRequestAspectRatio$outboundSchema.optional(),
-  callbackUrl: z1017.string().optional(),
-  creativity: z1017.int().optional(),
-  duration: z1017.int().optional(),
-  frameImages: z1017.array(FrameImage$outboundSchema).optional(),
-  generateAudio: z1017.boolean().optional(),
-  inputReferences: z1017.array(InputReference$outboundSchema).optional(),
-  model: z1017.string(),
-  previousJobId: z1017.string().optional(),
-  prompt: z1017.string().optional(),
-  provider: z1017.lazy(() => VideoGenerationRequestProvider$outboundSchema).optional(),
+  callbackUrl: z1019.string().optional(),
+  creativity: z1019.int().optional(),
+  duration: z1019.int().optional(),
+  frameImages: z1019.array(FrameImage$outboundSchema).optional(),
+  generateAudio: z1019.boolean().optional(),
+  inputReferences: z1019.array(InputReference$outboundSchema).optional(),
+  model: z1019.string(),
+  previousJobId: z1019.string().optional(),
+  prompt: z1019.string().optional(),
+  provider: z1019.lazy(() => VideoGenerationRequestProvider$outboundSchema).optional(),
   resolution: VideoGenerationRequestResolution$outboundSchema.optional(),
-  seed: z1017.int().optional(),
-  sessionId: z1017.string().optional(),
-  size: z1017.string().optional(),
+  seed: z1019.int().optional(),
+  sessionId: z1019.string().optional(),
+  size: z1019.string().optional(),
   trace: TraceConfig$outboundSchema.optional(),
-  upscaleFactor: z1017.number().optional(),
-  user: z1017.string().optional()
+  upscaleFactor: z1019.number().optional(),
+  user: z1019.string().optional()
 }).transform((v) => {
   return remap(v, {
     aspectRatio: "aspect_ratio",
@@ -45068,10 +45350,10 @@ var VideoGenerationRequest$outboundSchema = z1017.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createvideos.js
-var CreateVideosRequest$outboundSchema = z1018.object({
-  httpReferer: z1018.string().optional(),
-  appTitle: z1018.string().optional(),
-  appCategories: z1018.string().optional(),
+var CreateVideosRequest$outboundSchema = z1020.object({
+  httpReferer: z1020.string().optional(),
+  appTitle: z1020.string().optional(),
+  appCategories: z1020.string().optional(),
   videoGenerationRequest: VideoGenerationRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -45082,9 +45364,9 @@ var CreateVideosRequest$outboundSchema = z1018.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationGenerate.js
 function videoGenerationGenerate(client, request, options) {
-  return new APIPromise($do151(client, request, options));
+  return new APIPromise($do153(client, request, options));
 }
-async function $do151(client, request, options) {
+async function $do153(client, request, options) {
   const parsed = safeParse(request, (value) => CreateVideosRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -45158,12 +45440,12 @@ async function $do151(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/getvideos.js
-var z1019 = __toESM(require("zod/v4"), 1);
-var GetVideosRequest$outboundSchema = z1019.object({
-  httpReferer: z1019.string().optional(),
-  appTitle: z1019.string().optional(),
-  appCategories: z1019.string().optional(),
-  jobId: z1019.string()
+var z1021 = __toESM(require("zod/v4"), 1);
+var GetVideosRequest$outboundSchema = z1021.object({
+  httpReferer: z1021.string().optional(),
+  appTitle: z1021.string().optional(),
+  appCategories: z1021.string().optional(),
+  jobId: z1021.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -45172,9 +45454,9 @@ var GetVideosRequest$outboundSchema = z1019.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationGetGeneration.js
 function videoGenerationGetGeneration(client, request, options) {
-  return new APIPromise($do152(client, request, options));
+  return new APIPromise($do154(client, request, options));
 }
-async function $do152(client, request, options) {
+async function $do154(client, request, options) {
   const parsed = safeParse(request, (value) => GetVideosRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -45251,17 +45533,17 @@ async function $do152(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationGetVideoContent.js
-var z1023 = __toESM(require("zod/v4"), 1);
+var z1025 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/errors/goneresponseerror.js
-var z1021 = __toESM(require("zod/v4"), 1);
+var z1023 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/goneresponseerrordata.js
-var z1020 = __toESM(require("zod/v4"), 1);
-var GoneResponseErrorData$inboundSchema = z1020.object({
-  code: z1020.int(),
-  message: z1020.string(),
-  metadata: z1020.nullable(z1020.record(z1020.string(), z1020.any())).optional()
+var z1022 = __toESM(require("zod/v4"), 1);
+var GoneResponseErrorData$inboundSchema = z1022.object({
+  code: z1022.int(),
+  message: z1022.string(),
+  metadata: z1022.nullable(z1022.record(z1022.string(), z1022.any())).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/errors/goneresponseerror.js
@@ -45279,13 +45561,13 @@ var GoneResponseError = class extends OpenRouterError {
     this.name = "GoneResponseError";
   }
 };
-var GoneResponseError$inboundSchema = z1021.object({
+var GoneResponseError$inboundSchema = z1023.object({
   error: GoneResponseErrorData$inboundSchema,
-  openrouter_metadata: z1021.nullable(z1021.record(z1021.string(), z1021.any())).optional(),
-  user_id: z1021.nullable(z1021.string()).optional(),
-  request$: z1021.custom((x) => x instanceof Request),
-  response$: z1021.custom((x) => x instanceof Response),
-  body$: z1021.string()
+  openrouter_metadata: z1023.nullable(z1023.record(z1023.string(), z1023.any())).optional(),
+  user_id: z1023.nullable(z1023.string()).optional(),
+  request$: z1023.custom((x) => x instanceof Request),
+  response$: z1023.custom((x) => x instanceof Response),
+  body$: z1023.string()
 }).transform((v) => {
   const remapped = remap(v, {
     "openrouter_metadata": "openrouterMetadata",
@@ -45299,13 +45581,13 @@ var GoneResponseError$inboundSchema = z1021.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listvideoscontent.js
-var z1022 = __toESM(require("zod/v4"), 1);
-var ListVideosContentRequest$outboundSchema = z1022.object({
-  httpReferer: z1022.string().optional(),
-  appTitle: z1022.string().optional(),
-  appCategories: z1022.string().optional(),
-  jobId: z1022.string(),
-  index: z1022.nullable(z1022.int().default(0))
+var z1024 = __toESM(require("zod/v4"), 1);
+var ListVideosContentRequest$outboundSchema = z1024.object({
+  httpReferer: z1024.string().optional(),
+  appTitle: z1024.string().optional(),
+  appCategories: z1024.string().optional(),
+  jobId: z1024.string(),
+  index: z1024.nullable(z1024.int().default(0))
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -45314,9 +45596,9 @@ var ListVideosContentRequest$outboundSchema = z1022.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationGetVideoContent.js
 function videoGenerationGetVideoContent(client, request, options) {
-  return new APIPromise($do153(client, request, options));
+  return new APIPromise($do155(client, request, options));
 }
-async function $do153(client, request, options) {
+async function $do155(client, request, options) {
   const parsed = safeParse(request, (value) => ListVideosContentRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -45389,7 +45671,7 @@ async function $do153(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(stream(200, z1023.custom((x) => x instanceof ReadableStream), { ctype: "video/mp4" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(410, GoneResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(stream(200, z1025.custom((x) => x instanceof ReadableStream), { ctype: "video/mp4" }), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(404, NotFoundResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(410, GoneResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(502, BadGatewayResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -45397,10 +45679,10 @@ async function $do153(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/videomodelslistresponse.js
-var z1025 = __toESM(require("zod/v4"), 1);
+var z1027 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/videomodel.js
-var z1024 = __toESM(require("zod/v4"), 1);
+var z1026 = __toESM(require("zod/v4"), 1);
 var SupportedAspectRatio = {
   OneHundredAndSixtyNine: "16:9",
   NineHundredAndSixteen: "9:16",
@@ -45505,28 +45787,28 @@ var SupportedAspectRatio$inboundSchema = inboundSchema(SupportedAspectRatio);
 var SupportedFrameImage$inboundSchema = inboundSchema(SupportedFrameImage);
 var SupportedResolution$inboundSchema = inboundSchema(SupportedResolution);
 var SupportedSize$inboundSchema = inboundSchema(SupportedSize);
-var UpscaleFactor$inboundSchema = z1024.object({
-  max: z1024.nullable(z1024.number()).optional(),
-  min: z1024.nullable(z1024.number()).optional()
+var UpscaleFactor$inboundSchema = z1026.object({
+  max: z1026.nullable(z1026.number()).optional(),
+  min: z1026.nullable(z1026.number()).optional()
 });
-var VideoModel$inboundSchema = z1024.object({
-  allowed_passthrough_parameters: z1024.array(z1024.string()),
-  canonical_slug: z1024.string(),
-  created: z1024.int(),
-  creativity: z1024.nullable(z1024.array(z1024.int())),
-  description: z1024.string().optional(),
-  generate_audio: z1024.nullable(z1024.boolean()),
-  hugging_face_id: z1024.nullable(z1024.string()).optional(),
-  id: z1024.string(),
-  name: z1024.string(),
-  pricing_skus: z1024.nullable(z1024.record(z1024.string(), z1024.string())).optional(),
-  seed: z1024.nullable(z1024.boolean()),
-  supported_aspect_ratios: z1024.nullable(z1024.array(SupportedAspectRatio$inboundSchema)),
-  supported_durations: z1024.nullable(z1024.array(z1024.int())),
-  supported_frame_images: z1024.nullable(z1024.array(SupportedFrameImage$inboundSchema)),
-  supported_resolutions: z1024.nullable(z1024.array(SupportedResolution$inboundSchema)),
-  supported_sizes: z1024.nullable(z1024.array(SupportedSize$inboundSchema)),
-  upscale_factor: z1024.nullable(z1024.lazy(() => UpscaleFactor$inboundSchema))
+var VideoModel$inboundSchema = z1026.object({
+  allowed_passthrough_parameters: z1026.array(z1026.string()),
+  canonical_slug: z1026.string(),
+  created: z1026.int(),
+  creativity: z1026.nullable(z1026.array(z1026.int())),
+  description: z1026.string().optional(),
+  generate_audio: z1026.nullable(z1026.boolean()),
+  hugging_face_id: z1026.nullable(z1026.string()).optional(),
+  id: z1026.string(),
+  name: z1026.string(),
+  pricing_skus: z1026.nullable(z1026.record(z1026.string(), z1026.string())).optional(),
+  seed: z1026.nullable(z1026.boolean()),
+  supported_aspect_ratios: z1026.nullable(z1026.array(SupportedAspectRatio$inboundSchema)),
+  supported_durations: z1026.nullable(z1026.array(z1026.int())),
+  supported_frame_images: z1026.nullable(z1026.array(SupportedFrameImage$inboundSchema)),
+  supported_resolutions: z1026.nullable(z1026.array(SupportedResolution$inboundSchema)),
+  supported_sizes: z1026.nullable(z1026.array(SupportedSize$inboundSchema)),
+  upscale_factor: z1026.nullable(z1026.lazy(() => UpscaleFactor$inboundSchema))
 }).transform((v) => {
   return remap(v, {
     "allowed_passthrough_parameters": "allowedPassthroughParameters",
@@ -45544,16 +45826,16 @@ var VideoModel$inboundSchema = z1024.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/videomodelslistresponse.js
-var VideoModelsListResponse$inboundSchema = z1025.object({
-  data: z1025.array(VideoModel$inboundSchema)
+var VideoModelsListResponse$inboundSchema = z1027.object({
+  data: z1027.array(VideoModel$inboundSchema)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listvideosmodels.js
-var z1026 = __toESM(require("zod/v4"), 1);
-var ListVideosModelsRequest$outboundSchema = z1026.object({
-  httpReferer: z1026.string().optional(),
-  appTitle: z1026.string().optional(),
-  appCategories: z1026.string().optional()
+var z1028 = __toESM(require("zod/v4"), 1);
+var ListVideosModelsRequest$outboundSchema = z1028.object({
+  httpReferer: z1028.string().optional(),
+  appTitle: z1028.string().optional(),
+  appCategories: z1028.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -45562,9 +45844,9 @@ var ListVideosModelsRequest$outboundSchema = z1026.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/videoGenerationListVideosModels.js
 function videoGenerationListVideosModels(client, request, options) {
-  return new APIPromise($do154(client, request, options));
+  return new APIPromise($do156(client, request, options));
 }
-async function $do154(client, request, options) {
+async function $do156(client, request, options) {
   const parsed = safeParse(request, (value) => ListVideosModelsRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -45675,10 +45957,10 @@ var VideoGeneration = class extends ClientSDK {
 };
 
 // node_modules/@openrouter/sdk/esm/models/bulkaddworkspacemembersresponse.js
-var z1028 = __toESM(require("zod/v4"), 1);
+var z1030 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/workspacemember.js
-var z1027 = __toESM(require("zod/v4"), 1);
+var z1029 = __toESM(require("zod/v4"), 1);
 var WorkspaceMemberRole = {
   Admin: "admin",
   Member: "member",
@@ -45686,12 +45968,12 @@ var WorkspaceMemberRole = {
   RestrictedViewer: "restricted_viewer"
 };
 var WorkspaceMemberRole$inboundSchema = inboundSchema(WorkspaceMemberRole);
-var WorkspaceMember$inboundSchema = z1027.object({
-  created_at: z1027.string(),
-  id: z1027.string(),
+var WorkspaceMember$inboundSchema = z1029.object({
+  created_at: z1029.string(),
+  id: z1029.string(),
   role: WorkspaceMemberRole$inboundSchema,
-  user_id: z1027.string(),
-  workspace_id: z1027.string()
+  user_id: z1029.string(),
+  workspace_id: z1029.string()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -45701,9 +45983,9 @@ var WorkspaceMember$inboundSchema = z1027.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/bulkaddworkspacemembersresponse.js
-var BulkAddWorkspaceMembersResponse$inboundSchema = z1028.object({
-  added_count: z1028.int(),
-  data: z1028.array(WorkspaceMember$inboundSchema)
+var BulkAddWorkspaceMembersResponse$inboundSchema = z1030.object({
+  added_count: z1030.int(),
+  data: z1030.array(WorkspaceMember$inboundSchema)
 }).transform((v) => {
   return remap(v, {
     "added_count": "addedCount"
@@ -45711,12 +45993,12 @@ var BulkAddWorkspaceMembersResponse$inboundSchema = z1028.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkaddworkspacemembers.js
-var z1030 = __toESM(require("zod/v4"), 1);
+var z1032 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/bulkaddworkspacemembersrequest.js
-var z1029 = __toESM(require("zod/v4"), 1);
-var BulkAddWorkspaceMembersRequest$outboundSchema = z1029.object({
-  userIds: z1029.array(z1029.string())
+var z1031 = __toESM(require("zod/v4"), 1);
+var BulkAddWorkspaceMembersRequest$outboundSchema = z1031.object({
+  userIds: z1031.array(z1031.string())
 }).transform((v) => {
   return remap(v, {
     userIds: "user_ids"
@@ -45724,11 +46006,11 @@ var BulkAddWorkspaceMembersRequest$outboundSchema = z1029.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkaddworkspacemembers.js
-var BulkAddWorkspaceMembersRequest$outboundSchema2 = z1030.object({
-  httpReferer: z1030.string().optional(),
-  appTitle: z1030.string().optional(),
-  appCategories: z1030.string().optional(),
-  id: z1030.string(),
+var BulkAddWorkspaceMembersRequest$outboundSchema2 = z1032.object({
+  httpReferer: z1032.string().optional(),
+  appTitle: z1032.string().optional(),
+  appCategories: z1032.string().optional(),
+  id: z1032.string(),
   bulkAddWorkspaceMembersRequest: BulkAddWorkspaceMembersRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -45739,9 +46021,9 @@ var BulkAddWorkspaceMembersRequest$outboundSchema2 = z1030.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesBulkAddMembers.js
 function workspacesBulkAddMembers(client, request, options) {
-  return new APIPromise($do155(client, request, options));
+  return new APIPromise($do157(client, request, options));
 }
-async function $do155(client, request, options) {
+async function $do157(client, request, options) {
   const parsed = safeParse(request, (value) => BulkAddWorkspaceMembersRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -45821,9 +46103,9 @@ async function $do155(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/bulkremoveworkspacemembersresponse.js
-var z1031 = __toESM(require("zod/v4"), 1);
-var BulkRemoveWorkspaceMembersResponse$inboundSchema = z1031.object({
-  removed_count: z1031.int()
+var z1033 = __toESM(require("zod/v4"), 1);
+var BulkRemoveWorkspaceMembersResponse$inboundSchema = z1033.object({
+  removed_count: z1033.int()
 }).transform((v) => {
   return remap(v, {
     "removed_count": "removedCount"
@@ -45831,12 +46113,12 @@ var BulkRemoveWorkspaceMembersResponse$inboundSchema = z1031.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkremoveworkspacemembers.js
-var z1033 = __toESM(require("zod/v4"), 1);
+var z1035 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/bulkremoveworkspacemembersrequest.js
-var z1032 = __toESM(require("zod/v4"), 1);
-var BulkRemoveWorkspaceMembersRequest$outboundSchema = z1032.object({
-  userIds: z1032.array(z1032.string())
+var z1034 = __toESM(require("zod/v4"), 1);
+var BulkRemoveWorkspaceMembersRequest$outboundSchema = z1034.object({
+  userIds: z1034.array(z1034.string())
 }).transform((v) => {
   return remap(v, {
     userIds: "user_ids"
@@ -45844,11 +46126,11 @@ var BulkRemoveWorkspaceMembersRequest$outboundSchema = z1032.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/bulkremoveworkspacemembers.js
-var BulkRemoveWorkspaceMembersRequest$outboundSchema2 = z1033.object({
-  httpReferer: z1033.string().optional(),
-  appTitle: z1033.string().optional(),
-  appCategories: z1033.string().optional(),
-  id: z1033.string(),
+var BulkRemoveWorkspaceMembersRequest$outboundSchema2 = z1035.object({
+  httpReferer: z1035.string().optional(),
+  appTitle: z1035.string().optional(),
+  appCategories: z1035.string().optional(),
+  id: z1035.string(),
   bulkRemoveWorkspaceMembersRequest: BulkRemoveWorkspaceMembersRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -45859,9 +46141,9 @@ var BulkRemoveWorkspaceMembersRequest$outboundSchema2 = z1033.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesBulkRemoveMembers.js
 function workspacesBulkRemoveMembers(client, request, options) {
-  return new APIPromise($do156(client, request, options));
+  return new APIPromise($do158(client, request, options));
 }
-async function $do156(client, request, options) {
+async function $do158(client, request, options) {
   const parsed = safeParse(request, (value) => BulkRemoveWorkspaceMembersRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -45941,29 +46223,29 @@ async function $do156(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/createworkspaceresponse.js
-var z1035 = __toESM(require("zod/v4"), 1);
+var z1037 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/workspace.js
-var z1034 = __toESM(require("zod/v4"), 1);
-var Workspace$inboundSchema = z1034.object({
-  created_at: z1034.string(),
-  created_by: z1034.nullable(z1034.string()),
-  default_guardrail_id: z1034.string(),
-  default_image_model: z1034.nullable(z1034.string()),
-  default_provider_sort: z1034.nullable(z1034.string()),
-  default_text_model: z1034.nullable(z1034.string()),
-  description: z1034.nullable(z1034.string()),
-  disabled_server_tools: z1034.nullable(z1034.array(z1034.string())).optional(),
-  id: z1034.string(),
-  include_byok_in_budgets: z1034.boolean().optional(),
-  io_logging_api_key_ids: z1034.nullable(z1034.array(z1034.int())),
-  io_logging_sampling_rate: z1034.number(),
-  is_data_discount_logging_enabled: z1034.boolean(),
-  is_observability_broadcast_enabled: z1034.boolean(),
-  is_observability_io_logging_enabled: z1034.boolean(),
-  name: z1034.string(),
-  slug: z1034.string(),
-  updated_at: z1034.nullable(z1034.string())
+var z1036 = __toESM(require("zod/v4"), 1);
+var Workspace$inboundSchema = z1036.object({
+  created_at: z1036.string(),
+  created_by: z1036.nullable(z1036.string()),
+  default_guardrail_id: z1036.string(),
+  default_image_model: z1036.nullable(z1036.string()),
+  default_provider_sort: z1036.nullable(z1036.string()),
+  default_text_model: z1036.nullable(z1036.string()),
+  description: z1036.nullable(z1036.string()),
+  disabled_server_tools: z1036.nullable(z1036.array(z1036.string())).optional(),
+  id: z1036.string(),
+  include_byok_in_budgets: z1036.boolean().optional(),
+  io_logging_api_key_ids: z1036.nullable(z1036.array(z1036.int())),
+  io_logging_sampling_rate: z1036.number(),
+  is_data_discount_logging_enabled: z1036.boolean(),
+  is_observability_broadcast_enabled: z1036.boolean(),
+  is_observability_io_logging_enabled: z1036.boolean(),
+  name: z1036.string(),
+  slug: z1036.string(),
+  updated_at: z1036.nullable(z1036.string())
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -45984,15 +46266,15 @@ var Workspace$inboundSchema = z1034.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/createworkspaceresponse.js
-var CreateWorkspaceResponse$inboundSchema = z1035.object({
+var CreateWorkspaceResponse$inboundSchema = z1037.object({
   data: Workspace$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createworkspace.js
-var z1037 = __toESM(require("zod/v4"), 1);
+var z1039 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/createworkspacerequest.js
-var z1036 = __toESM(require("zod/v4"), 1);
+var z1038 = __toESM(require("zod/v4"), 1);
 var CreateWorkspaceRequestDisabledServerTool = {
   OpenrouterAdvisor: "openrouter:advisor",
   OpenrouterApplyPatch: "openrouter:apply_patch",
@@ -46009,19 +46291,19 @@ var CreateWorkspaceRequestDisabledServerTool = {
   OpenrouterWebSearch: "openrouter:web_search"
 };
 var CreateWorkspaceRequestDisabledServerTool$outboundSchema = outboundSchema(CreateWorkspaceRequestDisabledServerTool);
-var CreateWorkspaceRequest$outboundSchema = z1036.object({
-  defaultImageModel: z1036.nullable(z1036.string()).optional(),
-  defaultProviderSort: z1036.nullable(z1036.string()).optional(),
-  defaultTextModel: z1036.nullable(z1036.string()).optional(),
-  description: z1036.nullable(z1036.string()).optional(),
-  disabledServerTools: z1036.nullable(z1036.array(CreateWorkspaceRequestDisabledServerTool$outboundSchema)).optional(),
-  ioLoggingApiKeyIds: z1036.nullable(z1036.array(z1036.int())).optional(),
-  ioLoggingSamplingRate: z1036.number().optional(),
-  isDataDiscountLoggingEnabled: z1036.boolean().optional(),
-  isObservabilityBroadcastEnabled: z1036.boolean().optional(),
-  isObservabilityIoLoggingEnabled: z1036.boolean().optional(),
-  name: z1036.string(),
-  slug: z1036.string()
+var CreateWorkspaceRequest$outboundSchema = z1038.object({
+  defaultImageModel: z1038.nullable(z1038.string()).optional(),
+  defaultProviderSort: z1038.nullable(z1038.string()).optional(),
+  defaultTextModel: z1038.nullable(z1038.string()).optional(),
+  description: z1038.nullable(z1038.string()).optional(),
+  disabledServerTools: z1038.nullable(z1038.array(CreateWorkspaceRequestDisabledServerTool$outboundSchema)).optional(),
+  ioLoggingApiKeyIds: z1038.nullable(z1038.array(z1038.int())).optional(),
+  ioLoggingSamplingRate: z1038.number().optional(),
+  isDataDiscountLoggingEnabled: z1038.boolean().optional(),
+  isObservabilityBroadcastEnabled: z1038.boolean().optional(),
+  isObservabilityIoLoggingEnabled: z1038.boolean().optional(),
+  name: z1038.string(),
+  slug: z1038.string()
 }).transform((v) => {
   return remap(v, {
     defaultImageModel: "default_image_model",
@@ -46037,10 +46319,10 @@ var CreateWorkspaceRequest$outboundSchema = z1036.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/createworkspace.js
-var CreateWorkspaceRequest$outboundSchema2 = z1037.object({
-  httpReferer: z1037.string().optional(),
-  appTitle: z1037.string().optional(),
-  appCategories: z1037.string().optional(),
+var CreateWorkspaceRequest$outboundSchema2 = z1039.object({
+  httpReferer: z1039.string().optional(),
+  appTitle: z1039.string().optional(),
+  appCategories: z1039.string().optional(),
   createWorkspaceRequest: CreateWorkspaceRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -46051,9 +46333,9 @@ var CreateWorkspaceRequest$outboundSchema2 = z1037.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesCreate.js
 function workspacesCreate(client, request, options) {
-  return new APIPromise($do157(client, request, options));
+  return new APIPromise($do159(client, request, options));
 }
-async function $do157(client, request, options) {
+async function $do159(client, request, options) {
   const parsed = safeParse(request, (value) => CreateWorkspaceRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -46127,19 +46409,19 @@ async function $do157(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/deleteworkspaceresponse.js
-var z1038 = __toESM(require("zod/v4"), 1);
-var DeleteWorkspaceResponse$inboundSchema = z1038.object({
-  deleted: z1038.literal(true)
+var z1040 = __toESM(require("zod/v4"), 1);
+var DeleteWorkspaceResponse$inboundSchema = z1040.object({
+  deleted: z1040.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteworkspace.js
-var z1039 = __toESM(require("zod/v4"), 1);
-var DeleteWorkspaceRequest$outboundSchema = z1039.object({
-  httpReferer: z1039.string().optional(),
-  appTitle: z1039.string().optional(),
-  appCategories: z1039.string().optional(),
-  id: z1039.string(),
-  confirmDefaultWorkspaceDeletion: z1039.boolean().optional()
+var z1041 = __toESM(require("zod/v4"), 1);
+var DeleteWorkspaceRequest$outboundSchema = z1041.object({
+  httpReferer: z1041.string().optional(),
+  appTitle: z1041.string().optional(),
+  appCategories: z1041.string().optional(),
+  id: z1041.string(),
+  confirmDefaultWorkspaceDeletion: z1041.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -46149,9 +46431,9 @@ var DeleteWorkspaceRequest$outboundSchema = z1039.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesDelete.js
 function workspacesDelete(client, request, options) {
-  return new APIPromise($do158(client, request, options));
+  return new APIPromise($do160(client, request, options));
 }
-async function $do158(client, request, options) {
+async function $do160(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteWorkspaceRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -46232,13 +46514,13 @@ async function $do158(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/deleteworkspacebudgetresponse.js
-var z1040 = __toESM(require("zod/v4"), 1);
-var DeleteWorkspaceBudgetResponse$inboundSchema = z1040.object({
-  deleted: z1040.literal(true)
+var z1042 = __toESM(require("zod/v4"), 1);
+var DeleteWorkspaceBudgetResponse$inboundSchema = z1042.object({
+  deleted: z1042.literal(true)
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteworkspacebudget.js
-var z1041 = __toESM(require("zod/v4"), 1);
+var z1043 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/workspacebudgetinterval.js
 var WorkspaceBudgetInterval = {
@@ -46250,11 +46532,11 @@ var WorkspaceBudgetInterval = {
 var WorkspaceBudgetInterval$outboundSchema = outboundSchema(WorkspaceBudgetInterval);
 
 // node_modules/@openrouter/sdk/esm/models/operations/deleteworkspacebudget.js
-var DeleteWorkspaceBudgetRequest$outboundSchema = z1041.object({
-  httpReferer: z1041.string().optional(),
-  appTitle: z1041.string().optional(),
-  appCategories: z1041.string().optional(),
-  workspaceRef: z1041.string(),
+var DeleteWorkspaceBudgetRequest$outboundSchema = z1043.object({
+  httpReferer: z1043.string().optional(),
+  appTitle: z1043.string().optional(),
+  appCategories: z1043.string().optional(),
+  workspaceRef: z1043.string(),
   interval: WorkspaceBudgetInterval$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -46265,9 +46547,9 @@ var DeleteWorkspaceBudgetRequest$outboundSchema = z1041.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesDeleteBudget.js
 function workspacesDeleteBudget(client, request, options) {
-  return new APIPromise($do159(client, request, options));
+  return new APIPromise($do161(client, request, options));
 }
-async function $do159(client, request, options) {
+async function $do161(client, request, options) {
   const parsed = safeParse(request, (value) => DeleteWorkspaceBudgetRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -46348,18 +46630,18 @@ async function $do159(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/getworkspaceresponse.js
-var z1042 = __toESM(require("zod/v4"), 1);
-var GetWorkspaceResponse$inboundSchema = z1042.object({
+var z1044 = __toESM(require("zod/v4"), 1);
+var GetWorkspaceResponse$inboundSchema = z1044.object({
   data: Workspace$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getworkspace.js
-var z1043 = __toESM(require("zod/v4"), 1);
-var GetWorkspaceRequest$outboundSchema = z1043.object({
-  httpReferer: z1043.string().optional(),
-  appTitle: z1043.string().optional(),
-  appCategories: z1043.string().optional(),
-  id: z1043.string()
+var z1045 = __toESM(require("zod/v4"), 1);
+var GetWorkspaceRequest$outboundSchema = z1045.object({
+  httpReferer: z1045.string().optional(),
+  appTitle: z1045.string().optional(),
+  appCategories: z1045.string().optional(),
+  id: z1045.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
@@ -46368,9 +46650,9 @@ var GetWorkspaceRequest$outboundSchema = z1043.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesGet.js
 function workspacesGet(client, request, options) {
-  return new APIPromise($do160(client, request, options));
+  return new APIPromise($do162(client, request, options));
 }
-async function $do160(client, request, options) {
+async function $do162(client, request, options) {
   const parsed = safeParse(request, (value) => GetWorkspaceRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -46447,23 +46729,23 @@ async function $do160(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/getworkspacebudgetresponse.js
-var z1045 = __toESM(require("zod/v4"), 1);
+var z1047 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/workspacebudget.js
-var z1044 = __toESM(require("zod/v4"), 1);
+var z1046 = __toESM(require("zod/v4"), 1);
 var WorkspaceBudgetResetInterval = {
   Daily: "daily",
   Weekly: "weekly",
   Monthly: "monthly"
 };
 var WorkspaceBudgetResetInterval$inboundSchema = inboundSchema(WorkspaceBudgetResetInterval);
-var WorkspaceBudget$inboundSchema = z1044.object({
-  created_at: z1044.string(),
-  id: z1044.string(),
-  limit_usd: z1044.number(),
-  reset_interval: z1044.nullable(WorkspaceBudgetResetInterval$inboundSchema),
-  updated_at: z1044.string(),
-  workspace_id: z1044.string()
+var WorkspaceBudget$inboundSchema = z1046.object({
+  created_at: z1046.string(),
+  id: z1046.string(),
+  limit_usd: z1046.number(),
+  reset_interval: z1046.nullable(WorkspaceBudgetResetInterval$inboundSchema),
+  updated_at: z1046.string(),
+  workspace_id: z1046.string()
 }).transform((v) => {
   return remap(v, {
     "created_at": "createdAt",
@@ -46475,9 +46757,9 @@ var WorkspaceBudget$inboundSchema = z1044.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/getworkspacebudgetresponse.js
-var GetWorkspaceBudgetResponse$inboundSchema = z1045.object({
+var GetWorkspaceBudgetResponse$inboundSchema = z1047.object({
   data: WorkspaceBudget$inboundSchema,
-  include_byok_in_budgets: z1045.boolean().optional()
+  include_byok_in_budgets: z1047.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "include_byok_in_budgets": "includeByokInBudgets"
@@ -46485,12 +46767,12 @@ var GetWorkspaceBudgetResponse$inboundSchema = z1045.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/getworkspacebudget.js
-var z1046 = __toESM(require("zod/v4"), 1);
-var GetWorkspaceBudgetRequest$outboundSchema = z1046.object({
-  httpReferer: z1046.string().optional(),
-  appTitle: z1046.string().optional(),
-  appCategories: z1046.string().optional(),
-  workspaceRef: z1046.string(),
+var z1048 = __toESM(require("zod/v4"), 1);
+var GetWorkspaceBudgetRequest$outboundSchema = z1048.object({
+  httpReferer: z1048.string().optional(),
+  appTitle: z1048.string().optional(),
+  appCategories: z1048.string().optional(),
+  workspaceRef: z1048.string(),
   interval: WorkspaceBudgetInterval$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -46501,9 +46783,9 @@ var GetWorkspaceBudgetRequest$outboundSchema = z1046.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesGetBudget.js
 function workspacesGetBudget(client, request, options) {
-  return new APIPromise($do161(client, request, options));
+  return new APIPromise($do163(client, request, options));
 }
-async function $do161(client, request, options) {
+async function $do163(client, request, options) {
   const parsed = safeParse(request, (value) => GetWorkspaceBudgetRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -46584,13 +46866,13 @@ async function $do161(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspaces.js
-var z1048 = __toESM(require("zod/v4"), 1);
+var z1050 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/listworkspacesresponse.js
-var z1047 = __toESM(require("zod/v4"), 1);
-var ListWorkspacesResponse$inboundSchema = z1047.object({
-  data: z1047.array(Workspace$inboundSchema),
-  total_count: z1047.int()
+var z1049 = __toESM(require("zod/v4"), 1);
+var ListWorkspacesResponse$inboundSchema = z1049.object({
+  data: z1049.array(Workspace$inboundSchema),
+  total_count: z1049.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -46598,18 +46880,18 @@ var ListWorkspacesResponse$inboundSchema = z1047.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspaces.js
-var ListWorkspacesRequest$outboundSchema = z1048.object({
-  httpReferer: z1048.string().optional(),
-  appTitle: z1048.string().optional(),
-  appCategories: z1048.string().optional(),
-  offset: z1048.nullable(z1048.int().default(0)),
-  limit: z1048.int().default(50)
+var ListWorkspacesRequest$outboundSchema = z1050.object({
+  httpReferer: z1050.string().optional(),
+  appTitle: z1050.string().optional(),
+  appCategories: z1050.string().optional(),
+  offset: z1050.nullable(z1050.int().default(0)),
+  limit: z1050.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListWorkspacesResponse$inboundSchema2 = z1048.object({
+var ListWorkspacesResponse$inboundSchema2 = z1050.object({
   Result: ListWorkspacesResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -46619,9 +46901,9 @@ var ListWorkspacesResponse$inboundSchema2 = z1048.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesList.js
 function workspacesList(client, request, options) {
-  return new APIPromise($do162(client, request, options));
+  return new APIPromise($do164(client, request, options));
 }
-async function $do162(client, request, options) {
+async function $do164(client, request, options) {
   const parsed = safeParse(request, (value) => ListWorkspacesRequest$outboundSchema.optional().parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -46728,10 +47010,10 @@ async function $do162(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/listworkspacebudgetsresponse.js
-var z1049 = __toESM(require("zod/v4"), 1);
-var ListWorkspaceBudgetsResponse$inboundSchema = z1049.object({
-  data: z1049.array(WorkspaceBudget$inboundSchema),
-  include_byok_in_budgets: z1049.boolean().optional()
+var z1051 = __toESM(require("zod/v4"), 1);
+var ListWorkspaceBudgetsResponse$inboundSchema = z1051.object({
+  data: z1051.array(WorkspaceBudget$inboundSchema),
+  include_byok_in_budgets: z1051.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "include_byok_in_budgets": "includeByokInBudgets"
@@ -46739,12 +47021,12 @@ var ListWorkspaceBudgetsResponse$inboundSchema = z1049.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspacebudgets.js
-var z1050 = __toESM(require("zod/v4"), 1);
-var ListWorkspaceBudgetsRequest$outboundSchema = z1050.object({
-  httpReferer: z1050.string().optional(),
-  appTitle: z1050.string().optional(),
-  appCategories: z1050.string().optional(),
-  workspaceRef: z1050.string()
+var z1052 = __toESM(require("zod/v4"), 1);
+var ListWorkspaceBudgetsRequest$outboundSchema = z1052.object({
+  httpReferer: z1052.string().optional(),
+  appTitle: z1052.string().optional(),
+  appCategories: z1052.string().optional(),
+  workspaceRef: z1052.string()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
@@ -46754,9 +47036,9 @@ var ListWorkspaceBudgetsRequest$outboundSchema = z1050.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesListBudgets.js
 function workspacesListBudgets(client, request, options) {
-  return new APIPromise($do163(client, request, options));
+  return new APIPromise($do165(client, request, options));
 }
-async function $do163(client, request, options) {
+async function $do165(client, request, options) {
   const parsed = safeParse(request, (value) => ListWorkspaceBudgetsRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -46833,13 +47115,13 @@ async function $do163(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspacemembers.js
-var z1052 = __toESM(require("zod/v4"), 1);
+var z1054 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/listworkspacemembersresponse.js
-var z1051 = __toESM(require("zod/v4"), 1);
-var ListWorkspaceMembersResponse$inboundSchema = z1051.object({
-  data: z1051.array(WorkspaceMember$inboundSchema),
-  total_count: z1051.int()
+var z1053 = __toESM(require("zod/v4"), 1);
+var ListWorkspaceMembersResponse$inboundSchema = z1053.object({
+  data: z1053.array(WorkspaceMember$inboundSchema),
+  total_count: z1053.int()
 }).transform((v) => {
   return remap(v, {
     "total_count": "totalCount"
@@ -46847,19 +47129,19 @@ var ListWorkspaceMembersResponse$inboundSchema = z1051.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/listworkspacemembers.js
-var ListWorkspaceMembersRequest$outboundSchema = z1052.object({
-  httpReferer: z1052.string().optional(),
-  appTitle: z1052.string().optional(),
-  appCategories: z1052.string().optional(),
-  id: z1052.string(),
-  offset: z1052.nullable(z1052.int().default(0)),
-  limit: z1052.int().default(50)
+var ListWorkspaceMembersRequest$outboundSchema = z1054.object({
+  httpReferer: z1054.string().optional(),
+  appTitle: z1054.string().optional(),
+  appCategories: z1054.string().optional(),
+  id: z1054.string(),
+  offset: z1054.nullable(z1054.int().default(0)),
+  limit: z1054.int().default(50)
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer"
   });
 });
-var ListWorkspaceMembersResponse$inboundSchema2 = z1052.object({
+var ListWorkspaceMembersResponse$inboundSchema2 = z1054.object({
   Result: ListWorkspaceMembersResponse$inboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -46869,9 +47151,9 @@ var ListWorkspaceMembersResponse$inboundSchema2 = z1052.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesListMembers.js
 function workspacesListMembers(client, request, options) {
-  return new APIPromise($do164(client, request, options));
+  return new APIPromise($do166(client, request, options));
 }
-async function $do164(client, request, options) {
+async function $do166(client, request, options) {
   const parsed = safeParse(request, (value) => ListWorkspaceMembersRequest$outboundSchema.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [haltIterator(parsed), { status: "invalid" }];
@@ -46984,10 +47266,10 @@ async function $do164(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/upsertworkspacebudgetresponse.js
-var z1053 = __toESM(require("zod/v4"), 1);
-var UpsertWorkspaceBudgetResponse$inboundSchema = z1053.object({
+var z1055 = __toESM(require("zod/v4"), 1);
+var UpsertWorkspaceBudgetResponse$inboundSchema = z1055.object({
   data: WorkspaceBudget$inboundSchema,
-  include_byok_in_budgets: z1053.boolean().optional()
+  include_byok_in_budgets: z1055.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "include_byok_in_budgets": "includeByokInBudgets"
@@ -46995,13 +47277,13 @@ var UpsertWorkspaceBudgetResponse$inboundSchema = z1053.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/upsertworkspacebudget.js
-var z1055 = __toESM(require("zod/v4"), 1);
+var z1057 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/upsertworkspacebudgetrequest.js
-var z1054 = __toESM(require("zod/v4"), 1);
-var UpsertWorkspaceBudgetRequest$outboundSchema = z1054.object({
-  includeByokInBudgets: z1054.boolean().optional(),
-  limitUsd: z1054.number()
+var z1056 = __toESM(require("zod/v4"), 1);
+var UpsertWorkspaceBudgetRequest$outboundSchema = z1056.object({
+  includeByokInBudgets: z1056.boolean().optional(),
+  limitUsd: z1056.number()
 }).transform((v) => {
   return remap(v, {
     includeByokInBudgets: "include_byok_in_budgets",
@@ -47010,11 +47292,11 @@ var UpsertWorkspaceBudgetRequest$outboundSchema = z1054.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/upsertworkspacebudget.js
-var UpsertWorkspaceBudgetRequest$outboundSchema2 = z1055.object({
-  httpReferer: z1055.string().optional(),
-  appTitle: z1055.string().optional(),
-  appCategories: z1055.string().optional(),
-  workspaceRef: z1055.string(),
+var UpsertWorkspaceBudgetRequest$outboundSchema2 = z1057.object({
+  httpReferer: z1057.string().optional(),
+  appTitle: z1057.string().optional(),
+  appCategories: z1057.string().optional(),
+  workspaceRef: z1057.string(),
   interval: WorkspaceBudgetInterval$outboundSchema,
   upsertWorkspaceBudgetRequest: UpsertWorkspaceBudgetRequest$outboundSchema
 }).transform((v) => {
@@ -47027,9 +47309,9 @@ var UpsertWorkspaceBudgetRequest$outboundSchema2 = z1055.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesSetBudget.js
 function workspacesSetBudget(client, request, options) {
-  return new APIPromise($do165(client, request, options));
+  return new APIPromise($do167(client, request, options));
 }
-async function $do165(client, request, options) {
+async function $do167(client, request, options) {
   const parsed = safeParse(request, (value) => UpsertWorkspaceBudgetRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -47113,16 +47395,16 @@ async function $do165(client, request, options) {
 }
 
 // node_modules/@openrouter/sdk/esm/models/updateworkspaceresponse.js
-var z1056 = __toESM(require("zod/v4"), 1);
-var UpdateWorkspaceResponse$inboundSchema = z1056.object({
+var z1058 = __toESM(require("zod/v4"), 1);
+var UpdateWorkspaceResponse$inboundSchema = z1058.object({
   data: Workspace$inboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateworkspace.js
-var z1058 = __toESM(require("zod/v4"), 1);
+var z1060 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/updateworkspacerequest.js
-var z1057 = __toESM(require("zod/v4"), 1);
+var z1059 = __toESM(require("zod/v4"), 1);
 var UpdateWorkspaceRequestDisabledServerTool = {
   OpenrouterAdvisor: "openrouter:advisor",
   OpenrouterApplyPatch: "openrouter:apply_patch",
@@ -47139,19 +47421,19 @@ var UpdateWorkspaceRequestDisabledServerTool = {
   OpenrouterWebSearch: "openrouter:web_search"
 };
 var UpdateWorkspaceRequestDisabledServerTool$outboundSchema = outboundSchema(UpdateWorkspaceRequestDisabledServerTool);
-var UpdateWorkspaceRequest$outboundSchema = z1057.object({
-  defaultImageModel: z1057.nullable(z1057.string()).optional(),
-  defaultProviderSort: z1057.nullable(z1057.string()).optional(),
-  defaultTextModel: z1057.nullable(z1057.string()).optional(),
-  description: z1057.nullable(z1057.string()).optional(),
-  disabledServerTools: z1057.nullable(z1057.array(UpdateWorkspaceRequestDisabledServerTool$outboundSchema)).optional(),
-  ioLoggingApiKeyIds: z1057.nullable(z1057.array(z1057.int())).optional(),
-  ioLoggingSamplingRate: z1057.number().optional(),
-  isDataDiscountLoggingEnabled: z1057.boolean().optional(),
-  isObservabilityBroadcastEnabled: z1057.boolean().optional(),
-  isObservabilityIoLoggingEnabled: z1057.boolean().optional(),
-  name: z1057.string().optional(),
-  slug: z1057.string().optional()
+var UpdateWorkspaceRequest$outboundSchema = z1059.object({
+  defaultImageModel: z1059.nullable(z1059.string()).optional(),
+  defaultProviderSort: z1059.nullable(z1059.string()).optional(),
+  defaultTextModel: z1059.nullable(z1059.string()).optional(),
+  description: z1059.nullable(z1059.string()).optional(),
+  disabledServerTools: z1059.nullable(z1059.array(UpdateWorkspaceRequestDisabledServerTool$outboundSchema)).optional(),
+  ioLoggingApiKeyIds: z1059.nullable(z1059.array(z1059.int())).optional(),
+  ioLoggingSamplingRate: z1059.number().optional(),
+  isDataDiscountLoggingEnabled: z1059.boolean().optional(),
+  isObservabilityBroadcastEnabled: z1059.boolean().optional(),
+  isObservabilityIoLoggingEnabled: z1059.boolean().optional(),
+  name: z1059.string().optional(),
+  slug: z1059.string().optional()
 }).transform((v) => {
   return remap(v, {
     defaultImageModel: "default_image_model",
@@ -47167,11 +47449,11 @@ var UpdateWorkspaceRequest$outboundSchema = z1057.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/operations/updateworkspace.js
-var UpdateWorkspaceRequest$outboundSchema2 = z1058.object({
-  httpReferer: z1058.string().optional(),
-  appTitle: z1058.string().optional(),
-  appCategories: z1058.string().optional(),
-  id: z1058.string(),
+var UpdateWorkspaceRequest$outboundSchema2 = z1060.object({
+  httpReferer: z1060.string().optional(),
+  appTitle: z1060.string().optional(),
+  appCategories: z1060.string().optional(),
+  id: z1060.string(),
   updateWorkspaceRequest: UpdateWorkspaceRequest$outboundSchema
 }).transform((v) => {
   return remap(v, {
@@ -47182,9 +47464,9 @@ var UpdateWorkspaceRequest$outboundSchema2 = z1058.object({
 
 // node_modules/@openrouter/sdk/esm/funcs/workspacesUpdate.js
 function workspacesUpdate(client, request, options) {
-  return new APIPromise($do166(client, request, options));
+  return new APIPromise($do168(client, request, options));
 }
-async function $do166(client, request, options) {
+async function $do168(client, request, options) {
   const parsed = safeParse(request, (value) => UpdateWorkspaceRequest$outboundSchema2.parse(value), "Input validation failed");
   if (!parsed.ok) {
     return [parsed, { status: "invalid" }];
@@ -48408,10 +48690,13 @@ var Stream = class _Stream {
    * Decodes an SSE response into parsed JSON events.
    *
    * The resulting stream can be consumed only once, ignores events after `[DONE]`, and
-   * surfaces API error payloads as `APIError` instances. When
+   * surfaces API error payloads as `APIError` instances in the default `legacy` mode.
+   * In `events` mode, every parsed JSON payload remains a stream item. When
    * `synthesizeEventData` is enabled, each item also includes its SSE event name.
+   * Custom factories that wrap this method should forward the optional fifth
+   * argument to preserve the selected delivery mode.
    */
-  static fromSSEResponse(response, controller, client, synthesizeEventData) {
+  static fromSSEResponse(response, controller, client, synthesizeEventData, streamMode = "legacy") {
     let consumed = false;
     const logger5 = client ? loggerFor(client) : console;
     async function* iterator() {
@@ -48435,14 +48720,18 @@ var Stream = class _Stream {
             receivedCompletionSentinel = true;
             break;
           }
-          if (sse2.event === null || !sse2.event.startsWith("thread.")) {
-            let data;
-            try {
-              data = JSON.parse(sse2.data);
-            } catch {
-              logger5.error(`Could not parse message into JSON:`);
-              logger5.error(`From chunk:`);
-              throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
+          let data;
+          try {
+            data = JSON.parse(sse2.data);
+          } catch {
+            logger5.error(`Could not parse message into JSON:`);
+            logger5.error(`From chunk:`);
+            throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
+          }
+          if (streamMode === "legacy") {
+            if (sse2.event?.startsWith("thread.")) {
+              yield { event: sse2.event, data };
+              continue;
             }
             if (sse2.event === "error") {
               throw new APIError(void 0, data?.error ?? data, void 0, response.headers);
@@ -48450,18 +48739,8 @@ var Stream = class _Stream {
             if (data && data.error) {
               throw new APIError(void 0, data.error, void 0, response.headers);
             }
-            yield synthesizeEventData ? { event: sse2.event, data } : data;
-          } else {
-            let data;
-            try {
-              data = JSON.parse(sse2.data);
-            } catch {
-              logger5.error(`Could not parse message into JSON:`);
-              logger5.error(`From chunk:`);
-              throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
-            }
-            yield { event: sse2.event, data };
           }
+          yield synthesizeEventData ? { event: sse2.event, data } : data;
         }
         done = true;
       } catch (e) {
@@ -48948,9 +49227,9 @@ async function defaultParseResponse(client, props) {
     if (props.options.stream) {
       loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
       if (props.options.__streamClass) {
-        return props.options.__streamClass.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
+        return props.options.__streamClass.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData, props.options.__streamMode);
       }
-      return Stream.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData);
+      return Stream.fromSSEResponse(response, props.controller, client, props.options.__synthesizeEventData, props.options.__streamMode);
     }
     if (response.status === 204) {
       return null;
@@ -49009,7 +49288,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.47.0";
+var VERSION = "7.54.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -49222,22 +49501,22 @@ var encode = (str, _defaultEncoder, charset, _kind, format) => {
   if (str.length === 0) {
     return str;
   }
-  let string771 = str;
+  let string774 = str;
   if (typeof str === "symbol") {
-    string771 = Symbol.prototype.toString.call(str);
+    string774 = Symbol.prototype.toString.call(str);
   } else if (typeof str !== "string") {
-    string771 = String(str);
+    string774 = String(str);
   }
   if (charset === "iso-8859-1") {
-    return escape(string771).replace(/%u[0-9a-f]{4}/gi, ($0) => "%26%23" + Number.parseInt($0.slice(2), 16) + "%3B");
+    return escape(string774).replace(/%u[0-9a-f]{4}/gi, ($0) => "%26%23" + Number.parseInt($0.slice(2), 16) + "%3B");
   }
   let out = "";
-  for (let j = 0; j < string771.length; ) {
-    let segmentEnd = Math.min((Math.floor(j / limit) + 1) * limit, string771.length);
-    if (segmentEnd < string771.length && string771.codePointAt(segmentEnd - 1) > 65535) {
+  for (let j = 0; j < string774.length; ) {
+    let segmentEnd = Math.min((Math.floor(j / limit) + 1) * limit, string774.length);
+    if (segmentEnd < string774.length && string774.codePointAt(segmentEnd - 1) > 65535) {
       segmentEnd += 1;
     }
-    const segment = string771.length >= limit ? string771.slice(j, segmentEnd) : string771;
+    const segment = string774.length >= limit ? string774.slice(j, segmentEnd) : string774;
     const arr = [];
     for (let i = 0; i < segment.length; ++i) {
       let c = segment.charCodeAt(i);
@@ -49299,9 +49578,7 @@ var array_prefix_generators = {
   indices(prefix, key) {
     return String(prefix) + "[" + key + "]";
   },
-  repeat(prefix) {
-    return String(prefix);
-  }
+  repeat: String
 };
 var push_to_array = function push_to_array2(arr, value_or_array) {
   Array.prototype.push.apply(arr, isArray(value_or_array) ? value_or_array : [value_or_array]);
@@ -49333,13 +49610,13 @@ function is_non_nullish_primitive(v) {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean" || typeof v === "symbol" || typeof v === "bigint";
 }
 var sentinel = {};
-function inner_stringify(object1018, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
-  let obj = object1018;
+function inner_stringify(object1020, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
+  let obj = object1020;
   let tmp_sc = sideChannel;
   let step = 0;
   let find_flag = false;
   while ((tmp_sc = tmp_sc.get(sentinel)) !== void 0 && !find_flag) {
-    const pos = tmp_sc.get(object1018);
+    const pos = tmp_sc.get(object1020);
     step += 1;
     if (pos !== void 0) {
       if (pos === step) {
@@ -49425,7 +49702,7 @@ function inner_stringify(object1018, prefix, generateArrayPrefix, commaRoundTrip
     } else {
       key_prefix = adjusted_prefix + (allowDots ? "." + encoded_key : "[" + encoded_key + "]");
     }
-    sideChannel.set(object1018, step);
+    sideChannel.set(object1020, step);
     const valueSideChannel = new WeakMap([[sentinel, sideChannel]]);
     push_to_array(values, inner_stringify(
       value,
@@ -49518,8 +49795,8 @@ function normalize_stringify_options(opts = defaults) {
     strictNullHandling: typeof opts.strictNullHandling === "boolean" ? opts.strictNullHandling : defaults.strictNullHandling
   };
 }
-function stringify(object1018, opts = {}) {
-  let obj = object1018;
+function stringify(object1020, opts = {}) {
+  let obj = object1020;
   const options = normalize_stringify_options(opts);
   let obj_keys;
   let filter;
@@ -49593,7 +49870,10 @@ var endpoints = /* @__PURE__ */ new Map([
   ["global", "https://api.openai.com/v1"],
   ["us", "https://us.api.openai.com/v1"],
   ["eu", "https://eu.api.openai.com/v1"],
-  ["ae", "https://ae.api.openai.com/v1"]
+  ["ae", "https://ae.api.openai.com/v1"],
+  ["au", "https://au.api.openai.com/v1"],
+  ["in", "https://in.api.openai.com/v1"],
+  ["jp", "https://jp.api.openai.com/v1"]
 ]);
 function resolveDataResidency(options) {
   if (options.dataResidency === null || options.dataResidency === void 0) {
@@ -49604,7 +49884,7 @@ function resolveDataResidency(options) {
   }
   const endpoint = endpoints.get(options.dataResidency);
   if (endpoint === void 0) {
-    throw new OpenAIError("Invalid `dataResidency`; expected one of: global, us, eu, ae.");
+    throw new OpenAIError("Invalid `dataResidency`; expected one of: global, us, eu, ae, au, in, jp.");
   }
   return endpoint;
 }
@@ -51569,6 +51849,7 @@ var normalizeRequestOptionsForQueryKeys = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -55574,6 +55855,7 @@ var normalizeRequestOptionsForQueryKeys2 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -55717,6 +55999,7 @@ var normalizeRequestOptionsForQueryKeys3 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -55830,6 +56113,7 @@ var normalizeRequestOptionsForQueryKeys4 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -55902,6 +56186,7 @@ var normalizeRequestOptionsForQueryKeys5 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -56120,6 +56405,7 @@ var normalizeRequestOptionsForQueryKeys6 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -56254,6 +56540,7 @@ var normalizeRequestOptionsForQueryKeys7 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -56392,6 +56679,7 @@ var normalizeRequestOptionsForQueryKeys8 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -56507,6 +56795,7 @@ var normalizeRequestOptionsForQueryKeys9 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -56635,6 +56924,7 @@ var normalizeRequestOptionsForQueryKeys10 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -57061,6 +57351,7 @@ var normalizeRequestOptionsForQueryKeys11 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -57179,6 +57470,7 @@ var normalizeRequestOptionsForQueryKeys12 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -57297,6 +57589,7 @@ var normalizeRequestOptionsForQueryKeys13 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -57433,6 +57726,7 @@ var normalizeRequestOptionsForQueryKeys14 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -57578,6 +57872,7 @@ var normalizeRequestOptionsForQueryKeys15 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -57831,6 +58126,7 @@ var normalizeRequestOptionsForQueryKeys16 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -57912,6 +58208,7 @@ var normalizeRequestOptionsForQueryKeys17 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -58028,8 +58325,52 @@ var Roles3 = class extends APIResource {
   }
 };
 
-// ../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
+// ../../../node_modules/openai/resources/admin/organization/projects/service-tier-settings.mjs
 function resolveResourceRequestOptions24(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var ServiceTierSettings = class extends APIResource {
+  /**
+   * Retrieve the configured default and enabled service tiers for a project.
+   *
+   * @example
+   * ```ts
+   * const projectServiceTierSettings =
+   *   await client.admin.organization.projects.serviceTierSettings.retrieve(
+   *     'project_id',
+   *   );
+   * ```
+   */
+  retrieve(projectID, options) {
+    return this._client.get(path`/organization/projects/${projectID}/service_tier_settings`, resolveResourceRequestOptions24(options, (options2) => ({
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * Update the default or enabled service tiers atomically. Supply at least one
+   * field. Omitted fields keep their current values.
+   *
+   * @example
+   * ```ts
+   * const projectServiceTierSettings =
+   *   await client.admin.organization.projects.serviceTierSettings.update(
+   *     'project_id',
+   *     { default: 'standard' },
+   *   );
+   * ```
+   */
+  update(projectID, body, options) {
+    return this._client.post(path`/organization/projects/${projectID}/service_tier_settings`, resolveResourceRequestOptions24(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
+function resolveResourceRequestOptions25(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys18 = /* @__PURE__ */ new Set([
@@ -58050,6 +58391,7 @@ var normalizeRequestOptionsForQueryKeys18 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -58095,7 +58437,7 @@ var SpendAlerts2 = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/spend_alerts`, resolveResourceRequestOptions24(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${projectID}/spend_alerts`, resolveResourceRequestOptions25(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58115,7 +58457,7 @@ var SpendAlerts2 = class extends APIResource {
    */
   retrieve(alertID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions24(options, (options2) => ({
+    return this._client.get(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions25(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58143,7 +58485,7 @@ var SpendAlerts2 = class extends APIResource {
    */
   update(alertID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions24(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions25(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58156,7 +58498,7 @@ var SpendAlerts2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/spend_alerts`, ConversationCursorPage, resolveResourceRequestOptions24(options, (options2) => ({
+    return this._client.getAPIList(path`/organization/projects/${projectID}/spend_alerts`, ConversationCursorPage, resolveResourceRequestOptions25(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58176,7 +58518,7 @@ var SpendAlerts2 = class extends APIResource {
    */
   delete(alertID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions24(options, (options2) => ({
+    return this._client.delete(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions25(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58184,7 +58526,7 @@ var SpendAlerts2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/spend-limit.mjs
-function resolveResourceRequestOptions25(options, buildOptions) {
+function resolveResourceRequestOptions26(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var SpendLimit2 = class extends APIResource {
@@ -58200,7 +58542,7 @@ var SpendLimit2 = class extends APIResource {
    * ```
    */
   retrieve(projectID, options) {
-    return this._client.get(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions25(options, (options2) => ({
+    return this._client.get(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions26(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58222,7 +58564,7 @@ var SpendLimit2 = class extends APIResource {
    * ```
    */
   update(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions25(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions26(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58240,7 +58582,7 @@ var SpendLimit2 = class extends APIResource {
    * ```
    */
   delete(projectID, options) {
-    return this._client.delete(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions25(options, (options2) => ({
+    return this._client.delete(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions26(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58248,7 +58590,7 @@ var SpendLimit2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/roles.mjs
-function resolveResourceRequestOptions26(options, buildOptions) {
+function resolveResourceRequestOptions27(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Roles4 = class extends APIResource {
@@ -58266,7 +58608,7 @@ var Roles4 = class extends APIResource {
    */
   create(groupID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/projects/${project_id}/groups/${groupID}/roles`, resolveResourceRequestOptions26(options, (options2) => ({
+    return this._client.post(path`/projects/${project_id}/groups/${groupID}/roles`, resolveResourceRequestOptions27(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58286,7 +58628,7 @@ var Roles4 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { project_id, group_id } = params;
-    return this._client.get(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions26(options, (options2) => ({
+    return this._client.get(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions27(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58307,7 +58649,7 @@ var Roles4 = class extends APIResource {
    */
   list(groupID, params, options) {
     const { project_id, ...query } = params;
-    return this._client.getAPIList(path`/projects/${project_id}/groups/${groupID}/roles`, NextCursorPage, resolveResourceRequestOptions26(options, (options2) => ({
+    return this._client.getAPIList(path`/projects/${project_id}/groups/${groupID}/roles`, NextCursorPage, resolveResourceRequestOptions27(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58327,7 +58669,7 @@ var Roles4 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { project_id, group_id } = params;
-    return this._client.delete(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions26(options, (options2) => ({
+    return this._client.delete(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions27(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58335,7 +58677,7 @@ var Roles4 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/groups.mjs
-function resolveResourceRequestOptions27(options, buildOptions) {
+function resolveResourceRequestOptions28(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys19 = /* @__PURE__ */ new Set([
@@ -58356,6 +58698,7 @@ var normalizeRequestOptionsForQueryKeys19 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -58397,7 +58740,7 @@ var Groups2 = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/groups`, resolveResourceRequestOptions27(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${projectID}/groups`, resolveResourceRequestOptions28(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58417,7 +58760,7 @@ var Groups2 = class extends APIResource {
    */
   retrieve(groupID, params, options) {
     const { project_id, ...query } = params;
-    return this._client.get(path`/organization/projects/${project_id}/groups/${groupID}`, resolveResourceRequestOptions27(options, (options2) => ({
+    return this._client.get(path`/organization/projects/${project_id}/groups/${groupID}`, resolveResourceRequestOptions28(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58430,7 +58773,7 @@ var Groups2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/groups`, NextCursorPage, resolveResourceRequestOptions27(options, (options2) => ({
+    return this._client.getAPIList(path`/organization/projects/${projectID}/groups`, NextCursorPage, resolveResourceRequestOptions28(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58450,7 +58793,7 @@ var Groups2 = class extends APIResource {
    */
   delete(groupID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/groups/${groupID}`, resolveResourceRequestOptions27(options, (options2) => ({
+    return this._client.delete(path`/organization/projects/${project_id}/groups/${groupID}`, resolveResourceRequestOptions28(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58459,7 +58802,7 @@ var Groups2 = class extends APIResource {
 Groups2.Roles = Roles4;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/service-accounts/api-keys.mjs
-function resolveResourceRequestOptions28(options, buildOptions) {
+function resolveResourceRequestOptions29(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var APIKeys3 = class extends APIResource {
@@ -58477,7 +58820,7 @@ var APIKeys3 = class extends APIResource {
    */
   create(serviceAccountID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}/api_keys`, resolveResourceRequestOptions28(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}/api_keys`, resolveResourceRequestOptions29(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58486,7 +58829,7 @@ var APIKeys3 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/service-accounts/service-accounts.mjs
-function resolveResourceRequestOptions29(options, buildOptions) {
+function resolveResourceRequestOptions30(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys20 = /* @__PURE__ */ new Set([
@@ -58507,6 +58850,7 @@ var normalizeRequestOptionsForQueryKeys20 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -58549,7 +58893,7 @@ var ServiceAccounts = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/service_accounts`, resolveResourceRequestOptions29(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${projectID}/service_accounts`, resolveResourceRequestOptions30(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58569,7 +58913,7 @@ var ServiceAccounts = class extends APIResource {
    */
   retrieve(serviceAccountID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions29(options, (options2) => ({
+    return this._client.get(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions30(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58588,7 +58932,7 @@ var ServiceAccounts = class extends APIResource {
    */
   update(serviceAccountID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions29(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions30(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58601,7 +58945,7 @@ var ServiceAccounts = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/service_accounts`, ConversationCursorPage, resolveResourceRequestOptions29(options, (options2) => ({
+    return this._client.getAPIList(path`/organization/projects/${projectID}/service_accounts`, ConversationCursorPage, resolveResourceRequestOptions30(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58624,7 +58968,7 @@ var ServiceAccounts = class extends APIResource {
    */
   delete(serviceAccountID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions29(options, (options2) => ({
+    return this._client.delete(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions30(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58633,7 +58977,7 @@ var ServiceAccounts = class extends APIResource {
 ServiceAccounts.APIKeys = APIKeys3;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/users/roles.mjs
-function resolveResourceRequestOptions30(options, buildOptions) {
+function resolveResourceRequestOptions31(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Roles5 = class extends APIResource {
@@ -58651,7 +58995,7 @@ var Roles5 = class extends APIResource {
    */
   create(userID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/projects/${project_id}/users/${userID}/roles`, resolveResourceRequestOptions30(options, (options2) => ({
+    return this._client.post(path`/projects/${project_id}/users/${userID}/roles`, resolveResourceRequestOptions31(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58671,7 +59015,7 @@ var Roles5 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { project_id, user_id } = params;
-    return this._client.get(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions30(options, (options2) => ({
+    return this._client.get(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions31(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58692,7 +59036,7 @@ var Roles5 = class extends APIResource {
    */
   list(userID, params, options) {
     const { project_id, ...query } = params;
-    return this._client.getAPIList(path`/projects/${project_id}/users/${userID}/roles`, NextCursorPage, resolveResourceRequestOptions30(options, (options2) => ({
+    return this._client.getAPIList(path`/projects/${project_id}/users/${userID}/roles`, NextCursorPage, resolveResourceRequestOptions31(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58712,7 +59056,7 @@ var Roles5 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { project_id, user_id } = params;
-    return this._client.delete(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions30(options, (options2) => ({
+    return this._client.delete(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions31(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58720,7 +59064,7 @@ var Roles5 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/users/users.mjs
-function resolveResourceRequestOptions31(options, buildOptions) {
+function resolveResourceRequestOptions32(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys21 = /* @__PURE__ */ new Set([
@@ -58741,6 +59085,7 @@ var normalizeRequestOptionsForQueryKeys21 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -58783,7 +59128,7 @@ var Users2 = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/users`, resolveResourceRequestOptions31(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${projectID}/users`, resolveResourceRequestOptions32(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58803,7 +59148,7 @@ var Users2 = class extends APIResource {
    */
   retrieve(userID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions31(options, (options2) => ({
+    return this._client.get(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions32(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58822,7 +59167,7 @@ var Users2 = class extends APIResource {
    */
   update(userID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions31(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions32(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58835,7 +59180,7 @@ var Users2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/users`, ConversationCursorPage, resolveResourceRequestOptions31(options, (options2) => ({
+    return this._client.getAPIList(path`/organization/projects/${projectID}/users`, ConversationCursorPage, resolveResourceRequestOptions32(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58858,7 +59203,7 @@ var Users2 = class extends APIResource {
    */
   delete(userID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions31(options, (options2) => ({
+    return this._client.delete(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions32(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58867,7 +59212,7 @@ var Users2 = class extends APIResource {
 Users2.Roles = Roles5;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/projects.mjs
-function resolveResourceRequestOptions32(options, buildOptions) {
+function resolveResourceRequestOptions33(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys22 = /* @__PURE__ */ new Set([
@@ -58888,6 +59233,7 @@ var normalizeRequestOptionsForQueryKeys22 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -58919,6 +59265,7 @@ var Projects = class extends APIResource {
     this.apiKeys = new APIKeys2(this._client);
     this.rateLimits = new RateLimits(this._client);
     this.modelPermissions = new ModelPermissions(this._client);
+    this.serviceTierSettings = new ServiceTierSettings(this._client);
     this.hostedToolPermissions = new HostedToolPermissions(this._client);
     this.groups = new Groups2(this._client);
     this.roles = new Roles3(this._client);
@@ -58940,7 +59287,7 @@ var Projects = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/projects", resolveResourceRequestOptions32(options, (options2) => ({
+    return this._client.post("/organization/projects", resolveResourceRequestOptions33(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58958,7 +59305,7 @@ var Projects = class extends APIResource {
    * ```
    */
   retrieve(projectID, options) {
-    return this._client.get(path`/organization/projects/${projectID}`, resolveResourceRequestOptions32(options, (options2) => ({
+    return this._client.get(path`/organization/projects/${projectID}`, resolveResourceRequestOptions33(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -58975,7 +59322,7 @@ var Projects = class extends APIResource {
    * ```
    */
   update(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}`, resolveResourceRequestOptions32(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${projectID}`, resolveResourceRequestOptions33(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -58988,7 +59335,7 @@ var Projects = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/projects", ConversationCursorPage, resolveResourceRequestOptions32(options, (options2) => ({
+    return this._client.getAPIList("/organization/projects", ConversationCursorPage, resolveResourceRequestOptions33(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -59007,7 +59354,7 @@ var Projects = class extends APIResource {
    * ```
    */
   archive(projectID, options) {
-    return this._client.post(path`/organization/projects/${projectID}/archive`, resolveResourceRequestOptions32(options, (options2) => ({
+    return this._client.post(path`/organization/projects/${projectID}/archive`, resolveResourceRequestOptions33(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -59018,6 +59365,7 @@ Projects.ServiceAccounts = ServiceAccounts;
 Projects.APIKeys = APIKeys2;
 Projects.RateLimits = RateLimits;
 Projects.ModelPermissions = ModelPermissions;
+Projects.ServiceTierSettings = ServiceTierSettings;
 Projects.HostedToolPermissions = HostedToolPermissions;
 Projects.Groups = Groups2;
 Projects.Roles = Roles3;
@@ -59027,7 +59375,7 @@ Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
 // ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
-function resolveResourceRequestOptions33(options, buildOptions) {
+function resolveResourceRequestOptions34(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys23 = /* @__PURE__ */ new Set([
@@ -59048,6 +59396,7 @@ var normalizeRequestOptionsForQueryKeys23 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -59085,7 +59434,7 @@ var Roles6 = class extends APIResource {
    * ```
    */
   create(userID, body, options) {
-    return this._client.post(path`/organization/users/${userID}/roles`, resolveResourceRequestOptions33(options, (options2) => ({
+    return this._client.post(path`/organization/users/${userID}/roles`, resolveResourceRequestOptions34(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -59105,7 +59454,7 @@ var Roles6 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { user_id } = params;
-    return this._client.get(path`/organization/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions33(options, (options2) => ({
+    return this._client.get(path`/organization/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions34(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -59117,7 +59466,7 @@ var Roles6 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/users/${userID}/roles`, NextCursorPage, resolveResourceRequestOptions33(options, (options2) => ({
+    return this._client.getAPIList(path`/organization/users/${userID}/roles`, NextCursorPage, resolveResourceRequestOptions34(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -59137,7 +59486,7 @@ var Roles6 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { user_id } = params;
-    return this._client.delete(path`/organization/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions33(options, (options2) => ({
+    return this._client.delete(path`/organization/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions34(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -59145,7 +59494,7 @@ var Roles6 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/users/users.mjs
-function resolveResourceRequestOptions34(options, buildOptions) {
+function resolveResourceRequestOptions35(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys24 = /* @__PURE__ */ new Set([
@@ -59166,6 +59515,7 @@ var normalizeRequestOptionsForQueryKeys24 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -59204,7 +59554,7 @@ var Users3 = class extends APIResource {
    * ```
    */
   retrieve(userID, options) {
-    return this._client.get(path`/organization/users/${userID}`, resolveResourceRequestOptions34(options, (options2) => ({
+    return this._client.get(path`/organization/users/${userID}`, resolveResourceRequestOptions35(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -59219,7 +59569,7 @@ var Users3 = class extends APIResource {
    * ```
    */
   update(userID, body, options) {
-    return this._client.post(path`/organization/users/${userID}`, resolveResourceRequestOptions34(options, (options2) => ({
+    return this._client.post(path`/organization/users/${userID}`, resolveResourceRequestOptions35(options, (options2) => ({
       body,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -59232,7 +59582,7 @@ var Users3 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/users", ConversationCursorPage, resolveResourceRequestOptions34(options, (options2) => ({
+    return this._client.getAPIList("/organization/users", ConversationCursorPage, resolveResourceRequestOptions35(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -59249,13 +59599,298 @@ var Users3 = class extends APIResource {
    * ```
    */
   delete(userID, options) {
-    return this._client.delete(path`/organization/users/${userID}`, resolveResourceRequestOptions34(options, (options2) => ({
+    return this._client.delete(path`/organization/users/${userID}`, resolveResourceRequestOptions35(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
   }
 };
 Users3.Roles = Roles6;
+
+// ../../../node_modules/openai/resources/admin/organization/workload-identity-providers/federation-rules.mjs
+function resolveResourceRequestOptions36(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys25 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery25(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys25.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys25.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var FederationRules = class extends APIResource {
+  /**
+   * Bind verified token attributes to an existing project service account.
+   *
+   * @example
+   * ```ts
+   * const federationRule =
+   *   await client.admin.organization.workloadIdentityProviders.federationRules.create(
+   *     'x',
+   *     {
+   *       attribute_matchers: { foo: 'string' },
+   *       project_id: 'x',
+   *       service_account_id: 'x',
+   *     },
+   *   );
+   * ```
+   */
+  create(workloadIdentityProviderID, body, options) {
+    return this._client.post(path`/organization/workload_identity_providers/${workloadIdentityProviderID}/federation_rules`, resolveResourceRequestOptions36(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * Retrieve a federation rule owned by the authenticated organization and provider.
+   *
+   * @example
+   * ```ts
+   * const federationRule =
+   *   await client.admin.organization.workloadIdentityProviders.federationRules.retrieve(
+   *     'x',
+   *     { workload_identity_provider_id: 'x' },
+   *   );
+   * ```
+   */
+  retrieve(workloadIdentityFederationRuleID, params, options) {
+    const { workload_identity_provider_id } = params;
+    return this._client.get(path`/organization/workload_identity_providers/${workload_identity_provider_id}/federation_rules/${workloadIdentityFederationRuleID}`, resolveResourceRequestOptions36(options, (options2) => ({
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * Update supplied matcher, permission, metadata, or enabled fields.
+   *
+   * @example
+   * ```ts
+   * const federationRule =
+   *   await client.admin.organization.workloadIdentityProviders.federationRules.update(
+   *     'x',
+   *     { workload_identity_provider_id: 'x' },
+   *   );
+   * ```
+   */
+  update(workloadIdentityFederationRuleID, params, options) {
+    const { workload_identity_provider_id, ...body } = params;
+    return this._client.post(path`/organization/workload_identity_providers/${workload_identity_provider_id}/federation_rules/${workloadIdentityFederationRuleID}`, resolveResourceRequestOptions36(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  list(workloadIdentityProviderID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery25(query, ["after", "limit", "order", "service_account_id"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/organization/workload_identity_providers/${workloadIdentityProviderID}/federation_rules`, CursorPage, resolveResourceRequestOptions36(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * Delete a federation rule to a project service account.
+   *
+   * @example
+   * ```ts
+   * const federationRuleDeleted =
+   *   await client.admin.organization.workloadIdentityProviders.federationRules.delete(
+   *     'x',
+   *     { workload_identity_provider_id: 'x' },
+   *   );
+   * ```
+   */
+  delete(workloadIdentityFederationRuleID, params, options) {
+    const { workload_identity_provider_id } = params;
+    return this._client.delete(path`/organization/workload_identity_providers/${workload_identity_provider_id}/federation_rules/${workloadIdentityFederationRuleID}`, resolveResourceRequestOptions36(options, (options2) => ({
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/admin/organization/workload-identity-providers/workload-identity-providers.mjs
+function resolveResourceRequestOptions37(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys26 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery26(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys26.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys26.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var WorkloadIdentityProviders = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.federationRules = new FederationRules(this._client);
+  }
+  /**
+   * Register an OIDC provider for keyless project service-account authentication.
+   *
+   * @example
+   * ```ts
+   * const workloadIdentityProvider =
+   *   await client.admin.organization.workloadIdentityProviders.create(
+   *     {
+   *       audience: 'x',
+   *       issuer: 'x',
+   *       name: 'x',
+   *       type: 'oidc',
+   *     },
+   *   );
+   * ```
+   */
+  create(body, options) {
+    return this._client.post("/organization/workload_identity_providers", resolveResourceRequestOptions37(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * Retrieve an OIDC provider in the authenticated organization.
+   *
+   * @example
+   * ```ts
+   * const workloadIdentityProvider =
+   *   await client.admin.organization.workloadIdentityProviders.retrieve(
+   *     'x',
+   *   );
+   * ```
+   */
+  retrieve(workloadIdentityProviderID, options) {
+    return this._client.get(path`/organization/workload_identity_providers/${workloadIdentityProviderID}`, resolveResourceRequestOptions37(options, (options2) => ({
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * Update supplied provider fields, preserving omitted fields.
+   *
+   * @example
+   * ```ts
+   * const workloadIdentityProvider =
+   *   await client.admin.organization.workloadIdentityProviders.update(
+   *     'x',
+   *   );
+   * ```
+   */
+  update(workloadIdentityProviderID, body = {}, options) {
+    return this._client.post(path`/organization/workload_identity_providers/${workloadIdentityProviderID}`, resolveResourceRequestOptions37(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery26(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/organization/workload_identity_providers", CursorPage, resolveResourceRequestOptions37(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * Delete a provider after deleting all its federation rules.
+   *
+   * @example
+   * ```ts
+   * const workloadIdentityProviderDeleted =
+   *   await client.admin.organization.workloadIdentityProviders.delete(
+   *     'x',
+   *   );
+   * ```
+   */
+  delete(workloadIdentityProviderID, options) {
+    return this._client.delete(path`/organization/workload_identity_providers/${workloadIdentityProviderID}`, resolveResourceRequestOptions37(options, (options2) => ({
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+};
+WorkloadIdentityProviders.FederationRules = FederationRules;
 
 // ../../../node_modules/openai/resources/admin/organization/organization.mjs
 var Organization2 = class extends APIResource {
@@ -59270,6 +59905,7 @@ var Organization2 = class extends APIResource {
     this.roles = new Roles(this._client);
     this.dataRetention = new DataRetention(this._client);
     this.externalKeys = new ExternalKeys(this._client);
+    this.workloadIdentityProviders = new WorkloadIdentityProviders(this._client);
     this.externalStorage = new ExternalStorage(this._client);
     this.spendLimit = new SpendLimit(this._client);
     this.spendAlerts = new SpendAlerts(this._client);
@@ -59286,6 +59922,7 @@ Organization2.Groups = Groups;
 Organization2.Roles = Roles;
 Organization2.DataRetention = DataRetention;
 Organization2.ExternalKeys = ExternalKeys;
+Organization2.WorkloadIdentityProviders = WorkloadIdentityProviders;
 Organization2.ExternalStorage = ExternalStorage;
 Organization2.SpendLimit = SpendLimit;
 Organization2.SpendAlerts = SpendAlerts;
@@ -59302,7 +59939,7 @@ var Admin = class extends APIResource {
 Admin.Organization = Organization2;
 
 // ../../../node_modules/openai/resources/audio/speech.mjs
-function resolveResourceRequestOptions35(options, buildOptions) {
+function resolveResourceRequestOptions38(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Speech = class extends APIResource {
@@ -59332,7 +59969,7 @@ var Speech = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/audio/speech", resolveResourceRequestOptions35(options, (options2) => ({
+    return this._client.post("/audio/speech", resolveResourceRequestOptions38(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "application/octet-stream" }, options2?.headers]),
@@ -59343,7 +59980,7 @@ var Speech = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/audio/transcriptions.mjs
-function resolveResourceRequestOptions36(options, buildOptions) {
+function resolveResourceRequestOptions39(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization2(options, finalization) {
@@ -59351,7 +59988,7 @@ function withBodyFinalization2(options, finalization) {
 }
 var Transcriptions = class extends APIResource {
   create(body, options) {
-    return this._client.post("/audio/transcriptions", resolveResourceRequestOptions36(options, (options2) => multipartFormRequestOptions(withBodyFinalization2(((request) => ({ ...request, __metadata: { model: body.model } }))({
+    return this._client.post("/audio/transcriptions", resolveResourceRequestOptions39(options, (options2) => multipartFormRequestOptions(withBodyFinalization2(((request) => ({ ...request, __metadata: { model: body.model } }))({
       body,
       ...options2,
       stream: body.stream ?? false,
@@ -59361,12 +59998,12 @@ var Transcriptions = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/audio/translations.mjs
-function resolveResourceRequestOptions37(options, buildOptions) {
+function resolveResourceRequestOptions40(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Translations = class extends APIResource {
   create(body, options) {
-    return this._client.post("/audio/translations", resolveResourceRequestOptions37(options, (options2) => multipartFormRequestOptions(((request) => ({ ...request, __metadata: { model: body.model } }))({
+    return this._client.post("/audio/translations", resolveResourceRequestOptions40(options, (options2) => multipartFormRequestOptions(((request) => ({ ...request, __metadata: { model: body.model } }))({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -59375,10 +60012,10 @@ var Translations = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/audio/voice-consents.mjs
-function resolveResourceRequestOptions38(options, buildOptions) {
+function resolveResourceRequestOptions41(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys25 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys27 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -59396,18 +60033,19 @@ var normalizeRequestOptionsForQueryKeys25 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery25(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery27(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys25.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys27.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys25.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys27.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -59434,7 +60072,7 @@ var VoiceConsents = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/audio/voice_consents", resolveResourceRequestOptions38(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/audio/voice_consents", resolveResourceRequestOptions41(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Retrieves a voice consent recording.
@@ -59446,7 +60084,7 @@ var VoiceConsents = class extends APIResource {
    * ```
    */
   retrieve(consentID, options) {
-    return this._client.get(path`/audio/voice_consents/${consentID}`, resolveResourceRequestOptions38(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/audio/voice_consents/${consentID}`, resolveResourceRequestOptions41(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Updates a voice consent recording (metadata only).
@@ -59461,20 +60099,20 @@ var VoiceConsents = class extends APIResource {
    * ```
    */
   update(consentID, body, options) {
-    return this._client.post(path`/audio/voice_consents/${consentID}`, resolveResourceRequestOptions38(options, (options2) => ({
+    return this._client.post(path`/audio/voice_consents/${consentID}`, resolveResourceRequestOptions41(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery25(query, ["after", "limit"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery27(query, ["after", "limit"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/audio/voice_consents", CursorPage, resolveResourceRequestOptions38(options, (options2) => ({
+    return this._client.getAPIList("/audio/voice_consents", CursorPage, resolveResourceRequestOptions41(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -59490,12 +60128,12 @@ var VoiceConsents = class extends APIResource {
    * ```
    */
   delete(consentID, options) {
-    return this._client.delete(path`/audio/voice_consents/${consentID}`, resolveResourceRequestOptions38(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/audio/voice_consents/${consentID}`, resolveResourceRequestOptions41(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
 // ../../../node_modules/openai/resources/audio/voices.mjs
-function resolveResourceRequestOptions39(options, buildOptions) {
+function resolveResourceRequestOptions42(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Voices = class extends APIResource {
@@ -59522,7 +60160,7 @@ var Voices = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/audio/voices", resolveResourceRequestOptions39(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/audio/voices", resolveResourceRequestOptions42(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Deletes a voice created from a text prompt or an audio sample.
@@ -59542,7 +60180,7 @@ var Voices = class extends APIResource {
    * ```
    */
   delete(voiceID, options) {
-    return this._client.delete(path`/audio/voices/${voiceID}`, resolveResourceRequestOptions39(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/audio/voices/${voiceID}`, resolveResourceRequestOptions42(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
@@ -59564,204 +60202,7 @@ Audio.Voices = Voices;
 Audio.VoiceConsents = VoiceConsents;
 
 // ../../../node_modules/openai/resources/batches.mjs
-function resolveResourceRequestOptions40(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
-}
-var normalizeRequestOptionsForQueryKeys26 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery26(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys26.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys26.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Batches = class extends APIResource {
-  /**
-   * Creates and executes a batch from an uploaded file of requests
-   */
-  create(body, options) {
-    return this._client.post("/batches", resolveResourceRequestOptions40(options, (options2) => ({
-      body,
-      ...options2,
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Retrieves a batch.
-   */
-  retrieve(batchID, options) {
-    return this._client.get(path`/batches/${batchID}`, resolveResourceRequestOptions40(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
-  }
-  list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery26(query, ["after", "limit"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList("/batches", CursorPage, resolveResourceRequestOptions40(options, (options2) => ({
-      query,
-      ...options2,
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Cancels an in-progress batch. The batch will be in status `cancelling` for up to
-   * 10 minutes, before changing to `cancelled`, where it will have partial results
-   * (if any) available in the output file.
-   */
-  cancel(batchID, options) {
-    return this._client.post(path`/batches/${batchID}/cancel`, resolveResourceRequestOptions40(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
-  }
-};
-
-// ../../../node_modules/openai/resources/beta/assistants.mjs
-function resolveResourceRequestOptions41(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
-}
-var normalizeRequestOptionsForQueryKeys27 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery27(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys27.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys27.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Assistants = class extends APIResource {
-  /**
-   * Create an assistant with a model and instructions.
-   *
-   * @deprecated
-   */
-  create(body, options) {
-    return this._client.post("/assistants", resolveResourceRequestOptions41(options, (options2) => ({
-      body,
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Retrieves an assistant.
-   *
-   * @deprecated
-   */
-  retrieve(assistantID, options) {
-    return this._client.get(path`/assistants/${assistantID}`, resolveResourceRequestOptions41(options, (options2) => ({
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Modifies an assistant.
-   *
-   * @deprecated
-   */
-  update(assistantID, body, options) {
-    return this._client.post(path`/assistants/${assistantID}`, resolveResourceRequestOptions41(options, (options2) => ({
-      body,
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-  list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery27(query, ["after", "before", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList("/assistants", CursorPage, resolveResourceRequestOptions41(options, (options2) => ({
-      query,
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Delete an assistant.
-   *
-   * @deprecated
-   */
-  delete(assistantID, options) {
-    return this._client.delete(path`/assistants/${assistantID}`, resolveResourceRequestOptions41(options, (options2) => ({
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-};
-
-// ../../../node_modules/openai/resources/beta/agents/automations/invocations.mjs
-function resolveResourceRequestOptions42(options, buildOptions) {
+function resolveResourceRequestOptions43(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys28 = /* @__PURE__ */ new Set([
@@ -59782,6 +60223,7 @@ var normalizeRequestOptionsForQueryKeys28 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -59794,6 +60236,205 @@ function normalizeRequestOptionsForQuery28(value, queryKeys, options) {
   if (!requestOnly)
     return void 0;
   if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys28.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Batches = class extends APIResource {
+  /**
+   * Creates and executes a batch from an uploaded file of requests
+   */
+  create(body, options) {
+    return this._client.post("/batches", resolveResourceRequestOptions43(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Retrieves a batch.
+   */
+  retrieve(batchID, options) {
+    return this._client.get(path`/batches/${batchID}`, resolveResourceRequestOptions43(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery28(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/batches", CursorPage, resolveResourceRequestOptions43(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Cancels an in-progress batch. The batch will be in status `cancelling` for up to
+   * 10 minutes, before changing to `cancelled`, where it will have partial results
+   * (if any) available in the output file.
+   */
+  cancel(batchID, options) {
+    return this._client.post(path`/batches/${batchID}/cancel`, resolveResourceRequestOptions43(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+};
+
+// ../../../node_modules/openai/resources/beta/assistants.mjs
+function resolveResourceRequestOptions44(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys29 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery29(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys29.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys29.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Assistants = class extends APIResource {
+  /**
+   * Create an assistant with a model and instructions.
+   *
+   * @deprecated
+   */
+  create(body, options) {
+    return this._client.post("/assistants", resolveResourceRequestOptions44(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Retrieves an assistant.
+   *
+   * @deprecated
+   */
+  retrieve(assistantID, options) {
+    return this._client.get(path`/assistants/${assistantID}`, resolveResourceRequestOptions44(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Modifies an assistant.
+   *
+   * @deprecated
+   */
+  update(assistantID, body, options) {
+    return this._client.post(path`/assistants/${assistantID}`, resolveResourceRequestOptions44(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery29(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/assistants", CursorPage, resolveResourceRequestOptions44(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete an assistant.
+   *
+   * @deprecated
+   */
+  delete(assistantID, options) {
+    return this._client.delete(path`/assistants/${assistantID}`, resolveResourceRequestOptions44(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/beta/agents/automations/invocations.mjs
+function resolveResourceRequestOptions45(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys30 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery30(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys30.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys30.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -59818,7 +60459,7 @@ var Invocations = class extends APIResource {
    * ```
    */
   create(automationID, options) {
-    return this._client.post(path`/agents/automations/${automationID}/invocations`, resolveResourceRequestOptions42(options, (options2) => ({
+    return this._client.post(path`/agents/automations/${automationID}/invocations`, resolveResourceRequestOptions45(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -59838,20 +60479,20 @@ var Invocations = class extends APIResource {
    */
   retrieve(invocationID, params, options) {
     const { automation_id } = params;
-    return this._client.get(path`/agents/automations/${automation_id}/invocations/${invocationID}`, resolveResourceRequestOptions42(options, (options2) => ({
+    return this._client.get(path`/agents/automations/${automation_id}/invocations/${invocationID}`, resolveResourceRequestOptions45(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
     })));
   }
   list(automationID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery28(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery30(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/automations/${automationID}/invocations`, CursorPage, resolveResourceRequestOptions42(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/automations/${automationID}/invocations`, CursorPage, resolveResourceRequestOptions45(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -59861,10 +60502,10 @@ var Invocations = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/automations/automations.mjs
-function resolveResourceRequestOptions43(options, buildOptions) {
+function resolveResourceRequestOptions46(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys29 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys31 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -59882,18 +60523,19 @@ var normalizeRequestOptionsForQueryKeys29 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery29(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery31(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys29.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys31.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys29.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys31.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -59935,7 +60577,7 @@ var Automations = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/agents/automations", resolveResourceRequestOptions43(options, (options2) => ({
+    return this._client.post("/agents/automations", resolveResourceRequestOptions46(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -59954,7 +60596,7 @@ var Automations = class extends APIResource {
    * ```
    */
   retrieve(automationID, options) {
-    return this._client.get(path`/agents/automations/${automationID}`, resolveResourceRequestOptions43(options, (options2) => ({
+    return this._client.get(path`/agents/automations/${automationID}`, resolveResourceRequestOptions46(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -59972,7 +60614,7 @@ var Automations = class extends APIResource {
    * ```
    */
   update(automationID, body, options) {
-    return this._client.post(path`/agents/automations/${automationID}`, resolveResourceRequestOptions43(options, (options2) => ({
+    return this._client.post(path`/agents/automations/${automationID}`, resolveResourceRequestOptions46(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -59980,13 +60622,13 @@ var Automations = class extends APIResource {
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery29(query, ["after", "limit", "order", "session_id"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery31(query, ["after", "limit", "order", "session_id"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents/automations", CursorPage, resolveResourceRequestOptions43(options, (options2) => ({
+    return this._client.getAPIList("/agents/automations", CursorPage, resolveResourceRequestOptions46(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60006,7 +60648,7 @@ var Automations = class extends APIResource {
    * ```
    */
   delete(automationID, options) {
-    return this._client.delete(path`/agents/automations/${automationID}`, resolveResourceRequestOptions43(options, (options2) => ({
+    return this._client.delete(path`/agents/automations/${automationID}`, resolveResourceRequestOptions46(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -60024,7 +60666,7 @@ var Automations = class extends APIResource {
    * ```
    */
   pause(automationID, options) {
-    return this._client.post(path`/agents/automations/${automationID}/pause`, resolveResourceRequestOptions43(options, (options2) => ({
+    return this._client.post(path`/agents/automations/${automationID}/pause`, resolveResourceRequestOptions46(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -60043,7 +60685,7 @@ var Automations = class extends APIResource {
    * ```
    */
   resume(automationID, options) {
-    return this._client.post(path`/agents/automations/${automationID}/resume`, resolveResourceRequestOptions43(options, (options2) => ({
+    return this._client.post(path`/agents/automations/${automationID}/resume`, resolveResourceRequestOptions46(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -60131,7 +60773,7 @@ async function uploadAgentFile(client, resource, environmentID, params, options)
 }
 
 // ../../../node_modules/openai/resources/beta/agents/environments/files.mjs
-function resolveResourceRequestOptions44(options, buildOptions) {
+function resolveResourceRequestOptions47(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Files2 = class extends APIResource {
@@ -60151,7 +60793,7 @@ var Files2 = class extends APIResource {
    * ```
    */
   create(environmentID, body, options) {
-    return this._client.post(path`/agents/environments/${environmentID}/files`, resolveResourceRequestOptions44(options, (options2) => ({
+    return this._client.post(path`/agents/environments/${environmentID}/files`, resolveResourceRequestOptions47(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60174,7 +60816,7 @@ var Files2 = class extends APIResource {
    * ```
    */
   list(environmentID, query = {}, options) {
-    return this._client.getAPIList(path`/agents/environments/${environmentID}/files`, TokenPage, resolveResourceRequestOptions44(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/environments/${environmentID}/files`, TokenPage, resolveResourceRequestOptions47(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60192,10 +60834,10 @@ var Files2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/environments/templates.mjs
-function resolveResourceRequestOptions45(options, buildOptions) {
+function resolveResourceRequestOptions48(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys30 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys32 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -60213,18 +60855,19 @@ var normalizeRequestOptionsForQueryKeys30 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery30(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery32(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys30.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys32.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys30.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys32.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -60249,7 +60892,7 @@ var Templates = class extends APIResource {
    * ```
    */
   create(body = {}, options) {
-    return this._client.post("/agents/environments/templates", resolveResourceRequestOptions45(options, (options2) => ({
+    return this._client.post("/agents/environments/templates", resolveResourceRequestOptions48(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60270,7 +60913,7 @@ var Templates = class extends APIResource {
    * ```
    */
   retrieve(environmentTemplateID, options) {
-    return this._client.get(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions45(options, (options2) => ({
+    return this._client.get(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions48(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -60290,7 +60933,7 @@ var Templates = class extends APIResource {
    * ```
    */
   update(environmentTemplateID, body = {}, options) {
-    return this._client.post(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions45(options, (options2) => ({
+    return this._client.post(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions48(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60298,13 +60941,13 @@ var Templates = class extends APIResource {
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery30(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery32(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents/environments/templates", CursorPage, resolveResourceRequestOptions45(options, (options2) => ({
+    return this._client.getAPIList("/agents/environments/templates", CursorPage, resolveResourceRequestOptions48(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60325,7 +60968,7 @@ var Templates = class extends APIResource {
    * ```
    */
   delete(environmentTemplateID, options) {
-    return this._client.delete(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions45(options, (options2) => ({
+    return this._client.delete(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions48(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -60334,10 +60977,10 @@ var Templates = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/environments/environments.mjs
-function resolveResourceRequestOptions46(options, buildOptions) {
+function resolveResourceRequestOptions49(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys31 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys33 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -60355,18 +60998,19 @@ var normalizeRequestOptionsForQueryKeys31 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery31(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery33(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys31.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys33.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys31.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys33.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -60398,7 +61042,7 @@ var Environments = class extends APIResource {
    */
   create(params, options) {
     const { "Idempotency-Key": idempotencyKey, ...body } = params;
-    return this._client.post("/agents/environments", resolveResourceRequestOptions46(options, (options2) => ({
+    return this._client.post("/agents/environments", resolveResourceRequestOptions49(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([
@@ -60425,20 +61069,20 @@ var Environments = class extends APIResource {
    * ```
    */
   retrieve(environmentID, options) {
-    return this._client.get(path`/agents/environments/${environmentID}`, resolveResourceRequestOptions46(options, (options2) => ({
+    return this._client.get(path`/agents/environments/${environmentID}`, resolveResourceRequestOptions49(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery31(query, ["after", "limit", "order", "type"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery33(query, ["after", "limit", "order", "type"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents/environments", EnvironmentInfosPage, resolveResourceRequestOptions46(options, (options2) => ({
+    return this._client.getAPIList("/agents/environments", EnvironmentInfosPage, resolveResourceRequestOptions49(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60533,10 +61177,10 @@ var AgentResultArtifacts = class {
 _AgentResultArtifacts_resource = /* @__PURE__ */ new WeakMap(), _AgentResultArtifacts_sessionID = /* @__PURE__ */ new WeakMap(), _AgentResultArtifacts_turnID = /* @__PURE__ */ new WeakMap();
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/artifacts.mjs
-function resolveResourceRequestOptions47(options, buildOptions) {
+function resolveResourceRequestOptions50(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys32 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys34 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -60554,18 +61198,19 @@ var normalizeRequestOptionsForQueryKeys32 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery32(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery34(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys32.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys34.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys32.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys34.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -60593,20 +61238,20 @@ var Artifacts = class extends APIResource {
    */
   retrieve(artifactID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, resolveResourceRequestOptions47(options, (options2) => ({
+    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, resolveResourceRequestOptions50(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
     })));
   }
   list(sessionID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery32(query, ["after", "environment_id", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery34(query, ["after", "environment_id", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/artifacts`, CursorPage, resolveResourceRequestOptions47(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/artifacts`, CursorPage, resolveResourceRequestOptions50(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60629,7 +61274,7 @@ var Artifacts = class extends APIResource {
    */
   delete(artifactID, params, options) {
     const { session_id } = params;
-    return this._client.delete(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, resolveResourceRequestOptions47(options, (options2) => ({
+    return this._client.delete(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, resolveResourceRequestOptions50(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -60654,7 +61299,7 @@ var Artifacts = class extends APIResource {
    */
   content(artifactID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}/content`, resolveResourceRequestOptions47(options, (options2) => ({
+    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}/content`, resolveResourceRequestOptions50(options, (options2) => ({
       ...options2,
       headers: buildHeaders([
         { "OpenAI-Beta": "agents=v1", Accept: "application/octet-stream" },
@@ -60671,7 +61316,7 @@ var Artifacts = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/events.mjs
-function resolveResourceRequestOptions48(options, buildOptions) {
+function resolveResourceRequestOptions51(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Events = class extends APIResource {
@@ -60709,7 +61354,7 @@ var Events = class extends APIResource {
    */
   create(sessionID, params, options) {
     const { "Idempotency-Key": idempotencyKey, ...body } = params;
-    return this._client.post(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions48(options, (options2) => ({
+    return this._client.post(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions51(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([
@@ -60736,23 +61381,24 @@ var Events = class extends APIResource {
    * ```
    */
   stream(sessionID, options) {
-    return this._client.get(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions48(options, (options2) => ({
+    return this._client.get(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions51(options, (options2) => ({
       ...options2,
       headers: buildHeaders([
         { "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" },
         options2?.headers
       ]),
       stream: true,
+      __streamMode: "events",
       __security: { bearerAuth: true }
     })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/items.mjs
-function resolveResourceRequestOptions49(options, buildOptions) {
+function resolveResourceRequestOptions52(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys33 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys35 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -60770,18 +61416,19 @@ var normalizeRequestOptionsForQueryKeys33 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery33(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery35(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys33.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys35.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys33.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys35.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -60795,13 +61442,13 @@ function normalizeRequestOptionsForQuery33(value, queryKeys, options) {
 }
 var Items2 = class extends APIResource {
   list(sessionID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery33(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/items`, CursorPage, resolveResourceRequestOptions49(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/items`, CursorPage, resolveResourceRequestOptions52(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60811,10 +61458,10 @@ var Items2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/traces.mjs
-function resolveResourceRequestOptions50(options, buildOptions) {
+function resolveResourceRequestOptions53(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys34 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys36 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -60832,18 +61479,19 @@ var normalizeRequestOptionsForQueryKeys34 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery34(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery36(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys34.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys36.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys34.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys36.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -60857,13 +61505,13 @@ function normalizeRequestOptionsForQuery34(value, queryKeys, options) {
 }
 var Traces = class extends APIResource {
   list(sessionID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery34(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/traces`, CursorPage, resolveResourceRequestOptions50(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/traces`, CursorPage, resolveResourceRequestOptions53(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60873,7 +61521,7 @@ var Traces = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/items.mjs
-function resolveResourceRequestOptions51(options, buildOptions) {
+function resolveResourceRequestOptions54(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Items3 = class extends APIResource {
@@ -60894,7 +61542,7 @@ var Items3 = class extends APIResource {
    */
   list(subagentID, params, options) {
     const { session_id, ...query } = params;
-    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/items`, CursorPage, resolveResourceRequestOptions51(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/items`, CursorPage, resolveResourceRequestOptions54(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60904,7 +61552,7 @@ var Items3 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/turns/items.mjs
-function resolveResourceRequestOptions52(options, buildOptions) {
+function resolveResourceRequestOptions55(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Items4 = class extends APIResource {
@@ -60925,7 +61573,7 @@ var Items4 = class extends APIResource {
    */
   list(turnID, params, options) {
     const { session_id, subagent_id, ...query } = params;
-    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}/items`, CursorPage, resolveResourceRequestOptions52(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}/items`, CursorPage, resolveResourceRequestOptions55(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60935,7 +61583,7 @@ var Items4 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/turns/turns.mjs
-function resolveResourceRequestOptions53(options, buildOptions) {
+function resolveResourceRequestOptions56(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Turns = class extends APIResource {
@@ -60961,7 +61609,7 @@ var Turns = class extends APIResource {
    */
   retrieve(turnID, params, options) {
     const { session_id, subagent_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}`, resolveResourceRequestOptions53(options, (options2) => ({
+    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}`, resolveResourceRequestOptions56(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -60984,7 +61632,7 @@ var Turns = class extends APIResource {
    */
   list(subagentID, params, options) {
     const { session_id, ...query } = params;
-    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/turns`, CursorPage, resolveResourceRequestOptions53(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/turns`, CursorPage, resolveResourceRequestOptions56(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -60995,10 +61643,10 @@ var Turns = class extends APIResource {
 Turns.Items = Items4;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/subagents.mjs
-function resolveResourceRequestOptions54(options, buildOptions) {
+function resolveResourceRequestOptions57(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys35 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -61016,18 +61664,19 @@ var normalizeRequestOptionsForQueryKeys35 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery35(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery37(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys35.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys37.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys35.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys37.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -61060,20 +61709,20 @@ var Subagents = class extends APIResource {
    */
   retrieve(subagentID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagentID}`, resolveResourceRequestOptions54(options, (options2) => ({
+    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagentID}`, resolveResourceRequestOptions57(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
     })));
   }
   list(sessionID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery37(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/subagents`, CursorPage, resolveResourceRequestOptions54(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/subagents`, CursorPage, resolveResourceRequestOptions57(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -61085,7 +61734,7 @@ Subagents.Items = Items3;
 Subagents.Turns = Turns;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/turns/items.mjs
-function resolveResourceRequestOptions55(options, buildOptions) {
+function resolveResourceRequestOptions58(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Items5 = class extends APIResource {
@@ -61107,7 +61756,7 @@ var Items5 = class extends APIResource {
    */
   list(turnID, params, options) {
     const { session_id, ...query } = params;
-    return this._client.getAPIList(path`/agents/sessions/${session_id}/turns/${turnID}/items`, ConversationCursorPage, resolveResourceRequestOptions55(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${session_id}/turns/${turnID}/items`, ConversationCursorPage, resolveResourceRequestOptions58(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -61117,10 +61766,10 @@ var Items5 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/turns/turns.mjs
-function resolveResourceRequestOptions56(options, buildOptions) {
+function resolveResourceRequestOptions59(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys36 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -61138,18 +61787,19 @@ var normalizeRequestOptionsForQueryKeys36 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery36(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery38(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys36.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys38.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys36.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys38.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -61182,20 +61832,20 @@ var Turns2 = class extends APIResource {
    */
   retrieve(turnID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/turns/${turnID}`, resolveResourceRequestOptions56(options, (options2) => ({
+    return this._client.get(path`/agents/sessions/${session_id}/turns/${turnID}`, resolveResourceRequestOptions59(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
     })));
   }
   list(sessionID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery38(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/turns`, CursorPage, resolveResourceRequestOptions56(options, (options2) => ({
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/turns`, CursorPage, resolveResourceRequestOptions59(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -61513,8 +62163,8 @@ function parseAgentResult(result, format) {
     throw new AgentOutputParseError(result);
   }
 }
-function ownJSONValue(object1018, key) {
-  const descriptor = object1018 && Object.getOwnPropertyDescriptor(object1018, key);
+function ownJSONValue(object1020, key) {
+  const descriptor = object1020 && Object.getOwnPropertyDescriptor(object1020, key);
   return descriptor?.enumerable && "value" in descriptor ? descriptor.value : void 0;
 }
 function agentFormatParser(format) {
@@ -61532,17 +62182,17 @@ function agentFormatParser(format) {
   const parse = descriptor.value;
   return { type: "json_schema", schema, $parseRaw: (text2) => parse.call(format, text2) };
 }
-function snapshotJSONProperty(object1018, key, capture = (value) => value) {
-  const descriptor = Object.getOwnPropertyDescriptor(object1018, key);
+function snapshotJSONProperty(object1020, key, capture = (value) => value) {
+  const descriptor = Object.getOwnPropertyDescriptor(object1020, key);
   if (!descriptor?.enumerable) {
-    return object1018;
+    return object1020;
   }
-  const value = capture(object1018[key]);
+  const value = capture(object1020[key]);
   if ("value" in descriptor && value === descriptor.value) {
-    return object1018;
+    return object1020;
   }
-  return Object.create(Object.getPrototypeOf(object1018), {
-    ...Object.getOwnPropertyDescriptors(object1018),
+  return Object.create(Object.getPrototypeOf(object1020), {
+    ...Object.getOwnPropertyDescriptors(object1020),
     [key]: { value, enumerable: true, configurable: descriptor.configurable, writable: true }
   });
 }
@@ -62033,13 +62683,13 @@ function captureCreationTools(body, options) {
 }
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/sessions.mjs
-function resolveResourceRequestOptions57(options, buildOptions) {
+function resolveResourceRequestOptions60(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization3(options, finalization) {
   return { ...options, __metadata: { ...options.__metadata, ...finalization } };
 }
-var normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys39 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -62057,18 +62707,19 @@ var normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery37(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery39(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys37.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys39.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys37.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys39.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -62093,11 +62744,12 @@ var Sessions = class extends APIResource {
   create(body, options) {
     const creation = captureCreationTools(body, options);
     const output = captureAgentOutput(creation.body, creation.options);
-    const request = (body2, options2) => this._client.post("/agents/sessions", resolveResourceRequestOptions57(options2, (options3) => withBodyFinalization3({
+    const request = (body2, options2) => this._client.post("/agents/sessions", resolveResourceRequestOptions60(options2, (options3) => withBodyFinalization3({
       body: body2,
       ...options3,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options3?.headers]),
       stream: body2.stream ?? false,
+      __streamMode: "events",
       __security: { bearerAuth: true }
     }, { streamFromBody: true })));
     return request(output.body, output.options)._thenUnwrap((data, { options: options2 }) => (
@@ -62116,7 +62768,7 @@ var Sessions = class extends APIResource {
    * ```
    */
   retrieve(sessionID, options) {
-    return this._client.get(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions57(options, (options2) => ({
+    return this._client.get(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions60(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62134,7 +62786,7 @@ var Sessions = class extends APIResource {
    * ```
    */
   update(sessionID, body = {}, options) {
-    return this._client.post(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions57(options, (options2) => ({
+    return this._client.post(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions60(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62142,13 +62794,13 @@ var Sessions = class extends APIResource {
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery37(query, ["after", "agent_id", "limit", "metadata", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery39(query, ["after", "agent_id", "limit", "metadata", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents/sessions", CursorPage, resolveResourceRequestOptions57(options, (options2) => ({
+    return this._client.getAPIList("/agents/sessions", CursorPage, resolveResourceRequestOptions60(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62169,7 +62821,7 @@ var Sessions = class extends APIResource {
    * ```
    */
   delete(sessionID, options) {
-    return this._client.delete(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions57(options, (options2) => ({
+    return this._client.delete(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions60(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62188,10 +62840,10 @@ Sessions.Traces = Traces;
 Sessions.Turns = Turns2;
 
 // ../../../node_modules/openai/resources/beta/agents/vaults/credentials.mjs
-function resolveResourceRequestOptions58(options, buildOptions) {
+function resolveResourceRequestOptions61(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys40 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -62209,18 +62861,19 @@ var normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery38(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery40(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys38.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys40.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys38.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys40.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -62255,7 +62908,7 @@ var Credentials = class extends APIResource {
    * ```
    */
   create(vaultID, body, options) {
-    return this._client.post(path`/vaults/${vaultID}/credentials`, resolveResourceRequestOptions58(options, (options2) => ({
+    return this._client.post(path`/vaults/${vaultID}/credentials`, resolveResourceRequestOptions61(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62277,7 +62930,7 @@ var Credentials = class extends APIResource {
    */
   retrieve(credentialID, params, options) {
     const { vault_id } = params;
-    return this._client.get(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions58(options, (options2) => ({
+    return this._client.get(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions61(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62298,7 +62951,7 @@ var Credentials = class extends APIResource {
    */
   update(credentialID, params, options) {
     const { vault_id, ...body } = params;
-    return this._client.post(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions58(options, (options2) => ({
+    return this._client.post(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions61(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62306,13 +62959,13 @@ var Credentials = class extends APIResource {
     })));
   }
   list(vaultID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery38(query, ["after", "limit", "metadata", "order", "status"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery40(query, ["after", "limit", "metadata", "order", "status"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/vaults/${vaultID}/credentials`, CursorPage, resolveResourceRequestOptions58(options, (options2) => ({
+    return this._client.getAPIList(path`/vaults/${vaultID}/credentials`, CursorPage, resolveResourceRequestOptions61(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62334,7 +62987,7 @@ var Credentials = class extends APIResource {
    */
   delete(credentialID, params, options) {
     const { vault_id } = params;
-    return this._client.delete(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions58(options, (options2) => ({
+    return this._client.delete(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions61(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62343,10 +62996,10 @@ var Credentials = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/vaults/vaults.mjs
-function resolveResourceRequestOptions59(options, buildOptions) {
+function resolveResourceRequestOptions62(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys39 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys41 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -62364,18 +63017,19 @@ var normalizeRequestOptionsForQueryKeys39 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery39(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery41(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys39.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys41.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys39.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys41.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -62402,7 +63056,7 @@ var Vaults = class extends APIResource {
    * ```
    */
   create(body = {}, options) {
-    return this._client.post("/vaults", resolveResourceRequestOptions59(options, (options2) => ({
+    return this._client.post("/vaults", resolveResourceRequestOptions62(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62421,7 +63075,7 @@ var Vaults = class extends APIResource {
    * ```
    */
   retrieve(vaultID, options) {
-    return this._client.get(path`/vaults/${vaultID}`, resolveResourceRequestOptions59(options, (options2) => ({
+    return this._client.get(path`/vaults/${vaultID}`, resolveResourceRequestOptions62(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62441,7 +63095,7 @@ var Vaults = class extends APIResource {
    * ```
    */
   update(vaultID, body, options) {
-    return this._client.post(path`/vaults/${vaultID}`, resolveResourceRequestOptions59(options, (options2) => ({
+    return this._client.post(path`/vaults/${vaultID}`, resolveResourceRequestOptions62(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62449,13 +63103,13 @@ var Vaults = class extends APIResource {
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery39(query, ["after", "limit", "metadata", "order", "status"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query, ["after", "limit", "metadata", "order", "status"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/vaults", CursorPage, resolveResourceRequestOptions59(options, (options2) => ({
+    return this._client.getAPIList("/vaults", CursorPage, resolveResourceRequestOptions62(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62474,7 +63128,7 @@ var Vaults = class extends APIResource {
    * ```
    */
   delete(vaultID, options) {
-    return this._client.delete(path`/vaults/${vaultID}`, resolveResourceRequestOptions59(options, (options2) => ({
+    return this._client.delete(path`/vaults/${vaultID}`, resolveResourceRequestOptions62(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62484,10 +63138,10 @@ var Vaults = class extends APIResource {
 Vaults.Credentials = Credentials;
 
 // ../../../node_modules/openai/resources/beta/agents/agents.mjs
-function resolveResourceRequestOptions60(options, buildOptions) {
+function resolveResourceRequestOptions63(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys40 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys42 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -62505,18 +63159,19 @@ var normalizeRequestOptionsForQueryKeys40 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery40(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery42(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys40.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys42.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys40.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys42.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -62548,7 +63203,7 @@ var Agents = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/agents", resolveResourceRequestOptions60(options, (options2) => ({
+    return this._client.post("/agents", resolveResourceRequestOptions63(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62565,7 +63220,7 @@ var Agents = class extends APIResource {
    * ```
    */
   retrieve(agentID, options) {
-    return this._client.get(path`/agents/${agentID}`, resolveResourceRequestOptions60(options, (options2) => ({
+    return this._client.get(path`/agents/${agentID}`, resolveResourceRequestOptions63(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62581,7 +63236,7 @@ var Agents = class extends APIResource {
    * ```
    */
   update(agentID, body = {}, options) {
-    return this._client.post(path`/agents/${agentID}`, resolveResourceRequestOptions60(options, (options2) => ({
+    return this._client.post(path`/agents/${agentID}`, resolveResourceRequestOptions63(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62589,13 +63244,13 @@ var Agents = class extends APIResource {
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery40(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery42(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents", CursorPage, resolveResourceRequestOptions60(options, (options2) => ({
+    return this._client.getAPIList("/agents", CursorPage, resolveResourceRequestOptions63(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
@@ -62614,7 +63269,7 @@ var Agents = class extends APIResource {
    * ```
    */
   delete(agentID, options) {
-    return this._client.delete(path`/agents/${agentID}`, resolveResourceRequestOptions60(options, (options2) => ({
+    return this._client.delete(path`/agents/${agentID}`, resolveResourceRequestOptions63(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62627,7 +63282,7 @@ Agents.Vaults = Vaults;
 Agents.Sessions = Sessions;
 
 // ../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
-function resolveResourceRequestOptions61(options, buildOptions) {
+function resolveResourceRequestOptions64(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Sessions2 = class extends APIResource {
@@ -62644,7 +63299,7 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/chatkit/sessions", resolveResourceRequestOptions61(options, (options2) => ({
+    return this._client.post("/chatkit/sessions", resolveResourceRequestOptions64(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
@@ -62663,7 +63318,7 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   cancel(sessionID, options) {
-    return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, resolveResourceRequestOptions61(options, (options2) => ({
+    return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, resolveResourceRequestOptions64(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -62672,228 +63327,8 @@ var Sessions2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/chatkit/threads.mjs
-function resolveResourceRequestOptions62(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
-}
-var normalizeRequestOptionsForQueryKeys41 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery41(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys41.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys41.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Threads = class extends APIResource {
-  /**
-   * Retrieve a ChatKit thread by its identifier.
-   *
-   * @example
-   * ```ts
-   * const chatkitThread =
-   *   await client.beta.chatkit.threads.retrieve('cthr_123');
-   * ```
-   */
-  retrieve(threadID, options) {
-    return this._client.get(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions62(options, (options2) => ({
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-  list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query, ["after", "before", "limit", "order", "user"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList("/chatkit/threads", ConversationCursorPage, resolveResourceRequestOptions62(options, (options2) => ({
-      query,
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Delete a ChatKit thread along with its items and stored attachments.
-   *
-   * @example
-   * ```ts
-   * const thread = await client.beta.chatkit.threads.delete(
-   *   'cthr_123',
-   * );
-   * ```
-   */
-  delete(threadID, options) {
-    return this._client.delete(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions62(options, (options2) => ({
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-  listItems(threadID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query, ["after", "before", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, resolveResourceRequestOptions62(options, (options2) => ({
-      query,
-      ...options2,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-};
-
-// ../../../node_modules/openai/resources/beta/chatkit/chatkit.mjs
-var ChatKit = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.sessions = new Sessions2(this._client);
-    this.threads = new Threads(this._client);
-  }
-};
-ChatKit.Sessions = Sessions2;
-ChatKit.Threads = Threads;
-
-// ../../../node_modules/openai/resources/beta/responses/input-items.mjs
-function resolveResourceRequestOptions63(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
-}
-var normalizeRequestOptionsForQueryKeys42 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery42(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys42.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys42.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var InputItems = class extends APIResource {
-  list(responseID, params = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery42(params, ["after", "betas", "include", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      params = {};
-    }
-    params = params;
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList(path`/responses/${responseID}/input_items?beta=true`, CursorPage, resolveResourceRequestOptions63(options, (options2) => ({
-      query,
-      ...options2,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options2?.headers
-      ]),
-      __security: { bearerAuth: true }
-    })));
-  }
-};
-
-// ../../../node_modules/openai/resources/beta/responses/input-tokens.mjs
-function resolveResourceRequestOptions64(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
-}
-var InputTokens = class extends APIResource {
-  /**
-   * Returns input token counts of the request.
-   *
-   * Returns an object with `object` set to `response.input_tokens` and an
-   * `input_tokens` count.
-   *
-   * @example
-   * ```ts
-   * const response =
-   *   await client.beta.responses.inputTokens.count();
-   * ```
-   */
-  count(params = {}, options) {
-    const { betas, ...body } = params ?? {};
-    return this._client.post("/responses/input_tokens?beta=true", resolveResourceRequestOptions64(options, (options2) => ({
-      body,
-      ...options2,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options2?.headers
-      ]),
-      __security: { bearerAuth: true }
-    })));
-  }
-};
-
-// ../../../node_modules/openai/resources/beta/responses/responses.mjs
 function resolveResourceRequestOptions65(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
-}
-function withBodyFinalization4(options, finalization) {
-  return { ...options, __metadata: { ...options.__metadata, ...finalization } };
 }
 var normalizeRequestOptionsForQueryKeys43 = /* @__PURE__ */ new Set([
   "method",
@@ -62913,6 +63348,7 @@ var normalizeRequestOptionsForQueryKeys43 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -62936,6 +63372,228 @@ function normalizeRequestOptionsForQuery43(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
+var Threads = class extends APIResource {
+  /**
+   * Retrieve a ChatKit thread by its identifier.
+   *
+   * @example
+   * ```ts
+   * const chatkitThread =
+   *   await client.beta.chatkit.threads.retrieve('cthr_123');
+   * ```
+   */
+  retrieve(threadID, options) {
+    return this._client.get(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions65(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(query, ["after", "before", "limit", "order", "user"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/chatkit/threads", ConversationCursorPage, resolveResourceRequestOptions65(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete a ChatKit thread along with its items and stored attachments.
+   *
+   * @example
+   * ```ts
+   * const thread = await client.beta.chatkit.threads.delete(
+   *   'cthr_123',
+   * );
+   * ```
+   */
+  delete(threadID, options) {
+    return this._client.delete(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions65(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  listItems(threadID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, resolveResourceRequestOptions65(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/beta/chatkit/chatkit.mjs
+var ChatKit = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.sessions = new Sessions2(this._client);
+    this.threads = new Threads(this._client);
+  }
+};
+ChatKit.Sessions = Sessions2;
+ChatKit.Threads = Threads;
+
+// ../../../node_modules/openai/resources/beta/responses/input-items.mjs
+function resolveResourceRequestOptions66(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery44(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys44.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys44.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var InputItems = class extends APIResource {
+  list(responseID, params = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(params, ["after", "betas", "include", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      params = {};
+    }
+    params = params;
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList(path`/responses/${responseID}/input_items?beta=true`, CursorPage, resolveResourceRequestOptions66(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/beta/responses/input-tokens.mjs
+function resolveResourceRequestOptions67(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var InputTokens = class extends APIResource {
+  /**
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
+   *
+   * @example
+   * ```ts
+   * const response =
+   *   await client.beta.responses.inputTokens.count();
+   * ```
+   */
+  count(params = {}, options) {
+    const { betas, ...body } = params ?? {};
+    return this._client.post("/responses/input_tokens?beta=true", resolveResourceRequestOptions67(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/beta/responses/responses.mjs
+function resolveResourceRequestOptions68(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+function withBodyFinalization4(options, finalization) {
+  return { ...options, __metadata: { ...options.__metadata, ...finalization } };
+}
+var normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery45(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys45.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys45.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Responses2 = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -62944,7 +63602,7 @@ var Responses2 = class extends APIResource {
   }
   create(params, options) {
     const { betas, ...body } = params;
-    return this._client.post("/responses?beta=true", resolveResourceRequestOptions65(options, (options2) => withBodyFinalization4({
+    return this._client.post("/responses?beta=true", resolveResourceRequestOptions68(options, (options2) => withBodyFinalization4({
       body,
       ...options2,
       headers: buildHeaders([
@@ -62956,14 +63614,14 @@ var Responses2 = class extends APIResource {
     }, { streamFromBody: true })));
   }
   retrieve(responseID, params = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(params, ["betas", "include", "include_obfuscation", "starting_after", "stream"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery45(params, ["betas", "include", "include_obfuscation", "starting_after", "stream"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       params = {};
     }
     params = params;
     const { betas, ...query } = params ?? {};
-    return this._client.get(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions65(options, (options2) => ({
+    return this._client.get(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions68(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([
@@ -62986,7 +63644,7 @@ var Responses2 = class extends APIResource {
    */
   delete(responseID, params = {}, options) {
     const { betas } = params ?? {};
-    return this._client.delete(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions65(options, (options2) => ({
+    return this._client.delete(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions68(options, (options2) => ({
       ...options2,
       headers: buildHeaders([
         {
@@ -63012,7 +63670,7 @@ var Responses2 = class extends APIResource {
    */
   cancel(responseID, params = {}, options) {
     const { betas } = params ?? {};
-    return this._client.post(path`/responses/${responseID}/cancel?beta=true`, resolveResourceRequestOptions65(options, (options2) => ({
+    return this._client.post(path`/responses/${responseID}/cancel?beta=true`, resolveResourceRequestOptions68(options, (options2) => ({
       ...options2,
       headers: buildHeaders([
         { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
@@ -63039,7 +63697,7 @@ var Responses2 = class extends APIResource {
    */
   compact(params, options) {
     const { betas, ...body } = params;
-    return this._client.post("/responses/compact?beta=true", resolveResourceRequestOptions65(options, (options2) => ({
+    return this._client.post("/responses/compact?beta=true", resolveResourceRequestOptions68(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([
@@ -63054,10 +63712,10 @@ Responses2.InputItems = InputItems;
 Responses2.InputTokens = InputTokens;
 
 // ../../../node_modules/openai/resources/beta/threads/messages.mjs
-function resolveResourceRequestOptions66(options, buildOptions) {
+function resolveResourceRequestOptions69(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys46 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -63075,18 +63733,19 @@ var normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery44(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery46(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys44.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys46.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys44.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys46.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -63105,7 +63764,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   create(threadID, body, options) {
-    return this._client.post(path`/threads/${threadID}/messages`, resolveResourceRequestOptions66(options, (options2) => ({
+    return this._client.post(path`/threads/${threadID}/messages`, resolveResourceRequestOptions69(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -63119,7 +63778,7 @@ var Messages2 = class extends APIResource {
    */
   retrieve(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions66(options, (options2) => ({
+    return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions69(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -63132,7 +63791,7 @@ var Messages2 = class extends APIResource {
    */
   update(messageID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions66(options, (options2) => ({
+    return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions69(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -63140,13 +63799,13 @@ var Messages2 = class extends APIResource {
     })));
   }
   list(threadID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query, ["after", "before", "limit", "order", "run_id"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "before", "limit", "order", "run_id"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, resolveResourceRequestOptions66(options, (options2) => ({
+    return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, resolveResourceRequestOptions69(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -63160,7 +63819,7 @@ var Messages2 = class extends APIResource {
    */
   delete(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions66(options, (options2) => ({
+    return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions69(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -63169,7 +63828,7 @@ var Messages2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/beta/threads/runs/steps.mjs
-function resolveResourceRequestOptions67(options, buildOptions) {
+function resolveResourceRequestOptions70(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Steps = class extends APIResource {
@@ -63180,7 +63839,7 @@ var Steps = class extends APIResource {
    */
   retrieve(stepID, params, options) {
     const { thread_id, run_id, ...query } = params;
-    return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, resolveResourceRequestOptions67(options, (options2) => ({
+    return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, resolveResourceRequestOptions70(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -63194,7 +63853,7 @@ var Steps = class extends APIResource {
    */
   list(runID, params, options) {
     const { thread_id, ...query } = params;
-    return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, resolveResourceRequestOptions67(options, (options2) => ({
+    return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, resolveResourceRequestOptions70(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -64343,13 +65002,13 @@ function assertNever2(_x) {
 }
 
 // ../../../node_modules/openai/resources/beta/threads/runs/runs.mjs
-function resolveResourceRequestOptions68(options, buildOptions) {
+function resolveResourceRequestOptions71(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization5(options, finalization) {
   return { ...options, __metadata: { ...options.__metadata, ...finalization } };
 }
-var normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys47 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -64367,18 +65026,19 @@ var normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery45(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery47(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys45.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys47.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys45.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys47.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -64397,7 +65057,7 @@ var Runs = class extends APIResource {
   }
   create(threadID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path`/threads/${threadID}/runs`, resolveResourceRequestOptions68(options, (options2) => withBodyFinalization5({
+    return this._client.post(path`/threads/${threadID}/runs`, resolveResourceRequestOptions71(options, (options2) => withBodyFinalization5({
       query: { include },
       body,
       ...options2,
@@ -64429,7 +65089,7 @@ var Runs = class extends APIResource {
    */
   retrieve(runID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions68(options, (options2) => ({
+    return this._client.get(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions71(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -64442,7 +65102,7 @@ var Runs = class extends APIResource {
    */
   update(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions68(options, (options2) => ({
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions71(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -64450,13 +65110,13 @@ var Runs = class extends APIResource {
     })));
   }
   list(threadID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery45(query, ["after", "before", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query, ["after", "before", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, resolveResourceRequestOptions68(options, (options2) => ({
+    return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, resolveResourceRequestOptions71(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -64470,7 +65130,7 @@ var Runs = class extends APIResource {
    */
   cancel(runID, params, options) {
     const { thread_id } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, resolveResourceRequestOptions68(options, (options2) => ({
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, resolveResourceRequestOptions71(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -64492,7 +65152,7 @@ var Runs = class extends APIResource {
   }
   submitToolOutputs(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, resolveResourceRequestOptions68(options, (options2) => withBodyFinalization5({
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, resolveResourceRequestOptions71(options, (options2) => withBodyFinalization5({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -64520,7 +65180,7 @@ var Runs = class extends APIResource {
 Runs.Steps = Steps;
 
 // ../../../node_modules/openai/resources/beta/threads/threads.mjs
-function resolveResourceRequestOptions69(options, buildOptions) {
+function resolveResourceRequestOptions72(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization6(options, finalization) {
@@ -64538,7 +65198,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   create(body = {}, options) {
-    return this._client.post("/threads", resolveResourceRequestOptions69(options, (options2) => ({
+    return this._client.post("/threads", resolveResourceRequestOptions72(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -64551,7 +65211,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   retrieve(threadID, options) {
-    return this._client.get(path`/threads/${threadID}`, resolveResourceRequestOptions69(options, (options2) => ({
+    return this._client.get(path`/threads/${threadID}`, resolveResourceRequestOptions72(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -64563,7 +65223,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   update(threadID, body, options) {
-    return this._client.post(path`/threads/${threadID}`, resolveResourceRequestOptions69(options, (options2) => ({
+    return this._client.post(path`/threads/${threadID}`, resolveResourceRequestOptions72(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -64576,14 +65236,14 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   delete(threadID, options) {
-    return this._client.delete(path`/threads/${threadID}`, resolveResourceRequestOptions69(options, (options2) => ({
+    return this._client.delete(path`/threads/${threadID}`, resolveResourceRequestOptions72(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
     })));
   }
   createAndRun(body, options) {
-    return this._client.post("/threads/runs", resolveResourceRequestOptions69(options, (options2) => withBodyFinalization6({
+    return this._client.post("/threads/runs", resolveResourceRequestOptions72(options, (options2) => withBodyFinalization6({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -64696,7 +65356,7 @@ Beta2.Assistants = Assistants;
 Beta2.Threads = Threads2;
 
 // ../../../node_modules/openai/resources/completions.mjs
-function resolveResourceRequestOptions70(options, buildOptions) {
+function resolveResourceRequestOptions73(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization7(options, finalization) {
@@ -64704,12 +65364,12 @@ function withBodyFinalization7(options, finalization) {
 }
 var Completions2 = class extends APIResource {
   create(body, options) {
-    return this._client.post("/completions", resolveResourceRequestOptions70(options, (options2) => withBodyFinalization7({ body, ...options2, stream: body.stream ?? false, __security: { bearerAuth: true } }, { streamFromBody: true })));
+    return this._client.post("/completions", resolveResourceRequestOptions73(options, (options2) => withBodyFinalization7({ body, ...options2, stream: body.stream ?? false, __security: { bearerAuth: true } }, { streamFromBody: true })));
   }
 };
 
 // ../../../node_modules/openai/resources/containers/files/content.mjs
-function resolveResourceRequestOptions71(options, buildOptions) {
+function resolveResourceRequestOptions74(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Content = class extends APIResource {
@@ -64718,7 +65378,7 @@ var Content = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, resolveResourceRequestOptions71(options, (options2) => ({
+    return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, resolveResourceRequestOptions74(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
@@ -64728,217 +65388,11 @@ var Content = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/containers/files/files.mjs
-function resolveResourceRequestOptions72(options, buildOptions) {
+function resolveResourceRequestOptions75(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization8(options, finalization) {
   return { ...options, __metadata: { ...options.__metadata, ...finalization } };
-}
-var normalizeRequestOptionsForQueryKeys46 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery46(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys46.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys46.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Files3 = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.content = new Content(this._client);
-  }
-  /**
-   * Create a Container File
-   *
-   * You can send either a multipart/form-data request with the raw file content, or
-   * a JSON request with a file ID.
-   */
-  create(containerID, body, options) {
-    return this._client.post(path`/containers/${containerID}/files`, resolveResourceRequestOptions72(options, (options2) => maybeMultipartFormRequestOptions(withBodyFinalization8({ body, ...options2, __security: { bearerAuth: true } }, { finalizeMultipart: true }), this._client)));
-  }
-  /**
-   * Retrieve Container File
-   */
-  retrieve(fileID, params, options) {
-    const { container_id } = params;
-    return this._client.get(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions72(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
-  }
-  list(containerID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, resolveResourceRequestOptions72(options, (options2) => ({
-      query,
-      ...options2,
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Delete Container File
-   */
-  delete(fileID, params, options) {
-    const { container_id } = params;
-    return this._client.delete(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions72(options, (options2) => ({
-      ...options2,
-      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-};
-Files3.Content = Content;
-
-// ../../../node_modules/openai/resources/containers/containers.mjs
-function resolveResourceRequestOptions73(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
-}
-var normalizeRequestOptionsForQueryKeys47 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery47(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys47.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys47.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Containers2 = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.files = new Files3(this._client);
-  }
-  /**
-   * Create Container
-   */
-  create(body, options) {
-    return this._client.post("/containers", resolveResourceRequestOptions73(options, (options2) => ({
-      body,
-      ...options2,
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Retrieve Container
-   */
-  retrieve(containerID, options) {
-    return this._client.get(path`/containers/${containerID}`, resolveResourceRequestOptions73(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
-  }
-  list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query, ["after", "limit", "name", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList("/containers", CursorPage, resolveResourceRequestOptions73(options, (options2) => ({
-      query,
-      ...options2,
-      __security: { bearerAuth: true }
-    })));
-  }
-  /**
-   * Delete Container
-   */
-  delete(containerID, options) {
-    return this._client.delete(path`/containers/${containerID}`, resolveResourceRequestOptions73(options, (options2) => ({
-      ...options2,
-      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
-      __security: { bearerAuth: true }
-    })));
-  }
-};
-Containers2.Files = Files3;
-
-// ../../../node_modules/openai/resources/content-provenance-checks.mjs
-function resolveResourceRequestOptions74(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
-}
-var ContentProvenanceChecks = class extends APIResource {
-  /**
-   * Check whether an image or audio file contains known OpenAI provenance signals.
-   * [Learn more about content provenance](https://developers.openai.com/api/docs/guides/content-provenance).
-   *
-   * If `not_detected`, it means the tool did not find supported signals in the
-   * uploaded file. The content could still have been generated by OpenAI if the
-   * metadata was stripped or has evidence of tampering, the watermark was degraded,
-   * it comes from a legacy generation model, or it was created before provenance
-   * signals were available. Content could also still be AI-generated by another
-   * company's model, which the tool currently does not detect.
-   */
-  create(body, options) {
-    return this._client.post("/content_provenance_checks", resolveResourceRequestOptions74(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
-  }
-};
-
-// ../../../node_modules/openai/resources/conversations/items.mjs
-function resolveResourceRequestOptions75(options, buildOptions) {
-  return Promise.resolve(options).then(buildOptions);
 }
 var normalizeRequestOptionsForQueryKeys48 = /* @__PURE__ */ new Set([
   "method",
@@ -64958,6 +65412,7 @@ var normalizeRequestOptionsForQueryKeys48 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
@@ -64981,13 +65436,221 @@ function normalizeRequestOptionsForQuery48(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
+var Files3 = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.content = new Content(this._client);
+  }
+  /**
+   * Create a Container File
+   *
+   * You can send either a multipart/form-data request with the raw file content, or
+   * a JSON request with a file ID.
+   */
+  create(containerID, body, options) {
+    return this._client.post(path`/containers/${containerID}/files`, resolveResourceRequestOptions75(options, (options2) => maybeMultipartFormRequestOptions(withBodyFinalization8({ body, ...options2, __security: { bearerAuth: true } }, { finalizeMultipart: true }), this._client)));
+  }
+  /**
+   * Retrieve Container File
+   */
+  retrieve(fileID, params, options) {
+    const { container_id } = params;
+    return this._client.get(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions75(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  list(containerID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, resolveResourceRequestOptions75(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete Container File
+   */
+  delete(fileID, params, options) {
+    const { container_id } = params;
+    return this._client.delete(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions75(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+Files3.Content = Content;
+
+// ../../../node_modules/openai/resources/containers/containers.mjs
+function resolveResourceRequestOptions76(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys49 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery49(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys49.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys49.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Containers2 = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.files = new Files3(this._client);
+  }
+  /**
+   * Create Container
+   */
+  create(body, options) {
+    return this._client.post("/containers", resolveResourceRequestOptions76(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Retrieve Container
+   */
+  retrieve(containerID, options) {
+    return this._client.get(path`/containers/${containerID}`, resolveResourceRequestOptions76(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query, ["after", "limit", "name", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/containers", CursorPage, resolveResourceRequestOptions76(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete Container
+   */
+  delete(containerID, options) {
+    return this._client.delete(path`/containers/${containerID}`, resolveResourceRequestOptions76(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+Containers2.Files = Files3;
+
+// ../../../node_modules/openai/resources/content-provenance-checks.mjs
+function resolveResourceRequestOptions77(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var ContentProvenanceChecks = class extends APIResource {
+  /**
+   * Check whether an image or audio file contains known OpenAI provenance signals.
+   * [Learn more about content provenance](https://developers.openai.com/api/docs/guides/content-provenance).
+   *
+   * If `not_detected`, it means the tool did not find supported signals in the
+   * uploaded file. The content could still have been generated by OpenAI if the
+   * metadata was stripped or has evidence of tampering, the watermark was degraded,
+   * it comes from a legacy generation model, or it was created before provenance
+   * signals were available. Content could also still be AI-generated by another
+   * company's model, which the tool currently does not detect.
+   */
+  create(body, options) {
+    return this._client.post("/content_provenance_checks", resolveResourceRequestOptions77(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+  }
+};
+
+// ../../../node_modules/openai/resources/conversations/items.mjs
+function resolveResourceRequestOptions78(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys50 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__streamMode",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery50(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys50.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys50.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Items6 = class extends APIResource {
   /**
    * Create items in a conversation with the given ID.
    */
   create(conversationID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path`/conversations/${conversationID}/items`, resolveResourceRequestOptions75(options, (options2) => ({
+    return this._client.post(path`/conversations/${conversationID}/items`, resolveResourceRequestOptions78(options, (options2) => ({
       query: { include },
       body,
       ...options2,
@@ -64999,20 +65662,20 @@ var Items6 = class extends APIResource {
    */
   retrieve(itemID, params, options) {
     const { conversation_id, ...query } = params;
-    return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions75(options, (options2) => ({
+    return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions78(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
     })));
   }
   list(conversationID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query, ["after", "include", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery50(query, ["after", "include", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, resolveResourceRequestOptions75(options, (options2) => ({
+    return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, resolveResourceRequestOptions78(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65023,12 +65686,12 @@ var Items6 = class extends APIResource {
    */
   delete(itemID, params, options) {
     const { conversation_id } = params;
-    return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions75(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions78(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
 // ../../../node_modules/openai/resources/conversations/conversations.mjs
-function resolveResourceRequestOptions76(options, buildOptions) {
+function resolveResourceRequestOptions79(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Conversations = class extends APIResource {
@@ -65040,7 +65703,7 @@ var Conversations = class extends APIResource {
    * Create a conversation.
    */
   create(body = {}, options) {
-    return this._client.post("/conversations", resolveResourceRequestOptions76(options, (options2) => ({
+    return this._client.post("/conversations", resolveResourceRequestOptions79(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65050,13 +65713,13 @@ var Conversations = class extends APIResource {
    * Get a conversation
    */
   retrieve(conversationID, options) {
-    return this._client.get(path`/conversations/${conversationID}`, resolveResourceRequestOptions76(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/conversations/${conversationID}`, resolveResourceRequestOptions79(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Update a conversation
    */
   update(conversationID, body, options) {
-    return this._client.post(path`/conversations/${conversationID}`, resolveResourceRequestOptions76(options, (options2) => ({
+    return this._client.post(path`/conversations/${conversationID}`, resolveResourceRequestOptions79(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65066,13 +65729,13 @@ var Conversations = class extends APIResource {
    * Delete a conversation. Items in the conversation will not be deleted.
    */
   delete(conversationID, options) {
-    return this._client.delete(path`/conversations/${conversationID}`, resolveResourceRequestOptions76(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/conversations/${conversationID}`, resolveResourceRequestOptions79(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Conversations.Items = Items6;
 
 // ../../../node_modules/openai/resources/decisions.mjs
-function resolveResourceRequestOptions77(options, buildOptions) {
+function resolveResourceRequestOptions80(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Decisions2 = class extends APIResource {
@@ -65081,7 +65744,7 @@ var Decisions2 = class extends APIResource {
    * some input. You can ask multiple questions in one request.
    */
   create(body, options) {
-    return this._client.post("/decisions", resolveResourceRequestOptions77(options, (options2) => ({
+    return this._client.post("/decisions", resolveResourceRequestOptions80(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65137,7 +65800,7 @@ var Embeddings2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/evals/runs/output-items.mjs
-function resolveResourceRequestOptions78(options, buildOptions) {
+function resolveResourceRequestOptions81(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var OutputItems = class extends APIResource {
@@ -65146,14 +65809,14 @@ var OutputItems = class extends APIResource {
    */
   retrieve(outputItemID, params, options) {
     const { eval_id, run_id } = params;
-    return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, resolveResourceRequestOptions78(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, resolveResourceRequestOptions81(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Get a list of output items for an evaluation run.
    */
   list(runID, params, options) {
     const { eval_id, ...query } = params;
-    return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, resolveResourceRequestOptions78(options, (options2) => ({
+    return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, resolveResourceRequestOptions81(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65162,10 +65825,10 @@ var OutputItems = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/evals/runs/runs.mjs
-function resolveResourceRequestOptions79(options, buildOptions) {
+function resolveResourceRequestOptions82(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys49 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -65183,18 +65846,19 @@ var normalizeRequestOptionsForQueryKeys49 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery49(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery51(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys49.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys51.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys49.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys51.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -65217,7 +65881,7 @@ var Runs2 = class extends APIResource {
    * schema specified in the config of the evaluation.
    */
   create(evalID, body, options) {
-    return this._client.post(path`/evals/${evalID}/runs`, resolveResourceRequestOptions79(options, (options2) => ({
+    return this._client.post(path`/evals/${evalID}/runs`, resolveResourceRequestOptions82(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65228,16 +65892,16 @@ var Runs2 = class extends APIResource {
    */
   retrieve(runID, params, options) {
     const { eval_id } = params;
-    return this._client.get(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions79(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions82(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(evalID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query, ["after", "limit", "order", "status"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery51(query, ["after", "limit", "order", "status"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, resolveResourceRequestOptions79(options, (options2) => ({
+    return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, resolveResourceRequestOptions82(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65248,23 +65912,23 @@ var Runs2 = class extends APIResource {
    */
   delete(runID, params, options) {
     const { eval_id } = params;
-    return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions79(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions82(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Cancel an ongoing evaluation run.
    */
   cancel(runID, params, options) {
     const { eval_id } = params;
-    return this._client.post(path`/evals/${eval_id}/runs/${runID}/cancel`, resolveResourceRequestOptions79(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.post(path`/evals/${eval_id}/runs/${runID}/cancel`, resolveResourceRequestOptions82(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Runs2.OutputItems = OutputItems;
 
 // ../../../node_modules/openai/resources/evals/evals.mjs
-function resolveResourceRequestOptions80(options, buildOptions) {
+function resolveResourceRequestOptions83(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys50 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -65282,18 +65946,19 @@ var normalizeRequestOptionsForQueryKeys50 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery50(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery52(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys50.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys52.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys50.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys52.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -65319,7 +65984,7 @@ var Evals = class extends APIResource {
    * the [Evals guide](https://developers.openai.com/api/docs/guides/evals).
    */
   create(body, options) {
-    return this._client.post("/evals", resolveResourceRequestOptions80(options, (options2) => ({
+    return this._client.post("/evals", resolveResourceRequestOptions83(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65329,26 +65994,26 @@ var Evals = class extends APIResource {
    * Get an evaluation by ID.
    */
   retrieve(evalID, options) {
-    return this._client.get(path`/evals/${evalID}`, resolveResourceRequestOptions80(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/evals/${evalID}`, resolveResourceRequestOptions83(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Update certain properties of an evaluation.
    */
   update(evalID, body, options) {
-    return this._client.post(path`/evals/${evalID}`, resolveResourceRequestOptions80(options, (options2) => ({
+    return this._client.post(path`/evals/${evalID}`, resolveResourceRequestOptions83(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery50(query, ["after", "limit", "order", "order_by"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query, ["after", "limit", "order", "order_by"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/evals", CursorPage, resolveResourceRequestOptions80(options, (options2) => ({
+    return this._client.getAPIList("/evals", CursorPage, resolveResourceRequestOptions83(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65358,7 +66023,7 @@ var Evals = class extends APIResource {
    * Delete an evaluation.
    */
   delete(evalID, options) {
-    return this._client.delete(path`/evals/${evalID}`, resolveResourceRequestOptions80(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/evals/${evalID}`, resolveResourceRequestOptions83(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Evals.Runs = Runs2;
@@ -65381,10 +66046,10 @@ async function waitForFileProcessing(resource, id, pollInterval, maxWait) {
 }
 
 // ../../../node_modules/openai/resources/files.mjs
-function resolveResourceRequestOptions81(options, buildOptions) {
+function resolveResourceRequestOptions84(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys53 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -65402,18 +66067,19 @@ var normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery51(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery53(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys51.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys53.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys51.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys53.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -65456,22 +66122,22 @@ var Files4 = class extends APIResource {
    * storage limits.
    */
   create(body, options) {
-    return this._client.post("/files", resolveResourceRequestOptions81(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/files", resolveResourceRequestOptions84(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Returns information about a specific file.
    */
   retrieve(fileID, options) {
-    return this._client.get(path`/files/${fileID}`, resolveResourceRequestOptions81(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/files/${fileID}`, resolveResourceRequestOptions84(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery51(query, ["after", "limit", "order", "purpose"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query, ["after", "limit", "order", "purpose"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/files", CursorPage, resolveResourceRequestOptions81(options, (options2) => ({
+    return this._client.getAPIList("/files", CursorPage, resolveResourceRequestOptions84(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65481,13 +66147,13 @@ var Files4 = class extends APIResource {
    * Delete a file and remove it from all vector stores.
    */
   delete(fileID, options) {
-    return this._client.delete(path`/files/${fileID}`, resolveResourceRequestOptions81(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/files/${fileID}`, resolveResourceRequestOptions84(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Returns a response containing the contents of the specified file.
    */
   content(fileID, options) {
-    return this._client.get(path`/files/${fileID}/content`, resolveResourceRequestOptions81(options, (options2) => ({
+    return this._client.get(path`/files/${fileID}/content`, resolveResourceRequestOptions84(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
@@ -65507,7 +66173,7 @@ var Methods = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/fine-tuning/alpha/graders.mjs
-function resolveResourceRequestOptions82(options, buildOptions) {
+function resolveResourceRequestOptions85(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Graders = class extends APIResource {
@@ -65529,7 +66195,7 @@ var Graders = class extends APIResource {
    * ```
    */
   run(body, options) {
-    return this._client.post("/fine_tuning/alpha/graders/run", resolveResourceRequestOptions82(options, (options2) => ({
+    return this._client.post("/fine_tuning/alpha/graders/run", resolveResourceRequestOptions85(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65553,7 +66219,7 @@ var Graders = class extends APIResource {
    * ```
    */
   validate(body, options) {
-    return this._client.post("/fine_tuning/alpha/graders/validate", resolveResourceRequestOptions82(options, (options2) => ({
+    return this._client.post("/fine_tuning/alpha/graders/validate", resolveResourceRequestOptions85(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65571,10 +66237,10 @@ var Alpha2 = class extends APIResource {
 Alpha2.Graders = Graders;
 
 // ../../../node_modules/openai/resources/fine-tuning/checkpoints/permissions.mjs
-function resolveResourceRequestOptions83(options, buildOptions) {
+function resolveResourceRequestOptions86(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -65592,18 +66258,19 @@ var normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery52(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery54(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys52.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys54.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys52.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys54.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -65635,7 +66302,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   create(fineTunedModelCheckpoint, body, options) {
-    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, resolveResourceRequestOptions83(options, (options2) => ({
+    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, resolveResourceRequestOptions86(options, (options2) => ({
       body,
       method: "post",
       ...options2,
@@ -65643,26 +66310,26 @@ var Permissions = class extends APIResource {
     })));
   }
   retrieve(fineTunedModelCheckpoint, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query, ["after", "limit", "order", "project_id"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query, ["after", "limit", "order", "project_id"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, resolveResourceRequestOptions83(options, (options2) => ({
+    return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, resolveResourceRequestOptions86(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
   }
   list(fineTunedModelCheckpoint, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query, ["after", "limit", "order", "project_id"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query, ["after", "limit", "order", "project_id"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, resolveResourceRequestOptions83(options, (options2) => ({
+    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, resolveResourceRequestOptions86(options, (options2) => ({
       query,
       ...options2,
       __security: { adminAPIKeyAuth: true }
@@ -65689,7 +66356,7 @@ var Permissions = class extends APIResource {
    */
   delete(permissionID, params, options) {
     const { fine_tuned_model_checkpoint } = params;
-    return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, resolveResourceRequestOptions83(options, (options2) => ({
+    return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, resolveResourceRequestOptions86(options, (options2) => ({
       ...options2,
       __security: { adminAPIKeyAuth: true }
     })));
@@ -65706,10 +66373,10 @@ var Checkpoints = class extends APIResource {
 Checkpoints.Permissions = Permissions;
 
 // ../../../node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
-function resolveResourceRequestOptions84(options, buildOptions) {
+function resolveResourceRequestOptions87(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys53 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys55 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -65727,18 +66394,19 @@ var normalizeRequestOptionsForQueryKeys53 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery53(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery55(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys53.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys55.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys53.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys55.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -65752,13 +66420,13 @@ function normalizeRequestOptionsForQuery53(value, queryKeys, options) {
 }
 var Checkpoints2 = class extends APIResource {
   list(fineTuningJobID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query, ["after", "limit"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery55(query, ["after", "limit"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, resolveResourceRequestOptions84(options, (options2) => ({
+    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, resolveResourceRequestOptions87(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65767,10 +66435,10 @@ var Checkpoints2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
-function resolveResourceRequestOptions85(options, buildOptions) {
+function resolveResourceRequestOptions88(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys56 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -65788,18 +66456,19 @@ var normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery54(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery56(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys54.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys56.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys54.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys56.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -65834,7 +66503,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/fine_tuning/jobs", resolveResourceRequestOptions85(options, (options2) => ({
+    return this._client.post("/fine_tuning/jobs", resolveResourceRequestOptions88(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -65853,16 +66522,16 @@ var Jobs = class extends APIResource {
    * ```
    */
   retrieve(fineTuningJobID, options) {
-    return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, resolveResourceRequestOptions85(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, resolveResourceRequestOptions88(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query, ["after", "limit", "metadata"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery56(query, ["after", "limit", "metadata"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/fine_tuning/jobs", CursorPage, resolveResourceRequestOptions85(options, (options2) => ({
+    return this._client.getAPIList("/fine_tuning/jobs", CursorPage, resolveResourceRequestOptions88(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65879,16 +66548,16 @@ var Jobs = class extends APIResource {
    * ```
    */
   cancel(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, resolveResourceRequestOptions85(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, resolveResourceRequestOptions88(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   listEvents(fineTuningJobID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query, ["after", "limit"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery56(query, ["after", "limit"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, resolveResourceRequestOptions85(options, (options2) => ({
+    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, resolveResourceRequestOptions88(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -65905,7 +66574,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   pause(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, resolveResourceRequestOptions85(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, resolveResourceRequestOptions88(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Resume a fine-tune job.
@@ -65918,7 +66587,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   resume(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, resolveResourceRequestOptions85(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, resolveResourceRequestOptions88(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Jobs.Checkpoints = Checkpoints2;
@@ -65952,7 +66621,7 @@ var Graders2 = class extends APIResource {
 Graders2.GraderModels = GraderModels;
 
 // ../../../node_modules/openai/resources/images.mjs
-function resolveResourceRequestOptions86(options, buildOptions) {
+function resolveResourceRequestOptions89(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization9(options, finalization) {
@@ -65967,10 +66636,10 @@ var Images2 = class extends APIResource {
    * @deprecated
    */
   createVariation(body, options) {
-    return this._client.post("/images/variations", resolveResourceRequestOptions86(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/images/variations", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   edit(body, options) {
-    return this._client.post("/images/edits", resolveResourceRequestOptions86(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => ({
+    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => ({
       ...requestOptions,
       body: Object.fromEntries(Object.entries(requestOptions.body ?? {}).map(([key, value]) => [
         key,
@@ -65985,12 +66654,12 @@ var Images2 = class extends APIResource {
     }), { streamFromBody: true }), this._client)));
   }
   generate(body, options) {
-    return this._client.post("/images/generations", resolveResourceRequestOptions86(options, (options2) => withBodyFinalization9({ body, ...options2, stream: body.stream ?? false, __security: { bearerAuth: true } }, { streamFromBody: true })));
+    return this._client.post("/images/generations", resolveResourceRequestOptions89(options, (options2) => withBodyFinalization9({ body, ...options2, stream: body.stream ?? false, __security: { bearerAuth: true } }, { streamFromBody: true })));
   }
 };
 
 // ../../../node_modules/openai/resources/live/sessions.mjs
-function resolveResourceRequestOptions87(options, buildOptions) {
+function resolveResourceRequestOptions90(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Sessions4 = class extends APIResource {
@@ -66009,7 +66678,7 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   accept(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/accept`, resolveResourceRequestOptions87(options, (options2) => ({
+    return this._client.post(path`/live/sessions/${sessionID}/accept`, resolveResourceRequestOptions90(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
@@ -66029,7 +66698,7 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   downloadRecording(sessionID, options) {
-    return this._client.get(path`/live/sessions/${sessionID}/content`, resolveResourceRequestOptions87(options, (options2) => ({
+    return this._client.get(path`/live/sessions/${sessionID}/content`, resolveResourceRequestOptions90(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
@@ -66048,7 +66717,7 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   fork(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/fork`, resolveResourceRequestOptions87(options, (options2) => ({
+    return this._client.post(path`/live/sessions/${sessionID}/fork`, resolveResourceRequestOptions90(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -66063,7 +66732,7 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   hangup(sessionID, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/hangup`, resolveResourceRequestOptions87(options, (options2) => ({
+    return this._client.post(path`/live/sessions/${sessionID}/hangup`, resolveResourceRequestOptions90(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -66081,7 +66750,7 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   refer(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/refer`, resolveResourceRequestOptions87(options, (options2) => ({
+    return this._client.post(path`/live/sessions/${sessionID}/refer`, resolveResourceRequestOptions90(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
@@ -66100,7 +66769,7 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   reject(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/reject`, resolveResourceRequestOptions87(options, (options2) => ({
+    return this._client.post(path`/live/sessions/${sessionID}/reject`, resolveResourceRequestOptions90(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
@@ -66118,7 +66787,7 @@ var Sideband = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/live/live.mjs
-function resolveResourceRequestOptions88(options, buildOptions) {
+function resolveResourceRequestOptions91(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Live = class extends APIResource {
@@ -66141,7 +66810,7 @@ var Live = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/live/sessions", resolveResourceRequestOptions88(options, (options2) => ({
+    return this._client.post("/live/sessions", resolveResourceRequestOptions91(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -66153,7 +66822,7 @@ Live.Forks = Forks;
 Live.Sessions = Sessions4;
 
 // ../../../node_modules/openai/resources/models.mjs
-function resolveResourceRequestOptions89(options, buildOptions) {
+function resolveResourceRequestOptions92(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Models2 = class extends APIResource {
@@ -66162,26 +66831,26 @@ var Models2 = class extends APIResource {
    * the owner and permissioning.
    */
   retrieve(model, options) {
-    return this._client.get(path`/models/${model}`, resolveResourceRequestOptions89(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/models/${model}`, resolveResourceRequestOptions92(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Lists the currently available models, and provides basic information about each
    * one such as the owner and availability.
    */
   list(options) {
-    return this._client.getAPIList("/models", Page, resolveResourceRequestOptions89(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.getAPIList("/models", Page, resolveResourceRequestOptions92(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Delete a fine-tuned model. You must have the Owner role in your organization to
    * delete a model.
    */
   delete(model, options) {
-    return this._client.delete(path`/models/${model}`, resolveResourceRequestOptions89(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/models/${model}`, resolveResourceRequestOptions92(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
 // ../../../node_modules/openai/resources/moderations.mjs
-function resolveResourceRequestOptions90(options, buildOptions) {
+function resolveResourceRequestOptions93(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Moderations = class extends APIResource {
@@ -66191,7 +66860,7 @@ var Moderations = class extends APIResource {
    * [moderation guide](https://developers.openai.com/api/docs/guides/moderation).
    */
   create(body, options) {
-    return this._client.post("/moderations", resolveResourceRequestOptions90(options, (options2) => ({
+    return this._client.post("/moderations", resolveResourceRequestOptions93(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -66242,7 +66911,7 @@ async function encodedMultipartFormRequestOptions(options, client, encodings, ra
 }
 
 // ../../../node_modules/openai/resources/realtime/calls.mjs
-function resolveResourceRequestOptions91(options, buildOptions) {
+function resolveResourceRequestOptions94(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Calls = class extends APIResource {
@@ -66258,7 +66927,7 @@ var Calls = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/realtime/calls", resolveResourceRequestOptions91(options, (options2) => encodedMultipartFormRequestOptions({
+    return this._client.post("/realtime/calls", resolveResourceRequestOptions94(options, (options2) => encodedMultipartFormRequestOptions({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "application/sdp" }, options2?.headers]),
@@ -66281,7 +66950,7 @@ var Calls = class extends APIResource {
    * ```
    */
   accept(callID, body, options) {
-    return this._client.post(path`/realtime/calls/${callID}/accept`, resolveResourceRequestOptions91(options, (options2) => ({
+    return this._client.post(path`/realtime/calls/${callID}/accept`, resolveResourceRequestOptions94(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
@@ -66297,7 +66966,7 @@ var Calls = class extends APIResource {
    * ```
    */
   hangup(callID, options) {
-    return this._client.post(path`/realtime/calls/${callID}/hangup`, resolveResourceRequestOptions91(options, (options2) => ({
+    return this._client.post(path`/realtime/calls/${callID}/hangup`, resolveResourceRequestOptions94(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -66314,7 +66983,7 @@ var Calls = class extends APIResource {
    * ```
    */
   refer(callID, body, options) {
-    return this._client.post(path`/realtime/calls/${callID}/refer`, resolveResourceRequestOptions91(options, (options2) => ({
+    return this._client.post(path`/realtime/calls/${callID}/refer`, resolveResourceRequestOptions94(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
@@ -66330,7 +66999,7 @@ var Calls = class extends APIResource {
    * ```
    */
   reject(callID, body = {}, options) {
-    return this._client.post(path`/realtime/calls/${callID}/reject`, resolveResourceRequestOptions91(options, (options2) => ({
+    return this._client.post(path`/realtime/calls/${callID}/reject`, resolveResourceRequestOptions94(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
@@ -66340,7 +67009,7 @@ var Calls = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/realtime/client-secrets.mjs
-function resolveResourceRequestOptions92(options, buildOptions) {
+function resolveResourceRequestOptions95(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var ClientSecrets = class extends APIResource {
@@ -66368,7 +67037,7 @@ var ClientSecrets = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/realtime/client_secrets", resolveResourceRequestOptions92(options, (options2) => ({
+    return this._client.post("/realtime/client_secrets", resolveResourceRequestOptions95(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -66377,7 +67046,7 @@ var ClientSecrets = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/realtime/translations/client-secrets.mjs
-function resolveResourceRequestOptions93(options, buildOptions) {
+function resolveResourceRequestOptions96(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var ClientSecrets2 = class extends APIResource {
@@ -66402,7 +67071,7 @@ var ClientSecrets2 = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/realtime/translations/client_secrets", resolveResourceRequestOptions93(options, (options2) => ({
+    return this._client.post("/realtime/translations/client_secrets", resolveResourceRequestOptions96(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -66433,10 +67102,10 @@ Realtime2.Calls = Calls;
 Realtime2.Translations = Translations2;
 
 // ../../../node_modules/openai/resources/responses/input-items.mjs
-function resolveResourceRequestOptions94(options, buildOptions) {
+function resolveResourceRequestOptions97(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys55 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys57 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -66454,18 +67123,19 @@ var normalizeRequestOptionsForQueryKeys55 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery55(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery57(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys55.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys57.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys55.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys57.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -66479,13 +67149,13 @@ function normalizeRequestOptionsForQuery55(value, queryKeys, options) {
 }
 var InputItems2 = class extends APIResource {
   list(responseID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery55(query, ["after", "include", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery57(query, ["after", "include", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, resolveResourceRequestOptions94(options, (options2) => ({
+    return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, resolveResourceRequestOptions97(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -66494,7 +67164,7 @@ var InputItems2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/responses/input-tokens.mjs
-function resolveResourceRequestOptions95(options, buildOptions) {
+function resolveResourceRequestOptions98(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var InputTokens2 = class extends APIResource {
@@ -66510,7 +67180,7 @@ var InputTokens2 = class extends APIResource {
    * ```
    */
   count(body = {}, options) {
-    return this._client.post("/responses/input_tokens", resolveResourceRequestOptions95(options, (options2) => ({
+    return this._client.post("/responses/input_tokens", resolveResourceRequestOptions98(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -68365,13 +69035,13 @@ function finalizeResponse(snapshot, params, format) {
 }
 
 // ../../../node_modules/openai/resources/responses/responses.mjs
-function resolveResourceRequestOptions96(options, buildOptions) {
+function resolveResourceRequestOptions99(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization10(options, finalization) {
   return { ...options, __metadata: { ...options.__metadata, ...finalization } };
 }
-var normalizeRequestOptionsForQueryKeys56 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys58 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -68389,18 +69059,19 @@ var normalizeRequestOptionsForQueryKeys56 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery56(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery58(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys56.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys58.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys56.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys58.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -68419,7 +69090,7 @@ var Responses3 = class extends APIResource {
     this.inputTokens = new InputTokens2(this._client);
   }
   create(body, options) {
-    return this._client.post("/responses", resolveResourceRequestOptions96(options, (options2) => withBodyFinalization10({ body, ...options2, stream: body.stream ?? false, __security: { bearerAuth: true } }, { streamFromBody: true })))._thenUnwrap((rsp) => {
+    return this._client.post("/responses", resolveResourceRequestOptions99(options, (options2) => withBodyFinalization10({ body, ...options2, stream: body.stream ?? false, __security: { bearerAuth: true } }, { streamFromBody: true })))._thenUnwrap((rsp) => {
       if ("object" in rsp && rsp.object === "response") {
         addOutputText(rsp);
       }
@@ -68427,13 +69098,13 @@ var Responses3 = class extends APIResource {
     });
   }
   retrieve(responseID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery56(query, ["include", "include_obfuscation", "starting_after", "stream"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery58(query, ["include", "include_obfuscation", "starting_after", "stream"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.get(path`/responses/${responseID}`, resolveResourceRequestOptions96(options, (options2) => ({
+    return this._client.get(path`/responses/${responseID}`, resolveResourceRequestOptions99(options, (options2) => ({
       query,
       ...options2,
       stream: query?.stream ?? false,
@@ -68456,7 +69127,7 @@ var Responses3 = class extends APIResource {
    * ```
    */
   delete(responseID, options) {
-    return this._client.delete(path`/responses/${responseID}`, resolveResourceRequestOptions96(options, (options2) => ({
+    return this._client.delete(path`/responses/${responseID}`, resolveResourceRequestOptions99(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -68475,7 +69146,7 @@ var Responses3 = class extends APIResource {
    * ```
    */
   cancel(responseID, options) {
-    return this._client.post(path`/responses/${responseID}/cancel`, resolveResourceRequestOptions96(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.post(path`/responses/${responseID}/cancel`, resolveResourceRequestOptions99(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Compact a conversation. Returns a compacted response object.
@@ -68493,7 +69164,7 @@ var Responses3 = class extends APIResource {
    * ```
    */
   compact(body, options) {
-    return this._client.post("/responses/compact", resolveResourceRequestOptions96(options, (options2) => ({
+    return this._client.post("/responses/compact", resolveResourceRequestOptions99(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -68513,7 +69184,7 @@ Responses3.InputItems = InputItems2;
 Responses3.InputTokens = InputTokens2;
 
 // ../../../node_modules/openai/resources/safety/alerts.mjs
-function resolveResourceRequestOptions97(options, buildOptions) {
+function resolveResourceRequestOptions100(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Alerts = class extends APIResource {
@@ -68521,12 +69192,12 @@ var Alerts = class extends APIResource {
    * Get a safety alert belonging to the authenticated API project.
    */
   retrieve(id, options) {
-    return this._client.get(path`/safety/alerts/${id}`, resolveResourceRequestOptions97(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/safety/alerts/${id}`, resolveResourceRequestOptions100(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
 // ../../../node_modules/openai/resources/safety/cases.mjs
-function resolveResourceRequestOptions98(options, buildOptions) {
+function resolveResourceRequestOptions101(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Cases = class extends APIResource {
@@ -68534,7 +69205,7 @@ var Cases = class extends APIResource {
    * Get a safety case by ID.
    */
   retrieve(id, options) {
-    return this._client.get(path`/safety/cases/${id}`, resolveResourceRequestOptions98(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/safety/cases/${id}`, resolveResourceRequestOptions101(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
@@ -68550,7 +69221,7 @@ Safety.Cases = Cases;
 Safety.Alerts = Alerts;
 
 // ../../../node_modules/openai/resources/skills/content.mjs
-function resolveResourceRequestOptions99(options, buildOptions) {
+function resolveResourceRequestOptions102(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Content2 = class extends APIResource {
@@ -68558,7 +69229,7 @@ var Content2 = class extends APIResource {
    * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path`/skills/${skillID}/content`, resolveResourceRequestOptions99(options, (options2) => ({
+    return this._client.get(path`/skills/${skillID}/content`, resolveResourceRequestOptions102(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
@@ -68568,7 +69239,7 @@ var Content2 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/skills/versions/content.mjs
-function resolveResourceRequestOptions100(options, buildOptions) {
+function resolveResourceRequestOptions103(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Content3 = class extends APIResource {
@@ -68577,7 +69248,7 @@ var Content3 = class extends APIResource {
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path`/skills/${skill_id}/versions/${version}/content`, resolveResourceRequestOptions100(options, (options2) => ({
+    return this._client.get(path`/skills/${skill_id}/versions/${version}/content`, resolveResourceRequestOptions103(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
@@ -68587,13 +69258,13 @@ var Content3 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/skills/versions/versions.mjs
-function resolveResourceRequestOptions101(options, buildOptions) {
+function resolveResourceRequestOptions104(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization11(options, finalization) {
   return { ...options, __metadata: { ...options.__metadata, ...finalization } };
 }
-var normalizeRequestOptionsForQueryKeys57 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys59 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -68611,18 +69282,19 @@ var normalizeRequestOptionsForQueryKeys57 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery57(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery59(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys57.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys59.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys57.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys59.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -68650,16 +69322,16 @@ var Versions = class extends APIResource {
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path`/skills/${skill_id}/versions/${version}`, resolveResourceRequestOptions101(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/skills/${skill_id}/versions/${version}`, resolveResourceRequestOptions104(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(skillID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery57(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery59(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, resolveResourceRequestOptions101(options, (options2) => ({
+    return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, resolveResourceRequestOptions104(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -68670,19 +69342,19 @@ var Versions = class extends APIResource {
    */
   delete(version, params, options) {
     const { skill_id } = params;
-    return this._client.delete(path`/skills/${skill_id}/versions/${version}`, resolveResourceRequestOptions101(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/skills/${skill_id}/versions/${version}`, resolveResourceRequestOptions104(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Versions.Content = Content3;
 
 // ../../../node_modules/openai/resources/skills/skills.mjs
-function resolveResourceRequestOptions102(options, buildOptions) {
+function resolveResourceRequestOptions105(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization12(options, finalization) {
   return { ...options, __metadata: { ...options.__metadata, ...finalization } };
 }
-var normalizeRequestOptionsForQueryKeys58 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys60 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -68700,18 +69372,19 @@ var normalizeRequestOptionsForQueryKeys58 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery58(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery60(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys58.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys60.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys58.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys60.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -68739,26 +69412,26 @@ var Skills = class extends APIResource {
    * Get a skill by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path`/skills/${skillID}`, resolveResourceRequestOptions102(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/skills/${skillID}`, resolveResourceRequestOptions105(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
-    return this._client.post(path`/skills/${skillID}`, resolveResourceRequestOptions102(options, (options2) => ({
+    return this._client.post(path`/skills/${skillID}`, resolveResourceRequestOptions105(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery58(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery60(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/skills", CursorPage, resolveResourceRequestOptions102(options, (options2) => ({
+    return this._client.getAPIList("/skills", CursorPage, resolveResourceRequestOptions105(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -68768,14 +69441,14 @@ var Skills = class extends APIResource {
    * Delete a skill by its ID.
    */
   delete(skillID, options) {
-    return this._client.delete(path`/skills/${skillID}`, resolveResourceRequestOptions102(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/skills/${skillID}`, resolveResourceRequestOptions105(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Skills.Content = Content2;
 Skills.Versions = Versions;
 
 // ../../../node_modules/openai/resources/uploads/parts.mjs
-function resolveResourceRequestOptions103(options, buildOptions) {
+function resolveResourceRequestOptions106(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Parts = class extends APIResource {
@@ -68794,12 +69467,12 @@ var Parts = class extends APIResource {
    * [complete the Upload](https://developers.openai.com/api/reference/resources/uploads/methods/complete).
    */
   create(uploadID, body, options) {
-    return this._client.post(path`/uploads/${uploadID}/parts`, resolveResourceRequestOptions103(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post(path`/uploads/${uploadID}/parts`, resolveResourceRequestOptions106(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
 };
 
 // ../../../node_modules/openai/resources/uploads/uploads.mjs
-function resolveResourceRequestOptions104(options, buildOptions) {
+function resolveResourceRequestOptions107(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var Uploads = class extends APIResource {
@@ -68831,7 +69504,7 @@ var Uploads = class extends APIResource {
    * Returns the Upload object with status `pending`.
    */
   create(body, options) {
-    return this._client.post("/uploads", resolveResourceRequestOptions104(options, (options2) => ({
+    return this._client.post("/uploads", resolveResourceRequestOptions107(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -68843,7 +69516,7 @@ var Uploads = class extends APIResource {
    * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
-    return this._client.post(path`/uploads/${uploadID}/cancel`, resolveResourceRequestOptions104(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.post(path`/uploads/${uploadID}/cancel`, resolveResourceRequestOptions107(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Completes the
@@ -68863,7 +69536,7 @@ var Uploads = class extends APIResource {
    * object.
    */
   complete(uploadID, body, options) {
-    return this._client.post(path`/uploads/${uploadID}/complete`, resolveResourceRequestOptions104(options, (options2) => ({
+    return this._client.post(path`/uploads/${uploadID}/complete`, resolveResourceRequestOptions107(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -68928,7 +69601,7 @@ async function uploadAndPollVectorStoreFileBatch(resource, client, vectorStoreId
 }
 
 // ../../../node_modules/openai/resources/vector-stores/file-batches.mjs
-function resolveResourceRequestOptions105(options, buildOptions) {
+function resolveResourceRequestOptions108(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var FileBatches = class extends APIResource {
@@ -68936,7 +69609,7 @@ var FileBatches = class extends APIResource {
    * Create a vector store file batch.
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, resolveResourceRequestOptions105(options, (options2) => ({
+    return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, resolveResourceRequestOptions108(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -68948,7 +69621,7 @@ var FileBatches = class extends APIResource {
    */
   retrieve(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, resolveResourceRequestOptions105(options, (options2) => ({
+    return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, resolveResourceRequestOptions108(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -68960,7 +69633,7 @@ var FileBatches = class extends APIResource {
    */
   cancel(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, resolveResourceRequestOptions105(options, (options2) => ({
+    return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, resolveResourceRequestOptions108(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -68978,7 +69651,7 @@ var FileBatches = class extends APIResource {
    */
   listFiles(batchID, params, options) {
     const { vector_store_id, ...query } = params;
-    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, resolveResourceRequestOptions105(options, (options2) => ({
+    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, resolveResourceRequestOptions108(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -69005,10 +69678,10 @@ var FileBatches = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/vector-stores/files.mjs
-function resolveResourceRequestOptions106(options, buildOptions) {
+function resolveResourceRequestOptions109(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys59 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys61 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -69026,18 +69699,19 @@ var normalizeRequestOptionsForQueryKeys59 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery59(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery61(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys59.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys61.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys59.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys61.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -69056,7 +69730,7 @@ var Files5 = class extends APIResource {
    * [vector store](https://developers.openai.com/api/reference/resources/vector_stores).
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}/files`, resolveResourceRequestOptions106(options, (options2) => ({
+    return this._client.post(path`/vector_stores/${vectorStoreID}/files`, resolveResourceRequestOptions109(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -69068,7 +69742,7 @@ var Files5 = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions106(options, (options2) => ({
+    return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions109(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -69079,7 +69753,7 @@ var Files5 = class extends APIResource {
    */
   update(fileID, params, options) {
     const { vector_store_id, ...body } = params;
-    return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions106(options, (options2) => ({
+    return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions109(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -69087,13 +69761,13 @@ var Files5 = class extends APIResource {
     })));
   }
   list(vectorStoreID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery59(query, ["after", "before", "filter", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery61(query, ["after", "before", "filter", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, resolveResourceRequestOptions106(options, (options2) => ({
+    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, resolveResourceRequestOptions109(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -69108,7 +69782,7 @@ var Files5 = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions106(options, (options2) => ({
+    return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions109(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -69152,7 +69826,7 @@ var Files5 = class extends APIResource {
    */
   content(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, resolveResourceRequestOptions106(options, (options2) => ({
+    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, resolveResourceRequestOptions109(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -69161,10 +69835,10 @@ var Files5 = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/vector-stores/vector-stores.mjs
-function resolveResourceRequestOptions107(options, buildOptions) {
+function resolveResourceRequestOptions110(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys60 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys62 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -69182,18 +69856,19 @@ var normalizeRequestOptionsForQueryKeys60 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery60(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery62(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys60.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys62.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys60.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys62.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -69215,7 +69890,7 @@ var VectorStores = class extends APIResource {
    * Create a vector store.
    */
   create(body, options) {
-    return this._client.post("/vector_stores", resolveResourceRequestOptions107(options, (options2) => ({
+    return this._client.post("/vector_stores", resolveResourceRequestOptions110(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -69226,7 +69901,7 @@ var VectorStores = class extends APIResource {
    * Retrieves a vector store.
    */
   retrieve(vectorStoreID, options) {
-    return this._client.get(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions107(options, (options2) => ({
+    return this._client.get(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions110(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -69236,7 +69911,7 @@ var VectorStores = class extends APIResource {
    * Modifies a vector store.
    */
   update(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions107(options, (options2) => ({
+    return this._client.post(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions110(options, (options2) => ({
       body,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -69244,13 +69919,13 @@ var VectorStores = class extends APIResource {
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery60(query, ["after", "before", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery62(query, ["after", "before", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/vector_stores", CursorPage, resolveResourceRequestOptions107(options, (options2) => ({
+    return this._client.getAPIList("/vector_stores", CursorPage, resolveResourceRequestOptions110(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
@@ -69261,7 +69936,7 @@ var VectorStores = class extends APIResource {
    * Delete a vector store.
    */
   delete(vectorStoreID, options) {
-    return this._client.delete(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions107(options, (options2) => ({
+    return this._client.delete(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions110(options, (options2) => ({
       ...options2,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
@@ -69272,7 +69947,7 @@ var VectorStores = class extends APIResource {
    * filter.
    */
   search(vectorStoreID, body, options) {
-    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, resolveResourceRequestOptions107(options, (options2) => ({
+    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, resolveResourceRequestOptions110(options, (options2) => ({
       body,
       method: "post",
       ...options2,
@@ -69285,13 +69960,13 @@ VectorStores.Files = Files5;
 VectorStores.FileBatches = FileBatches;
 
 // ../../../node_modules/openai/resources/videos.mjs
-function resolveResourceRequestOptions108(options, buildOptions) {
+function resolveResourceRequestOptions111(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 function withBodyFinalization13(options, finalization) {
   return { ...options, __metadata: { ...options.__metadata, ...finalization } };
 }
-var normalizeRequestOptionsForQueryKeys61 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys63 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -69309,18 +69984,19 @@ var normalizeRequestOptionsForQueryKeys61 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery61(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery63(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys61.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys63.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys61.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys63.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -69339,7 +70015,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   create(body, options) {
-    return this._client.post("/videos", resolveResourceRequestOptions108(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/videos", resolveResourceRequestOptions111(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -69347,16 +70023,16 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   retrieve(videoID, options) {
-    return this._client.get(path`/videos/${videoID}`, resolveResourceRequestOptions108(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/videos/${videoID}`, resolveResourceRequestOptions111(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery61(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery63(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/videos", ConversationCursorPage, resolveResourceRequestOptions108(options, (options2) => ({
+    return this._client.getAPIList("/videos", ConversationCursorPage, resolveResourceRequestOptions111(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -69368,7 +70044,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   delete(videoID, options) {
-    return this._client.delete(path`/videos/${videoID}`, resolveResourceRequestOptions108(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/videos/${videoID}`, resolveResourceRequestOptions111(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Create a character from an uploaded video.
@@ -69376,16 +70052,16 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   createCharacter(body, options) {
-    return this._client.post("/videos/characters", resolveResourceRequestOptions108(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/videos/characters", resolveResourceRequestOptions111(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   downloadContent(videoID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery61(query, ["variant"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery63(query, ["variant"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.get(path`/videos/${videoID}/content`, resolveResourceRequestOptions108(options, (options2) => ({
+    return this._client.get(path`/videos/${videoID}/content`, resolveResourceRequestOptions111(options, (options2) => ({
       query,
       ...options2,
       headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
@@ -69400,7 +70076,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   edit(body, options) {
-    return this._client.post("/videos/edits", resolveResourceRequestOptions108(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/videos/edits", resolveResourceRequestOptions111(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Create an extension of a completed video.
@@ -69408,7 +70084,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   extend(body, options) {
-    return this._client.post("/videos/extensions", resolveResourceRequestOptions108(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+    return this._client.post("/videos/extensions", resolveResourceRequestOptions111(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Fetch a character.
@@ -69416,7 +70092,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   getCharacter(characterID, options) {
-    return this._client.get(path`/videos/characters/${characterID}`, resolveResourceRequestOptions108(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/videos/characters/${characterID}`, resolveResourceRequestOptions111(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -69424,12 +70100,12 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   remix(videoID, body, options) {
-    return this._client.post(path`/videos/${videoID}/remix`, resolveResourceRequestOptions108(options, (options2) => maybeMultipartFormRequestOptions(withBodyFinalization13({ body, ...options2, __security: { bearerAuth: true } }, { finalizeMultipart: true }), this._client)));
+    return this._client.post(path`/videos/${videoID}/remix`, resolveResourceRequestOptions111(options, (options2) => maybeMultipartFormRequestOptions(withBodyFinalization13({ body, ...options2, __security: { bearerAuth: true } }, { finalizeMultipart: true }), this._client)));
   }
 };
 
 // ../../../node_modules/openai/resources/webhooks/event-types.mjs
-function resolveResourceRequestOptions109(options, buildOptions) {
+function resolveResourceRequestOptions112(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
 var EventTypes = class extends APIResource {
@@ -69443,7 +70119,7 @@ var EventTypes = class extends APIResource {
    * ```
    */
   list(options) {
-    return this._client.get("/webhook_event_types", resolveResourceRequestOptions109(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get("/webhook_event_types", resolveResourceRequestOptions112(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
@@ -69548,10 +70224,10 @@ async function verifyWebhookSignature(payload, signatureHeader, timestamp, webho
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
-function resolveResourceRequestOptions110(options, buildOptions) {
+function resolveResourceRequestOptions113(options, buildOptions) {
   return Promise.resolve(options).then(buildOptions);
 }
-var normalizeRequestOptionsForQueryKeys62 = /* @__PURE__ */ new Set([
+var normalizeRequestOptionsForQueryKeys64 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -69569,18 +70245,19 @@ var normalizeRequestOptionsForQueryKeys62 = /* @__PURE__ */ new Set([
   "__binaryRequest",
   "__binaryResponse",
   "__streamClass",
+  "__streamMode",
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery62(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery64(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys62.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys64.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys62.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys64.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -69612,7 +70289,7 @@ var Webhooks = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/webhook_endpoints", resolveResourceRequestOptions110(options, (options2) => ({
+    return this._client.post("/webhook_endpoints", resolveResourceRequestOptions113(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -69629,7 +70306,7 @@ var Webhooks = class extends APIResource {
    * ```
    */
   retrieve(webhookEndpointID, options) {
-    return this._client.get(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions110(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.get(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions113(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Updates a webhook endpoint for the authenticated project.
@@ -69640,20 +70317,20 @@ var Webhooks = class extends APIResource {
    * ```
    */
   update(webhookEndpointID, body = {}, options) {
-    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions110(options, (options2) => ({
+    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions113(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
     })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery62(query, ["after", "limit"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery64(query, ["after", "limit"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/webhook_endpoints", CursorPage, resolveResourceRequestOptions110(options, (options2) => ({
+    return this._client.getAPIList("/webhook_endpoints", CursorPage, resolveResourceRequestOptions113(options, (options2) => ({
       query,
       ...options2,
       __security: { bearerAuth: true }
@@ -69670,7 +70347,7 @@ var Webhooks = class extends APIResource {
    * ```
    */
   delete(webhookEndpointID, options) {
-    return this._client.delete(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions110(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+    return this._client.delete(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions113(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Rotates the signing secret for a webhook endpoint in the authenticated project.
@@ -69682,7 +70359,7 @@ var Webhooks = class extends APIResource {
    * ```
    */
   rotateSecret(webhookEndpointID, body = {}, options) {
-    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/rotate_secret`, resolveResourceRequestOptions110(options, (options2) => ({
+    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/rotate_secret`, resolveResourceRequestOptions113(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }
@@ -69700,7 +70377,7 @@ var Webhooks = class extends APIResource {
    * ```
    */
   test(webhookEndpointID, body, options) {
-    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/test`, resolveResourceRequestOptions110(options, (options2) => ({
+    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/test`, resolveResourceRequestOptions113(options, (options2) => ({
       body,
       ...options2,
       __security: { bearerAuth: true }

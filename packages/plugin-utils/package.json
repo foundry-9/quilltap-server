@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/plugin-utils",
-  "version": "2.7.4",
+  "version": "2.7.5",
   "description": "Utility functions for Quilltap plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -65,7 +65,7 @@
     }
   },
   "devDependencies": {
-    "openai": "^7.47.0",
+    "openai": "^7.54.0",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3"
   },
