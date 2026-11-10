@@ -10,6 +10,8 @@
 import {
   classifyStagedOutfits,
   rebaseStagedGestures,
+  rollbackTargetSlots,
+  standingRollbacks,
   type SlotsMutator,
 } from '@/lib/wardrobe/staged-live-outfits'
 import { EMPTY_EQUIPPED_SLOTS, equippedSlotsEqual } from '@/lib/schemas/wardrobe.types'
@@ -135,5 +137,30 @@ describe('classifyStagedOutfits', () => {
       dirty: [],
       unresolved: [],
     })
+  })
+})
+
+describe('staged rollback helpers', () => {
+  const entry = {
+    top: [
+      { itemId: 'coat', archived: true, missing: false },
+      { itemId: 'shirt', archived: false, missing: false },
+    ],
+    footwear: [{ itemId: 'gone', archived: false, missing: true }],
+  }
+
+  it('rollbackTargetSlots leaves missing and archived items off, unless archived and worn there', () => {
+    expect(rollbackTargetSlots(entry, slots({})).top).toEqual(['shirt'])
+    expect(rollbackTargetSlots(entry, slots({ top: ['coat'] })).top).toEqual(['coat', 'shirt'])
+    expect(rollbackTargetSlots(entry, slots({})).footwear).toEqual([])
+  })
+
+  it('standingRollbacks keeps only picks the staging still matches', () => {
+    const baseline = slots({})
+    const target = rollbackTargetSlots(entry, baseline)
+    const rollbacks = { a: { index: 2, slots: entry }, b: { index: 3, slots: entry }, c: { index: 4, slots: entry } }
+    const staged = { a: target, b: { ...target, hair: ['wig'] }, c: target }
+    const out = standingRollbacks(rollbacks, staged, { a: baseline, b: baseline, c: baseline }, { c: ['bundle'] })
+    expect(out).toEqual([{ characterId: 'a', index: 2, slots: target }])
   })
 })

@@ -6,26 +6,25 @@
  * every entry but the current one.
  *
  * Reads `?action=wardrobe-history` (refetched on the `chats` realtime topic,
- * so a tool call under an open dialog shows up without a poll); Wear again
- * posts `?action=wardrobe-rollback`, which Aurora announces like any other
- * operator change. The Live tab's staged edits are not shared: when the
- * character has unsaved staging, the operator confirms, the staging is
- * discarded, and only then does the rollback run — so Done never flushes a
- * stale stage over it.
+ * so a tool call under an open dialog shows up without a poll). Wear again
+ * stages, like every other wardrobe gesture: the recorded outfit appears on the
+ * Live tab and nothing is sent until Done, when the dialog commits it through
+ * `?action=wardrobe-rollback` (`useStagedLiveOutfits`). Picking an outfit
+ * replaces any other staging for the character, so when there is some the
+ * operator confirms first. A staged pick can be taken back with Unstage.
  *
  * Design of record: docs/developer/features/complete/wardrobe-outfit-history.md §8.4
  *
  * @module components/wardrobe/outfit-history-tab
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { formatRelativeDate } from '@/lib/format-time'
 import { useNow } from '@/hooks/useNow'
 import { WARDROBE_SLOT_TYPES, WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
-import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 export interface OutfitHistorySlotItem {
   itemId: string
@@ -53,24 +52,18 @@ export interface OutfitHistoryResponse {
   entries: OutfitHistoryEntry[]
 }
 
-interface RollbackResponse {
-  equippedSlots: EquippedSlots
-  previousIndex: number
-  restoredIndex: number
-  skipped: Array<{ itemId: string; title: string | null; reason: 'archived' | 'missing' }>
-}
-
 export interface OutfitHistoryTabProps {
   chatId: string
   characterId: string
   characterName: string
   /** True when the Live tab holds unsaved staged edits for this character. */
   hasStagedEdits: boolean
-  /**
-   * Throw away this character's staged Live-tab edits (after the operator
-   * agrees); with `reseed`, re-seed the Live tab from the refreshed snapshot.
-   */
-  discardStagedEdits: (options?: { reseed?: boolean }) => void
+  /** The history index the staging returns this character to, if any. */
+  stagedIndex: number | null
+  /** Stage a return to `entry` on the Live tab; it applies on Done. */
+  stageEntry: (entry: OutfitHistoryEntry) => void
+  /** Throw away this character's staged edits (a staged pick included). */
+  discardStagedEdits: () => void
   requestConfirmation: (message: string) => Promise<boolean>
 }
 
@@ -116,10 +109,11 @@ export function OutfitHistoryTab({
   characterId,
   characterName,
   hasStagedEdits,
+  stagedIndex,
+  stageEntry,
   discardStagedEdits,
   requestConfirmation,
 }: OutfitHistoryTabProps) {
-  const queryClient = useQueryClient()
   const nowMs = useNow(60_000)
   const history = useQuery({
     queryKey: queryKeys.wardrobe.history(chatId, characterId),
@@ -130,42 +124,16 @@ export function OutfitHistoryTab({
       ),
   })
 
-  const rollback = useMutation({
-    mutationFn: (index: number) =>
-      apiFetch<RollbackResponse>(`/api/v1/chats/${chatId}?action=wardrobe-rollback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId, index }),
-      }),
-    onSuccess: (result) => {
-      const skipped = result.skipped ?? []
-      if (skipped.length === 0) {
-        showSuccessToast(`Back in outfit ${result.restoredIndex}`)
-      } else {
-        const names = skipped.map((s) => s.title ?? s.itemId).join(', ')
-        showSuccessToast(
-          `Back in outfit ${result.restoredIndex}. ${skipped.length} item${skipped.length === 1 ? '' : 's'} could not be put back on: ${names}`,
-        )
-      }
-    },
-    onError: (error) => {
-      showErrorToast(apiErrorMessage(error, 'Could not return to that outfit'))
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.all })
-      discardStagedEdits({ reseed: true })
-    },
-  })
-
-  const wearAgain = async (index: number) => {
-    if (hasStagedEdits) {
+  const wearAgain = async (entry: OutfitHistoryEntry) => {
+    // A staged pick that still stands is simply replaced; other edits are
+    // the operator's to give up.
+    if (hasStagedEdits && stagedIndex === null) {
       const ok = await requestConfirmation(
-        `Discard the staged changes to ${characterName}'s outfit and return to outfit ${index}?`,
+        `Discard the staged changes to ${characterName}'s outfit and stage outfit ${entry.index} instead?`,
       )
       if (!ok) return
-      discardStagedEdits()
     }
-    rollback.mutate(index)
+    stageEntry(entry)
   }
 
   const entries = [...(history.data?.entries ?? [])].sort((a, b) => b.index - a.index)
@@ -174,7 +142,8 @@ export function OutfitHistoryTab({
     <div className="space-y-2 mb-3">
       <p className="qt-text-xs qt-text-secondary px-1">
         Every change of clothes in this chat, numbered from the outfit they arrived in. Wear
-        again returns to one — Aurora will say so.
+        again stages one on the Live outfit tab; it goes on when you click Done, and Aurora
+        will say so.
       </p>
 
       {history.isLoading && <p className="qt-text-xs qt-text-muted px-1">Consulting the record…</p>}
@@ -201,14 +170,25 @@ export function OutfitHistoryTab({
                 </span>
                 <span className="qt-text-xs qt-text-secondary">· {entry.changedBy}</span>
                 <span className="flex-1" />
-                {entry.isCurrent ? (
+                {entry.index === stagedIndex ? (
+                  <>
+                    <span className="qt-badge text-xs">Staged — on at Done</span>
+                    <button
+                      type="button"
+                      className="qt-button-secondary qt-button-sm"
+                      onClick={discardStagedEdits}
+                      title={`Leave ${characterName} in what they are wearing now`}
+                    >
+                      Unstage
+                    </button>
+                  </>
+                ) : entry.isCurrent ? (
                   <span className="qt-badge text-xs">Wearing now</span>
                 ) : (
                   <button
                     type="button"
                     className="qt-button-secondary qt-button-sm"
-                    disabled={rollback.isPending}
-                    onClick={() => void wearAgain(entry.index)}
+                    onClick={() => void wearAgain(entry)}
                     title={
                       stale > 0
                         ? `${stale} item${stale === 1 ? ' in this outfit is' : 's in this outfit are'} no longer available and will be left off.`

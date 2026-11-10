@@ -377,7 +377,9 @@ function WardrobeControlDialogInner({
                   characterId={selectedCharacterId}
                   characterName={selectedCharacter?.name ?? 'this character'}
                   hasStagedEdits={live.isDirty(selectedCharacterId)}
-                  discardStagedEdits={(options) => live.discard(selectedCharacterId, options)}
+                  stagedIndex={live.stagedRollbackIndex(selectedCharacterId)}
+                  stageEntry={live.stageRollback}
+                  discardStagedEdits={() => live.discard(selectedCharacterId)}
                   requestConfirmation={requestConfirmation}
                 />
               ) : rightTab === 'live' && isInChat ? (

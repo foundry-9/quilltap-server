@@ -4,6 +4,15 @@
 
 ### 4.13-dev
 
+#### Fix: Wardrobe History's Wear again stages until Done
+
+- Wear again on the Wardrobe dialog's History tab posted `?action=wardrobe-rollback` immediately, so the outfit changed in the Salon while the Live outfit tab still showed the old staging. It now stages: `useStagedLiveOutfits.stageRollback` replaces the character's staged slots with the entry's, the Live tab shows them, and nothing is sent until Done.
+- On Done, a pick whose staged slots still match goes through `?action=wardrobe-rollback` (cursor move, Aurora announcement); a pick edited further on the Live tab goes as a normal `set_all`.
+- The History tab marks the staged entry ("Staged — on at Done") with an Unstage button, and asks before replacing other staged edits.
+- New pure helpers in `lib/wardrobe/staged-live-outfits.ts`: `rollbackTargetSlots` (client mirror of `filterStaleItems`), `rollbackGesture`, `standingRollbacks`. `discard` no longer takes `{ reseed }`; it re-seeds at once.
+- Tests: `outfit-history-tab.test.tsx`, `use-staged-live-outfits-discard.test.tsx`, `staged-live-outfits.test.ts`.
+- Help: `wardrobe.md`.
+
 #### Chore: dependency updates
 
 - `npm update -S` across the root, `packages/*` and `plugins/dist/*`. Root: `next` / `eslint-config-next` 16.4.6, `openai` 7.54.0, `@tanstack/react-query` (+ devtools, eslint plugin) 5.107.1, `@tanstack/react-virtual` 3.14.26, `@openrouter/sdk` 1.5.73, `@tailwindcss/postcss` 4.3.5, `ws` 8.22.2, `dotenv` 18.0.10, `@testing-library/user-event` 14.6.9, `@quilltap/plugin-utils` 2.7.4.

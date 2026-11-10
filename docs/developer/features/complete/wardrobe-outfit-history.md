@@ -52,8 +52,8 @@ order of work; §11 the acceptance tests; §12 the bookkeeping the commit skill 
   and restore. Item ids that fail to resolve after an import fall under the stale-item rule.
 - **GUI: a History tab, instant restore.** A third tab beside **Live outfit** / **Outfit
   Builder** for the selected character in a chat. Each entry: index, time, who changed it, a
-  one-line summary, the current one marked. **Wear again** restores at once as an operator
-  change — Aurora announces, as with any dialog edit.
+  one-line summary, the current one marked. **Wear again** stages the outfit on the Live tab
+  and it goes on at **Done** as an operator change — Aurora announces, as with any dialog edit.
 
 ## 2. Storage
 
@@ -528,22 +528,25 @@ or a rollback mutation already covers the operator's own edits.
 - `type RightTab = 'live' | 'builder' | 'history'` in `wardrobe-control-dialog.tsx`; the tab
   button renders only `isInChat && selectedCharacterId`, after **Outfit Builder**, labelled
   **History**. Its hint line: "Every change of clothes in this chat, numbered from the outfit
-  they arrived in. Wear again returns to one — Aurora will say so."
+  they arrived in. Wear again stages one on the Live outfit tab; it goes on when you click
+  Done, and Aurora will say so."
 - The list, newest first: an index badge (`#6`), a relative time with the absolute one in the
   title, the `changed_by` label, the one-line summary, and an `OutfitSlotsPreview` of the
   resolved slots (stale items greyed with an "archived" / "gone" tag). The current entry
   carries a **Wearing now** badge and no button.
-- **Wear again** → `useMutation` posting `?action=wardrobe-rollback`; on success invalidate
-  `queryKeys.wardrobe.all`, toast "Back in outfit N" (plus "N items could not be put back on"
-  when `skipped` is non-empty, listing titles in the toast body). The button's title warns
-  ahead of time when the entry has stale items: "2 items in this outfit are no longer
-  available and will be left off."
-- If the Live tab holds **unsaved staged edits for this character** (`useStagedLiveOutfits`
-  reports the character dirty), confirm first via the dialog's existing `requestConfirmation`:
-  "Discard the staged changes to <name>'s outfit and return to outfit N?" — a yes discards
-  the staged gestures for that character (`rebaseStagedGestures` to the fresh snapshot after
-  the mutation settles) before the rollback. The staged outfit must never be flushed *over* a
-  rollback on Done.
+- **Wear again stages** (revised 4.13): `useStagedLiveOutfits.stageRollback` replaces the
+  character's staged slots with the entry's (stale items filtered client-side by
+  `rollbackTargetSlots`, the mirror of the server's `filterStaleItems`), so the Live tab shows
+  it at once and nothing is sent. The staged entry is badged **Staged — on at Done** with an
+  **Unstage** button (`discard`). On **Done**, `standingRollbacks` picks each character whose
+  staged slots still equal the rollback target and posts `?action=wardrobe-rollback` for it
+  (cursor move, Aurora's announcement, a toast only when `skipped` is non-empty); a pick edited
+  further on the Live tab is committed as an ordinary `set_all` and appends a new entry. The
+  button's title warns ahead of time when the entry has stale items: "2 items in this outfit
+  are no longer available and will be left off."
+- If the Live tab holds **other unsaved staged edits for this character**, confirm first via
+  the dialog's `requestConfirmation`: "Discard the staged changes to <name>'s outfit and stage
+  outfit N instead?" Replacing a standing staged pick does not ask.
 - Empty state (no rows — a pre-migration seat never dressed): "No outfits recorded yet. The
   first change of clothes starts the record."
 - `qt-*` classes only; any new utility goes through the three-way mirror rule in CLAUDE.md
