@@ -213,11 +213,6 @@ function readPlan(raw: unknown): OpeningPlan {
 
 const inFlight = processSingleton('chat.openings', () => new Map<string, Promise<void>>())
 
-/** Is an opening running for this chat in this process? */
-export function isOpeningInFlight(chatId: string): boolean {
-  return inFlight.has(chatId)
-}
-
 /** Wait for this chat's opening, if one is running in this process. */
 export async function waitForOpening(chatId: string): Promise<void> {
   const running = inFlight.get(chatId)
