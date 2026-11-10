@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-11-02
+**Last Updated**: 2026-11-10
 **Tool Used**: knip
-**Codebase**: Quilltap v4.11-dev
+**Codebase**: Quilltap v4.13-dev
 
 ---
 
@@ -12,12 +12,52 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | 0 as of 2026-11-02 (knip clean). 0 remaining as of 2026-10-31: the kept-with-reason SVAR pair went with the whole SVAR file manager (`components/files/svar/`), retired in folder-browser Phase 4. 2 remaining as of 2026-10-26 (SVAR pair, kept-with-reason); 2026-10-26 deleted the importer-less `components/inventory/index.ts` barrel. 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Files | 0 as of 2026-11-10: deleted three importer-less barrels (`components/new-chat/index.ts`, `components/new-chat/hooks/index.ts`, `lib/characters/vault/index.ts`). 0 as of 2026-11-02 (knip clean). 0 remaining as of 2026-10-31: the kept-with-reason SVAR pair went with the whole SVAR file manager (`components/files/svar/`), retired in folder-browser Phase 4. 2 remaining as of 2026-10-26 (SVAR pair, kept-with-reason); 2026-10-26 deleted the importer-less `components/inventory/index.ts` barrel. 2 remaining as of 2026-10-13, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-10-13 deleted the importer-less memory barrels `lib/memory/index.ts` and `lib/memory/recall/index.ts`. As of 2026-09-04, 2 remaining, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
 | Unused Dependencies | None flagged as of 2026-10-13 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1359 (2026-11-02; 1363 before the sweep). 1338 (2026-10-26, before removals; new Inventory/Pascal/Scenario surface). 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 859 (2026-11-02; 860 before the sweep). 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Exports | 1506 (2026-11-10; 1510 before the sweep on knip 6.45.0; the rise from 1359 is the Refactor 4.12/4.13 surface — opening, document core, tier walk, Atlas — plus a newer knip). 1359 (2026-11-02; 1363 before the sweep). 1338 (2026-10-26, before removals; new Inventory/Pascal/Scenario surface). 1302 (2026-10-13; 1307 before the sweep — the rise from 1061 is the memory-refactor, Concierge, progressions, wardrobe-folder and sync surface, almost all used inside its own module or by a test). 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 982 (2026-11-10; 984 before the sweep). 859 (2026-11-02; 860 before the sweep). 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 4 in ErrorCode (preserved for future use; `UNAUTHORIZED` joined the list on 2026-09-04 when its only consumer, `requireAuth`, was removed) |
-| Duplicate Exports | 78 (2026-11-02, unchanged). 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+| Duplicate Exports | 88 (2026-11-10). 78 (2026-11-02, unchanged). 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+
+---
+
+## 2026-11-10 — v4.13 release sweep (knip)
+
+knip 6.45.0 flagged **3 unused files**, **1510 unused exports**, **984 unused exported types**, 4 unused enum members and 88 duplicate exports; no unused or unlisted dependencies. Run with `node_modules` present (`npm ci --ignore-scripts`).
+
+Method as on 2026-11-02: every flagged symbol (2,494) was scored by identifier references outside its defining file across all tracked source. 822 had none; of those, 72 are not used in their own file either, and each of those was read by hand (the other 750 are exported helpers and types used inside their own module). Exports referenced only by tests (20) were read too.
+
+Verified with `npx tsc` (exit 0), `eslint` on the changed files (clean) and the full `npm run test:unit` suite: **1,358 suites passed / 19,667 tests / 94 snapshots**, 1 suite and 3 tests skipped (pre-existing). Re-running knip: unused files 3 → 0, exports 1510 → 1506, types 984 → 982.
+
+### Removed — files
+
+| File | Why |
+|------|-----|
+| `components/new-chat/index.ts` | Barrel with no importers; callers import `NewChatModal`, `NewChatForm`, etc. directly. |
+| `components/new-chat/hooks/index.ts` | Barrel whose only importer was the barrel above; `useNewChat` is imported from `hooks/useNewChat`. |
+| `lib/characters/vault/index.ts` | Barrel with no importers; every caller imports `layout`, `parsers`, `hydrate`, `write`, `readers`, `scaffold` directly. |
+
+### Removed — functions / consts / types
+
+| File | Removed | Why |
+|------|---------|-----|
+| `lib/memory/recall/recap.ts` | `buildRecentConversationsBlock`, `calculateRecentConversationsLimit` and the four `RECENT_CONVERSATIONS_*` constants | The greeting's "Recent Conversations" block. Its only caller was the legacy greeting builder (`lib/chat/initial-greeting.ts`), deleted when the greeting became a turn (`purpose: 'opening'`); the greeting now gets the recap's conversation lists through `buildConversationRecallLists` like any turn. The bug-158 guards (gist cap, closing `read_conversation` note) live on in `truncateGist`, now documented at its definition, and four of the bug-158 tests in `__tests__/unit/lib/memory/memory-recap.test.ts` were re-pointed at `generateMemoryRecap` (the live path) instead of being dropped; the three that only exercised the dead function's `limit` / exclusion arguments went with it (the exclusion is already pinned on `generateMemoryRecap`). |
+| `lib/services/chat-message/turn-transcript.ts` | `resolveUserCharacterParticipant` | No callers. Both former callers (`memory-extraction.ts`, `chats/[id]/actions/memories.ts`) no longer read the user character this way. |
+| `lib/chat/opening/run.ts` | `isOpeningInFlight` | No callers; `waitForOpening` is what callers use. |
+| `lib/backup/restore/uuid-remap.ts` | `InventoryImagePointerFix` | Unused alias of `ItemImagePointerFix`, which `planInventoryImagePointerFixes` returns. |
+| `components/document-browser/useDocumentStoreSource.ts` | `DocumentStoreOps` | Unused `ReturnType` alias. |
+
+### Kept — with reason
+
+- **`TOOL_RESULT_VERBATIM_TURNS_NEVER_ELIDE`** (`lib/schemas/profile.types.ts`) — names the sentinel `0` beside `DEFAULT_TOOL_RESULT_VERBATIM_TURNS` and `TOOL_RESULT_VERBATIM_TURNS_CEILING`; documentation of the stored value's meaning. Schema-constant rule.
+- **`invalidateAllFrozenArchives`** (`lib/memory/recall/archive.ts`) — no production caller (the memory refactor stopped reaching it from jobs), but it is the clear-all half of the live frozen-archive cache and two dispatcher suites assert it is *not* called. Lifecycle-pair rule, like `clearCompressionCache` / `getCompressionCacheStats`.
+- **New `z.infer` / API-body / tool-input aliases with no users** — `CharacterCreateBody`, `CharacterUpdateBody`, `PhysicalDescriptionWrite`, `CastingDefaultsQuery`, `LookupCharacterInput`, `LookupMemoriesInput`, `LookupMessagesInput`, `ReadMessagesInput`, `HoldingsSubSection` (with its sibling `*SubSection` types). Standing schema / tool-input rule.
+- **Registry accessors** (`moderation-provider-registry.ts`, `provider-registry.ts` stats/errors), **theme API**, **`createToolLogger`**, **scheduler introspection** (`isMemoryMaintenanceSchedulerRunning`, `isAutonomousRoomsSchedulerRunning`, `stopAutonomousRoomsScheduler`), the remaining `z.infer` list and the `__tests__/helpers` / fixtures exports — standing keeps, unchanged in character.
+- **4 `ErrorCode` enum members and 88 duplicate exports** — unchanged in character (the ten new duplicates are the `xxxFieldsSchema` / `createXxxSchema` and named-plus-alias pattern).
+
+### Follow-up still open (not dead code)
+
+- **`ChatProvider`** (`components/providers/chat-context.tsx`) still has no caller, so `useChatContext()` always returns its empty fallback. Open since 2026-10-26.
 
 ---
 

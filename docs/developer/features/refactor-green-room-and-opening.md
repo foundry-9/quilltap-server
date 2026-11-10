@@ -231,7 +231,7 @@ Fence (f) in `opening-chokepoints.test.ts` holds every `route.*` test at five mo
 6. **On a join, the join-scenario whisper now follows the arrival** (after Aurora's whisper) rather than directly after the Host's welcome.
 7. **Staff posts are idempotent by `systemSender`/`systemKind` when the opening is resuming; Aurora's opening-outfit whisper is not** (it carries no structured character key), so an arrivals phase broken off half-way and re-run may announce an already-announced seat a second time. The seat's outfit and inventory are not redone (the arrival checks the seat's entries).
 8. **The reconciler returns stale `'running'` rows to `'pending'`** rather than re-running them headless; the next visit (or run start) resumes from `openingPhase`. A `'running'` row with no in-process opening is resumable on the next open whatever its age.
-9. **`buildRecentConversationsBlock`** stays in `recap.ts` as D2 says, but nothing outside its tests calls it now.
+9. **`buildRecentConversationsBlock`** stayed in `recap.ts` as D2 said, but nothing outside its tests called it; it and `calculateRecentConversationsLimit` were removed in the 2026-11-10 dead-code sweep. The recap's `buildConversationRecallLists` carries the bug-158 guards on the live path.
 
 ### Second announcement route on a join (D4)
 

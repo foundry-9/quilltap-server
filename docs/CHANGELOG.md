@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Chore: Dead code sweep (release checklist 5)
+
+- Deleted importer-less barrels `components/new-chat/index.ts`, `components/new-chat/hooks/index.ts`, `lib/characters/vault/index.ts`.
+- Removed `buildRecentConversationsBlock`, `calculateRecentConversationsLimit` and the `RECENT_CONVERSATIONS_*` constants from `lib/memory/recall/recap.ts`; their only caller was the legacy greeting builder removed when the greeting became a turn. The bug-158 tests now run against `generateMemoryRecap`.
+- Removed unused `resolveUserCharacterParticipant` (`turn-transcript.ts`), `isOpeningInFlight` (`lib/chat/opening/run.ts`), `InventoryImagePointerFix` (`uuid-remap.ts`) and `DocumentStoreOps` (`useDocumentStoreSource.ts`).
+- Details in `docs/developer/DEAD-CODE-REPORT.md`.
+
 #### Feature: Picture view for document-store file browsers
 
 - `DocumentStoreBrowser` has a List / Pictures toggle beside the search box. Pictures lays folders and files out as square tiles (`DocumentTile`): image files show the image, other files and folders show a generic icon, and the name and modified date are overlaid on the tile (`qt-gallery-caption`). The ⋮ menu, select checkboxes and in-place rename work in both views. Applies everywhere the browser is used, including the Salon's attach-from-library picker, where browsing hundreds of images as thin rows was impractical.

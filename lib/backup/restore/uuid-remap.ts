@@ -294,9 +294,6 @@ export interface ItemImagePointerFix {
   imageFileId: string;
 }
 
-/** One Inventory object's pointer fix (the kind-neutral shape). */
-export type InventoryImagePointerFix = ItemImagePointerFix;
-
 /**
  * The analogue of {@link planWardrobeImagePointerFixes} for a kind whose
  * `imageFileId` lives in a file the remap never rewrites: list the pointers
