@@ -198,7 +198,7 @@ export function ScenariosCard() {
                       type="button"
                       disabled={readOnly}
                       onClick={() => setDefault(isDefault ? null : scenario.id)}
-                      className={`qt-button-icon qt-button-ghost ${isDefault ? 'qt-text-favorite' : 'hover:text-primary'}`}
+                      className={`qt-button-icon qt-button-ghost ${isDefault ? 'qt-text-favorite' : 'hover:qt-text-brand'}`}
                       aria-pressed={isDefault}
                       aria-label={isDefault ? `Stop using ${scenario.title} by default` : `Use ${scenario.title} by default`}
                       title={isDefault ? 'The default scenario — click to clear' : 'Set as the default scenario'}
@@ -235,7 +235,7 @@ export function ScenariosCard() {
                       </button>
                       {deleteConfirm === scenario.id && (
                         <div className="absolute right-0 top-full z-10 mt-1 min-w-[220px] rounded-lg border qt-border-default qt-bg-card p-3 qt-shadow-lg">
-                          <p className="text-sm text-foreground mb-2">
+                          <p className="text-sm qt-text mb-2">
                             Delete this scenario? Chats already begun keep their scene.
                           </p>
                           <div className="flex gap-2">

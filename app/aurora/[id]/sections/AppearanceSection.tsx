@@ -109,7 +109,7 @@ function InventoryCard() {
           {carried.map((item, i) => (
             <span key={item.id}>
               {i > 0 && ', '}
-              <strong className="text-foreground">{item.title || item.name}</strong>
+              <strong className="qt-text">{item.title || item.name}</strong>
             </span>
           ))}
           .

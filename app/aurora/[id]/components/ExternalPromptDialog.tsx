@@ -135,7 +135,7 @@ export function ExternalPromptDialog({
   const selectClasses = 'qt-select'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+    <div className="qt-dialog-overlay p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -151,7 +151,7 @@ export function ExternalPromptDialog({
 
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin h-6 w-6 border-2 border-foreground border-t-transparent rounded-full" />
+            <div className="qt-spinner animate-spin h-6 w-6 rounded-full" />
           </div>
         ) : (
           <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">

@@ -211,7 +211,7 @@ export function AtlasEntryEditor({
         </p>
 
         <div className="space-y-1">
-          <label className="text-sm text-foreground" htmlFor={`${fieldId}-name`}>Name</label>
+          <label className="text-sm qt-text" htmlFor={`${fieldId}-name`}>Name</label>
           <input
             id={`${fieldId}-name`}
             type="text"
@@ -241,7 +241,7 @@ export function AtlasEntryEditor({
         <OverlapNotices overlaps={notices} />
 
         <div className="space-y-1">
-          <label className="text-sm text-foreground" htmlFor={`${fieldId}-graphic-prompt`}>Graphic prompt</label>
+          <label className="text-sm qt-text" htmlFor={`${fieldId}-graphic-prompt`}>Graphic prompt</label>
           <p className="qt-text-xs qt-text-secondary">
             What it looks like, in a sentence or two. Handed to the painters as a reference whenever it may be in the
             picture, and to a character who describes it.
@@ -259,7 +259,7 @@ export function AtlasEntryEditor({
         </div>
 
         <div className="space-y-1">
-          <span className="text-sm text-foreground block">Knowledge</span>
+          <span className="text-sm qt-text block">Knowledge</span>
           <p className="qt-text-xs qt-text-secondary">
             What is known of it. Told to every character who can reach this entry while it is being spoken of.
           </p>
@@ -325,7 +325,7 @@ function AtlasPicturesSection({ container, entry }: { container: AtlasContainer;
   return (
     <section className="space-y-2 border-t qt-border-default pt-3" aria-labelledby={`atlas-pictures-${entry.id}`}>
       <div className="flex items-center justify-between gap-2">
-        <h3 id={`atlas-pictures-${entry.id}`} className="text-sm text-foreground">Pictures</h3>
+        <h3 id={`atlas-pictures-${entry.id}`} className="text-sm qt-text">Pictures</h3>
         <div className="flex items-center gap-2">
           <label className="qt-button-ghost qt-button-sm cursor-pointer">
             Upload…

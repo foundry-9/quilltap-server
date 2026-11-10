@@ -97,7 +97,7 @@ function PluginToggle({
         relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
         transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring
         focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
-        ${enabled ? 'bg-primary' : 'qt-bg-muted'}
+        ${enabled ? 'qt-bg-primary' : 'qt-bg-muted'}
       `}
       role="switch"
       aria-checked={enabled}
@@ -519,7 +519,7 @@ export default function PluginsTab() {
           >
             Installed
             {activeTab === 'installed' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 qt-bg-primary" />
             )}
           </button>
           <button
@@ -532,7 +532,7 @@ export default function PluginsTab() {
           >
             Upgrades{availableUpgrades.length > 0 && ` (${availableUpgrades.length})`}
             {activeTab === 'upgrades' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 qt-bg-primary" />
             )}
           </button>
           <button
@@ -545,7 +545,7 @@ export default function PluginsTab() {
           >
             Browse npm
             {activeTab === 'browse' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 qt-bg-primary" />
             )}
           </button>
         </div>

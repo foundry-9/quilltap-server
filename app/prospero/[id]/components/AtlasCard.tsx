@@ -40,7 +40,7 @@ export function AtlasCard({ projectId, expanded, onToggle }: AtlasCardProps) {
         <div className="flex items-center gap-3">
           <Icon name="atlas" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">The Atlas ({entries.length})</h3>
+            <h3 className="qt-heading-4 qt-text">The Atlas ({entries.length})</h3>
             <p className="qt-text-small qt-text-secondary">
               The vehicles, houses, devices and places of this project&rsquo;s world
             </p>

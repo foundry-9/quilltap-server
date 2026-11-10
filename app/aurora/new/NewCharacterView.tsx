@@ -327,7 +327,7 @@ export function NewCharacterView() {
             </p>
           </div>
           <div>
-            <label htmlFor="defaultConnectionProfileId" className="block qt-label mb-2 text-foreground">
+            <label htmlFor="defaultConnectionProfileId" className="block qt-label mb-2 qt-text">
               Default connection profile
             </label>
             <select

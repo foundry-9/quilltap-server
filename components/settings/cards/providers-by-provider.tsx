@@ -155,11 +155,6 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
   // mount, so each opening gets a fresh one.
   const [openSeq, setOpenSeq] = useState(0)
   const open = useCallback((next: NonNullable<ModalRequest>) => {
-    console.debug('[ProvidersByProvider] Opening modal', {
-      kind: next.kind,
-      provider: next.provider ?? null,
-      editing: 'profile' in next && next.profile ? next.profile.id : null,
-    })
     setOpenSeq((n) => n + 1)
     setRequest(next)
   }, [])
@@ -252,7 +247,6 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
           offers={offers(group.provider)}
           onAdd={(kind) => {
             if (kind === 'connection') {
-              console.debug('[ProvidersByProvider] Opening modal', { kind, provider: group.provider })
               connectionModal.openNew(group.provider)
             } else {
               open({ kind, provider: group.provider })
@@ -260,7 +254,6 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
           }}
           onOpenProfile={(entry) => {
             if (entry.kind === 'connection') {
-              console.debug('[ProvidersByProvider] Opening modal', { kind: 'connection', editing: entry.profile.id })
               connectionModal.openEdit(entry.profile)
             } else if (entry.kind === 'image') {
               open({ kind: 'image', profile: entry.profile })

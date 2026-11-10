@@ -449,7 +449,7 @@ function PhotoCard({ entry, onClick }: { entry: GalleryEntry; onClick: () => voi
           />
           {entry.linkSummary.count > 1 && (
             <span
-              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-background/85 px-2.5 py-1 text-xs font-medium qt-text-primary backdrop-blur-sm qt-shadow-sm"
+              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full qt-bg-card/90 px-2.5 py-1 text-xs font-medium qt-text-primary backdrop-blur-sm qt-shadow-sm"
               title={`Hard-linked in ${entry.linkSummary.count} places`}
             >
               <span aria-hidden="true">🔗</span>
@@ -517,7 +517,7 @@ function PhotoDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+      className="qt-dialog-overlay p-4"
       onClick={onClose}
       role="presentation"
     >

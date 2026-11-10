@@ -204,7 +204,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
 
           {/* Selected indicator */}
           {selectedImageId === image.id && !missingImages.has(image.id) && (
-            <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1">
+            <div className="absolute top-2 right-2 qt-bg-primary qt-text-on-primary rounded-full p-1">
               <Icon name="check" className="w-4 h-4" />
             </div>
           )}

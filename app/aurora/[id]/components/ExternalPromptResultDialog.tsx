@@ -43,7 +43,7 @@ export function ExternalPromptResultDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+    <div className="qt-dialog-overlay p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -60,7 +60,7 @@ export function ExternalPromptResultDialog({
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label qt-text qt-shadow-sm hover:qt-bg-muted"
               title="Copy to clipboard"
             >
               {copied ? (
@@ -77,7 +77,7 @@ export function ExternalPromptResultDialog({
             </button>
             <button
               onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label qt-text qt-shadow-sm hover:qt-bg-muted"
               title="Download as Markdown file"
             >
               <Icon name="download" className="w-4 h-4" />
@@ -86,7 +86,7 @@ export function ExternalPromptResultDialog({
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 pr-2 -mr-2 rounded-lg border qt-border-default bg-background/50 p-4">
+        <div className="overflow-y-auto flex-1 pr-2 -mr-2 rounded-lg border qt-border-default qt-bg-default p-4">
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {prompt}
@@ -97,7 +97,7 @@ export function ExternalPromptResultDialog({
         <div className="mt-4 flex justify-end flex-shrink-0">
           <button
             onClick={onClose}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
+            className="qt-button qt-button-primary"
           >
             Close
           </button>

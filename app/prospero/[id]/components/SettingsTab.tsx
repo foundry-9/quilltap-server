@@ -42,7 +42,7 @@ export function SettingsTab({
         <div className="mt-2 flex justify-end">
           <button
             onClick={onSave}
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
+            className="qt-button qt-button-primary"
           >
             Save Instructions
           </button>
@@ -64,7 +64,7 @@ export function SettingsTab({
           aria-label="Allow Any Character"
           onClick={onToggleAllowAnyCharacter}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            project.allowAnyCharacter ? 'bg-primary' : 'qt-bg-muted'
+            project.allowAnyCharacter ? 'qt-bg-primary' : 'qt-bg-muted'
           }`}
         >
           <span

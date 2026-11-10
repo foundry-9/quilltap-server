@@ -13482,6 +13482,14 @@
     color: var(--color-muted-foreground);
   }
   /**
+   * Brand (primary-colour) text — the theme's --color-primary as a text colour.
+   * Not to be confused with qt-text-primary, which is the primary *foreground*
+   * text colour. Use for brand-tinted links and hover accents.
+   */
+  .qt-text-brand {
+    color: var(--color-primary);
+  }
+  /**
    * Warning text color
    */
   .qt-text-warning {
@@ -13893,6 +13901,9 @@
   }
   .hover\:qt-text-primary:hover {
     color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+  .hover\:qt-text-brand:hover {
+    color: var(--color-primary);
   }
   /**
    * Hover borders — the outline that answers a pointer on cards, drop zones

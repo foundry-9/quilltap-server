@@ -150,7 +150,7 @@ export function ContextCompressionSettingsComponent({
             disabled={saving}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
               compressionSettings.enabled
-                ? 'bg-primary'
+                ? 'qt-bg-primary'
                 : 'qt-bg-muted'
             } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             role="switch"

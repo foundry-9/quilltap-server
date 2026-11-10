@@ -129,7 +129,7 @@ export function ProfileEditSection({
               </div>
               <button
                 onClick={() => setShowAvatarSelector(true)}
-                className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground qt-shadow-lg hover:qt-bg-primary/90 transition-colors"
+                className="absolute bottom-0 right-0 p-2 rounded-full qt-bg-primary qt-text-on-primary qt-shadow-lg hover:qt-bg-primary/90 transition-colors"
                 title="Change avatar"
                 aria-label="Change avatar"
               >

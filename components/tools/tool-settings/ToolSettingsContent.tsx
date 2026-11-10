@@ -493,7 +493,7 @@ function TriStateCheckbox({ state, onChange, label }: Readonly<TriStateCheckboxP
         <Icon name="check" className="w-3.5 h-3.5 text-primary" />
       )}
       {state === 'indeterminate' && (
-        <div className="w-2.5 h-0.5 bg-primary rounded-full" />
+        <div className="w-2.5 h-0.5 qt-bg-primary rounded-full" />
       )}
     </button>
   )

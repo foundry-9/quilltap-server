@@ -254,7 +254,7 @@ export function ModelSelector({
                     onClick={() => handleSelect(model)}
                     className={`w-full text-left px-3 py-2 qt-hover-accent transition-colors ${
                       value === model
-                        ? 'bg-primary text-primary-foreground'
+                        ? 'qt-bg-primary qt-text-on-primary'
                         : 'text-foreground'
                     }`}
                   >
