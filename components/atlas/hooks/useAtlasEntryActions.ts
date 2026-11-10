@@ -3,14 +3,14 @@
 /**
  * The Atlas browser's row actions and the overlays they open: the editor,
  * the folder picker and the cross-tier transfer (the shared
- * `useItemOverlays`), plus archive, duplicate and delete. Every confirmation
+ * `useItemOverlays`), a row's picture full screen, plus archive, duplicate and delete. Every confirmation
  * goes through `requestConfirmation` so the dialog that hosts the browser can
  * keep itself open while one is up.
  *
  * @module components/atlas/hooks/useAtlasEntryActions
  */
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { AtlasEntryWithOrigin } from '@/lib/schemas/atlas.types'
 import { GENERAL_ATLAS_CONTAINER, containerOfAtlasOrigin, type AtlasContainer } from '@/lib/atlas/container'
@@ -20,6 +20,12 @@ import { useItemOverlays } from '@/components/item-browser/useItemOverlays'
 export type AtlasEditorState =
   | { kind: 'create'; folder: string }
   | { kind: 'edit'; entry: AtlasEntryWithOrigin }
+
+/** A row's current picture on show, addressed through the tier it lives in. */
+export interface AtlasImageView {
+  entry: AtlasEntryWithOrigin
+  container: AtlasContainer
+}
 
 export interface AtlasEntryActionsOptions {
   /** The tier being browsed. */
@@ -42,13 +48,23 @@ export function describeAtlasRefusal(error: unknown, fallback: string): string {
 
 export function useAtlasEntryActions({ container, requestConfirmation, requestAlert }: AtlasEntryActionsOptions) {
   const mutations = useAtlasMutations()
-  const overlays = useItemOverlays<AtlasEntryWithOrigin, AtlasEditorState>()
+  const [imageView, setImageView] = useState<AtlasImageView | null>(null)
+  const overlays = useItemOverlays<AtlasEntryWithOrigin, AtlasEditorState>(imageView !== null)
 
   /** The tier an entry lives in. */
   const addressOf = useCallback(
     (entry: AtlasEntryWithOrigin): AtlasContainer => containerOfAtlasOrigin(entry.origin, container ?? GENERAL_ATLAS_CONTAINER),
     [container],
   )
+
+  /** Open a row's current picture full screen. */
+  const openImage = useCallback(
+    (entry: AtlasEntryWithOrigin) => {
+      if (entry.imageFileId) setImageView({ entry, container: addressOf(entry) })
+    },
+    [addressOf],
+  )
+  const closeImage = useCallback(() => setImageView(null), [])
 
   const remove = useCallback(
     async (entry: AtlasEntryWithOrigin) => {
@@ -91,6 +107,9 @@ export function useAtlasEntryActions({ container, requestConfirmation, requestAl
   return useMemo(
     () => ({
       ...overlays,
+      imageView,
+      openImage,
+      closeImage,
       mutations,
       addressOf,
       requestConfirmation,
@@ -101,7 +120,7 @@ export function useAtlasEntryActions({ container, requestConfirmation, requestAl
       toggleArchived,
       duplicate,
     }),
-    [overlays, openEditorWith, mutations, addressOf, requestConfirmation, requestAlert, remove, toggleArchived, duplicate],
+    [overlays, imageView, openImage, closeImage, openEditorWith, mutations, addressOf, requestConfirmation, requestAlert, remove, toggleArchived, duplicate],
   )
 }
 

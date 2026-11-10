@@ -3,8 +3,9 @@
 /**
  * Atlas Entry Row — one entry in the Atlas browser.
  *
- * The current picture as a thumbnail (the `atlas` icon when there is none),
- * the canonical name, its aliases, and the graphic prompt truncated to one
+ * The current picture as a thumbnail (the `atlas` icon when there is none) —
+ * a button that opens the picture full screen in `ItemImageViewer`, as a
+ * Wardrobe row's does — the canonical name, its aliases, and the graphic prompt truncated to one
  * line, with chips for the tier an entry is borrowed from and *archived*. The
  * ⋮ menu holds Edit, Duplicate, Move / Copy to folder…, Move / Copy to
  * another atlas…, Archive / Restore and Delete — through the shared
@@ -26,6 +27,8 @@ export interface AtlasRowActions {
   onTransfer: (entry: AtlasEntryWithOrigin, mode: 'move' | 'copy') => void
   onToggleArchived: (entry: AtlasEntryWithOrigin) => void
   onDelete: (entry: AtlasEntryWithOrigin) => void
+  /** Open the entry's current picture full screen. */
+  onOpenImage?: (entry: AtlasEntryWithOrigin) => void
 }
 
 interface AtlasEntryRowProps {
@@ -38,18 +41,43 @@ interface AtlasEntryRowProps {
   folderCrumb?: string | null
 }
 
-/** An entry's current picture, or the Atlas's icon. */
-export function AtlasEntryPicture({ entry, size = 40 }: { entry: Pick<AtlasEntryWithOrigin, 'name' | 'imageFileId'>; size?: number }) {
+/**
+ * An entry's current picture, or the Atlas's icon. With `onOpen` a picture is
+ * its own button (open it full screen); the icon never is.
+ */
+export function AtlasEntryPicture({
+  entry,
+  size = 40,
+  onOpen,
+}: {
+  entry: Pick<AtlasEntryWithOrigin, 'name' | 'imageFileId'>
+  size?: number
+  onOpen?: () => void
+}) {
   if (entry.imageFileId) {
-    return (
+    const img = (
       <img
         src={`/api/v1/files/${entry.imageFileId}?action=thumbnail`}
-        alt={`Picture of ${entry.name}`}
+        alt={onOpen ? '' : `Picture of ${entry.name}`}
         width={size}
         height={size}
         className="rounded object-cover border qt-border-default shrink-0"
         style={{ width: size, height: size }}
       />
+    )
+    if (!onOpen) return img
+    const label = `View the picture of ${entry.name} full size`
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="shrink-0 rounded cursor-zoom-in hover:opacity-80 transition-opacity"
+        title={label}
+        aria-label={label}
+        data-testid="atlas-entry-picture-open"
+      >
+        {img}
+      </button>
     )
   }
   return (
@@ -83,7 +111,10 @@ export function AtlasEntryRow({ entry, manageable, actions, selection, folderCru
           aria-label={`Select ${entry.name}`}
         />
       )}
-      <AtlasEntryPicture entry={entry} />
+      <AtlasEntryPicture
+        entry={entry}
+        onOpen={actions.onOpenImage ? () => actions.onOpenImage?.(entry) : undefined}
+      />
       <div className="flex-1 min-w-0">
         <div className="text-sm text-foreground truncate" title={entry.name}>
           {entry.name}

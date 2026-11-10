@@ -116,6 +116,7 @@ export function AtlasBrowser({
     onTransfer: actions.openTransfer,
     onToggleArchived: (entry: AtlasEntryWithOrigin) => void actions.toggleArchived(entry),
     onDelete: (entry: AtlasEntryWithOrigin) => void actions.remove(entry),
+    onOpenImage: actions.openImage,
   }
 
   const createFolder = inOwnTier ? currentFolder : ''

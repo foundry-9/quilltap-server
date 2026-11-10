@@ -28,6 +28,7 @@ import { ItemControlDialogShell, useItemControlState } from '@/components/item-b
 import { AtlasBrowser } from './AtlasBrowser'
 import { AtlasEntryEditor } from './atlas-entry-editor'
 import { AtlasTransferDialog } from './AtlasTransferDialog'
+import { ItemImageViewer } from '@/components/item-browser/ItemImageViewer'
 import { useAtlasListData } from './hooks/useAtlasListData'
 import { useAtlasEntryActions } from './hooks/useAtlasEntryActions'
 
@@ -92,9 +93,20 @@ function AtlasControlDialogInner({ initialContainer, onClose, asTab = false, fix
     void queryClient.invalidateQueries({ queryKey: queryKeys.atlas.all })
   })
 
-  const editor = actions.editor
+  const { editor, imageView } = actions
   const overlays = (
     <>
+      {/* A row's picture, full screen — above the dialog and the editor */}
+      {imageView?.entry.imageFileId && (
+        <ItemImageViewer
+          kind="atlas"
+          onClose={actions.closeImage}
+          itemId={imageView.entry.id}
+          itemTitle={imageView.entry.name}
+          container={imageView.container}
+          fileId={imageView.entry.imageFileId}
+        />
+      )}
       {editor && container && (
         <AtlasEntryEditor
           container={editor.kind === 'edit' ? containerOfAtlasOrigin(editor.entry.origin, container) : container}

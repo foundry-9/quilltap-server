@@ -8,6 +8,7 @@
 
 - The full-screen Atlas picture viewer now has Save to a document store, like Wardrobe and Inventory pictures. `SaveImageDialog`'s `SaveImageTarget` gains an `atlas` kind; the three item doors share one `itemImagesUrl` helper and post to the item's own images route (`save-targets` / `save-to-store`, already served by `createItemImagesRoute`).
 - Tests: `save-image-dialog-item-doors.test.tsx` (all three item doors' URLs), Atlas case in `item-image-viewer.test.tsx`.
+- Atlas browser rows: the thumbnail is now a button that opens the current picture in the full-screen viewer, as on Wardrobe rows (`AtlasEntryPicture` `onOpen`, `useAtlasEntryActions.openImage` / `imageView`, viewer rendered by the Atlas host at the entry's home tier). Previously the viewer was reachable only from the entry editor. Test: `atlas-entry-row.test.tsx`.
 - Help: `atlas.md`.
 
 #### Feature: The Atlas — named things, what they look like and what is known of them
