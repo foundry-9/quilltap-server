@@ -50,7 +50,7 @@ export function GroupCard({ group, onClick, onDelete, onOpen }: GroupCardProps) 
         {onOpen ? (
           <button
             onClick={(e) => { e.stopPropagation(); onOpen(group.id) }}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+            className="qt-button qt-button-primary flex-1"
             title="Edit group"
           >
             Edit
@@ -58,7 +58,7 @@ export function GroupCard({ group, onClick, onDelete, onOpen }: GroupCardProps) 
         ) : (
           <Link
             href={`/aurora/groups/${group.id}`}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
+            className="qt-button qt-button-primary flex-1"
             title="Edit group"
           >
             Edit

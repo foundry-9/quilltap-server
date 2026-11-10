@@ -107,9 +107,9 @@ export function AIWizardModal({
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center qt-label transition-colors ${
                     step < wizard.currentStep
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'qt-bg-primary qt-text-on-primary'
                       : step === wizard.currentStep
-                      ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
+                      ? 'qt-bg-primary qt-text-on-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
                       : 'qt-bg-muted qt-text-secondary'
                   }`}
                 >
@@ -122,7 +122,7 @@ export function AIWizardModal({
                 {step < 4 && (
                   <div
                     className={`w-16 sm:w-24 h-0.5 mx-2 transition-colors ${
-                      step < wizard.currentStep ? 'bg-primary' : 'qt-bg-muted'
+                      step < wizard.currentStep ? 'qt-bg-primary' : 'qt-bg-muted'
                     }`}
                   />
                 )}

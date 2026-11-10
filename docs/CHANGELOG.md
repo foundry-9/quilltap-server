@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Chore: Release checklist 7 — raw Tailwind colors to `qt-*` utilities
+
+- New `qt-text-brand` / `hover:qt-text-brand` utilities (`--color-primary` as a text color; `qt-text-primary` remains the main foreground color). `packages/theme-storybook` regenerated and bumped to 1.0.111.
+- Components added or changed since 4.12.2: `text-foreground` → `qt-text`, `hover:text-primary` → `hover:qt-text-brand`, back links → `qt-action`, a hand-drawn spinner → `qt-spinner`, `bg-background` panels → `qt-bg-default`.
+- Across `app/` and `components/`: every hand-built `bg-background/80 backdrop-blur-sm` dialog backdrop → `qt-dialog-overlay` (now z-60, above the left sidebar, theme backdrop color, no blur); every hand-built primary button → `qt-button qt-button-primary` (toolbar theme hooks and `flex-1` kept); remaining `bg-primary` / `text-primary-foreground` (toggles, stepper dots, tab underlines, selected pills) → `qt-bg-primary` / `qt-text-on-primary`.
+- No `qt-*` equivalent yet, left as is: `bg-border` on the import wizard's step line, `ring-primary` on the AI wizard's current step, `focus:ring-ring`.
+
 #### Tests: Release checklist 2 pass
 
 - Regression test for the `node:crypto` client-bundle fix: `__tests__/unit/lib/characters/vault-paths-client-safe.test.ts` walks the static value-import graph from `character-field-semantics.ts`, `field-hints.ts` and the Aurora new-character page and fails on any reachable `node:` import; it also checks `paths.ts` imports nothing and `layout.ts` re-exports its constants. Fails with the old `layout.ts` import restored.

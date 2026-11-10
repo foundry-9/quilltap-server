@@ -114,7 +114,7 @@ function NewChatModalFrame({
   const widthClass = pickerExpanded ? 'md:max-w-5xl' : 'md:max-w-3xl'
 
   const modalContent = (
-    <div className="new-chat-modal fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+    <div className="new-chat-modal qt-dialog-overlay p-4">
       <div
         ref={dialogRef}
         role="dialog"

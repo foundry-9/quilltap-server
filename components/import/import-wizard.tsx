@@ -502,9 +502,9 @@ export function ImportWizard({
                     <div
                       className={`w-6 h-6 rounded-full flex items-center justify-center qt-text-label-xs flex-shrink-0 transition-colors ${
                         i < currentStepIndex
-                          ? 'bg-primary text-primary-foreground'
+                          ? 'qt-bg-primary qt-text-on-primary'
                           : i === currentStepIndex
-                            ? 'bg-primary text-primary-foreground'
+                            ? 'qt-bg-primary qt-text-on-primary'
                             : 'qt-bg-muted qt-text-secondary'
                       }`}
                     >
@@ -522,7 +522,7 @@ export function ImportWizard({
                   </div>
                   {i < STEPS.length - 1 && (
                     <div className={`h-px flex-1 min-w-4 ${
-                      i < currentStepIndex ? 'bg-primary' : 'bg-border'
+                      i < currentStepIndex ? 'qt-bg-primary' : 'bg-border'
                     }`} />
                   )}
                 </div>

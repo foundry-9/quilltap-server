@@ -95,7 +95,7 @@ export function ProjectDetailHeader({
             </button>
             <button
               onClick={onSave}
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
+              className="qt-button qt-button-primary"
             >
               Save
             </button>

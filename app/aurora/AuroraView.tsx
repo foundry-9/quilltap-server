@@ -468,7 +468,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
           </button>
           <Link
             href="/aurora/new"
-            className="qt-button character-toolbar__button character-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button character-toolbar__button--primary qt-button-primary"
           >
             Create Character
           </Link>
@@ -648,7 +648,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
 
       {/* Import Dialog */}
       {importDialogOpen && (
-        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+        <div className="character-import-dialog qt-dialog-overlay p-4">
           <div
             ref={importRef}
             role="dialog"
@@ -685,7 +685,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                 </button>
                 <button
                   type="submit"
-                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
+                  className="qt-button qt-button-primary"
                 >
                   Import
                 </button>
@@ -697,7 +697,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
 
       {/* Reset Built-ins Dialog */}
       {resetBuiltinsDialogOpen && (
-        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+        <div className="character-import-dialog qt-dialog-overlay p-4">
           <div
             ref={resetRef}
             role="alertdialog"
@@ -726,7 +726,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                 type="button"
                 onClick={handleResetBuiltins}
                 disabled={resetBuiltinsInProgress}
-                className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="qt-button qt-button-primary"
               >
                 {resetBuiltinsInProgress ? 'Resetting...' : 'Reset Built-ins'}
               </button>
@@ -737,7 +737,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
 
       {/* AI Import Dialog */}
       {aiImportDialogOpen && (
-        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+        <div className="character-import-dialog qt-dialog-overlay p-4">
           <div
             ref={aiImportRef}
             role="dialog"
@@ -780,7 +780,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
 
       {/* Create Group Dialog */}
       {createGroupDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+        <div className="qt-dialog-overlay p-4">
           <div
             ref={groupRef}
             role="dialog"
@@ -838,7 +838,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                 <button
                   type="submit"
                   disabled={creatingGroup || !newGroupName.trim()}
-                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="qt-button qt-button-primary"
                 >
                   {creatingGroup ? 'Creating...' : 'Create'}
                 </button>

@@ -407,7 +407,7 @@ function LoadedCharacterPage({
 
   return (
     <CharacterPageContext.Provider value={context}>
-      <div className="character-page qt-page-container min-h-screen text-foreground">
+      <div className="character-page qt-page-container min-h-screen qt-text">
         <CharacterHeader
           avatarStyle={avatarStyle}
           rehydrating={rehydrating}
@@ -444,7 +444,7 @@ function LoadedCharacterPage({
               🗄️
             </span>
             <div className="flex-1">
-              <p className="qt-text-label text-foreground">{character.name} rests in the archive.</p>
+              <p className="qt-text-label qt-text">{character.name} rests in the archive.</p>
               <p className="qt-text-small qt-text-secondary mt-1">
                 Their effects — memories, correspondence, photographs, summaries — are packed into a sealed bundle on
                 the shelf. What you see below is kept for the record and may be read but not altered; rehydrate them to
@@ -593,7 +593,7 @@ export function CharacterPage(props: CharacterPageProps) {
   if (isLoading && !character) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading character…</p>
+        <p className="text-lg qt-text">Loading character…</p>
       </div>
     )
   }
@@ -611,7 +611,7 @@ export function CharacterPage(props: CharacterPageProps) {
           <p className="mb-4 text-lg qt-text-destructive">
             {error instanceof Error ? 'This character could not be loaded.' : 'This character could not be found.'}
           </p>
-          <button type="button" onClick={props.onBack} className="font-medium text-primary hover:text-primary/80">
+          <button type="button" onClick={props.onBack} className="qt-action">
             ← Back to Characters
           </button>
         </div>

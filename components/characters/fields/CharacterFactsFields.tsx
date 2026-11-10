@@ -166,14 +166,14 @@ export function CharacterFactsFields({
             {aliases.value.map((alias, index) => (
               <li
                 key={`${alias}-${index}`}
-                className="inline-flex items-center gap-1 rounded-full qt-bg-muted px-3 py-1 text-sm text-foreground"
+                className="inline-flex items-center gap-1 rounded-full qt-bg-muted px-3 py-1 text-sm qt-text"
               >
                 {alias}
                 <button
                   type="button"
                   disabled={disabled}
                   onClick={() => aliases.onChange(aliases.value.filter((_, i) => i !== index))}
-                  className="ml-1 qt-text-secondary hover:text-foreground"
+                  className="ml-1 qt-text-secondary hover:qt-text"
                   aria-label={`Remove alias ${alias}`}
                 >
                   &times;

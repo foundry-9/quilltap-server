@@ -41,7 +41,7 @@ export function SectionCard({ title, description, actions, children, anchor, col
     <section id={anchor} aria-labelledby={headingId} className="qt-card scroll-mt-48 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h2 id={headingId} className="qt-heading-4 text-foreground">
+          <h2 id={headingId} className="qt-heading-4 qt-text">
             {collapsible ? (
               <button
                 type="button"

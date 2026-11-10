@@ -44,7 +44,7 @@ export function CharactersTab({ project, onRemoveCharacter }: CharactersTabProps
                   </div>
                 )}
                 <div>
-                  <Link href={`/aurora/${char.id}`} className="font-medium hover:text-primary">
+                  <Link href={`/aurora/${char.id}`} className="font-medium hover:qt-text-brand">
                     {char.name || 'Unknown Character'}
                   </Link>
                   <p className="qt-text-small">{char.chatCount || 0} chat{char.chatCount !== 1 ? 's' : ''} in project</p>
