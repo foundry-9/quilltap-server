@@ -149,12 +149,16 @@ Import lets you load exported data from `.quilltap` files back into your system.
 - If you already have a character named "Alice", the import is skipped
 - Use this to add new items without overwriting
 - Safe option that won't lose existing work
+- A chat that is kept keeps its own annotations, Informs, outfit history and Document Mode panes; importing the same bundle twice adds none of them a second time
 
 **Replace (Recommended for updating):**
 
 - If you already have a character named "Alice", it's overwritten with the imported version
 - Use this to update items with newer versions
 - Replaces completely, no merging
+- The item keeps its place in the household: chats, memories, projects and groups that name it still find it afterwards, for it is rewritten under its own identity rather than torn down and rebuilt as a stranger
+- A connection or image profile keeps the API key it already had; keys never travel in a bundle
+- The built-in roleplay templates are never overwritten; a bundle's copy of one is quietly passed over
 
 **Create New (Recommended for duplicating):**
 
@@ -337,6 +341,8 @@ instance cannot reach the outside world; otherwise a refresh knows better.
 - Check that file hasn't been corrupted (a truncated NDJSON file will report a specific line number)
 - An export that fails with **"doc_mount_blob_chunk received without preceding doc_mount_blob"** was written by a build predating this fix and read by one predating it too; the file itself is sound. Import it again on a current build and its large attachments will arrive whole
 - A genuinely truncated export now says so plainly — *"NDJSON export truncated"*, naming the attachments that never finished arriving — rather than complaining about an orphaned chunk
+- An export that simply stops before its final line is refused as *"truncated — it ends before its __footer__ record"* rather than imported halfway and declared a success; fetch a fresh copy and try again
+- A groups export carries the groups but not their members or linked stores. Members and stores already in this instance are reattached; any that cannot be found are named in the warnings
 - Very old exports above ~450 MB that used the monolithic JSON format are too large to import on modern runtimes — re-export them from a newer Quilltap build first
 - A bundle that has been opened up and edited by hand — or written by some other establishment's tooling — may carry a record whose fields are not the shape Quilltap expects. Such a record is named in the warnings and set aside; the rest of the bundle arrives as usual. Should a whole import fall over on account of one such item, you are running a build predating version 4.9, and a newer one will take the same file in stride
 - Try changing conflict resolution strategy

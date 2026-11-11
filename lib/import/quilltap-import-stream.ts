@@ -482,6 +482,13 @@ export async function assembleExportFromStream(
       `NDJSON export truncated: ${blobAccumulators.size} blob(s) missing chunks — ${JSON.stringify(pending)}`
     );
   }
+  // The writer always ends with a footer. A stream that stops before it was
+  // cut short, and importing what arrived would report a partial export as a
+  // success (#201).
+  if (!footerCounts) {
+    throw new Error('NDJSON export is truncated — it ends before its __footer__ record');
+  }
+
 
   if (fileBlobAccumulators.size > 0) {
     const pending = Array.from(fileBlobAccumulators.entries()).map(([fileId, a]) => ({
@@ -515,7 +522,7 @@ export async function assembleExportFromStream(
 
   // If the footer carried counts, trust them over what we emitted on the
   // envelope — the writer leaves envelope counts empty on purpose.
-  const counts = footerCounts ?? manifest.counts ?? {};
+  const counts = footerCounts;
 
   const data = buildExportDataForType(manifest.exportType, {
     tags,

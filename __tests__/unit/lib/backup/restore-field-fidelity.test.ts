@@ -1098,7 +1098,7 @@ describe('restore field fidelity — 4.11 data-model additions', () => {
     mockedGetRepositories.mockReturnValue(
       new Proxy(globalRepos, {
         get(target, prop: string) {
-          if (prop === 'roleplayTemplates') return repoStub({ create: roleplayCreate })
+          if (prop === 'roleplayTemplates') return repoStub({ create: roleplayCreate, findById: jest.fn().mockResolvedValue(null) })
           return target[prop]
         },
       }) as never
@@ -1113,6 +1113,8 @@ describe('restore field fidelity — 4.11 data-model additions', () => {
     await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
 
     expect(roleplayCreate.mock.calls[0][0]).toMatchObject({ ...unmarked, userId: 'user-1' })
+    // Restored under its backup id, so chats naming it still find it (#190).
+    expect(roleplayCreate.mock.calls[0][1]).toEqual({ id: 'rt-1' })
   })
 
   it("carries an LLM log's storytellerRoundId and every Log entry through restore", async () => {

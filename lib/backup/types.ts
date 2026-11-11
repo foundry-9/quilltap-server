@@ -164,6 +164,12 @@ export interface BackupManifest {
    * compact restore would come back with search quietly cold.
    */
   compact?: boolean;
+  /**
+   * What the backup could not carry whole — a character, project or group
+   * whose document store could not be read, backed up as its bare row with
+   * its memories (#202). Absent when there is nothing to say.
+   */
+  warnings?: string[];
 
   /** Counts of all backed-up entities for validation and progress tracking */
   counts: {

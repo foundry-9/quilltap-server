@@ -249,12 +249,67 @@ export interface IdMappingState {
    * message: informs, conversation annotations, memories, file `linkedTo`.
    */
   messages: Map<string, Map<string, string>>;
+  /**
+   * Source ids of the chats whose row (and transcript) this import wrote —
+   * created, duplicated or overwritten. A chat sidecar (annotations, Document
+   * Mode state, informs, outfit history, avatar timeline) is inserted only for
+   * a chat in this set: a skipped chat keeps the sidecars it already has, and
+   * inserting the bundle's again duplicated them on every re-import (#193).
+   */
+  writtenChats: Set<string>;
+  /**
+   * Destination ids of every row this import wrote (created, duplicated or
+   * overwritten), of any kind. Reconciliation rewrites only these: a row the
+   * import skipped is the instance's own, and its references are not the
+   * bundle's to remap.
+   */
+  writtenRows: Set<string>;
+}
+
+/** Record a row the import wrote, so reconciliation visits it. */
+export function noteWritten(idMaps: IdMappingState, outcome: { status: string; id?: string }): void {
+  if ((outcome.status === 'created' || outcome.status === 'updated') && outcome.id) {
+    idMaps.writtenRows.add(outcome.id);
+  }
+}
+
+/** A fresh, empty id-mapping state for one import run. */
+export function createIdMappingState(): IdMappingState {
+  return {
+    tags: new Map(),
+    characters: new Map(),
+    chats: new Map(),
+    connectionProfiles: new Map(),
+    imageProfiles: new Map(),
+    embeddingProfiles: new Map(),
+    roleplayTemplates: new Map(),
+    projects: new Map(),
+    groups: new Map(),
+    mountPoints: new Map(),
+    docMountFileLinks: new Map(),
+    characterVaultMounts: new Map(),
+    skippedCharacterVaults: new Set(),
+    preserveIdsSkips: new Set(),
+    wardrobeItems: new Map(),
+    messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
+  };
 }
 
 export interface ImportCounts {
   imported: number;
   skipped: number;
   messages?: number;
+}
+
+/**
+ * An importer's counts, read off its outcome tally: imported is every row the
+ * import wrote (created or overwritten), skipped every row it left alone.
+ * Failures are neither; they are named in the warnings.
+ */
+export function countsFrom(tally: { written: number; skipped: number }): ImportCounts {
+  return { imported: tally.written, skipped: tally.skipped };
 }
 
 export interface DocumentStoreImportCounts {

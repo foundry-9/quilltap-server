@@ -13,7 +13,8 @@ import type { Character } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ExportedCharacter, ExportedWardrobeItem } from '@/lib/export/types';
 import { type LegacyOutfitPreset, legacyPresetToComposite } from './legacy-presets';
-import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
+import { type ImportOptions, type IdMappingState, type ImportCounts, countsFrom, noteWritten } from './types';
+import { insertUnderPolicy, OutcomeTally } from '@/lib/backup/insert-policy';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -75,8 +76,7 @@ export async function importCharacters(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
+  const tally = new OutcomeTally();
 
   // Pre-fetch existing characters for name-based matching (cross-instance imports)
   const existingCharacters = await repos.characters.findAll();
@@ -87,135 +87,109 @@ export async function importCharacters(
 
   for (const rawCharacter of characters) {
     const character = migrateCharacterScenarios(rawCharacter);
-    try {
-      // Skip-if-present rehydrate (spec §6/F4): this IS the character being
-      // rehydrated — its row survived the archive. Map it to itself and move
-      // on. Deliberately NOT via the conflict-strategy 'skip' branch below:
-      // that one adds the vault to skippedCharacterVaults, which would drop
-      // the very store records this import exists to restore. Nor
-      // rememberBundleVault: the character still points at its own vault, so
-      // reconciliation must not repoint anything or tear down a "scaffold".
-      if (options.preserveIds && idMaps.preserveIdsSkips.has(character.id)) {
-        idMaps.characters.set(character.id, character.id);
-        skipped++;
-        continue;
-      }
 
-      // Check by ID first (same-instance re-import), then by name (cross-instance)
-      let existing = await repos.characters.findById(character.id);
-      let nameMatched = false;
+    // Skip-if-present rehydrate (spec §6/F4): this IS the character being
+    // rehydrated — its row survived the archive. Map it to itself and move
+    // on. Deliberately NOT via the conflict-strategy 'skip' branch below:
+    // that one adds the vault to skippedCharacterVaults, which would drop
+    // the very store records this import exists to restore. Nor
+    // rememberBundleVault: the character still points at its own vault, so
+    // reconciliation must not repoint anything or tear down a "scaffold".
+    if (options.preserveIds && idMaps.preserveIdsSkips.has(character.id)) {
+      idMaps.characters.set(character.id, character.id);
+      tally.add({ status: 'skipped', id: character.id });
+      continue;
+    }
 
-      if (!existing) {
-        const nameMatch = existingByName.get(character.name.toLowerCase());
+    const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
+
+    const outcome = await insertUnderPolicy<Character>({
+      kind: 'character',
+      label: character.name,
+      incomingId: character.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      // By id first (same-instance re-import), then by name (cross-instance).
+      findExisting: async () => {
+        const byId = await repos.characters.findById(character.id);
+        if (byId) return byId;
+        const nameMatch = existingByName.get(character.name.toLowerCase()) ?? null;
         if (nameMatch) {
-          existing = nameMatch;
-          nameMatched = true;
           moduleLogger.debug('Character matched by name for cross-instance import', {
             importedId: character.id,
             existingId: nameMatch.id,
             name: character.name,
           });
         }
+        return nameMatch;
+      },
+      // An archived character is a tombstone; only rehydration revives it.
+      refuseOverwrite: (existing) => (existing.archivedAt ? 'it is archived; rehydrate it instead' : null),
+      // `update()` cannot take the prompt and scenario collections, so an
+      // overwrite removes the row and creates it again under the same id.
+      // Chats, memories and memberships name that id and keep resolving; the
+      // bundle's vault replaces the old one in reconciliation (bundle wins,
+      // whole-store), exactly as for a new character.
+      remove: async (existing) => {
+        await repos.characters.delete(existing.id);
+        existingByName.delete(existing.name.toLowerCase());
+      },
+      // create() provisions the vault and projects every managed field
+      // (identity / description / manifesto / personality / etc.) into it
+      // atomically — no follow-up ensureCharacterVault call is needed.
+      create: ({ id, duplicate }) => repos.characters.create(
+        duplicate ? { ...charData, name: `${charData.name} (imported)` } : charData,
+        id ? { id } : undefined
+      ),
+      idMap: idMaps.characters,
+      warnings,
+    });
+    tally.add(outcome);
+    noteWritten(idMaps, outcome);
+
+    if (outcome.status === 'skipped') {
+      // The existing character keeps its own vault untouched, so the
+      // bundle's store must not be imported at all — it would land as a
+      // store nothing points at.
+      if (character.characterDocumentMountPointId) {
+        idMaps.skippedCharacterVaults.add(character.characterDocumentMountPointId);
       }
+      continue;
+    }
+    if (outcome.status === 'failed' || !outcome.id) continue;
 
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.characters.set(character.id, existing.id);
-          // The existing character keeps its own vault untouched, so the
-          // bundle's store must not be imported at all — it would land as a
-          // store nothing points at.
-          if (character.characterDocumentMountPointId) {
-            idMaps.skippedCharacterVaults.add(character.characterDocumentMountPointId);
-          }
-          continue;
-        }
+    rememberBundleVault(idMaps, character, outcome.id);
 
-        if (options.conflictStrategy === 'overwrite') {
-          // Map old import ID to the existing ID before deleting, so related
-          // entities (chats, memories) get re-linked to the replacement
-          idMaps.characters.set(character.id, existing.id);
-          await repos.characters.delete(existing.id);
-          // Remove from name map so we don't re-match
-          existingByName.delete(character.name.toLowerCase());
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
-          // create() provisions the vault and projects every managed field
-          // (identity / description / manifesto / personality / etc.) into it
-          // atomically — no follow-up ensureCharacterVault call is needed.
-          const newCharacter = await repos.characters.create({
-            ...charData,
-            name: `${charData.name} (imported)`,
-          });
-          idMaps.characters.set(character.id, newCharacter.id);
-          rememberBundleVault(idMaps, character, newCharacter.id);
-
-          // Import wardrobe items for duplicated character (folding any legacy
-          // outfitPresets into composites for pre-rework `.qtap` exports).
-          // wardrobe.create() reprojects the vault's Wardrobe/ folder after
-          // each insert, so by the time this returns the vault is in sync.
-          await importCharacterWardrobeItems(
-            (rawCharacter as ExportedCharacter).wardrobeItems,
-            (rawCharacter as ExportedCharacter & { outfitPresets?: LegacyOutfitPreset[] }).outfitPresets,
-            newCharacter.id,
-            warnings,
-            idMaps.wardrobeItems
-          );
-
-          // Import plugin data for duplicated character
-          await importCharacterPluginData(
-            (rawCharacter as ExportedCharacter).pluginData,
-            newCharacter.id,
-            warnings
-          );
-
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
-      const createData = options.preserveIds ? { ...charData, id: character.id } : charData;
-      const createOptions = getPreserveIdsCreateOptions(character.id, options);
-      // create() provisions vault + projects managed fields atomically.
-      const newCharacter = await repos.characters.create(createData, createOptions);
-      idMaps.characters.set(character.id, newCharacter.id);
-      rememberBundleVault(idMaps, character, newCharacter.id);
-
-      // Import wardrobe items for this character (folding any legacy
-      // outfitPresets into composites for pre-rework `.qtap` exports).
+    try {
+      // Wardrobe items (folding any legacy outfitPresets into composites for
+      // pre-rework `.qtap` exports). wardrobe.create() reprojects the vault's
+      // Wardrobe/ folder after each insert.
       await importCharacterWardrobeItems(
         (rawCharacter as ExportedCharacter).wardrobeItems,
         (rawCharacter as ExportedCharacter & { outfitPresets?: LegacyOutfitPreset[] }).outfitPresets,
-        newCharacter.id,
+        outcome.id,
         warnings,
         idMaps.wardrobeItems
       );
-
-      // Import plugin data for this character
       await importCharacterPluginData(
         (rawCharacter as ExportedCharacter).pluginData,
-        newCharacter.id,
+        outcome.id,
         warnings
       );
-
-      imported++;
     } catch (error) {
       warnings.push(
-        `Failed to import character "${character.name}": ${
+        `Failed to import the wardrobe or plugin data of character "${character.name}": ${
           error instanceof Error ? error.message : String(error)
         }`
       );
-      moduleLogger.warn('Failed to import character', {
-        characterId: character.id,
+      moduleLogger.warn('Failed to import character sidecars', {
+        characterId: outcome.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
-  return { imported, skipped };
+  return countsFrom(tally);
 }
 
 /**

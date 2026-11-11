@@ -4,6 +4,20 @@
 
 ### 4.13-dev
 
+#### Refactor: one insert policy and one id-field table for import and restore
+
+- `.qtap` import and backup restore bring every row in through `insertUnderPolicy` (`lib/backup/insert-policy.ts`): skip maps to the existing row, overwrite keeps the existing id (updated in place, or removed and recreated under the same id), duplicate maps to the created row. Summaries count outcomes instead of array lengths.
+- Both drive id remapping from one table, `ID_FIELDS` (`lib/backup/id-fields.ts`), through `remapEntity`: each id field's target kind and what happens when it does not resolve (`keep`, `null`, `drop-row`; never a minted id). `id-fields-guard.test.ts` walks every exported entity's Zod schema and fails on a UUID field that is neither listed nor exempt.
+- #188: import Overwrite no longer deletes and recreates rows under new ids. Profiles, tags, templates, projects and groups update in place; characters, chats and files are recreated under the existing id. An overwritten profile keeps its API key. Built-in templates and archived characters are not overwritten.
+- #195: import Duplicate maps every kind to the row it created.
+- #193: annotations, chat documents, informs, outfit history and avatar timeline rows are imported only for chats the import wrote. Reconciliation rewrites only rows the import wrote, never skipped ones.
+- #190: restore keeps prompt and roleplay template ids. Built-in roleplay templates have fixed UUIDv5 ids (`lib/roleplay-templates/built-in-ids.ts`); migration `rekey-built-in-roleplay-templates-v1` re-keys existing built-ins and their pointers in `characters`, `chats` (column and participants JSON) and `chat_settings`, and the boot step `rekeyProjectRoleplayTemplatePointers` updates project stores. A backup from before this change cannot identify which built-in a chat used; those pointers resolve to nothing and are cleared on a new-account restore.
+- #199: new-account restore remaps `summaryAnchorMessageIds`, `archiveFileId` / `archivedAvatarFileId`, `consoleConnectionProfileId`, template pointers and ids inside message payloads; reissues `linkGroupId`; and no longer mints ids for references the backup does not carry. Sidecar rows whose chat or store is absent are dropped.
+- Import now remaps a chat's `roleplayTemplateId`, `imageProfileId`, `consoleConnectionProfileId`, a character's `partnerLinks`, and character ids inside message payloads. An unknown summary anchor is dropped from the array instead of clearing the summary (decision §8.2); `plugin:*` template references are kept.
+- #200: a groups-only import reattaches members and linked stores that already exist in the instance and warns about the rest.
+- #201: an NDJSON export without its `__footer__` record is refused as truncated.
+- #202: backup and data deletion read characters, projects and groups raw (`lib/backup/owned-rows.ts`), so a row whose store is unreadable is backed up as its bare row with its memories (noted in the new `manifest.warnings`, repeated at restore) and is deleted by a replace restore or delete-all. All LLM logs are backed up (paged) and deleted (`deleteByUserId`), not the newest 10,000.
+
 #### Fix: null comparisons in SQLite filters (#198, by mikemikimike)
 
 - #196: the LLM logs page's Standalone list was always empty. `findStandalone` filters with `$eq: null`, which the SQLite query translator bound as `= NULL`, a comparison that matches no row. Null comparisons are now written `IS NULL` / `IS NOT NULL` (`lib/database/backends/sqlite/query-translator.ts`): `$eq`, `$ne`, `$ieq`, a `null` inside `$in` / `$nin`, and `$eq` / `$ne` on a field inside an array column (`jsonArrayObjectMatch`).

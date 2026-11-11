@@ -829,7 +829,9 @@ describe('remapBackupData() - wardrobe wear ledger', () => {
     expect(row.id).toBe(mapping['row-old'])
     expect(row.wearerCharacterId).toBe(mapping['char-old'])
     expect(row.wearerCharacterId).toBe(result.characters[0].id)
-    expect(row.lastWornChatId).toBe(mapping['chat-old'])
+    // The backup carries no such chat: the reference is kept, never minted.
+    expect(row.lastWornChatId).toBe('chat-old')
+    expect(mapping['chat-old']).toBeUndefined()
     expect(row.wearCount).toBe(4)
   })
 
@@ -922,7 +924,8 @@ describe('wardrobe item pictures in a new-account restore', () => {
     const mapping = remapper.getMapping()
 
     expect(file.id).toBe(mapping['file-old'])
-    expect(file.linkedTo).toEqual([ITEM_ID, mapping['chat-old']])
+    // 'chat-old' is not in the backup, so it is kept rather than minted.
+    expect(file.linkedTo).toEqual([ITEM_ID, 'chat-old'])
     expect(file.tags).toEqual([ITEM_ID])
   })
 

@@ -63,6 +63,7 @@ import { updateInventoryManyInMount } from '@/lib/inventory/vault-writes';
 import { updateAtlasManyInMount } from '@/lib/atlas/vault-writes';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
+import { insertUnderPolicy, OutcomeTally, type InsertOutcome } from '../insert-policy';
 import { decodeIndexKeyedEmbedding } from './index-keyed-embedding';
 import { makeStoreClaimMap, type StoreClaim, type StoreOwnerKind } from './store-claims';
 import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
@@ -107,6 +108,11 @@ export async function restore(
 
   try {
     let data = parsedData;
+
+    // What the backup itself could not carry whole (#202) is worth repeating.
+    for (const note of parsedData.manifest?.warnings ?? []) {
+      warnings.push(`The backup noted: ${note}`);
+    }
 
     // For replace mode, delete existing data first. Archived-character
     // bundles survive by default (spec §4.7) — the restore replaces the
@@ -161,16 +167,39 @@ export async function restore(
     // Restore in dependency order
     // All entities preserve their backup/remapped IDs via CreateOptions.id,
     // so cross-references (characterId in participants, tags, etc.) are already correct.
+    //
+    // Every row goes in through the one insert policy (`lib/backup/insert-policy.ts`)
+    // under its backup id, and every count in the summary is a tally of
+    // outcomes — never the length of the array the backup carried.
+    const restoreRow = async (
+      tally: OutcomeTally,
+      kind: string,
+      label: string,
+      id: string,
+      create: () => Promise<unknown>,
+      findExisting?: () => Promise<{ id: string } | null>,
+    ): Promise<InsertOutcome> =>
+      tally.add(await insertUnderPolicy({
+        kind,
+        label,
+        incomingId: id,
+        strategy: 'skip',
+        preserveIds: true,
+        findExisting,
+        create: async () => {
+          await create();
+          return { id };
+        },
+        warnings,
+        action: 'restore',
+      }));
 
     // 1. Tags (no dependencies)
+    const tagTally = new OutcomeTally();
     for (const tag of data.tags) {
-      try {
-        const { userId, createdAt, updatedAt, ...tagData } = tag;
-        await repos.tags.create({ ...tagData, nameLower: tagData.nameLower || tagData.name.toLowerCase() }, { id: tag.id });
-      } catch (error) {
-        warnings.push(`Failed to restore tag "${tag.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore tag', { tagId: tag.id, error });
-      }
+      const { userId, createdAt, updatedAt, ...tagData } = tag;
+      await restoreRow(tagTally, 'tag', tag.name, tag.id, () =>
+        repos.tags.create({ ...tagData, nameLower: tagData.nameLower || tagData.name.toLowerCase() }, { id: tag.id }));
     }
 
     // 2. Connection profiles (no entity dependencies, but have tag refs).
@@ -179,8 +208,9 @@ export async function restore(
     // rename on collision rather than letting the constraint drop the profile.
     const existingConnectionProfiles = await repos.connections.findAll();
     const takenConnectionNames = new Set(existingConnectionProfiles.map((p) => normalizeProfileName(p.name)));
+    const connectionProfileTally = new OutcomeTally();
     for (const profile of data.connectionProfiles) {
-      try {
+      await restoreRow(connectionProfileTally, 'connection profile', profile.name, profile.id, async () => {
         const { userId, createdAt, updatedAt, apiKeyId, ...rawProfileData } = profile;
         // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
         // Columns the archive predates would otherwise be decided by the table
@@ -207,32 +237,23 @@ export async function restore(
         }
         takenConnectionNames.add(normalizeProfileName(uniqueName));
         await repos.connections.create({ ...profileData, name: uniqueName, apiKeyId: null }, { id: profile.id });
-      } catch (error) {
-        warnings.push(`Failed to restore connection profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore connection profile', { profileId: profile.id, error });
-      }
+      });
     }
 
     // 3. Image profiles
+    const imageProfilesTally = new OutcomeTally();
     for (const profile of data.imageProfiles) {
-      try {
-        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
-        await repos.imageProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id });
-      } catch (error) {
-        warnings.push(`Failed to restore image profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore image profile', { profileId: profile.id, error });
-      }
+      const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+      await restoreRow(imageProfilesTally, 'image profile', profile.name, profile.id, () =>
+        repos.imageProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id }));
     }
 
     // 4. Embedding profiles
+    const embeddingProfilesTally = new OutcomeTally();
     for (const profile of data.embeddingProfiles) {
-      try {
-        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
-        await repos.embeddingProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id });
-      } catch (error) {
-        warnings.push(`Failed to restore embedding profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore embedding profile', { profileId: profile.id, error });
-      }
+      const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+      await restoreRow(embeddingProfilesTally, 'embedding profile', profile.name, profile.id, () =>
+        repos.embeddingProfiles.create({ ...profileData, apiKeyId: null }, { id: profile.id }));
     }
 
     // 5. Files — DEFERRED to step 22a-bis (after doc-store mounts exist).
@@ -252,8 +273,9 @@ export async function restore(
     // overlay before then (memories below check ownership by id for that
     // reason). Anything else is created with a fresh vault, as before.
     const restoredCharacterIds = new Set<string>();
+    const characterTally = new OutcomeTally();
     for (const character of data.characters) {
-      try {
+      const outcome = await restoreRow(characterTally, 'character', character.name, character.id, async () => {
         const { userId, createdAt, updatedAt, ...charData } = character;
         const claim = storeClaims.claim('character', character.id, character.characterDocumentMountPointId);
         if (claim.bound) {
@@ -269,17 +291,15 @@ export async function restore(
           noteStoreFallback('character', character.id, character.name, claim);
           await repos.characters.create(charData, { id: character.id });
         }
-        restoredCharacterIds.add(character.id);
-      } catch (error) {
-        warnings.push(`Failed to restore character "${character.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore character', { characterId: character.id, error });
-      }
+      });
+      if (outcome.status === 'created') restoredCharacterIds.add(character.id);
     }
 
     // 7. Chats (with messages)
     let messagesRestored = 0;
+    const chatTally = new OutcomeTally();
     for (const chat of data.chats) {
-      try {
+      await restoreRow(chatTally, 'chat', chat.title, chat.id, async () => {
         const { userId, createdAt, updatedAt, messages, ...bundledChat } = chat;
         // Cursors travel on the chat under their legacy names; they are written
         // to memory_extraction_cursors once the chat exists.
@@ -318,10 +338,7 @@ export async function restore(
         } catch (stampError) {
           warnings.push(`Failed to restore last-activity date for chat "${chat.title}": ${stampError instanceof Error ? stampError.message : String(stampError)}`);
         }
-      } catch (error) {
-        warnings.push(`Failed to restore chat "${chat.title}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore chat', { chatId: chat.id, error });
-      }
+      });
     }
 
     // 9. Memories
@@ -337,7 +354,7 @@ export async function restore(
     // with `id` for new-account restores. Letting the repository mint a fresh id
     // here would leave every one of those edges pointing at a memory that no longer
     // exists, quietly flattening the Commonplace Book's graph on restore.
-    let memoriesRestored = 0;
+    const memoryTally = new OutcomeTally();
     // A character this restore wrote is the target user's; any other must
     // already belong to them, read raw (no overlay) and remembered.
     const memoryOwnerChecks = new Map<string, boolean>();
@@ -356,7 +373,7 @@ export async function restore(
     const legacyVectors = new Map((data.vectorEntries || []).map((e) => [e.id, e.embedding]));
     let legacyVectorsAdopted = 0;
     for (const memory of data.memories) {
-      try {
+      await restoreRow(memoryTally, 'memory', memory.id, memory.id, async () => {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
 
         // Strip legacy personaId from old backups (column no longer exists)
@@ -380,73 +397,52 @@ export async function restore(
           throw new Error('Character not found or access denied');
         }
         await globalRepos.memories.create(cleanMemoryData as Parameters<typeof globalRepos.memories.create>[0], { id });
-        memoriesRestored++;
         if (adoptsLegacyVector) legacyVectorsAdopted++;
-      } catch (error) {
-        warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
-      }
+      });
     }
     // The index is the rows just written; drop any cached copy so the next
     // search reads them.
     memoryIndex.reloadAll();
     moduleLogger.debug('Restored memories', {
       total: data.memories.length,
-      restored: memoriesRestored,
+      restored: memoryTally.written,
       legacyVectorsAdopted,
     });
 
-    // 10. Prompt Templates (user-created only)
-    let promptTemplatesRestored = 0;
+    // 10–11. Prompt and roleplay templates (user-created only). Restored
+    // under their backup ids like every other row, so the chats, characters,
+    // projects and settings that name a template still find it (#190). A row
+    // already holding the id is kept and the backup's skipped.
+    const promptTemplateTally = new OutcomeTally();
     for (const template of data.promptTemplates) {
-      try {
-        const { id, userId, createdAt, updatedAt, ...templateData } = template;
-        await globalRepos.promptTemplates.create({
-          ...templateData,
-          userId: targetUserId,
-        });
-        promptTemplatesRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore prompt template "${template.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore prompt template', { templateId: template.id, error });
-      }
+      const { id, userId, createdAt, updatedAt, ...templateData } = template;
+      await restoreRow(promptTemplateTally, 'prompt template', template.name, template.id,
+        () => globalRepos.promptTemplates.create({ ...templateData, userId: targetUserId }, { id: template.id }),
+        () => globalRepos.promptTemplates.findById(template.id));
     }
-
-    // 11. Roleplay Templates (user-created only)
-    let roleplayTemplatesRestored = 0;
+    const roleplayTemplateTally = new OutcomeTally();
     for (const template of data.roleplayTemplates) {
-      try {
-        const { id, userId, createdAt, updatedAt, ...templateData } = template;
-        await globalRepos.roleplayTemplates.create({
-          ...templateData,
-          userId: targetUserId,
-        });
-        roleplayTemplatesRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore roleplay template "${template.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore roleplay template', { templateId: template.id, error });
-      }
+      const { id, userId, createdAt, updatedAt, ...templateData } = template;
+      await restoreRow(roleplayTemplateTally, 'roleplay template', template.name, template.id,
+        () => globalRepos.roleplayTemplates.create({ ...templateData, userId: targetUserId }, { id: template.id }),
+        () => globalRepos.roleplayTemplates.findById(template.id));
     }
 
     // 12. Provider Models (global cache)
-    let providerModelsRestored = 0;
+    const providerModelsTally = new OutcomeTally();
     for (const model of data.providerModels) {
-      try {
+      await restoreRow(providerModelsTally, 'provider model', String(model.modelId), model.id, async () => {
         const { id, createdAt, updatedAt, ...modelData } = model;
         await globalRepos.providerModels.upsertModel(modelData);
-        providerModelsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore provider model "${model.modelId}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore provider model', { modelId: model.modelId, error });
-      }
+      });
     }
 
     // 13. Projects. Bound to the archived official store when the archive
     // carries it (bug 185) — slim row only, no fresh store and no link; the
     // archive's link rows arrive at 22h. Otherwise a fresh store, as before.
-    let projectsRestored = 0;
+    const projectTally = new OutcomeTally();
     for (const project of data.projects) {
-      try {
+      await restoreRow(projectTally, 'project', project.name, project.id, async () => {
         // userId no longer exists on Project (projects are global).
         const { createdAt, updatedAt, ...projectData } = project;
         const claim = storeClaims.claim('project', project.id, project.officialMountPointId);
@@ -457,11 +453,7 @@ export async function restore(
           noteStoreFallback('project', project.id, project.name, claim);
           await repos.projects.create(projectData, { id: project.id });
         }
-        projectsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore project "${project.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore project', { projectId: project.id, error });
-      }
+      });
     }
 
     // 13a. Groups — parallel to projects: a slim row bound to the archived
@@ -470,9 +462,9 @@ export async function restore(
     // instructions / state / properties into it. Membership and
     // additional-store links are restored later (22h-i / 22h-ii), once
     // doc-mount points exist.
-    let groupsRestored = 0;
+    const groupTally = new OutcomeTally();
     for (const group of data.groups || []) {
-      try {
+      await restoreRow(groupTally, 'group', group.name, group.id, async () => {
         const { createdAt, updatedAt, ...groupData } = group;
         const claim = storeClaims.claim('group', group.id, group.officialMountPointId);
         if (claim.bound) {
@@ -482,28 +474,18 @@ export async function restore(
           noteStoreFallback('group', group.id, group.name, claim);
           await repos.groups.create(groupData, { id: group.id });
         }
-        groupsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore group "${group.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore group', { groupId: group.id, error });
-      }
+      });
     }
 
     // 14. LLM Logs
-    let llmLogsRestored = 0;
+    const llmLogTally = new OutcomeTally();
     if (isLLMLogsDegraded()) {
       moduleLogger.warn('Skipping LLM logs restore — logs database is in degraded mode');
       warnings.push('LLM logs were not restored because the logs database is in degraded mode');
     } else {
       for (const log of data.llmLogs) {
-        try {
-          const { id, createdAt, ...logData } = log;
-          await repos.llmLogs.create(logData, { id, createdAt });
-          llmLogsRestored++;
-        } catch (error) {
-          warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
-          moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
-        }
+        const { id, createdAt, ...logData } = log;
+        await restoreRow(llmLogTally, 'LLM log', log.id, log.id, () => repos.llmLogs.create(logData, { id, createdAt }));
       }
     }
 
@@ -538,7 +520,7 @@ export async function restore(
     }
 
     // 16. Chat Settings
-    let chatSettingsRestored = 0;
+    const chatSettingsTally = new OutcomeTally();
     // A pre-4.10 backup carries the retired Concierge settings and no
     // conciergeSettings; translate them before the schema strips the old keys.
     const backupHasUnmoderatedChats = (data.chats || []).some(
@@ -565,14 +547,8 @@ export async function restore(
           impersonationVoiceMode: (settings as { impersonationVoiceMode?: string }).impersonationVoiceMode,
         });
       }
-      try {
-        const { id, createdAt, updatedAt, ...settingsData } = settings;
-        await globalRepos.chatSettings.create(settingsData, { id });
-        chatSettingsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore chat settings: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore chat settings', { settingsId: settings.id, error });
-      }
+      const { id, createdAt, updatedAt, ...settingsData } = settings;
+      await restoreRow(chatSettingsTally, 'chat settings', settings.id, settings.id, () => globalRepos.chatSettings.create(settingsData, { id }));
     }
 
     // 17. Folders
@@ -607,36 +583,28 @@ export async function restore(
     // Items from a post-cutover backup already restore as `Wardrobe/*.md`
     // documents via 22c–22e; only LEGACY (pre-cutover) backups carry
     // `data.wardrobeItems`, and those are seeded into the vault at 22g.
-    let wardrobeItemsRestored = 0;
+    const wardrobeItemTally = new OutcomeTally();
 
     // 20. Outfit Presets — REMOVED: presets are now composite WardrobeItems and
     // were folded into data.wardrobeItems at parse time for back-compat with
     // older backups. Nothing to restore here.
 
     // 21. Character Plugin Data (depends on characters)
-    let characterPluginDataRestored = 0;
+    const characterPluginDataTally = new OutcomeTally();
     for (const cpd of data.characterPluginData || []) {
-      try {
+      await restoreRow(characterPluginDataTally, 'character plugin data for plugin', String(cpd.pluginName), cpd.id, async () => {
         const { id, createdAt, updatedAt, ...cpdData } = cpd;
         await globalRepos.characterPluginData.create(cpdData, { id: cpd.id });
-        characterPluginDataRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore character plugin data for plugin "${cpd.pluginName}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore character plugin data', { cpdId: cpd.id, pluginName: cpd.pluginName, error });
-      }
+      });
     }
 
     // 22. Conversation Annotations (depends on chats)
-    let conversationAnnotationsRestored = 0;
+    const conversationAnnotationsTally = new OutcomeTally();
     for (const annotation of data.conversationAnnotations || []) {
-      try {
+      await restoreRow(conversationAnnotationsTally, 'conversation annotation', String(annotation.id), annotation.id, async () => {
         const { id, createdAt, updatedAt, ...annotationData } = annotation;
         await globalRepos.conversationAnnotations.create(annotationData, { id: annotation.id });
-        conversationAnnotationsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore conversation annotation: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore conversation annotation', { annotationId: annotation.id, error });
-      }
+      });
     }
 
     // ========================================================================
@@ -847,60 +815,42 @@ export async function restore(
 
     // 22b. Document store folders — sort by path length so parents precede
     // children (parentId is a self-FK into the same table).
-    let docMountFoldersRestored = 0;
+    const docMountFolderTally = new OutcomeTally();
     const sortedFolders = [...(data.docMountFolders || [])].sort(
       (a, b) => (a.path?.length ?? 0) - (b.path?.length ?? 0)
     );
     for (const folder of sortedFolders) {
-      try {
-        const { id, createdAt, updatedAt, ...folderData } = folder;
-        await globalRepos.docMountFolders.create(folderData, { id: folder.id });
-        docMountFoldersRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore doc-store folder "${folder.name}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore doc mount folder', { folderId: folder.id, error });
-      }
+      const { id, createdAt, updatedAt, ...folderData } = folder;
+      await restoreRow(docMountFolderTally, 'doc-store folder', folder.name, folder.id, () => globalRepos.docMountFolders.create(folderData, { id: folder.id }));
     }
 
     // 22c. Document store file content rows (content-addressed by sha256).
-    let docMountFilesRestored = 0;
+    const docMountFilesTally = new OutcomeTally();
     for (const file of data.docMountFiles || []) {
-      try {
+      await restoreRow(docMountFilesTally, 'doc-store file row', String(file.id), file.id, async () => {
         const { id, createdAt, updatedAt, ...fileData } = file;
         await globalRepos.docMountFiles.create(fileData, { id: file.id });
-        docMountFilesRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore doc-store file row: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore doc mount file', { fileId: file.id, error });
-      }
+      });
     }
 
     // 22d. Document store file links (hard links to file content). Same
     // storage-type coercion as 22a — the three policy flags arrive as
     // INTEGER 0/1 and the schema demands booleans.
-    let docMountFileLinksRestored = 0;
+    const docMountFileLinksTally = new OutcomeTally();
     for (const link of data.docMountFileLinks || []) {
-      try {
+      await restoreRow(docMountFileLinksTally, 'doc-store file link', String(link.relativePath), link.id, async () => {
         const { id, createdAt, updatedAt, ...linkData } = coerceDocMountFileLinkRow(link);
         await globalRepos.docMountFileLinks.create(linkData, { id: link.id });
-        docMountFileLinksRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore doc-store file link "${link.relativePath}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore doc mount file link', { linkId: link.id, error });
-      }
+      });
     }
 
     // 22e. Document store text documents (database-backed text content).
-    let docMountDocumentsRestored = 0;
+    const docMountDocumentsTally = new OutcomeTally();
     for (const doc of data.docMountDocuments || []) {
-      try {
+      await restoreRow(docMountDocumentsTally, 'doc-store document', String(doc.id), doc.id, async () => {
         const { id, createdAt, updatedAt, ...docData } = doc;
         await globalRepos.docMountDocuments.create(docData, { id: doc.id });
-        docMountDocumentsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore doc-store document: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore doc mount document', { documentId: doc.id, error });
-      }
+      });
     }
 
     // 22f. Document store binary blobs (metadata rows + bytes from disk).
@@ -957,14 +907,8 @@ export async function restore(
     // documents (already restored above) and leave `data.wardrobeItems` empty,
     // so this loop only fires for older, pre-cutover backups.
     for (const item of data.wardrobeItems || []) {
-      try {
-        const { id, createdAt, updatedAt, ...itemData } = item;
-        await globalRepos.wardrobe.create(itemData, { id: item.id });
-        wardrobeItemsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
-      }
+      const { id, createdAt, updatedAt, ...itemData } = item;
+      await restoreRow(wardrobeItemTally, 'wardrobe item', item.title, item.id, () => globalRepos.wardrobe.create(itemData, { id: item.id }));
     }
 
     // 22f-ter. Wardrobe picture pointers (new-account mode). The vaults and
@@ -1052,29 +996,21 @@ export async function restore(
 
     // 22g. Document store embedded chunks. The repo's create() accepts the
     // chunk in serialised form; the schema rehydrates embedding as Float32Array.
-    let docMountChunksRestored = 0;
+    const docMountChunksTally = new OutcomeTally();
     for (const chunk of data.docMountChunks || []) {
-      try {
+      await restoreRow(docMountChunksTally, 'doc-store chunk', String(chunk.id), chunk.id, async () => {
         const { id, createdAt, updatedAt, ...chunkData } = chunk;
         await globalRepos.docMountChunks.create(chunkData as unknown as Parameters<typeof globalRepos.docMountChunks.create>[0], { id: chunk.id });
-        docMountChunksRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore doc-store chunk: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore doc mount chunk', { chunkId: chunk.id, error });
-      }
+      });
     }
 
     // 22h. Project ↔ document-store links.
-    let projectDocMountLinksRestored = 0;
+    const projectDocMountLinksTally = new OutcomeTally();
     for (const link of data.projectDocMountLinks || []) {
-      try {
+      await restoreRow(projectDocMountLinksTally, 'project↔store link', String(link.id), link.id, async () => {
         const { id, createdAt, updatedAt, ...linkData } = link;
         await globalRepos.projectDocMountLinks.create(linkData, { id: link.id });
-        projectDocMountLinksRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore project↔store link: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore project doc mount link', { linkId: link.id, error });
-      }
+      });
     }
 
     // 22h-bis. Files of projects bound to their archived stores whose bytes
@@ -1095,43 +1031,31 @@ export async function restore(
 
     // 22h-i. Group ↔ document-store links (a group's *additional* linked stores;
     // the official store rides on the group row). Mirror of projectDocMountLinks.
-    let groupDocMountLinksRestored = 0;
+    const groupDocMountLinksTally = new OutcomeTally();
     for (const link of data.groupDocMountLinks || []) {
-      try {
+      await restoreRow(groupDocMountLinksTally, 'group↔store link', String(link.id), link.id, async () => {
         const { id, createdAt, updatedAt, ...linkData } = link;
         await globalRepos.groupDocMountLinks.create(linkData, { id: link.id });
-        groupDocMountLinksRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore group↔store link: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore group doc mount link', { linkId: link.id, error });
-      }
+      });
     }
 
     // 22h-ii. Group ↔ character membership. groupId/characterId both reference
     // main-DB rows already restored above (groups at 13a, characters at 6).
-    let groupCharacterMembersRestored = 0;
+    const groupCharacterMembersTally = new OutcomeTally();
     for (const member of data.groupCharacterMembers || []) {
-      try {
+      await restoreRow(groupCharacterMembersTally, 'group membership', String(member.id), member.id, async () => {
         const { id, createdAt, updatedAt, ...memberData } = member;
         await globalRepos.groupCharacterMembers.create(memberData, { id: member.id });
-        groupCharacterMembersRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore group membership: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore group character member', { memberId: member.id, error });
-      }
+      });
     }
 
     // 22i. Chat documents (Document Mode pane state per chat).
-    let chatDocumentsRestored = 0;
+    const chatDocumentsTally = new OutcomeTally();
     for (const cd of data.chatDocuments || []) {
-      try {
+      await restoreRow(chatDocumentsTally, 'chat document', String(cd.id), cd.id, async () => {
         const { id, createdAt, updatedAt, ...cdData } = cd;
         await globalRepos.chatDocuments.create(cdData, { id: cd.id });
-        chatDocumentsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore chat document: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore chat document', { chatDocumentId: cd.id, error });
-      }
+      });
     }
 
     // 22i-ii. Inform rows. Consumed rows come back too: the row a past turn
@@ -1139,26 +1063,22 @@ export async function restore(
     // Must follow the chats (13/14) and their replayed transcripts, since the
     // row points at a seat, at the Host record message and, once consumed, at
     // the assistant message that carried it.
-    let chatInformsRestored = 0;
+    const chatInformsTally = new OutcomeTally();
     for (const inform of data.chatInforms || []) {
-      try {
+      await restoreRow(chatInformsTally, 'inform', String(inform.id), inform.id, async () => {
         const { id, createdAt, updatedAt, ...informData } = inform;
         await globalRepos.chatInforms.create(informData, { id: inform.id });
-        chatInformsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore inform: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore chat inform', { informId: inform.id, error });
-      }
+      });
     }
     moduleLogger.debug('Restored chat informs', {
       total: (data.chatInforms || []).length,
-      restored: chatInformsRestored,
+      restored: chatInformsTally.written,
     });
 
     // 22k. Conversation chunks (semantic chunks with embeddings).
-    let conversationChunksRestored = 0;
+    const conversationChunksTally = new OutcomeTally();
     for (const chunk of data.conversationChunks || []) {
-      try {
+      await restoreRow(conversationChunksTally, 'conversation chunk', String(chunk.id), chunk.id, async () => {
         const { id, createdAt, updatedAt, ...chunkData } = chunk;
         // The repo's create accepts ConversationChunkInput; embeddings come
         // through as number[] and the Zod transform rehydrates them.
@@ -1166,43 +1086,31 @@ export async function restore(
           chunkData as unknown as Parameters<typeof globalRepos.conversationChunks.create>[0],
           { id: chunk.id }
         );
-        conversationChunksRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore conversation chunk: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore conversation chunk', { chunkId: chunk.id, error });
-      }
+      });
     }
 
     // 22l. TF-IDF vocabularies (one per BUILTIN embedding profile).
-    let tfidfVocabulariesRestored = 0;
+    const tfidfVocabulariesTally = new OutcomeTally();
     for (const voc of data.tfidfVocabularies || []) {
-      try {
+      await restoreRow(tfidfVocabulariesTally, 'TF-IDF vocabulary', String(voc.id), voc.id, async () => {
         const { id, createdAt, updatedAt, ...vocData } = voc;
         await globalRepos.tfidfVocabularies.create(
           { ...vocData, userId: targetUserId },
           { id: voc.id }
         );
-        tfidfVocabulariesRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore TF-IDF vocabulary: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore tfidf vocabulary', { vocabularyId: voc.id, error });
-      }
+      });
     }
 
     // 22m. Embedding status flags.
-    let embeddingStatusRestored = 0;
+    const embeddingStatusTally = new OutcomeTally();
     for (const es of data.embeddingStatus || []) {
-      try {
+      await restoreRow(embeddingStatusTally, 'embedding status', String(es.id), es.id, async () => {
         const { id, createdAt, updatedAt, ...esData } = es;
         await globalRepos.embeddingStatus.create(
           { ...esData, userId: targetUserId },
           { id: es.id }
         );
-        embeddingStatusRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore embedding status: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore embedding status', { statusId: es.id, error });
-      }
+      });
     }
 
     // 22n. Text replacement rules (global; no userId, no FKs). Insert each row
@@ -1292,7 +1200,7 @@ export async function restore(
     // 22n-quater. The Log. Lives in the LLM logs database, so it is skipped
     // with the LLM logs when that database is degraded. Lines are written once
     // and never edited, so each keeps its id and both timestamps.
-    let logEntriesRestored = 0;
+    const logEntryTally = new OutcomeTally();
     const logEntryRows = data.logEntries || [];
     if (logEntryRows.length > 0) {
       if (isLLMLogsDegraded()) {
@@ -1300,20 +1208,14 @@ export async function restore(
         warnings.push('Log entries were not restored because the logs database is in degraded mode');
       } else {
         for (const entry of logEntryRows) {
-          try {
-            const { id, createdAt, updatedAt, ...entryData } = entry;
-            await globalRepos.logEntries.create(entryData, { id, createdAt, updatedAt });
-            logEntriesRestored++;
-          } catch (error) {
-            warnings.push(`Failed to restore Log entry: ${error instanceof Error ? error.message : String(error)}`);
-            moduleLogger.warn('Failed to restore Log entry', { entryId: entry.id, error });
-          }
+          const { id, createdAt, updatedAt, ...entryData } = entry;
+          await restoreRow(logEntryTally, 'Log entry', entry.id, entry.id, () => globalRepos.logEntries.create(entryData, { id, createdAt, updatedAt }));
         }
       }
     }
     moduleLogger.debug('Restored Log entries', {
       total: logEntryRows.length,
-      restored: logEntriesRestored,
+      restored: logEntryTally.written,
     });
 
     // 22o. Instance settings — applied last because the mount-point keys
@@ -1478,56 +1380,56 @@ export async function restore(
     }
 
     const summary: RestoreSummary = {
-      characters: data.characters.length,
-      chats: data.chats.length,
+      characters: characterTally.written,
+      chats: chatTally.written,
       messages: messagesRestored,
-      tags: data.tags.length,
+      tags: tagTally.written,
       files: filesRestored,
-      memories: memoriesRestored,
+      memories: memoryTally.written,
       profiles: {
-        connection: data.connectionProfiles.length,
-        image: data.imageProfiles.length,
-        embedding: data.embeddingProfiles.length,
+        connection: connectionProfileTally.written,
+        image: imageProfilesTally.written,
+        embedding: embeddingProfilesTally.written,
       },
       templates: {
-        prompt: promptTemplatesRestored,
-        roleplay: roleplayTemplatesRestored,
+        prompt: promptTemplateTally.written,
+        roleplay: roleplayTemplateTally.written,
       },
-      providerModels: providerModelsRestored,
-      projects: projectsRestored,
-      groups: groupsRestored,
-      llmLogs: llmLogsRestored,
+      providerModels: providerModelsTally.written,
+      projects: projectTally.written,
+      groups: groupTally.written,
+      llmLogs: llmLogTally.written,
       pluginConfigs: pluginConfigsRestored,
-      chatSettings: chatSettingsRestored,
+      chatSettings: chatSettingsTally.written,
       folders: foldersRestored,
-      wardrobeItems: wardrobeItemsRestored,
+      wardrobeItems: wardrobeItemTally.written,
       npmPlugins: 0,
       npmPluginNames: npmPluginsInBackup,
-      characterPluginData: characterPluginDataRestored,
-      conversationAnnotations: conversationAnnotationsRestored,
+      characterPluginData: characterPluginDataTally.written,
+      conversationAnnotations: conversationAnnotationsTally.written,
       userInstalledThemes: userInstalledThemesRestored,
-      chatDocuments: chatDocumentsRestored,
-      chatInforms: chatInformsRestored,
+      chatDocuments: chatDocumentsTally.written,
+      chatInforms: chatInformsTally.written,
       instanceSettings: instanceSettingsRestored,
-      embeddingStatus: embeddingStatusRestored,
-      conversationChunks: conversationChunksRestored,
-      tfidfVocabularies: tfidfVocabulariesRestored,
+      embeddingStatus: embeddingStatusTally.written,
+      conversationChunks: conversationChunksTally.written,
+      tfidfVocabularies: tfidfVocabulariesTally.written,
       legacyVectorsAdopted,
       docMountPoints: docMountPointsRestored,
-      docMountFolders: docMountFoldersRestored,
-      docMountFiles: docMountFilesRestored,
-      docMountFileLinks: docMountFileLinksRestored,
-      docMountChunks: docMountChunksRestored,
-      docMountDocuments: docMountDocumentsRestored,
+      docMountFolders: docMountFolderTally.written,
+      docMountFiles: docMountFilesTally.written,
+      docMountFileLinks: docMountFileLinksTally.written,
+      docMountChunks: docMountChunksTally.written,
+      docMountDocuments: docMountDocumentsTally.written,
       docMountBlobs: docMountBlobsRestored,
-      projectDocMountLinks: projectDocMountLinksRestored,
-      groupDocMountLinks: groupDocMountLinksRestored,
-      groupCharacterMembers: groupCharacterMembersRestored,
+      projectDocMountLinks: projectDocMountLinksTally.written,
+      groupDocMountLinks: groupDocMountLinksTally.written,
+      groupCharacterMembers: groupCharacterMembersTally.written,
       textReplacementRules: textReplacementRulesRestored,
       wardrobeWear: wardrobeWearRestored,
       wardrobeHistory: wardrobeHistoryRestored,
       avatarTimeline: avatarTimelineRestored,
-      logEntries: logEntriesRestored,
+      logEntries: logEntryTally.written,
       embeddingReconcile: {
         targetDimensions: reconcileResult.targetDimensions,
         skippedReason: reconcileResult.skippedReason,

@@ -1648,6 +1648,15 @@ CREATE INDEX "idx_roleplay_templates_createdAt" ON "roleplay_templates" ("create
 CREATE INDEX "idx_roleplay_templates_userId" ON "roleplay_templates" ("userId");
 ```
 
+> **Built-in ids (since `rekey-built-in-roleplay-templates-v1`, 4.13):** a row with
+> `isBuiltIn = 1` has the fixed id `builtInRoleplayTemplateId(name)` — a UUIDv5 of its
+> name in a fixed namespace (`lib/roleplay-templates/built-in-ids.ts`) — the same on
+> every instance, so restored and imported pointers resolve. The migration re-keyed
+> older rows and `characters.defaultRoleplayTemplateId`, `chats.roleplayTemplateId`,
+> `chats.participants[].roleplayTemplateId` and `chat_settings.defaultRoleplayTemplateId`;
+> projects' pointers (in `properties.json`) are re-keyed at boot from the
+> `instance_settings` key `builtInRoleplayTemplateRekeys`, which is then deleted.
+
 > **`delimiters` JSON shape (since `rp-delimiter-kinds-v1`):** each entry is a
 > discriminated union on `kind`: `{ kind: 'wrap', name, buttonName, delimiters, style }`
 > (string or `[open, close]`), `{ kind: 'linePrefix', name, buttonName, marker, style }`,

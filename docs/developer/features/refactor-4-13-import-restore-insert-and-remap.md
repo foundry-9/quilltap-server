@@ -1,6 +1,6 @@
 # Refactor 4.13 — One insert policy and one id-remap table for restore and import
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #188, #190, #193 and #195 by construction, and closes the remap gaps listed in §4.2.
+**Status:** Done (2026-11-11). Proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #188, #190, #193 and #195 by construction, and closes the remap gaps listed in §4.2.
 
 Line numbers are from the audit and will drift. Re-locate each site by name before editing.
 
@@ -118,3 +118,11 @@ Built-ins get deterministic ids (a UUIDv5 over a fixed namespace and the templat
 2. Per-field `onMissing` where the two sides disagree today: `summaryAnchorMessageIds` (proposed: drop the unknown ids from the array), chat `imageProfileId` (proposed: null), `swipeGroupId` (proposed: import's `swipe-<id>` rewrite).
 3. Deterministic built-in roleplay template ids with a re-keying migration (proposed), or match built-ins by name at restore time and leave ids random?
 4. Backup of a character whose vault is unreadable: back up the row and its memories with a manifest warning (proposed), or refuse the backup?
+
+**Decisions taken.** All four §8 proposals: (1) Overwrite keeps the existing id for every entity; (2) `summaryAnchorMessageIds` drops unknown ids, chat `imageProfileId` is cleared, `swipeGroupId` uses the `swipe-<id>` rewrite; (3) deterministic UUIDv5 built-in ids with a re-keying migration (`rekey-built-in-roleplay-templates-v1`; project pointers, which live in project stores, re-keyed by the boot step `rekeyProjectRoleplayTemplatePointers`); (4) a row whose store is unreadable is backed up as its bare row with its memories and a `manifest.warnings` note.
+
+**§4.2 outcomes.** Every traced item reproduced and was filed and fixed: restore id gaps (#199, plus `linkGroupId` not reissued), groups-only bundles (#200), the missing footer (#201), and `findAll` / the 10,000-log cap in backup and deletion (#202).
+
+**What landed beyond the plan.** Reconciliation now rewrites only rows the import wrote (it used to remap skipped, pre-existing rows through the bundle's maps). Import remaps character ids inside message payloads. A legacy `plugin:*` roleplay template reference is opaque and never cleared. A pre-change backup cannot say which built-in template a chat used; those pointers clear on a new-account restore.
+
+**Left as bespoke** (listed in the table with the reason): vault and avatar pointers on import, scenario sources, character-keyed chat columns, wardrobe item ids, polymorphic `linkedTo`, the memory import's pre-minted ids, and the inform verifier. Restore's folder, mount-point, blob, plugin-config, text-rule, wear-ledger, history and avatar-timeline loops keep their own loops (each has bespoke conflict handling); their counts were already outcome counts.

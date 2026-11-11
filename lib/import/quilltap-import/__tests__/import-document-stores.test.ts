@@ -51,6 +51,8 @@ function makeIdMaps(): IdMappingState {
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
     messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
   };
 }
 

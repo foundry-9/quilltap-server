@@ -98,6 +98,8 @@ const backup = (): BackupData => ({
   providerModels: [],
   projects: [],
   llmLogs: [],
+  docMountPoints: [{ id: 'vault-old', name: 'Vault' }] as unknown as BackupData['docMountPoints'],
+  docMountFiles: docs.map((_d, i) => ({ id: `docfile-${i}` })) as unknown as BackupData['docMountFiles'],
   docMountFileLinks: docs.map((d, i) => ({
     id: `link-${i}`,
     mountPointId: 'vault-old',

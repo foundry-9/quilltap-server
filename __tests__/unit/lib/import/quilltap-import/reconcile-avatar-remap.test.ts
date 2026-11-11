@@ -25,7 +25,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 type IdMapOverrides = Partial<Record<string, Map<string, string> | Set<string>>>;
 
 function makeIdMaps(overrides: IdMapOverrides = {}): any {
-  return {
+  const idMaps: any = {
     tags: new Map(),
     characters: new Map([['source-character-id', 'char-1']]),
     chats: new Map(),
@@ -42,8 +42,15 @@ function makeIdMaps(overrides: IdMapOverrides = {}): any {
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
     messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
     ...overrides,
   };
+  // Every mapped row is one this import wrote, so reconciliation visits it.
+  idMaps.writtenRows = new Set(
+    [idMaps.characters, idMaps.chats, idMaps.projects, idMaps.connectionProfiles].flatMap((m: Map<string, string>) => [...m.values()])
+  );
+  return idMaps;
 }
 
 function makeRepos(character: Record<string, unknown>, files: Record<string, unknown> = {}) {

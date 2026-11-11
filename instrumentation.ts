@@ -783,6 +783,20 @@ export async function register() {
         });
       }
 
+      // Built-in roleplay templates now have fixed ids (#190). The migration
+      // re-pointed the main database; a project's pointer lives in its store,
+      // so it is re-pointed here, through the repository, once the stores exist.
+      // A no-op once the migration's re-key map has been applied and cleared.
+      try {
+        const { rekeyProjectRoleplayTemplatePointers } = await import('./lib/startup/rekey-project-roleplay-template-pointers');
+        await rekeyProjectRoleplayTemplatePointers();
+      } catch (rekeyError) {
+        logger.warn('Error re-pointing projects at built-in roleplay templates, continuing startup', {
+          context: 'instrumentation.register',
+          error: rekeyError instanceof Error ? rekeyError.message : String(rekeyError),
+        });
+      }
+
       // ================================================================
       // PHASE 3.4: Ensure Project Scenario Infrastructure
       // ================================================================
