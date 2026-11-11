@@ -26,6 +26,7 @@
 
 import type { MemorySearchExtraction } from './query'
 import { recentlyWhisperedIdSet } from './history'
+import { memoryDateStamp, type MemoryClock } from '../time/clock'
 // Type-only: recall-tuning reads this module's constants at load time, so a
 // value import back from it would be a circular-initialisation trap.
 import type { RecallMultiplierTable, ResolvedRecallTuning } from './tuning'
@@ -727,6 +728,8 @@ export interface TurnRecallContextInput {
    * feeds the anti-repetition set.
    */
   chat: { id: string; projectId?: string | null; commonplaceRecallHistory?: unknown }
+  /** The character recalling: the anti-repetition ring is theirs alone (A14). */
+  characterId: string
   /** Instance-wide recall settings (`getMemoryRecallSettings()`). */
   recallSettings: { scopePolicy: ScopePolicy; expandRelated: boolean }
   /** The turn's dominant `context` axis from the keyword distillation, or null. */
@@ -762,7 +765,7 @@ export function buildTurnRecallContext(input: TurnRecallContextInput): RecallCon
     turnTemporal: input.turnTemporal,
     presentAboutCharacterIds: input.presentAboutCharacterIds,
     expandRelated: input.recallSettings.expandRelated,
-    recentlyWhisperedIds: recentlyWhisperedIdSet(input.chat.commonplaceRecallHistory),
+    recentlyWhisperedIds: recentlyWhisperedIdSet(input.chat.commonplaceRecallHistory, input.characterId),
     currentChatId: input.chat.id,
     nowMs: input.nowMs,
   }
@@ -785,15 +788,17 @@ export function buildTurnRecallContext(input: TurnRecallContextInput): RecallCon
 export function buildRetrospectiveProbes(
   signals: Pick<MemorySearchExtraction, 'entities' | 'paraphrase' | 'timeRange'> | null | undefined,
   retrospective: boolean,
+  clock?: Pick<MemoryClock, 'timeZone'>,
 ): string[] | undefined {
   if (!retrospective || !signals) return undefined
   const probes: string[] = []
   const entityProbe = (signals.entities ?? []).join(' ').trim()
   if (entityProbe) probes.push(entityProbe)
   if (signals.paraphrase && signals.timeRange) {
-    probes.push(
-      `${signals.paraphrase} (around ${signals.timeRange.from.slice(0, 10)} to ${signals.timeRange.to.slice(0, 10)})`,
-    )
+    // The window's days on the memory calendar, not UTC's (#187).
+    const from = memoryDateStamp(signals.timeRange.from, clock)
+    const to = memoryDateStamp(signals.timeRange.to, clock)
+    if (from && to) probes.push(`${signals.paraphrase} (around ${from} to ${to})`)
   }
   return probes.length > 0 ? probes : undefined
 }

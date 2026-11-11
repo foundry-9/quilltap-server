@@ -464,7 +464,7 @@ describe('chokepoint grep-tests', () => {
       'lib/backup/restore/restore.ts',
       'lib/import/quilltap-import/import-entities.ts',
       'lib/memory/admission/apply.ts',
-      'lib/memory/consolidation.ts',
+      'lib/memory/admission/consolidation-writes.ts',
     ])
   })
 
@@ -472,6 +472,7 @@ describe('chokepoint grep-tests', () => {
     expect(filesMatching(/\.incrementReinforcement\(|\.appendReinforcementFootnotes\(/)).toEqual([
       'lib/memory/admission/admit.ts',
       'lib/memory/admission/apply.ts',
+      'lib/memory/admission/consolidation-writes.ts',
     ])
   })
 

@@ -39,6 +39,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { estimateTokens } from '@/lib/tokens/token-counter'
 import { withTimeout } from '@/lib/promise-timeout'
 import { logger } from '@/lib/logger'
+import type { SpeakerNames } from '@/lib/chat/speaker-names'
 import type { ChatMessage, UncensoredFallbackOptions } from '../cheap-llm-tasks'
 import { getOrComputeFrozenArchive, type FrozenArchive } from './archive'
 import {
@@ -182,7 +183,13 @@ export interface RecallPlan {
   /** The recent-window prose — the query when nothing better is distilled. */
   recentWindow: string
   /** Distil the turn's signals here when the proactive pass did not. */
-  distill?: { messages: ChatMessage[]; selection: CheapLLMSelection; clockIso: string }
+  distill?: {
+    messages: ChatMessage[]
+    selection: CheapLLMSelection
+    clockIso: string
+    /** participantId → name for labelling `messages` (`resolveSpeakerNames`); absent, `User` / `Character`. */
+    speakerNames?: SpeakerNames
+  }
   preRecall?: PreRecall | null
   recap?: {
     selection: CheapLLMSelection
@@ -304,11 +311,13 @@ export async function assembleRecall(plan: RecallPlan): Promise<RecallBundle> {
                 clock: { nowIso: plan.distill.clockIso, timelineMode: plan.chat.timelineMode ?? 'realtime' },
                 // The operator is waiting: tight budget, no retry (bug 115).
                 latency: 'interactive',
+                speakerNames: plan.distill.speakerNames,
               }
             : undefined,
         }, trace)
         const ctx = buildTurnRecallContext({
           chat: plan.chat,
+          characterId,
           recallSettings: plan.recallSettings,
           turnContext: bundle.query.signals?.context ?? null,
           turnTemporal: bundle.query.signals?.temporal ?? null,

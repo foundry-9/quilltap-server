@@ -269,7 +269,9 @@ describe('Appearance Resolution Module', () => {
           'Bob relaxing at home',
           testSelection,
           testUserId,
-          testChatId
+          testChatId,
+          // The chat's speaker names (none resolvable here: the role fallbacks stand).
+          expect.any(Map)
         )
 
         expect(result.llmResolved).toBe(true)

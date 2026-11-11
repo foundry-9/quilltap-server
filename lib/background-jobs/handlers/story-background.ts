@@ -18,6 +18,7 @@ import { parseStoredSceneState, isParticipantPresent, type SceneState } from '@/
 import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logger } from '@/lib/logger';
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import {
@@ -335,6 +336,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   if (isDangerousChat && uncensoredLLMSelection) {
   }
 
+  // The scene-context transcript is labelled by speaker, never by role.
+  const sceneSpeakerNames = recentMessages.length > 0 && !sceneStateData
+    ? await resolveSpeakerNames(chat)
+    : undefined;
+  logger.debug('[StoryBackground] Resolved transcript speaker names', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    namedSeats: sceneSpeakerNames?.size ?? 0,
+  });
+
   // Run scene context derivation and appearance resolution in parallel
   const [sceneResult, appearanceResolutionResult] = await Promise.all([
     // Scene context derivation
@@ -345,6 +356,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
             contextSummary: chat.contextSummary,
             recentMessages,
             characterNames: validCharacters.map(c => c!.name),
+            speakerNames: sceneSpeakerNames,
           },
           cheapLLMSelection,
           job.userId,

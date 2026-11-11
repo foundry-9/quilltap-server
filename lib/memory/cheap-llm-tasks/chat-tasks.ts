@@ -4,19 +4,15 @@
 
 import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { ESTABLISHED_FACT_TRANSCRIPT_RULE, framedEstablishedFactBody } from '@/lib/chat/established-fact'
+import { renderLabelledTranscript, type SpeakerNames } from '@/lib/chat/speaker-names'
 import type { LLMMessage } from '@/lib/llm/base'
+import { logger } from '@/lib/logger'
+import { memoryDateStamp } from '@/lib/memory/time'
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from './core-execution'
 import { cleanTitle, parseTitleVerdict, type TitleVerdict } from './title-verdict'
 import type { ChatMessage, CheapLLMTaskResult } from './types'
-
-/**
- * Chat summarization prompt template
- */
-const CHAT_SUMMARY_PROMPT = `You are a summarizer. Create a concise summary of the following conversation.
-Focus on key events, decisions, emotional moments, and important information shared.
-Keep the summary under 200 words. Write in third person, past tense.
-Respond with only the summary text, no additional formatting.`
 
 /**
  * Help chat title prompt template — practical, descriptive titles for support conversations
@@ -121,54 +117,6 @@ Respond with a JSON object:
 Keep suggested titles 3-8 words, under 60 characters, poetic and distinctive (or technically descriptive if the conversation is about technical work).`
 
 /**
- * Context summary update prompt template
- */
-const CONTEXT_SUMMARY_PROMPT = `You are updating a running summary of a conversation.
-Integrate the new messages into the existing summary, keeping it concise and under 300 words.
-Focus on maintaining continuity and capturing any new important information.
-Respond with only the updated summary text.`
-
-/**
- * Summarizes a chat conversation
- *
- * @param messages - The chat messages to summarize
- * @param selection - The cheap LLM provider selection
- * @param userId - The user ID for API key retrieval
- * @returns A summary of the conversation
- */
-export async function summarizeChat(
-  messages: ChatMessage[],
-  selection: CheapLLMSelection,
-  userId: string,
-  chatId?: string
-): Promise<CheapLLMTaskResult<string>> {
-  // Format messages for the prompt
-  const conversationText = messages
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-    .join('\n\n')
-
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: CHAT_SUMMARY_PROMPT,
-    },
-    {
-      role: 'user',
-      content: conversationText,
-    },
-  ]
-
-  return executeCheapLLMTask(
-    selection,
-    llmMessages,
-    userId,
-    (content: string): string => content.trim(),
-    'summarize-chat',
-    chatId
-  )
-}
-
-/**
  * Strips tool call artifacts from assistant message content so that title
  * generation focuses on the actual conversation, not tool machinery.
  *
@@ -262,6 +210,8 @@ export type VisibleConversationCandidate = {
   systemKind?: string | null
   systemSender?: string | null
   isEstablishedFact?: boolean | null
+  /** Carried onto the output line so the transcript can name the speaker. */
+  participantId?: string | null
 }
 
 /**
@@ -287,15 +237,24 @@ export function toVisibleConversationMessage(m: VisibleConversationCandidate): C
   // output can return into an opaque character's prompt as system block 3.
   // A machine fact is an input to the scene, so it becomes a user line.
   const framedFact = framedEstablishedFactBody(m, 'plain')
-  if (framedFact !== null) return { role: 'user', content: framedFact }
+  // A machine fact has no speaker (its participantId, if any, is the Host's
+  // business), so it carries none; a seat line keeps its seat.
+  if (framedFact !== null) {
+    return m.systemSender ? { role: 'user', content: framedFact } : withSeat({ role: 'user', content: framedFact }, m)
+  }
 
   // Only include USER and ASSISTANT roles
   const role = (m.role || '').toUpperCase()
-  if (role === 'USER') return { role: 'user', content: m.content }
+  if (role === 'USER') return withSeat({ role: 'user', content: m.content }, m)
   if (role !== 'ASSISTANT') return null
 
   const cleaned = stripToolArtifacts(m.content)
-  return cleaned ? { role: 'assistant', content: cleaned } : null
+  return cleaned ? withSeat({ role: 'assistant', content: cleaned }, m) : null
+}
+
+/** Adds the source row's seat to a visible line — only when it has one, so the line's shape is otherwise unchanged. */
+function withSeat(line: ChatMessage, m: VisibleConversationCandidate): ChatMessage {
+  return m.participantId ? { ...line, participantId: m.participantId } : line
 }
 
 /**
@@ -312,24 +271,21 @@ export async function titleChat(
   existingTitle: string | undefined,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<string>> {
   // Use up to 100 messages, weighted toward the end of the conversation.
-  // Older messages are truncated aggressively; recent messages get full text.
+  // Older messages are truncated aggressively; recent messages get full text:
+  // the last 10 get up to 500 chars, older ones 150.
   const capped = messages.slice(-100)
-  const recentThreshold = Math.max(0, capped.length - 10)
-  const conversationText = capped
-    .map((m, i) => {
-      const label = m.role.toUpperCase()
-      // Last 10 messages: full text (up to 500 chars)
-      // Older messages: truncated to 150 chars
-      const limit = i >= recentThreshold ? 500 : 150
-      const text = m.content.length > limit
-        ? m.content.substring(0, limit) + '...'
-        : m.content
-      return `${label}: ${text}`
-    })
-    .join('\n\n')
+  const conversationText = renderLabelledTranscript(capped, speakerNames, {
+    maxChars: (i, total) => (i >= Math.max(0, total - 10) ? 500 : 150),
+  })
+  logger.debug('[titleChat] Rendered labelled transcript', {
+    chatId,
+    lines: capped.length,
+    namedSeats: speakerNames.size,
+  })
 
   let prompt = CHAT_TITLE_PROMPT
   if (existingTitle) {
@@ -366,19 +322,17 @@ export async function titleHelpChat(
   existingTitle: string | undefined,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<string>> {
   // For help chats, we use fewer messages since titles should fire early
   const capped = messages.slice(-20)
-  const conversationText = capped
-    .map(m => {
-      const label = m.role.toUpperCase()
-      const text = m.content.length > 500
-        ? m.content.substring(0, 500) + '...'
-        : m.content
-      return `${label}: ${text}`
-    })
-    .join('\n\n')
+  const conversationText = renderLabelledTranscript(capped, speakerNames, { maxChars: 500 })
+  logger.debug('[titleHelpChat] Rendered labelled transcript', {
+    chatId,
+    lines: capped.length,
+    namedSeats: speakerNames.size,
+  })
 
   let prompt = HELP_CHAT_TITLE_PROMPT
   if (existingTitle && !existingTitle.startsWith('Help:')) {
@@ -414,12 +368,17 @@ async function considerTitleUpdateWithPrompt(
   existingSummaryOrTitle: string | null,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<TitleVerdict>> {
-  // Format recent messages
-  const conversationText = recentMessages
-    .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`) // Truncate long messages
-    .join('\n\n')
+  // Format recent messages, truncating long ones
+  const conversationText = renderLabelledTranscript(recentMessages, speakerNames, { maxChars: 500 })
+  logger.debug('[considerTitleUpdate] Rendered labelled transcript', {
+    chatId,
+    parseLabel,
+    lines: recentMessages.length,
+    namedSeats: speakerNames.size,
+  })
 
   const contextInfo = existingSummaryOrTitle
     ? `Previous context: ${existingSummaryOrTitle}`
@@ -449,7 +408,8 @@ export async function considerHelpChatTitleUpdate(
   existingSummaryOrTitle: string | null,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<TitleVerdict>> {
   return considerTitleUpdateWithPrompt(
     HELP_CHAT_TITLE_CONSIDERATION_PROMPT,
@@ -459,7 +419,8 @@ export async function considerHelpChatTitleUpdate(
     existingSummaryOrTitle,
     selection,
     userId,
-    chatId
+    chatId,
+    speakerNames
   )
 }
 
@@ -547,7 +508,8 @@ export async function considerTitleUpdate(
   existingSummaryOrTitle: string | null,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<TitleVerdict>> {
   return considerTitleUpdateWithPrompt(
     CHAT_TITLE_CONSIDERATION_PROMPT,
@@ -557,52 +519,8 @@ export async function considerTitleUpdate(
     existingSummaryOrTitle,
     selection,
     userId,
-    chatId
-  )
-}
-
-/**
- * Updates a running context summary with new messages
- *
- * @param currentSummary - The existing context summary
- * @param newMessages - New messages to integrate
- * @param selection - The cheap LLM provider selection
- * @param userId - The user ID for API key retrieval
- * @returns Updated context summary
- */
-export async function updateContextSummary(
-  currentSummary: string,
-  newMessages: ChatMessage[],
-  selection: CheapLLMSelection,
-  userId: string,
-  chatId?: string
-): Promise<CheapLLMTaskResult<string>> {
-  const newMessagesText = newMessages
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-    .join('\n\n')
-
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: CONTEXT_SUMMARY_PROMPT,
-    },
-    {
-      role: 'user',
-      content: `Current summary:
-${currentSummary}
-
-New messages to integrate:
-${newMessagesText}`,
-    },
-  ]
-
-  return executeCheapLLMTask(
-    selection,
-    llmMessages,
-    userId,
-    (content: string): string => content.trim(),
-    'update-context-summary',
-    chatId
+    chatId,
+    speakerNames
   )
 }
 
@@ -654,12 +572,16 @@ export async function foldChatSummary(
   userId: string,
   chatId?: string,
 ): Promise<CheapLLMTaskResult<string>> {
-  const newTurnsText = input.newTurns
-    .map(m => {
-      const stamp = m.createdAt ? `[${m.createdAt.slice(0, 10)}] ` : ''
-      return `${stamp}${m.speaker}: ${m.content}`
-    })
-    .join('\n\n')
+  // Dates on the instance calendar, not the UTC day of the ISO string (#187).
+  const timeZone = await refreshMemoryTimeZone()
+  const newTurnsText = renderLabelledTranscript(input.newTurns, new Map(), {
+    dateStamp: (iso) => memoryDateStamp(iso, { timeZone }),
+  })
+  logger.debug('[foldChatSummary] Rendered labelled transcript', {
+    chatId,
+    turns: input.newTurns.length,
+    timeZone,
+  })
 
   const priorSummaryBlock = input.priorSummary && input.priorSummary.trim().length > 0
     ? input.priorSummary.trim()

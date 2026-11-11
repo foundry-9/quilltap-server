@@ -56,4 +56,16 @@ describe('scoring chokepoint', () => {
     }
     expect(offenders).toEqual([])
   })
+
+  it('no timestamp under lib/memory/ is printed by slicing its first ten characters (#187)', () => {
+    // That is the UTC day; a date printed to a model is `memoryDateStamp` on the
+    // instance calendar (lib/memory/time/clock.ts).
+    const files: string[] = []
+    walk(path.join(ROOT, 'lib', 'memory'), files)
+    expect(files.length).toBeGreaterThan(20)
+    const offenders = files
+      .filter((file) => /\.(slice|substring)\(\s*0\s*,\s*10\s*\)/.test(fs.readFileSync(file, 'utf8')))
+      .map((file) => path.relative(ROOT, file))
+    expect(offenders).toEqual([])
+  })
 })

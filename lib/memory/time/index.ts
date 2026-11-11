@@ -21,6 +21,8 @@ export {
   resolveReferenceWindow,
   resolveDayReference,
   normaliseTimeRange,
+  memoryDateStamp,
+  parseInstantOnCalendar,
   type MemoryClock,
   type TimeWindow,
   type DayReferenceResolution,

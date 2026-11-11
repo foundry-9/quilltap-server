@@ -5,6 +5,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
+import { renderLabelledTranscript, type SpeakerNames } from '@/lib/chat/speaker-names'
 import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
 import { stripCodeFences } from '@/lib/llm/llm-json'
 import { executeCheapLLMTask } from './core-execution'
@@ -646,14 +647,13 @@ export async function deriveSceneContext(
   chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   // Format recent messages for the prompt
-  const messageText = input.recentMessages
-    .map(m => {
-      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      // Truncate long messages to keep context manageable
-      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
-      return `${speaker}: ${content}`
-    })
-    .join('\n\n')
+  // Truncate long messages to keep context manageable
+  const messageText = renderLabelledTranscript(input.recentMessages, input.speakerNames, { maxChars: 500 })
+  logger.debug('[deriveSceneContext] Rendered labelled transcript', {
+    chatId,
+    lines: input.recentMessages.length,
+    namedSeats: input.speakerNames?.size ?? 0,
+  })
 
   // Build the context section
   let contextInfo = `Chat Title: "${input.chatTitle}"`
@@ -722,12 +722,12 @@ export async function updateSceneState(
 ): Promise<CheapLLMTaskResult<Record<string, unknown>>> {
   // Format recent messages for the prompt — no truncation for scene state tracking,
   // because clothing/appearance details often appear deep in longer messages
-  const messageText = input.recentMessages
-    .map(m => {
-      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      return `${speaker}: ${m.content}`
-    })
-    .join('\n\n')
+  const messageText = renderLabelledTranscript(input.recentMessages, input.speakerNames)
+  logger.debug('[updateSceneState] Rendered labelled transcript', {
+    chatId,
+    lines: input.recentMessages.length,
+    namedSeats: input.speakerNames?.size ?? 0,
+  })
 
   // Build character baseline section
   const characterBaselines = input.characters
@@ -928,7 +928,8 @@ export async function resolveAppearance(
   imagePrompt: string,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<AppearanceResolutionItem[]>> {
   // Build character data section
   const characterSection = characters.map(char => {
@@ -963,14 +964,13 @@ export async function resolveAppearance(
   }).join('\n\n')
 
   // Format recent messages
-  const messageText = recentMessages
-    .slice(-20)
-    .map(m => {
-      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
-      return `${speaker}: ${content}`
-    })
-    .join('\n\n')
+  const lastTwenty = recentMessages.slice(-20)
+  const messageText = renderLabelledTranscript(lastTwenty, speakerNames, { maxChars: 500 })
+  logger.debug('[resolveAppearance] Rendered labelled transcript', {
+    chatId,
+    lines: lastTwenty.length,
+    namedSeats: speakerNames.size,
+  })
 
   const messages: LLMMessage[] = [
     {

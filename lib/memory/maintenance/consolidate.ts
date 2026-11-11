@@ -22,6 +22,7 @@ import {
   type RunConsolidationOptions,
 } from '../consolidation'
 import type { ConsolidationWritePlan, LinkIndexRow } from '../consolidation-plan'
+import type { AppliedConsolidation } from '../admission/consolidation-writes'
 import { tierOf, type MaintenanceCorpus } from './corpus'
 
 const log = logger.child({ module: 'memory:maintenance:consolidate' })
@@ -152,11 +153,37 @@ export async function runConsolidatePhase(
     buckets: buckets.size,
   })
   const run = await consolidate({ holder, rowIndex, buckets, stats }, opts)
-  applyConsolidationToCorpus(corpus, run.plan, run.belowMinConsidered, opts.now.toISOString())
+  if (run.applied) applyWrittenConsolidationToCorpus(corpus, run.plan, run.applied)
+  else applyConsolidationToCorpus(corpus, run.plan, run.belowMinConsidered, opts.now.toISOString())
   return run
 }
 
-/** Apply a consolidation plan to the corpus as the writes would leave it. */
+/**
+ * Bring the corpus in step with what the writer actually wrote: every row it
+ * touched, as it now stands, with its vector (a digest's new one from the
+ * plan; otherwise the one the corpus held). Skipped clusters change nothing.
+ */
+export function applyWrittenConsolidationToCorpus(
+  corpus: MaintenanceCorpus,
+  plan: ConsolidationWritePlan,
+  applied: AppliedConsolidation,
+): void {
+  const landed = new Set(applied.landedClusters)
+  const vectors = new Map<string, Float32Array>()
+  for (const digest of [...plan.creates, ...plan.updates]) {
+    if (landed.has(digest.clusterIndex) && digest.embedding) vectors.set(digest.id, digest.embedding)
+  }
+  for (const row of applied.rows) {
+    corpus.put({ ...row, embedding: vectors.get(row.id) ?? corpus.get(row.id)?.embedding ?? null })
+  }
+  log.debug('Corpus brought in step with the consolidation writes', {
+    rows: applied.rows.length,
+    landed: applied.landedClusters.length,
+    changed: applied.staleClusters.length,
+  })
+}
+
+/** Apply a consolidation plan to the corpus as the writes would leave it (a dry run). */
 export function applyConsolidationToCorpus(
   corpus: MaintenanceCorpus,
   plan: ConsolidationWritePlan,
@@ -174,7 +201,11 @@ export function applyConsolidationToCorpus(
     } as Memory)
   }
   for (const update of plan.updates) {
-    corpus.patch(update.id, { ...update.patch, ...(update.embedding ? { embedding: update.embedding } : {}) })
+    corpus.patch(update.id, {
+      ...update.patch,
+      ...update.projected,
+      ...(update.embedding ? { embedding: update.embedding } : {}),
+    })
   }
   for (const move of plan.tierMoves) {
     for (const id of move.ids) {

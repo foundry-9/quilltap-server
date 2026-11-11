@@ -153,7 +153,7 @@ export async function deliverRecall(bundle: RecallBundle, opts: DeliverOptions):
   const signature = retroDelivered ? bundle.retroSignature : null
   if (opts.persistRing !== false && (head.length > 0 || signature)) {
     try {
-      let next = appendRecallTurn(opts.chat.commonplaceRecallHistory, head)
+      let next = appendRecallTurn(opts.chat.commonplaceRecallHistory, opts.characterId, head)
       if (signature) next = appendRetroSignature(next, signature)
       await getRepositories().chats.update(opts.chat.id, { commonplaceRecallHistory: next } as never)
     } catch (error) {

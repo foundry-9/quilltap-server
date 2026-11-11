@@ -29,6 +29,7 @@ import { createTitleGenerationEvent } from '@/lib/services/system-events.service
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { TitleUpdatePayload } from '../queue-service';
 import { applyAutoTitle } from '@/lib/chat/auto-title';
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names';
 
 /**
  * Handle a title update job
@@ -129,6 +130,15 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   // Get existing summary for context
   const existingContext = chat.contextSummary || chat.title;
 
+  // Label the transcript by speaker, never by role.
+  const speakerNames = await resolveSpeakerNames(chat);
+  logger.debug('[Title Update] Considering title', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    lines: recentMessages.length,
+    namedSeats: speakerNames.size,
+  });
+
   // Evaluate whether title needs updating (help chats use a different prompt)
   const result = isHelpChat
     ? await considerHelpChatTitleUpdate(
@@ -138,6 +148,7 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
         cheapLLMSelection,
         job.userId,
         payload.chatId,
+        speakerNames,
       )
     : await considerTitleUpdate(
         chat.title,
@@ -146,6 +157,7 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
         cheapLLMSelection,
         job.userId,
         payload.chatId,
+        speakerNames,
       );
 
   if (!result.success) {

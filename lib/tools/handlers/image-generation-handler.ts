@@ -922,6 +922,8 @@ async function resolveAppearances(
         .map((msg: any) => ({
           role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
           content: msg.content,
+          // The seat, so appearance resolution can label the line by speaker.
+          ...(msg.participantId ? { participantId: msg.participantId as string } : {}),
         }));
 
     } catch (error) {

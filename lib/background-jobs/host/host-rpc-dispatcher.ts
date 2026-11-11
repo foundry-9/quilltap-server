@@ -28,7 +28,9 @@
  * extracts and embeds; the parent does the rest (`admitPrepared`).
  * `foldNearDuplicates` is the same rule for maintenance's near-duplicate fold:
  * it writes under admission's per-character lock, so a fold and an admission
- * never interleave on one row.
+ * never interleave on one row. `applyConsolidation` is the same rule for the
+ * consolidation phase: the parent re-reads each cluster's rows under the lock
+ * and writes counts, links and members as deltas (A9).
  *
  * Each bridge short-circuits to `callHost(...)` when running in the child;
  * the parent re-enters the same bridge here on its RW connection (where
@@ -137,6 +139,10 @@ async function runMethod(
     case 'foldNearDuplicates': {
       const { applyNearDuplicateFolds } = await import('@/lib/memory/maintenance/fold-near-duplicates');
       return applyNearDuplicateFolds(args[0] as Parameters<typeof applyNearDuplicateFolds>[0]);
+    }
+    case 'applyConsolidation': {
+      const { applyConsolidationPlan } = await import('@/lib/memory/admission/consolidation-writes');
+      return applyConsolidationPlan(args[0] as Parameters<typeof applyConsolidationPlan>[0]);
     }
     case 'countRecentAdmissions': {
       const { countRecentAdmissionsLocal } = await import('@/lib/memory/admission/rate-ledger');

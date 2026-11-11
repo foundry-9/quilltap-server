@@ -135,8 +135,14 @@ describe('resolveDayReference — future references', () => {
     expect(r.pastPointing).toBe(false)
   })
 
-  it('lets a later future reference suppress an earlier past one', () => {
+  it('never lets a later future reference displace an earlier past one (A20)', () => {
     const r = resolveDayReference('we said yesterday that we would start tomorrow', NOW)!
+    expect(r.matched).toBe('yesterday')
+    expect(r.pastPointing).toBe(true)
+  })
+
+  it('returns a future reference only when no past day is named', () => {
+    const r = resolveDayReference('we start tomorrow', NOW)!
     expect(r.matched).toBe('tomorrow')
     expect(r.pastPointing).toBe(false)
   })

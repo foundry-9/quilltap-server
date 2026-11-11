@@ -12,6 +12,7 @@ import { titleChat, titleHelpChat, extractVisibleConversation } from '@/lib/memo
 import type { RequestContext } from '@/lib/api/middleware';
 import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/types';
 import { applyAutoTitle } from '@/lib/chat/auto-title';
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names';
 
 /**
  * Regenerate a chat's title using LLM
@@ -65,9 +66,17 @@ export async function handleRegenerateTitle(
       return badRequest('No messages in chat to generate title from');
     }
 
+    // Label the transcript by speaker, never by role.
+    const speakerNames = await resolveSpeakerNames(chat);
+    logger.debug('[Chats v1] Regenerating title', {
+      chatId,
+      lines: conversationMessages.length,
+      namedSeats: speakerNames.size,
+    });
+
     const result = isHelpLikeChatType(chat.chatType)
-      ? await titleHelpChat(conversationMessages, undefined, cheapLLM, user.id, chatId)
-      : await titleChat(conversationMessages, undefined, cheapLLM, user.id, chatId);
+      ? await titleHelpChat(conversationMessages, undefined, cheapLLM, user.id, chatId, speakerNames)
+      : await titleChat(conversationMessages, undefined, cheapLLM, user.id, chatId, speakerNames);
 
     if (!result.success || !result.result) {
       logger.error('[Chats v1] Title generation failed', { chatId, error: result.error });

@@ -166,6 +166,9 @@ export interface ChildShutdownAckMessage {
  *   - `foldNearDuplicates` — maintenance's near-duplicate fold
  *     (`applyNearDuplicateFolds`): the child plans, the parent folds under
  *     admission's per-character lock and retires the folded rows
+ *   - `applyConsolidation` — maintenance's consolidation writes
+ *     (`applyConsolidationPlan`): the child plans and embeds, the parent
+ *     re-reads and writes each cluster as deltas under admission's lock (A9)
  * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
  * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
@@ -190,7 +193,8 @@ export interface ChildHostRpcRequestMessage {
     | 'startScheduledAutonomousRun'
     | 'admitMemory'
     | 'countRecentAdmissions'
-    | 'foldNearDuplicates';
+    | 'foldNearDuplicates'
+    | 'applyConsolidation';
   args: unknown[];
 }
 

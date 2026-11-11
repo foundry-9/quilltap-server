@@ -24,6 +24,7 @@
 import {
   getMemoryTimeZone,
   startOfZonedDayMs,
+  zonedDateStamp,
   zonedDayBoundsIso,
   zonedParts,
   zonedTimeToUtcMs,
@@ -81,6 +82,52 @@ export async function memoryClockFor(
 ): Promise<MemoryClock> {
   const { refreshMemoryTimeZone } = await import('./calendar-refresh')
   return clockFor(chat, { timeZone: await refreshMemoryTimeZone(nowMs) }, nowMs)
+}
+
+/**
+ * The `YYYY-MM-DD` a stored instant falls on, on the memory calendar — the
+ * one way a date is printed into a memory prompt (#187). Slicing an ISO
+ * string's first ten characters gives the UTC day, which east or west of
+ * Greenwich is often not the day the operator lived. Null when `iso` is not
+ * a parseable instant.
+ */
+export function memoryDateStamp(
+  iso: string | null | undefined,
+  clock: Pick<MemoryClock, 'timeZone'> = { timeZone: getMemoryTimeZone() },
+): string | null {
+  const raw = iso?.trim()
+  if (!raw) return null
+  const ms = parseInstantOnCalendar(raw, clock.timeZone)
+  return ms === null ? null : zonedDateStamp(ms, clock.timeZone)
+}
+
+/**
+ * Parse an ISO date-time on the memory calendar. A string carrying a zone
+ * (`Z` or an offset) is an instant and parses as one; a zone-less wall time
+ * from a model ("2026-07-14T21:00") is read on `timeZone`, never the server's
+ * system zone (A20). A bare date is its local midnight. Null when unparseable.
+ */
+export function parseInstantOnCalendar(raw: string, timeZone: string): number | null {
+  const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?\s*(Z|z|[+-]\d{2}:?\d{2})?$/)
+  if (!m) {
+    const parsed = Date.parse(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  if (m[8]) {
+    const parsed = Date.parse(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  const year = Number(m[1])
+  const month = Number(m[2]) - 1
+  const day = Number(m[3])
+  const check = new Date(Date.UTC(year, month, day))
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month || check.getUTCDate() !== day) return null
+  const hour = m[4] ? Number(m[4]) : 0
+  const minute = m[5] ? Number(m[5]) : 0
+  const second = m[6] ? Number(m[6]) : 0
+  const millis = m[7] ? Number(m[7].slice(0, 3).padEnd(3, '0')) : 0
+  if (hour > 23 || minute > 59 || second > 59) return null
+  return zonedTimeToUtcMs(year, month, day, hour, timeZone) + ((minute * 60 + second) * 1000 + millis)
 }
 
 function toWindow(w: RuleWindow): TimeWindow {
@@ -154,10 +201,11 @@ export function resolveEventTime(
   // Absolute ISO datetime / date.
   const isoMatch = lower.match(/^(\d{4})-(\d{2})-(\d{2})(t[\d:.]+(z|[+-]\d{2}:?\d{2})?)?$/)
   if (isoMatch) {
-    const parsed = Date.parse(raw)
-    if (!Number.isFinite(parsed)) return none
+    // A zone-less wall time is read on the memory calendar, not the system zone (A20).
+    const parsed = parseInstantOnCalendar(raw, tz)
+    if (parsed === null) return none
     if (isoMatch[4]) return { occurredAt: iso(parsed), window: null }
-    const dayBounds = zonedDayBoundsIso(lower.slice(0, 10), tz)
+    const dayBounds = zonedDayBoundsIso(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`, tz)
     return dayBounds ? { occurredAt: dayBounds.from, window: dayBounds } : none
   }
 
@@ -230,24 +278,32 @@ export function resolveWhenPhrase(
 
 /**
  * Scan conversation text for a day reference and resolve it to its window at
- * `clock.nowMs`. The latest match in the text wins (the most recent utterance
- * is the turn's focus); an unresolvable match ("97 days ago") does not
- * displace an earlier one. Null when nothing is found. Narrative clocks are
- * the caller's to skip — story time is not the wall calendar.
+ * `clock.nowMs`. The latest past-pointing match in the text wins (the most
+ * recent utterance is the turn's focus); a future reference never displaces a
+ * past one ("yesterday … and tomorrow" recalls yesterday — A20), and is
+ * returned (with `pastPointing: false`) only when the text names no past day.
+ * An unresolvable match ("97 days ago") displaces nothing. Null when nothing
+ * is found. Narrative clocks are the caller's to skip — story time is not the
+ * wall calendar.
  */
 export function resolveReferenceWindow(text: string, clock: Pick<MemoryClock, 'timeZone' | 'nowMs'>): DayReferenceResolution | null {
   if (!text || !Number.isFinite(clock.nowMs)) return null
-  let latest: DayReferenceResolution | null = null
+  let latestPast: DayReferenceResolution | null = null
+  let latestFuture: DayReferenceResolution | null = null
   const scan = new RegExp(DAY_REFERENCE_SCAN_PATTERN.source, DAY_REFERENCE_SCAN_PATTERN.flags)
   let match: RegExpExecArray | null
   while ((match = scan.exec(text)) !== null) {
     const phrase = match[0].toLowerCase().replace(/\s+/g, ' ')
     const hit = matchDayReferenceRule(phrase)
     const w = hit ? hit.rule.window(hit.match, clock.nowMs, clock.timeZone) : null
-    if (w) latest = { timeRange: toWindow(w), pastPointing: w.pastPointing, matched: phrase }
+    if (w) {
+      const resolved = { timeRange: toWindow(w), pastPointing: w.pastPointing, matched: phrase }
+      if (w.pastPointing) latestPast = resolved
+      else latestFuture = resolved
+    }
     if (match.index === scan.lastIndex) scan.lastIndex++
   }
-  return latest
+  return latestPast ?? latestFuture
 }
 
 /** The `(text, Date, zone)` form of {@link resolveReferenceWindow}. */
@@ -273,12 +329,18 @@ export function normaliseTimeRange(
   const to = range?.to?.trim()
   if (!from || !to) return null
   if (!/^\d{4}-\d{2}-\d{2}/.test(from) || !/^\d{4}-\d{2}-\d{2}/.test(to)) return null
-  const fromIso = from.length === 10 ? zonedDayBoundsIso(from, clock.timeZone)?.from ?? null : from
-  const toIso = to.length === 10 ? zonedDayBoundsIso(to, clock.timeZone)?.to ?? null : to
-  if (!fromIso || !toIso) return null
-  const fromMs = Date.parse(fromIso)
-  const toMs = Date.parse(toIso)
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || fromMs > toMs) return null
-  return { from: fromIso, to: toIso }
+  // A date-time without a zone is a wall time on the memory calendar (A20),
+  // and comes back as a UTC instant so no later reader re-parses it locally.
+  const bound = (value: string, edge: 'from' | 'to'): number | null => {
+    if (value.length === 10) {
+      const day = zonedDayBoundsIso(value, clock.timeZone)
+      return day ? Date.parse(day[edge]) : null
+    }
+    return parseInstantOnCalendar(value, clock.timeZone)
+  }
+  const fromMs = bound(from, 'from')
+  const toMs = bound(to, 'to')
+  if (fromMs === null || toMs === null || fromMs > toMs) return null
+  return { from: new Date(fromMs).toISOString(), to: new Date(toMs).toISOString() }
 }
 

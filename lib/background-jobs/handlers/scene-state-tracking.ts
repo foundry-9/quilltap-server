@@ -16,6 +16,7 @@ import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resol
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names';
 import type { SceneStateTrackingPayload } from '../queue-service';
 import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped';
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash';
@@ -230,14 +231,21 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     ? chatScenarioParts.join('\n\n')
     : undefined;
 
-  // 9. Call updateSceneState
+  // 9. Call updateSceneState — the transcript is labelled by speaker, never by role.
+  const speakerNames = await resolveSpeakerNames(chat);
   const sceneStateInput = {
     previousSceneState,
     characters: characterBaselines,
     recentMessages,
     messageCount: chat.messageCount ?? 0,
     chatScenario,
+    speakerNames,
   };
+  logger.debug('[SceneStateTracking] Resolved transcript speaker names', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    namedSeats: speakerNames.size,
+  });
 
   // Build uncensored fallback options for the built-in retry in executeCheapLLMTask —
   // a refusal retry, so only where the policy allows failover (on duty, not Locked).
