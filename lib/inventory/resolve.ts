@@ -16,7 +16,7 @@
  * @module lib/inventory/resolve
  */
 
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import {
   INVENTORY_INHERITABLE_FIELDS,
   type InventoryInheritableField,

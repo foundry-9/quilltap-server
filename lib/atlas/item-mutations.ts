@@ -17,7 +17,7 @@
  * @module lib/atlas/item-mutations
  */
 
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { archivedPatch, foldItemName, nextCopyTitle } from '@/lib/mount-index/item-rules';
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -27,8 +27,6 @@ import {
   type AtlasRecord,
   type AtlasUpdateBody,
 } from '@/lib/schemas/atlas.types';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
 import {
   ATLAS_FOLDER_RULES,
   AtlasEntryNotInLocationError,

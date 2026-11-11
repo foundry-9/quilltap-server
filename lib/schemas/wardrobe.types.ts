@@ -197,7 +197,7 @@ export const createWardrobeSchema = wardrobeItemFieldsSchema;
 /**
  * Body schema for updating a project or group wardrobe item (all fields
  * optional), plus the `archived` boolean the item routes translate into
- * `archivedAt` via `lib/wardrobe/archived-patch`.
+ * `archivedAt` via `archivedPatch` (`lib/mount-index/item-rules`).
  */
 export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
   archived: z.boolean().optional(),

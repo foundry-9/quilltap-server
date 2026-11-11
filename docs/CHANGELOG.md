@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Refactor: item-family kernel (phase 6: shared rules; done)
+
+- `archivedPatch` and `nextCopyTitle` moved from `lib/wardrobe/` to `lib/mount-index/item-rules.ts` (beside `foldItemName`, which `nextCopyTitle` now uses); all three families import them from there. `lib/wardrobe/archived-patch.ts` and `lib/wardrobe/next-copy-title.ts` are gone.
+- The Atlas and Inventory client request helpers are one `createItemRequest` (`lib/mount-index/item-request.ts`); `AtlasRequestError` / `InventoryRequestError` keep their names.
+- CLAUDE.md's Wardrobe, Inventory and Atlas paragraphs name the kernel and the rule that a whole-set rewrite never treats an unread tier as gone. The spec (`refactor-4-13-item-family-kernel.md`) records the outcome.
+
 #### Refactor: item-family kernel (phase 5: item pictures)
 
 - `createItemImages` (`lib/mount-index/item-family-images.ts`) owns the Atlas's and the Inventory's pictures: list (with a parent's pictures showing through, marked `inherited`), add, set-current, delete, cleanup, transfer carry, home resolution, and synchronous generation through the Concierge's image failover. `lib/atlas/item-images.ts` and `lib/inventory/item-images.ts` are bindings with their subject prompt, wording and log type; the two `item-image-generation.ts` files re-export the generation names. All exported names are unchanged.

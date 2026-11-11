@@ -60,10 +60,10 @@ export {
 } from '@/lib/mount-index/item-tiers';
 
 // ============================================================================
-// Names (client-safe; `item-names.ts`)
+// Shared rules (client-safe; `item-rules.ts`)
 // ============================================================================
 
-export { foldItemName } from '@/lib/mount-index/item-names';
+export { archivedPatch, foldItemName, nextCopyTitle } from '@/lib/mount-index/item-rules';
 
 // ============================================================================
 // The folder store

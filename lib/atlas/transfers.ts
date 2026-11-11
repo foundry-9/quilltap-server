@@ -12,7 +12,7 @@
  * @module lib/atlas/transfers
  */
 
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';

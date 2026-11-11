@@ -17,7 +17,7 @@
  * @module lib/atlas/vault-readers
  */
 
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';

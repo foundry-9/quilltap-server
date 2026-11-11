@@ -20,7 +20,7 @@
  * @module lib/inventory/refs
  */
 
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { isKin, kitState } from '@/lib/inventory/resolve';
 import type { AggregateObject, AggregateScope } from '@/lib/pascal/inventory-aggregate';

@@ -18,7 +18,7 @@
  */
 
 import { buildNameMatcher } from '@/lib/chat/name-mentions';
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 
 /** What matching needs of an entry. */
 export interface MatchableAtlasEntry {

@@ -24,7 +24,7 @@ import { castGroupMounts, groupMountsFor, groupOriginMap } from '@/lib/mount-ind
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { readAtlasRecords } from '@/lib/atlas/vault-readers';
 import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-tiers';
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import { GENERAL_ATLAS_ORIGIN, type AtlasLocation } from '@/lib/atlas/location';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { AtlasEntryWithOrigin, AtlasOrigin, AtlasRecord } from '@/lib/schemas/atlas.types';

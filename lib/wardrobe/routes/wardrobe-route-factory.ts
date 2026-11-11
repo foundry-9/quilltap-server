@@ -68,7 +68,7 @@ import {
   type ItemRouteKind,
 } from '@/lib/mount-index/item-folder-routes';
 import { draftFromItem, draftToPayload } from '@/lib/wardrobe/item-draft';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
+import { nextCopyTitle } from '@/lib/mount-index/item-rules';
 import { cleanupEquippedRefs, cleanupItemImages, imageChoiceError } from '@/lib/wardrobe/item-route-steps';
 import {
   resolveWardrobeLocation,

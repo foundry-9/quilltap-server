@@ -17,7 +17,7 @@
  * @module lib/wardrobe/wearable-ref
  */
 
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { scanPlaceholders } from '@/lib/pascal/placeholders';
 

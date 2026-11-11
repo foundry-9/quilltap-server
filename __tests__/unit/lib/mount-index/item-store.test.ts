@@ -18,12 +18,14 @@ jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 
 import { publishRealtime } from '@/lib/realtime/bus'
 import { pathsIn, putDoc, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
-import { foldItemName } from '@/lib/mount-index/item-names'
+import { foldItemName } from '@/lib/mount-index/item-rules'
 import { readTiers, shadowLayers } from '@/lib/mount-index/item-tiers'
 import { defineItemFolderErrors, folderOfItemPath, isItemDocumentPath, type ItemFolderRules } from '@/lib/mount-index/item-folders'
 import {
+  archivedPatch,
   cleanPatch,
   createItemFolderStore,
+  nextCopyTitle,
   locationWriter,
   type ItemFolderScan,
 } from '@/lib/mount-index/item-store'
@@ -251,5 +253,18 @@ describe('the location write wrapper', () => {
 
   it('cleanPatch strips identity and timestamps', () => {
     expect(cleanPatch({ id: 'x', createdAt: 'a', updatedAt: 'b', name: 'kept' } as Partial<Toy>)).toEqual({ name: 'kept' })
+  })
+})
+
+describe('shared helpers', () => {
+  it('archivedPatch stamps, clears, or answers null for no change', () => {
+    expect(archivedPatch(null, true, 'now')).toEqual({ archivedAt: 'now' })
+    expect(archivedPatch('then', false, 'now')).toEqual({ archivedAt: null })
+    expect(archivedPatch('then', true, 'now')).toBeNull()
+  })
+
+  it('nextCopyTitle escalates past taken copies, case-insensitively', () => {
+    expect(nextCopyTitle('Shirt', ['Shirt'])).toBe('Shirt (copy)')
+    expect(nextCopyTitle('Shirt (copy)', ['shirt (COPY)'])).toBe('Shirt (copy 2)')
   })
 })

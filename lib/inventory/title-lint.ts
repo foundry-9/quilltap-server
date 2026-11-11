@@ -62,7 +62,7 @@
  * @module lib/inventory/title-lint
  */
 
-import { foldItemName } from '@/lib/mount-index/item-names';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import { logger } from '@/lib/logger';
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
