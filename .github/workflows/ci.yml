@@ -83,8 +83,23 @@ jobs:
       # ubuntu runner image ships without zsh. Absent it the test skips itself
       # rather than failing, so install it here to keep the check honest —
       # this is the only place that check ever runs unattended.
+      #
+      # The runner's Ubuntu mirror (azure.archive.ubuntu.com) has gone
+      # unresolvable for hours at a time, which used to fail the whole Test job
+      # before a single test ran. Retry a few times; if the mirror is still
+      # down, warn loudly and let the suite run with that one check skipped.
       - name: Install zsh (for the completion-template parse check)
-        run: sudo apt-get update && sudo apt-get install -y zsh
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 update \
+              && sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 install -y zsh; then
+              zsh --version
+              exit 0
+            fi
+            echo "zsh install attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::warning title=zsh not installed::apt mirror unreachable; the zsh completion-template parse check will be skipped in this run"
 
       # test:coverage raises the Jest *parent's* heap (--max-old-space-size).
       # With the v8 provider every worker sends back each loaded module's

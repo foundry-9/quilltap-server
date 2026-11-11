@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### CI
+
+- The Test job's zsh install retries three times and, if the runner's Ubuntu mirror is still unreachable, posts a warning and continues instead of failing the job. Only the zsh completion-template parse check is skipped in that case. Every CI run on 2026-11-11 had failed at this step on `Temporary failure resolving 'azure.archive.ubuntu.com'` before any test ran.
+
 #### Refactor: API inputs validated by schemas (phases 1–6)
 
 - #165: SillyTavern character export (JSON and PNG) and chat JSONL export returned 500 for a name with characters above U+00FF and broke on a `"`. They, the theme export, the backup download and the two `system/tools` downloads now build `Content-Disposition` with `buildContentDisposition`. A grep-test forbids a hand-spelled `filename=` header.
