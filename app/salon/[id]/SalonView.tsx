@@ -145,6 +145,12 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // --- Core data hook ---
   const chatDataHook = useChatData(id)
   const { chat, messages, loading, error, swipeStates, chatMemoryCount } = chatDataHook
+  // #173: a refresh that fails while the chat is on screen is news, not a
+  // dead end — say so once and keep the room up; the next read clears it.
+  const hasChat = chat !== null
+  useEffect(() => {
+    if (error && hasChat) showErrorToast(`The chat could not be refreshed: ${error}`)
+  }, [error, hasChat])
   const { setChat, setMessages, setSwipeStates, selectSwipeVariant } = chatDataHook
   const { fetchChat, refreshTranscript, clearProvisionalMessages, fetchChatMemoryCount } = chatDataHook
 
@@ -916,7 +922,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // handlers by identity: a fresh object per render would redraw them all.
   const { retryPicture, retryBackground } = useConciergeRetry(id, fetchChat, startBackgroundPolling)
   const regenerate = regenerationController.regenerate
-  const hasChat = !!chat
   const chatIsLocked = getConciergeState(chat) === 'locked'
   const conciergeRetry = useMemo<ConciergeRetryHandlers | undefined>(() => {
     if (!hasChat || chatIsLocked) return undefined
@@ -1750,7 +1755,9 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     )
   }
 
-  if (error || !chat) {
+  // #173: the full-page error is for a chat that never loaded. One that is
+  // already on screen keeps showing; a failed refresh is a toast (above).
+  if (!chat) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-lg qt-text-destructive">Error: {error || 'Chat not found'}</p>
@@ -1995,6 +2002,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           inputRef={inputRef}
           disabled={sseStreaming.sending || regenerationController.isRegenerating}
           sending={sseStreaming.sending}
+          streamInFlight={sseStreaming.isStreamInFlight}
           hasActiveCharacters={participantsWithImpersonation.hasActiveCharacters}
           streaming={sseStreaming.streaming}
           waitingForResponse={sseStreaming.waitingForResponse}

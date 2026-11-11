@@ -135,3 +135,75 @@ describe('useSSEStreaming — triggerContinueMode while paused', () => {
     })
   })
 })
+
+/**
+ * #172 — `sending` was set only by `sendMessage`, so a send made while a
+ * continue, opening or storyteller run was in flight passed the guard and
+ * opened a second stream over the first.
+ */
+describe('useSSEStreaming — one stream at a time', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('refuses a send while a continue is in flight, and keeps the text', async () => {
+    const { rendered } = setup()
+
+    act(() => {
+      void rendered.result.current.triggerContinueMode('participant-1', true)
+    })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(rendered.result.current.isStreamInFlight).toBe(true))
+    jest.mocked(showInfoToast).mockClear()
+
+    const setInput = jest.fn()
+    await act(async () => {
+      await rendered.result.current.sendMessage(
+        null,
+        'Too soon.',
+        setInput as never,
+        [],
+        [],
+        jest.fn() as never,
+        jest.fn() as never,
+      )
+    })
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(setInput).not.toHaveBeenCalled()
+    expect(showInfoToast).toHaveBeenCalledTimes(1)
+    expect(jest.mocked(showInfoToast).mock.calls[0][0]).toContain('still speaking')
+  })
+
+  it('refuses a storyteller run while a send is in flight', async () => {
+    const { rendered, send } = setup()
+
+    act(() => {
+      void send('The first remark.')
+    })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+
+    let ran: boolean | undefined
+    await act(async () => {
+      ran = await rendered.result.current.runStorytellerSelection('round-1', ['participant-1'], 'sequential' as never)
+    })
+
+    expect(ran).toBe(false)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a continue while an opening is in flight', async () => {
+    const { rendered } = setup()
+
+    act(() => {
+      void rendered.result.current.openChat()
+    })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      await rendered.result.current.triggerContinueMode('participant-1')
+    })
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+})

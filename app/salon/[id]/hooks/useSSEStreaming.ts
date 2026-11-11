@@ -354,6 +354,25 @@ export function useSSEStreaming({
   } = useToolExecutionStatus()
 
   const abortControllerRef = useRef<AbortController | null>(null)
+  // #172: one flag for "a stream is in flight", whichever lifecycle opened it.
+  // The ref answers the guards synchronously; the state re-renders the composer.
+  // The ref holds the owning stream's token, so a stream abandoned by Stop
+  // cannot, in its late `finally`, release a stream started after it.
+  const inFlightRef = useRef<symbol | null>(null)
+  const [isStreamInFlight, setIsStreamInFlight] = useState(false)
+  const claimStream = useCallback((): symbol | null => {
+    if (inFlightRef.current) return null
+    const token = Symbol('turn-stream')
+    inFlightRef.current = token
+    setIsStreamInFlight(true)
+    return token
+  }, [])
+  /** Release the claim — only the owner's token (or none, for an abandon) does. */
+  const releaseStream = useCallback((token?: symbol) => {
+    if (token && inFlightRef.current !== token) return
+    inFlightRef.current = null
+    setIsStreamInFlight(false)
+  }, [])
   // Monotonic batch counter so tool-call React keys stay unique across batches.
   const toolBatchSeqRef = useRef(0)
 
@@ -1046,7 +1065,8 @@ export function useSSEStreaming({
     // indistinguishable from a send that broke. The text stays in the composer
     // either way.
     if (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) return
-    if (sending) {
+    const streamToken = claimStream()
+    if (!streamToken) {
       showInfoToast('One moment — the room is still speaking. Your remark waits in the composer.')
       return
     }
@@ -1322,10 +1342,11 @@ export function useSSEStreaming({
       // reads above retire the ones the server persisted, and anything still
       // standing belongs to a send that never landed at all.
       clearProvisionalMessages()
+      releaseStream(streamToken)
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, restoreUnpersistedSubmission, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, claimStream, releaseStream, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, restoreUnpersistedSubmission, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Open a chat that was cast but not yet opened: the server runs the opening
@@ -1335,7 +1356,8 @@ export function useSSEStreaming({
    * closed stream.
    */
   const openChat = useCallback(async () => {
-    if (abortControllerRef.current) return
+    const streamToken = claimStream()
+    if (!streamToken) return
     setWaitingForResponse(true)
     setStreaming(false)
     resetStreamingContent()
@@ -1410,10 +1432,11 @@ export function useSSEStreaming({
       setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
+      releaseStream(streamToken)
       await fetchChat()
       focusInput()
     }
-  }, [chatId, setMessages, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, scrollOnStreamComplete, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, claimStream, releaseStream, setMessages, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, scrollOnStreamComplete, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Read a narration-only stream — a join the operator is watching
@@ -1457,7 +1480,7 @@ export function useSSEStreaming({
    * `isPaused` stands — so the room falls quiet again straight afterwards.
    */
   const triggerContinueMode = useCallback(async (participantId: string, nudge = false) => {
-    if (streaming || waitingForResponse) {
+    if (inFlightRef.current) {
       showInfoToast('One moment — the room is still speaking.')
       return
     }
@@ -1473,12 +1496,9 @@ export function useSSEStreaming({
       return
     }
 
+    const streamToken = claimStream()
+    if (!streamToken) return
     setHandStatus(null)
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-    }
 
     setWaitingForResponse(true)
     setStreaming(false)
@@ -1594,12 +1614,13 @@ export function useSSEStreaming({
       stoppingRef.current = false
       setStopping(false)
       scrollOnStreamComplete()
+      releaseStream(streamToken)
       // Re-fetch chat to pick up side-channel messages (e.g. whisper tool writes)
       await fetchChat()
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, claimStream, releaseStream, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Storyteller: run the operator's selection for an open round. The stream
@@ -1613,13 +1634,10 @@ export function useSSEStreaming({
     order: StorytellerOrder,
     keepOrder = false,
   ): Promise<boolean> => {
-    if (streaming || waitingForResponse) {
+    const streamToken = claimStream()
+    if (!streamToken) {
       showInfoToast('One moment — the room is still speaking.')
       return false
-    }
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
     }
 
     setWaitingForResponse(true)
@@ -1712,12 +1730,13 @@ export function useSSEStreaming({
       setHandStatus(settleHandAtStreamEnd)
       stoppingRef.current = false
       setStopping(false)
+      releaseStream(streamToken)
       scrollOnStreamComplete()
       await fetchChat()
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, claimStream, releaseStream, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Abandon the local stream outright — the old Stop, now only the fallback
@@ -1738,7 +1757,8 @@ export function useSSEStreaming({
     resetStreamingContent()
     stoppingRef.current = false
     setStopping(false)
-  }, [setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus])
+    releaseStream()
+  }, [setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus, releaseStream])
 
   /**
    * Hard stop. The server pauses a room with a rotation, abandons the provider
@@ -1821,6 +1841,7 @@ export function useSSEStreaming({
 
   return {
     sending,
+    isStreamInFlight,
     streaming,
     streamingContent,
     streamingReasoning,

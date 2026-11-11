@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Refactor: one Salon stream lifecycle
+
+- #172: Enter in the composer during a Continue, nudge, opening or storyteller run started a second turn stream over the first. `useSSEStreaming` now holds one in-flight claim (`isStreamInFlight`) that every lifecycle takes and checks; a send refused by it shows the "still speaking" toast and leaves the text in the composer. The composer's Enter path and Send button ask the same question. A claim is released only by its own stream's `finally` (or by Stop's local abandon), so an abandoned stream cannot clear a newer one's.
+- #173: one failed chat read left the Salon on its full-page error screen for the life of the tab. `useChatData` clears `error` on a successful read; `SalonView` shows the error screen only when there is no chat, and a failed refresh of a chat on screen is a toast.
+
 #### Refactor: API inputs validated by schemas (phases 1–6)
 
 - #165: SillyTavern character export (JSON and PNG) and chat JSONL export returned 500 for a name with characters above U+00FF and broke on a `"`. They, the theme export, the backup download and the two `system/tools` downloads now build `Content-Disposition` with `buildContentDisposition`. A grep-test forbids a hand-spelled `filename=` header.
