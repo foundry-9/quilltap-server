@@ -158,6 +158,11 @@ describe('casting calls no model and leaves the chat to be opened', () => {
 
   it('honours an explicit null as "No image generation" over every default', async () => {
     expect((await cast({ imageProfileId: null })).row?.imageProfileId).toBeNull()
+    // #177: a project default does not override it either.
+    expect((await cast(
+      { projectId: PROJECT, imageProfileId: null },
+      makeRepos({ project: { id: PROJECT, defaultImageProfileId: 'proj-img' } }),
+    )).row?.imageProfileId).toBeNull()
   })
 })
 

@@ -10,7 +10,7 @@ import { badRequest } from '@/lib/api/responses';
 import { retireMemories } from '@/lib/memory/retire';
 import { bulkReattributeSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
-import type { ChatMetadata, MessageEvent, ChatEvent } from '@/lib/schemas/types';
+import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 
 /**
  * Bulk re-attribute messages from one participant to another
@@ -68,7 +68,6 @@ export async function handleBulkReattribute(
 
   // Delete memories for all affected messages
   let memoriesDeleted = 0;
-  const affectedMessageIds = new Set(affectedMessages.map((m) => m.id));
 
   // The re-attributed lines' memories were extracted for the old speaker;
   // they go together, through the deletion chokepoint.
@@ -93,18 +92,24 @@ export async function handleBulkReattribute(
     }
   }
 
-  // Update all messages
-  const updatedMessages: ChatEvent[] = allMessages.map((msg) => {
-    if (msg.type === 'message' && affectedMessageIds.has(msg.id)) {
-      return { ...msg, participantId: targetParticipantId };
+  // Update only the re-attributed rows' participantId, one row at a time —
+  // never a clear-and-replay of the whole transcript (#164), which ran
+  // addMessage's per-message bookkeeping over the history and lost every row
+  // after a failed insert. A row that fails to update is logged and left as
+  // it was; every other row stays in place.
+  let messagesUpdated = 0;
+  for (const msg of affectedMessages) {
+    const updated = await repos.chats.updateMessage(chatId, msg.id, {
+      participantId: targetParticipantId,
+    });
+    if (updated) {
+      messagesUpdated++;
+    } else {
+      logger.warn('[Chats v1] Bulk re-attribute could not update a message', {
+        chatId,
+        messageId: msg.id,
+      });
     }
-    return msg;
-  });
-
-  // Rewrite all messages
-  await repos.chats.clearMessages(chatId);
-  for (const msg of updatedMessages) {
-    await repos.chats.addMessage(chatId, msg);
   }
 
   // Update chat's updatedAt timestamp
@@ -115,13 +120,13 @@ export async function handleBulkReattribute(
     sourceParticipantId,
     targetParticipantId,
     roleFilter,
-    messagesUpdated: affectedMessages.length,
+    messagesUpdated,
     memoriesDeleted,
   });
 
   return NextResponse.json({
     success: true,
-    messagesUpdated: affectedMessages.length,
+    messagesUpdated,
     memoriesDeleted,
   });
 }

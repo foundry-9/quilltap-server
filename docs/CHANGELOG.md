@@ -4,6 +4,18 @@
 
 ### 4.13-dev
 
+#### Fix: nine audit bugs (#164, #169, #174, #175, #177, #178, #183, #184, #185)
+
+- #164: bulk re-attribute (`?action=bulk-reattribute`) updates only the affected rows' `participantId` through `updateMessage`. It used to clear the transcript and replay every row through `addMessage`, which reset `lastMessageAt` and the cycle state, bumped the transcript once per row, ran in O(N²), and lost every row after a failed insert. A row that fails to update is logged and the rest stay in place.
+- #169: the Scriptorium list's Edit dialog mounts per store (`key={store.id}`) and sends only changed fields; an emptied pattern field sends `[]`. It used to open with Filesystem / Documents / Enabled and save those over the store. The mount-point PATCH refuses a `storeType` or `mountType` change on a live character vault, as it already refused a rename.
+- #174: Document Mode records the text it actually sent as saved. Text typed during a save stays dirty and is written by the same save run before it resolves. One save runs per document; a second call joins it.
+- #175: `saveDocument` returns whether everything was written. Closing or renaming after a refused save (409 or any error) keeps the pane open with its text and shows a toast.
+- #177: already fixed in 11bc7b59a (an explicit `imageProfileId: null` is sent and honored); added the project-default case to `cast.test.ts`.
+- #178: the import memory-creation dialog posts to `/api/v1/chats/[id]?action=queue-memories` with an empty body, instead of the nonexistent `/queue-memories` path. The server's error message is shown on failure.
+- #183: a swipe regeneration whose stream yields no content throws before any write, so no blank swipe is saved and the original line's memories are not retired.
+- #184: wearing a composite leaves its archived components off unless already worn (`analyzeComposite` / `dissolveCompositeToLeaves` take the worn set; `WearableNode` carries `archivedAt`). A composite whose every part is archived puts nothing on. `wardrobe_create` refuses an archived component.
+- #185: an ordinary send to a chat whose opening has not run runs the opening first, without the greeting, on the send's stream (`openBeforeSend`). Autonomous rooms are left to their run start.
+
 #### Refactor: the job queue's dedupe rule and the query translator's quiet failures
 
 - #192: memory text search treated user text as a regex turned into `LIKE`. Escaped punctuation (`Mr. Darcy (the elder)`) became literal backslashes and matched nothing; `.`, `%` and `_` were wildcards. New filter operators `$contains` and `$startsWith` (`LIKE … ESCAPE '\'`, value escaped by `like-escape.ts`) replace it in `searchByContent`, `countMemoriesWithText`, `findMemoriesWithText` and `searchByContentAboutCharacter`. `$regex` now throws on a pattern containing a backslash; `AbstractBaseRepository.escapeRegex` is removed.

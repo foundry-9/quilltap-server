@@ -139,6 +139,7 @@ Get an alternative response:
 **What happens:**
 - The same character regenerates — in a multi-character scene the new version is spoken and attributed by the very character whose message you regenerated, with their full persona, memory, and the scene's context
 - The newest version is shown in place; the original is kept one swipe away in the same group
+- Should the provider return nothing at all — a content filter, a reply made entirely of reasoning, an understudy with nothing to say — no blank swipe is filed, the original line stays as it was (memories included), and the regeneration reports the empty reply
 - Token usage counts for each generation
 
 #### Try Uncensored

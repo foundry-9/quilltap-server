@@ -2682,6 +2682,8 @@ Open a chat that was cast but not yet opened, for a caller that is not the Salon
 
 The Salon's opening stream. The server walks the opening's phases (`OPENING_PHASES`, resuming after the last recorded `openingPhase`), narrating each as a `greenRoom` stream frame — `{ kind: 'greenRoom', greenRoom: { event: 'phase' | 'status' | 'log' | 'wardrobeStart' | 'wardrobeResult' | 'inventory' | 'done', … } }` — and for a Salon chat ends with the greeting as an ordinary continue-mode turn (`purpose: 'opening'`; `turnStart` / `content` / `done`), then one `chainComplete`. It runs under the chat's turn-control handle: the Salon's Stop skips the greeting and the chat is marked opened; a send made meanwhile waits for it. A chat already opened answers with a bare `chainComplete`.
 
+An ordinary send to a chat that was never opened (still `'pending'`, or `'running'` from a broken-off attempt) runs the opening first on the send's own stream — the same `greenRoom` frames, **without** the greeting, since the operator's line is the first one — then the turn (`openBeforeSend`, `lib/services/chat-message/open-before-send.ts`; #185). An autonomous room is left to its run start.
+
 #### `POST /api/v1/chats/[id]?action=add-participant`
 
 Add a character to the chat.
