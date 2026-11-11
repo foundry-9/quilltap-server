@@ -74,7 +74,7 @@ export default function SummonFromLoreModal({
       onClose={onClose}
       headerless
       maxWidth="4xl"
-      overlayClassName="p-4"
+     
       className="overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
       bodyClassName=""
     >

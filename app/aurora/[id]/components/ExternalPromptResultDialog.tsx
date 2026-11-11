@@ -43,7 +43,7 @@ export function ExternalPromptResultDialog({
       maxWidth="3xl"
       className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
       bodyClassName="p-6 flex-1 min-h-0 flex flex-col"
-      overlayClassName="p-4"
+     
     >
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <ModalTitle className="qt-heading-4">

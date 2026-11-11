@@ -10,11 +10,9 @@
  * ceremony the occasion demands.
  */
 
-import { useEffect, useId, useRef, useState } from 'react';
-import { useDialogFocus } from '@/hooks/useDialogFocus';
+import { useEffect, useState } from 'react';
 import { Icon } from '@/components/ui/icon';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { createPortal } from 'react-dom';
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal';
 import type {
   CharacterOptimizerModalProps,
   OptimizerFilterOptions,
@@ -100,11 +98,6 @@ export function CharacterOptimizerModal({
   const canStart = Boolean(selectedProfileId) && profiles.length > 0 && (useMemories || hasInstructions);
   const stepLabels = stepLabelsFor(useMemories, hasInstructions);
 
-  useEscapeKey(onClose, !optimizer.loading && !optimizer.applying);
-  const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true);
-
   const handleClose = () => {
     if (!optimizer.loading && !optimizer.applying) {
       onClose();
@@ -143,528 +136,524 @@ export function CharacterOptimizerModal({
 
   const reviewedCount = optimizer.suggestions.filter((s) => optimizer.decisions.has(s.id)).length;
 
-  return createPortal(
-    <div className="qt-dialog-overlay" onClick={handleClose}>
-      <div
-        className="qt-dialog w-full max-w-2xl h-[92vh] m-4 flex flex-col"
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="qt-dialog-header flex items-start justify-between flex-shrink-0">
-          <div className="flex flex-col gap-0.5">
-            <h2 id={titleId} className="qt-dialog-title flex items-center gap-2">
-              <Icon name="book" className="w-5 h-5 text-primary" />
-              Refine from Memories &amp; Instructions
-            </h2>
-            <p className="qt-dialog-description">
-              {characterName} &mdash;{' '}
-              {optimizer.phase === 'preflight' && 'Configure & commence the refinement proceedings'}
-              {optimizer.phase === 'progress' && (useMemories ? 'The automata are consulting the memoirs…' : 'The automata are studying your instructions…')}
-              {optimizer.phase === 'review' && `Review ${optimizer.suggestions.length} proposed ${optimizer.suggestions.length === 1 ? 'amendment' : 'amendments'}`}
-              {optimizer.phase === 'apply' && 'Confirm amendments for commission'}
-              {optimizer.phase === 'suggestions-file-written' && 'Suggestions inscribed in the vault'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={optimizer.loading || optimizer.applying}
-            className="qt-button-icon qt-button-ghost disabled:opacity-50 flex-shrink-0"
-            aria-label="Close"
-          >
-            <Icon name="close" className="w-5 h-5" />
-          </button>
+  return (
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      headerless
+      busy={optimizer.loading || optimizer.applying}
+      maxWidth="2xl"
+      className="w-full h-[92vh] !max-h-[92vh] m-4"
+      bodyClassName="flex-1 min-h-0 flex flex-col"
+    >
+      {/* Header */}
+      <div className="qt-dialog-header flex items-start justify-between flex-shrink-0">
+        <div className="flex flex-col gap-0.5">
+          <ModalTitle className="qt-dialog-title flex items-center gap-2">
+            <Icon name="book" className="w-5 h-5 text-primary" />
+            Refine from Memories &amp; Instructions
+          </ModalTitle>
+          <p className="qt-dialog-description">
+            {characterName} &mdash;{' '}
+            {optimizer.phase === 'preflight' && 'Configure & commence the refinement proceedings'}
+            {optimizer.phase === 'progress' && (useMemories ? 'The automata are consulting the memoirs…' : 'The automata are studying your instructions…')}
+            {optimizer.phase === 'review' && `Review ${optimizer.suggestions.length} proposed ${optimizer.suggestions.length === 1 ? 'amendment' : 'amendments'}`}
+            {optimizer.phase === 'apply' && 'Confirm amendments for commission'}
+            {optimizer.phase === 'suggestions-file-written' && 'Suggestions inscribed in the vault'}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={handleClose}
+          disabled={optimizer.loading || optimizer.applying}
+          className="qt-button-icon qt-button-ghost disabled:opacity-50 flex-shrink-0"
+          aria-label="Close"
+        >
+          <Icon name="close" className="w-5 h-5" />
+        </button>
+      </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 pt-5 pb-8 flex flex-col gap-5">
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto px-6 pt-5 pb-8 flex flex-col gap-5">
 
-          {/* ===== PREFLIGHT PHASE ===== */}
-          {optimizer.phase === 'preflight' && (
-            <div className="flex flex-col gap-5">
-              <div className="qt-card p-4">
-                <p className="qt-body text-sm leading-relaxed">
-                  This instrument shall propose refinements to every corner of the character&rsquo;s
-                  profile &mdash; fields, scenarios, system prompts, appearance, wardrobe and aliases
-                  &mdash; upon whichever grounds you furnish: the patterns of behaviour recorded in their
-                  Commonplace Book, your own written instructions, or both together. You shall review
-                  each proposal and accept, reject, or amend it as your editorial judgement sees fit.
+        {/* ===== PREFLIGHT PHASE ===== */}
+        {optimizer.phase === 'preflight' && (
+          <div className="flex flex-col gap-5">
+            <div className="qt-card p-4">
+              <p className="qt-body text-sm leading-relaxed">
+                This instrument shall propose refinements to every corner of the character&rsquo;s
+                profile &mdash; fields, scenarios, system prompts, appearance, wardrobe and aliases
+                &mdash; upon whichever grounds you furnish: the patterns of behaviour recorded in their
+                Commonplace Book, your own written instructions, or both together. You shall review
+                each proposal and accept, reject, or amend it as your editorial judgement sees fit.
+              </p>
+            </div>
+
+            {profiles.length === 0 ? (
+              <div className="qt-card p-4 qt-border-destructive/30 qt-bg-destructive/5">
+                <div className="flex items-center gap-2 qt-text-destructive mb-2">
+                  <Icon name="alert-triangle" className="w-4 h-4" />
+                  <span className="text-sm font-semibold">No Connection Profile Available</span>
+                </div>
+                <p className="qt-body-sm qt-text-secondary">
+                  The refinement proceedings require an AI connection profile to be configured.
+                  Please visit The Foundry&rsquo;s Connection Profiles section to establish one
+                  before proceeding.
                 </p>
               </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <label className="qt-label" htmlFor="optimizer-profile-select">
+                  Select AI Model
+                </label>
+                <select
+                  id="optimizer-profile-select"
+                  className="qt-select"
+                  value={selectedProfileId}
+                  onChange={(e) => setSelectedProfileId(e.target.value)}
+                >
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="qt-helper">
+                  The selected model shall perform the analysis and compose the proposed refinements.
+                </p>
+              </div>
+            )}
 
-              {profiles.length === 0 ? (
-                <div className="qt-card p-4 qt-border-destructive/30 qt-bg-destructive/5">
-                  <div className="flex items-center gap-2 qt-text-destructive mb-2">
-                    <Icon name="alert-triangle" className="w-4 h-4" />
-                    <span className="text-sm font-semibold">No Connection Profile Available</span>
-                  </div>
-                  <p className="qt-body-sm qt-text-secondary">
-                    The refinement proceedings require an AI connection profile to be configured.
-                    Please visit The Foundry&rsquo;s Connection Profiles section to establish one
-                    before proceeding.
+            {/* The author's instructions */}
+            {profiles.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <label className="qt-label" htmlFor="optimizer-instructions">
+                  Your Instructions <span className="qt-text-secondary font-normal">(optional)</span>
+                </label>
+                <textarea
+                  id="optimizer-instructions"
+                  className="qt-textarea min-h-[7rem]"
+                  rows={5}
+                  placeholder="e.g. &ldquo;She has left the navy and now runs a bookshop in Bath; rewrite everything to suit, and soften her temper considerably.&rdquo;"
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  maxLength={OPTIMIZER_INSTRUCTIONS_MAX_LENGTH}
+                  aria-describedby="optimizer-instructions-help"
+                />
+                <div className="flex justify-between gap-3">
+                  <p id="optimizer-instructions-help" className="qt-helper">
+                    Direction the automata shall apply across every core file it touches. Where your
+                    instructions and the memoirs disagree, your instructions carry the day.
                   </p>
+                  <span className="qt-helper flex-shrink-0 tabular-nums">
+                    {instructions.length}/{OPTIMIZER_INSTRUCTIONS_MAX_LENGTH}
+                  </span>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <label className="qt-label" htmlFor="optimizer-profile-select">
-                    Select AI Model
-                  </label>
-                  <select
-                    id="optimizer-profile-select"
-                    className="qt-select"
-                    value={selectedProfileId}
-                    onChange={(e) => setSelectedProfileId(e.target.value)}
-                  >
-                    {profiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="qt-helper">
-                    The selected model shall perform the analysis and compose the proposed refinements.
-                  </p>
-                </div>
-              )}
+              </div>
+            )}
 
-              {/* The author's instructions */}
-              {profiles.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <label className="qt-label" htmlFor="optimizer-instructions">
-                    Your Instructions <span className="qt-text-secondary font-normal">(optional)</span>
-                  </label>
-                  <textarea
-                    id="optimizer-instructions"
-                    className="qt-textarea min-h-[7rem]"
-                    rows={5}
-                    placeholder="e.g. &ldquo;She has left the navy and now runs a bookshop in Bath; rewrite everything to suit, and soften her temper considerably.&rdquo;"
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    maxLength={OPTIMIZER_INSTRUCTIONS_MAX_LENGTH}
-                    aria-describedby="optimizer-instructions-help"
-                  />
-                  <div className="flex justify-between gap-3">
-                    <p id="optimizer-instructions-help" className="qt-helper">
-                      Direction the automata shall apply across every core file it touches. Where your
-                      instructions and the memoirs disagree, your instructions carry the day.
-                    </p>
-                    <span className="qt-helper flex-shrink-0 tabular-nums">
-                      {instructions.length}/{OPTIMIZER_INSTRUCTIONS_MAX_LENGTH}
-                    </span>
+            {/* Consult the Commonplace Book */}
+            {profiles.length > 0 && (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="qt-checkbox mt-0.5"
+                  checked={useMemories}
+                  onChange={(e) => setUseMemories(e.target.checked)}
+                />
+                <span className="flex flex-col gap-1">
+                  <span className="qt-label text-sm">Consult the Commonplace Book</span>
+                  <span className="qt-helper">
+                    Draw upon the character&rsquo;s most-reinforced memories as well. Untick to refine
+                    from your instructions alone.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {profiles.length > 0 && !useMemories && !hasInstructions && (
+              <p className="qt-helper qt-text-warning" role="status">
+                With the Commonplace Book closed, the automata require instructions to proceed.
+              </p>
+            )}
+
+            {/* Memory count slider */}
+            {profiles.length > 0 && useMemories && (
+              <div className="flex flex-col gap-2">
+                <label className="qt-label" htmlFor="optimizer-max-memories">
+                  Maximum Memories to Analyse: <span className="text-primary font-semibold">{maxMemories}</span>
+                </label>
+                <input
+                  id="optimizer-max-memories"
+                  type="range"
+                  min={5}
+                  max={200}
+                  step={5}
+                  value={maxMemories}
+                  onChange={(e) => setMaxMemories(Number(e.target.value))}
+                  className="qt-range w-full"
+                />
+                <div className="flex justify-between text-[10px] qt-text-secondary">
+                  <span>5</span>
+                  <span>200</span>
+                </div>
+              </div>
+            )}
+
+            {/* Filter section */}
+            {profiles.length > 0 && useMemories && (
+              <details className="qt-card">
+                <summary className="px-4 py-3 cursor-pointer qt-label select-none">
+                  Filter Memories
+                </summary>
+                <div className="px-4 pb-4 flex flex-col gap-4 border-t qt-border-default pt-3">
+                  {/* Text / semantic search */}
+                  <div className="flex flex-col gap-2">
+                    <label className="qt-label" htmlFor="optimizer-search-query">
+                      Search Query
+                    </label>
+                    <input
+                      id="optimizer-search-query"
+                      type="text"
+                      className="qt-input"
+                      placeholder="e.g. &ldquo;betrayal&rdquo; or &ldquo;relationship with the duke&rdquo;"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      maxLength={500}
+                    />
+                    <label className="flex items-center gap-2 text-sm qt-text-secondary">
+                      <input
+                        type="checkbox"
+                        className="qt-checkbox"
+                        checked={useSemanticSearch}
+                        onChange={(e) => setUseSemanticSearch(e.target.checked)}
+                      />
+                      Use semantic search (finds conceptually related memories)
+                    </label>
+                  </div>
+
+                  {/* Date filters */}
+                  <div className="flex gap-4">
+                    <div className="flex flex-col gap-1 flex-1">
+                      <label className="qt-label" htmlFor="optimizer-since-date">
+                        Since
+                      </label>
+                      <input
+                        id="optimizer-since-date"
+                        type="date"
+                        className="qt-input"
+                        value={sinceDate}
+                        onChange={(e) => setSinceDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1">
+                      <label className="qt-label" htmlFor="optimizer-before-date">
+                        Before
+                      </label>
+                      <input
+                        id="optimizer-before-date"
+                        type="date"
+                        className="qt-input"
+                        value={beforeDate}
+                        onChange={(e) => setBeforeDate(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
+              </details>
+            )}
 
-              {/* Consult the Commonplace Book */}
-              {profiles.length > 0 && (
+            {/* Output mode — save suggestions to vault instead of applying */}
+            {profiles.length > 0 && vaultAvailable && (
+              <div className="qt-card p-4 flex flex-col gap-2">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     className="qt-checkbox mt-0.5"
-                    checked={useMemories}
-                    onChange={(e) => setUseMemories(e.target.checked)}
+                    checked={saveToVault}
+                    onChange={(e) => setSaveToVault(e.target.checked)}
                   />
                   <span className="flex flex-col gap-1">
-                    <span className="qt-label text-sm">Consult the Commonplace Book</span>
+                    <span className="qt-label text-sm">
+                      Save as suggestions in the vault (for later discussion)
+                    </span>
                     <span className="qt-helper">
-                      Draw upon the character&rsquo;s most-reinforced memories as well. Untick to refine
-                      from your instructions alone.
+                      In lieu of applying amendments directly, the proceedings shall be inscribed as a
+                      markdown dossier in the character&rsquo;s vault &mdash; at
+                      <code className="qt-code text-[11px] mx-1">Suggestions/refinement-&lt;timestamp&gt;.md</code>
+                      &mdash; so that author and character may review and debate the proposals at leisure before any are commissioned.
                     </span>
                   </span>
                 </label>
-              )}
-
-              {profiles.length > 0 && !useMemories && !hasInstructions && (
-                <p className="qt-helper qt-text-warning" role="status">
-                  With the Commonplace Book closed, the automata require instructions to proceed.
-                </p>
-              )}
-
-              {/* Memory count slider */}
-              {profiles.length > 0 && useMemories && (
-                <div className="flex flex-col gap-2">
-                  <label className="qt-label" htmlFor="optimizer-max-memories">
-                    Maximum Memories to Analyse: <span className="text-primary font-semibold">{maxMemories}</span>
-                  </label>
-                  <input
-                    id="optimizer-max-memories"
-                    type="range"
-                    min={5}
-                    max={200}
-                    step={5}
-                    value={maxMemories}
-                    onChange={(e) => setMaxMemories(Number(e.target.value))}
-                    className="qt-range w-full"
-                  />
-                  <div className="flex justify-between text-[10px] qt-text-secondary">
-                    <span>5</span>
-                    <span>200</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Filter section */}
-              {profiles.length > 0 && useMemories && (
-                <details className="qt-card">
-                  <summary className="px-4 py-3 cursor-pointer qt-label select-none">
-                    Filter Memories
-                  </summary>
-                  <div className="px-4 pb-4 flex flex-col gap-4 border-t qt-border-default pt-3">
-                    {/* Text / semantic search */}
-                    <div className="flex flex-col gap-2">
-                      <label className="qt-label" htmlFor="optimizer-search-query">
-                        Search Query
-                      </label>
-                      <input
-                        id="optimizer-search-query"
-                        type="text"
-                        className="qt-input"
-                        placeholder="e.g. &ldquo;betrayal&rdquo; or &ldquo;relationship with the duke&rdquo;"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        maxLength={500}
-                      />
-                      <label className="flex items-center gap-2 text-sm qt-text-secondary">
-                        <input
-                          type="checkbox"
-                          className="qt-checkbox"
-                          checked={useSemanticSearch}
-                          onChange={(e) => setUseSemanticSearch(e.target.checked)}
-                        />
-                        Use semantic search (finds conceptually related memories)
-                      </label>
-                    </div>
-
-                    {/* Date filters */}
-                    <div className="flex gap-4">
-                      <div className="flex flex-col gap-1 flex-1">
-                        <label className="qt-label" htmlFor="optimizer-since-date">
-                          Since
-                        </label>
-                        <input
-                          id="optimizer-since-date"
-                          type="date"
-                          className="qt-input"
-                          value={sinceDate}
-                          onChange={(e) => setSinceDate(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1 flex-1">
-                        <label className="qt-label" htmlFor="optimizer-before-date">
-                          Before
-                        </label>
-                        <input
-                          id="optimizer-before-date"
-                          type="date"
-                          className="qt-input"
-                          value={beforeDate}
-                          onChange={(e) => setBeforeDate(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              )}
-
-              {/* Output mode — save suggestions to vault instead of applying */}
-              {profiles.length > 0 && vaultAvailable && (
-                <div className="qt-card p-4 flex flex-col gap-2">
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="qt-checkbox mt-0.5"
-                      checked={saveToVault}
-                      onChange={(e) => setSaveToVault(e.target.checked)}
-                    />
-                    <span className="flex flex-col gap-1">
-                      <span className="qt-label text-sm">
-                        Save as suggestions in the vault (for later discussion)
-                      </span>
-                      <span className="qt-helper">
-                        In lieu of applying amendments directly, the proceedings shall be inscribed as a
-                        markdown dossier in the character&rsquo;s vault &mdash; at
-                        <code className="qt-code text-[11px] mx-1">Suggestions/refinement-&lt;timestamp&gt;.md</code>
-                        &mdash; so that author and character may review and debate the proposals at leisure before any are commissioned.
-                      </span>
-                    </span>
-                  </label>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ===== PROGRESS PHASE ===== */}
-          {optimizer.phase === 'progress' && (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <h3 className="qt-section-title text-sm">
-                  {useMemories ? 'Consulting the Memoirs' : 'Studying Your Instructions'}
-                </h3>
-                <p className="qt-section-subtitle text-xs">
-                  The automata are at their labours. Please stand by.
-                </p>
               </div>
-
-              {/* Progress bar */}
-              <ProgressBar currentStep={optimizer.progressStep} startedAt={optimizer.startedAt} />
-
-              <div className="flex flex-col gap-1 qt-card p-3">
-                {Object.entries(stepLabels).map(([key, label]) => (
-                  <ProgressStep
-                    key={key}
-                    stepKey={key}
-                    label={label}
-                    currentStep={optimizer.progressStep}
-                  />
-                ))}
-              </div>
-
-              {optimizer.progressStep === 'generating' && optimizer.progressSubStep && (
-                <p className="qt-caption text-center">
-                  {optimizer.progressSubStep.label}
-                  {optimizer.progressSubStep.total > 1 && (
-                    <> &mdash; pass {optimizer.progressSubStep.index} of {optimizer.progressSubStep.total}</>
-                  )}
-                </p>
-              )}
-
-              {optimizer.memoryCount > 0 && (
-                <p className="qt-caption text-center">
-                  {optimizer.filteredCount > optimizer.memoryCount ? (
-                    <>{optimizer.filteredCount} {optimizer.filteredCount === 1 ? 'memoir' : 'memoirs'} matched; top {optimizer.memoryCount} selected for analysis</>
-                  ) : (
-                    <>{optimizer.memoryCount} {optimizer.memoryCount === 1 ? 'memory' : 'memories'} retrieved from the Commonplace Book</>
-                  )}
-                </p>
-              )}
-
-              {/* Show analysis summary once available */}
-              {optimizer.analysis && (
-                <AnalysisSummary
-                  analysis={optimizer.analysis}
-                  memoryCount={optimizer.memoryCount}
-                  instructionsGiven={hasInstructions}
-                />
-              )}
-
-              {optimizer.noSuggestionsMessage && !optimizer.loading && (
-                <div className="qt-card p-4 text-center flex flex-col items-center gap-3">
-                  <Icon name="check-circle" className="w-10 h-10 qt-text-secondary" />
-                  <p className="qt-body-sm qt-text-secondary leading-relaxed max-w-sm">
-                    {optimizer.noSuggestionsMessage}
-                  </p>
-                  <button type="button" onClick={handleClose} className="qt-button-secondary qt-button-sm">
-                    Close
-                  </button>
-                </div>
-              )}
-
-              {optimizer.error && (
-                <div className="qt-card p-3 qt-border-destructive/30 qt-bg-destructive/5">
-                  <p className="text-sm qt-text-destructive">{optimizer.error}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ===== REVIEW PHASE ===== */}
-          {optimizer.phase === 'review' && optimizer.suggestions.length > 0 && (
-            <div className="flex flex-col gap-4 flex-1 min-h-0">
-              {/* Progress through suggestions */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  {optimizer.suggestions.map((_, idx) => {
-                    const hasDecision = optimizer.decisions.has(optimizer.suggestions[idx].id);
-                    const decision = optimizer.decisions.get(optimizer.suggestions[idx].id);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => optimizer.goToSuggestion(idx)}
-                        aria-label={`Go to suggestion ${idx + 1}`}
-                        className={`rounded-full transition-all ${
-                          idx === optimizer.currentIndex
-                            ? 'w-6 h-2.5 qt-bg-primary'
-                            : hasDecision
-                            ? decision === 'rejected'
-                              ? 'w-2.5 h-2.5 qt-bg-destructive/60'
-                              : 'w-2.5 h-2.5 qt-bg-success/60'
-                            : 'w-2.5 h-2.5 qt-bg-muted-foreground/30 hover:qt-bg-muted-foreground/60'
-                        }`}
-                      />
-                    );
-                  })}
-                </div>
-                <span className="qt-caption">
-                  {reviewedCount} of {optimizer.suggestions.length} reviewed
-                </span>
-              </div>
-
-              {/* Current suggestion card */}
-              {currentSuggestion && (
-                <SuggestionCard
-                  suggestion={currentSuggestion}
-                  decision={optimizer.decisions.get(currentSuggestion.id)}
-                  editedValue={optimizer.editedValues.get(currentSuggestion.id)}
-                  onAccept={() => optimizer.decideSuggestion(currentSuggestion.id, 'accepted')}
-                  onReject={() => optimizer.decideSuggestion(currentSuggestion.id, 'rejected')}
-                  onEdit={(value) => optimizer.editSuggestion(currentSuggestion.id, value)}
-                  index={optimizer.currentIndex}
-                  total={optimizer.suggestions.length}
-                />
-              )}
-
-              {/* Skip to apply */}
-              {allReviewed && optimizer.currentIndex < optimizer.suggestions.length - 1 && (
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => optimizer.setPhase('apply')}
-                    className="qt-action text-xs"
-                  >
-                    All proposals reviewed — proceed to Apply Changes
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ===== SUGGESTIONS-FILE-WRITTEN PHASE ===== */}
-          {optimizer.phase === 'suggestions-file-written' && (
-            <div className="flex flex-col items-center gap-4 py-8 text-center">
-              <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
-                <Icon name="file" className="w-8 h-8 qt-text-success" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <h3 className="qt-section-title">Suggestions Inscribed</h3>
-                <p className="qt-section-subtitle text-sm max-w-md">
-                  A dossier of {optimizer.suggestions.length}{' '}
-                  {optimizer.suggestions.length === 1 ? 'proposal has' : 'proposals have'} been deposited in {characterName}&rsquo;s vault. Author
-                  and character are invited to peruse, deliberate, and commission refinements in their own good time.
-                </p>
-                {optimizer.suggestionsFilePath && (
-                  <p className="qt-caption mt-2 font-mono text-xs break-all">
-                    {optimizer.suggestionsFilePath}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ===== APPLY PHASE ===== */}
-          {optimizer.phase === 'apply' && (
-            <>
-              {applySuccess ? (
-                <div className="flex flex-col items-center gap-4 py-8 text-center">
-                  <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
-                    <Icon name="check" className="w-8 h-8 qt-text-success" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <h3 className="qt-section-title">Refinements Commissioned</h3>
-                    <p className="qt-section-subtitle text-sm">
-                      The amendments have been inscribed into {characterName}&rsquo;s permanent record
-                      with all due ceremony. The character is now the beneficiary of your editorial wisdom.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <ApplyConfirmation
-                  changes={acceptedChanges}
-                  applying={optimizer.applying}
-                  onApply={handleApply}
-                  onBack={() => optimizer.setPhase('review')}
-                />
-              )}
-
-              {optimizer.error && !applySuccess && (
-                <div className="qt-card p-3 qt-border-destructive/30 qt-bg-destructive/5">
-                  <p className="text-sm qt-text-destructive">{optimizer.error}</p>
-                </div>
-              )}
-            </>
-          )}
-
-        </div>
-
-        {/* Footer */}
-        {optimizer.phase === 'preflight' && (
-          <div className="qt-dialog-footer flex justify-between flex-shrink-0">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="qt-button-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleStart}
-              disabled={!canStart}
-              className="qt-button-primary disabled:opacity-50"
-            >
-              <Icon name="book" className="w-4 h-4" />
-              Commence Refinement
-            </button>
+            )}
           </div>
         )}
 
-        {optimizer.phase === 'review' && (
-          <div className="qt-dialog-footer flex flex-col gap-2 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={optimizer.prevSuggestion}
-                disabled={optimizer.currentIndex === 0}
-                className="qt-button-ghost qt-button-sm disabled:opacity-30"
-              >
-                <Icon name="chevron-left" className="w-4 h-4" />
-                Previous
-              </button>
+        {/* ===== PROGRESS PHASE ===== */}
+        {optimizer.phase === 'progress' && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <h3 className="qt-section-title text-sm">
+                {useMemories ? 'Consulting the Memoirs' : 'Studying Your Instructions'}
+              </h3>
+              <p className="qt-section-subtitle text-xs">
+                The automata are at their labours. Please stand by.
+              </p>
+            </div>
 
-              <div className="flex-1" />
+            {/* Progress bar */}
+            <ProgressBar currentStep={optimizer.progressStep} startedAt={optimizer.startedAt} />
 
-              {optimizer.currentIndex < optimizer.suggestions.length - 1 ? (
-                <button
-                  type="button"
-                  onClick={optimizer.nextSuggestion}
-                  className="qt-button-secondary qt-button-sm"
-                >
-                  Next
-                  <Icon name="chevron-right" className="w-4 h-4" />
+            <div className="flex flex-col gap-1 qt-card p-3">
+              {Object.entries(stepLabels).map(([key, label]) => (
+                <ProgressStep
+                  key={key}
+                  stepKey={key}
+                  label={label}
+                  currentStep={optimizer.progressStep}
+                />
+              ))}
+            </div>
+
+            {optimizer.progressStep === 'generating' && optimizer.progressSubStep && (
+              <p className="qt-caption text-center">
+                {optimizer.progressSubStep.label}
+                {optimizer.progressSubStep.total > 1 && (
+                  <> &mdash; pass {optimizer.progressSubStep.index} of {optimizer.progressSubStep.total}</>
+                )}
+              </p>
+            )}
+
+            {optimizer.memoryCount > 0 && (
+              <p className="qt-caption text-center">
+                {optimizer.filteredCount > optimizer.memoryCount ? (
+                  <>{optimizer.filteredCount} {optimizer.filteredCount === 1 ? 'memoir' : 'memoirs'} matched; top {optimizer.memoryCount} selected for analysis</>
+                ) : (
+                  <>{optimizer.memoryCount} {optimizer.memoryCount === 1 ? 'memory' : 'memories'} retrieved from the Commonplace Book</>
+                )}
+              </p>
+            )}
+
+            {/* Show analysis summary once available */}
+            {optimizer.analysis && (
+              <AnalysisSummary
+                analysis={optimizer.analysis}
+                memoryCount={optimizer.memoryCount}
+                instructionsGiven={hasInstructions}
+              />
+            )}
+
+            {optimizer.noSuggestionsMessage && !optimizer.loading && (
+              <div className="qt-card p-4 text-center flex flex-col items-center gap-3">
+                <Icon name="check-circle" className="w-10 h-10 qt-text-secondary" />
+                <p className="qt-body-sm qt-text-secondary leading-relaxed max-w-sm">
+                  {optimizer.noSuggestionsMessage}
+                </p>
+                <button type="button" onClick={handleClose} className="qt-button-secondary qt-button-sm">
+                  Close
                 </button>
-              ) : (
+              </div>
+            )}
+
+            {optimizer.error && (
+              <div className="qt-card p-3 qt-border-destructive/30 qt-bg-destructive/5">
+                <p className="text-sm qt-text-destructive">{optimizer.error}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== REVIEW PHASE ===== */}
+        {optimizer.phase === 'review' && optimizer.suggestions.length > 0 && (
+          <div className="flex flex-col gap-4 flex-1 min-h-0">
+            {/* Progress through suggestions */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                {optimizer.suggestions.map((_, idx) => {
+                  const hasDecision = optimizer.decisions.has(optimizer.suggestions[idx].id);
+                  const decision = optimizer.decisions.get(optimizer.suggestions[idx].id);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => optimizer.goToSuggestion(idx)}
+                      aria-label={`Go to suggestion ${idx + 1}`}
+                      className={`rounded-full transition-all ${
+                        idx === optimizer.currentIndex
+                          ? 'w-6 h-2.5 qt-bg-primary'
+                          : hasDecision
+                          ? decision === 'rejected'
+                            ? 'w-2.5 h-2.5 qt-bg-destructive/60'
+                            : 'w-2.5 h-2.5 qt-bg-success/60'
+                          : 'w-2.5 h-2.5 qt-bg-muted-foreground/30 hover:qt-bg-muted-foreground/60'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+              <span className="qt-caption">
+                {reviewedCount} of {optimizer.suggestions.length} reviewed
+              </span>
+            </div>
+
+            {/* Current suggestion card */}
+            {currentSuggestion && (
+              <SuggestionCard
+                suggestion={currentSuggestion}
+                decision={optimizer.decisions.get(currentSuggestion.id)}
+                editedValue={optimizer.editedValues.get(currentSuggestion.id)}
+                onAccept={() => optimizer.decideSuggestion(currentSuggestion.id, 'accepted')}
+                onReject={() => optimizer.decideSuggestion(currentSuggestion.id, 'rejected')}
+                onEdit={(value) => optimizer.editSuggestion(currentSuggestion.id, value)}
+                index={optimizer.currentIndex}
+                total={optimizer.suggestions.length}
+              />
+            )}
+
+            {/* Skip to apply */}
+            {allReviewed && optimizer.currentIndex < optimizer.suggestions.length - 1 && (
+              <div className="text-center">
                 <button
                   type="button"
                   onClick={() => optimizer.setPhase('apply')}
-                  className="qt-button-primary qt-button-sm"
+                  className="qt-action text-xs"
                 >
-                  Review Changes
-                  <Icon name="chevron-right" className="w-4 h-4" />
+                  All proposals reviewed — proceed to Apply Changes
                 </button>
-              )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== SUGGESTIONS-FILE-WRITTEN PHASE ===== */}
+        {optimizer.phase === 'suggestions-file-written' && (
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
+              <Icon name="file" className="w-8 h-8 qt-text-success" />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="qt-caption">
-                {acceptedChanges.length} {acceptedChanges.length === 1 ? 'change' : 'changes'} accepted so far
-              </span>
-              <button
-                type="button"
-                onClick={() => optimizer.setPhase('apply')}
-                className="qt-button-primary"
-              >
-                Review &amp; Apply Changes
-              </button>
+            <div className="flex flex-col gap-1">
+              <h3 className="qt-section-title">Suggestions Inscribed</h3>
+              <p className="qt-section-subtitle text-sm max-w-md">
+                A dossier of {optimizer.suggestions.length}{' '}
+                {optimizer.suggestions.length === 1 ? 'proposal has' : 'proposals have'} been deposited in {characterName}&rsquo;s vault. Author
+                and character are invited to peruse, deliberate, and commission refinements in their own good time.
+              </p>
+              {optimizer.suggestionsFilePath && (
+                <p className="qt-caption mt-2 font-mono text-xs break-all">
+                  {optimizer.suggestionsFilePath}
+                </p>
+              )}
             </div>
           </div>
         )}
+
+        {/* ===== APPLY PHASE ===== */}
+        {optimizer.phase === 'apply' && (
+          <>
+            {applySuccess ? (
+              <div className="flex flex-col items-center gap-4 py-8 text-center">
+                <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
+                  <Icon name="check" className="w-8 h-8 qt-text-success" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <h3 className="qt-section-title">Refinements Commissioned</h3>
+                  <p className="qt-section-subtitle text-sm">
+                    The amendments have been inscribed into {characterName}&rsquo;s permanent record
+                    with all due ceremony. The character is now the beneficiary of your editorial wisdom.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ApplyConfirmation
+                changes={acceptedChanges}
+                applying={optimizer.applying}
+                onApply={handleApply}
+                onBack={() => optimizer.setPhase('review')}
+              />
+            )}
+
+            {optimizer.error && !applySuccess && (
+              <div className="qt-card p-3 qt-border-destructive/30 qt-bg-destructive/5">
+                <p className="text-sm qt-text-destructive">{optimizer.error}</p>
+              </div>
+            )}
+          </>
+        )}
+
       </div>
-    </div>,
-    document.body
+
+      {/* Footer */}
+      {optimizer.phase === 'preflight' && (
+        <div className="qt-dialog-footer flex justify-between flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="qt-button-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={!canStart}
+            className="qt-button-primary disabled:opacity-50"
+          >
+            <Icon name="book" className="w-4 h-4" />
+            Commence Refinement
+          </button>
+        </div>
+      )}
+
+      {optimizer.phase === 'review' && (
+        <div className="qt-dialog-footer flex flex-col gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={optimizer.prevSuggestion}
+              disabled={optimizer.currentIndex === 0}
+              className="qt-button-ghost qt-button-sm disabled:opacity-30"
+            >
+              <Icon name="chevron-left" className="w-4 h-4" />
+              Previous
+            </button>
+
+            <div className="flex-1" />
+
+            {optimizer.currentIndex < optimizer.suggestions.length - 1 ? (
+              <button
+                type="button"
+                onClick={optimizer.nextSuggestion}
+                className="qt-button-secondary qt-button-sm"
+              >
+                Next
+                <Icon name="chevron-right" className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => optimizer.setPhase('apply')}
+                className="qt-button-primary qt-button-sm"
+              >
+                Review Changes
+                <Icon name="chevron-right" className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="qt-caption">
+              {acceptedChanges.length} {acceptedChanges.length === 1 ? 'change' : 'changes'} accepted so far
+            </span>
+            <button
+              type="button"
+              onClick={() => optimizer.setPhase('apply')}
+              className="qt-button-primary"
+            >
+              Review &amp; Apply Changes
+            </button>
+          </div>
+        </div>
+      )}
+    </BaseModal>
   );
 }

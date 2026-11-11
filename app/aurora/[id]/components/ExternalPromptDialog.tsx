@@ -113,7 +113,7 @@ export function ExternalPromptDialog({
       headerless
       className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
       bodyClassName="p-6 flex-1 min-h-0 flex flex-col"
-      overlayClassName="p-4"
+     
     >
       <ModalTitle className="mb-4 qt-heading-4 flex-shrink-0">
         Generate External Prompt{characterName ? ` for ${characterName}` : ''}

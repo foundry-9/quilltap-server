@@ -40,7 +40,7 @@ export function ArchiveCharacterDialog({
       headerless
       className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
       bodyClassName="flex-1 min-h-0 flex flex-col"
-      overlayClassName="p-4"
+     
       footerClassName="px-6 py-4 qt-bg-muted border-t qt-border-default flex gap-3 justify-end flex-shrink-0 rounded-b-2xl"
       footer={
         <>

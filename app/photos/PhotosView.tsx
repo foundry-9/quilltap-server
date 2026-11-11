@@ -514,7 +514,7 @@ function PhotoDetailModal({
       onClose={onClose}
       headerless
       maxWidth="5xl"
-      overlayClassName="p-4"
+     
       className="relative overflow-hidden rounded-2xl border qt-border-default qt-bg-card qt-shadow-lg"
       bodyClassName=""
     >
