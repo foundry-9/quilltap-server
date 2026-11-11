@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Refactor: item-family kernel (phase 5: item pictures)
+
+- `createItemImages` (`lib/mount-index/item-family-images.ts`) owns the Atlas's and the Inventory's pictures: list (with a parent's pictures showing through, marked `inherited`), add, set-current, delete, cleanup, transfer carry, home resolution, and synchronous generation through the Concierge's image failover. `lib/atlas/item-images.ts` and `lib/inventory/item-images.ts` are bindings with their subject prompt, wording and log type; the two `item-image-generation.ts` files re-export the generation names. All exported names are unchanged.
+- The images routes were already adapters of the 4.12 `createItemImagesRoute`; they still call the families' named exports. The Wardrobe's route stays as it is: its extra lines are its own `link-image` action and error mapping, already on the shared factory.
+
 #### Refactor: item-family kernel (phase 4: the folder store)
 
 - `createItemFolderStore` (`lib/mount-index/item-store.ts`) is the one writer of an item family's folder: create, batched update (with `remove` keys and `requireAll`), delete (with follow-on patches), the five folder operations, and an in-lock write `guard`, each serialised per folder and parsing the folder once. The Atlas and the Inventory `vault-writes.ts` are bindings of it with their serialiser and scan (the Inventory also passes its title-lint mark as `wrapWrite`); their exported names are unchanged. `locationWriter` and `cleanPatch` are the location write wrapper both locations used to copy.
