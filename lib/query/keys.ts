@@ -160,6 +160,14 @@ export const queryKeys = {
     all: ['groups'] as const,
     list: () => ['groups', 'list'] as const,
     state: (id: string) => ['groups', id, 'state'] as const,
+    /** One group's record (`GET /api/v1/groups/{id}`). */
+    detail: (id: string) => ['groups', id, 'detail'] as const,
+    /** One group's members (`?action=members`). */
+    members: (id: string) => ['groups', id, 'members'] as const,
+    /** The group's linked stores (`/api/v1/groups/{id}/mount-points`). */
+    stores: (id: string) => ['groups', id, 'stores'] as const,
+    /** Prefix of every `byCharacters(...)` key — invalidate after a group write. */
+    byCharactersAll: ['groups', 'by-characters'] as const,
     /** Groups any of these characters belongs to; keyed by comma-joined, sorted ids. */
     byCharacters: (characterIdsKey: string) => ['groups', 'by-characters', characterIdsKey] as const,
   },
@@ -223,7 +231,10 @@ export const queryKeys = {
     lists: ['projects', 'list'] as const,
     list: (filters?: Filters) => ['projects', 'list', filters ?? {}] as const,
     detail: (id: string) => ['projects', 'detail', id] as const,
+    /** The project's files (`?action=list-files`): its store's files, else legacy rows. */
     files: (projectId: string) => ['projects', projectId, 'files'] as const,
+    /** The project's chats, paged (`?action=list-chats`) — an infinite query. */
+    chats: (projectId: string) => ['projects', projectId, 'chats'] as const,
     /** The project's linked stores and its own (`/api/v1/projects/{id}/mount-points`). */
     stores: (projectId: string) => ['projects', projectId, 'stores'] as const,
     background: (id: string) => ['projects', id, 'background'] as const,

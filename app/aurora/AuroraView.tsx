@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useId, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
@@ -23,7 +23,6 @@ import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
@@ -88,7 +87,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
-  const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
+  const { groups, deleteGroup, createGroup } = useGroups()
   const bgStyle = useSubsystemBackgroundStyle('aurora')
   // In a workspace tab, drilling into a character renders in place (keep-alive)
   // instead of navigating to /aurora/[id]. (Group detail still routes.)
@@ -99,17 +98,6 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   } = useInTabDrilldown(initialGroupId)
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [openChatForSelected, setOpenChatForSelected] = useState(false)
-
-  // Fetch groups on mount
-  useEffect(() => {
-    fetchGroups()
-  }, [fetchGroups])
-
-  // Navigating back to this tab refreshes the groups list (the characters
-  // list is TanStack-backed and refreshed by the tab-activation invalidator).
-  useOnTabActivated(() => {
-    void fetchGroups()
-  })
 
   const queryClient = useQueryClient()
   // "Show archived" opts into the tombstones the API hides by default; the two
@@ -395,12 +383,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     return (
       <GroupDetailView
         groupId={selectedGroupId}
-        onBack={() => {
-          setSelectedGroupId(null)
-          // Reflect any name/color/member edits in the list (a route visit would
-          // have refetched on remount).
-          void fetchGroups()
-        }}
+        onBack={() => setSelectedGroupId(null)}
       />
     )
   }
