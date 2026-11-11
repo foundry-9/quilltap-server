@@ -1,6 +1,6 @@
 # Refactor 4.13 — Client server-state: the remaining hand-rolled reads and writes
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #170 and #176 and closes the class behind several unfiled findings in §4.2.
+**Status:** Implemented (2026-11-11) on `claude/trusting-maxwell-ol20wu`, phases 1–5; outcome and what remains in §9. Browser verification not yet done. Proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #170 and #176 and closes the class behind several unfiled findings in §4.2.
 
 Counts and line numbers are the audit's and will drift. Re-measure before starting.
 
@@ -45,17 +45,17 @@ Two concentrated cases:
 
 Confirm each with a test; file what reproduces (confirm with the human before filing).
 
-- **Profile lists never invalidated**: `components/settings/connection-profiles/hooks/useConnectionProfiles.ts:100-123, 164-180` (232 lines, six fetches, cache-busts with `?t=`), `embedding-profiles/index.tsx:37` and `hooks/useEmbeddingProfiles.ts` (161), `image-profiles-tab.tsx:99-123`; consumer `chat-settings/hooks/useChatSettings.ts:106-117`.
-- **Not refreshable by realtime**: `app/scriptorium/hooks/useDocumentStores.ts` (270 lines), `app/prospero/hooks/useProjects.ts` (103), `components/settings/plugins-tab.tsx` (18 `useState`s).
-- **Cache not re-seeded after save**: `PluginConfigModal.tsx:93-118`, `tools/memory-recall-card.tsx:86-103`. Reopening within the stale time shows, and can re-save, pre-save values.
-- **`ChatToolSettingsModal.tsx:68-72`**: an effect keyed on array identity resets unsaved toggles on every chat refetch. The effect is verified; the user-visible loss is the audit's reading.
-- **CreateNPCDialog**: a new NPC is not in the picker (`:226-229`, no `characters.list()` invalidation).
-- **Embedding profile edit cannot clear** Dimensions, Base URL or API key (`embedding-profiles/ProfileModal.tsx:93-96`, `|| undefined` dropped by JSON). Same shape as fixed bugs 73 and 76.
-- **Salon list**: importing a chat does not show it (`app/salon/SalonListView.tsx:169-173` omits the `mutateChats()` its siblings call).
-- **Wardrobe dialog keeps the old project tier** after a chat is moved: `queryKeys.chats.project(chatId)` has `staleTime: Infinity` (`lib/hooks/use-character-wardrobe-items.ts:74-86`) and nothing invalidates it.
-- **No stale-response guard** on search-as-you-type: `components/memory/memory-list.tsx:87-133`, `character/character-conversations-tab.tsx:66-100`, `search-dialog.tsx:61-74, 149-210`. `useQuery` with the term in the key gives this for free.
-- **`useChatSettings.ts:190-193`**: every failed settings PUT is console-only.
-- **LLM log retention** saves on every keystroke (`LLMLoggingSettings.tsx:80-81`): typing "60" over "30" PUTs 6 first, and emptying the field sends 0, which means unlimited.
+- ~~**Profile lists never invalidated**~~ (confirmed by `use-profiles.test.tsx`; fixed in phase 4): `components/settings/connection-profiles/hooks/useConnectionProfiles.ts:100-123, 164-180` (232 lines, six fetches, cache-busts with `?t=`), `embedding-profiles/index.tsx:37` and `hooks/useEmbeddingProfiles.ts` (161), `image-profiles-tab.tsx:99-123`; consumer `chat-settings/hooks/useChatSettings.ts:106-117`.
+- ~~**Not refreshable by realtime**~~ (fixed in phase 4; `use-projects-and-stores.test.tsx`): `app/scriptorium/hooks/useDocumentStores.ts` (270 lines), `app/prospero/hooks/useProjects.ts` (103), `components/settings/plugins-tab.tsx` (18 `useState`s).
+- ~~**Cache not re-seeded after save**~~ (fixed by reading; no test): `PluginConfigModal.tsx:93-118`, `tools/memory-recall-card.tsx:86-103`. Reopening within the stale time shows, and can re-save, pre-save values.
+- ~~**`ChatToolSettingsModal.tsx:68-72`**~~ (reproduced by `ChatToolSettingsModal.draft.test.tsx`; fixed): an effect keyed on array identity resets unsaved toggles on every chat refetch. The effect is verified; the user-visible loss is the audit's reading.
+- ~~**CreateNPCDialog**~~ (fixed by reading; no test): a new NPC is not in the picker (`:226-229`, no `characters.list()` invalidation).
+- ~~**Embedding profile edit cannot clear**~~ — already fixed by spec 5 (the modal sends `null`); struck. Dimensions, Base URL or API key (`embedding-profiles/ProfileModal.tsx:93-96`, `|| undefined` dropped by JSON). Same shape as fixed bugs 73 and 76.
+- ~~**Salon list**~~ (fixed by reading; no test — the list view has no harness): importing a chat does not show it (`app/salon/SalonListView.tsx:169-173` omits the `mutateChats()` its siblings call).
+- ~~**Wardrobe dialog keeps the old project tier**~~ (fixed: `usePatchChat` invalidates `chats.project(id)`) after a chat is moved: `queryKeys.chats.project(chatId)` has `staleTime: Infinity` (`lib/hooks/use-character-wardrobe-items.ts:74-86`) and nothing invalidates it.
+- ~~**No stale-response guard**~~ on search-as-you-type (reproduced for the memory list and the dialog by `memory-list.test.tsx` and `search-dialog-stale.test.tsx`; the dialog guarded the term but not the type filter): `components/memory/memory-list.tsx:87-133`, `character/character-conversations-tab.tsx:66-100`, `search-dialog.tsx:61-74, 149-210`. `useQuery` with the term in the key gives this for free.
+- ~~**`useChatSettings.ts:190-193`**~~ (fixed by `useChatSettingsMutation`; `useChatSettingsMutation.test.tsx`): every failed settings PUT is console-only.
+- ~~**LLM log retention** saves on every keystroke~~ (reproduced by `llm-logging-retention.test.tsx`; fixed) (`LLMLoggingSettings.tsx:80-81`): typing "60" over "30" PUTs 6 first, and emptying the field sends 0, which means unlimited.
 
 ## 5. Design
 
@@ -96,3 +96,24 @@ Number inputs that save on change (`LLMLoggingSettings`) save on blur or after a
 
 1. Strict chat update schema: reject unknown top-level keys with 400 (proposed)? Any external client relying on the lenient form?
 2. A failed settings save: toast and roll the control back (proposed), or toast and leave the control as the user set it?
+
+## 9. Outcome (2026-11-11)
+
+**Decisions taken** (§8, the proposed defaults; revisit if wrong):
+
+1. `chatUpdateRequestSchema` is `z.strictObject`: an unknown top-level key is a 400. Every in-repo client was checked; none sends one. The inner `chat` object (`updateChatSchema`) is still lenient.
+2. A failed settings save toasts the server's sentence, rolls the cached row back, and re-reads it.
+
+**What was built**
+
+- `useDraft` (`lib/hooks/use-draft.ts`): `useProjectDetail` (two drafts, each editor saves its own fields), the tool settings dialog, the plugin config dialog, the Auto-Lock minutes field, the LLM log retention field.
+- `useChatSettingsMutation` / `putChatSettings` (`hooks/useChatSettingsMutation.ts`). `useChatSettings` is a table of `set` / `merge` / `field` setters (831 → 228 lines). The five outside writers use it; the Avatar Display provider reads the shared settings query.
+- `usePatchChat` (`lib/chat/use-patch-chat.ts`) over `putChatUpdate` / `patchChat`: the sidebar's five writers (the avatar-generation toggle is a server action, not a field write, and stays a plain `apiFetch`), the rename and project dialogs.
+- Entity hooks: `lib/hooks/use-profiles.ts` (connection, image, embedding profiles, API keys, roleplay templates; `useEnvelopeSelect`, `useInvalidateProfileLists`), `use-projects.ts`, `use-document-stores.ts`, `use-characters-list.ts`, `use-plugins.ts`. Named differently from the spec (`useXxxQuery`, `useCharactersList`) because `useConnectionProfiles` / `useRoleplayTemplates` were already taken by view hooks.
+- No `REALTIME_TOPICS` rows were needed: the new list keys sit under the `projects`, `mountPoints`, `characters` and `plugins` prefixes that the topic map and the tab refetch already sweep.
+- Size: about 3,180 source lines removed and 2,190 added (tests and docs excluded).
+
+**Left as plain calls, deliberately**: `app/setup/page.tsx`, `app/setup/profile/page.tsx` and `components/startup/pepper-vault-gate.tsx` read the character or profile list once to choose a redirect; the setup wizard's `fetchExistingConfig` and `updateChatSettings` run before any settings view is mounted (the wizard invalidates the lists when it finishes).
+
+**What remains** (not entity lists, so outside §5.1's named hooks; candidates for a follow-up): other effect-and-state loaders the audit counted, among them `useProjectChats`, `useProjectFiles`, `useProjectDocumentStores`, `useGroupMembers`' member list, `GroupDetailView` and `useGroupMountPoints`. None is one of the stale-dropdown or draft-loss cases.
+
