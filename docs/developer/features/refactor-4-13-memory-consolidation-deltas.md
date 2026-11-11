@@ -1,6 +1,6 @@
 # Refactor 4.13 — Consolidation writes as deltas, and one date stamp and transcript renderer for memory prompts
 
-**Status:** Phases 1–6 done (2026-11-11); phase 7 (the contradiction marker column) waits on decision 1 (§8). Originally proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #187. Finishes what the [memory-system refactor](complete/memory-system-refactor.md) recorded as left for its Phase F.
+**Status:** Complete (2026-11-11). Phases 1–6 done; phase 7 struck (decision 1: no column — see §9); decision 3 answered with a startup migration. Originally proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #187. Finishes what the [memory-system refactor](complete/memory-system-refactor.md) recorded as left for its Phase F.
 
 Line numbers are from the audit and will drift. Re-locate each site by name before editing.
 
@@ -120,5 +120,15 @@ Phase 1's tests decided the scope; every item in §4.2 reproduced, none was stru
 
 **One deliberate deviation from §5.1.** The spec says the writer "drops any id that no longer exists". It does that for link targets, tier moves and re-aims, but a digest whose *member* is gone (or whose existing text changed since the read — a footnote landed) is not written at all: the model's text summarises that member, and writing it would put a fact the operator deleted back into the book. The cluster is reported `changed` and stays unconsidered, so the next run re-plans it from the rows as they are.
 
-**Not done:** phase 7 (decision 1) and a repair arm for rows A9 already damaged (decision 3: left alone for now). The `recall-replay` before/after comparison on a real corpus (§7) is for the human to run on V4test.
+**Decision 1 — no new column (2026-11-11).** An audit of every reader of `supersededById` found none that mistreats a contradicted row once the `resolveDigest` guard is in:
+
+- Digest liveness in `retireMemories` asks `consolidatedFrom` first, so a contradicted row never keeps a digest alive.
+- Deleting the row that carries the newer fact clears the contradicted row's `supersededById` (the orphan scrub), and it re-enters consolidation as a demoted row. That is the right outcome: the evidence against it is gone.
+- Retention retires a contradicted cold row on the same clock as a folded member.
+- Graph repair and the CLI's `memories validate` flag only a superseder that no longer exists.
+- Labels were the only casualty: the memory card's "Superseded by a digest" now reads "Superseded by a newer memory", and the Brahma SQL prompt describes both meanings.
+
+**Decision 3 — a startup migration, not a repair arm.** Rewound counts left by A9 cannot be recovered (nothing records what they should have been), and links to retired ids are already `scrubDanglingMemoryLinks`' work. One-way links can be found and fixed exactly, so `symmetrize-memory-links-v1` adds the missing reverse side between two existing rows of the same holder, once, at startup. It removes nothing and leaves cross-holder links alone.
+
+**Not done:** phase 7 (struck by decision 1). The `recall-replay` before/after comparison on a real corpus (§7) is for the human to run on V4test.
 

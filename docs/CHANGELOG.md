@@ -14,6 +14,8 @@
 - #187: dates printed into memory prompts use the instance calendar. New `memoryDateStamp(iso, clock)` (`lib/memory/time/clock.ts`) replaces `.slice(0, 10)` in the relevant-conversations block, retrospective probes, the Commonplace mirror, the consolidation prompt, the context-summary fold and the anchor line. A grep-test forbids the slice under `lib/memory/`.
 - Cheap-LLM transcripts are labelled by speaker. New `renderLabelledTranscript` (`lib/chat/speaker-names.ts`) is used by the title passes, the context-summary fold, keyword distillation and the three image-scene passes, with names from `resolveSpeakerNames` where the caller has a chat. `ChatMessage` and `extractVisibleConversation` carry `participantId`. A grep-test forbids `role.toUpperCase()` and the `'User' :` role ternary under `lib/memory/` and `lib/image-gen/`.
 - Removed the unused `summarizeChat` and `updateContextSummary` cheap-LLM tasks.
+- New startup migration `symmetrize-memory-links-v1`: adds the missing reverse side of one-way links between two of a holder's memories, left by the old absolute consolidation writes. Adds only; skips cross-holder and missing targets.
+- No separate contradiction column: an audit of `supersededById` readers found the `resolveDigest` guard sufficient. The memory card now says "Superseded by a newer memory" (a contradicted row's replacement need not be a digest); help and the Brahma SQL prompt updated.
 
 #### Refactor: client server-state (phase 5: drafts and stale answers)
 

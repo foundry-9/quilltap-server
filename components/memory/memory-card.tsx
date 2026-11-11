@@ -114,10 +114,10 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onVie
                 onClick={() => onViewDigest(memory.supersededById!)}
                 className="qt-link"
               >
-                Superseded by a digest
+                Superseded by a newer memory
               </button>
             ) : (
-              'Superseded by a digest.'
+              'Superseded by a newer memory.'
             )
           )}
         </p>
