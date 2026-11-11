@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { themeRegistry } from '@/lib/themes/theme-registry';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { successResponse, notFound, badRequest, serverError, messageResponse } from '@/lib/api/responses';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { uninstallThemeBundle, exportThemeAsBundle } from '@/lib/themes/bundle-loader';
@@ -121,7 +122,7 @@ async function handleExport(themeId: string): Promise<Response> {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${themeId}.qtap-theme"`,
+        'Content-Disposition': buildContentDisposition(`${themeId}.qtap-theme`, 'attachment'),
         'Content-Length': fileBuffer.length.toString(),
       },
     });

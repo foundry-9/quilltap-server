@@ -100,6 +100,8 @@ export const POST = createContextParamsHandler<{ id: string }>(
 
       return created({ link, mountPoint });
     } catch (error) {
+      // A validation failure is the middleware's 400, not a 500 (#166).
+      if (error instanceof z.ZodError) throw error;
       logger.error('[Projects v1] Error linking mount point to project', { projectId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to link mount point to project');
     }
@@ -137,6 +139,8 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
 
       return successResponse({ message: 'Mount point unlinked from project' });
     } catch (error) {
+      // A validation failure is the middleware's 400, not a 500 (#166).
+      if (error instanceof z.ZodError) throw error;
       logger.error('[Projects v1] Error unlinking mount point from project', { projectId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to unlink mount point from project');
     }

@@ -33,6 +33,7 @@ import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
@@ -186,7 +187,7 @@ async function handleExport(
     return new NextResponse(jsonlContent, {
       headers: {
         'Content-Type': 'application/x-ndjson',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': buildContentDisposition(filename, 'attachment'),
       },
     });
   } catch (error) {

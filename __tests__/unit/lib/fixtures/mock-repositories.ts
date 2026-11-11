@@ -148,6 +148,7 @@ export interface MockLLMLogsRepository {
   findStandalone: jest.Mock;
   findByType: jest.Mock;
   findRecent: jest.Mock;
+  countByScope: jest.Mock;
   findByUserId: jest.Mock;
   countByUserId: jest.Mock;
   countByMessageId: jest.Mock;
@@ -410,6 +411,7 @@ export function createMockLLMLogsRepository(): MockLLMLogsRepository {
     findStandalone: jest.fn().mockResolvedValue([]),
     findByType: jest.fn().mockResolvedValue([]),
     findRecent: jest.fn().mockResolvedValue([]),
+    countByScope: jest.fn().mockResolvedValue(0),
     findByUserId: jest.fn().mockResolvedValue([]),
     countByUserId: jest.fn().mockResolvedValue(0),
     countByMessageId: jest.fn().mockResolvedValue(0),

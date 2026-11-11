@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
-import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse, created, validationError } from '@/lib/api/responses';
 import {
   regenerateMessageAsSwipe,
   streamSwipeRegeneration,
@@ -28,7 +28,7 @@ import {
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import type { ChatEvent, MessageEvent, ChatMetadata, ChatParticipant } from '@/lib/schemas/types';
-import type { MemoryCascadeAction } from '@/lib/schemas/settings.types';
+import { MemoryCascadeActionEnum } from '@/lib/schemas/settings.types';
 
 // Validation schemas
 const editMessageSchema = z.object({
@@ -220,8 +220,14 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
     try {
       // Parse query params for memory handling
       const { searchParams } = req.nextUrl;
-      const memoryAction = searchParams.get('memoryAction') as MemoryCascadeAction | null;
-      const skipConfirmation = searchParams.get('skipConfirmation') === 'true';const result = await findMessageInUserChats(repos, user.id, messageId);
+      const rawMemoryAction = searchParams.get('memoryAction');
+      const parsedMemoryAction = rawMemoryAction === null ? null : MemoryCascadeActionEnum.safeParse(rawMemoryAction);
+      if (parsedMemoryAction && !parsedMemoryAction.success) {
+        return validationError(parsedMemoryAction.error);
+      }
+      const memoryAction = parsedMemoryAction?.data ?? null;
+      const skipConfirmation = searchParams.get('skipConfirmation') === 'true';
+const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
         return notFound('Message');
       }
@@ -324,8 +330,14 @@ async function handleSwipeAction(
   const body = await req.json().catch(() => ({}));
   const parsed = swipeActionSchema.safeParse(body);
 
+  // A body that is present and fails the schema is a client error, never "no
+  // swipeIndex" — that would run a billable regeneration (#168).
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
   // If swipeIndex is provided, this is a switch operation (like PUT)
-  if (parsed.success && parsed.data.swipeIndex !== undefined) {
+  if (parsed.data.swipeIndex !== undefined) {
     return handleSwitchSwipe(repos, user.id, messageId, parsed.data.swipeIndex);
   }
 

@@ -90,7 +90,7 @@ describe('GET /api/v1/llm-logs', () => {
     const data = await res.json()
 
     expect(res.status).toBe(200)
-    expect(mockRepos.llmLogs.findStandalone).toHaveBeenCalledWith('user-123', 10)
+    expect(mockRepos.llmLogs.findStandalone).toHaveBeenCalledWith('user-123', 10, 0)
     expect(data.count).toBe(1)
   })
 
@@ -99,24 +99,62 @@ describe('GET /api/v1/llm-logs', () => {
     const data = await res.json()
 
     expect(res.status).toBe(200)
-    expect(mockRepos.llmLogs.findByType).toHaveBeenCalledWith('user-123', 'tool', 50)
+    expect(mockRepos.llmLogs.findByType).toHaveBeenCalledWith('user-123', 'tool', 50, 0)
     expect(data.count).toBe(1)
   })
 
-  it('applies limit and offset pagination', async () => {
-    mockRepos.llmLogs.findRecent.mockResolvedValue([
-      { ...baseLog, id: 'log-1' },
-      { ...baseLog, id: 'log-2' },
-      { ...baseLog, id: 'log-3' },
-    ])
+  // #167: the user-wide listings page in SQL, so the offset goes to the
+  // repository and the total comes from a count, never from the page.
+  it('passes limit and offset to the repository and totals with a count', async () => {
+    mockRepos.llmLogs.findRecent.mockResolvedValue([{ ...baseLog, id: 'log-2' }])
+    mockRepos.llmLogs.countByScope.mockResolvedValue(3)
 
     const res = await listLLMLogs(createMockRequest('http://localhost/api/v1/llm-logs?limit=1&offset=1'))
     const data = await res.json()
 
     expect(res.status).toBe(200)
+    expect(mockRepos.llmLogs.findRecent).toHaveBeenCalledWith('user-123', 1, 1)
+    expect(mockRepos.llmLogs.countByScope).toHaveBeenCalledWith('user-123', { kind: 'recent' })
     expect(data.count).toBe(1)
     expect(data.total).toBe(3)
+    expect(data.offset).toBe(1)
     expect(data.logs[0].id).toBe('log-2')
+  })
+
+  it('counts the same scope it pages for type and standalone', async () => {
+    await listLLMLogs(createMockRequest('http://localhost/api/v1/llm-logs?type=tool&offset=50'))
+    expect(mockRepos.llmLogs.findByType).toHaveBeenCalledWith('user-123', 'tool', 50, 50)
+    expect(mockRepos.llmLogs.countByScope).toHaveBeenCalledWith('user-123', { kind: 'type', type: 'tool' })
+
+    await listLLMLogs(createMockRequest('http://localhost/api/v1/llm-logs?standalone=true'))
+    expect(mockRepos.llmLogs.countByScope).toHaveBeenCalledWith('user-123', { kind: 'standalone' })
+  })
+
+  it('clamps a negative or non-numeric limit to the default rather than reading every row', async () => {
+    for (const bad of ['-1', 'abc', '0']) {
+      mockRepos.llmLogs.findRecent.mockClear()
+      const res = await listLLMLogs(createMockRequest(`http://localhost/api/v1/llm-logs?limit=${bad}&offset=-5`))
+      expect(res.status).toBe(200)
+      expect(mockRepos.llmLogs.findRecent).toHaveBeenCalledWith('user-123', 50, 0)
+    }
+  })
+
+  it('caps the limit at 100', async () => {
+    await listLLMLogs(createMockRequest('http://localhost/api/v1/llm-logs?limit=5000'))
+    expect(mockRepos.llmLogs.findRecent).toHaveBeenCalledWith('user-123', 100, 0)
+  })
+
+  it('pages the per-entity listings in memory', async () => {
+    mockRepos.llmLogs.findByChatId.mockResolvedValue([
+      { ...baseLog, id: 'log-1' },
+      { ...baseLog, id: 'log-2' },
+      { ...baseLog, id: 'log-3' },
+    ])
+    const res = await listLLMLogs(createMockRequest('http://localhost/api/v1/llm-logs?chatId=chat-1&limit=1&offset=1'))
+    const data = await res.json()
+    expect(data.total).toBe(3)
+    expect(data.logs.map((l: { id: string }) => l.id)).toEqual(['log-2'])
+    expect(mockRepos.llmLogs.countByScope).not.toHaveBeenCalled()
   })
 })
 

@@ -21,6 +21,8 @@ import { CHARACTER_VAULT_FILE_PATHS } from '@/lib/characters/vault/layout';
 import { inspectCharacterVault } from '@/lib/characters/vault/health';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import { readPagination } from '@/lib/api/query-params';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
@@ -143,7 +145,7 @@ function hydratedGetHandlers(
           return new NextResponse(new Uint8Array(pngBuffer), {
             headers: {
               'Content-Type': 'image/png',
-              'Content-Disposition': `attachment; filename="${character.name}.png"`,
+              'Content-Disposition': buildContentDisposition(`${character.name}.png`, 'attachment'),
             },
           });
         }
@@ -152,7 +154,7 @@ function hydratedGetHandlers(
         return new NextResponse(JSON.stringify(stCharacter, null, 2), {
           headers: {
             'Content-Type': 'application/json',
-            'Content-Disposition': `attachment; filename="${character.name}.json"`,
+            'Content-Disposition': buildContentDisposition(`${character.name}.json`, 'attachment'),
           },
         });
       } catch (error) {
@@ -165,8 +167,7 @@ function hydratedGetHandlers(
       try {
         const { searchParams } = req.nextUrl;
         const search = searchParams.get('search')?.toLowerCase() || '';
-        const limit = parseInt(searchParams.get('limit') || '10', 10);
-        const offset = parseInt(searchParams.get('offset') || '0', 10);
+        const { limit, offset } = readPagination(req, { defaultLimit: 10, maxLimit: 200 });
 
         const allChats = await repos.chats.findByCharacterId(id);
         const userChats = allChats.filter((chat) => chat.userId === user.id);

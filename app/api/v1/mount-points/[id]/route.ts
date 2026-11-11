@@ -175,6 +175,8 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
 
       return successResponse({ mountPoint: updated });
     } catch (error) {
+      // A validation failure is the middleware's 400, not a 500 (#166).
+      if (error instanceof z.ZodError) throw error;
       logger.error('[Mount Points v1] Error updating mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to update mount point');
     }

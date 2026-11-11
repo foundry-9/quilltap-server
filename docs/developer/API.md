@@ -240,6 +240,12 @@ Status code: `429 Too Many Requests`
 - `500` - Internal Server Error
 - `503` - Service Unavailable
 
+### Validation and shared readers
+
+- **A body that fails its schema is a `400`**, answered by the middleware (`createContextHandler` maps a thrown `ZodError` to `validationError`, with `details` the Zod issues). A route parses with `.parse()` and lets the error through: it never catches a `ZodError` into a `500`, and a present-but-invalid body is never read as "field absent" (#166, #168).
+- **Pagination** is read by `readPagination(req, { defaultLimit, maxLimit })` (`lib/api/query-params.ts`): `limit` clamped to `[1, maxLimit]`, a missing, non-numeric or non-positive value meaning the default, `offset` a non-negative integer (#167).
+- **A download's filename** is set by `buildContentDisposition(name, 'attachment' | 'inline')` (`lib/api/content-disposition.ts`): ASCII `filename="…"` with `"` and `\` escaped, plus `filename*=UTF-8''…` for a non-ASCII name. A grep-test forbids a hand-spelled header (#165).
+
 ## Providers
 
 Quilltap uses a plugin-based provider system. Available providers depend on which plugins are enabled via `SITE_PLUGINS_ENABLED`:
@@ -537,7 +543,7 @@ Update chat settings.
 
 Further accepted fields (each optional, same shapes as in the `GET` response): `tokenDisplaySettings`, `customTools`, `customToolTriggers` (boolean, default `false`: run a custom tool when anyone in a chat says one of its `triggers` phrases; ignored while `customTools` is off), `customToolIntervention` (boolean, default `true`: hold a custom tool marked intervenable for the operator before it is announced; `false` lets every run go ahead as rolled; ignored while `customTools` is off), `agentModeSettings`, `storyBackgroundsSettings`, `contextCompressionSettings`, `autoLockSettings`, `compositionModeDefault`, `composerSpellcheck`, `composerEmoji`, `composerUnicode`, `composerSlashCommands` (boolean, default `true`: the Salon composer's `/` command menu), `impersonationVoiceMode` (`'off'` / `'ask'` / `'always'`), `textReplacementsEnabled`, `autonomousRoomSettings`, `thinkingDisplay`, `autoScrollOnResponseComplete`, `answerConfirmationSettings`, `smartTypographySettings`.
 
-`conciergeSettings` is validated with `ConciergeSettingsSchema` (a malformed object is a `400`). The retired Concierge settings — `dangerousContentSettings`, the top-level `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId` — are rejected with `400` so a stale client fails loudly instead of writing a column nothing reads.
+The body is validated by `ChatSettingsPutSchema` (`patchSchemaOf(ChatSettingsSchema)`, strict): every key optional and none defaulted, an unknown top-level key or a malformed value is a `400` with the Zod issues. `id`, `userId`, the timestamps, `defaultTimestampConfig` and `timezone` are not writable here. Each nested object is replaced whole and validated against its full sub-schema, so its own field defaults fill what the client left out and unknown nested keys are dropped; `null` is refused for a nested object. A `defaultRoleplayTemplateId` that names no template is a `400`. The retired Concierge settings — `dangerousContentSettings`, the top-level `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId` — are rejected with `400` so a stale client fails loudly instead of writing a column nothing reads.
 
 #### `GET /api/v1/settings/data-retention`
 
@@ -6423,8 +6429,10 @@ List LLM logs with filters.
 - `characterId` - Filter by character ID
 - `type` - Filter by log type (CHAT_MESSAGE, TOOL_CONTINUATION, MEMORY_EXTRACTION, CHARACTER_WIZARD, etc.)
 - `standalone` - Set to 'true' for logs without entity associations
-- `limit` - Max results (default 50, max 100)
-- `offset` - Pagination offset
+- `limit` - Max results (default 50, max 100; with `includeMessages=true` default and max 500). A missing, non-numeric or non-positive value is the default.
+- `offset` - Rows to skip (non-negative; anything else is 0)
+
+The user-wide listings (no `messageId` / `chatId` / `characterId`: recent, `type`, `standalone`) page in SQL and report `total` as the count of every matching row. The per-entity listings load the whole set and page it in memory; `total` is that set's size.
 
 **Response**: `200 OK`
 

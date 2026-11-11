@@ -15,6 +15,7 @@
 import { NextRequest } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
+import { readPagination } from '@/lib/api/query-params';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { notFound, badRequest, serverError, successResponse, created, errorResponse } from '@/lib/api/responses';
@@ -54,7 +55,7 @@ async function handleList(req: NextRequest, context: RequestContext) {
     const limitParam = searchParams.get('limit');
     const includeAutonomous = searchParams.get('includeAutonomous') === 'true';
     const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : [];
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+    const limit = limitParam ? readPagination(req, { defaultLimit: 50, maxLimit: 1000 }).limit : undefined;
     const allChatMetadata = await repos.chats.findByUserId(user.id);
     // Default Salon listing: salon chats only (no help, no autonomous unless asked).
     // Autonomous rooms with per-room runVisibility = 'household' | 'open' are

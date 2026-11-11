@@ -4,6 +4,15 @@
 
 ### 4.13-dev
 
+#### Refactor: API inputs validated by schemas (phases 1–2)
+
+- #165: SillyTavern character export (JSON and PNG) and chat JSONL export returned 500 for a name with characters above U+00FF and broke on a `"`. They, the theme export, the backup download and the two `system/tools` downloads now build `Content-Disposition` with `buildContentDisposition`. A grep-test forbids a hand-spelled `filename=` header.
+- #166: an invalid body to `POST`/`DELETE /api/v1/projects/[id]/mount-points`, `PATCH /api/v1/mount-points/[id]` or `?action=close-document` was a 500; the `ZodError` now reaches the middleware, which answers 400.
+- #167: new `readPagination(req, { defaultLimit, maxLimit })` (`lib/api/query-params.ts`) clamps `limit` to `[1, maxLimit]`, treats a negative or non-numeric value as the default, and keeps `offset >= 0`. Used by `llm-logs`, `ui/search`, project chats, character chats and the chat list. `GET /api/v1/llm-logs` pages the recent, type and standalone listings in SQL (`findRecent` / `findByType` / `findStandalone` take an offset) and reports `total` from `countByScope`; `offset` used to return an empty page and `limit=-1` read every row.
+- #168: `POST /api/v1/messages/[id]?action=swipe` with a malformed `swipeIndex` returns 400 instead of running a regeneration; `DELETE` validates `memoryAction` against the enum instead of casting it.
+- `PUT /api/v1/settings/chat` validates with `ChatSettingsPutSchema` (`patchSchemaOf(ChatSettingsSchema)`, strict, server-owned columns omitted). The 36-argument validator, the hand `ACCEPTED_KEYS` set and the 400-or-500 choice by `errorMessage.includes('Invalid')` are gone. Nested objects validate against their full sub-schema, so a `null` or malformed nested object is refused and unknown nested keys are dropped. `avatarDisplayStyle` must be `CIRCULAR` or `RECTANGULAR`; `contextCompressionSettings` is held to its schema's bounds.
+- `patchSchemaOf` also strips a `.default()` under an `.optional()` or `.nullable()`. `sidebarWidth: z.number().default(256).optional()` kept its default, so any chat-settings patch would have reset the sidebar width.
+
 #### Refactor: the job queue's dedupe rule and the query translator's quiet failures
 
 - #192: memory text search treated user text as a regex turned into `LIKE`. Escaped punctuation (`Mr. Darcy (the elder)`) became literal backslashes and matched nothing; `.`, `%` and `_` were wildcards. New filter operators `$contains` and `$startsWith` (`LIKE … ESCAPE '\'`, value escaped by `like-escape.ts`) replace it in `searchByContent`, `countMemoriesWithText`, `findMemoriesWithText` and `searchByContentAboutCharacter`. `$regex` now throws on a pattern containing a backslash; `AbstractBaseRepository.escapeRegex` is removed.

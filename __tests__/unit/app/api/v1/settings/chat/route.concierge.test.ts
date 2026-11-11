@@ -16,8 +16,16 @@ const mockUpdateForUser = jest.fn(async (_userId: string, data: Record<string, u
 jest.mock('@/lib/api/middleware', () => ({
   createContextHandler:
     (handler: (req: any, ctx: any) => Promise<any>) =>
-    async (req: any) =>
-      handler(req, { user: { id: 'user-1' }, repos: { chatSettings: { updateForUser: mockUpdateForUser } } }),
+    async (req: any) => {
+      // The real middleware answers a thrown ZodError with a 400 (#166).
+      try {
+        return await handler(req, { user: { id: 'user-1' }, repos: { chatSettings: { updateForUser: mockUpdateForUser } } })
+      } catch (error) {
+        const { z } = jest.requireActual('zod')
+        if (error instanceof z.ZodError) return jest.requireActual('@/lib/api/responses').validationError(error)
+        throw error
+      }
+    },
 }))
 
 import { PUT } from '@/app/api/v1/settings/chat/route'

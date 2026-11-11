@@ -30,6 +30,7 @@ import { createHash } from 'crypto';
 import { createContextHandler } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { badRequest, notFound, serverError, validationError } from '@/lib/api/responses';
 import { deleteAllUserData, previewDeleteAllUserData } from '@/lib/backup/restore-service';
 import { BackgroundJob } from '@/lib/schemas/types';
@@ -404,7 +405,7 @@ async function handleExport(req: NextRequest, context: any) {
       status: 200,
       headers: {
         'Content-Type': QTAP_NDJSON_CONTENT_TYPE,
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': buildContentDisposition(filename, 'attachment'),
         'Cache-Control': 'no-store',
       },
     });
@@ -1019,7 +1020,7 @@ async function handleCapabilitiesReportGet(req: NextRequest, context: any) {
         status: 200,
         headers: {
           'Content-Type': 'text/markdown',
-          'Content-Disposition': `attachment; filename="${reportFile.originalFilename}"`,
+          'Content-Disposition': buildContentDisposition(reportFile.originalFilename, 'attachment'),
           'Content-Length': String(buffer.length),
         },
       });

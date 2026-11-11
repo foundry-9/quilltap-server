@@ -337,4 +337,22 @@ describe('chats [id] GET handler', () => {
     expect(body.chat.conciergeRefusalCount).toBe(0)
     expect(body.chat).not.toHaveProperty('conciergeOverride')
   })
+
+  // #165: a hand-built `filename="…"` header with a name above U+00FF threw
+  // inside NextResponse and the catch answered 500.
+  it('exports a chat whose character has a non-Latin-1 name', async () => {
+    const { exportSTChatAsJSONL } = require('@/lib/sillytavern/chat')
+    ;(exportSTChatAsJSONL as jest.Mock).mockReturnValue('{}\n')
+    ctx.repos.characters.findByIds = jest.fn().mockResolvedValue([
+      { id: 'char-1', name: 'Suparṇā "the Post"', aliases: [] },
+    ])
+    const req = { url: 'http://localhost/api/v1/chats/chat-1?action=export', nextUrl: new URL('http://localhost/api/v1/chats/chat-1?action=export') }
+
+    const res = await handleGet(req, ctx, chatId)
+
+    expect(res.status).toBe(200)
+    const header = res.headers.get('Content-Disposition') as string
+    expect(header).toMatch(/^attachment; filename="Supar_?_? \\"the Post\\"_chat_\d+\.jsonl"; filename\*=UTF-8''/)
+    expect(header).toContain(encodeURIComponent('Suparṇā'))
+  })
 })
