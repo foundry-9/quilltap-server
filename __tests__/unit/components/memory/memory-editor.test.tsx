@@ -36,7 +36,7 @@ describe('MemoryEditor', () => {
 
   describe('rendering', () => {
     it('should render editor modal', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -45,7 +45,7 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const modal = container.querySelector('h2');
+      const modal = document.body.querySelector('h2');
       expect(modal).toBeInTheDocument();
     });
 
@@ -95,7 +95,7 @@ describe('MemoryEditor', () => {
     });
 
     it('should have empty form in create mode', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -104,9 +104,9 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const contentEditor = container.querySelector('[aria-label="Memory content"]');
+      const contentEditor = document.body.querySelector('[aria-label="Memory content"]');
       const contentEditable = contentEditor?.querySelector('[contenteditable="true"]') as HTMLElement | null;
-      const summaryInput = container.querySelector('input#summary') as HTMLInputElement;
+      const summaryInput = document.body.querySelector('input#summary') as HTMLInputElement;
 
       // Empty Lexical content is either empty string or a single empty paragraph
       expect((contentEditable?.textContent ?? '').trim()).toBe('');
@@ -129,7 +129,7 @@ describe('MemoryEditor', () => {
     });
 
     it('should populate form with existing memory data', async () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={mockMemory}
@@ -138,21 +138,21 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const summaryInput = container.querySelector('input#summary') as HTMLInputElement;
+      const summaryInput = document.body.querySelector('input#summary') as HTMLInputElement;
       expect(summaryInput.value).toBe(mockMemory.summary);
 
       // MarkdownLexicalEditor renders Lexical's contenteditable with the
       // markdown converted to rich text. The bridge schedules the conversion
       // via editor.update so the DOM lands a microtask later.
       await waitFor(() => {
-        const contentEditor = container.querySelector('[aria-label="Memory content"]');
+        const contentEditor = document.body.querySelector('[aria-label="Memory content"]');
         const contentEditable = contentEditor?.querySelector('[contenteditable="true"]') as HTMLElement | null;
         expect(contentEditable?.textContent).toContain(mockMemory.content);
       });
     });
 
     it('should show importance value from existing memory', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={mockMemory}
@@ -161,14 +161,14 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const importanceSlider = container.querySelector('input#importance') as HTMLInputElement;
+      const importanceSlider = document.body.querySelector('input#importance') as HTMLInputElement;
       expect(importanceSlider.value).toBe('0.7');
     });
   });
 
   describe('importance slider', () => {
     it('should display importance slider', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -177,13 +177,13 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const importanceSlider = container.querySelector('input#importance') as HTMLInputElement;
+      const importanceSlider = document.body.querySelector('input#importance') as HTMLInputElement;
       expect(importanceSlider).toBeInTheDocument();
       expect(importanceSlider.type).toBe('range');
     });
 
     it('should have valid importance range', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -192,13 +192,13 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const importanceSlider = container.querySelector('input#importance') as HTMLInputElement;
+      const importanceSlider = document.body.querySelector('input#importance') as HTMLInputElement;
       expect(importanceSlider.min).toBe('0');
       expect(importanceSlider.max).toBe('1');
     });
 
     it('should display importance level text', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -207,14 +207,14 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const importanceLabel = container.querySelector('label[for="importance"]');
+      const importanceLabel = document.body.querySelector('label[for="importance"]');
       expect(importanceLabel).toBeInTheDocument();
     });
   });
 
   describe('form labels and help text', () => {
     it('should show labels for all fields', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -223,9 +223,9 @@ describe('MemoryEditor', () => {
         />
       );
 
-      expect(container.querySelector('label[for="summary"]')).toBeInTheDocument();
-      expect(container.querySelector('label[for="content"]')).toBeInTheDocument();
-      expect(container.querySelector('label[for="keywords"]')).toBeInTheDocument();
+      expect(document.body.querySelector('label[for="summary"]')).toBeInTheDocument();
+      expect(document.body.querySelector('label[for="content"]')).toBeInTheDocument();
+      expect(document.body.querySelector('label[for="keywords"]')).toBeInTheDocument();
     });
 
     it('should display help text for fields', () => {
@@ -262,7 +262,7 @@ describe('MemoryEditor', () => {
 
   describe('modal structure', () => {
     it('should render modal dialog', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -271,13 +271,14 @@ describe('MemoryEditor', () => {
         />
       );
 
-      // Look for qt-dialog-overlay (semantic class) or the dialog container
-      const modal = container.querySelector('.qt-dialog-overlay') || container.querySelector('.qt-dialog');
-      expect(modal).toBeInTheDocument();
+      // BaseModal portals the dialog to document.body, named by its title.
+      const modal = screen.getByRole('dialog', { name: /Add Memory|Edit Memory/ });
+      expect(modal).toHaveAttribute('aria-modal', 'true');
+      expect(modal.closest('.qt-dialog-overlay')).toBeInTheDocument();
     });
 
     it('should have form element', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -286,12 +287,12 @@ describe('MemoryEditor', () => {
         />
       );
 
-      const form = container.querySelector('form');
+      const form = document.body.querySelector('form');
       expect(form).toBeInTheDocument();
     });
 
     it('should have all required input fields', () => {
-      const { container } = render(
+      render(
         <MemoryEditor
           characterId={mockCharacterId}
           memory={null}
@@ -300,10 +301,10 @@ describe('MemoryEditor', () => {
         />
       );
 
-      expect(container.querySelector('input#summary')).toBeInTheDocument();
-      expect(container.querySelector('[aria-label="Memory content"]')).toBeInTheDocument();
-      expect(container.querySelector('input#keywords')).toBeInTheDocument();
-      expect(container.querySelector('input#importance')).toBeInTheDocument();
+      expect(document.body.querySelector('input#summary')).toBeInTheDocument();
+      expect(document.body.querySelector('[aria-label="Memory content"]')).toBeInTheDocument();
+      expect(document.body.querySelector('input#keywords')).toBeInTheDocument();
+      expect(document.body.querySelector('input#importance')).toBeInTheDocument();
     });
   });
 });

@@ -1,9 +1,7 @@
 'use client'
 
-import { useId, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import type { FullJobDetail } from './types'
 
 interface TaskDetailsProps {
@@ -23,14 +21,6 @@ export function TaskDetails({
   onDelete,
   formatDate,
 }: TaskDetailsProps) {
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-
-  useEscapeKey(onClose, isOpen)
-
-  if (!isOpen) return null
-
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'PROCESSING':
@@ -47,81 +37,16 @@ export function TaskDetails({
   }
 
   return (
-    <div
-      className="qt-dialog-overlay"
-      onClick={onClose}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Dialog Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div>
-            <h3 id={titleId} className="qt-heading-4 qt-text">Job Details</h3>
-            <p className="qt-text-small">{job.type}</p>
-          </div>
-          <button
-            aria-label="Close"
-            onClick={onClose}
-            className="p-1 rounded hover:qt-bg-muted"
-          >
-            <Icon name="close" className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Dialog Content */}
-        <div className="p-4 overflow-y-auto max-h-[calc(80vh-140px)]">
-          {/* Status and metadata */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <span className="qt-text-xs">Status</span>
-              <div className={`font-medium ${getStatusColor(job.status)}`}>
-                {job.status}
-              </div>
-            </div>
-            <div>
-              <span className="qt-text-xs">Priority</span>
-              <div className="font-medium">{job.priority}</div>
-            </div>
-            <div>
-              <span className="qt-text-xs">Attempts</span>
-              <div className="font-medium">
-                {job.attempts} / {job.maxAttempts}
-              </div>
-            </div>
-            <div>
-              <span className="qt-text-xs">Scheduled</span>
-              <div className="font-medium text-sm">{formatDate(job.scheduledAt)}</div>
-            </div>
-          </div>
-
-          {job.lastError && (
-            <div className="mb-4">
-              <span className="qt-text-xs">Last Error</span>
-              <div className="text-sm qt-text-destructive qt-bg-destructive/10 p-2 rounded mt-1">
-                {job.lastError}
-              </div>
-            </div>
-          )}
-
-          {/* Job parameters */}
-          <div>
-            <span className="qt-text-xs">Job Parameters</span>
-            <pre className="mt-1 p-3 qt-bg-muted rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">
-              {JSON.stringify(job.payload, null, 2)}
-            </pre>
-          </div>
-        </div>
-
-        {/* Dialog Footer */}
-        <div className="flex items-center justify-between p-4 border-t qt-bg-muted/30">
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      headerless
+      maxWidth="2xl"
+      className="w-full mx-4 !max-h-[80vh] overflow-hidden"
+      bodyClassName="flex flex-col min-h-0 flex-1"
+      footerClassName="flex items-center justify-between p-4 border-t qt-bg-muted/30"
+      footer={
+        <>
           <button
             onClick={onClose}
             className="qt-button qt-button-secondary"
@@ -156,8 +81,68 @@ export function TaskDetails({
               Delete Job
             </button>
           )}
+        </>
+      }
+    >
+      {/* Dialog Header */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <div>
+          <ModalTitle className="qt-heading-4 qt-text">Job Details</ModalTitle>
+          <p className="qt-text-small">{job.type}</p>
+        </div>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="p-1 rounded hover:qt-bg-muted"
+        >
+          <Icon name="close" className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Dialog Content */}
+      <div className="p-4 overflow-y-auto max-h-[calc(80vh-140px)]">
+        {/* Status and metadata */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <span className="qt-text-xs">Status</span>
+            <div className={`font-medium ${getStatusColor(job.status)}`}>
+              {job.status}
+            </div>
+          </div>
+          <div>
+            <span className="qt-text-xs">Priority</span>
+            <div className="font-medium">{job.priority}</div>
+          </div>
+          <div>
+            <span className="qt-text-xs">Attempts</span>
+            <div className="font-medium">
+              {job.attempts} / {job.maxAttempts}
+            </div>
+          </div>
+          <div>
+            <span className="qt-text-xs">Scheduled</span>
+            <div className="font-medium text-sm">{formatDate(job.scheduledAt)}</div>
+          </div>
+        </div>
+
+        {job.lastError && (
+          <div className="mb-4">
+            <span className="qt-text-xs">Last Error</span>
+            <div className="text-sm qt-text-destructive qt-bg-destructive/10 p-2 rounded mt-1">
+              {job.lastError}
+            </div>
+          </div>
+        )}
+
+        {/* Job parameters */}
+        <div>
+          <span className="qt-text-xs">Job Parameters</span>
+          <pre className="mt-1 p-3 qt-bg-muted rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">
+            {JSON.stringify(job.payload, null, 2)}
+          </pre>
         </div>
       </div>
-    </div>
+    </BaseModal>
   )
 }

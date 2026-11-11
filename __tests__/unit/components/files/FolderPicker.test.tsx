@@ -32,7 +32,7 @@ function stubRoutes(byProject: Record<string, Stub>) {
             ? input.toString()
             : (input as Request).url
 
-      const projectMatch = /\/projects\/([^/]+)\/files/.exec(url) ?? /projectId=([^&]+)/.exec(url)
+      const projectMatch = /\/projects\/([^/?]+)\?action=list-files/.exec(url) ?? /projectId=([^&]+)/.exec(url)
       const key = projectMatch ? projectMatch[1] : 'general'
       const stub = byProject[key] ?? {}
 

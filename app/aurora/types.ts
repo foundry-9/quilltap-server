@@ -48,18 +48,7 @@ export interface UseGroupMembersReturn {
   members: GroupMember[]
   allCharacters: GroupMember[]
   loading: boolean
-  fetchMembers: () => Promise<void>
-  fetchAllCharacters: () => Promise<void>
   addMember: (characterId: string) => Promise<boolean>
   removeMember: (characterId: string) => Promise<boolean>
 }
 
-export interface UseGroupMountPointsReturn {
-  linkedStores: DocumentStore[]
-  allStores: DocumentStore[]
-  loading: boolean
-  fetchLinkedStores: () => Promise<void>
-  fetchAllStores: () => Promise<void>
-  linkStore: (mountPointId: string) => Promise<boolean>
-  unlinkStore: (mountPointId: string) => Promise<boolean>
-}

@@ -8,9 +8,8 @@
  * Supports different generation options based on selected provider
  */
 
-import { useState, useEffect, useId, useRef, FormEvent } from 'react';
-import { useDialogFocus } from '@/hooks/useDialogFocus';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useState, useEffect, useId, FormEvent } from 'react';
+import { BaseModal } from '@/components/ui/BaseModal';
 
 interface GenerationOption {
   n?: number;
@@ -89,9 +88,6 @@ export function ImageGenerationDialog({
   contextId,
   orientation,
 }: ImageGenerationDialogProps) {
-  const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen);
   const id = useId();
   const [prompt, setPrompt] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState('');
@@ -235,273 +231,260 @@ export function ImageGenerationDialog({
     onClose();
   }
 
-  useEscapeKey(handleClose, isOpen);
-
-  if (!isOpen) return null;
-
   return (
-    <div className="qt-dialog-overlay" onClick={handleClose}>
-      <div
-        className="qt-dialog max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="qt-dialog-header sticky top-0">
-          <h2 id={titleId} className="qt-dialog-title">Generate Image</h2>
-        </div>
+    <BaseModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Generate Image"
+      maxWidth="2xl"
+      className="mx-4"
+      busy={generating}
+      bodyClassName="flex-1 overflow-y-auto"
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="px-6 py-4 space-y-6">
+          {/* Provider Selection */}
+          <div>
+            <label htmlFor={`${id}-profile`} className="qt-label mb-2">
+              Provider
+            </label>
+            {loadingProfiles ? (
+              <div className="qt-text-small">Loading providers...</div>
+            ) : profiles.length === 0 ? (
+              <div className="qt-alert-warning">
+                <p className="text-sm">
+                  No image-capable providers configured. Please set up OpenAI, Google, Grok, or OpenRouter in your connection profiles.
+                </p>
+              </div>
+            ) : (
+              <select
+                id={`${id}-profile`}
+                value={selectedProfileId}
+                onChange={(e) => setSelectedProfileId(e.target.value)}
+                className="qt-select"
+              >
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} ({profile.modelName})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit}>
-          <div className="px-6 py-4 space-y-6">
-            {/* Provider Selection */}
-            <div>
-              <label htmlFor={`${id}-profile`} className="qt-label mb-2">
-                Provider
-              </label>
-              {loadingProfiles ? (
-                <div className="qt-text-small">Loading providers...</div>
-              ) : profiles.length === 0 ? (
-                <div className="qt-alert-warning">
-                  <p className="text-sm">
-                    No image-capable providers configured. Please set up OpenAI, Google, Grok, or OpenRouter in your connection profiles.
-                  </p>
+          {/* Prompt Input */}
+          <div>
+            <label htmlFor={`${id}-prompt`} className="qt-label mb-2">
+              Prompt
+            </label>
+            <textarea
+              id={`${id}-prompt`}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Describe the image you want to generate..."
+              rows={4}
+              maxLength={4000}
+              className="qt-textarea resize-none"
+            />
+            <p className="mt-1 qt-text-xs">
+              {prompt.length}/4000 characters
+            </p>
+          </div>
+
+          {/* Generation Options */}
+          {selectedProfile && (
+            <div className="qt-panel space-y-4">
+              <h3 className="text-sm font-semibold qt-text-primary">Generation Options</h3>
+
+              {/* Number of Images */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor={`${id}-n`} className="block qt-text-xs qt-text-primary mb-1">
+                    Number of Images
+                  </label>
+                  <select
+                    id={`${id}-n`}
+                    value={options.n || 1}
+                    onChange={(e) => setOptions({ ...options, n: Number.parseInt(e.target.value) })}
+                    className="qt-select"
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ) : (
-                <select
-                  id={`${id}-profile`}
-                  value={selectedProfileId}
-                  onChange={(e) => setSelectedProfileId(e.target.value)}
-                  className="qt-select"
-                >
-                  {profiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name} ({profile.modelName})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
 
-            {/* Prompt Input */}
-            <div>
-              <label htmlFor={`${id}-prompt`} className="qt-label mb-2">
-                Prompt
-              </label>
-              <textarea
-                id={`${id}-prompt`}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the image you want to generate..."
-                rows={4}
-                maxLength={4000}
-                className="qt-textarea resize-none"
-              />
-              <p className="mt-1 qt-text-xs">
-                {prompt.length}/4000 characters
-              </p>
-            </div>
-
-            {/* Generation Options */}
-            {selectedProfile && (
-              <div className="qt-panel space-y-4">
-                <h3 className="text-sm font-semibold qt-text-primary">Generation Options</h3>
-
-                {/* Number of Images */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Image Size — a fixed shape replaces the picker */}
+                {orientation ? (
                   <div>
-                    <label htmlFor={`${id}-n`} className="block qt-text-xs qt-text-primary mb-1">
-                      Number of Images
+                    <span className="block qt-text-xs qt-text-primary mb-1">
+                      Shape
+                    </span>
+                    <p className="qt-text-small">
+                      {orientation === 'portrait'
+                        ? 'Portrait — taller than wide, as befits a likeness'
+                        : orientation === 'landscape'
+                          ? 'Landscape — wider than tall'
+                          : 'Square'}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label htmlFor={`${id}-size`} className="block qt-text-xs qt-text-primary mb-1">
+                      Size
                     </label>
                     <select
-                      id={`${id}-n`}
-                      value={options.n || 1}
-                      onChange={(e) => setOptions({ ...options, n: Number.parseInt(e.target.value) })}
+                      id={`${id}-size`}
+                      value={options.size || '1024x1024'}
+                      onChange={(e) => setOptions({ ...options, size: e.target.value })}
                       className="qt-select"
                     >
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
+                      {(isOpenAI ? OPENAI_SIZES : DEFAULT_SIZES).map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* OpenAI Specific Options */}
+              {isOpenAI && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor={`${id}-quality`} className="block qt-text-xs qt-text-primary mb-1">
+                      Quality
+                    </label>
+                    <select
+                      id={`${id}-quality`}
+                      value={options.quality ?? ''}
+                      onChange={(e) => setOptions({ ...options, quality: e.target.value as GenerationOption['quality'] })}
+                      className="qt-select"
+                    >
+                      {OPENAI_QUALITIES.map((q) => (
+                        <option key={q.value} value={q.value}>
+                          {q.label}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Image Size — a fixed shape replaces the picker */}
-                  {orientation ? (
-                    <div>
-                      <span className="block qt-text-xs qt-text-primary mb-1">
-                        Shape
-                      </span>
-                      <p className="qt-text-small">
-                        {orientation === 'portrait'
-                          ? 'Portrait — taller than wide, as befits a likeness'
-                          : orientation === 'landscape'
-                            ? 'Landscape — wider than tall'
-                            : 'Square'}
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <label htmlFor={`${id}-size`} className="block qt-text-xs qt-text-primary mb-1">
-                        Size
-                      </label>
-                      <select
-                        id={`${id}-size`}
-                        value={options.size || '1024x1024'}
-                        onChange={(e) => setOptions({ ...options, size: e.target.value })}
-                        className="qt-select"
-                      >
-                        {(isOpenAI ? OPENAI_SIZES : DEFAULT_SIZES).map((size) => (
-                          <option key={size} value={size}>
-                            {size}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {/* OpenAI Specific Options */}
-                {isOpenAI && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor={`${id}-quality`} className="block qt-text-xs qt-text-primary mb-1">
-                        Quality
-                      </label>
-                      <select
-                        id={`${id}-quality`}
-                        value={options.quality ?? ''}
-                        onChange={(e) => setOptions({ ...options, quality: e.target.value as GenerationOption['quality'] })}
-                        className="qt-select"
-                      >
-                        {OPENAI_QUALITIES.map((q) => (
-                          <option key={q.value} value={q.value}>
-                            {q.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label htmlFor={`${id}-style`} className="block qt-text-xs qt-text-primary mb-1">
-                        Style
-                      </label>
-                      <select
-                        id={`${id}-style`}
-                        value={options.style || 'vivid'}
-                        onChange={(e) => setOptions({ ...options, style: e.target.value as any })}
-                        className="qt-select"
-                      >
-                        <option value="vivid">Vivid</option>
-                        <option value="natural">Natural</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {/* Gemini Specific Options */}
-                {isGemini && !orientation && (
                   <div>
-                    <label htmlFor={`${id}-aspect`} className="block qt-text-xs qt-text-primary mb-1">
-                      Aspect Ratio
+                    <label htmlFor={`${id}-style`} className="block qt-text-xs qt-text-primary mb-1">
+                      Style
                     </label>
                     <select
-                      id={`${id}-aspect`}
-                      value={options.aspectRatio || ''}
-                      onChange={(e) => setOptions({ ...options, aspectRatio: e.target.value || undefined })}
+                      id={`${id}-style`}
+                      value={options.style || 'vivid'}
+                      onChange={(e) => setOptions({ ...options, style: e.target.value as any })}
                       className="qt-select"
                     >
-                      <option value="">Default</option>
-                      <option value="16:9">16:9 (Landscape)</option>
-                      <option value="4:3">4:3 (Landscape)</option>
-                      <option value="1:1">1:1 (Square)</option>
-                      <option value="3:4">3:4 (Portrait)</option>
-                      <option value="9:16">9:16 (Portrait)</option>
+                      <option value="vivid">Vivid</option>
+                      <option value="natural">Natural</option>
                     </select>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Context Info */}
-            {contextType && contextId && (
-              <div className="qt-alert-info">
-                <p className="text-sm">
-                  Generated images will be automatically tagged with this {contextType.toLowerCase()}.
-                </p>
-              </div>
-            )}
-
-            {/* Preview Images */}
-            {previewImages.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold qt-text-primary mb-3">Generated Images</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {previewImages.map((img) => (
-                    <div key={img.id} className="qt-card">
-                      { }
-                      <img
-                        src={img.data}
-                        alt="Generated"
-                        className="w-full h-48 object-cover qt-bg-muted rounded"
-                      />
-                      {img.revisedPrompt && (
-                        <div className="px-3 py-2 border-t qt-border-default mt-2">
-                          <p className="qt-text-xs">
-                            <span className="font-semibold">Revised:</span> {img.revisedPrompt}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Error */}
-            {error && (
-              <div className="qt-alert-error">
-                <p className="qt-text-small">{error}</p>
-              </div>
-            )}
-          </div>
+              {/* Gemini Specific Options */}
+              {isGemini && !orientation && (
+                <div>
+                  <label htmlFor={`${id}-aspect`} className="block qt-text-xs qt-text-primary mb-1">
+                    Aspect Ratio
+                  </label>
+                  <select
+                    id={`${id}-aspect`}
+                    value={options.aspectRatio || ''}
+                    onChange={(e) => setOptions({ ...options, aspectRatio: e.target.value || undefined })}
+                    className="qt-select"
+                  >
+                    <option value="">Default</option>
+                    <option value="16:9">16:9 (Landscape)</option>
+                    <option value="4:3">4:3 (Landscape)</option>
+                    <option value="1:1">1:1 (Square)</option>
+                    <option value="3:4">3:4 (Portrait)</option>
+                    <option value="9:16">9:16 (Portrait)</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Footer */}
-          <div className="qt-dialog-footer sticky bottom-0">
+          {/* Context Info */}
+          {contextType && contextId && (
+            <div className="qt-alert-info">
+              <p className="text-sm">
+                Generated images will be automatically tagged with this {contextType.toLowerCase()}.
+              </p>
+            </div>
+          )}
+
+          {/* Preview Images */}
+          {previewImages.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold qt-text-primary mb-3">Generated Images</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {previewImages.map((img) => (
+                  <div key={img.id} className="qt-card">
+                    { }
+                    <img
+                      src={img.data}
+                      alt="Generated"
+                      className="w-full h-48 object-cover qt-bg-muted rounded"
+                    />
+                    {img.revisedPrompt && (
+                      <div className="px-3 py-2 border-t qt-border-default mt-2">
+                        <p className="qt-text-xs">
+                          <span className="font-semibold">Revised:</span> {img.revisedPrompt}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="qt-alert-error">
+              <p className="qt-text-small">{error}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="qt-dialog-footer sticky bottom-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={generating}
+            className="qt-button qt-button-secondary"
+          >
+            Cancel
+          </button>
+          {previewImages.length > 0 ? (
             <button
               type="button"
-              onClick={handleClose}
-              disabled={generating}
-              className="qt-button qt-button-secondary"
+              onClick={handleConfirm}
+              className="qt-button qt-button-primary"
             >
-              Cancel
+              Done
             </button>
-            {previewImages.length > 0 ? (
-              <button
-                type="button"
-                onClick={handleConfirm}
-                className="qt-button qt-button-primary"
-              >
-                Done
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={generating || !selectedProfileId || profiles.length === 0}
-                className="qt-button qt-button-primary"
-              >
-                {generating ? 'Generating...' : 'Generate'}
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-    </div>
+          ) : (
+            <button
+              type="submit"
+              disabled={generating || !selectedProfileId || profiles.length === 0}
+              className="qt-button qt-button-primary"
+            >
+              {generating ? 'Generating...' : 'Generate'}
+            </button>
+          )}
+        </div>
+      </form>
+    </BaseModal>
   );
 }

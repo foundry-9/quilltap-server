@@ -1,12 +1,10 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
+import { useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { triggerUrlDownload } from '@/lib/download-utils'
-import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { WizardModal } from '@/components/ui/WizardModal'
 
 interface BackupDialogProps {
   isOpen: boolean
@@ -22,16 +20,10 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
   // time and money exactly when the user is recovering from something.
   const [compact, setCompact] = useState(false)
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-
   const handleClose = () => {
     setError(null)
     onClose()
   }
-
-  useEscapeKey(handleClose, isOpen)
 
   if (!isOpen) return null
 
@@ -79,109 +71,67 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
   }
 
   return (
-    <>
-      {/* Overlay */}
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
-        onClick={handleClose}
-        aria-label="Close dialog"
-        type="button"
-      />
-
-      {/* Dialog */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog max-w-md"
-        >
-          {/* Header */}
-          <div className="qt-dialog-header">
-            <div className="flex items-center justify-between">
-              <h2 id={titleId} className="qt-dialog-title">Create Backup</h2>
-              <button
-                onClick={handleClose}
-                className="qt-text-secondary hover:qt-text"
-                aria-label="Close dialog"
-              >
-                <Icon name="close" className="w-6 h-6" />
-              </button>
-            </div>
-            <p className="qt-dialog-description qt-text-small">
-              Create a complete backup of your Quilltap data
-            </p>
-          </div>
-
-          {/* Body */}
-          <div className="qt-dialog-body space-y-4">
-            <div className="p-4 qt-bg-muted/50 rounded-lg">
-              <p className="text-sm qt-text-primary mb-2">
-                Your backup will include:
-              </p>
-              <ul className="qt-text-small space-y-1 list-disc list-inside">
-                <li>All characters, chats, and messages</li>
-                <li>Memories and relationships</li>
-                <li>All uploaded files and images</li>
-                <li>Connection, image, and embedding profiles</li>
-                <li>Templates, projects, and character groups</li>
-                <li>Plugin configurations and npm plugins</li>
-              </ul>
-            </div>
-
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={compact}
-                onChange={(e) => setCompact(e.target.checked)}
-                disabled={loading}
-                className="w-4 h-4 mt-0.5"
-              />
-              <span>
-                <span className="text-sm qt-text-primary">Compact backup</span>
-                <span className="block qt-text-small qt-text-secondary">
-                  A considerably slimmer archive — the search indexes are left behind and
-                  rebuilt after restoring. Everything you have written travels either way.
-                </span>
-              </span>
-            </label>
-
-            {/* Error Display */}
-            {error && (
-              <div className="p-3 qt-bg-destructive/10 border qt-border-destructive rounded-lg">
-                <p className="text-sm qt-text-destructive">{error}</p>
-              </div>
+    <WizardModal
+      onClose={handleClose}
+      title="Create Backup"
+      description="Create a complete backup of your Quilltap data"
+      busy={loading}
+      maxWidth="md"
+      primary={{
+        onClick: handleCreateBackup,
+        disabled: loading,
+        label: (
+          <>
+            {loading && (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
             )}
-          </div>
-
-          {/* Footer */}
-          <div className="qt-dialog-footer">
-            <button
-              onClick={handleClose}
-              disabled={loading}
-              className="qt-button qt-button-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreateBackup}
-              disabled={loading}
-              className="qt-button qt-button-primary"
-            >
-              {loading && (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              )}
-              {loading ? 'Creating Backup...' : 'Download Backup'}
-            </button>
-          </div>
+            {loading ? 'Creating Backup...' : 'Download Backup'}
+          </>
+        ),
+      }}
+    >
+      <div className="space-y-4">
+        <div className="p-4 qt-bg-muted/50 rounded-lg">
+          <p className="text-sm qt-text-primary mb-2">
+            Your backup will include:
+          </p>
+          <ul className="qt-text-small space-y-1 list-disc list-inside">
+            <li>All characters, chats, and messages</li>
+            <li>Memories and relationships</li>
+            <li>All uploaded files and images</li>
+            <li>Connection, image, and embedding profiles</li>
+            <li>Templates, projects, and character groups</li>
+            <li>Plugin configurations and npm plugins</li>
+          </ul>
         </div>
+
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={compact}
+            onChange={(e) => setCompact(e.target.checked)}
+            disabled={loading}
+            className="w-4 h-4 mt-0.5"
+          />
+          <span>
+            <span className="text-sm qt-text-primary">Compact backup</span>
+            <span className="block qt-text-small qt-text-secondary">
+              A considerably slimmer archive — the search indexes are left behind and
+              rebuilt after restoring. Everything you have written travels either way.
+            </span>
+          </span>
+        </label>
+
+        {/* Error Display */}
+        {error && (
+          <div className="p-3 qt-bg-destructive/10 border qt-border-destructive rounded-lg">
+            <p className="text-sm qt-text-destructive">{error}</p>
+          </div>
+        )}
       </div>
-    </>
+    </WizardModal>
   )
 }

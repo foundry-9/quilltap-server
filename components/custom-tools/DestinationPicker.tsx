@@ -10,12 +10,11 @@
  * same name in a DIFFERENT store is a non-blocking advisory.
  */
 
-import { useId, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import type { CustomToolDestinations, DestinationStore } from '@/lib/pascal/workbench'
 
 export interface PickedDestination {
@@ -34,10 +33,6 @@ interface DestinationPickerProps {
 
 export function DestinationPicker({ toolName, onPick, onCancel, onOpenExisting }: Readonly<DestinationPickerProps>) {
   const [selected, setSelected] = useState<PickedDestination | null>(null)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-  useEscapeKey(onCancel)
 
   const destinationsQuery = useQuery({
     queryKey: queryKeys.customTools.destinations(),
@@ -78,124 +73,121 @@ export function DestinationPicker({ toolName, onPick, onCancel, onOpenExisting }
   }
 
   return (
-    <div className="qt-dialog-overlay">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-card qt-shadow-lg rounded-lg border w-full max-w-lg max-h-[80vh] overflow-y-auto p-4 space-y-3"
-      >
-        <h2 id={titleId} className="qt-card-title text-base">Where shall Pascal keep this contrivance?</h2>
+    <BaseModal
+      isOpen
+      onClose={onCancel}
+      headerless
+      maxWidth="lg"
+      className="w-full !max-h-[80vh]"
+      bodyClassName="overflow-y-auto p-4 space-y-3"
+    >
+      <ModalTitle className="qt-card-title text-base">Where shall Pascal keep this contrivance?</ModalTitle>
 
-        {destinationsQuery.isLoading && <p className="text-sm qt-text-secondary">Surveying the premises…</p>}
-        {destinationsQuery.isError && (
-          <p className="text-sm qt-text-destructive">
-            {destinationsQuery.error instanceof Error ? destinationsQuery.error.message : 'The stores could not be listed.'}
-          </p>
-        )}
+      {destinationsQuery.isLoading && <p className="text-sm qt-text-secondary">Surveying the premises…</p>}
+      {destinationsQuery.isError && (
+        <p className="text-sm qt-text-destructive">
+          {destinationsQuery.error instanceof Error ? destinationsQuery.error.message : 'The stores could not be listed.'}
+        </p>
+      )}
 
-        {data && (
-          <div className="space-y-3">
+      {data && (
+        <div className="space-y-3">
+          <DestinationGroup
+            heading="◈ The General Store"
+            consequence="every chat, every character"
+          >
+            {data.general ? (
+              storeRow(data.general)
+            ) : (
+              <p className="text-xs qt-text-secondary px-3">Not yet provisioned — the General store appears once first used.</p>
+            )}
+          </DestinationGroup>
+
+          {data.projects.length > 0 && (
+            <DestinationGroup heading="◈ Projects" consequence="chats in that project">
+              {data.projects.map((project) => (
+                <div key={project.projectId} className="pl-2">
+                  <p className="text-sm">▸ {project.projectName}</p>
+                  {project.stores.map((store) => storeRow(store))}
+                </div>
+              ))}
+            </DestinationGroup>
+          )}
+
+          {data.groups.length > 0 && (
+            <DestinationGroup heading="◈ Groups" consequence="every member of the group">
+              {data.groups.map((group) => (
+                <div key={group.groupId} className="pl-2">
+                  <p className="text-sm">▸ {group.groupName}</p>
+                  {group.stores.map((store) => storeRow(store, store.official ? 'Official Store ★' : undefined))}
+                </div>
+              ))}
+            </DestinationGroup>
+          )}
+
+          {data.characters.length > 0 && (
             <DestinationGroup
-              heading="◈ The General Store"
-              consequence="every chat, every character"
+              heading="◈ Character vaults"
+              consequence="that character only — shadows every farther tier"
             >
-              {data.general ? (
-                storeRow(data.general)
-              ) : (
-                <p className="text-xs qt-text-secondary px-3">Not yet provisioned — the General store appears once first used.</p>
+              {data.characters.map((character) =>
+                storeRow(
+                  {
+                    mountPointId: character.mountPointId,
+                    mountName: character.characterName,
+                    existingToolNames: character.existingToolNames,
+                  },
+                  'their vault'
+                )
               )}
             </DestinationGroup>
+          )}
 
-            {data.projects.length > 0 && (
-              <DestinationGroup heading="◈ Projects" consequence="chats in that project">
-                {data.projects.map((project) => (
-                  <div key={project.projectId} className="pl-2">
-                    <p className="text-sm">▸ {project.projectName}</p>
-                    {project.stores.map((store) => storeRow(store))}
-                  </div>
-                ))}
-              </DestinationGroup>
-            )}
-
-            {data.groups.length > 0 && (
-              <DestinationGroup heading="◈ Groups" consequence="every member of the group">
-                {data.groups.map((group) => (
-                  <div key={group.groupId} className="pl-2">
-                    <p className="text-sm">▸ {group.groupName}</p>
-                    {group.stores.map((store) => storeRow(store, store.official ? 'Official Store ★' : undefined))}
-                  </div>
-                ))}
-              </DestinationGroup>
-            )}
-
-            {data.characters.length > 0 && (
-              <DestinationGroup
-                heading="◈ Character vaults"
-                consequence="that character only — shadows every farther tier"
-              >
-                {data.characters.map((character) =>
-                  storeRow(
-                    {
-                      mountPointId: character.mountPointId,
-                      mountName: character.characterName,
-                      existingToolNames: character.existingToolNames,
-                    },
-                    'their vault'
-                  )
-                )}
-              </DestinationGroup>
-            )}
-
-            {data.other.length > 0 && (
-              <DestinationGroup heading="◈ Other stores" consequence="not attached to anything — inert until linked">
-                {data.other.map((store) => storeRow(store))}
-              </DestinationGroup>
-            )}
-          </div>
-        )}
-
-        {duplicateHere && selected && (
-          <div className="text-xs qt-text-destructive space-y-1">
-            <p>
-              &ldquo;{toolName}&rdquo; is already on the table in {selected.mountName} — two files with one name in one
-              store would both be refused at deal time.
-            </p>
-            {onOpenExisting && (
-              <button
-                type="button"
-                className="qt-button qt-button-secondary qt-button-sm"
-                onClick={() => onOpenExisting(selected.mountPointId)}
-              >
-                Open the existing one instead
-              </button>
-            )}
-          </div>
-        )}
-        {!duplicateHere && nameElsewhere && (
-          <p className="text-xs qt-text-secondary">
-            This name is also on the table at another store; when both are in reach, the nearest tier wins.
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="qt-button qt-button-ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="qt-button qt-button-primary"
-            disabled={!selected || duplicateHere}
-            onClick={() => selected && onPick(selected)}
-          >
-            Keep it here
-          </button>
+          {data.other.length > 0 && (
+            <DestinationGroup heading="◈ Other stores" consequence="not attached to anything — inert until linked">
+              {data.other.map((store) => storeRow(store))}
+            </DestinationGroup>
+          )}
         </div>
+      )}
+
+      {duplicateHere && selected && (
+        <div className="text-xs qt-text-destructive space-y-1">
+          <p>
+            &ldquo;{toolName}&rdquo; is already on the table in {selected.mountName} — two files with one name in one
+            store would both be refused at deal time.
+          </p>
+          {onOpenExisting && (
+            <button
+              type="button"
+              className="qt-button qt-button-secondary qt-button-sm"
+              onClick={() => onOpenExisting(selected.mountPointId)}
+            >
+              Open the existing one instead
+            </button>
+          )}
+        </div>
+      )}
+      {!duplicateHere && nameElsewhere && (
+        <p className="text-xs qt-text-secondary">
+          This name is also on the table at another store; when both are in reach, the nearest tier wins.
+        </p>
+      )}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button type="button" className="qt-button qt-button-ghost" onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="qt-button qt-button-primary"
+          disabled={!selected || duplicateHere}
+          onClick={() => selected && onPick(selected)}
+        >
+          Keep it here
+        </button>
       </div>
-    </div>
+    </BaseModal>
   )
 }
 

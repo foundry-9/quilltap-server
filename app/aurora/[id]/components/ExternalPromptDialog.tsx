@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEffect, useState } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 
 interface SystemPrompt {
@@ -67,11 +66,6 @@ export function ExternalPromptDialog({
     }
   }, [systemPrompts, systemPromptId])
 
-  useEscapeKey(onCancel, !generating)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-
   const handleGenerate = async () => {
     if (!connectionProfileId || !systemPromptId) return
 
@@ -112,148 +106,146 @@ export function ExternalPromptDialog({
   const selectClasses = 'qt-select'
 
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="w-full max-w-md md:max-w-lg rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col"
-      >
-        <h3 id={titleId} className="mb-4 qt-heading-4 flex-shrink-0">
-          Generate External Prompt{characterName ? ` for ${characterName}` : ''}
-        </h3>
+    <BaseModal
+      isOpen
+      onClose={onCancel}
+      busy={generating}
+      headerless
+      className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+      bodyClassName="p-6 flex-1 min-h-0 flex flex-col"
+     
+    >
+      <ModalTitle className="mb-4 qt-heading-4 flex-shrink-0">
+        Generate External Prompt{characterName ? ` for ${characterName}` : ''}
+      </ModalTitle>
 
-        {loading ? (
-          <div className="qt-loading-state">
-            <div className="qt-spinner animate-spin h-6 w-6 rounded-full" />
-          </div>
-        ) : (
-          <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
-            {/* Connection Profile */}
-            <div>
-              <label htmlFor="ext-profile" className="mb-2 qt-label">
-                LLM Connection Profile *
-              </label>
-              <select
-                id="ext-profile"
-                value={connectionProfileId}
-                onChange={(e) => setPickedProfileId(e.target.value)}
-                className={selectClasses}
-              >
-                <option value="">Select a profile</option>
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name} ({profile.provider} / {profile.modelName})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* System Prompt */}
-            <div>
-              <label htmlFor="ext-system-prompt" className="mb-2 qt-label">
-                System Prompt *
-              </label>
-              <select
-                id="ext-system-prompt"
-                value={systemPromptId}
-                onChange={(e) => setSystemPromptId(e.target.value)}
-                className={selectClasses}
-              >
-                <option value="">Select a system prompt</option>
-                {systemPrompts?.map((prompt) => (
-                  <option key={prompt.id} value={prompt.id}>
-                    {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
-                  </option>
-                ))}
-              </select>
-              {(!systemPrompts || systemPrompts.length === 0) && (
-                <p className="mt-1 text-xs qt-text-destructive">
-                  This character has no system prompts. Add one first.
-                </p>
-              )}
-            </div>
-
-            {/* Scenario (optional) */}
-            {scenarios && scenarios.length > 0 && (
-              <div>
-                <label htmlFor="ext-scenario" className="mb-2 qt-label">
-                  Scenario (Optional)
-                </label>
-                <select
-                  id="ext-scenario"
-                  value={scenarioId}
-                  onChange={(e) => setScenarioId(e.target.value)}
-                  className={selectClasses}
-                >
-                  <option value="">None</option>
-                  {scenarios.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Token Size Slider */}
-            <div>
-              <label htmlFor="ext-max-tokens" className="mb-2 qt-label">
-                Maximum Output Size
-              </label>
-              <input
-                id="ext-max-tokens"
-                type="range"
-                min={1000}
-                max={20000}
-                step={500}
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(Number(e.target.value))}
-                className="qt-range w-full"
-              />
-              <div className="mt-1 flex justify-between text-xs qt-text-secondary">
-                <span>{maxTokens.toLocaleString()} tokens</span>
-                <span>~{estimatedChars.toLocaleString()} characters</span>
-              </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div className="rounded-lg border qt-border-destructive/50 qt-bg-destructive/10 px-3 py-2 text-sm qt-text-destructive">
-                {error}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-4 flex justify-end gap-3 flex-shrink-0">
-          <button
-            onClick={onCancel}
-            disabled={generating}
-            className="qt-button qt-button-secondary"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleGenerate}
-            disabled={!canGenerate}
-            className="qt-button qt-button-primary"
-          >
-            {generating ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="animate-spin h-4 w-4 qt-border-primary-foreground border-t-transparent rounded-full" />
-                Generating...
-              </span>
-            ) : (
-              'Generate Prompt'
-            )}
-          </button>
+      {loading ? (
+        <div className="qt-loading-state">
+          <div className="qt-spinner animate-spin h-6 w-6 rounded-full" />
         </div>
+      ) : (
+        <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
+          {/* Connection Profile */}
+          <div>
+            <label htmlFor="ext-profile" className="mb-2 qt-label">
+              LLM Connection Profile *
+            </label>
+            <select
+              id="ext-profile"
+              value={connectionProfileId}
+              onChange={(e) => setPickedProfileId(e.target.value)}
+              className={selectClasses}
+            >
+              <option value="">Select a profile</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} / {profile.modelName})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* System Prompt */}
+          <div>
+            <label htmlFor="ext-system-prompt" className="mb-2 qt-label">
+              System Prompt *
+            </label>
+            <select
+              id="ext-system-prompt"
+              value={systemPromptId}
+              onChange={(e) => setSystemPromptId(e.target.value)}
+              className={selectClasses}
+            >
+              <option value="">Select a system prompt</option>
+              {systemPrompts?.map((prompt) => (
+                <option key={prompt.id} value={prompt.id}>
+                  {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                </option>
+              ))}
+            </select>
+            {(!systemPrompts || systemPrompts.length === 0) && (
+              <p className="mt-1 text-xs qt-text-destructive">
+                This character has no system prompts. Add one first.
+              </p>
+            )}
+          </div>
+
+          {/* Scenario (optional) */}
+          {scenarios && scenarios.length > 0 && (
+            <div>
+              <label htmlFor="ext-scenario" className="mb-2 qt-label">
+                Scenario (Optional)
+              </label>
+              <select
+                id="ext-scenario"
+                value={scenarioId}
+                onChange={(e) => setScenarioId(e.target.value)}
+                className={selectClasses}
+              >
+                <option value="">None</option>
+                {scenarios.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Token Size Slider */}
+          <div>
+            <label htmlFor="ext-max-tokens" className="mb-2 qt-label">
+              Maximum Output Size
+            </label>
+            <input
+              id="ext-max-tokens"
+              type="range"
+              min={1000}
+              max={20000}
+              step={500}
+              value={maxTokens}
+              onChange={(e) => setMaxTokens(Number(e.target.value))}
+              className="qt-range w-full"
+            />
+            <div className="mt-1 flex justify-between text-xs qt-text-secondary">
+              <span>{maxTokens.toLocaleString()} tokens</span>
+              <span>~{estimatedChars.toLocaleString()} characters</span>
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-lg border qt-border-destructive/50 qt-bg-destructive/10 px-3 py-2 text-sm qt-text-destructive">
+              {error}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="mt-4 flex justify-end gap-3 flex-shrink-0">
+        <button
+          onClick={onCancel}
+          disabled={generating}
+          className="qt-button qt-button-secondary"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleGenerate}
+          disabled={!canGenerate}
+          className="qt-button qt-button-primary"
+        >
+          {generating ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="animate-spin h-4 w-4 qt-border-primary-foreground border-t-transparent rounded-full" />
+              Generating...
+            </span>
+          ) : (
+            'Generate Prompt'
+          )}
+        </button>
       </div>
-    </div>
+    </BaseModal>
   )
 }

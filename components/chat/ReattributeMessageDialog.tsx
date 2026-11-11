@@ -8,12 +8,11 @@
  * are deleted.
  */
 
-import { useState, useRef, useEffect, useId } from 'react'
+import { useState, useEffect } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/icon'
-import { useClickOutside } from '@/hooks/useClickOutside'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal } from '@/components/ui/BaseModal'
 
 interface ParticipantData {
   id: string
@@ -50,7 +49,6 @@ export default function ReattributeMessageDialog({
 }: ReattributeMessageDialogProps) {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const modalRef = useRef<HTMLDivElement>(null)
 
   // Reset selection when dialog opens
   useEffect(() => {
@@ -59,12 +57,6 @@ export default function ReattributeMessageDialog({
       setSelectedParticipantId(null)
     }
   }, [isOpen, messageId, currentParticipantId, participants.length])
-
-  // Handle click outside to close
-  useClickOutside(modalRef, () => { if (!isSubmitting) onClose() }, {
-    enabled: isOpen,
-    onEscape: () => { if (!isSubmitting) onClose() },
-  })
 
   // Filter to only show other participants (exclude current)
   const availableParticipants = participants.filter(
@@ -130,139 +122,127 @@ export default function ReattributeMessageDialog({
     return participant.character || null
   }
 
-  const titleId = useId()
-  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
-
   if (!isOpen) return null
 
-  return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-md"
+  const footer = (
+    <>
+      <button
+        onClick={onClose}
+        className="qt-button qt-button-secondary"
+        disabled={isSubmitting}
       >
-        {/* Header */}
-        <div className="qt-dialog-header flex items-center justify-between">
-          <h2 id={titleId} className="qt-dialog-title">
-            Re-attribute Message
-          </h2>
-          <button
-            aria-label="Close"
-            onClick={onClose}
-            className="qt-button qt-button-ghost p-2"
-            disabled={isSubmitting}
-          >
-            <Icon name="close" className="w-6 h-6" />
-          </button>
+        Cancel
+      </button>
+      <button
+        onClick={handleReattribute}
+        className="qt-button qt-button-primary"
+        disabled={isSubmitting || !selectedParticipantId || availableParticipants.length === 0}
+      >
+        {isSubmitting ? (
+          <span className="flex items-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Re-attributing...
+          </span>
+        ) : (
+          'Re-attribute'
+        )}
+      </button>
+    </>
+  )
+
+  return (
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Re-attribute Message"
+      maxWidth="md"
+      busy={isSubmitting}
+      footerClassName="qt-dialog-footer flex justify-end gap-2"
+      headerActions={
+        <button
+          aria-label="Close"
+          onClick={onClose}
+          className="qt-button qt-button-ghost p-2"
+          disabled={isSubmitting}
+        >
+          <Icon name="close" className="w-6 h-6" />
+        </button>
+      }
+      footer={footer}
+    >
+      {availableParticipants.length === 0 ? (
+        <div className="text-center py-8 qt-text-secondary">
+          No other participants available in this chat.
         </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="qt-text-secondary text-sm">
+            Select who should be attributed as the sender of this message.
+            Any memories associated with this message will be deleted.
+          </p>
 
-        {/* Content */}
-        <div className="qt-dialog-body">
-          {availableParticipants.length === 0 ? (
-            <div className="text-center py-8 qt-text-secondary">
-              No other participants available in this chat.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="qt-text-secondary text-sm">
-                Select who should be attributed as the sender of this message.
-                Any memories associated with this message will be deleted.
-              </p>
+          {/* Participant list */}
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {availableParticipants.map((participant) => {
+              const isSelected = selectedParticipantId === participant.id
+              const name = getParticipantName(participant)
+              const title = getParticipantTitle(participant)
+              const avatarSrc = getParticipantAvatarSrc(participant)
 
-              {/* Participant list */}
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {availableParticipants.map((participant) => {
-                  const isSelected = selectedParticipantId === participant.id
-                  const name = getParticipantName(participant)
-                  const title = getParticipantTitle(participant)
-                  const avatarSrc = getParticipantAvatarSrc(participant)
+              return (
+                <button
+                  key={participant.id}
+                  onClick={() => setSelectedParticipantId(participant.id)}
+                  disabled={isSubmitting}
+                  className={`
+                    w-full p-3 rounded-lg border text-left transition-all
+                    ${isSelected
+                      ? 'qt-border-primary qt-bg-primary/10 ring-2 qt-ring-brand'
+                      : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
+                    }
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  `}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Avatar */}
+                    <Avatar
+                      name={name}
+                      src={avatarSrc}
+                      size="md"
+                      styleOverride="RECTANGULAR"
+                    />
 
-                  return (
-                    <button
-                      key={participant.id}
-                      onClick={() => setSelectedParticipantId(participant.id)}
-                      disabled={isSubmitting}
-                      className={`
-                        w-full p-3 rounded-lg border text-left transition-all
-                        ${isSelected
-                          ? 'qt-border-primary qt-bg-primary/10 ring-2 qt-ring-brand'
-                          : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
-                        }
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                      `}
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* Avatar */}
-                        <Avatar
-                          name={name}
-                          src={avatarSrc}
-                          size="md"
-                          styleOverride="RECTANGULAR"
-                        />
-
-                        {/* Info */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold qt-text truncate">
-                              {name}
-                            </span>
-                            <span className="qt-text-xs px-1.5 py-0.5 rounded qt-bg-muted qt-text-secondary">
-                              {participant.type === 'CHARACTER' ? 'Character' : 'Persona'}
-                            </span>
-                          </div>
-                          {title && (
-                            <div className="qt-text-xs italic truncate qt-text-secondary">
-                              {title}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Selected indicator */}
-                        {isSelected && (
-                          <Icon name="check-circle" className="w-5 h-5 qt-text-brand flex-shrink-0" />
-                        )}
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold qt-text truncate">
+                          {name}
+                        </span>
+                        <span className="qt-text-xs px-1.5 py-0.5 rounded qt-bg-muted qt-text-secondary">
+                          {participant.type === 'CHARACTER' ? 'Character' : 'Persona'}
+                        </span>
                       </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+                      {title && (
+                        <div className="qt-text-xs italic truncate qt-text-secondary">
+                          {title}
+                        </div>
+                      )}
+                    </div>
 
-        {/* Footer */}
-        <div className="qt-dialog-footer flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="qt-button qt-button-secondary"
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleReattribute}
-            className="qt-button qt-button-primary"
-            disabled={isSubmitting || !selectedParticipantId || availableParticipants.length === 0}
-          >
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Re-attributing...
-              </span>
-            ) : (
-              'Re-attribute'
-            )}
-          </button>
+                    {/* Selected indicator */}
+                    {isSelected && (
+                      <Icon name="check-circle" className="w-5 h-5 qt-text-brand flex-shrink-0" />
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </BaseModal>
   )
 }

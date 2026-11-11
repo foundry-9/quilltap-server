@@ -9,9 +9,15 @@
  * @module app/prospero/[id]/ProjectDetailView
  */
 
-import { useEffect, useState } from 'react'
-import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
-import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState, useProjectDocumentStores } from './hooks'
+import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
+import { useImageProfilesQuery } from '@/lib/hooks/use-profiles'
+import { useProjectFilesQuery } from '@/lib/hooks/use-project-files'
+import { useOwnerStoreLinks } from '@/lib/hooks/use-owner-store-links'
+import type { DocumentStore } from '@/app/scriptorium/types'
+import { useProjectDetail, useProjectChats, useProjectCardState } from './hooks'
+import type { ProjectFile } from './types'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
 import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
@@ -29,6 +35,16 @@ import {
   InventoryCard,
   AtlasCard,
 } from './components'
+
+interface ImageProfileOption {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+}
+
+const NO_IMAGE_PROFILES: ImageProfileOption[] = []
+const NO_FILES: ProjectFile[] = []
 
 export interface ProjectDetailViewProps {
   projectId: string
@@ -48,7 +64,6 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     isEditing,
     startEditing,
     cancelEditing,
-    fetchProject,
     handleSaveHeader,
     handleSaveInstructions,
     handleToggleAllowAnyCharacter,
@@ -64,29 +79,25 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
-  // Image profiles for the default image profile selector
-  const [imageProfiles, setImageProfiles] = useState<Array<{ id: string; name: string; provider: string; modelName: string }>>([])
+  // Image profiles for the default image profile selector (the shared list).
+  const { data: imageProfiles = NO_IMAGE_PROFILES } = useImageProfilesQuery<ImageProfileOption>()
 
   const {
     chats,
     loading: chatsLoading,
     loadingMore,
     pagination,
-    fetchChats,
     loadMoreChats,
     handleRemoveChat,
   } = useProjectChats(projectId)
 
-  const { files, fetchFiles } = useProjectFiles(projectId)
+  const queryClient = useQueryClient()
+  const { data: files = NO_FILES } = useProjectFilesQuery<ProjectFile>(projectId)
+  const refreshFiles = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.projects.files(projectId) })
+  }, [queryClient, projectId])
 
-  const {
-    linkedStores,
-    allStores,
-    fetchLinkedStores,
-    fetchAllStores,
-    linkStore,
-    unlinkStore,
-  } = useProjectDocumentStores(projectId)
+  const { linkedStores, allStores, linkStore, unlinkStore } = useOwnerStoreLinks<DocumentStore>('project', projectId)
 
   // Card expansion state - all open on first visit, all closed on subsequent visits
   const { cardState, toggleCard } = useProjectCardState(projectId)
@@ -107,27 +118,10 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
   const { backgroundImage: prosperoBackgroundImage } = useSubsystemInfo('prospero')
   useReportWorkspaceBackdrop(storyBackgroundUrl || prosperoBackgroundImage || null, false)
 
-  useEffect(() => {
-    fetchChats()
-    fetchFiles()
-    fetchLinkedStores()
-    fetchAllStores()
-    // Fetch image profiles for the default image profile selector
-    fetch('/api/v1/image-profiles')
-      .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image profiles')))
-      .then(data => setImageProfiles(data?.profiles || []))
-      .catch(() => {/* non-critical, selector will just be empty */})
-  }, [projectId, fetchChats, fetchFiles, fetchLinkedStores, fetchAllStores])
-
-  // Navigating back to the containing workspace tab refreshes everything this
-  // page shows. The project re-read never touches an edited draft (#170).
-  useOnTabActivated(() => {
-    void fetchProject()
-    void fetchChats()
-    void fetchFiles()
-    void fetchLinkedStores()
-    void fetchAllStores()
-  })
+  // Every read on this page is a query under the `projects` prefix (or the
+  // store and profile lists), so the Prospero tab's activation refetch and
+  // the realtime topics refresh it; the project re-read never touches an
+  // edited draft (#170).
 
   if (loading) {
     return (
@@ -176,7 +170,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
           expanded={cardState.files}
           onToggle={() => toggleCard('files')}
           projectId={projectId}
-          onFilesChange={fetchFiles}
+          onFilesChange={refreshFiles}
         />
         <DocumentStoresCard
           linkedStores={linkedStores}

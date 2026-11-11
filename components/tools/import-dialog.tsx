@@ -1,9 +1,7 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
-import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useState } from 'react'
+import { WizardModal } from '@/components/ui/WizardModal'
 import { useImportData } from './import-export/hooks/useImportData'
 import {
   LoadingSpinner,
@@ -30,10 +28,6 @@ export function ImportDialog({
   })
   const [dragActive, setDragActive] = useState(false)
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-
   const handleClose = () => {
     if (!state.importing) {
       setDragActive(false)
@@ -41,8 +35,6 @@ export function ImportDialog({
       onClose()
     }
   }
-
-  useEscapeKey(handleClose, isOpen)
 
   if (!isOpen) return null
 
@@ -93,170 +85,95 @@ export function ImportDialog({
   )
 
   return (
-    <>
-      {/* Overlay */}
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
-        onClick={handleClose}
-        disabled={state.importing}
-        aria-label="Close dialog"
-        type="button"
-      />
+    <WizardModal
+      onClose={handleClose}
+      title="Import Data"
+      step={{ current: getStepNumber(), total: 5 }}
+      busy={state.importing}
+      done={state.step === 'complete'}
+      onBack={actions.handleBack}
+      backDisabled={state.step === 'file'}
+      hideActions={state.step === 'importing'}
+      primary={
+        state.step === 'options'
+          ? {
+              onClick: actions.handleImport,
+              disabled: state.importing,
+              label: state.importing ? (
+                <>
+                  <LoadingSpinner />
+                  Importing...
+                </>
+              ) : (
+                'Import'
+              ),
+            }
+          : {
+              onClick: actions.handleNext,
+              disabled: (state.step === 'file' && !state.exportData) || state.loadingPreview,
+              label: state.loadingPreview ? (
+                <>
+                  <LoadingSpinner />
+                  Loading...
+                </>
+              ) : (
+                'Next'
+              ),
+            }
+      }
+    >
+      {/* Step 1: File Selection */}
+      {state.step === 'file' && (
+        <ImportFileStep
+          selectedFile={state.selectedFile}
+          dragActive={dragActive}
+          fileInputRef={fileInputRef}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onFileSelect={actions.handleFileSelect}
+        />
+      )}
 
-      {/* Dialog */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-[90vw] max-w-2xl">
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog w-full max-h-[90vh] flex flex-col"
-        >
-          {/* Header */}
-          <div className="qt-dialog-header flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 id={titleId} className="qt-dialog-title">Import Data</h2>
-                <p className="qt-dialog-description mt-0.5">
-                  Step {getStepNumber()} of 5
-                </p>
-              </div>
-              <button
-                onClick={handleClose}
-                disabled={state.importing}
-                className="qt-text-secondary hover:qt-text disabled:opacity-50"
-                aria-label="Close dialog"
-              >
-                <Icon name="close" className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
+      {/* Step 2: Preview */}
+      {state.step === 'preview' && (
+        <ImportPreviewStep
+          loading={state.loadingPreview}
+          preview={state.preview}
+          selectedEntityIds={state.selectedEntityIds}
+          onToggleSelection={actions.toggleEntitySelection}
+        />
+      )}
 
-          {/* Body */}
-          <div className="qt-dialog-body overflow-y-auto flex-1">
-            {/* Step 1: File Selection */}
-            {state.step === 'file' && (
-              <ImportFileStep
-                selectedFile={state.selectedFile}
-                dragActive={dragActive}
-                fileInputRef={fileInputRef}
-                onDragEnter={handleDragEnter}
-                onDragLeave={handleDragLeave}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onFileSelect={actions.handleFileSelect}
-              />
-            )}
+      {/* Step 3: Options */}
+      {state.step === 'options' && (
+        <ImportOptionsStep
+          conflictStrategy={state.conflictStrategy}
+          onConflictStrategyChange={actions.setConflictStrategy}
+          importMemories={state.importMemories}
+          onImportMemoriesChange={actions.setImportMemories}
+          hasMemories={hasMemories}
+        />
+      )}
 
-            {/* Step 2: Preview */}
-            {state.step === 'preview' && (
-              <ImportPreviewStep
-                loading={state.loadingPreview}
-                preview={state.preview}
-                selectedEntityIds={state.selectedEntityIds}
-                onToggleSelection={actions.toggleEntitySelection}
-              />
-            )}
+      {/* Step 4: Importing */}
+      {state.step === 'importing' && (
+        <WizardLoadingStep message="Importing data..." />
+      )}
 
-            {/* Step 3: Options */}
-            {state.step === 'options' && (
-              <ImportOptionsStep
-                conflictStrategy={state.conflictStrategy}
-                onConflictStrategyChange={actions.setConflictStrategy}
-                importMemories={state.importMemories}
-                onImportMemoriesChange={actions.setImportMemories}
-                hasMemories={hasMemories}
-              />
-            )}
+      {/* Step 5: Complete */}
+      {state.step === 'complete' && state.importResult && (
+        <ImportCompleteStep importResult={state.importResult} />
+      )}
 
-            {/* Step 4: Importing */}
-            {state.step === 'importing' && (
-              <WizardLoadingStep message="Importing data..." />
-            )}
-
-            {/* Step 5: Complete */}
-            {state.step === 'complete' && state.importResult && (
-              <ImportCompleteStep importResult={state.importResult} />
-            )}
-
-            {/* Error State */}
-            {state.step === 'error' && (
-              <WizardErrorStep
-                title="Import Failed"
-                error={state.error}
-              />
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="qt-dialog-footer flex gap-3 justify-between flex-shrink-0">
-            {state.step === 'complete' ? (
-              <button onClick={handleClose} className="flex-1 qt-button qt-button-primary">
-                Close
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={actions.handleBack}
-                  disabled={state.step === 'file' || state.importing}
-                  className="qt-button qt-button-secondary"
-                >
-                  Back
-                </button>
-
-                {state.step === 'importing' ? null : (
-                  <>
-                    <button
-                      onClick={handleClose}
-                      disabled={state.importing}
-                      className="qt-button qt-button-secondary"
-                    >
-                      Cancel
-                    </button>
-
-                    {state.step === 'options' ? (
-                      <button
-                        onClick={actions.handleImport}
-                        disabled={state.importing}
-                        className="qt-button qt-button-primary"
-                      >
-                        {state.importing ? (
-                          <>
-                            <LoadingSpinner />
-                            Importing...
-                          </>
-                        ) : (
-                          'Import'
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={actions.handleNext}
-                        disabled={
-                          (state.step === 'file' && !state.exportData) ||
-                          state.loadingPreview
-                        }
-                        className="qt-button qt-button-primary"
-                      >
-                        {state.loadingPreview ? (
-                          <>
-                            <LoadingSpinner />
-                            Loading...
-                          </>
-                        ) : (
-                          'Next'
-                        )}
-                      </button>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </>
+      {/* Error State */}
+      {state.step === 'error' && (
+        <WizardErrorStep
+          title="Import Failed"
+          error={state.error}
+        />
+      )}
+    </WizardModal>
   )
 }
