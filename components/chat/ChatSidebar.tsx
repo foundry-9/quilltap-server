@@ -13,10 +13,9 @@
  */
 
 import { useMemo, useState, useCallback, useEffect, useRef, useId } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { usePatchChat } from '@/lib/chat/use-patch-chat'
-import { queryKeys } from '@/lib/query/keys'
+import { useApiKeysQuery, useImageProfilesQuery, useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { ConciergeOffDutyHint } from './ConciergeOffDutyHint'
 import { Icon } from '@/components/ui/icon'
@@ -1060,25 +1059,13 @@ function ChatSection({
     }
   }, [sectionOpen, hasEverOpened])
 
-  const { data: templatesData } = useQuery({
-    queryKey: queryKeys.roleplayTemplates.all,
-    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
-    enabled: hasEverOpened,
-  })
-  const { data: imageProfilesData } = useQuery({
-    queryKey: queryKeys.imageProfiles.all,
-    queryFn: ({ signal }) => apiFetch<{ profiles: ImageProfile[] }>('/api/v1/image-profiles', { signal }),
-    enabled: hasEverOpened,
-  })
-  const { data: apiKeysData } = useQuery({
-    queryKey: queryKeys.apiKeys.all,
-    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKey[] }>('/api/v1/api-keys', { signal }),
-    enabled: hasEverOpened,
-  })
+  const { data: templatesData } = useRoleplayTemplatesQuery<RoleplayTemplate>({ enabled: hasEverOpened })
+  const { data: imageProfilesData } = useImageProfilesQuery<ImageProfile>({ enabled: hasEverOpened })
+  const { data: apiKeysData } = useApiKeysQuery<ApiKey>({ enabled: hasEverOpened })
 
   const roleplayTemplates = templatesData ?? []
-  const imageProfiles = imageProfilesData?.profiles ?? []
-  const apiKeys = apiKeysData?.apiKeys ?? []
+  const imageProfiles = imageProfilesData ?? []
+  const apiKeys = apiKeysData ?? []
 
   // Every write to the chat row goes through the one mutation: it toasts a
   // refusal, refreshes the cached reads, and runs `onChatUpdated` on success.

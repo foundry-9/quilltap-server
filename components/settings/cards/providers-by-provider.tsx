@@ -22,6 +22,7 @@ import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useApiKeysQuery, useConnectionProfilesQuery, useEmbeddingProfilesQuery, useImageProfilesQuery } from '@/lib/hooks/use-profiles'
 import { getErrorMessage } from '@/lib/error-utils'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
 import LoadingState from '@/components/ui/LoadingState'
@@ -87,28 +88,13 @@ type ModalRequest =
 export function ProvidersByProvider({ focusProvider }: { focusProvider?: string | null } = {}) {
   const queryClient = useQueryClient()
 
-  // One read per list, shared with every other reader of the same key. Remounts
-  // (switching back from *By kind*, whose lists write without the cache) refetch.
-  const keysQuery = useQuery({
-    queryKey: queryKeys.apiKeys.all,
-    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKeyListItem[] }>('/api/v1/api-keys', { signal }),
-    refetchOnMount: 'always',
-  })
-  const connectionQuery = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
-    refetchOnMount: 'always',
-  })
-  const imageQuery = useQuery({
-    queryKey: queryKeys.imageProfiles.all,
-    queryFn: ({ signal }) => apiFetch<{ profiles: ImageProfile[] }>('/api/v1/image-profiles', { signal }),
-    refetchOnMount: 'always',
-  })
-  const embeddingQuery = useQuery({
-    queryKey: queryKeys.embeddingProfiles.all,
-    queryFn: ({ signal }) => apiFetch<{ profiles: EmbeddingProfile[] }>('/api/v1/embedding-profiles', { signal }),
-    refetchOnMount: 'always',
-  })
+  // One read per list, shared with every other reader of the same key
+  // (`lib/hooks/use-profiles.ts`). A remount refetches, as a belt to the
+  // writers' invalidation.
+  const keysQuery = useApiKeysQuery<ApiKeyListItem>({ refetchOnMount: 'always' })
+  const connectionQuery = useConnectionProfilesQuery<ConnectionProfile>({ refetchOnMount: 'always' })
+  const imageQuery = useImageProfilesQuery<ImageProfile>({ refetchOnMount: 'always' })
+  const embeddingQuery = useEmbeddingProfilesQuery<EmbeddingProfile>({ refetchOnMount: 'always' })
   const providersQuery = useQuery({
     queryKey: queryKeys.providers.all,
     queryFn: ({ signal }) => apiFetch<{ providers: ProviderListing[] }>('/api/v1/providers', { signal }),
@@ -119,10 +105,10 @@ export function ProvidersByProvider({ focusProvider }: { focusProvider?: string 
       apiFetch<{ providers: string[] }>('/api/v1/embedding-profiles?action=list-providers', { signal }),
   })
 
-  const apiKeys = keysQuery.data?.apiKeys ?? EMPTY
-  const connectionProfiles = connectionQuery.data?.profiles ?? EMPTY
-  const imageProfiles = imageQuery.data?.profiles ?? EMPTY
-  const embeddingProfiles = embeddingQuery.data?.profiles ?? EMPTY
+  const apiKeys = keysQuery.data ?? EMPTY
+  const connectionProfiles = connectionQuery.data ?? EMPTY
+  const imageProfiles = imageQuery.data ?? EMPTY
+  const embeddingProfiles = embeddingQuery.data ?? EMPTY
   const providers = providersQuery.data?.providers ?? EMPTY
   const embeddingProviderNames = embeddingProviderNamesQuery.data?.providers
 

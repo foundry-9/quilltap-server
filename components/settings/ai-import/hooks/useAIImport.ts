@@ -7,7 +7,8 @@
  * Handles file uploads, SSE streaming, and import execution.
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { QuilltapExport } from '@/lib/export/types';
 import type {
@@ -45,9 +46,14 @@ export function useAIImport() {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Step 2: Configuration
-  const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
-  const [loadingProfiles, setLoadingProfiles] = useState(true);
-  const [profileId, setProfileId] = useState('');
+  const {
+    data: profiles = [],
+    isLoading: loadingProfiles,
+    isError: profilesFailed,
+  } = useConnectionProfilesQuery<ConnectionProfile>();
+  const [pickedProfileId, setProfileId] = useState('');
+  // Until the user picks one, the default profile (else the first) is in force.
+  const profileId = pickedProfileId || (profiles.find((p) => p.isDefault) ?? profiles[0])?.id || '';
   const [includeMemories, setIncludeMemories] = useState(true);
   const [includeChats, setIncludeChats] = useState(false);
 
@@ -59,7 +65,8 @@ export function useAIImport() {
     stepResults: null,
     errors: {},
   });
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
+  const error = actionError ?? (profilesFailed ? 'Failed to load connection profiles' : null);
 
   // Import state
   const [importing, setImporting] = useState(false);
@@ -69,39 +76,6 @@ export function useAIImport() {
     warnings: string[];
     importedCharacterIds: string[];
   } | null>(null);
-
-  // Fetch connection profiles on mount
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      try {
-        setLoadingProfiles(true);
-        const response = await fetch('/api/v1/connection-profiles');
-        if (!response.ok) {
-          throw new Error('Failed to fetch connection profiles');
-        }
-        const data = await response.json();
-        const profileList = data.profiles || [];
-        setProfiles(profileList);
-
-        // Auto-select default profile
-        const defaultProfile = profileList.find((p: ConnectionProfile) => p.isDefault);
-        if (defaultProfile) {
-          setProfileId(defaultProfile.id);
-        } else if (profileList.length > 0) {
-          setProfileId(profileList[0].id);
-        }
-      } catch (err) {
-        console.error('Failed to fetch profiles for AI import', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-        setError('Failed to load connection profiles');
-      } finally {
-        setLoadingProfiles(false);
-      }
-    };
-
-    fetchProfiles();
-  }, []);
 
   // Computed: Can proceed to next step?
   const canProceed = useMemo(() => {

@@ -6,6 +6,7 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
 import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 type StaffId =
@@ -102,7 +103,8 @@ export default function InsertAnnouncementDialog({
   const [characters, setCharacters] = useState<CharacterCard[]>([])
   const [charsLoading, setCharsLoading] = useState(false)
   const [charSearch, setCharSearch] = useState('')
-  const [profiles, setProfiles] = useState<ProfileCard[]>([])
+  // Shared connection-profile list, fetched only while the dialog is open.
+  const { data: profiles = [], error: profilesError } = useConnectionProfilesQuery<ProfileCard>({ enabled: isOpen })
   // Explicit user choices for the in-character rewrite. Null means "use the
   // computed default" — that way the default updates automatically when the
   // character or profile list changes, but a deliberate pick sticks.
@@ -135,26 +137,11 @@ export default function InsertAnnouncementDialog({
       .finally(() => setCharsLoading(false))
   }, [characters.length, charsLoading])
 
-  // Load connection profiles once per open. Cheap — the response is small
-  // and the user has at most a couple dozen profiles.
   useEffect(() => {
-    if (!isOpen) return
-    fetch('/api/v1/connection-profiles')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data) => {
-        const all: ProfileCard[] = (data.profiles || []).map((p: Record<string, unknown>) => ({
-          id: String(p.id),
-          name: String(p.name ?? ''),
-          provider: String(p.provider ?? ''),
-          modelName: String(p.modelName ?? ''),
-          isDefault: Boolean(p.isDefault),
-        }))
-        setProfiles(all)
-      })
-      .catch((err) => {
-        showErrorToast(`Failed to load connection profiles: ${err.message}`)
-      })
-  }, [isOpen])
+    if (profilesError) {
+      showErrorToast(`Failed to load connection profiles: ${profilesError.message}`)
+    }
+  }, [profilesError])
 
   const selectedCharacter = useMemo(
     () => characters.find((c) => c.id === characterId) || null,

@@ -1,7 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { apiErrorMessage } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useApiKeysQuery, useImageProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { useModalState } from '@/hooks/useModalState'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -34,17 +38,18 @@ interface ImageProfile {
   apiKey?: ApiKey | null
 }
 
-export default function ImageProfilesTab() {
-  const [profiles, setProfiles] = useState<ImageProfile[]>([])
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
+const EMPTY_PROFILES: ImageProfile[] = []
+const EMPTY_KEYS: ApiKey[] = []
 
-  const {
-    loading: loadingProfiles,
-    error: profilesError,
-    execute: executeLoadProfiles,
-    clearError: clearProfilesError,
-  } = useAsyncOperation<ImageProfile[]>()
+export default function ImageProfilesTab() {
+  const queryClient = useQueryClient()
+  // Shared lists: a profile created or deleted here shows in every picker.
+  const profilesQuery = useImageProfilesQuery<ImageProfile>({ refetchOnMount: 'always' })
+  const { data: apiKeys = EMPTY_KEYS } = useApiKeysQuery<ApiKey>()
+  const profiles = profilesQuery.data ?? EMPTY_PROFILES
+  const loadingProfiles = profilesQuery.isPending
+  const profilesError = profilesQuery.error ? apiErrorMessage(profilesQuery.error, 'Failed to load profiles') : null
+  const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
 
   const {
     loading: deletingProfile,
@@ -59,47 +64,7 @@ export default function ImageProfilesTab() {
     triggerAutoAssociate()
   }, [triggerAutoAssociate])
 
-  // Fetch profiles on mount only
-  useEffect(() => {
-    const loadProfiles = async () => {
-      const result = await executeLoadProfiles(async () => {
-        const response = await fetchJson<{ profiles: ImageProfile[], count: number }>('/api/v1/image-profiles')
-        if (!response.ok) {
-          throw new Error(response.error || 'Failed to load profiles')
-        }
-        return response.data?.profiles || []
-      })
-      if (result) {
-        setProfiles(result)
-      }
-    }
-
-    loadProfiles()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // executeLoadProfiles is stable
-
-  // Fetch API keys on mount
-  useEffect(() => {
-    const loadApiKeys = async () => {
-      const response = await fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys')
-      if (response.ok && response.data?.apiKeys) {
-        setApiKeys(response.data.apiKeys)
-      } else {
-        console.error('Failed to load API keys', { error: response.error })
-      }
-    }
-
-    loadApiKeys()
-  }, [])
-
-  const refreshProfiles = async () => {
-    const response = await fetchJson<{ profiles: ImageProfile[], count: number }>('/api/v1/image-profiles')
-    if (response.ok && response.data?.profiles) {
-      setProfiles(response.data.profiles)
-    } else {
-      console.error('Failed to refresh profiles', { error: response.error })
-    }
-  }
+  const refreshProfiles = () => queryClient.invalidateQueries({ queryKey: queryKeys.imageProfiles.all })
 
   const {
     isOpen: isModalOpen,
@@ -149,10 +114,7 @@ export default function ImageProfilesTab() {
       {(profilesError || deleteError) && (
         <ErrorAlert
           message={profilesError || deleteError || 'An error occurred'}
-          onRetry={() => {
-            if (profilesError) clearProfilesError()
-            refreshProfiles()
-          }}
+          onRetry={() => void refreshProfiles()}
         />
       )}
 

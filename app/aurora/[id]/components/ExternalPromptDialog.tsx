@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 
 interface SystemPrompt {
   id: string
@@ -42,44 +43,20 @@ export function ExternalPromptDialog({
   onCancel,
   onGenerated,
 }: ExternalPromptDialogProps) {
-  const [connectionProfileId, setConnectionProfileId] = useState('')
   const [systemPromptId, setSystemPromptId] = useState('')
   const [scenarioId, setScenarioId] = useState('')
   const [maxTokens, setMaxTokens] = useState(4000)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // Fetch connection profiles on mount. The character's physical description
-  // and wardrobe are pulled in by the server; the dialog no longer asks the
-  // user to pick which record to use.
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const profilesRes = await fetch('/api/v1/connection-profiles')
-
-        if (profilesRes.ok) {
-          const data = await profilesRes.json()
-          const fetchedProfiles = data.profiles || []
-          setProfiles(fetchedProfiles)
-          const defaultProfile = fetchedProfiles.find((p: ConnectionProfile) => p.isDefault)
-          if (defaultProfile) {
-            setConnectionProfileId(defaultProfile.id)
-          } else if (fetchedProfiles.length > 0) {
-            setConnectionProfileId(fetchedProfiles[0].id)
-          }
-        }
-      } catch {
-        // Non-critical — dropdowns will just be empty
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
+  // Connection profiles come from the shared cache. The character's physical
+  // description and wardrobe are pulled in by the server; the dialog no longer
+  // asks the user to pick which record to use. A failed load leaves the
+  // dropdown empty — non-critical.
+  const { data: profiles = [], isLoading: loading } = useConnectionProfilesQuery<ConnectionProfile>()
+  const [pickedProfileId, setPickedProfileId] = useState('')
+  const defaultProfileId = (profiles.find((p) => p.isDefault) ?? profiles[0])?.id ?? ''
+  const connectionProfileId = pickedProfileId || defaultProfileId
 
   // Pre-select default system prompt
   useEffect(() => {
@@ -163,7 +140,7 @@ export function ExternalPromptDialog({
               <select
                 id="ext-profile"
                 value={connectionProfileId}
-                onChange={(e) => setConnectionProfileId(e.target.value)}
+                onChange={(e) => setPickedProfileId(e.target.value)}
                 className={selectClasses}
               >
                 <option value="">Select a profile</option>

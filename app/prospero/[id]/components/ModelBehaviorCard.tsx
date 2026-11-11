@@ -7,15 +7,15 @@
  */
 
 import { useId, useState, useCallback, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import type { Project } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
 import { Icon } from '@/components/ui/icon'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import type { RoleplayTemplate } from '@/lib/schemas/template.types'
 import { InlineBrahmaProfileSelect } from '@/components/brahma-console/InlineBrahmaProfileSelect'
+
+const EMPTY_TEMPLATES: RoleplayTemplate[] = []
 
 interface ModelBehaviorCardProps {
   project: Project
@@ -44,10 +44,7 @@ export function ModelBehaviorCard({
   const [localDisabledTools, setLocalDisabledTools] = useState<string[]>(project.defaultDisabledTools || [])
   const [localDisabledToolGroups, setLocalDisabledToolGroups] = useState<string[]>(project.defaultDisabledToolGroups || [])
 
-  const { data: roleplayTemplates = [] } = useQuery({
-    queryKey: queryKeys.roleplayTemplates.all,
-    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
-  })
+  const { data: roleplayTemplates = EMPTY_TEMPLATES } = useRoleplayTemplatesQuery<RoleplayTemplate>()
 
   const toolSummary = useMemo(() => {
     const toolCount = localDisabledTools.length

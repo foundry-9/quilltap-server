@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { ProviderIcon } from './ProviderIcon'
 
 interface ApiKey {
@@ -42,38 +45,28 @@ export function ImageProfilePicker({
   disabled,
   preselectDefault,
 }: ImageProfilePickerProps) {
-  const [profiles, setProfiles] = useState<ImageProfile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const url = new URL('/api/v1/image-profiles', window.location.origin)
-        if (characterId) {
-          url.searchParams.set('sortByCharacter', characterId)
-        }
-        if (userCharacterId) {
-          url.searchParams.set('sortByUserCharacter', userCharacterId)
-        }
-
-        const res = await fetch(url.toString())
-        if (!res.ok) throw new Error('Failed to fetch profiles')
-
-        const data = await res.json()
-        setProfiles(data.profiles || [])
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch profiles')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchProfiles()
-  }, [characterId, userCharacterId])
+  // The server orders the list by tag match for the given characters, so the
+  // fetch is keyed on them; the key sits under `imageProfiles.all`, so a profile
+  // created or deleted anywhere refreshes this picker.
+  const {
+    data: profiles = [],
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: queryKeys.imageProfiles.sorted(characterId, userCharacterId),
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams()
+      if (characterId) params.set('sortByCharacter', characterId)
+      if (userCharacterId) params.set('sortByUserCharacter', userCharacterId)
+      const query = params.toString()
+      return apiFetch<{ profiles?: ImageProfile[] }>(
+        `/api/v1/image-profiles${query ? `?${query}` : ''}`,
+        { signal },
+      )
+    },
+    select: (data) => data.profiles ?? [],
+  })
+  const error = queryError ? queryError.message || 'Failed to fetch profiles' : null
 
   const preselected = useRef(false)
   useEffect(() => {

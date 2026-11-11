@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Refactor: client server-state (phase 4: profile, key and template lists)
+
+- The Settings "by kind" connection, embedding and image profile tabs read the shared list queries instead of private copies, and their writes (create, edit, delete, reorder, reset sort, auto-configure) invalidate the shared key. A profile created there now shows in every dropdown on the page and in the by-provider card at once; a deleted one disappears. The connection tab's `?t=` cache-buster and an unused function that fetched every chat to count messages are gone.
+- Every reader of `/api/v1/connection-profiles`, `/image-profiles`, `/embedding-profiles`, `/api-keys` and `/roleplay-templates` goes through `lib/hooks/use-profiles.ts`: the New Chat dialog, the Salon sidebar and list, Add Character, Create NPC, the participant controls, the wardrobe image panes, the project Model Behavior card, the API keys tab, the attention strip, the External Prompt and AI Wizard / AI Import flows, and the Select Profile, Insert Announcement and Impersonation Voice dialogs. `hooks/useConnectionProfiles` is a `select` over the shared list. `ImageProfilePicker` keeps its server-side sort and reads `queryKeys.imageProfiles.sorted(...)`, under the `image-profiles` prefix.
+- Create NPC: the new character now appears in the character pickers (it did not invalidate the character list). Its connection profile defaults to the first in the list without an effect.
+- The API keys tab invalidates the shared key list after a write, so the profile modals' key pickers see a new key.
+
 #### Refactor: client server-state (phases 1–3)
 
 - #170: project instructions typed before a tab switch, a roster change or a realtime hint were overwritten by the refetch, and Save then wrote the old text. New `useDraft(serverValue)` (`lib/hooks/use-draft.ts`) holds a form's draft and adopts a new server value only while the draft is clean, or when the server value already equals it. `useProjectDetail` reads the project through `queryKeys.projects.detail` and keeps two drafts: the header (name, description) and the instructions, each saving only its own fields. The instructions Save is disabled while nothing has changed. The unused `SettingsTab` component is gone.

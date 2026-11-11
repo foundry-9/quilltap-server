@@ -25,6 +25,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useApiKeysQuery } from '@/lib/hooks/use-profiles'
 import { getSettingsCard, settingsCardHref, type SettingsGroupId } from '@/lib/settings/registry'
 import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
 import { mergeConciergeSettings } from '@/components/settings/concierge-settings/merge'
@@ -108,10 +109,7 @@ export function useAttentionChips(): { chips: AttentionChip[]; ready: boolean } 
   const { settings, loading, connectionProfiles, imageProfiles, embeddingProfiles, loadingProfiles } =
     useChatSettingsContext()
 
-  const apiKeys = useQuery({
-    queryKey: queryKeys.apiKeys.all,
-    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKeyRow[] }>('/api/v1/api-keys', { signal }),
-  })
+  const apiKeys = useApiKeysQuery<ApiKeyRow>()
   const providers = useQuery({
     queryKey: queryKeys.providers.all,
     queryFn: ({ signal }) => apiFetch<{ providers?: ProviderRow[] }>('/api/v1/providers', { signal }),
@@ -148,7 +146,7 @@ export function useAttentionChips(): { chips: AttentionChip[]; ready: boolean } 
     const lit: AttentionChip[] = []
 
     const troubled = findTroubledProfiles({
-      apiKeys: apiKeys.data?.apiKeys,
+      apiKeys: apiKeys.data,
       providers: providers.data?.providers,
       connectionProfiles: connectionProfiles as ProfileRow[],
       imageProfiles: imageProfiles as ProfileRow[],

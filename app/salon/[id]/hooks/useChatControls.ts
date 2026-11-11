@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { patchChat, type ChatPatch } from '@/lib/chat/patch-chat'
-import { queryKeys } from '@/lib/query/keys'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
@@ -192,17 +191,10 @@ export function useChatControls({
   }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
   // Fetch connection profiles for participant sidebar dropdowns
-  const { data: profilesData } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) =>
-      apiFetch<{ profiles: Array<{ id: string; name: string; provider?: string; modelName?: string }> }>(
-        '/api/v1/connection-profiles',
-        { signal }
-      ),
-  })
+  const { data: profilesData } = useConnectionProfilesQuery<{ id: string; name: string; provider?: string; modelName?: string }>()
 
   const connectionProfiles = useMemo(
-    () => profilesData?.profiles?.map((p) => ({
+    () => profilesData?.map((p) => ({
       id: p.id,
       name: p.name,
       provider: p.provider,

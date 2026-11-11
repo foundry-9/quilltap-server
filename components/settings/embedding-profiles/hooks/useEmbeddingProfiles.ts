@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { useCallback, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
-import { fetchJson } from '@/lib/fetch-helpers'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useApiKeysQuery, useEmbeddingProfilesQuery } from '@/lib/hooks/use-profiles'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile, EmbeddingProvider } from '../types'
 
 /**
@@ -25,14 +27,11 @@ interface UseEmbeddingProfilesResult {
   embeddingProviders: EmbeddingProviderInfo[]
   loading: boolean
   error: string | null
-  loadData: () => Promise<void>
-  fetchProfiles: () => Promise<void>
+  /** Re-read the profile list everywhere it is shown. */
+  refreshProfiles: () => Promise<void>
   triggerAutoAssociate: () => Promise<void>
 }
 
-/**
- * Hook to manage embedding profiles data fetching and state
- */
 /**
  * Static provider metadata (used when API doesn't provide full details)
  * This is a fallback - ideally the API would return this information
@@ -85,77 +84,50 @@ export function toEmbeddingProviderInfo(names: string[]): EmbeddingProviderInfo[
   }))
 }
 
-export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
-  const [profiles, setProfiles] = useState<EmbeddingProfile[]>([])
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [embeddingModels, setEmbeddingModels] = useState<Record<string, EmbeddingModel[]>>({})
-  const [embeddingProviders, setEmbeddingProviders] = useState<EmbeddingProviderInfo[]>([])
+const EMPTY_PROFILES: EmbeddingProfile[] = []
+const EMPTY_KEYS: ApiKey[] = []
+const EMPTY_MODELS: Record<string, EmbeddingModel[]> = {}
 
-  const {
-    loading,
-    error,
-    execute: executeLoad,
-  } = useAsyncOperation<void>()
+/**
+ * The Settings "by kind" embedding-profiles tab's data. Every list is a
+ * shared query (the same keys the by-provider card and the chat-settings
+ * pickers read), so a profile created or deleted here shows everywhere.
+ */
+export function useEmbeddingProfiles(): UseEmbeddingProfilesResult {
+  const queryClient = useQueryClient()
+  const profilesQuery = useEmbeddingProfilesQuery<EmbeddingProfile>({ refetchOnMount: 'always' })
+  const { data: apiKeys = EMPTY_KEYS } = useApiKeysQuery<ApiKey>()
+  const { data: embeddingModels = EMPTY_MODELS } = useQuery({
+    queryKey: queryKeys.embeddingProfiles.models,
+    queryFn: ({ signal }) =>
+      apiFetch<Record<string, EmbeddingModel[]>>('/api/v1/embedding-profiles?action=list-models', { signal }),
+  })
+  const { data: providerNames } = useQuery({
+    queryKey: queryKeys.embeddingProfiles.providerNames,
+    queryFn: ({ signal }) =>
+      apiFetch<{ providers: string[] }>('/api/v1/embedding-profiles?action=list-providers', { signal }),
+    select: (data) => data.providers,
+  })
+  // The provider list, or (when it cannot be read) the models catalogue's keys.
+  const embeddingProviders = useMemo(
+    () => toEmbeddingProviderInfo(providerNames ?? Object.keys(embeddingModels)),
+    [providerNames, embeddingModels],
+  )
 
   const triggerAutoAssociate = useAutoAssociate()
 
-  const loadData = useCallback(async () => {
-    await executeLoad(async () => {
-      const [profilesRes, keysRes, modelsRes, providersRes] = await Promise.all([
-        fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles'),
-        fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys'),
-        fetchJson<Record<string, EmbeddingModel[]>>('/api/v1/embedding-profiles?action=list-models'),
-        fetchJson<{ providers: string[] }>('/api/v1/embedding-profiles?action=list-providers'),
-      ])
-
-      if (!profilesRes.ok) {
-        throw new Error(profilesRes.error || 'Failed to fetch profiles')
-      }
-      if (!keysRes.ok) {
-        console.error('Failed to fetch API keys', { error: keysRes.error })
-      } else if (keysRes.data?.apiKeys) {
-        setApiKeys(keysRes.data.apiKeys)
-      }
-      if (!modelsRes.ok) {
-        console.error('Failed to fetch embedding models', { error: modelsRes.error })
-      } else if (modelsRes.data) {
-        setEmbeddingModels(modelsRes.data)
-      }
-
-      // Build providers list from API response or fall back to models keys
-      if (providersRes.ok && providersRes.data?.providers) {
-        setEmbeddingProviders(toEmbeddingProviderInfo(providersRes.data.providers))
-      } else if (modelsRes.data) {
-        // Fallback: derive providers from models response
-        setEmbeddingProviders(toEmbeddingProviderInfo(Object.keys(modelsRes.data)))
-      }
-
-      if (profilesRes.data?.profiles) {
-        setProfiles(profilesRes.data.profiles)
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // executeLoad is stable (empty deps in useAsyncOperation)
-
-  const fetchProfiles = useCallback(async () => {
-    const result = await fetchJson<{ profiles: EmbeddingProfile[]; count: number }>('/api/v1/embedding-profiles')
-    if (!result.ok) {
-      throw new Error(result.error || 'Failed to fetch profiles')
-    }
-    if (result.data?.profiles) {
-      setProfiles(result.data.profiles)
-    }
-  }, [])
+  const refreshProfiles = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.embeddingProfiles.all })
+  }, [queryClient])
 
   return {
-    profiles,
+    profiles: profilesQuery.data ?? EMPTY_PROFILES,
     apiKeys,
     embeddingModels,
     embeddingProviders,
-    loading,
-    error,
-    loadData,
-    fetchProfiles,
+    loading: profilesQuery.isPending,
+    error: profilesQuery.error ? apiErrorMessage(profilesQuery.error, 'Failed to fetch profiles') : null,
+    refreshProfiles,
     triggerAutoAssociate,
   }
 }

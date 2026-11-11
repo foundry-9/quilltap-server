@@ -199,6 +199,9 @@ export const queryKeys = {
   },
   imageProfiles: {
     all: ['image-profiles'] as const,
+    /** The list ordered for a character / user-character (tag matches first). Nested under `all`, so a profile write refreshes it too. */
+    sorted: (characterId?: string, userCharacterId?: string) =>
+      ['image-profiles', 'sorted', characterId ?? null, userCharacterId ?? null] as const,
     /** The per-model options schema + LoRA support flag the profile editor renders from. */
     optionsSchema: (provider: string, model: string) =>
       ['image-profiles', 'options-schema', provider, model] as const,

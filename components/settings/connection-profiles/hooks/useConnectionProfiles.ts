@@ -1,229 +1,114 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { useCallback, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
-import { fetchJson } from '@/lib/fetch-helpers'
-import { getErrorMessage } from '@/lib/error-utils'
-import type { ConnectionProfile, Tag, ApiKey, ProviderConfig } from '../types'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useApiKeysQuery, useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { showErrorToast } from '@/lib/toast'
+import type { ConnectionProfile, ApiKey, ProviderConfig } from '../types'
+
+const EMPTY_PROFILES: ConnectionProfile[] = []
+const EMPTY_KEYS: ApiKey[] = []
+const EMPTY_PROVIDERS: ProviderConfig[] = []
 
 /**
- * Hook for managing connection profiles data
- * Handles fetching, deletion, and message counting
+ * The Settings "by kind" connection-profiles tab's data and writes.
+ *
+ * Reads are the shared list queries (`lib/hooks/use-profiles.ts`), so a
+ * profile created, deleted or reordered here shows in every picker on the
+ * page and in the by-provider card at once; writes invalidate the shared key
+ * rather than re-fetching into private state.
  */
 export function useConnectionProfiles() {
-  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [providers, setProviders] = useState<ProviderConfig[]>([])
-  const [cheapDefaultProfileId, setCheapDefaultProfileId] = useState<string | null>(null)
-
-  const fetchOp = useAsyncOperation<ConnectionProfile[]>()
-  const deleteOp = useAsyncOperation<any>()
+  const queryClient = useQueryClient()
+  const profilesQuery = useConnectionProfilesQuery<ConnectionProfile>({ refetchOnMount: 'always' })
+  const { data: apiKeys = EMPTY_KEYS } = useApiKeysQuery<ApiKey>()
+  const { data: providers = EMPTY_PROVIDERS } = useQuery({
+    queryKey: queryKeys.providers.all,
+    queryFn: ({ signal }) => apiFetch<{ providers?: ProviderConfig[] }>('/api/v1/providers', { signal }),
+    select: (data) => data.providers ?? EMPTY_PROVIDERS,
+  })
+  const { data: cheapDefaultProfileId = null } = useChatSettingsQuery(
+    (settings) => settings.cheapLLMSettings?.defaultCheapProfileId ?? null,
+  )
   const triggerAutoAssociate = useAutoAssociate()
+  const [deleting, setDeleting] = useState(false)
 
-  const countMessagesPerProfile = useCallback(
-    async (profilesList: ConnectionProfile[]) => {
-      try {
-        // Initialize message counts for all profiles
-        const messageCounts: Record<string, number> = {}
-        profilesList.forEach((p) => {
-          messageCounts[p.id] = 0
-        })
-
-        // Fetch all chats to analyze message usage
-        const chatsRes = await fetch('/api/v1/chats')
-        if (!chatsRes.ok) return messageCounts
-
-        const chatsData = await chatsRes.json()
-        const chats = chatsData.chats || []
-        if (!Array.isArray(chats)) return messageCounts
-
-        // For each chat, count messages by profile
-        await Promise.all(
-          chats.map(async (chat: any) => {
-            try {
-              // Get chat with messages from v1 API
-              const chatRes = await fetch(`/api/v1/chats/${chat.id}`)
-              if (!chatRes.ok) return
-
-              const chatData = await chatRes.json()
-              const messages = chatData.chat?.messages
-              if (!Array.isArray(messages)) return
-
-              // Get CHARACTER participants with their connection profiles
-              const characterParticipants = (chat.participants || []).filter(
-                (p: any) => p.type === 'CHARACTER'
-              )
-
-              if (characterParticipants.length === 0) return
-
-              // Count ASSISTANT messages
-              // Distribute messages among character participants based on conversation flow
-              const assistantMessages = messages.filter((m: any) => m.role === 'ASSISTANT')
-
-              if (assistantMessages.length === 0) return
-
-              // Simple strategy: if only one character, assign all assistant messages to them
-              // If multiple characters, assign based on alternating pattern or message order
-              if (characterParticipants.length === 1) {
-                const profileId = characterParticipants[0].connectionProfileId
-                if (profileId && profileId in messageCounts) {
-                  messageCounts[profileId] += assistantMessages.length
-                }
-              } else {
-                // For multiple participants, use a round-robin approach based on message index
-                assistantMessages.forEach((msg: any, index: number) => {
-                  const participantIndex = index % characterParticipants.length
-                  const profileId = characterParticipants[participantIndex].connectionProfileId
-                  if (profileId && profileId in messageCounts) {
-                    messageCounts[profileId]++
-                  }
-                })
-              }
-            } catch (err) {
-              console.error(`Error processing chat ${chat.id}`, { error: getErrorMessage(err) })
-            }
-          })
-        )
-
-        return messageCounts
-      } catch (err) {
-        console.error('Error counting messages per profile', { error: getErrorMessage(err) })
-        return {}
-      }
-    },
-    []
+  const refreshProfiles = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.connectionProfiles.all }),
+    [queryClient],
   )
 
-  const fetchProfiles = useCallback(async () => {
-    return await fetchOp.execute(async () => {
-      // Add cache busting timestamp to force fresh data
-      const result = await fetchJson<{ profiles: ConnectionProfile[], count: number }>(`/api/v1/connection-profiles?t=${Date.now()}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        },
-      })
-
-      if (!result.ok) {
-        throw new Error(result.error || 'Failed to fetch profiles')
+  /** A write whose success refreshes the shared list; failures toast. */
+  const write = useCallback(
+    async (url: string, init: RequestInit, failure: string): Promise<boolean> => {
+      try {
+        await apiFetch(url, init)
+        await refreshProfiles()
+        return true
+      } catch (err) {
+        const message = apiErrorMessage(err, failure)
+        console.error('[ConnectionProfiles] write failed', { url, message })
+        showErrorToast(message)
+        return false
       }
-
-      const data = result.data?.profiles || []
-
-      // Tags are already included in the profile response from /api/profiles
-      // No need to fetch them separately
-      setProfiles(data)
-      return data
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)
-
-  const fetchApiKeys = useCallback(async () => {
-    try {
-      const result = await fetchJson<{ apiKeys: ApiKey[], count: number }>('/api/v1/api-keys')
-      if (result.ok) {
-        setApiKeys(result.data?.apiKeys || [])
-      } else {
-        throw new Error(result.error)
-      }
-    } catch (err) {
-      console.error('Failed to fetch API keys', { error: getErrorMessage(err) })
-    }
-  }, [])
-
-  const fetchProviders = useCallback(async () => {
-    try {
-      const result = await fetchJson<{ providers: ProviderConfig[], count: number }>('/api/v1/providers')
-      if (result.ok) {
-        const providerList = result.data?.providers || []
-        setProviders(providerList)
-      } else {
-        throw new Error(result.error)
-      }
-    } catch (err) {
-      console.error('Failed to fetch providers', { error: getErrorMessage(err) })
-    }
-  }, [])
-
-  const fetchChatSettings = useCallback(async () => {
-    try {
-      const result = await fetchJson<any>('/api/v1/settings/chat')
-      if (result.ok) {
-        setCheapDefaultProfileId(result.data?.cheapLLMSettings?.defaultCheapProfileId || null)
-      }
-    } catch (err) {
-      console.error('Error fetching chat settings', { error: getErrorMessage(err) })
-    }
-  }, [])
+    },
+    [refreshProfiles],
+  )
 
   const handleDelete = useCallback(
     async (id: string) => {
-      const result = await deleteOp.execute(async () => {
-        const fetchResult = await fetchJson(`/api/v1/connection-profiles/${id}`, { method: 'DELETE' })
-        if (!fetchResult.ok) throw new Error(fetchResult.error || 'Failed to delete profile')
-        return fetchResult.data
-      })
-
-      if (result) {
-        await fetchProfiles()
+      setDeleting(true)
+      try {
+        return await write(`/api/v1/connection-profiles/${id}`, { method: 'DELETE' }, 'Failed to delete profile')
+      } finally {
+        setDeleting(false)
       }
-
-      return result
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [] // deleteOp.execute and fetchProfiles are stable
+    [write],
   )
 
   const reorderProfiles = useCallback(
     async (order: Array<{ id: string; sortIndex: number }>) => {
-      try {
-        const result = await fetchJson('/api/v1/connection-profiles?action=reorder', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order }),
-        })
-        if (!result.ok) {
-          throw new Error(result.error || 'Failed to reorder profiles')
-        }
-        await fetchProfiles()
-      } catch (err) {
-        console.error('Failed to reorder profiles', { error: getErrorMessage(err) })
-      }
+      await write(
+        '/api/v1/connection-profiles?action=reorder',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order }) },
+        'Failed to reorder profiles',
+      )
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [] // fetchProfiles is stable
+    [write],
   )
 
   const resetSort = useCallback(async () => {
-    try {
-      const result = await fetchJson('/api/v1/connection-profiles?action=reset-sort', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      if (!result.ok) {
-        throw new Error(result.error || 'Failed to reset sort order')
-      }
-      await fetchProfiles()
-    } catch (err) {
-      console.error('Failed to reset sort order', { error: getErrorMessage(err) })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // fetchProfiles is stable
+    await write(
+      '/api/v1/connection-profiles?action=reset-sort',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) },
+      'Failed to reset sort order',
+    )
+  }, [write])
+
+  /** Re-read the profiles and keys (after the modal saves). */
+  const refreshAfterSave = useCallback(async () => {
+    await Promise.all([
+      refreshProfiles(),
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all }),
+    ])
+  }, [refreshProfiles, queryClient])
 
   return {
-    profiles,
+    profiles: profilesQuery.data ?? EMPTY_PROFILES,
     apiKeys,
     providers,
     cheapDefaultProfileId,
-    fetchOp,
-    deleteOp,
-    fetchProfiles,
-    fetchApiKeys,
-    fetchProviders,
-    fetchChatSettings,
+    loading: profilesQuery.isPending,
+    error: profilesQuery.error ? apiErrorMessage(profilesQuery.error, 'Failed to fetch profiles') : null,
+    deleting,
+    /** Re-read the profile list everywhere it is shown. */
+    refreshProfiles,
+    refreshAfterSave,
     handleDelete,
     triggerAutoAssociate,
     reorderProfiles,

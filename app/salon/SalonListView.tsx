@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard } from '@/components/chat/ChatCard'
@@ -52,11 +53,7 @@ export function SalonListView() {
     queryFn: ({ signal }) =>
       apiFetch<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters', { signal }),
   })
-  const { data: profilesData, isLoading: profilesLoading } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) =>
-      apiFetch<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles', { signal }),
-  })
+  const { data: profilesData, isLoading: profilesLoading } = useConnectionProfilesQuery()
 
   // Whether the user actually owns any autonomous rooms — used to decide
   // whether to surface the "hidden" hint when the toggle is off. Cheap GET;
@@ -74,7 +71,7 @@ export function SalonListView() {
     [charactersData]
   )
   const profiles = useMemo(
-    () => (profilesData?.profiles ?? []).map((p) => ({ id: p.id, name: p.name })),
+    () => (profilesData ?? []).map((p) => ({ id: p.id, name: p.name })),
     [profilesData]
   )
   const loading = chatsLoading || charactersLoading || profilesLoading

@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
@@ -51,44 +52,25 @@ export function SelectLLMProfileDialog({
   onConfirm,
   onCancel,
 }: Readonly<SelectLLMProfileDialogProps>) {
-  const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [loading, setLoading] = useState(false)
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('')
+  // Shared connection-profile list, fetched only while the dialog is open.
+  const {
+    data: profiles = [],
+    isLoading: loading,
+    error: profilesError,
+  } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen })
+  const [pickedProfileId, setPickedProfileId] = useState<string>('')
 
-  // Fetch connection profiles when modal opens
+  // Until the operator picks one: the character's default profile if it has
+  // one, otherwise the first profile in the list.
+  const selectedProfileId = pickedProfileId || character?.defaultConnectionProfileId || profiles[0]?.id || ''
+
   useEffect(() => {
-    if (!isOpen) return
-
-    const fetchProfiles = async () => {
-      try {
-        setLoading(true)
-
-        const res = await fetch('/api/v1/connection-profiles')
-        if (!res.ok) {
-          throw new Error('Failed to fetch connection profiles')
-        }
-
-        const data = await res.json()
-        setProfiles(data.profiles || [])
-
-        // Pre-select the character's default profile if available
-        if (character?.defaultConnectionProfileId) {
-          setSelectedProfileId(character.defaultConnectionProfileId)
-        } else if (data.profiles?.length > 0) {
-          setSelectedProfileId(data.profiles[0].id)
-        }
-      } catch (error) {
-        console.error('[SelectLLMProfileDialog] Failed to fetch profiles', {
-          error: error instanceof Error ? error.message : String(error),
-        })
-        showErrorToast('Failed to load connection profiles')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchProfiles()
-  }, [isOpen, character?.defaultConnectionProfileId])
+    if (!profilesError) return
+    console.error('[SelectLLMProfileDialog] Failed to fetch profiles', {
+      error: profilesError.message,
+    })
+    showErrorToast('Failed to load connection profiles')
+  }, [profilesError])
 
   const handleConfirm = () => {
     if (!selectedProfileId) {
@@ -203,7 +185,7 @@ export function SelectLLMProfileDialog({
                     name="connectionProfile"
                     value={profile.id}
                     checked={selectedProfileId === profile.id}
-                    onChange={() => setSelectedProfileId(profile.id)}
+                    onChange={() => setPickedProfileId(profile.id)}
                     className="sr-only"
                   />
                   <div className="flex-1">
