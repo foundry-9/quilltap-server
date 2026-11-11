@@ -145,7 +145,7 @@ export interface UseDocumentModeReturn {
 const AUTOSAVE_DEBOUNCE_MS = 30000
 
 /** Toast shown when a close or rename is held because the store refused a save. */
-const UNSAVED_EDITS_MESSAGE =
+export const UNSAVED_EDITS_MESSAGE =
   "The Librarian could not file your latest changes, so the document stays open with them intact. Do try again in a moment."
 
 function isMarkdownDocument(document: Pick<ActiveDocument, 'filePath'>): boolean {

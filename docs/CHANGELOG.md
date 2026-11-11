@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Fix: standalone document tab saves (follow-up to #174 / #175)
+
+- The workspace's standalone document tab (`components/workspace/StandaloneDocumentView.tsx`) had the same two save bugs as Document Mode. `saveDocument` now records the text it sent as saved and writes text typed during the save in the same run, one save at a time, and returns whether everything was written. Closing or renaming after a refused save (409 or any error) keeps the tab open with its text and shows a toast. The toast text (`UNSAVED_EDITS_MESSAGE`) is shared from `useDocumentMode.ts`.
+
 #### Fix: nine audit bugs (#164, #169, #174, #175, #177, #178, #183, #184, #185)
 
 - #164: bulk re-attribute (`?action=bulk-reattribute`) updates only the affected rows' `participantId` through `updateMessage`. It used to clear the transcript and replay every row through `addMessage`, which reset `lastMessageAt` and the cycle state, bumped the transcript once per row, ran in O(N²), and lost every row after a failed insert. A row that fails to update is logged and the rest stay in place.

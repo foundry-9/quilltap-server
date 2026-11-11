@@ -136,7 +136,10 @@ particular: rich or source Markdown, autosave, rename by clicking the title,
 the little trash-can for dismissals. The one difference is discretion itself:
 with no conversation attached, **the Librarian makes no announcements and no
 character is told** of your openings, scribblings, renamings, or erasures. The
-work is entirely between you and the page.
+work is entirely between you and the page. It saves with the same care, too:
+words typed while a save is under way follow directly behind it, and should a
+save be refused, the tab declines to close or rename until your changes are
+safely filed, keeping them where you left them.
 
 Pick the same file twice and the workspace politely brings its existing tab
 forward rather than opening a second copy; standalone tabs are likewise
