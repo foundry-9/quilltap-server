@@ -12,6 +12,7 @@
  * @module lib/atlas/transfers
  */
 
+import { foldItemName } from '@/lib/mount-index/item-names';
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -65,8 +66,8 @@ export async function transferAtlasEntry(
     throw new AtlasShapeError('An entry with that id already exists at the destination', { entryId: planned.id });
   }
   if (!planned.archivedAt) {
-    const key = planned.name.toLocaleLowerCase();
-    const clash = existing.find((entry) => !entry.archivedAt && entry.name.toLocaleLowerCase() === key);
+    const key = foldItemName(planned.name);
+    const clash = existing.find((entry) => !entry.archivedAt && foldItemName(entry.name) === key);
     if (clash) {
       logger.info('[AtlasTransfers] Transfer refused: the name is taken at the destination', {
         action,

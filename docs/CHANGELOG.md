@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Refactor: item-family kernel (phase 3: one name fold)
+
+- `foldItemName` (`lib/mount-index/item-names.ts`, client-safe; re-exported by the kernel) is NFC + trim + locale-free lower case, and is the one fold for comparing item names and titles: the Atlas pool's shadowing key, its matcher terms, the vault scan's duplicate-name warning, the uniqueness rule and transfers; the Inventory's references, kin rule and title lint; the Wardrobe's title match and copy titles. The Atlas used `toLocaleLowerCase` in some sites and `toLowerCase` in others, so under a Turkish locale its uniqueness rule and its matcher could disagree; some sites also skipped the trim.
+- The Atlas's free-name check ran before the write's lock, so two concurrent creates of one name both passed. It is now a write guard run inside the folder's write chain against the current records (`location.create` / `update` take `{ guard }`).
+
 #### Refactor: item-family kernel (phase 2: one tier reader)
 
 - New `lib/mount-index/item-store.ts`, the item-store kernel shared by the Wardrobe, the Inventory and the Atlas. `readTiers` reads a reach's tiers (concurrently, each tier's mounts strongest first) and returns `{ layers, unread, consulted }` in tier order; `shadowLayers` shadows them strongest first, first claim wins. All three pools build from it, so the Inventory no longer reads each tier reversed and shadows last-wins.

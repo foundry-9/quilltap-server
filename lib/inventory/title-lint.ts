@@ -62,6 +62,7 @@
  * @module lib/inventory/title-lint
  */
 
+import { foldItemName } from '@/lib/mount-index/item-names';
 import { logger } from '@/lib/logger';
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
@@ -80,16 +81,14 @@ import type { ToolGateKeyCensus, ToolGateKeyUse } from '@/lib/pascal/tool-gate-k
 type Repos = Pick<RepositoryContainer, 'characters' | 'chats'>;
 
 /**
- * Fold a title for comparison: the resolver's own fold (`trim` +
- * `toLowerCase`) first, then whitespace collapsed, diacritics stripped and
+ * Fold a title for comparison: the resolver's own fold (`foldItemName`, the
+ * item-store kernel's) first, then whitespace collapsed, diacritics stripped and
  * case folded again. Starting from the resolver's fold guarantees the lint is
  * never looser than the door it guards: any two strings the resolver calls
  * equal, this calls equal. Punctuation, apostrophes included, is kept.
  */
 export function normalizeTitle(value: string | null | undefined): string {
-  return (value ?? '')
-    .trim()
-    .toLowerCase()
+  return foldItemName(value ?? '')
     .normalize('NFKD')
     .replace(/\p{M}+/gu, '')
     .replace(/\s+/g, ' ')

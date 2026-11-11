@@ -130,10 +130,22 @@ export async function projectMountAtlas(
   );
 }
 
+/**
+ * A check run inside the folder's write chain against the records as they are
+ * now, before anything is written; it throws to refuse. What makes a
+ * read-then-write rule (a free name) hold under concurrent writers.
+ */
+export type AtlasWriteGuard = (records: readonly AtlasRecord[]) => void;
+
 /** Create a record in the folder. */
-export async function createAtlasInMount(mount: AtlasMount, record: AtlasRecord): Promise<AtlasRecord> {
+export async function createAtlasInMount(
+  mount: AtlasMount,
+  record: AtlasRecord,
+  opts: { guard?: AtlasWriteGuard } = {},
+): Promise<AtlasRecord> {
   return runSerialized(mount.mountPointId, async () => {
     const scan = await scanAtlasFolder(mount.mountPointId);
+    opts.guard?.(scan.records);
     const stored: AtlasRecord = { ...record, folder: safeFolder(record.folder) };
     await projectMountAtlas(mount, [...scan.records, stored], scan);
     logger.debug('Atlas entry created in folder', {
@@ -187,7 +199,7 @@ function applyPatches(
 export async function updateAtlasManyInMount(
   mount: AtlasMount,
   patches: readonly AtlasRecordPatch[],
-  opts: { requireAll?: boolean } = {},
+  opts: { requireAll?: boolean; guard?: AtlasWriteGuard } = {},
 ): Promise<AtlasRecord[]> {
   if (patches.length === 0) return [];
   return runSerialized(mount.mountPointId, () => updateManyUnserialized(mount, patches, opts));
@@ -196,10 +208,11 @@ export async function updateAtlasManyInMount(
 async function updateManyUnserialized(
   mount: AtlasMount,
   patches: readonly AtlasRecordPatch[],
-  opts: { requireAll?: boolean } = {},
+  opts: { requireAll?: boolean; guard?: AtlasWriteGuard } = {},
   scanned?: AtlasFolderScan,
 ): Promise<AtlasRecord[]> {
   const scan = scanned ?? (await scanAtlasFolder(mount.mountPointId));
+  opts.guard?.(scan.records);
   if (opts.requireAll) {
     const present = new Set(scan.records.map((record) => record.id));
     const missing = patches.map((p) => p.id).filter((id) => !present.has(id));

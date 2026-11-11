@@ -119,14 +119,7 @@ export function shadowLayers<R>(
 }
 
 // ============================================================================
-// Names
+// Names (client-safe; `item-names.ts`)
 // ============================================================================
 
-/**
- * The one fold for comparing item names and titles as identity: NFC, trimmed,
- * lower-cased without a locale (a Turkish locale must not make the uniqueness
- * rule and the matcher disagree).
- */
-export function foldItemName(name: string): string {
-  return name.normalize('NFC').trim().toLowerCase();
-}
+export { foldItemName } from '@/lib/mount-index/item-names';

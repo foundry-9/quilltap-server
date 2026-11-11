@@ -34,6 +34,7 @@ import {
   updateAtlasManyInMount,
   type AtlasMount,
   type AtlasRecordPatch,
+  type AtlasWriteGuard,
 } from '@/lib/atlas/vault-writes';
 import { resolveOwnerStore } from '@/lib/mount-index/reach';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -43,6 +44,7 @@ import type { ItemFolderLocation } from '@/lib/mount-index/item-folder-location'
 
 export { AtlasScopeSchema, type AtlasScope } from '@/lib/schemas/atlas.types';
 export { locationKey } from '@/lib/mount-index/item-folder-location';
+export type { AtlasWriteGuard } from '@/lib/atlas/vault-writes';
 
 /** What Quilltap General's entries are tagged with. */
 export const GENERAL_ATLAS_ORIGIN: AtlasOrigin = { scope: 'general', id: null, name: 'Quilltap General' };
@@ -56,9 +58,10 @@ export interface AtlasLocation extends ItemFolderLocation {
   readEntries(includeArchived?: boolean): Promise<AtlasRecord[]>;
   /** One record from the folder (archived included), or null. */
   findEntry(id: string): Promise<AtlasRecord | null>;
-  create(record: AtlasRecord): Promise<AtlasRecord>;
-  update(id: string, patch: Partial<AtlasRecord>): Promise<AtlasRecord | null>;
-  updateMany(patches: AtlasRecordPatch[], opts?: { requireAll?: boolean }): Promise<AtlasRecord[]>;
+  /** `guard` runs inside the folder's write chain against the current records; it throws to refuse. */
+  create(record: AtlasRecord, opts?: { guard?: AtlasWriteGuard }): Promise<AtlasRecord>;
+  update(id: string, patch: Partial<AtlasRecord>, opts?: { guard?: AtlasWriteGuard }): Promise<AtlasRecord | null>;
+  updateMany(patches: AtlasRecordPatch[], opts?: { requireAll?: boolean; guard?: AtlasWriteGuard }): Promise<AtlasRecord[]>;
   delete(ids: readonly string[]): Promise<string[]>;
   listFolders(): Promise<AtlasFolder[]>;
 }
@@ -104,9 +107,9 @@ export function atlasLocationForMount(mount: AtlasMount, id: string | null, orig
     async findEntry(entryId) {
       return (await readMountAtlas(mount)).find((record) => record.id === entryId) ?? null;
     },
-    create: (record) => write((target) => createAtlasInMount(target, record)),
-    async update(entryId, patch) {
-      const [updated] = await updateMany([{ id: entryId, patch }]);
+    create: (record, opts) => write((target) => createAtlasInMount(target, record, opts)),
+    async update(entryId, patch, opts) {
+      const [updated] = await updateMany([{ id: entryId, patch }], opts);
       return updated ?? null;
     },
     updateMany,

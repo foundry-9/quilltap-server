@@ -16,6 +16,7 @@
  * @module lib/inventory/resolve
  */
 
+import { foldItemName } from '@/lib/mount-index/item-names';
 import {
   INVENTORY_INHERITABLE_FIELDS,
   type InventoryInheritableField,
@@ -114,7 +115,7 @@ export function resolveItem(
 /** The display name: `Excalibur (sword)` when both differ, else the one there is. */
 export function inventoryDisplayName(item: Pick<InventoryItem, 'name' | 'title'>): string {
   const title = item.title?.trim();
-  if (title && title.toLowerCase() !== item.name.trim().toLowerCase()) return `${title} (${item.name})`;
+  if (title && foldItemName(title) !== foldItemName(item.name)) return `${title} (${item.name})`;
   return title || item.name;
 }
 
@@ -125,7 +126,7 @@ export function inventoryLabel(item: Pick<InventoryItem, 'name' | 'title'>): str
 
 /** Kin share a resolved name, case-insensitively. */
 export function isKin(a: Pick<InventoryItem, 'name'>, b: Pick<InventoryItem, 'name'>): boolean {
-  return a.name.trim().toLowerCase() === b.name.trim().toLowerCase();
+  return foldItemName(a.name) === foldItemName(b.name);
 }
 
 /** An object that can be carried: not an archetype, not a kit, not archived. */

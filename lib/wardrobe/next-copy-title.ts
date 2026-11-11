@@ -9,6 +9,8 @@
  * @module lib/wardrobe/next-copy-title
  */
 
+import { foldItemName } from '@/lib/mount-index/item-names';
+
 /** Matches a trailing ` (copy)` or ` (copy <N>)` suffix, case-insensitive. */
 const COPY_SUFFIX = /\s*\(copy(?:\s+\d+)?\)\s*$/i
 
@@ -20,10 +22,10 @@ const COPY_SUFFIX = /\s*\(copy(?:\s+\d+)?\)\s*$/i
  */
 export function nextCopyTitle(sourceTitle: string, existingTitles: string[]): string {
   const base = sourceTitle.replace(COPY_SUFFIX, '').trim() || sourceTitle.trim()
-  const taken = new Set(existingTitles.map((t) => t.trim().toLowerCase()))
+  const taken = new Set(existingTitles.map((t) => foldItemName(t)))
 
   for (let n = 1; ; n++) {
     const candidate = n === 1 ? `${base} (copy)` : `${base} (copy ${n})`
-    if (!taken.has(candidate.toLowerCase())) return candidate
+    if (!taken.has(foldItemName(candidate))) return candidate
   }
 }
