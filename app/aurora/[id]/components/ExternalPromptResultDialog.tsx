@@ -1,11 +1,9 @@
 'use client'
 
-import { useId, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Icon } from '@/components/ui/icon'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 interface ExternalPromptResultDialogProps {
@@ -20,11 +18,6 @@ export function ExternalPromptResultDialog({
   onClose,
 }: ExternalPromptResultDialogProps) {
   const { copied, copy } = useCopyToClipboard()
-
-  useEscapeKey(onClose)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
 
   const handleCopy = () => copy(prompt)
 
@@ -43,66 +36,64 @@ export function ExternalPromptResultDialog({
   }
 
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="w-full max-w-md md:max-w-3xl rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col"
-      >
-        <div className="flex items-center justify-between mb-4 flex-shrink-0">
-          <h3 id={titleId} className="qt-heading-4">
-            Generated Prompt{characterName ? ` for ${characterName}` : ''}
-          </h3>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label qt-text qt-shadow-sm hover:qt-bg-muted"
-              title="Copy to clipboard"
-            >
-              {copied ? (
-                <>
-                  <Icon name="check" className="w-4 h-4 qt-text-success" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Icon name="copy" className="w-4 h-4" />
-                  Copy
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label qt-text qt-shadow-sm hover:qt-bg-muted"
-              title="Download as Markdown file"
-            >
-              <Icon name="download" className="w-4 h-4" />
-              Download
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-y-auto flex-1 pr-2 -mr-2 rounded-lg border qt-border-default qt-bg-default p-4">
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {prompt}
-            </ReactMarkdown>
-          </div>
-        </div>
-
-        <div className="mt-4 flex justify-end flex-shrink-0">
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      headerless
+      maxWidth="3xl"
+      className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+      bodyClassName="p-6 flex-1 min-h-0 flex flex-col"
+      overlayClassName="p-4"
+    >
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <ModalTitle className="qt-heading-4">
+          Generated Prompt{characterName ? ` for ${characterName}` : ''}
+        </ModalTitle>
+        <div className="flex items-center gap-2">
           <button
-            onClick={onClose}
-            className="qt-button qt-button-primary"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label qt-text qt-shadow-sm hover:qt-bg-muted"
+            title="Copy to clipboard"
           >
-            Close
+            {copied ? (
+              <>
+                <Icon name="check" className="w-4 h-4 qt-text-success" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Icon name="copy" className="w-4 h-4" />
+                Copy
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleDownload}
+            className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 qt-label qt-text qt-shadow-sm hover:qt-bg-muted"
+            title="Download as Markdown file"
+          >
+            <Icon name="download" className="w-4 h-4" />
+            Download
           </button>
         </div>
       </div>
-    </div>
+
+      <div className="overflow-y-auto flex-1 pr-2 -mr-2 rounded-lg border qt-border-default qt-bg-default p-4">
+        <div className="prose prose-sm dark:prose-invert max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {prompt}
+          </ReactMarkdown>
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-end flex-shrink-0">
+        <button
+          onClick={onClose}
+          className="qt-button qt-button-primary"
+        >
+          Close
+        </button>
+      </div>
+    </BaseModal>
   )
 }

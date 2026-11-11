@@ -6,10 +6,9 @@
  * this dialog is where the user decides whether it stays.
  */
 
-import { useId, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 
 interface RehydrateBundleDialogProps {
   characterName: string
@@ -28,10 +27,6 @@ export function RehydrateBundleDialog({
 }: RehydrateBundleDialogProps) {
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-  useEscapeKey(onClose, !working)
 
   const handleDiscard = async () => {
     setWorking(true)
@@ -52,40 +47,17 @@ export function RehydrateBundleDialog({
   }
 
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
-      >
-        <div className="px-6 py-4 border-b qt-border-default flex items-center gap-3 flex-shrink-0">
-          <Icon name="folder" className="w-6 h-6 qt-text-secondary" />
-          <h3 id={titleId} className="qt-dialog-title qt-text">
-            The empty bundle remains on the shelf
-          </h3>
-        </div>
-
-        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-          <p className="qt-text-small">
-            {characterName} is fully unpacked — memories, correspondence and
-            photographs all back where they belong. The sealed bundle they
-            travelled in still sits in the file library, and keeping it costs
-            nothing but shelf space: it is a spare copy of everything the
-            archive held, exactly as it was.
-          </p>
-          <p className="qt-text-small qt-text-secondary">
-            Discard it and the spare copy is gone for good — though of course
-            you can always archive {characterName} afresh, which packs a new
-            bundle from their current state.
-          </p>
-          {error && <p className="qt-text-small qt-text-danger">{error}</p>}
-        </div>
-
-        <div className="px-6 py-4 qt-bg-muted border-t qt-border-default flex gap-3 justify-end flex-shrink-0 rounded-b-2xl">
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      busy={working}
+      headerless
+      className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+      bodyClassName="flex-1 min-h-0 flex flex-col"
+      overlayClassName="p-4"
+      footerClassName="px-6 py-4 qt-bg-muted border-t qt-border-default flex gap-3 justify-end flex-shrink-0 rounded-b-2xl"
+      footer={
+        <>
           <button
             onClick={handleDiscard}
             disabled={working}
@@ -96,8 +68,31 @@ export function RehydrateBundleDialog({
           <button onClick={onClose} disabled={working} className="qt-button qt-button-primary">
             Keep It
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="px-6 py-4 border-b qt-border-default flex items-center gap-3 flex-shrink-0">
+        <Icon name="folder" className="w-6 h-6 qt-text-secondary" />
+        <ModalTitle className="qt-dialog-title qt-text">
+          The empty bundle remains on the shelf
+        </ModalTitle>
       </div>
-    </div>
+
+      <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+        <p className="qt-text-small">
+          {characterName} is fully unpacked — memories, correspondence and
+          photographs all back where they belong. The sealed bundle they
+          travelled in still sits in the file library, and keeping it costs
+          nothing but shelf space: it is a spare copy of everything the
+          archive held, exactly as it was.
+        </p>
+        <p className="qt-text-small qt-text-secondary">
+          Discard it and the spare copy is gone for good — though of course
+          you can always archive {characterName} afresh, which packs a new
+          bundle from their current state.
+        </p>
+        {error && <p className="qt-text-small qt-text-danger">{error}</p>}
+      </div>
+    </BaseModal>
   )
 }

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { Icon } from '@/components/ui/icon'
+import { useWorkspaceTabVisible } from '@/components/workspace/workspace-tab-context'
 
 /**
  * Size variants for the modal
@@ -203,10 +204,16 @@ export function BaseModal({
   closeOnEscape = true,
   'data-testid': testId,
 }: BaseModalProps) {
+  // A dialog portals to the body, so one opened in a kept-alive workspace tab
+  // would float over whichever tab the user moved to. While its tab is hidden
+  // it stands down (Escape included); the caller's state is untouched, so it
+  // comes back with the tab. Outside the workspace this is always true.
+  const tabVisible = useWorkspaceTabVisible()
+  const shown = isOpen && tabVisible
   const modalRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const subtitleId = useId()
-  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
+  const handleFocusKeyDown = useDialogFocus(modalRef, shown)
 
   // Only the dialog on top answers an outside click or Escape, and a busy one
   // answers neither.
@@ -219,16 +226,16 @@ export function BaseModal({
     [busy, onClose],
   )
   useClickOutside(modalRef, closeIfOnTop, {
-    enabled: isOpen && closeOnClickOutside,
+    enabled: shown && closeOnClickOutside,
     onEscape: closeOnEscape ? closeIfOnTop : undefined,
   })
   // Escape still needs a listener when outside clicks are off.
   useClickOutside(modalRef, noop, {
-    enabled: isOpen && !closeOnClickOutside && closeOnEscape,
+    enabled: shown && !closeOnClickOutside && closeOnEscape,
     onEscape: closeIfOnTop,
   })
 
-  if (!isOpen || typeof document === 'undefined') return null
+  if (!shown || typeof document === 'undefined') return null
 
   const closeButton = showCloseButton ? (
     <button

@@ -8,10 +8,8 @@
  * mountType back to 'filesystem'.
  */
 
-import { useId, useRef, useState } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { DirectoryPicker } from './DirectoryPicker'
 import type { DocumentStore } from '../types'
 
@@ -24,11 +22,6 @@ interface DeconvertToFilesystemDialogProps {
 export function DeconvertToFilesystemDialog({ store, onClose, onConfirm }: DeconvertToFilesystemDialogProps) {
   const [targetPath, setTargetPath] = useState('')
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, !!store)
-  useEscapeKey(onClose, !!store)
-
   if (!store) return null
 
   const canSubmit = targetPath.trim().length > 0 && targetPath.trim().startsWith('/')
@@ -39,66 +32,63 @@ export function DeconvertToFilesystemDialog({ store, onClose, onConfirm }: Decon
     onConfirm(targetPath.trim())
   }
 
-  return createPortal(
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-lg p-6"
-      >
-        <h3 id={titleId} className="qt-dialog-title mb-4">Deconvert &ldquo;{store.name}&rdquo; to Filesystem Storage</h3>
+  return (
+    <BaseModal
+      isOpen={!!store}
+      onClose={onClose}
+      headerless
+      className="p-6"
+      bodyClassName="overflow-y-auto"
+      overlayClassName="p-4"
+      closeOnClickOutside={false}
+    >
+      <ModalTitle className="qt-dialog-title mb-4">Deconvert &ldquo;{store.name}&rdquo; to Filesystem Storage</ModalTitle>
 
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-3 mb-5">
-            <p className="qt-text-small">
-              Every document and blob in this store will be written out to disk under the target
-              directory. The store will then switch to filesystem-backed, watching that directory
-              for live changes.
-            </p>
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-3 mb-5">
+          <p className="qt-text-small">
+            Every document and blob in this store will be written out to disk under the target
+            directory. The store will then switch to filesystem-backed, watching that directory
+            for live changes.
+          </p>
 
-            <ul className="list-disc pl-5 qt-text-small space-y-1">
-              <li>The target directory must be <strong>empty</strong> or not yet exist (it will be created).</li>
-              <li>Existing chunks and embeddings are preserved — no re-embedding required.</li>
-              <li>Files leave the encrypted mount-index database and land on disk as plain bytes.</li>
-            </ul>
-          </div>
+          <ul className="list-disc pl-5 qt-text-small space-y-1">
+            <li>The target directory must be <strong>empty</strong> or not yet exist (it will be created).</li>
+            <li>Existing chunks and embeddings are preserved — no re-embedding required.</li>
+            <li>Files leave the encrypted mount-index database and land on disk as plain bytes.</li>
+          </ul>
+        </div>
 
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Target directory</label>
-            <DirectoryPicker
-              value={targetPath}
-              onChange={setTargetPath}
-              required
-              placeholder="/absolute/path/to/export"
-            />
-            <p className="mt-1 text-xs qt-text-secondary">
-              Absolute filesystem path. Must be empty or nonexistent.
-            </p>
-          </div>
+        <div className="mb-4">
+          <label className="qt-label mb-2 block">Target directory</label>
+          <DirectoryPicker
+            value={targetPath}
+            onChange={setTargetPath}
+            required
+            placeholder="/absolute/path/to/export"
+          />
+          <p className="mt-1 text-xs qt-text-secondary">
+            Absolute filesystem path. Must be empty or nonexistent.
+          </p>
+        </div>
 
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="qt-button-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className={`qt-button-primary ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              Deconvert
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="qt-button-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className={`qt-button-primary ${!canSubmit ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Deconvert
+          </button>
+        </div>
+      </form>
+    </BaseModal>
   )
 }
