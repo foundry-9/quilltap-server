@@ -39,6 +39,19 @@ function toSqliteParam(value: unknown): unknown {
   return value;
 }
 
+function isNullish(value: unknown): value is null | undefined {
+  return value === null || value === undefined;
+}
+
+/**
+ * The one spelling of a null test. SQL NULL compares UNKNOWN to everything,
+ * so `= ?` / `!= ?` bound to NULL match no row at all (#196): a comparison
+ * against null must be written `IS NULL` / `IS NOT NULL`, never bound.
+ */
+function nullTest(columnExpr: string, isNull: boolean): string {
+  return `${columnExpr} ${isNull ? 'IS NULL' : 'IS NOT NULL'}`;
+}
+
 /**
  * Check if a value is a comparison condition object
  */
@@ -103,9 +116,9 @@ function translateFieldFilter(
           }
           case '$ne': {
             // NOT EXISTS for not equal
-            const { sql } = jsonArrayObjectMatch(column, nestedPath, opValue);
+            const { sql, params: p } = jsonArrayObjectMatch(column, nestedPath, opValue);
             clauses.push(`NOT ${sql}`);
-            params.push(opValue);
+            params.push(...p);
             break;
           }
           default:
@@ -137,8 +150,8 @@ function translateFieldFilter(
   }
 
   // Handle different value types
-  if (value === null || value === undefined) {
-    clauses.push(`${columnExpr} IS NULL`);
+  if (isNullish(value)) {
+    clauses.push(nullTest(columnExpr, true));
   } else if (isComparisonCondition(value)) {
     // Handle comparison operators
     const conditions = value as Record<string, unknown>;
@@ -146,21 +159,35 @@ function translateFieldFilter(
     for (const [op, opValue] of Object.entries(conditions)) {
       switch (op) {
         case '$eq':
-          clauses.push(`${columnExpr} = ?`);
-          params.push(toSqliteParam(opValue));
+          if (isNullish(opValue)) {
+            clauses.push(nullTest(columnExpr, true));
+          } else {
+            clauses.push(`${columnExpr} = ?`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$ieq':
           // Case-insensitive equals via SQLite's NOCASE collation. ASCII-only
           // case folding — sufficient for filesystem paths and identifiers,
           // not for arbitrary Unicode text.
-          clauses.push(`${columnExpr} = ? COLLATE NOCASE`);
-          params.push(toSqliteParam(opValue));
+          if (isNullish(opValue)) {
+            clauses.push(nullTest(columnExpr, true));
+          } else {
+            clauses.push(`${columnExpr} = ? COLLATE NOCASE`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$ne':
-          clauses.push(`${columnExpr} != ?`);
-          params.push(toSqliteParam(opValue));
+          if (isNullish(opValue)) {
+            clauses.push(nullTest(columnExpr, false));
+          } else {
+            // `IS NOT` rather than `!=`: a NULL column is not equal to the
+            // value, so it matches — `!=` would compare UNKNOWN and drop it.
+            clauses.push(`${columnExpr} IS NOT ?`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$gt':
@@ -192,10 +219,18 @@ function translateFieldFilter(
               clauses.push(sql);
               params.push(...p);
             } else {
-              // Standard IN query - convert booleans in array
-              const placeholders = opValue.map(() => '?').join(', ');
-              clauses.push(`${columnExpr} IN (${placeholders})`);
-              params.push(...opValue.map(toSqliteParam));
+              // Standard IN query - convert booleans in array. A null in the
+              // list is matched with IS NULL; bound into IN (…) it never matches.
+              const values = opValue.filter(v => !isNullish(v));
+              const parts: string[] = [];
+              if (values.length > 0) {
+                parts.push(`${columnExpr} IN (${values.map(() => '?').join(', ')})`);
+                params.push(...values.map(toSqliteParam));
+              }
+              if (values.length < opValue.length) {
+                parts.push(nullTest(columnExpr, true));
+              }
+              clauses.push(parts.length > 1 ? `(${parts.join(' OR ')})` : parts[0]);
             }
           } else {
             // Empty $in always false
@@ -205,20 +240,25 @@ function translateFieldFilter(
 
         case '$nin':
           if (Array.isArray(opValue) && opValue.length > 0) {
-            // Convert booleans in array
-            const placeholders = opValue.map(() => '?').join(', ');
-            clauses.push(`${columnExpr} NOT IN (${placeholders})`);
-            params.push(...opValue.map(toSqliteParam));
+            // A NULL column is "not in" a list of values, so it matches unless
+            // the list names null. Bound NULLs are kept out of NOT IN (…): one
+            // there makes the test UNKNOWN for every row.
+            const values = opValue.filter(v => !isNullish(v));
+            const excludesNull = values.length < opValue.length;
+            if (values.length === 0) {
+              clauses.push(nullTest(columnExpr, false));
+            } else {
+              const notIn = `${columnExpr} NOT IN (${values.map(() => '?').join(', ')})`;
+              // NOT IN is already UNKNOWN (dropped) for a NULL column.
+              clauses.push(excludesNull ? notIn : `(${nullTest(columnExpr, true)} OR ${notIn})`);
+              params.push(...values.map(toSqliteParam));
+            }
           }
           // Empty $nin is always true, no clause needed
           break;
 
         case '$exists':
-          if (opValue) {
-            clauses.push(`${columnExpr} IS NOT NULL`);
-          } else {
-            clauses.push(`${columnExpr} IS NULL`);
-          }
+          clauses.push(nullTest(columnExpr, !opValue));
           break;
 
         case '$like': {

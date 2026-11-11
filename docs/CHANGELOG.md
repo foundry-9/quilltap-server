@@ -4,6 +4,13 @@
 
 ### 4.13-dev
 
+#### Fix: null comparisons in SQLite filters (#198, by mikemikimike)
+
+- #196: the LLM logs page's Standalone list was always empty. `findStandalone` filters with `$eq: null`, which the SQLite query translator bound as `= NULL`, a comparison that matches no row. Null comparisons are now written `IS NULL` / `IS NOT NULL` (`lib/database/backends/sqlite/query-translator.ts`): `$eq`, `$ne`, `$ieq`, a `null` inside `$in` / `$nin`, and `$eq` / `$ne` on a field inside an array column (`jsonArrayObjectMatch`).
+- `$ne: value` and `$nin: [values]` now match rows where the column is NULL, as a Mongo-style filter should (`IS NOT ?`; `IS NULL OR NOT IN (…)`). Recent-conversation recaps no longer skip chats whose `chatType` is NULL.
+- A nested array-column `$ne` bound the raw operand instead of the match's parameters.
+- New real-SQLite tests for the translator's null cases and for `findStandalone` and the token-usage sums.
+
 #### Test: deterministic outfit-selection concurrency check
 
 - `applyOutfitSelections` "bounded by the slowest character" test no longer asserts a wall-clock bound (under 120 ms), which failed on a loaded CI runner with coverage on (231 ms). Each mocked selection now waits on a barrier that only opens once all four have started, so serial resolution fails and runner speed doesn't matter.

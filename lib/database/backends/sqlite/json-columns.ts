@@ -172,7 +172,9 @@ export function jsonArrayContainsLike(column: string, pattern: string): { sql: s
  *
  * @param column The column name containing a JSON array of objects
  * @param nestedPath The JSON path within each array element (e.g., 'characterId' or 'address.city')
- * @param value The value to match
+ * @param value The value to match. A null/undefined value matches an element
+ *   whose nested field is null or absent (`IS NULL`, no bound parameter) —
+ *   `= ?` bound to NULL never matches anything in SQL (#196).
  */
 export function jsonArrayObjectMatch(
   column: string,
@@ -181,8 +183,15 @@ export function jsonArrayObjectMatch(
 ): { sql: string; params: unknown[] } {
   // Use json_each to iterate array elements, then json_extract to get the nested field
   const jsonPath = '$.' + nestedPath;
+  const fieldExpr = `json_extract(value, '${jsonPath}')`;
+  if (value === null || value === undefined) {
+    return {
+      sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE ${fieldExpr} IS NULL)`,
+      params: [],
+    };
+  }
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') = ?)`,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE ${fieldExpr} = ?)`,
     params: [value],
   };
 }

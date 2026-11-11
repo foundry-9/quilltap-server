@@ -445,12 +445,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
-        // `$exists: true` only. `$ne: null` used to be here too and made this
-        // method return zeroes on every install: the SQLite translator emits
-        // `usage != ?` with a NULL parameter, i.e. `usage != NULL`, which is
-        // unknown for every row by SQL NULL semantics, so the filter matched
-        // nothing. The Almanack renders exactly this number, which is how the
-        // long-standing "0 tokens logged" reading was finally traced.
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           userId,
           usage: { $exists: true },
@@ -491,8 +486,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
-        // `$exists: true` only — see {@link getTotalTokenUsage} for why
-        // `$ne: null` must never be added back.
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           userId,
           usage: { $exists: true },
@@ -537,13 +531,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   ): Promise<{ promptTokens: number; completionTokens: number; totalTokens: number }> {
     return this.safeQuery(
       async () => {
-        // Only `$exists: true` (→ `usage IS NOT NULL`) — do NOT add
-        // `$ne: null`. The SQLite translator emits `usage != NULL`
-        // literally, which is unknown/false for every row by SQL NULL
-        // semantics, so the filter would return zero matches and the
-        // sum would always be 0. The sibling methods getTotalTokenUsage
-        // and getTotalTokenUsageSince carried that bug until 4.9 and are
-        // now fixed the same way.
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           chatId,
           usage: { $exists: true },
@@ -598,9 +586,7 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
     const { includeCacheHits = false } = options;
     return this.safeQuery(
       async () => {
-        // `$exists: true` only — see getTotalTokenUsageForChatSince for why
-        // `$ne: null` must not be added (the translator emits `usage != NULL`,
-        // which is unknown for every row and zeroes the sum).
+        // Rows with usage recorded (`usage IS NOT NULL`).
         const filter: TypedQueryFilter<LLMLog> = {
           autonomousRunId,
           usage: { $exists: true },

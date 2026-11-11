@@ -1,10 +1,13 @@
 /**
+ * @jest-environment node
+ *
  * Unit Tests for SQLite Query Translator
  * Tests lib/database/backends/sqlite/query-translator.ts
  * v2.7-dev: Query Translation Utilities
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import path from 'path';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import {
   translateFilter,
   translateSort,
@@ -103,6 +106,53 @@ describe('SQLite Query Translator', () => {
         expect(result.sql).toContain('"age" = ?');
         expect(result.params).toEqual([25]);
       });
+
+      // SQL NULL compares UNKNOWN to everything, so a bound NULL matches no
+      // row; every null comparison must come out as IS [NOT] NULL (#196).
+      it('should translate $eq: null to IS NULL with no bound parameter', () => {
+        expect(translateFilter({ messageId: { $eq: null } })).toEqual({ sql: '"messageId" IS NULL', params: [] });
+      });
+
+      it('should translate $ne: null to IS NOT NULL with no bound parameter', () => {
+        expect(translateFilter({ messageId: { $ne: null } })).toEqual({ sql: '"messageId" IS NOT NULL', params: [] });
+      });
+
+      it('should translate $ieq: null to IS NULL with no bound parameter', () => {
+        expect(translateFilter({ path: { $ieq: null } })).toEqual({ sql: '"path" IS NULL', params: [] });
+      });
+
+      it('should match a null in $in with IS NULL', () => {
+        expect(translateFilter({ status: { $in: ['a', null] } })).toEqual({
+          sql: '("status" IN (?) OR "status" IS NULL)',
+          params: ['a'],
+        });
+        expect(translateFilter({ status: { $in: [null] } })).toEqual({ sql: '"status" IS NULL', params: [] });
+      });
+
+      it('should exclude null rows from $nin only when the list names null', () => {
+        expect(translateFilter({ status: { $nin: ['a', null] } })).toEqual({
+          sql: '"status" NOT IN (?)',
+          params: ['a'],
+        });
+        expect(translateFilter({ status: { $nin: [null] } })).toEqual({ sql: '"status" IS NOT NULL', params: [] });
+      });
+
+      it('should test a nested array-column field for null without a bound parameter', () => {
+        const arrayColumns = new Set(['participants']);
+        const eq = translateFilter({ 'participants.characterId': { $eq: null } }, new Set(), arrayColumns);
+        expect(eq.sql).toContain(`json_extract(value, '$.characterId') IS NULL`);
+        expect(eq.params).toEqual([]);
+
+        const ne = translateFilter({ 'participants.characterId': { $ne: null } }, new Set(), arrayColumns);
+        expect(ne.sql).toMatch(/^NOT EXISTS/);
+        expect(ne.params).toEqual([]);
+      });
+
+      it('should bind exactly the match parameters for a nested array-column $ne', () => {
+        const arrayColumns = new Set(['participants']);
+        const result = translateFilter({ 'participants.characterId': { $ne: 'c1' } }, new Set(), arrayColumns);
+        expect(result.params).toEqual(['c1']);
+      });
     });
 
     describe('Comparison operators', () => {
@@ -114,7 +164,7 @@ describe('SQLite Query Translator', () => {
 
       it('should handle $ne operator', () => {
         const result = translateFilter({ age: { $ne: 25 } });
-        expect(result.sql).toBe('"age" != ?');
+        expect(result.sql).toBe('"age" IS NOT ?');
         expect(result.params).toEqual([25]);
       });
 
@@ -172,7 +222,7 @@ describe('SQLite Query Translator', () => {
 
       it('should handle $nin operator with values', () => {
         const result = translateFilter({ status: { $nin: ['deleted', 'archived'] } });
-        expect(result.sql).toBe('"status" NOT IN (?, ?)');
+        expect(result.sql).toBe('("status" IS NULL OR "status" NOT IN (?, ?))');
         expect(result.params).toEqual(['deleted', 'archived']);
       });
 
@@ -1121,6 +1171,46 @@ describe('SQLite Query Translator', () => {
     it('should properly escape field names with quotes', () => {
       const result = translateFilter({ 'first-name': 'John' });
       expect(result.sql).toContain('"first-name"');
+    });
+  });
+
+  // The SQL strings above only matter if SQLite reads them the way we mean,
+  // so run the null-sensitive operators against a real table.
+  describe('null semantics against real SQLite', () => {
+    // The jest moduleNameMapper mocks bare `better-sqlite3`; require the real
+    // binding by absolute path so these cases run actual SQL.
+    const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'));
+    let db: { prepare: (sql: string) => { all: (...p: unknown[]) => unknown[]; run: (...p: unknown[]) => unknown }; exec: (sql: string) => void; close: () => void };
+
+    beforeEach(() => {
+      db = new Database(':memory:');
+      db.exec('CREATE TABLE "t" ("id" TEXT PRIMARY KEY, "status" TEXT, "participants" TEXT)');
+      const insert = db.prepare('INSERT INTO "t" VALUES (?, ?, ?)');
+      insert.run('a', 'a', JSON.stringify([{ characterId: 'c1' }]));
+      insert.run('b', 'b', JSON.stringify([{ characterId: 'c1' }, { personaId: 'p1' }]));
+      insert.run('n', null, JSON.stringify([{ characterId: 'c2' }]));
+    });
+
+    afterEach(() => db.close());
+
+    function ids(filter: QueryFilter): string[] {
+      const { sql, params } = translateFilter(filter, new Set(), new Set(['participants']));
+      return (db.prepare(`SELECT "id" FROM "t" WHERE ${sql} ORDER BY "id"`).all(...params) as { id: string }[])
+        .map(r => r.id);
+    }
+
+    it.each<[string, QueryFilter, string[]]>([
+      ['$eq: null', { status: { $eq: null } }, ['n']],
+      ['$ne: null', { status: { $ne: null } }, ['a', 'b']],
+      ['$ne: value keeps null rows', { status: { $ne: 'a' } }, ['b', 'n']],
+      ['$in with null', { status: { $in: ['a', null] } }, ['a', 'n']],
+      ['$nin keeps null rows', { status: { $nin: ['a'] } }, ['b', 'n']],
+      ['$nin naming null', { status: { $nin: ['a', null] } }, ['b']],
+      ['nested $eq: null', { 'participants.characterId': { $eq: null } }, ['b']],
+      ['nested $ne: null', { 'participants.characterId': { $ne: null } }, ['a', 'n']],
+      ['nested $ne: value', { 'participants.characterId': { $ne: 'c1' } }, ['n']],
+    ])('%s', (_label, filter, expected) => {
+      expect(ids(filter)).toEqual(expected);
     });
   });
 });
