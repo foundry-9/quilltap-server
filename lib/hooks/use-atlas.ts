@@ -141,7 +141,7 @@ export function useAtlasMutations() {
     renameFolder: folders.renameFolder,
     deleteFolder: folders.deleteFolder,
     fileItems: folders.fileItems,
-    transfer: async (body: { action: 'move' | 'copy'; entryId: string; from: AtlasContainer; to: AtlasContainer }) =>
-      (await run({ url: '/api/v1/atlas/transfers', method: 'POST', body })).entry as AtlasEntryWithOrigin,
+    transfer: async ({ action, ...body }: { action: 'move' | 'copy'; entryId: string; from: AtlasContainer; to: AtlasContainer }) =>
+      (await run({ url: `/api/v1/atlas?action=${action}-to-tier`, method: 'POST', body })).entry as AtlasEntryWithOrigin,
   }
 }

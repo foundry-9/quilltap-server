@@ -8,7 +8,9 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createContextHandler } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
+import { handleGroupScenarios } from './actions/scenarios';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, successResponse } from '@/lib/api/responses';
@@ -31,7 +33,17 @@ const createGroupSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createContextHandler(async (req: NextRequest, { user, repos }) => {
+/**
+ * GET /api/v1/groups — list groups (optionally `?characterIds=` members)
+ * GET /api/v1/groups?action=scenarios&characterIds=… — the scenarios of those
+ *   characters' groups (formerly `/api/v1/groups/scenarios`, which still answers
+ *   for one release)
+ */
+export const GET = createContextHandler((req: NextRequest, ctx: RequestContext) =>
+  dispatchAction(req, { scenarios: () => handleGroupScenarios(req, ctx) }, () => handleListGroups(req, ctx))
+);
+
+async function handleListGroups(req: NextRequest, { user, repos }: RequestContext) {
   let groups = await repos.groups.findAll();
 
   // Optional membership filter. Only character ids this user can read are
@@ -71,7 +83,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
   );
 
   return successResponse({ groups: enrichedGroups });
-});
+}
 
 // ============================================================================
 // POST Handler

@@ -9,7 +9,7 @@
  * is the whole reason this is a function rather than an inline read.
  */
 
-import { readIncludeArchived } from '@/lib/api/query-params'
+import { readIncludeArchived, readPagination } from '@/lib/api/query-params'
 
 /** The only property the reader touches. */
 function req(url: string): Request {
@@ -48,5 +48,47 @@ describe('readIncludeArchived — not asked', () => {
   it('falls closed on an unparseable URL rather than throwing', () => {
     expect(readIncludeArchived(req('not a url'))).toBe(false)
     expect(readIncludeArchived({} as Request)).toBe(false)
+  })
+})
+
+describe('readPagination', () => {
+  const opts = { defaultLimit: 20, maxLimit: 50 }
+
+  it('reads a well-formed pair', () => {
+    expect(readPagination(req('https://x.test/a?limit=10&offset=30'), opts)).toEqual({ limit: 10, offset: 30 })
+  })
+
+  it('defaults when absent', () => {
+    expect(readPagination(req('https://x.test/a'), opts)).toEqual({ limit: 20, offset: 0 })
+  })
+
+  it('caps the limit at maxLimit', () => {
+    expect(readPagination(req('https://x.test/a?limit=5000'), opts).limit).toBe(50)
+  })
+
+  // SQLite reads LIMIT -1 as "no limit" (#167).
+  it('treats a negative, zero or non-numeric limit as the default', () => {
+    for (const bad of ['-1', '0', 'abc', '']) {
+      expect(readPagination(req(`https://x.test/a?limit=${bad}`), opts).limit).toBe(20)
+    }
+  })
+
+  it('treats a negative or non-numeric offset as zero', () => {
+    for (const bad of ['-5', 'abc']) {
+      expect(readPagination(req(`https://x.test/a?offset=${bad}`), opts).offset).toBe(0)
+    }
+  })
+
+  it('clamps a default larger than the cap', () => {
+    expect(readPagination(req('https://x.test/a'), { defaultLimit: 500, maxLimit: 100 }).limit).toBe(100)
+  })
+
+  it('prefers nextUrl when present', () => {
+    const r = { nextUrl: new URL('https://x.test/a?limit=7') } as unknown as Request
+    expect(readPagination(r, opts).limit).toBe(7)
+  })
+
+  it('falls back to defaults on an unparseable URL', () => {
+    expect(readPagination(req('not a url'), opts)).toEqual({ limit: 20, offset: 0 })
   })
 })

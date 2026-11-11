@@ -524,6 +524,8 @@ export async function handleCloseDocument(
 
     return successResponse({ success: true });
   } catch (error) {
+    // A validation failure is the middleware's 400, not a 500 (#166).
+    if (error instanceof z.ZodError) throw error;
     logger.error('Failed to close document', {
       chatId,
       error: error instanceof Error ? error.message : String(error),

@@ -26,8 +26,6 @@ import { z } from 'zod';
 export const GET = createContextHandler(async (req, context) => {
   const { searchParams } = req.nextUrl;
   const providerFilter = searchParams.get('provider');
-  const hasVisionFilter = searchParams.get('hasVision');
-  const hasStreamingFilter = searchParams.get('hasStreaming');
   const { repos } = context;
 
   // Get cached models from the database
@@ -43,10 +41,11 @@ export const GET = createContextHandler(async (req, context) => {
   return successResponse({
     models: allModels,
     count: allModels.length,
+    // Only the provider filter exists: a cached model row records no vision
+    // or streaming capability, so `hasVision` / `hasStreaming` were echoed
+    // here and never applied.
     filters: {
       provider: providerFilter,
-      hasVision: hasVisionFilter === 'true',
-      hasStreaming: hasStreamingFilter === 'true',
     },
     cached: true,
   });

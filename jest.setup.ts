@@ -232,6 +232,7 @@ jest.mock('@/lib/plugins/provider-validation', () => ({
   }),
   acceptsApiKey: jest.fn(() => true),
   requiresApiKey: jest.fn(() => true),
+  requiresBaseUrl: jest.fn(() => false),
 }))
 
 // Mock LLM module (re-exports from plugin-factory)

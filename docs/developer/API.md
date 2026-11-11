@@ -111,7 +111,7 @@ API reference for Quilltap v4.3 and later.
   - [System Deployment](#system-deployment)
   - [System Home](#system-home)
   - [System Autonomous Rooms](#system-autonomous-rooms)
-  - [System Browse Directory](#system-browse-directory)
+  - [System Directories](#system-browse-directory)
   - [System Conversation Summaries](#system-conversation-summaries)
   - [System Image Aesthetics](#system-image-aesthetics)
   - [System Startup Status](#system-startup-status)
@@ -142,6 +142,10 @@ POST /api/v1/chats/[id]?action=regenerate-title  # Regenerate title
 GET /api/v1/characters/[id]?action=export  # Export character
 ```
 
+
+**Path-segment actions moved (4.13).** Every action that used to be a path segment or a body discriminator is now `?action=` on its parent route: `wardrobe?action=analyze-image|preview-avatar|move-to-tier|copy-to-tier`, `atlas?action=move-to-tier|copy-to-tier`, `inventory?action=move-to-tier|copy-to-tier`, `groups?action=scenarios`, `system/plugins?action=state|initialize|upgrades|mark-upgrades-notified`, `system/directories` (a plain read), `chats/[id]?action=turn-*` and `system/tools?action=tasks-queue-start|stop`. The old forms answer until 4.14 through `deprecatedPath` (`lib/api/deprecated-path.ts`), which logs a warning once and sets `Deprecation: true` and `Link: <replacement>; rel="successor-version"`.
+
+**Accepted exceptions.** `GET /api/v1/files/proxy/[...key]` and `GET /api/v1/chats/[id]/qtap-target` are byte routes: the page CSP is lifted from them by path in `next.config.js` (a query string cannot be matched there), and `files/proxy` URLs are written into stored content. `/api/v1/search-replace?action=preview|execute` is a feature route that already dispatches on `?action=`.
 ### Legacy Routes Removed
 
 As of v2.8, legacy routes (without `/v1/` prefix) have been removed. Only `/api/v1/` routes are supported.
@@ -239,6 +243,12 @@ Status code: `429 Too Many Requests`
 - `429` - Too Many Requests
 - `500` - Internal Server Error
 - `503` - Service Unavailable
+
+### Validation and shared readers
+
+- **A body that fails its schema is a `400`**, answered by the middleware (`createContextHandler` maps a thrown `ZodError` to `validationError`, with `details` the Zod issues). A route parses with `.parse()` and lets the error through: it never catches a `ZodError` into a `500`, and a present-but-invalid body is never read as "field absent" (#166, #168).
+- **Pagination** is read by `readPagination(req, { defaultLimit, maxLimit })` (`lib/api/query-params.ts`): `limit` clamped to `[1, maxLimit]`, a missing, non-numeric or non-positive value meaning the default, `offset` a non-negative integer (#167).
+- **A download's filename** is set by `buildContentDisposition(name, 'attachment' | 'inline')` (`lib/api/content-disposition.ts`): ASCII `filename="…"` with `"` and `\` escaped, plus `filename*=UTF-8''…` for a non-ASCII name. A grep-test forbids a hand-spelled header (#165).
 
 ## Providers
 
@@ -452,7 +462,7 @@ User-specific chat and UI settings.
 
 #### `GET /api/v1/settings/chat`
 
-Get chat settings for the current user.
+Get chat settings for the current user. A user with no saved settings gets the defaults (`defaultChatSettings`, with no `id` or timestamps); the read writes nothing, and the first `PUT` creates the row.
 
 **Response**: `200 OK`
 
@@ -537,7 +547,7 @@ Update chat settings.
 
 Further accepted fields (each optional, same shapes as in the `GET` response): `tokenDisplaySettings`, `customTools`, `customToolTriggers` (boolean, default `false`: run a custom tool when anyone in a chat says one of its `triggers` phrases; ignored while `customTools` is off), `customToolIntervention` (boolean, default `true`: hold a custom tool marked intervenable for the operator before it is announced; `false` lets every run go ahead as rolled; ignored while `customTools` is off), `agentModeSettings`, `storyBackgroundsSettings`, `contextCompressionSettings`, `autoLockSettings`, `compositionModeDefault`, `composerSpellcheck`, `composerEmoji`, `composerUnicode`, `composerSlashCommands` (boolean, default `true`: the Salon composer's `/` command menu), `impersonationVoiceMode` (`'off'` / `'ask'` / `'always'`), `textReplacementsEnabled`, `autonomousRoomSettings`, `thinkingDisplay`, `autoScrollOnResponseComplete`, `answerConfirmationSettings`, `smartTypographySettings`.
 
-`conciergeSettings` is validated with `ConciergeSettingsSchema` (a malformed object is a `400`). The retired Concierge settings — `dangerousContentSettings`, the top-level `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId` — are rejected with `400` so a stale client fails loudly instead of writing a column nothing reads.
+The body is validated by `ChatSettingsPutSchema` (`patchSchemaOf(ChatSettingsSchema)`, strict): every key optional and none defaulted, an unknown top-level key or a malformed value is a `400` with the Zod issues. `id`, `userId`, the timestamps, `defaultTimestampConfig` and `timezone` are not writable here. Each nested object is replaced whole and validated against its full sub-schema, so its own field defaults fill what the client left out and unknown nested keys are dropped; `null` is refused for a nested object. A `defaultRoleplayTemplateId` that names no template is a `400`. The retired Concierge settings — `dangerousContentSettings`, the top-level `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId` — are rejected with `400` so a stale client fails loudly instead of writing a column nothing reads.
 
 #### `GET /api/v1/settings/data-retention`
 
@@ -690,10 +700,12 @@ Create a new API key.
 }
 ```
 
-**Validation**:
-- `provider`: Required, provider ID from enabled plugins
-- `label`: Required, 1-100 characters
-- `apiKey`: Required, will be encrypted with AES-256-GCM
+**Validation** (`ApiKeyCreateSchema`, `lib/api-keys/api-key-input.ts`, strict):
+- `provider`: Required, non-blank, trimmed. An unregistered provider is accepted with a logged warning (a plugin may arrive later).
+- `label`: Required, non-blank, trimmed
+- `apiKey`: Required, non-blank, stored exactly as sent
+
+Every body on `/api/v1/api-keys` and `/api/v1/api-keys/[id]` (create, update, `test`, `export`, `import`, `import-preview`) is a schema in that module; a malformed one is the middleware's `400` with the old messages (`Label is required`, `Passphrase must be at least 8 characters`, `Invalid file format`, `Unsupported file version: N`, …) in `message`. `import-preview` still answers `{ valid: false, error }` for a well-formed file that will not open.
 
 **Response**: `201 Created`
 
@@ -703,7 +715,7 @@ Get a specific API key (masked).
 
 #### `PUT /api/v1/api-keys/[id]`
 
-Update an API key's label or active status.
+Update an API key's `label`, `isActive` or `apiKey` (any subset; strict).
 
 #### `DELETE /api/v1/api-keys/[id]`
 
@@ -875,6 +887,8 @@ either provider keeps the prefill, which is the stronger anchor.
 
 `PUT` accepts the same field and rejects a non-boolean with `400`.
 
+**Validation.** The body is `ConnectionProfileCreateSchema` (`lib/llm/connection-profile-input.ts`), derived from `ConnectionProfileSchema` and **strict**: an unknown key, a wrong type (a `null` or string `parameters`, a string boolean), an unknown `pseudoToolMode` or `modelClass`, or a non-positive `maxContext` is a `400` from the middleware, with `message` naming the field. `name`, `provider` and `modelName` are trimmed and required. `''` clears `apiKeyId`, `baseUrl`, `fallbackProfileId` and `modelClass`; `maxContext` of `0` or `''` means none; numeric strings are accepted for the number fields. A sent `sortIndex` is validated and ignored (the server appends the profile). A `transport: 'courier'` profile has `apiKeyId`, `baseUrl`, tools, web search, image upload and `isDangerousCompatible` forced off and `pseudoToolMode` forced to `auto`. An `apiKeyId` that names no key is a `404`; a key for another provider, or a bad `fallbackProfileId`, is a `400` (`checkConnectionProfileReferences`, shared with `PUT`).
+
 #### `GET /api/v1/connection-profiles/[id]`
 
 Get a specific profile. Rejects an unrecognised `?action=` with `400` rather
@@ -893,7 +907,7 @@ entity's `get-tags` action shares so the shape cannot drift between them.
 
 #### `PUT /api/v1/connection-profiles/[id]`
 
-Update a profile.
+Update a profile. The body is `ConnectionProfileUpdateSchema` — `patchSchemaOf` the same input object, strict: any subset of the `POST` fields plus `sortIndex` (a non-negative integer). An absent key is left alone and `null` clears a nullable column; `null` for `maxImagesPerRequest` or `toolResultVerbatimTurns` means "not sent", since both always hold a number. The same reference rules as `POST` apply, plus "not its own fallback". Courier forcing applies whenever the transport after the write is `courier`.
 
 #### `DELETE /api/v1/connection-profiles/[id]`
 
@@ -986,7 +1000,9 @@ List embedding profiles.
 
 Create an embedding profile.
 
-**Supported Providers**: `OPENAI`, `OLLAMA`, `OPENROUTER`
+**Supported Providers**: `OPENAI`, `OLLAMA`, `OPENROUTER`, `NANOGPT`, `BUILTIN` (`EmbeddingProfileProviderEnum`; any other value is a `400`).
+
+**Validation.** The body is `EmbeddingProfileCreateSchema` (`lib/embedding/embedding-profile-input.ts`), strict: `name`, `provider`, `modelName` (trimmed, required), `apiKeyId` and `baseUrl` (`''` or `null` clears), `dimensions` (positive or `null`), `truncateToDimensions` (positive integer or `null`), `normalizeL2` (default `true`), `isDefault`. `PUT` takes any subset (`patchSchemaOf`): an absent key is left alone, `null` clears.
 
 #### `GET /api/v1/embedding-profiles/[id]`
 
@@ -1055,7 +1071,7 @@ List image generation profiles.
 
 #### `POST /api/v1/image-profiles`
 
-Create an image profile.
+Create an image profile. The body is `ImageProfileCreateSchema` (`lib/image-gen/image-profile-input.ts`), strict: `name`, `provider`, `modelName` (trimmed, required), `apiKeyId` / `baseUrl` (`''` clears), `parameters` (an object; a malformed reserved `loras` list is a `400` with the issue under `parameters.loras`), `isDefault`, `isDangerousCompatible`. An unavailable provider is a `400`; an `apiKeyId` that names no key is a `404`.
 
 **Request Body**:
 
@@ -1316,7 +1332,7 @@ Get a specific image profile.
 
 #### `PUT /api/v1/image-profiles/[id]`
 
-Update an image profile.
+Update an image profile. Any subset of the `POST` fields (`ImageProfileUpdateSchema`, `patchSchemaOf` the create shape, strict): an absent key is left alone, `null` or `''` clears `apiKeyId` / `baseUrl`, and `parameters.loras` is validated as on create.
 
 #### `DELETE /api/v1/image-profiles/[id]`
 
@@ -1334,8 +1350,8 @@ List cached models from the database.
 
 **Query Parameters**:
 - `provider` - Filter by provider (e.g., `openai`, `anthropic`)
-- `hasVision` - Filter to vision-capable models (`true`)
-- `hasStreaming` - Filter to streaming-capable models (`true`)
+
+(`hasVision` / `hasStreaming` were documented and echoed back but never applied — a cached model row records neither capability. They are no longer read.)
 
 **Response**: `200 OK`
 
@@ -1355,9 +1371,7 @@ List cached models from the database.
   ],
   "count": 25,
   "filters": {
-    "provider": "openai",
-    "hasVision": false,
-    "hasStreaming": false
+    "provider": "openai"
   },
   "cached": true
 }
@@ -2221,7 +2235,9 @@ One route for an item's pictures in every tier; the item's container rides in th
 
 A `POST` without an action is a 400. `generate` runs synchronously inside `trackActivity('image', …)`, with the profile resolved by `resolveWardrobeImageProfile` (override → `chatSettings.wardrobeImageSettings.imageProfileId` → default image profile; no usable profile → 400). A character's own item is drawn worn by its owner; a shared item is drawn catalogue style. The provider call goes through `generateImageWithConciergeFailover` with `purpose: 'wardrobe'` and no chat; a refusal that could not be rerouted answers **422** with `details: { trail, refused: true }`; any other provider failure (auth, rate limit, timeout, no image) answers **502** with the same `details` shape. `set-current`, `delete-image` and `save-to-store` refuse a file not linked to the item (400). `save-to-store` files a copy into the store's `photos/` through `saveImageToAlbum` (the Salon's save service), attributed to the operator and captioned with the item's title by default; an archived character's vault as the target is a **409**, and a store already holding the picture is a **409** `{ code: 'ALREADY_SAVED', keptAt, relativePath }`. The item is not written, so a picture may be copied out of an archived character's wardrobe.
 
-#### `POST /api/v1/wardrobe/analyze-image`
+#### `POST /api/v1/wardrobe?action=analyze-image`
+
+(`GET ?action=analyze-image` lists the vision profiles the dialog may offer.) Formerly `/api/v1/wardrobe/analyze-image`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 Analyze an image using a vision LLM to suggest wardrobe items.
 
@@ -2246,7 +2262,9 @@ Analyze an image using a vision LLM to suggest wardrobe items.
 }
 ```
 
-#### `POST /api/v1/wardrobe/preview-avatar`
+#### `POST /api/v1/wardrobe?action=preview-avatar`
+
+Formerly `/api/v1/wardrobe/preview-avatar`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 Generate a one-off character avatar against an arbitrary equipped-slot snapshot (the state a wardrobe dialog is currently showing). The result is saved as a regular generated image (downloadable from the dialog) but is **not** persisted onto the character's `avatarOverrides` or any chat's `characterAvatars` — out-of-chat avatars never overwrite the canonical character avatar.
 
@@ -2254,7 +2272,9 @@ Generate a one-off character avatar against an arbitrary equipped-slot snapshot 
 
 **Response**: `{ fileId, url, mimeType, prompt }`
 
-#### `POST /api/v1/wardrobe/transfers`
+#### `POST /api/v1/wardrobe?action=move-to-tier` / `?action=copy-to-tier`
+
+Formerly `POST /api/v1/wardrobe/transfers` with `action: 'move' | 'copy'` in the body; the action is now the query and the body carries the rest. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 Move or copy one wardrobe item between wardrobe tiers. The rules live in `transferWardrobeItem` (`lib/wardrobe/transfers.ts`); the route only parses and maps refusals (404 when the item is in none of the tiers probed, 400 for an invalid destination, the same source and destination, or an id already taken there, 409 for an archived character). The former `GET` (destination options) was removed in 4.12; clients read the characters, projects and groups lists instead. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
@@ -2410,9 +2430,11 @@ One `.json` file per object under a tier's `Inventory/` folder; four tiers, one 
 - `PUT ?action=detach` — bake the resolved values into the instance and drop its `parentId`.
 - `DELETE` — an archetype with dependents is `ARCHETYPE_IN_USE` unless `?force=true`, which bakes every instance first (refused with `ARCHIVED_DEPENDENTS` while an archived character holds one). A deleted object leaves its tier's kits. Answers `{ success, detached }`.
 
-#### `POST /api/v1/inventory/transfers`
+#### `POST /api/v1/inventory?action=move-to-tier` / `?action=copy-to-tier`
 
-`{ action: 'move' | 'copy', itemId, from: { scope, id }, to: { scope, id } }`. A move keeps the id (equipped sets and kits still name it); a copy mints one and is refused when the object's resolved `canCopy` is false. Folder path kept; pictures travel. Answers `{ item }`.
+Formerly `POST /api/v1/inventory/transfers` with `action` in the body. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+
+`{ itemId, from: { scope, id }, to: { scope, id } }`. A move keeps the id (equipped sets and kits still name it); a copy mints one and is refused when the object's resolved `canCopy` is false. Folder path kept; pictures travel. Answers `{ item }`.
 
 #### `/api/v1/inventory/[itemId]/images?scope=<scope>&id=<containerId>`
 
@@ -2447,9 +2469,11 @@ One `.md` file per entry under a tier's `Atlas/` folder (frontmatter: `id`, `nam
 - `PUT` — `updateAtlasEntrySchema` (any field, nothing defaulted; `archived` archives; `imageFileId` must be one of the entry's own pictures). A rename or restore into a live name is `NAME_TAKEN`. Answers `{ entry }`.
 - `DELETE` — deletes the entry and its pictures. `{ success }`.
 
-#### `POST /api/v1/atlas/transfers`
+#### `POST /api/v1/atlas?action=move-to-tier` / `?action=copy-to-tier`
 
-`{ action: 'move' | 'copy', entryId, from: { scope, id }, to: { scope, id } }`. A move keeps the id, a copy mints one; folder path kept; pictures travel. A live entry of the same name at the destination is `NAME_TAKEN`. Answers `{ entry }`.
+Formerly `POST /api/v1/atlas/transfers` with `action` in the body. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
+
+`{ entryId, from: { scope, id }, to: { scope, id } }`. A move keeps the id, a copy mints one; folder path kept; pictures travel. A live entry of the same name at the destination is `NAME_TAKEN`. Answers `{ entry }`.
 
 #### `/api/v1/atlas/[entryId]/images?scope=<scope>&id=<containerId>`
 
@@ -2584,7 +2608,7 @@ The chat-creation progress route (`GET /api/v1/chats/creation-progress`) was rem
 
 #### `GET /api/v1/chats/[id]`
 
-Get a chat with full message history. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`), `openingState` (`'pending' | 'running' | 'done'` — the Salon opens a chat that is not `'done'`; list payloads carry it too), and the chat's Concierge posture, derived server-side: `conciergeState` (`'moderated' | 'unmoderated' | 'locked'`), `conciergeSetBy` (`'operator' | 'concierge' | null`), `conciergeReason` (`'manual' | 'refusals' | 'classifier' | 'migration' | null`) and `conciergeRefusalCount` (the refusal ledger's count). `isDangerousChat` and `dangerCategories` remain as the classifier's telemetry; the legacy `conciergeOverride` is not returned.
+Get a chat with full message history. The read writes nothing: the housekeeping it used to do (re-enqueue embeddings for conversation chunks that lost theirs, close terminal sessions a restart orphaned, announce mail to the operator's own characters) is `POST ?action=visit` (`actions/visit.ts`), which the Salon posts before each full read. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`), `openingState` (`'pending' | 'running' | 'done'` — the Salon opens a chat that is not `'done'`; list payloads carry it too), and the chat's Concierge posture, derived server-side: `conciergeState` (`'moderated' | 'unmoderated' | 'locked'`), `conciergeSetBy` (`'operator' | 'concierge' | null`), `conciergeReason` (`'manual' | 'refusals' | 'classifier' | 'migration' | null`) and `conciergeRefusalCount` (the refusal ledger's count). `isDangerousChat` and `dangerCategories` remain as the classifier's telemetry; the legacy `conciergeOverride` is not returned.
 
 #### `PUT /api/v1/chats/[id]`
 
@@ -2901,9 +2925,9 @@ Raise (or lower) the operator's hand on the chat's open Salon stream. The next L
 
 `active: false` means no stream was open, so the floor is already the operator's.
 
-#### `POST /api/v1/chats/[id]?action=turn`
+#### `POST /api/v1/chats/[id]?action=turn-nudge` / `turn-queue` / `turn-dequeue` / `turn-skip-user` / `turn-query`
 
-Update turn state for multi-character chat, or query the next speaker.
+Update turn state for multi-character chat (`{ participantId }`), or query the next speaker (`turn-query`, no body). `turn-query` stays a `POST`: answering it redraws and stores a spent rotation. Formerly one `POST ?action=turn` with `action: 'nudge' | 'queue' | 'dequeue' | 'query' | 'skipUserTurn'` in the body, which still answers for one release.
 
 **Request Body** (for `nudge`, `queue`, `dequeue`):
 
@@ -3841,7 +3865,7 @@ Post a letter as a player-character. Anti-hijack safeguards apply in multi-chara
 
 #### `GET /api/v1/chats/[id]?action=mailbox&characterId=…`
 
-List the letters in a player-character's `Mail/` folder.
+List the letters in a player-character's `Mail/` folder. A read never provisions: a character with no vault yet has no letters (it used to create the vault).
 
 **Response**: `200 OK` with the character's mailbox letters.
 
@@ -5475,6 +5499,8 @@ Per-chat roleplay formatting templates.
 - `PUT /api/v1/roleplay-templates/[id]` - Update template
 - `DELETE /api/v1/roleplay-templates/[id]` - Delete template
 
+Both bodies derive from one input object (`lib/roleplay-templates/template-input.ts`, strict). Create requires `name` (1–100, trimmed), `systemPrompt` and `narrationDelimiters` (a string, a `[open, close]` pair, or `null` for unmarked prose), and takes `description` (≤ 500; blank is none), `delimiters`, `renderingPatterns`, `dialogueDetection`, `unmarkedStyle`, `markdownAsterisks`; tags are attached afterwards with the tag actions. Update takes any subset of those plus `tags`. A malformed body is the middleware's `400`.
+
 ---
 
 ### Images
@@ -6425,8 +6451,10 @@ List LLM logs with filters.
 - `characterId` - Filter by character ID
 - `type` - Filter by log type (CHAT_MESSAGE, TOOL_CONTINUATION, MEMORY_EXTRACTION, CHARACTER_WIZARD, etc.)
 - `standalone` - Set to 'true' for logs without entity associations
-- `limit` - Max results (default 50, max 100)
-- `offset` - Pagination offset
+- `limit` - Max results (default 50, max 100; with `includeMessages=true` default and max 500). A missing, non-numeric or non-positive value is the default.
+- `offset` - Rows to skip (non-negative; anything else is 0)
+
+The user-wide listings (no `messageId` / `chatId` / `characterId`: recent, `type`, `standalone`) page in SQL and report `total` as the count of every matching row. The per-entity listings load the whole set and page it in memory; `total` is that set's size.
 
 **Response**: `200 OK`
 
@@ -6879,6 +6907,10 @@ tell that work passed through between two polls.
 }
 ```
 
+#### `POST /api/v1/system/jobs`
+
+Enqueue a background job by hand (an operator tool; no UI calls it). Body (strict): `type` (a `BackgroundJobType`), `payload` (an object), optional `priority` (integer) and `maxAttempts` (integer 1–20). A malformed body is a `400`. The payload is not yet checked per job type. Answers `201 { jobId, message }`.
+
 #### `GET /api/v1/system/jobs/[id]`
 
 Get job details.
@@ -6895,6 +6927,10 @@ Pause a job.
 
 Resume a paused job.
 
+#### `/api/v1/system/tools` — layout
+
+The route is a dispatch table; each feature lives in `lib/system-tools/` (`delete-data.ts`, `tasks-queue.ts`, `export.ts`, `import.ts`, `almanack-reports.ts`, `ai-import.ts`) with its Zod body and query schemas beside its handlers. A malformed body or query is the middleware's `400` (`{ error: 'Validation error', message, details }`, the old wording in `message`). Newly refused: an export `POST` with no `type`, an unknown export `scope`, a non-object `exportData` on `import-execute`, and a malformed `capabilities-report-generate` body (an empty body is still an untracked run). The `tasks-queue` `POST` still takes `{ action: 'start' | 'stop' }` in the body (a conformance item, §1.3), now validated.
+
 #### `POST /api/v1/system/tools?action=delete-data`
 
 Delete all user data (the Delete All Data card).
@@ -6909,6 +6945,10 @@ Delete all user data (the Delete All Data card).
 #### `GET /api/v1/system/tools?action=delete-data-preview`
 
 Count-only preview for the deletion above; the summary's `archiveBundles` reports the bundles on hand (nothing is deleted).
+
+#### `POST /api/v1/system/tools?action=tasks-queue-start` / `?action=tasks-queue-stop`
+
+Start or stop the background-job processor (no body). Formerly `POST ?action=tasks-queue` with `{ action: 'start' | 'stop' }`, which still answers for one release.
 
 #### `GET /api/v1/system/tools?action=tasks-queue`
 
@@ -7038,8 +7078,11 @@ Endpoints for managing LLM tools available during chat conversations.
 
 List all available LLM tools that can be enabled/disabled per chat.
 
+The built-in tools are `BUILT_IN_TOOL_PICKER` (`lib/tools/tool-picker.ts`): one entry per declared tool, either listed (name, description, category, definition, availability `requires`) or unlisted with a reason. The tool-definitions snapshot test fails on a declared tool with no entry. Unlisted: the Brahma-only tools, `request_full_context`, `submit_final_response`, and five tools no surface offers (`doc_move_folder` and the four `doc_*_blob` tools are executable, but `buildTools` never adds them to a tool list).
+
 **Query Parameters:**
 - `chatId` (optional) - Chat ID to check tool availability in context
+- `includeSchemas` (optional, `true`) - include each tool's `parameters` JSON Schema (every listed built-in now has one)
 
 **Response:**
 ```json
@@ -7483,7 +7526,9 @@ Link a mount point to the project. Body: `{ mountPointId }`.
 
 #### `DELETE /api/v1/projects/[id]/mount-points`
 
-Unlink a mount point from the project. Body: `{ mountPointId }`.
+Unlink a mount point from the project: `?mountPointId=`. The JSON body `{ mountPointId }` this used to take is still read for one release (with a logged warning). No such link is a `400`.
+
+The project and group routes are one factory, `createOwnerMountLinkRoutes` (`lib/mount-index/owner-mount-links-routes.ts`); both answer the same shapes and both send a malformed body to the middleware's `400`.
 
 #### `GET /api/v1/projects/[id]/wardrobe`
 
@@ -7547,7 +7592,7 @@ A group's linked document stores are managed through `/api/v1/groups/[id]/mount-
 
 #### `GET /api/v1/groups/[id]/mount-points`
 
-List the mount points linked to a group.
+List the mount points linked to a group. Returns `{ mountPoints, officialMountPointId }`, as the project route does.
 
 #### `POST /api/v1/groups/[id]/mount-points`
 
@@ -7555,7 +7600,7 @@ Link a mount point to the group. Body: `{ mountPointId }`.
 
 #### `DELETE /api/v1/groups/[id]/mount-points`
 
-Unlink a mount point from the group. Body: `{ mountPointId }`.
+Unlink a mount point from the group: `?mountPointId=` (the old JSON body is read for one release).
 
 #### `GET /api/v1/groups/[id]/wardrobe`
 
@@ -7615,7 +7660,9 @@ For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename 
 - `GET /api/v1/groups/[id]/scenarios` · `POST /api/v1/groups/[id]/scenarios`
 - `GET`/`PUT`/`DELETE /api/v1/groups/[id]/scenarios/[scenarioPath]` · `POST …?action=rename`
 
-#### `GET /api/v1/groups/scenarios?characterIds=<id,id,...>[&includeArchived=true]`
+#### `GET /api/v1/groups?action=scenarios&characterIds=<id,id,...>[&includeArchived=true]`
+
+Formerly `/api/v1/groups/scenarios`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 The New Chat dialog's participant-union aggregation: for every group that **any** of the supplied prospective participants belongs to, returns that group's `Scenarios/` entries grouped under the group's name. This is the one sanctioned exception to a group's otherwise strict per-responding-character isolation — scenarios are a chat-creation-time menu, not a per-turn access grant, so this route must never feed the per-turn tier resolver.
 
@@ -7868,7 +7915,9 @@ List every autonomous room owned by the authenticated user, with enough context 
 
 ### System Browse Directory
 
-#### `GET /api/v1/system/browse-directory?path=/some/path`
+#### `GET /api/v1/system/directories?path=/some/path`
+
+Formerly `/api/v1/system/browse-directory` (a verb in the path). The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 List the immediate subdirectories of the given path for the directory-picker UI. Returns the resolved path and its subdirectories. With no `path`, lists the user's home directory.
 
@@ -7956,7 +8005,9 @@ latency problem rather than a correctness one.
 
 ### System Plugin Initialization
 
-#### `GET /api/v1/system/plugins/initialize`
+#### `GET /api/v1/system/plugins?action=state`
+
+Formerly `GET /api/v1/system/plugins/initialize`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 Returns the current plugin initialization status without triggering initialization.
 
@@ -7971,7 +8022,9 @@ Returns the current plugin initialization status without triggering initializati
 }
 ```
 
-#### `POST /api/v1/system/plugins/initialize`
+#### `POST /api/v1/system/plugins?action=initialize`
+
+Formerly `POST /api/v1/system/plugins/initialize`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 Triggers plugin system initialization. Scans and loads all plugins. This endpoint is idempotent.
 
@@ -7996,7 +8049,9 @@ Triggers plugin system initialization. Scans and loads all plugins. This endpoin
 
 Plugin upgrade notification management. Unauthenticated as it runs during startup.
 
-#### `GET /api/v1/system/plugins/upgrades`
+#### `GET /api/v1/system/plugins?action=upgrades`
+
+Formerly `GET /api/v1/system/plugins/upgrades`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 Returns pending upgrade notifications from server startup. Returns null results if already notified or no upgrades occurred.
 
@@ -8026,7 +8081,9 @@ Returns pending upgrade notifications from server startup. Returns null results 
 | `ready` | `false` if server startup is not yet complete |
 | `results` | `null` if no un-notified upgrades exist |
 
-#### `POST /api/v1/system/plugins/upgrades`
+#### `POST /api/v1/system/plugins?action=mark-upgrades-notified`
+
+Formerly `POST /api/v1/system/plugins/upgrades`. The old path still answers for one release (with `Deprecation` / `Link` headers; `lib/api/deprecated-path.ts`).
 
 Mark upgrade notifications as acknowledged. Call this after showing toast notifications to prevent re-notification.
 

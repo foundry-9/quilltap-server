@@ -83,7 +83,7 @@ function installFetchStub(): jest.Mock {
       if (url.startsWith('/api/v1/projects')) return { projects: [], scenarios: [] }
       if (url.startsWith('/api/v1/roleplay-templates')) return []
       if (url.startsWith('/api/v1/settings/chat')) return {}
-      if (url.startsWith('/api/v1/groups/scenarios')) return { groupScenarios: [] }
+      if (url.startsWith('/api/v1/groups?action=scenarios')) return { groupScenarios: [] }
       return { scenarios: [] }
     })()
     return {

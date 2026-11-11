@@ -18,15 +18,20 @@ import { Provider } from '@/lib/schemas/types';
 import { getAllAvailableProviders } from '@/lib/llm';
 import { logger } from '@/lib/logger';
 import { autoAssociateApiKeys, autoAssociateAllKeys, type ProfileAssociation } from '@/lib/api-keys/auto-associate';
-import { badRequest, serverError } from '@/lib/api/responses';
+import { badRequest, serverError, successResponse, created } from '@/lib/api/responses';
+import { z } from 'zod';
+import {
+  API_KEY_EXPORT_FORMAT,
+  API_KEY_EXPORT_VERSION,
+  ApiKeyCreateSchema,
+  ApiKeyExportSchema,
+  ApiKeyImportSchema,
+  ApiKeyImportPreviewSchema,
+  ApiKeyExportPayloadSchema,
+  type ApiKeyExportFile,
+} from '@/lib/api-keys/api-key-input';
 
-// Constants for export/import
-const EXPORT_FORMAT = 'quilltap-apikeys';
-const EXPORT_VERSION = 1;
-const SUPPORTED_VERSIONS = [1];
-const MIN_PASSPHRASE_LENGTH = 8;
-
-// Types for export/import
+/** What an export file seals: the plaintext keys. */
 interface ExportPayload {
   keys: Array<{
     provider: string;
@@ -35,26 +40,33 @@ interface ExportPayload {
   }>;
 }
 
-interface ImportFile {
-  format: string;
-  version: number;
-  exportedAt: string;
-  keyCount: number;
-  encryption: {
-    algorithm: string;
-    kdf: string;
-    kdfIterations: number;
-    salt: string;
-  };
-  payload: {
-    ciphertext: string;
-    iv: string;
-    authTag: string;
-  };
-  signature: string;
+/**
+ * Open an export file's payload with the passphrase. Null when the passphrase
+ * is wrong, the file is corrupt, or what decrypts is not a key list.
+ */
+function openExportFile(
+  file: ApiKeyExportFile,
+  passphrase: string
+): z.infer<typeof ApiKeyExportPayloadSchema> | null {
+  let decrypted: unknown;
+  try {
+    decrypted = decryptWithPassphrase<unknown>(
+      {
+        salt: file.encryption.salt,
+        iv: file.payload.iv,
+        ciphertext: file.payload.ciphertext,
+        authTag: file.payload.authTag,
+        iterations: file.encryption.kdfIterations,
+      },
+      passphrase
+    );
+  } catch {
+    logger.debug('[API Keys v1] Export file did not decrypt');
+    return null;
+  }
+  const parsed = ApiKeyExportPayloadSchema.safeParse(decrypted);
+  return parsed.success ? parsed.data : null;
 }
-
-type DuplicateHandling = 'skip' | 'replace' | 'rename';
 
 
 /**
@@ -102,66 +114,41 @@ export const GET = createContextHandler(async (req, { user }) => {
  * POST /api/v1/api-keys - Create a new API key (default action)
  */
 async function handleCreate(req: NextRequest, user: { id: string }) {
-  try {
-    const body = await req.json();
-    const { provider, label, apiKey } = body;
+  const { provider, label, apiKey } = ApiKeyCreateSchema.parse(await req.json());
 
-    // Validation
-    if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
-      return badRequest('Invalid provider');
-    }
-
-    // Check if provider is registered (warn but allow for future plugins)
-    const availableProviders = getAllAvailableProviders();
-    if (!availableProviders.includes(provider)) {
-      logger.warn('[API Keys v1] Key created for unregistered provider', { provider });
-    }
-
-    if (!label || typeof label !== 'string' || label.trim().length === 0) {
-      return badRequest('Label is required');
-    }
-
-    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-      return badRequest('API key is required');
-    }
-
-    const repos = getUserRepositories(user.id);
-
-    // Store in database
-    const newKey = await repos.connections.createApiKey({
-      provider: provider as Provider,
-      label: label.trim(),
-      key_value: apiKey,
-      isActive: true,
-    });
-
-    // Auto-associate the new key with profiles that need it
-    const associationResult = await autoAssociateApiKeys(user.id, [newKey.id]);
-
-    logger.info('[API Keys v1] Key created', {
-      keyId: newKey.id,
-      provider: newKey.provider,
-      associations: associationResult.associations.length,
-    });
-
-    return NextResponse.json(
-      {
-        apiKey: {
-          id: newKey.id,
-          provider: newKey.provider,
-          label: newKey.label,
-          isActive: newKey.isActive,
-          createdAt: newKey.createdAt,
-          updatedAt: newKey.updatedAt,
-          associations: associationResult.associations,
-        },
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    logger.error('[API Keys v1] Error creating key', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create API key');
+  // Check if provider is registered (warn but allow for future plugins)
+  if (!getAllAvailableProviders().includes(provider)) {
+    logger.warn('[API Keys v1] Key created for unregistered provider', { provider });
   }
+
+  const repos = getUserRepositories(user.id);
+  const newKey = await repos.connections.createApiKey({
+    provider: provider as Provider,
+    label,
+    key_value: apiKey,
+    isActive: true,
+  });
+
+  // Auto-associate the new key with profiles that need it
+  const associationResult = await autoAssociateApiKeys(user.id, [newKey.id]);
+
+  logger.info('[API Keys v1] Key created', {
+    keyId: newKey.id,
+    provider: newKey.provider,
+    associations: associationResult.associations.length,
+  });
+
+  return created({
+    apiKey: {
+      id: newKey.id,
+      provider: newKey.provider,
+      label: newKey.label,
+      isActive: newKey.isActive,
+      createdAt: newKey.createdAt,
+      updatedAt: newKey.updatedAt,
+      associations: associationResult.associations,
+    },
+  });
 }
 
 /**
@@ -179,7 +166,7 @@ async function handleAutoAssociate(req: NextRequest, user: { id: string }) {
       errors: result.errors.length,
     });
 
-    return NextResponse.json({
+    return successResponse({
       success: true,
       associations: result.associations,
       errors: result.errors,
@@ -195,19 +182,8 @@ async function handleAutoAssociate(req: NextRequest, user: { id: string }) {
  * Export all API keys encrypted with a user-provided passphrase
  */
 async function handleExport(req: NextRequest, user: { id: string }) {
+  const { passphrase } = ApiKeyExportSchema.parse(await req.json());
   try {
-    const body = await req.json();
-    const { passphrase } = body;
-
-    // Validate passphrase
-    if (!passphrase || typeof passphrase !== 'string') {
-      return badRequest('Passphrase is required');
-    }
-
-    if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
-      return badRequest(`Passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`);
-    }
-
 
     const repos = getUserRepositories(user.id);
     const apiKeys = await repos.connections.getAllApiKeys();
@@ -238,8 +214,8 @@ async function handleExport(req: NextRequest, user: { id: string }) {
 
     // Build the export file
     const exportFile = {
-      format: EXPORT_FORMAT,
-      version: EXPORT_VERSION,
+      format: API_KEY_EXPORT_FORMAT,
+      version: API_KEY_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
       keyCount: decryptedKeys.length,
       encryption: {
@@ -261,7 +237,7 @@ async function handleExport(req: NextRequest, user: { id: string }) {
       keyCount: decryptedKeys.length,
     });
 
-    return NextResponse.json(exportFile);
+    return successResponse(exportFile);
   } catch (error) {
     logger.error('[API Keys v1] Error exporting keys', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to export API keys');
@@ -273,52 +249,11 @@ async function handleExport(req: NextRequest, user: { id: string }) {
  * Import API keys from export file
  */
 async function handleImport(req: NextRequest, user: { id: string }) {
+  const { file, passphrase, duplicateHandling: handling } = ApiKeyImportSchema.parse(await req.json());
   try {
-    const body = await req.json();
-    const { file, passphrase, duplicateHandling = 'skip' } = body;
-
-    // Validate inputs
-    if (!file || typeof file !== 'object') {
-      return badRequest('Import file is required');
-    }
-
-    if (!passphrase || typeof passphrase !== 'string') {
-      return badRequest('Passphrase is required');
-    }
-
-    if (!['skip', 'replace', 'rename'].includes(duplicateHandling)) {
-      return badRequest('Invalid duplicate handling option');
-    }
-
-    const importFile = file as ImportFile;
-    const handling = duplicateHandling as DuplicateHandling;
-
-    // Validate file format
-    if (importFile.format !== EXPORT_FORMAT) {
-      return badRequest('Invalid file format');
-    }
-
-    if (!SUPPORTED_VERSIONS.includes(importFile.version)) {
-      return badRequest(`Unsupported file version: ${importFile.version}`);
-    }// Decrypt the payload
-    let payload: ExportPayload;
-    try {
-      payload = decryptWithPassphrase<ExportPayload>(
-        {
-          salt: importFile.encryption.salt,
-          iv: importFile.payload.iv,
-          ciphertext: importFile.payload.ciphertext,
-          authTag: importFile.payload.authTag,
-          iterations: importFile.encryption.kdfIterations,
-        },
-        passphrase
-      );
-    } catch (error) {return badRequest('Invalid passphrase or corrupted file');
-    }
-
-    // Validate payload
-    if (!payload.keys || !Array.isArray(payload.keys)) {
-      return badRequest('Invalid payload structure');
+    const payload = openExportFile(file, passphrase);
+    if (!payload) {
+      return badRequest('Invalid passphrase or corrupted file');
     }
 
     const repos = getUserRepositories(user.id);
@@ -418,7 +353,7 @@ async function handleImport(req: NextRequest, user: { id: string }) {
       errors: result.errors.length,
     });
 
-    return NextResponse.json(result);
+    return successResponse(result);
   } catch (error) {
     logger.error('[API Keys v1] Error importing keys', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to import API keys');
@@ -430,43 +365,11 @@ async function handleImport(req: NextRequest, user: { id: string }) {
  * Preview keys in an import file
  */
 async function handleImportPreview(req: NextRequest, user: { id: string }) {
+  // A malformed file or passphrase is the middleware's 400; the preview's own
+  // `{ valid: false, error }` answers are for a file that is well-formed but
+  // will not open.
+  const { file: importFile, passphrase } = ApiKeyImportPreviewSchema.parse(await req.json());
   try {
-    const body = await req.json();
-    const { file, passphrase } = body;
-
-    // Validate inputs
-    if (!file || typeof file !== 'object') {
-      return NextResponse.json({ valid: false, error: 'Import file is required' }, { status: 400 });
-    }
-
-    if (!passphrase || typeof passphrase !== 'string') {
-      return NextResponse.json({ valid: false, error: 'Passphrase is required' }, { status: 400 });
-    }
-
-    const importFile = file as ImportFile;
-
-    // Validate file format
-    if (importFile.format !== EXPORT_FORMAT) {
-      return NextResponse.json({ valid: false, error: 'Invalid file format' }, { status: 400 });
-    }
-
-    if (!SUPPORTED_VERSIONS.includes(importFile.version)) {
-      return NextResponse.json(
-        { valid: false, error: `Unsupported file version: ${importFile.version}` },
-        { status: 400 }
-      );
-    }
-
-    // Validate required fields
-    if (
-      !importFile.encryption?.salt ||
-      !importFile.payload?.ciphertext ||
-      !importFile.payload?.iv ||
-      !importFile.payload?.authTag
-    ) {
-      return NextResponse.json({ valid: false, error: 'Invalid file structure' }, { status: 400 });
-    }
-
     // Verify signature (warn but don't block if invalid)
     const payloadJson = JSON.stringify({
       ciphertext: importFile.payload.ciphertext,
@@ -485,28 +388,9 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
       logger.warn('[API Keys v1] Import file signature verification failed', { userId: user.id });
     }
 
-    // Attempt to decrypt the payload
-    let payload: ExportPayload;
-    try {
-      payload = decryptWithPassphrase<ExportPayload>(
-        {
-          salt: importFile.encryption.salt,
-          iv: importFile.payload.iv,
-          ciphertext: importFile.payload.ciphertext,
-          authTag: importFile.payload.authTag,
-          iterations: importFile.encryption.kdfIterations,
-        },
-        passphrase
-      );
-    } catch (error) {return NextResponse.json(
-        { valid: false, error: 'Invalid passphrase or corrupted file' },
-        { status: 400 }
-      );
-    }
-
-    // Validate payload structure
-    if (!payload.keys || !Array.isArray(payload.keys)) {
-      return NextResponse.json({ valid: false, error: 'Invalid payload structure' }, { status: 400 });
+    const payload = openExportFile(importFile, passphrase);
+    if (!payload) {
+      return NextResponse.json({ valid: false, error: 'Invalid passphrase or corrupted file' }, { status: 400 });
     }
 
     // Get existing keys to check for duplicates
@@ -533,9 +417,9 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
       }
 
       previewKeys.push({
-        provider: key.provider,
-        label: key.label,
-        keyPreview: maskApiKey(key.apiKey),
+        provider: key.provider ?? '',
+        label: key.label ?? '',
+        keyPreview: maskApiKey(key.apiKey ?? ''),
         isDuplicate: !!existing,
         existingId: existing?.id,
       });
@@ -548,7 +432,7 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
       signatureValid,
     });
 
-    return NextResponse.json({
+    return successResponse({
       valid: true,
       signatureValid,
       keyCount: previewKeys.length,

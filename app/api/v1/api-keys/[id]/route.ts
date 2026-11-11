@@ -16,6 +16,8 @@ import { Provider } from '@/lib/schemas/types';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 import { logger } from '@/lib/logger';
+import { z } from 'zod';
+import { ApiKeyTestSchema, ApiKeyUpdateSchema } from '@/lib/api-keys/api-key-input';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 
 /**
@@ -97,34 +99,13 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         return notFound('API key');
       }
 
-      const body = await req.json();
-      const { label, isActive, apiKey } = body;
-
-      // Build update data
-      const updateData: Record<string, unknown> = {};
-
-      if (label !== undefined) {
-        if (typeof label !== 'string' || label.trim().length === 0) {
-          return badRequest('Label must be a non-empty string');
-        }
-        updateData.label = label.trim();
-      }
-
-      if (isActive !== undefined) {
-        if (typeof isActive !== 'boolean') {
-          return badRequest('isActive must be a boolean');
-        }
-        updateData.isActive = isActive;
-      }
-
-      // If new API key is provided, store it directly
-      if (apiKey !== undefined) {
-        if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-          return badRequest('API key must be a non-empty string');
-        }
-
-        updateData.key_value = apiKey;
-      }
+      const { label, isActive, apiKey } = ApiKeyUpdateSchema.parse(await req.json());
+      const updateData = {
+        ...(label !== undefined ? { label } : {}),
+        ...(isActive !== undefined ? { isActive } : {}),
+        // A new key is stored exactly as sent.
+        ...(apiKey !== undefined ? { key_value: apiKey } : {}),
+      };
 
       // Update the key
       const updatedKey = await repos.connections.updateApiKey(id, updateData);
@@ -147,6 +128,8 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         },
       });
     } catch (error) {
+      // A validation failure is the middleware's 400, not a 500 (#166).
+      if (error instanceof z.ZodError) throw error;
       logger.error('[API Keys v1] Error updating key', { keyId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to update API key');
     }
@@ -208,8 +191,8 @@ async function handleTestKey(
       const decryptedKey = apiKey.key_value;
 
       // Get optional baseUrl from request body
-      const body = await req.json().catch(() => ({}));
-      const { baseUrl } = body;
+      // The body is optional; a present one must be well-formed.
+      const { baseUrl } = ApiKeyTestSchema.parse(await req.json().catch(() => ({})));
 
       // Test the key
       const result = await testProviderApiKey(
@@ -238,6 +221,7 @@ async function handleTestKey(
         { status: 400 }
       );
     } catch (error) {
+      if (error instanceof z.ZodError) throw error;
       logger.error('[API Keys v1] Error testing key', { keyId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to test API key');
     }

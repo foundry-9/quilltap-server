@@ -15,7 +15,12 @@ import { TypedQueryFilter } from '../interfaces';
  * A fresh user's chat settings. Also the value a refused stored field is
  * repaired to (see `ChatSettingsRepository.hydrateTolerantly`).
  */
-function defaultChatSettings(userId: string): Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> {
+/**
+ * The settings a user has before they have saved any: what `updateForUser`
+ * writes on first save, and what `GET /api/v1/settings/chat` answers without
+ * writing.
+ */
+export function defaultChatSettings(userId: string): Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> {
   return {
     userId,
     avatarDisplayMode: 'ALWAYS',

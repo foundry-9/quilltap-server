@@ -263,18 +263,19 @@ export const POST = createContextParamsHandler<{ name: string }>(
 // PUT Handler - Enable/Disable Plugin
 // ============================================================================
 
+/** PUT body: switch the plugin on or off. */
+const SetEnabledSchema = z.object({
+  enabled: z.boolean({ error: 'Missing required field: enabled' }),
+});
+
 export const PUT = createContextParamsHandler<{ name: string }>(
   async (req: NextRequest, context, { name }) => {
     const { user } = context;
 
+    // A malformed body is the middleware's 400.
+    const { enabled } = SetEnabledSchema.parse(await req.json().catch(() => ({})));
+
     try {
-
-      const body = await req.json().catch(() => ({}));
-      const { enabled } = body;
-
-      if (enabled === undefined) {
-        return badRequest('Missing required field: enabled');
-      }
 
       // Try to find plugin by name first in registry
       let pluginName = name;

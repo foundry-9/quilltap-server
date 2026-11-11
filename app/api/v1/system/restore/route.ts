@@ -19,6 +19,18 @@ import { dispatchAction } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
+import { z } from 'zod';
+
+/** `?action=preview` body. */
+const RestorePreviewSchema = z.object({
+  uploadId: z.string({ error: 'uploadId is required' }).min(1, 'uploadId is required'),
+});
+
+/** Restore body. */
+const RestoreSchema = RestorePreviewSchema.extend({
+  mode: z.enum(['replace', 'new-account'], { error: 'mode must be "replace" or "new-account"' }),
+  keepArchivedCharacterBundles: z.boolean().default(true),
+});
 
 // Extend timeout for restore operations
 export const maxDuration = 300; // 5 minutes
@@ -145,17 +157,8 @@ async function handleUpload(req: NextRequest, userId: string): Promise<NextRespo
 async function handlePreview(req: NextRequest, userId: string): Promise<NextResponse> {
   cleanupExpiredUploads();
 
-  let body: { uploadId?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return badRequest('Invalid JSON body');
-  }
-
-  const { uploadId } = body;
-  if (!uploadId) {
-    return badRequest('uploadId is required');
-  }
+  // A malformed body is the middleware's 400.
+  const { uploadId } = RestorePreviewSchema.parse(await req.json());
 
   const upload = getPendingUpload(uploadId, userId);
   if (!upload) {
@@ -186,25 +189,10 @@ async function handlePreview(req: NextRequest, userId: string): Promise<NextResp
 async function handleRestore(req: NextRequest, userId: string): Promise<NextResponse> {
   cleanupExpiredUploads();
 
-  let body: { uploadId?: string; mode?: string; keepArchivedCharacterBundles?: boolean };
-  try {
-    body = await req.json();
-  } catch {
-    return badRequest('Invalid JSON body');
-  }
-
-  const { uploadId, mode } = body;
-  // Replace mode spares archived-character bundles unless the client
-  // explicitly opts out (spec §4.7).
-  const keepArchivedCharacterBundles = body.keepArchivedCharacterBundles !== false;
-
-  if (!uploadId) {
-    return badRequest('uploadId is required');
-  }
-
-  if (!mode || !['replace', 'new-account'].includes(mode)) {
-    return badRequest('mode must be "replace" or "new-account"');
-  }
+  // A malformed body is the middleware's 400. Replace mode spares
+  // archived-character bundles unless the client explicitly opts out
+  // (spec §4.7).
+  const { uploadId, mode, keepArchivedCharacterBundles } = RestoreSchema.parse(await req.json());
 
   const upload = getPendingUpload(uploadId, userId);
   if (!upload) {
@@ -220,7 +208,7 @@ async function handleRestore(req: NextRequest, userId: string): Promise<NextResp
     });
 
     const summary = await restore(upload.path, {
-      mode: mode as 'replace' | 'new-account',
+      mode,
       targetUserId: userId,
       keepArchivedCharacterBundles,
     });

@@ -137,6 +137,8 @@ To modify an existing profile:
    - **Normalise to unit length** — keep this on unless you have a specific reason to disable it.
 3. Click **Save Changes**
 
+Emptying a field and saving clears it in earnest — a blank API key, Base URL or Dimensions box is recorded as *nothing at all*, rather than quietly keeping whatever was there before. Should the clerk at the counter object to a value (a name left blank, say), the complaint names the field in question, so one need not guess which box offended.
+
 ## Matryoshka Truncation & Unit Normalisation
 
 Some embedding models — Qwen3-Embedding most notably — are trained as a *Matryoshka representation*: the first N components of their full vector are themselves a perfectly valid embedding at dimension N. Take a 4096-dimension Qwen3 vector, keep only the first 1024 numbers, renormalise it, and you have a 1024-dimension embedding with very nearly the same retrieval quality as the full thing. A quarter of the storage. A quarter of the cosine work at search time.

@@ -208,7 +208,7 @@ export function createAtlasCollectionHandlers<P extends Params>(config: AtlasRou
   }
 
   const GET = createContextParamsHandler<P>(
-    withActionDispatch<P>({ folders: preamble.getFolders, overlaps: handleOverlaps }, handleList),
+    withActionDispatch<P>({ folders: preamble.getFolders, overlaps: handleOverlaps, ...config.extraGetActions }, handleList),
   );
 
   const POST = createContextParamsHandler<P>(
@@ -218,6 +218,7 @@ export function createAtlasCollectionHandlers<P extends Params>(config: AtlasRou
         'move-items': withErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileEntries('move', req, ctx, params)),
         'copy-items': withErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileEntries('copy', req, ctx, params)),
         duplicate: withErrors(handleDuplicate),
+        ...config.extraPostActions,
       },
       withErrors(handleCreate),
     ),

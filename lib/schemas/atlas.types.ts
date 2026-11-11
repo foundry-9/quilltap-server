@@ -166,7 +166,7 @@ export const fileAtlasEntriesSchema = z.object({
   folder: AtlasFolderInputSchema,
 });
 
-/** `POST /api/v1/atlas/transfers` body. */
+/** `POST /api/v1/atlas?action=move-to-tier|copy-to-tier` body (`action` supplied from the query; the deprecated `/transfers` path takes it in the body). */
 export const atlasTransferSchema = z.object({
   action: z.enum(['move', 'copy']),
   entryId: UUIDSchema,

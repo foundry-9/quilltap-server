@@ -193,6 +193,10 @@ export function useChatData(chatId: string) {
 
   const fetchChat = useCallback(async () => {
     try {
+      // Housekeeping first (terminal reconcile, operator mail, chunk re-warm),
+      // so anything it announces is in the read below. A failed visit never
+      // blocks the read — the GET no longer does any of it.
+      await fetch(`/api/v1/chats/${chatId}?action=visit`, { method: 'POST' }).catch(() => undefined)
       const res = await fetch(`/api/v1/chats/${chatId}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('Failed to fetch chat')
       const data = await res.json()

@@ -10,11 +10,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, enrichProfile, type RequestContext } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { notFound, badRequest, serverError, messageResponse, successResponse, validationError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, messageResponse, successResponse, conflict } from '@/lib/api/responses';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generation-handler';
-import { validateProfileLoras } from '@/lib/image-gen/lora-validation';
 import { logger } from '@/lib/logger';
+import { ImageProfileUpdateSchema } from '@/lib/image-gen/image-profile-input';
+import { apiKeyExists } from '@/lib/schemas/profile-input';
 import { z } from 'zod';
 import { imageQualitySchema } from '@/lib/image-gen/quality';
 
@@ -61,134 +62,48 @@ export const GET = createContextParamsHandler<{ id: string }>(
  */
 export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-
-      // Verify ownership
-      const existingProfile = await repos.imageProfiles.findById(id);
-
-      if (!existingProfile) {
-        return notFound('Image profile');
-      }
-
-      const body = await req.json();
-      const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isDangerousCompatible } = body;
-
-      // Build update data
-      const updateData: Record<string, unknown> = {};
-
-      if (name !== undefined) {
-        if (typeof name !== 'string' || name.trim().length === 0) {
-          return badRequest('Name must be a non-empty string');
-        }
-
-        // Check for duplicate name (excluding current profile)
-        const duplicateProfile = await repos.imageProfiles.findByName(user.id, name.trim());
-
-        if (duplicateProfile && duplicateProfile.id !== id) {
-          return NextResponse.json(
-            { error: 'An image profile with this name already exists' },
-            { status: 409 }
-          );
-        }
-
-        updateData.name = name.trim();
-      }
-
-      if (provider !== undefined) {
-        if (typeof provider !== 'string' || provider.trim().length === 0) {
-          return badRequest('Provider must be a non-empty string');
-        }
-
-        // Verify provider is available
-        try {
-          createImageProvider(provider);
-        } catch {
-          return badRequest(`Provider ${provider} is not available`);
-        }
-
-        updateData.provider = provider;
-      }
-
-      if (apiKeyId !== undefined) {
-        if (apiKeyId === null) {
-          updateData.apiKeyId = null;
-        } else {
-          const apiKey = await repos.connections.findApiKeyById(apiKeyId);
-          if (!apiKey) {
-            return notFound('API key');
-          }
-          updateData.apiKeyId = apiKeyId;
-        }
-      }
-
-      if (baseUrl !== undefined) {
-        updateData.baseUrl = baseUrl || null;
-      }
-
-      if (modelName !== undefined) {
-        if (typeof modelName !== 'string' || modelName.trim().length === 0) {
-          return badRequest('Model name must be a non-empty string');
-        }
-        updateData.modelName = modelName.trim();
-      }
-
-      if (parameters !== undefined) {
-        if (typeof parameters !== 'object' || Array.isArray(parameters)) {
-          return badRequest('Parameters must be an object');
-        }
-        // Validate the reserved `loras` key before anything is written — a
-        // malformed adapter list must not save cleanly and fail at generation.
-        const loraError = validateProfileLoras(parameters);
-        if (loraError) {
-          logger.warn('[Image Profiles v1] Rejected an update with a malformed LoRA list', {
-            profileId: id,
-            issues: loraError.issues.map(i => `${i.path.join('.')}: ${i.message}`),
-          });
-          return validationError(loraError);
-        }
-        updateData.parameters = parameters;
-      }
-
-      if (isDefault !== undefined) {
-        if (typeof isDefault !== 'boolean') {
-          return badRequest('isDefault must be a boolean');
-        }
-
-        // If setting as default, unset other defaults
-        if (isDefault) {
-          await repos.imageProfiles.unsetAllDefaults(user.id);
-        }
-
-        updateData.isDefault = isDefault;
-      }
-
-      if (isDangerousCompatible !== undefined) {
-        if (typeof isDangerousCompatible !== 'boolean') {
-          return badRequest('isDangerousCompatible must be a boolean');
-        }
-        updateData.isDangerousCompatible = isDangerousCompatible;
-      }
-
-      // Update the profile
-      const updatedProfile = await repos.imageProfiles.update(id, updateData);
-
-      if (!updatedProfile) {
-        return serverError('Failed to update profile');
-      }
-
-      // Enrich with API key and tag details
-      const enriched = await enrichProfile(updatedProfile, repos);
-
-      logger.info('[Image Profiles v1] Profile updated', { profileId: id });
-
-      return NextResponse.json({
-        ...updatedProfile,
-        ...enriched,
-      });
-    } catch (error) {
-      logger.error('[Image Profiles v1] Error updating profile', { profileId: id }, error instanceof Error ? error : undefined);
-      return serverError('Failed to update image profile');
+    const existingProfile = await repos.imageProfiles.findById(id);
+    if (!existingProfile) {
+      return notFound('Image profile');
     }
+
+    // A malformed body (the LoRA list included) is the middleware's 400.
+    const patch = ImageProfileUpdateSchema.parse(await req.json());
+
+    if (patch.name !== undefined) {
+      const duplicateProfile = await repos.imageProfiles.findByName(user.id, patch.name);
+      if (duplicateProfile && duplicateProfile.id !== id) {
+        return conflict('An image profile with this name already exists');
+      }
+    }
+
+    if (patch.provider !== undefined) {
+      try {
+        createImageProvider(patch.provider);
+      } catch {
+        return badRequest(`Provider ${patch.provider} is not available`);
+      }
+    }
+
+    if (!(await apiKeyExists(patch.apiKeyId, repos))) {
+      return notFound('API key');
+    }
+
+    // If setting as default, unset other defaults
+    if (patch.isDefault) {
+      await repos.imageProfiles.unsetAllDefaults(user.id);
+    }
+
+    const updatedProfile = await repos.imageProfiles.update(id, patch);
+    if (!updatedProfile) {
+      return serverError('Failed to update profile');
+    }
+
+    const enriched = await enrichProfile(updatedProfile, repos);
+
+    logger.info('[Image Profiles v1] Profile updated', { profileId: id, keys: Object.keys(patch) });
+
+    return successResponse({ ...updatedProfile, ...enriched });
   }
 );
 

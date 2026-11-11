@@ -16,11 +16,14 @@ import { dispatchAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, conflict, successResponse } from '@/lib/api/responses';
-import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
-import { parseMaxImagesPerRequest, parseToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils';
-import { MAX_IMAGES_PER_REQUEST_CEILING, TOOL_RESULT_VERBATIM_TURNS_CEILING } from '@/lib/schemas/profile.types';
+import {
+  ConnectionProfileUpdateSchema,
+  applyCourierForcing,
+  checkConnectionProfileReferences,
+  withoutNullCounters,
+} from '@/lib/llm/connection-profile-input';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -104,317 +107,70 @@ export const GET = createContextParamsHandler<{ id: string }>(
 );
 
 /**
- * PUT /api/v1/connection-profiles/[id] - Update a profile
+ * PUT /api/v1/connection-profiles/[id] - Update a profile.
+ *
+ * The body is `ConnectionProfileUpdateSchema` — any subset, an absent key left
+ * alone and `null` clearing a nullable one; a malformed body is the
+ * middleware's 400. The database rules are `checkConnectionProfileReferences`,
+ * shared with the create.
  */
 export const PUT = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
-    try {// Verify ownership
-      const existingProfile = await repos.connections.findById(id);
+  async (req, context, { id }) => {
+    const { user, repos } = context;
 
-      if (!existingProfile) {
-        return notFound('Connection profile');
+    const existingProfile = await repos.connections.findById(id);
+    if (!existingProfile) {
+      return notFound('Connection profile');
+    }
+
+    const patch = withoutNullCounters(ConnectionProfileUpdateSchema.parse(await req.json()));
+
+    // Courier-mode gates (no key, no tools, …) hinge on the transport after
+    // this write: the newly-set value, else the stored one.
+    const isCourier = (patch.transport ?? existingProfile.transport ?? 'api') === 'courier';
+    const provider = patch.provider ?? existingProfile.provider;
+
+    const refusal = await checkConnectionProfileReferences(patch, context, { profileId: id, provider, isCourier });
+    if (refusal) {
+      return refusal.status === 404 ? notFound('API key') : badRequest(refusal.message);
+    }
+
+    if (patch.name !== undefined) {
+      // Names are unique per user (case-insensitive, trimmed). Reject a rename
+      // that collides with a *different* profile before the DB's unique index
+      // would. Renaming a profile to its own name is fine.
+      const normalizedName = normalizeProfileName(patch.name);
+      const userProfiles = await repos.connections.findByUserId(user.id);
+      if (userProfiles.some((p) => p.id !== id && normalizeProfileName(p.name) === normalizedName)) {
+        logger.debug('Rejected duplicate connection-profile name on update', {
+          userId: user.id,
+          profileId: id,
+          name: patch.name,
+        });
+        return conflict(`A connection profile named "${patch.name}" already exists`);
       }
+    }
 
-      const body = await req.json();
-      const {
-        name,
-        transport,
-        courierDeltaMode,
-        provider,
-        apiKeyId,
-        baseUrl,
-        modelName,
-        parameters,
-        isDefault,
-        isCheap,
-        isDangerousCompatible,
-        allowWebSearch,
-        useNativeWebSearch,
-        allowToolUse,
-        pseudoToolMode,
-        modelClass,
-        maxContext,
-        sortIndex,
-        supportsImageUpload,
-        multiCharacterPrefill,
-        fallbackProfileId,
-        allowTierFallback,
-        maxImagesPerRequest,
-        toolResultVerbatimTurns,
-      } = body;
-
-      // Build update data
-      const updateData: Record<string, unknown> = {};
-
-      if (transport !== undefined) {
-        if (transport !== 'api' && transport !== 'courier') {
-          return badRequest('Transport must be "api" or "courier"');
-        }
-        updateData.transport = transport;
-      }
-
-      if (courierDeltaMode !== undefined) {
-        if (typeof courierDeltaMode !== 'boolean') {
-          return badRequest('courierDeltaMode must be a boolean');
-        }
-        updateData.courierDeltaMode = courierDeltaMode;
-      }
-
-      // Effective transport for this update — newly-set value if present,
-      // otherwise the existing row's setting. Courier-mode validation gates
-      // (no API key, no tools, etc.) hinge on this.
-      const effectiveTransport =
-        (updateData.transport as 'api' | 'courier' | undefined) ??
-        ((existingProfile as { transport?: 'api' | 'courier' }).transport ?? 'api');
-      const isCourier = effectiveTransport === 'courier';
-      if (isCourier) {
-        updateData.apiKeyId = null;
-        updateData.baseUrl = null;
-        updateData.allowToolUse = false;
-        updateData.allowWebSearch = false;
-        updateData.useNativeWebSearch = false;
-        updateData.supportsImageUpload = false;
-        updateData.isDangerousCompatible = false;
-      }
-
-      if (name !== undefined) {
-        if (typeof name !== 'string' || name.trim().length === 0) {
-          return badRequest('Name must be a non-empty string');
-        }
-        // Names are unique per user (case-insensitive, trimmed). Reject a
-        // rename that collides with a *different* profile before the DB's
-        // unique index would. Renaming a profile to its own name is fine.
-        const normalizedName = normalizeProfileName(name);
-        const userProfiles = await repos.connections.findByUserId(user.id);
-        if (userProfiles.some((p) => p.id !== id && normalizeProfileName(p.name) === normalizedName)) {
-          logger.debug('Rejected duplicate connection-profile name on update', {
-            userId: user.id,
-            profileId: id,
-            name: name.trim(),
-          });
-          return conflict(`A connection profile named "${name.trim()}" already exists`);
-        }
-        updateData.name = name.trim();
-      }
-
-      if (provider !== undefined) {
-        if (typeof provider !== 'string' || provider.trim().length === 0) {
-          return badRequest('Provider must be a non-empty string');
-        }
-        updateData.provider = provider;
-      }
-
-      if (apiKeyId !== undefined && !isCourier) {
-        if (apiKeyId === null) {
-          updateData.apiKeyId = null;
-        } else {
-          const apiKey = await repos.connections.findApiKeyById(apiKeyId);
-
-          if (!apiKey) {
-            return notFound('API key');
-          }
-
-          const providerToCheck = provider !== undefined ? provider : existingProfile.provider;
-          if (apiKey.provider !== providerToCheck) {
-            return badRequest('API key provider does not match profile provider');
-          }
-
-          updateData.apiKeyId = apiKeyId;
+    // If setting as default, unset other defaults
+    if (patch.isDefault) {
+      const allProfiles = await repos.connections.findByUserId(user.id);
+      for (const profile of allProfiles) {
+        if (profile.isDefault && profile.id !== id) {
+          await repos.connections.update(profile.id, { isDefault: false });
         }
       }
+    }
 
-      if (baseUrl !== undefined && !isCourier) {
-        updateData.baseUrl = baseUrl || null;
-      }
-
-      if (modelName !== undefined) {
-        if (typeof modelName !== 'string' || modelName.trim().length === 0) {
-          return badRequest('Model name must be a non-empty string');
-        }
-        updateData.modelName = modelName.trim();
-      }
-
-      if (parameters !== undefined) {
-        if (typeof parameters !== 'object' || Array.isArray(parameters)) {
-          return badRequest('Parameters must be an object');
-        }
-        updateData.parameters = parameters;
-      }
-
-      if (isDefault !== undefined) {
-        if (typeof isDefault !== 'boolean') {
-          return badRequest('isDefault must be a boolean');
-        }
-
-        // If setting as default, unset other defaults
-        if (isDefault) {
-          const allProfiles = await repos.connections.findByUserId(user.id);
-          for (const profile of allProfiles) {
-            if (profile.isDefault && profile.id !== id) {
-              await repos.connections.update(profile.id, { isDefault: false });
-            }
-          }
-        }
-
-        updateData.isDefault = isDefault;
-      }
-
-      if (isCheap !== undefined) {
-        if (typeof isCheap !== 'boolean') {
-          return badRequest('isCheap must be a boolean');
-        }
-        updateData.isCheap = isCheap;
-      }
-
-      if (isDangerousCompatible !== undefined && !isCourier) {
-        if (typeof isDangerousCompatible !== 'boolean') {
-          return badRequest('isDangerousCompatible must be a boolean');
-        }
-        updateData.isDangerousCompatible = isDangerousCompatible;
-      }
-
-      if (allowWebSearch !== undefined && !isCourier) {
-        if (typeof allowWebSearch !== 'boolean') {
-          return badRequest('allowWebSearch must be a boolean');
-        }
-        updateData.allowWebSearch = allowWebSearch;
-      }
-
-      if (useNativeWebSearch !== undefined && !isCourier) {
-        if (typeof useNativeWebSearch !== 'boolean') {
-          return badRequest('useNativeWebSearch must be a boolean');
-        }
-        updateData.useNativeWebSearch = useNativeWebSearch;
-      }
-
-      if (allowToolUse !== undefined && !isCourier) {
-        if (typeof allowToolUse !== 'boolean') {
-          return badRequest('allowToolUse must be a boolean');
-        }
-        updateData.allowToolUse = allowToolUse;
-      }
-
-      if (pseudoToolMode !== undefined && !isCourier) {
-        if (pseudoToolMode !== 'auto' && pseudoToolMode !== 'native' && pseudoToolMode !== 'simple-json' && pseudoToolMode !== 'text-block') {
-          return badRequest('pseudoToolMode must be one of auto, native, simple-json, text-block');
-        }
-        updateData.pseudoToolMode = pseudoToolMode;
-      }
-
-      // Whether multi-character turns are anchored with the assistant "[Name]"
-      // prefill. Applies to every transport — the Courier renders the same
-      // assembled context for the user to carry by hand.
-      if (multiCharacterPrefill !== undefined) {
-        if (typeof multiCharacterPrefill !== 'boolean') {
-          return badRequest('multiCharacterPrefill must be a boolean');
-        }
-        updateData.multiCharacterPrefill = multiCharacterPrefill;
-      }
-
-      // The fallback chain's named understudy. Two rules, both structural:
-      // a profile cannot understudy itself (the chain would be one attempt
-      // wearing two names), and a Courier profile cannot stand in for anyone
-      // (its "transport" is a human carrying the request by hand, which is no
-      // kind of automatic failover). Everything else — a target with no API
-      // key yet, a cycle A->B/B->A — is legal; chains never recurse, so a
-      // cycle simply stops.
-      if (fallbackProfileId !== undefined) {
-        if (fallbackProfileId === null || fallbackProfileId === '') {
-          updateData.fallbackProfileId = null;
-        } else if (typeof fallbackProfileId !== 'string') {
-          return badRequest('fallbackProfileId must be a profile id or null');
-        } else if (fallbackProfileId === id) {
-          return badRequest('A connection profile cannot be its own fallback');
-        } else {
-          const target = await repos.connections.findById(fallbackProfileId);
-          if (!target || target.userId !== user.id) {
-            return badRequest('Fallback profile not found');
-          }
-          if (target.transport === 'courier') {
-            return badRequest(
-              'A Courier profile cannot be used as a fallback — its requests are carried by hand, so it cannot stand in automatically'
-            );
-          }
-          updateData.fallbackProfileId = fallbackProfileId;
-        }
-      }
-
-      if (allowTierFallback !== undefined) {
-        if (typeof allowTierFallback !== 'boolean') {
-          return badRequest('allowTierFallback must be a boolean');
-        }
-        updateData.allowTierFallback = allowTierFallback;
-      }
-
-      if (modelClass !== undefined) {
-        if (modelClass === null || modelClass === '') {
-          updateData.modelClass = null;
-        } else {
-          if (!isValidModelClassName(modelClass)) {
-            return badRequest(`Invalid model class: ${modelClass}`);
-          }
-          updateData.modelClass = modelClass;
-        }
-      }
-
-      if (maxContext !== undefined) {
-        if (maxContext === null || maxContext === '' || maxContext === 0) {
-          updateData.maxContext = null;
-        } else {
-          const parsed = typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext;
-          if (!Number.isInteger(parsed) || parsed <= 0) {
-            return badRequest('maxContext must be a positive integer');
-          }
-          updateData.maxContext = parsed;
-        }
-      }
-
-      if (sortIndex !== undefined) {
-        if (typeof sortIndex !== 'number' || !Number.isInteger(sortIndex) || sortIndex < 0) {
-          return badRequest('sortIndex must be a non-negative integer');
-        }
-        updateData.sortIndex = sortIndex;
-      }
-
-      if (supportsImageUpload !== undefined && !isCourier) {
-        if (typeof supportsImageUpload !== 'boolean') {
-          return badRequest('supportsImageUpload must be a boolean');
-        }
-        updateData.supportsImageUpload = supportsImageUpload;
-      }
-
-      if (maxImagesPerRequest !== undefined) {
-        const parsedMaxImages = parseMaxImagesPerRequest(maxImagesPerRequest);
-        if (parsedMaxImages === null) {
-          return badRequest(`maxImagesPerRequest must be a whole number from 1 to ${MAX_IMAGES_PER_REQUEST_CEILING}`);
-        }
-        updateData.maxImagesPerRequest = parsedMaxImages;
-      }
-
-      if (toolResultVerbatimTurns !== undefined) {
-        const parsedVerbatimTurns = parseToolResultVerbatimTurns(toolResultVerbatimTurns);
-        if (parsedVerbatimTurns === null) {
-          return badRequest(`toolResultVerbatimTurns must be a whole number from 0 to ${TOOL_RESULT_VERBATIM_TURNS_CEILING}`);
-        }
-        updateData.toolResultVerbatimTurns = parsedVerbatimTurns;
-      }
-
-      // Update the profile
-      const updatedProfile = await repos.connections.update(id, updateData);
-
-      if (!updatedProfile) {
-        return serverError('Failed to update connection profile');
-      }
-
-      const enrichedProfile = await enrichProfile(updatedProfile, repos);
-
-      logger.info('[Connection Profiles v1] Profile updated', { profileId: id });
-
-      return NextResponse.json({ profile: enrichedProfile });
-    } catch (error) {
-      logger.error('[Connection Profiles v1] Error updating profile', { profileId: id }, error instanceof Error ? error : undefined);
+    const updatedProfile = await repos.connections.update(id, applyCourierForcing(patch, isCourier));
+    if (!updatedProfile) {
       return serverError('Failed to update connection profile');
     }
+
+    const enrichedProfile = await enrichProfile(updatedProfile, repos);
+
+    logger.info('[Connection Profiles v1] Profile updated', { profileId: id, keys: Object.keys(patch) });
+
+    return successResponse({ profile: enrichedProfile });
   }
 );
 

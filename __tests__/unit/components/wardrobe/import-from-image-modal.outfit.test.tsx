@@ -74,7 +74,7 @@ function routeFetch(analysis: unknown = ANALYSIS, options: { failUploads?: boole
   let nextId = 0
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    if (url.endsWith('/api/v1/wardrobe/analyze-image')) {
+    if (url.endsWith('/api/v1/wardrobe?action=analyze-image')) {
       if (init?.method !== 'POST') return jsonResponse(VISION_PROFILES)
       analyzeBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
       return jsonResponse(analysis)

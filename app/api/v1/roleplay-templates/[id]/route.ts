@@ -8,33 +8,17 @@
  * Roleplay templates provide formatting instructions that are prepended to character system prompts.
  */
 
-import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { createContextParamsHandler } from '@/lib/api/middleware';
 import { successResponse, errorResponse, notFound, forbidden } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
 import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
-import { TemplateDelimiterSchema, UnmarkedStyleSchema, StrictRenderingPatternSchema, StrictDialogueDetectionSchema } from '@/lib/schemas/template.types';
+import { RoleplayTemplateUpdateSchema } from '@/lib/roleplay-templates/template-input';
 
 // ============================================================================
 // Schemas
 // ============================================================================
 
-const updateRoleplayTemplateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  description: z.string().max(500).optional().nullable(),
-  systemPrompt: z.string().min(1).optional(),
-  tags: z.array(z.uuid()).optional(),
-  delimiters: z.array(TemplateDelimiterSchema).optional(),
-  renderingPatterns: z.array(StrictRenderingPatternSchema).optional(),
-  dialogueDetection: StrictDialogueDetectionSchema.optional().nullable(),
-  // null = narration is unmarked plain prose
-  narrationDelimiters: z.union([
-    z.string().min(1),
-    z.tuple([z.string().min(1), z.string().min(1)]),
-  ]).nullable().optional(),
-  unmarkedStyle: UnmarkedStyleSchema.nullable().optional(),
-  markdownAsterisks: z.boolean().optional(),
-});
+// The PUT body is `RoleplayTemplateUpdateSchema` (`lib/roleplay-templates/template-input.ts`).
 
 // ============================================================================
 // GET Handler
@@ -98,7 +82,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
     }
 
     const body = await req.json();
-    const validatedData = updateRoleplayTemplateSchema.parse(body);
+    const validatedData = RoleplayTemplateUpdateSchema.parse(body);
 
     // If name is being updated, check for duplicates
     if (validatedData.name && validatedData.name !== existingTemplate.name) {
@@ -113,13 +97,8 @@ export const PUT = createContextParamsHandler<{ id: string }>(
       }
     }
 
-    // Trim string values
-    const updateData: Record<string, unknown> = {
-      ...validatedData,
-      name: validatedData.name?.trim(),
-      description: validatedData.description?.trim(),
-      systemPrompt: validatedData.systemPrompt?.trim(),
-    };
+    // The schema trims; `undefined` keys are absent, never written.
+    const updateData: Record<string, unknown> = { ...validatedData };
 
     // Regenerate rendering patterns whenever any authoring field they derive from
     // changed and no explicit patterns were sent. Every field falls back to the

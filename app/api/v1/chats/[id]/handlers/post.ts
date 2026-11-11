@@ -5,6 +5,9 @@
  */
 
 import { handleOpenChat } from '../actions/open';
+import { handleVisit } from '../actions/visit';
+import { TURN_ACTION_KINDS } from '../actions/turn';
+import { deprecatedPath } from '@/lib/api/deprecated-path';
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { notFound } from '@/lib/api/responses';
@@ -85,13 +88,22 @@ export async function handlePost(
   }
 
   return dispatchAction(req, {
+    visit: () => handleVisit(chatId, chat, ctx),
     'regenerate-title': () => handleRegenerateTitle(chatId, chat, ctx),
     'rebuild-summary': () => handleRebuildSummary(chatId, chat, ctx),
     'add-tag': () => handleAddTag(req, chatId, ctx),
     'remove-tag': () => handleRemoveTag(req, chatId, ctx),
     impersonate: () => handleImpersonate(req, chatId, chat, ctx),
     'set-active-speaker': () => handleSetActiveSpeaker(req, chatId, chat, ctx),
-    turn: () => handleTurnAction(req, chatId, chat, ctx),
+    ...Object.fromEntries(
+      Object.entries(TURN_ACTION_KINDS).map(([action, kind]) => [action, () => handleTurnAction(req, chatId, chat, ctx, kind)]),
+    ),
+    // Deprecated: the action named in the body. Answers for one release.
+    turn: deprecatedPath(
+      'POST /api/v1/chats/[id]?action=turn',
+      '/api/v1/chats/[id]?action=turn-nudge|turn-queue|turn-dequeue|turn-query|turn-skip-user',
+      () => handleTurnAction(req, chatId, chat, ctx),
+    ),
     'stop-turn': () => handleStopTurn(chatId, chat, ctx),
     'raise-hand': () => handleRaiseHand(req, chatId),
     'add-participant': () => handleAddParticipantAction(req, chatId, chat, ctx),

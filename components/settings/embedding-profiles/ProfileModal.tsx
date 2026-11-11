@@ -91,10 +91,13 @@ export function ProfileModal({
       const payload = {
         name: form.formData.name,
         provider: form.formData.provider,
-        apiKeyId: form.formData.apiKeyId || undefined,
-        baseUrl: form.formData.baseUrl || undefined,
+        // `null`, never `undefined`: JSON drops an undefined key, and an
+        // absent key on an edit means "leave it" — so a cleared field must be
+        // sent as null to be cleared.
+        apiKeyId: form.formData.apiKeyId || null,
+        baseUrl: form.formData.baseUrl || null,
         modelName,
-        dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions) : undefined,
+        dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions, 10) : null,
         isDefault: form.formData.isDefault,
       }
 

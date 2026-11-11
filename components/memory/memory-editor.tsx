@@ -7,7 +7,7 @@ import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { showSuccessToast } from '@/lib/toast'
+import { showSuccessToast, showWarningToast } from '@/lib/toast'
 import { FormActions } from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { importanceBand } from '@/lib/memory/scoring/importance'
@@ -79,7 +79,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
         ? `/api/v1/memories/${memory.id}`
         : `/api/v1/memories`
 
-      const result = await fetchJson<{ memory?: { id: string }; action?: string }>(url, {
+      const result = await fetchJson<{ memory?: { id: string }; action?: string; warning?: string }>(url, {
         method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -99,6 +99,10 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
       showSuccessToast(
         isEditing ? 'Memory updated' : merged ? 'Already on file — the existing memory has been reinforced instead' : 'Memory created'
       )
+      // Saved, but something asked for did not take (a refused keystone mark).
+      if (result.data?.warning) {
+        showWarningToast(result.data.warning)
+      }
       onSave()
     })
   }

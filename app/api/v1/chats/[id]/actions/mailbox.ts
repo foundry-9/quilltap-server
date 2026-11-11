@@ -9,8 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { badRequest, notFound, forbidden } from '@/lib/api/responses';
-import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import { badRequest, notFound, forbidden, successResponse } from '@/lib/api/responses';
+import { logger } from '@/lib/logger';
 import { listMailbox } from '@/lib/post-office/mailbox';
 import { findOperatorPlayedParticipant } from '../participant-auth';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -44,10 +44,15 @@ export async function handleGetMailbox(
     return badRequest('That character is archived; rehydrate it to continue.');
   }
 
-  const { mountPointId } = await ensureCharacterVault(character);
+  // A read never provisions: a character with no vault yet has no letters.
+  const mountPointId = character.characterDocumentMountPointId ?? null;
+  if (!mountPointId) {
+    logger.debug('[Chats v1] Mailbox read for a character with no vault; no letters', { chatId, characterId });
+    return successResponse({ letters: [] });
+  }
   const letters = await listMailbox(mountPointId);
 
-  return NextResponse.json({
+  return successResponse({
     letters: letters.map((l) => ({ path: l.path, from: l.from, sentAt: l.sentAt })),
   });
 }

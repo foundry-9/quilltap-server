@@ -59,6 +59,8 @@ The Tool Settings modal displays:
 - Tools may be organized by category (Built-in, Memory, Search, Project, Files, etc.)
 - Plugins tools appear under their plugin names
 
+**Every tool a character is offered now has its place on the list.** Until lately a handful were offered to characters without ever presenting themselves here — a guest who dines nightly but never signs the book — and so could not be switched off. They are now listed like the rest: **Read Conversation**, **Annotate Conversation** and **Remove Annotation** (the Scriptorium's transcript and its margin notes), **List Terminals** and **Read Terminal** (Ariel's read-only view of the chat's terminals), and **Open Document**, **Close Document** and **Focus Document** (the Document Mode panes, available, like the other document tools, only when the chat's project has linked stores). The only tools still absent are those no character is ever offered: the Console's own instruments, two internal mechanisms, and a few document tools held in reserve.
+
 ## Enabling and Disabling Tools
 
 **To enable a tool:**

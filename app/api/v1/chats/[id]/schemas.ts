@@ -10,9 +10,14 @@ import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
 import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
 import { ChatTurnModeSchema } from '@/lib/schemas/storyteller.types';
 
+/**
+ * `PUT` `{ chat }`. `contextSummary` is not here: a summary
+ * written straight through skipped its anchor and turn bookkeeping — rebuild
+ * one with `?action=rebuild-summary`. A `title` sent without
+ * `isManuallyRenamed` is taken as a manual rename (`withManualRenameFlag`).
+ */
 export const updateChatSchema = z.object({
   title: z.string().optional(),
-  contextSummary: z.string().optional(),
   roleplayTemplateId: z.string().nullish(),
   isPaused: z.boolean().optional(),
   storytellerInviteFilter: z.boolean().optional(), // Storyteller: weight bid invitations by talkativeness
@@ -35,6 +40,19 @@ export const updateChatSchema = z.object({
   activeTerminalSessionId: z.uuid().nullish(),
   rightPaneVerticalSplit: z.number().min(20).max(80).optional(),
 });
+
+/**
+ * A rename from the operator pins the title against the automatic retitle
+ * (`applyAutoTitle` refuses a manually renamed chat). The rename dialog says
+ * so explicitly, and may turn automatic titles back on with `false`; any other
+ * caller that sends only a title is renaming by hand.
+ */
+export function withManualRenameFlag<T extends { title?: string; isManuallyRenamed?: boolean }>(patch: T): T {
+  if (patch.title !== undefined && patch.isManuallyRenamed === undefined) {
+    return { ...patch, isManuallyRenamed: true };
+  }
+  return patch;
+}
 
 /**
  * `POST ?action=scenario` — change the scene mid-conversation.

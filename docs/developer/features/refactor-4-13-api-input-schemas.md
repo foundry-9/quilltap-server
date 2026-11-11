@@ -1,6 +1,6 @@
 # Refactor 4.13 — API inputs: schemas instead of hand validation, and the remaining standard departures
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #165, #166, #167 and #168.
+**Status:** Implemented (2026-11-11) on `claude/laughing-dirac-nvol84`; decisions recorded in §7. Written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #165, #166, #167 and #168.
 
 Counts and line numbers are the audit's (a scripted sweep of all 158 `route.ts` files, 27.5k lines, and 108 handler modules) and will drift. Re-run the sweeps before starting.
 
@@ -107,3 +107,12 @@ Work it in this order: GETs that write (move the write to the POST that follows,
 2. The default chat GET's side effects (re-embed enqueue, terminal reconcile, mail announcements): keep as documented (proposed), or move to a `?action=visit` POST the Salon calls on mount?
 3. Stricter profile validation on create: any external client (CLI, scripts) known to send the lenient forms?
 4. The tool picker: should every character-offered tool be listed and switchable (proposed), or are some deliberately hidden?
+
+### Decisions taken (2026-11-11)
+
+1. **Moved**, for consistency, with the old paths answering until 4.14 through `deprecatedPath` (`lib/api/deprecated-path.ts`). Exceptions: `files/proxy/[...key]` and `chats/[id]/qtap-target` are byte routes whose page-CSP exemption in `next.config.js` can only match a path (and proxy URLs are stored in content); `search-replace` already dispatched on `?action=`. Body discriminators moved too (`turn-*`, `tasks-queue-start|stop`, `move-to-tier|copy-to-tier`); `turn-query` stays a POST because it stores a redrawn rotation.
+2. **Moved**: GETs don't write. The chat GET's housekeeping is `POST ?action=visit`; the mailbox reads the vault pointer; the processor starts at boot rather than on the jobs poll.
+3. No external clients known; the stricter validation stands.
+4. Every tool a character is offered is listed. `doc_move_folder` and the four `doc_*_blob` tools stay unlisted because no surface offers them.
+
+Not done here: per-job-type payload schemas for `POST /system/jobs`, the §6 `req.json()` sweep test, and the mechanical `createContextHandler` / response-helper sweeps.

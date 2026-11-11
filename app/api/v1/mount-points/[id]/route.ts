@@ -184,6 +184,8 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
 
       return successResponse({ mountPoint: updated });
     } catch (error) {
+      // A validation failure is the middleware's 400, not a 500 (#166).
+      if (error instanceof z.ZodError) throw error;
       logger.error('[Mount Points v1] Error updating mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to update mount point');
     }
@@ -846,17 +848,19 @@ async function handleWriteFile(
   }
 }
 
+/** `?action=delete-file` body: the store-relative path to remove. */
+const DeleteFileSchema = z.object({
+  path: z.string({ error: 'Missing "path" field' }).trim().min(1, 'Missing "path" field'),
+});
+
 async function handleDeleteFile(
   req: NextRequest,
   { user }: RequestContext,
   { id }: { id: string }
 ): Promise<NextResponse> {
+  // A malformed body is the middleware's 400.
+  const { path: relativePath } = DeleteFileSchema.parse(await req.json().catch(() => ({})));
   try {
-    const body = await req.json().catch(() => ({}));
-    const relativePath = typeof body?.path === 'string' ? body.path.trim() : '';
-    if (!relativePath) {
-      return badRequest('Missing "path" field');
-    }
     const result = await deleteFile({ mountPointId: id, relativePath });
     logger.info('[Mount Points v1] Deleted file', {
       ...result,

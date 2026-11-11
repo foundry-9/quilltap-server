@@ -13,6 +13,8 @@ import { z } from 'zod';
  */
 export interface ErrorResponse {
   error: string;
+  /** Human-readable summary, when `error` is only a category. */
+  message?: string;
   details?: unknown;
 }
 
@@ -111,10 +113,23 @@ export function validationError(
   return NextResponse.json(
     {
       error: 'Validation error',
+      message: summarizeZodIssues(zodError),
       details: zodError.issues,
     },
     { status: 400 }
   );
+}
+
+/**
+ * The issues as one readable line — `name: Name is required; maxContext: …` —
+ * so a form can show what was wrong rather than "Validation error". A message
+ * a schema spelled for the user (`.min(1, 'Name is required')`) arrives as
+ * written.
+ */
+export function summarizeZodIssues(zodError: z.ZodError): string {
+  return zodError.issues
+    .map((issue) => (issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
+    .join('; ');
 }
 
 /**

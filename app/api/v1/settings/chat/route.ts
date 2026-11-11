@@ -7,12 +7,12 @@
 
 import { NextRequest } from 'next/server'
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
+import { z } from 'zod'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
-import { TagStyleMapSchema, ThemePreferenceSchema, UUIDSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, CoreWhisperSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, WardrobeImageSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
-import { type AvatarDisplayMode } from '@/lib/schemas/types'
-import { getErrorMessage } from '@/lib/error-utils'
+import { ChatSettingsSchema } from '@/lib/schemas/settings.types'
+import { patchSchemaOf } from '@/lib/schemas/patch-schema'
+import { defaultChatSettings } from '@/lib/database/repositories/chat-settings.repository'
 
 /**
  * The keys a PUT may no longer carry: `dangerousContentSettings`,
@@ -33,381 +33,81 @@ function findRetiredConciergeKeys(body: unknown): string[] {
 }
 
 /**
- * Every top-level key a PUT may carry. Anything else is refused with a 400
- * rather than silently dropped: a field the client thinks it saved but the
- * route never wrote (Core whisper's toggles, for one) reads back unchanged and
- * looks like a UI that won't take the click.
+ * The write-side shape of a PUT: every operator-settable key of
+ * `ChatSettingsSchema`, each optional and none defaulted (`patchSchemaOf`, bug
+ * 244), and **strict** — an unknown key is a 400 rather than silently dropped:
+ * a field the client thinks it saved but the route never wrote (Core whisper's
+ * toggles, for one) reads back unchanged and looks like a UI that won't take
+ * the click.
+ *
+ * The repository replaces each top-level key wholesale and the clients send
+ * whole nested objects, so a nested object validates against its full
+ * sub-schema (its own field defaults fill what a client left out — the same
+ * values a read would have filled in). Server-owned and non-operator columns
+ * (`id`, `userId`, timestamps, `defaultTimestampConfig`, `timezone`) are not
+ * writable here.
  */
-const ACCEPTED_KEYS = new Set([
-  'avatarDisplayMode', 'avatarDisplayStyle', 'tagStyles', 'cheapLLMSettings',
-  'imageDescriptionProfileId', 'themePreference', 'defaultRoleplayTemplateId',
-  'sidebarWidth', 'tokenDisplaySettings', 'memoryCascadePreferences',
-  'llmLoggingSettings', 'autoDetectRng', 'customTools', 'customToolTriggers',
-  'customToolIntervention', 'agentModeSettings', 'storyBackgroundsSettings',
-  'contextCompressionSettings', 'conciergeSettings', 'autoLockSettings',
-  'compositionModeDefault', 'composerSpellcheck', 'composerEmoji',
-  'composerUnicode', 'composerSlashCommands', 'impersonationVoiceMode',
-  'textReplacementsEnabled', 'autonomousRoomSettings', 'thinkingDisplay',
-  'autoScrollOnResponseComplete', 'answerConfirmationSettings',
-  'smartTypographySettings', 'wardrobeImageSettings', 'coreWhisper',
-])
+export const ChatSettingsPutSchema = patchSchemaOf(
+  ChatSettingsSchema.omit({
+    id: true,
+    userId: true,
+    createdAt: true,
+    updatedAt: true,
+    defaultTimestampConfig: true,
+    timezone: true,
+  }).extend({
+    // The entity column is a free string for old rows; a write names one of
+    // the two styles the Salon draws.
+    avatarDisplayStyle: z.enum(['CIRCULAR', 'RECTANGULAR']),
+  }),
+).strict()
 
-function findUnknownKeys(body: unknown): string[] {
-  if (!body || typeof body !== 'object') return []
-  return Object.keys(body as Record<string, unknown>).filter((key) => !ACCEPTED_KEYS.has(key))
-}
+export type ChatSettingsPut = z.infer<typeof ChatSettingsPutSchema>
 
 /**
- * Validate and update chat settings
+ * Write a validated patch. The only check the schema cannot make is that a
+ * named roleplay template exists.
  */
-async function updateChatSettings(
-  userId: string,
-  repos: any,
-  avatarDisplayMode?: string,
-  avatarDisplayStyle?: string,
-  tagStyles?: unknown,
-  cheapLLMSettings?: unknown,
-  imageDescriptionProfileId?: string | null,
-  themePreference?: unknown,
-  defaultRoleplayTemplateId?: string | null,
-  sidebarWidth?: number,
-  tokenDisplaySettings?: unknown,
-  memoryCascadePreferences?: unknown,
-  llmLoggingSettings?: unknown,
-  autoDetectRng?: boolean,
-  customTools?: boolean,
-  customToolTriggers?: boolean,
-  customToolIntervention?: boolean,
-  agentModeSettings?: unknown,
-  storyBackgroundsSettings?: unknown,
-  contextCompressionSettings?: unknown,
-  conciergeSettings?: unknown,
-  autoLockSettings?: unknown,
-  compositionModeDefault?: boolean,
-  composerSpellcheck?: boolean,
-  composerEmoji?: boolean,
-  composerUnicode?: boolean,
-  composerSlashCommands?: boolean,
-  impersonationVoiceMode?: unknown,
-  textReplacementsEnabled?: boolean,
-  autonomousRoomSettings?: unknown,
-  thinkingDisplay?: unknown,
-  autoScrollOnResponseComplete?: boolean,
-  answerConfirmationSettings?: unknown,
-  smartTypographySettings?: unknown,
-  wardrobeImageSettings?: unknown,
-  coreWhisper?: unknown,
-) {
-  // Validate avatarDisplayMode if provided
-  if (avatarDisplayMode) {
-    const validModes: AvatarDisplayMode[] = ['ALWAYS', 'GROUP_ONLY', 'NEVER']
-    if (!validModes.includes(avatarDisplayMode as AvatarDisplayMode)) {
-      throw new Error('Invalid avatar display mode')
+async function updateChatSettings(userId: string, repos: RequestContext['repos'], patch: ChatSettingsPut) {
+  if (patch.defaultRoleplayTemplateId) {
+    const template = await repos.roleplayTemplates.findById(patch.defaultRoleplayTemplateId)
+    if (!template) {
+      logger.warn('[Settings v1] Rejected an unknown default roleplay template', {
+        userId,
+        templateId: patch.defaultRoleplayTemplateId,
+      })
+      return badRequest('Invalid roleplay template ID')
     }
   }
 
-  // Validate avatarDisplayStyle if provided
-  if (avatarDisplayStyle) {
-    const validStyles = ['CIRCULAR', 'RECTANGULAR']
-    if (!validStyles.includes(avatarDisplayStyle)) {
-      throw new Error('Invalid avatar display style')
-    }
-  }
-
-  const updateData: Record<string, any> = {}
-  if (avatarDisplayMode) updateData.avatarDisplayMode = avatarDisplayMode
-  if (avatarDisplayStyle) updateData.avatarDisplayStyle = avatarDisplayStyle
-  if (typeof tagStyles !== 'undefined') {
-    const validatedTagStyles = TagStyleMapSchema.parse(tagStyles)
-    updateData.tagStyles = validatedTagStyles
-  }
-  if (typeof cheapLLMSettings !== 'undefined') {
-    // Validate cheapLLMSettings structure
-    const validStrategies = ['USER_DEFINED', 'PROVIDER_CHEAPEST', 'LOCAL_FIRST']
-    const validEmbeddingProviders = ['SAME_PROVIDER', 'OPENAI', 'LOCAL']
-
-    if (cheapLLMSettings && typeof cheapLLMSettings === 'object') {
-      const settings = cheapLLMSettings as any
-      if (settings.strategy && !validStrategies.includes(settings.strategy)) {
-        throw new Error('Invalid cheap LLM strategy')
-      }
-      if (settings.embeddingProvider && !validEmbeddingProviders.includes(settings.embeddingProvider)) {
-        throw new Error('Invalid embedding provider')
-      }
-      if (
-        typeof settings.allowCheapFallback !== 'undefined' &&
-        typeof settings.allowCheapFallback !== 'boolean'
-      ) {
-        throw new Error('allowCheapFallback must be a boolean')
-      }
-      if (
-        settings.outfitSelectionProfileId != null &&
-        !UUIDSchema.safeParse(settings.outfitSelectionProfileId).success
-      ) {
-        throw new Error('outfitSelectionProfileId must be a profile id or null')
-      }
-    }
-    updateData.cheapLLMSettings = cheapLLMSettings
-  }
-  if (typeof imageDescriptionProfileId !== 'undefined') {
-    updateData.imageDescriptionProfileId = imageDescriptionProfileId
-  }
-  if (typeof themePreference !== 'undefined') {
-    const validatedThemePreference = ThemePreferenceSchema.parse(themePreference)
-    updateData.themePreference = validatedThemePreference
-  }
-  if (typeof defaultRoleplayTemplateId !== 'undefined') {
-    // Validate template exists if setting a non-null value
-    if (defaultRoleplayTemplateId !== null) {
-      const template = await repos.roleplayTemplates.findById(defaultRoleplayTemplateId)
-      if (!template) {
-        throw new Error('Invalid roleplay template ID')
-      }
-    }
-    updateData.defaultRoleplayTemplateId = defaultRoleplayTemplateId
-  }
-  if (typeof sidebarWidth !== 'undefined') {
-    // Validate sidebar width range (256-512)
-    if (typeof sidebarWidth !== 'number' || sidebarWidth < 256 || sidebarWidth > 512) {
-      throw new Error('Invalid sidebar width (must be 256-512)')
-    }
-    updateData.sidebarWidth = sidebarWidth
-  }
-  if (typeof tokenDisplaySettings !== 'undefined') {
-    const validatedTokenDisplaySettings = TokenDisplaySettingsSchema.parse(tokenDisplaySettings)
-    updateData.tokenDisplaySettings = validatedTokenDisplaySettings
-  }
-  if (typeof memoryCascadePreferences !== 'undefined') {
-    // Validate memoryCascadePreferences structure
-    const validActions = ['DELETE_MEMORIES', 'KEEP_MEMORIES', 'ASK_EVERY_TIME', 'REGENERATE_MEMORIES']
-    if (memoryCascadePreferences && typeof memoryCascadePreferences === 'object') {
-      const prefs = memoryCascadePreferences as any
-      if (prefs.onMessageDelete && !validActions.includes(prefs.onMessageDelete)) {
-        throw new Error('Invalid memory cascade action for onMessageDelete')
-      }
-      if (prefs.onSwipeRegenerate && !validActions.includes(prefs.onSwipeRegenerate)) {
-        throw new Error('Invalid memory cascade action for onSwipeRegenerate')
-      }
-    }
-    updateData.memoryCascadePreferences = memoryCascadePreferences
-  }
-  if (typeof llmLoggingSettings !== 'undefined') {
-    const validatedLLMLoggingSettings = LLMLoggingSettingsSchema.parse(llmLoggingSettings)
-    updateData.llmLoggingSettings = validatedLLMLoggingSettings
-  }
-  if (typeof autoDetectRng !== 'undefined') {
-    if (typeof autoDetectRng !== 'boolean') {
-      throw new Error('Invalid autoDetectRng value (must be boolean)')
-    }
-    updateData.autoDetectRng = autoDetectRng
-  }
-  if (typeof customTools !== 'undefined') {
-    if (typeof customTools !== 'boolean') {
-      throw new Error('Invalid customTools value (must be boolean)')
-    }
-    updateData.customTools = customTools
-  }
-  if (typeof customToolTriggers !== 'undefined') {
-    if (typeof customToolTriggers !== 'boolean') {
-      throw new Error('Invalid customToolTriggers value (must be boolean)')
-    }
-    updateData.customToolTriggers = customToolTriggers
-  }
-  if (typeof customToolIntervention !== 'undefined') {
-    if (typeof customToolIntervention !== 'boolean') {
-      throw new Error('Invalid customToolIntervention value (must be boolean)')
-    }
-    updateData.customToolIntervention = customToolIntervention
-  }
-  if (typeof agentModeSettings !== 'undefined') {
-    const validatedAgentModeSettings = AgentModeSettingsSchema.parse(agentModeSettings)
-    updateData.agentModeSettings = validatedAgentModeSettings
-  }
-  if (typeof storyBackgroundsSettings !== 'undefined') {
-    const validatedStoryBackgroundsSettings = StoryBackgroundsSettingsSchema.parse(storyBackgroundsSettings)
-    updateData.storyBackgroundsSettings = validatedStoryBackgroundsSettings
-  }
-  if (typeof wardrobeImageSettings !== 'undefined') {
-    updateData.wardrobeImageSettings = WardrobeImageSettingsSchema.parse(wardrobeImageSettings)
-    logger.debug('[Settings v1] Wardrobe image settings updated', {
-      imageProfileId: updateData.wardrobeImageSettings.imageProfileId ?? null,
-      generateFromTools: updateData.wardrobeImageSettings.generateFromTools,
-    })
-  }
-  if (typeof coreWhisper !== 'undefined') {
-    updateData.coreWhisper = CoreWhisperSettingsSchema.parse(coreWhisper)
-    logger.debug('[Settings v1] Core whisper settings updated', { coreWhisper: updateData.coreWhisper })
-  }
-  if (typeof contextCompressionSettings !== 'undefined') {
-    // Basic validation - ensure it's an object with expected structure
-    if (contextCompressionSettings && typeof contextCompressionSettings === 'object') {
-      const settings = contextCompressionSettings as any
-      if (typeof settings.enabled !== 'boolean') {
-        throw new Error('Invalid contextCompressionSettings.enabled (must be boolean)')
-      }
-      if (typeof settings.windowSize !== 'number' || settings.windowSize < 1) {
-        throw new Error('Invalid contextCompressionSettings.windowSize (must be positive number)')
-      }
-    }
-    updateData.contextCompressionSettings = contextCompressionSettings
-  }
-  if (typeof conciergeSettings !== 'undefined') {
-    const parsed = ConciergeSettingsSchema.safeParse(conciergeSettings)
-    if (!parsed.success) {
-      throw new Error(`Invalid conciergeSettings: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)
-    }
+  logger.debug('[Settings v1] Updating chat settings', { userId, keys: Object.keys(patch) })
+  if (patch.conciergeSettings) {
     logger.debug('[Settings v1] Updating Concierge settings', {
       userId,
-      enabled: parsed.data.enabled,
-      preScreen: parsed.data.preScreen.enabled,
-      summaryClassification: parsed.data.preScreen.summaryClassification,
+      enabled: patch.conciergeSettings.enabled,
+      preScreen: patch.conciergeSettings.preScreen.enabled,
+      summaryClassification: patch.conciergeSettings.preScreen.summaryClassification,
     })
-    updateData.conciergeSettings = parsed.data
-  }
-  if (typeof autoLockSettings !== 'undefined') {
-    const validatedAutoLockSettings = AutoLockSettingsSchema.parse(autoLockSettings)
-    updateData.autoLockSettings = validatedAutoLockSettings
-  }
-  if (typeof compositionModeDefault !== 'undefined') {
-    if (typeof compositionModeDefault !== 'boolean') {
-      throw new Error('Invalid compositionModeDefault value (must be boolean)')
-    }
-    updateData.compositionModeDefault = compositionModeDefault
-  }
-  if (typeof composerSpellcheck !== 'undefined') {
-    if (typeof composerSpellcheck !== 'boolean') {
-      throw new Error('Invalid composerSpellcheck value (must be boolean)')
-    }
-    updateData.composerSpellcheck = composerSpellcheck
-  }
-  if (typeof composerEmoji !== 'undefined') {
-    if (typeof composerEmoji !== 'boolean') {
-      throw new Error('Invalid composerEmoji value (must be boolean)')
-    }
-    updateData.composerEmoji = composerEmoji
-  }
-  if (typeof composerUnicode !== 'undefined') {
-    if (typeof composerUnicode !== 'boolean') {
-      throw new Error('Invalid composerUnicode value (must be boolean)')
-    }
-    updateData.composerUnicode = composerUnicode
-  }
-  if (typeof composerSlashCommands !== 'undefined') {
-    if (typeof composerSlashCommands !== 'boolean') {
-      throw new Error('Invalid composerSlashCommands value (must be boolean)')
-    }
-    updateData.composerSlashCommands = composerSlashCommands
-  }
-  if (typeof impersonationVoiceMode !== 'undefined') {
-    const parsedMode = ImpersonationVoiceModeEnum.safeParse(impersonationVoiceMode)
-    if (!parsedMode.success) {
-      throw new Error(`Invalid impersonationVoiceMode value (must be one of ${ImpersonationVoiceModeEnum.options.join(', ')})`)
-    }
-    updateData.impersonationVoiceMode = parsedMode.data
-    logger.debug('[Settings v1] impersonationVoiceMode updated', { userId, impersonationVoiceMode: parsedMode.data })
-  }
-  if (typeof textReplacementsEnabled !== 'undefined') {
-    if (typeof textReplacementsEnabled !== 'boolean') {
-      throw new Error('Invalid textReplacementsEnabled value (must be boolean)')
-    }
-    updateData.textReplacementsEnabled = textReplacementsEnabled
-  }
-  if (typeof autoScrollOnResponseComplete !== 'undefined') {
-    if (typeof autoScrollOnResponseComplete !== 'boolean') {
-      throw new Error('Invalid autoScrollOnResponseComplete value (must be boolean)')
-    }
-    updateData.autoScrollOnResponseComplete = autoScrollOnResponseComplete
-    logger.debug('[Settings v1] autoScrollOnResponseComplete updated', { userId, autoScrollOnResponseComplete })
-  }
-  if (typeof autonomousRoomSettings !== 'undefined') {
-    // 4.6 Private Character Rooms — shape validation kept lightweight here;
-    // the Zod schema on chat_settings ultimately governs the persisted shape.
-    if (autonomousRoomSettings !== null && typeof autonomousRoomSettings !== 'object') {
-      throw new Error('Invalid autonomousRoomSettings value (must be an object)')
-    }
-    const validVisibilities = ['owner_only', 'household', 'open']
-    const validPolicies = ['always_refuse', 'opt_in_per_room']
-    if (autonomousRoomSettings && typeof autonomousRoomSettings === 'object') {
-      const s = autonomousRoomSettings as Record<string, unknown>
-      if (
-        typeof s.dailyTokenBudget !== 'undefined'
-        && s.dailyTokenBudget !== null
-        && (typeof s.dailyTokenBudget !== 'number' || !Number.isFinite(s.dailyTokenBudget) || s.dailyTokenBudget <= 0)
-      ) {
-        throw new Error('Invalid dailyTokenBudget (must be positive number or null)')
-      }
-      if (
-        typeof s.defaultFreshnessWindowMs !== 'undefined'
-        && (typeof s.defaultFreshnessWindowMs !== 'number' || !Number.isFinite(s.defaultFreshnessWindowMs) || s.defaultFreshnessWindowMs <= 0)
-      ) {
-        throw new Error('Invalid defaultFreshnessWindowMs (must be positive number)')
-      }
-      if (typeof s.visibilityDefault !== 'undefined' && !validVisibilities.includes(s.visibilityDefault as string)) {
-        throw new Error('Invalid visibilityDefault')
-      }
-      if (typeof s.destructiveToolPolicy !== 'undefined' && !validPolicies.includes(s.destructiveToolPolicy as string)) {
-        throw new Error('Invalid destructiveToolPolicy')
-      }
-    }
-    updateData.autonomousRoomSettings = autonomousRoomSettings
-  }
-  if (typeof thinkingDisplay !== 'undefined') {
-    // Thinking / reasoning display defaults. Lightweight shape check; the Zod
-    // schema on chat_settings governs the persisted shape. DISPLAY ONLY.
-    if (thinkingDisplay !== null && typeof thinkingDisplay !== 'object') {
-      throw new Error('Invalid thinkingDisplay value (must be an object)')
-    }
-    if (thinkingDisplay && typeof thinkingDisplay === 'object') {
-      const s = thinkingDisplay as Record<string, unknown>
-      if (typeof s.defaultVisible !== 'undefined' && typeof s.defaultVisible !== 'boolean') {
-        throw new Error('Invalid thinkingDisplay.defaultVisible (must be boolean)')
-      }
-      if (typeof s.defaultCollapsed !== 'undefined' && typeof s.defaultCollapsed !== 'boolean') {
-        throw new Error('Invalid thinkingDisplay.defaultCollapsed (must be boolean)')
-      }
-    }
-    updateData.thinkingDisplay = thinkingDisplay
-  }
-  if (typeof answerConfirmationSettings !== 'undefined') {
-    // Answer confirmation global default. Zod governs the persisted shape.
-    const validated = AnswerConfirmationSettingsSchema.parse(answerConfirmationSettings)
-    updateData.answerConfirmationSettings = validated
-  }
-  if (typeof smartTypographySettings !== 'undefined') {
-    // Smart typography (render-time quotes + type-time dashes/ellipsis).
-    // Zod governs the persisted shape.
-    const validated = SmartTypographySettingsSchema.parse(smartTypographySettings)
-    updateData.smartTypographySettings = validated
   }
 
-  return repos.chatSettings.updateForUser(userId, updateData)
+  return successResponse(await repos.chatSettings.updateForUser(userId, patch))
 }
 
 /**
  * GET /api/v1/settings/chat
- * Get chat settings for the authenticated user
- * Returns default settings if none exist
+ * Get chat settings for the authenticated user. A user who has never saved
+ * any gets the defaults — answered, not written: the row is created by the
+ * first PUT (`updateForUser`), so a read never writes.
  */
 export const GET = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
-
-    let chatSettings = await repos.chatSettings.findByUserId(user.id)
-
-    // If no settings exist, create default settings via update
-    if (!chatSettings) {
-      chatSettings = await repos.chatSettings.updateForUser(user.id, {
-        avatarDisplayMode: 'ALWAYS',
-        avatarDisplayStyle: 'CIRCULAR',
-        tagStyles: {},
-        themePreference: {
-          activeThemeId: null,
-          colorMode: 'system',
-          showNavThemeSelector: false,
-        },
-      })
+    const chatSettings = await repos.chatSettings.findByUserId(user.id)
+    if (chatSettings) {
+      return successResponse(chatSettings)
     }
 
-    return successResponse(chatSettings)
+    logger.debug('[Settings v1] No chat settings saved yet; answering defaults', { userId: user.id })
+    return successResponse(defaultChatSettings(user.id))
   } catch (error) {
     logger.error('[Settings v1] Error fetching chat settings', { userId: user.id }, error instanceof Error ? error : undefined)
     return serverError('Failed to fetch chat settings')
@@ -419,109 +119,20 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
  * Update chat settings for the authenticated user
  */
 export const PUT = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
-  try {
-    const body = await req.json()
+  const body = await req.json()
 
-    // Settings the Concierge's own object replaced (phase 4). A stale client
-    // must fail loudly rather than write a column nothing reads any more.
-    const retired = findRetiredConciergeKeys(body)
-    if (retired.length > 0) {
-      logger.warn('[Settings v1] Rejected a PUT carrying retired Concierge settings', { userId: user.id, retired })
-      return badRequest(
-        `Invalid settings: ${retired.join(', ')} ${retired.length === 1 ? 'was' : 'were'} replaced by conciergeSettings`,
-      )
-    }
-
-    const unknown = findUnknownKeys(body)
-    if (unknown.length > 0) {
-      logger.warn('[Settings v1] Rejected a PUT carrying unknown settings keys', { userId: user.id, unknown })
-      return badRequest(`Invalid settings: unknown key${unknown.length === 1 ? '' : 's'} ${unknown.join(', ')}`)
-    }
-
-    const {
-      avatarDisplayMode,
-      avatarDisplayStyle,
-      tagStyles,
-      cheapLLMSettings,
-      imageDescriptionProfileId,
-      themePreference,
-      defaultRoleplayTemplateId,
-      sidebarWidth,
-      tokenDisplaySettings,
-      memoryCascadePreferences,
-      llmLoggingSettings,
-      autoDetectRng,
-      customTools,
-      customToolTriggers,
-      customToolIntervention,
-      agentModeSettings,
-      storyBackgroundsSettings,
-      contextCompressionSettings,
-      conciergeSettings,
-      autoLockSettings,
-      compositionModeDefault,
-      composerSpellcheck,
-      composerEmoji,
-      composerUnicode,
-      composerSlashCommands,
-      impersonationVoiceMode,
-      textReplacementsEnabled,
-      autonomousRoomSettings,
-      thinkingDisplay,
-      autoScrollOnResponseComplete,
-      answerConfirmationSettings,
-      smartTypographySettings,
-      wardrobeImageSettings,
-      coreWhisper,
-    } = body
-
-    const chatSettings = await updateChatSettings(
-      user.id,
-      repos,
-      avatarDisplayMode,
-      avatarDisplayStyle,
-      tagStyles,
-      cheapLLMSettings,
-      imageDescriptionProfileId,
-      themePreference,
-      defaultRoleplayTemplateId,
-      sidebarWidth,
-      tokenDisplaySettings,
-      memoryCascadePreferences,
-      llmLoggingSettings,
-      autoDetectRng,
-      customTools,
-      customToolTriggers,
-      customToolIntervention,
-      agentModeSettings,
-      storyBackgroundsSettings,
-      contextCompressionSettings,
-      conciergeSettings,
-      autoLockSettings,
-      compositionModeDefault,
-      composerSpellcheck,
-      composerEmoji,
-      composerUnicode,
-      composerSlashCommands,
-      impersonationVoiceMode,
-      textReplacementsEnabled,
-      autonomousRoomSettings,
-      thinkingDisplay,
-      autoScrollOnResponseComplete,
-      answerConfirmationSettings,
-      smartTypographySettings,
-      wardrobeImageSettings,
-      coreWhisper,
+  // Settings the Concierge's own object replaced (phase 4). A stale client
+  // must fail loudly rather than write a column nothing reads any more.
+  const retired = findRetiredConciergeKeys(body)
+  if (retired.length > 0) {
+    logger.warn('[Settings v1] Rejected a PUT carrying retired Concierge settings', { userId: user.id, retired })
+    return badRequest(
+      `Invalid settings: ${retired.join(', ')} ${retired.length === 1 ? 'was' : 'were'} replaced by conciergeSettings`,
     )
-
-    return successResponse(chatSettings)
-  } catch (error) {
-    logger.error('[Settings v1] Error updating chat settings', { userId: user.id }, error instanceof Error ? error : undefined)
-    const errorMessage = getErrorMessage(error, 'Failed to update chat settings')
-    const status = errorMessage.includes('Invalid') ? 400 : 500
-    if (status === 400) {
-      return badRequest(errorMessage)
-    }
-    return serverError(errorMessage)
   }
+
+  // A malformed body throws a ZodError, which the middleware answers with a
+  // 400 and the issues (#166). Anything else is a real 500.
+  const patch = ChatSettingsPutSchema.parse(body)
+  return updateChatSettings(user.id, repos, patch)
 })

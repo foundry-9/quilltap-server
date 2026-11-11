@@ -70,6 +70,12 @@ function profileKey(groupBy: ProfileGroupBy): { keyExpr: string; notNullClause: 
  * Extends AbstractDedicatedDbRepository (over AbstractBaseRepository, not the
  * user-owned base) since LLMLog schema uses Date type for timestamps.
  */
+/** The three listings that page in SQL; `countByScope` totals the same rows. */
+export type LLMLogListScope =
+  | { kind: 'recent' }
+  | { kind: 'standalone' }
+  | { kind: 'type'; type: LLMLogType };
+
 export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   constructor() {
     super('llm_logs', LLMLogSchema, {
@@ -205,33 +211,56 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   }
 
   /**
-   * Find standalone logs (no messageId, chatId, or characterId - for standalone image gen)
-   * @param userId The user ID
-   * @param limit Maximum number of logs to return (default: 50)
-   * @returns Promise<LLMLog[]> Array of standalone logs
+   * The filter behind each paged listing. One builder, so a page and its
+   * total can never disagree about which rows they count (#167).
    */
-  async findStandalone(userId: string, limit: number = 50): Promise<LLMLog[]> {
-    return this.safeQuery(
-      async () => {
-        const filter: TypedQueryFilter<LLMLog> = {
+  private scopeFilter(userId: string, scope: LLMLogListScope): TypedQueryFilter<LLMLog> {
+    switch (scope.kind) {
+      case 'standalone':
+        return {
           userId,
           messageId: { $eq: null },
           chatId: { $eq: null },
           characterId: { $eq: null },
         };
+      case 'type':
+        return { userId, type: scope.type };
+      case 'recent':
+        return { userId };
+    }
+  }
 
+  /** One page of a listing, newest first, paged in SQL. */
+  private async findPage(
+    userId: string,
+    scope: LLMLogListScope,
+    limit: number,
+    offset: number,
+    errorMessage: string
+  ): Promise<LLMLog[]> {
+    return this.safeQuery(
+      async () => {
         const options: QueryOptions = {
           sort: { createdAt: -1 },
           limit,
+          ...(offset > 0 ? { skip: offset } : {}),
         };
-
-        const logs = await this.findByFilter(filter, options);
-        return logs;
+        return this.findByFilter(this.scopeFilter(userId, scope), options);
       },
-      'Error finding standalone LLM logs',
-      { userId, limit },
+      errorMessage,
+      { userId, scope: scope.kind, limit, offset },
       []
     );
+  }
+
+  /**
+   * Find standalone logs (no messageId, chatId, or characterId - for standalone image gen)
+   * @param userId The user ID
+   * @param limit Maximum number of logs to return (default: 50)
+   * @param offset Rows to skip, newest first (default: 0)
+   */
+  async findStandalone(userId: string, limit: number = 50, offset: number = 0): Promise<LLMLog[]> {
+    return this.findPage(userId, { kind: 'standalone' }, limit, offset, 'Error finding standalone LLM logs');
   }
 
   /**
@@ -239,47 +268,25 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
    * @param userId The user ID
    * @param type The log type
    * @param limit Maximum number of logs to return (default: 50)
-   * @returns Promise<LLMLog[]> Array of logs of the specified type
+   * @param offset Rows to skip, newest first (default: 0)
    */
-  async findByType(userId: string, type: LLMLogType, limit: number = 50): Promise<LLMLog[]> {
-    return this.safeQuery(
-      async () => {
-        const filter: TypedQueryFilter<LLMLog> = { userId, type };
-        const options: QueryOptions = {
-          sort: { createdAt: -1 },
-          limit,
-        };
-
-        const logs = await this.findByFilter(filter, options);
-        return logs;
-      },
-      'Error finding LLM logs by type',
-      { userId, type, limit },
-      []
-    );
+  async findByType(userId: string, type: LLMLogType, limit: number = 50, offset: number = 0): Promise<LLMLog[]> {
+    return this.findPage(userId, { kind: 'type', type }, limit, offset, 'Error finding LLM logs by type');
   }
 
   /**
-   * Find recent logs for a user
+   * Find recent logs for a user, newest first
    * @param userId The user ID
    * @param limit Maximum number of logs to return (default: 20)
-   * @returns Promise<LLMLog[]> Array of recent logs, sorted by creation date (newest first)
+   * @param offset Rows to skip, newest first (default: 0)
    */
-  async findRecent(userId: string, limit: number = 20): Promise<LLMLog[]> {
-    return this.safeQuery(
-      async () => {
-        const options: QueryOptions = {
-          sort: { createdAt: -1 },
-          limit,
-        };
+  async findRecent(userId: string, limit: number = 20, offset: number = 0): Promise<LLMLog[]> {
+    return this.findPage(userId, { kind: 'recent' }, limit, offset, 'Error finding recent LLM logs');
+  }
 
-        const logs = await this.findByFilter({ userId }, options);
-        return logs;
-      },
-      'Error finding recent LLM logs',
-      { userId, limit },
-      []
-    );
+  /** How many rows the matching paged listing holds in all. */
+  async countByScope(userId: string, scope: LLMLogListScope): Promise<number> {
+    return this.count(this.scopeFilter(userId, scope));
   }
 
   /**
