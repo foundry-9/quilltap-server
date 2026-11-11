@@ -1,9 +1,6 @@
 'use client'
 
-import { useId, useRef } from 'react'
-import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { WizardModal } from '@/components/ui/WizardModal'
 import { useRestoreData } from './hooks/useRestoreData'
 import { RestoreItemSelector } from './RestoreItemSelector'
 import { RestoreProgress } from './RestoreProgress'
@@ -40,18 +37,12 @@ export function RestoreDialog({
 }: RestoreDialogProps) {
   const { state, fileInputRef, actions } = useRestoreData(isOpen)
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-
   const handleClose = () => {
     if (!state.restoring && !state.uploading) {
       actions.resetDialog()
       onClose()
     }
   }
-
-  useEscapeKey(handleClose, isOpen)
 
   if (!isOpen) return null
 
@@ -181,156 +172,76 @@ export function RestoreDialog({
     </div>
   )
 
+  const busy = state.restoring || state.uploading
+
   return (
-    <>
-      {/* Overlay */}
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
-        onClick={handleClose}
-        disabled={state.restoring || state.uploading}
-        aria-label="Close dialog"
-        type="button"
-      />
-
-      {/* Dialog */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto w-[90vw] max-w-2xl">
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog w-full max-h-[90vh] flex flex-col"
-        >
-          {/* Header */}
-          <div className="qt-dialog-header flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 id={titleId} className="qt-dialog-title">Restore Backup</h2>
-                <p className="qt-dialog-description mt-0.5">
-                  Step {getStepNumber()} of 4
-                </p>
-              </div>
-              <button
-                onClick={handleClose}
-                disabled={state.restoring || state.uploading}
-                className="qt-text-secondary hover:text-foreground disabled:opacity-50"
-                aria-label="Close dialog"
-              >
-                <Icon name="close" className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-
-          {/* Body */}
-          <div className="qt-dialog-body overflow-y-auto flex-1">
-            {state.step === 'source' && (
-              <RestoreItemSelector
-                selectedFile={state.selectedFile}
-                error={state.error}
-                onFileSelect={actions.handleFileSelect}
-              />
-            )}
-            {state.step === 'preview' && (
-              <RestoreProgress
-                restoring={false}
-                restoreSummary={null}
-                error={state.error}
-                preview={state.preview}
-                loadingPreview={state.loadingPreview}
-              />
-            )}
-            {state.step === 'mode' && renderModeSelection()}
-            {state.step === 'progress' && (
-              <RestoreProgress
-                restoring={state.restoring}
-                restoreSummary={state.restoreSummary}
-                error={state.error}
-              />
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="qt-dialog-footer flex gap-3 justify-between flex-shrink-0">
-            {state.step === 'progress' && state.restoreSummary ? (
-              <button
-                onClick={handleCloseAfterRestore}
-                className="flex-1 qt-button qt-button-primary"
-              >
-                Close
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={actions.handleBack}
-                  disabled={state.step === 'source' || state.restoring || state.uploading}
-                  className="qt-button qt-button-secondary"
-                >
-                  Back
-                </button>
-
-                {state.step === 'progress' ? null : (
-                  <>
-                    <button
-                      onClick={handleClose}
-                      disabled={state.restoring || state.uploading}
-                      className="qt-button qt-button-secondary"
-                    >
-                      Cancel
-                    </button>
-
-                    {state.step === 'mode' ? (
-                      <button
-                        onClick={actions.handleStartRestore}
-                        disabled={
-                          state.restoring ||
-                          (state.restoreMode === 'replace' &&
-                            !state.confirmReplace)
-                        }
-                        className="qt-button qt-button-primary"
-                      >
-                        {state.restoring ? (
-                          <>
-                            <LoadingSpinner size={4} />
-                            Restoring...
-                          </>
-                        ) : (
-                          'Start Restore'
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={actions.handleNext}
-                        disabled={
-                          state.uploading ||
-                          state.loadingPreview ||
-                          (state.step === 'source' && !state.selectedFile)
-                        }
-                        className="qt-button qt-button-primary"
-                      >
-                        {state.uploading ? (
-                          <>
-                            <LoadingSpinner size={4} />
-                            Uploading... {state.uploadProgress}%
-                          </>
-                        ) : state.loadingPreview ? (
-                          <>
-                            <LoadingSpinner size={4} />
-                            Analyzing...
-                          </>
-                        ) : (
-                          'Next'
-                        )}
-                      </button>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </>
+    <WizardModal
+      onClose={handleClose}
+      title="Restore Backup"
+      step={{ current: getStepNumber(), total: 4 }}
+      busy={busy}
+      done={state.step === 'progress' && !!state.restoreSummary}
+      onDone={handleCloseAfterRestore}
+      onBack={actions.handleBack}
+      backDisabled={state.step === 'source'}
+      hideActions={state.step === 'progress'}
+      primary={
+        state.step === 'mode'
+          ? {
+              onClick: actions.handleStartRestore,
+              disabled: state.restoring || (state.restoreMode === 'replace' && !state.confirmReplace),
+              label: state.restoring ? (
+                <>
+                  <LoadingSpinner size={4} />
+                  Restoring...
+                </>
+              ) : (
+                'Start Restore'
+              ),
+            }
+          : {
+              onClick: actions.handleNext,
+              disabled: state.uploading || state.loadingPreview || (state.step === 'source' && !state.selectedFile),
+              label: state.uploading ? (
+                <>
+                  <LoadingSpinner size={4} />
+                  Uploading... {state.uploadProgress}%
+                </>
+              ) : state.loadingPreview ? (
+                <>
+                  <LoadingSpinner size={4} />
+                  Analyzing...
+                </>
+              ) : (
+                'Next'
+              ),
+            }
+      }
+    >
+      {state.step === 'source' && (
+        <RestoreItemSelector
+          selectedFile={state.selectedFile}
+          error={state.error}
+          onFileSelect={actions.handleFileSelect}
+        />
+      )}
+      {state.step === 'preview' && (
+        <RestoreProgress
+          restoring={false}
+          restoreSummary={null}
+          error={state.error}
+          preview={state.preview}
+          loadingPreview={state.loadingPreview}
+        />
+      )}
+      {state.step === 'mode' && renderModeSelection()}
+      {state.step === 'progress' && (
+        <RestoreProgress
+          restoring={state.restoring}
+          restoreSummary={state.restoreSummary}
+          error={state.error}
+        />
+      )}
+    </WizardModal>
   )
 }

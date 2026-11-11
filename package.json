@@ -30,7 +30,7 @@
     "generate:storybook-css": "node scripts/generate-storybook-css.mjs",
     "generate:emoji-index": "tsx scripts/generate-emoji-index.ts",
     "generate:unicode-index": "tsx scripts/generate-unicode-index.ts",
-    "lint": "eslint . && node scripts/check-quilltap-spelling.mjs && node scripts/check-qt-classes.mjs && node scripts/check-css-vars.mjs && node scripts/check-storybook-css.mjs",
+    "lint": "eslint . && node scripts/check-quilltap-spelling.mjs && node scripts/check-qt-classes.mjs && node scripts/check-css-vars.mjs && node scripts/check-modal-shell.mjs && node scripts/check-storybook-css.mjs",
     "lint:fix": "eslint . --fix && node scripts/check-quilltap-spelling.mjs",
     "oneoff:cleanup-old-files-v1.6": "tsx scripts/cleanup-old-files.ts",
     "oneoff:theme-convert-v2.8": "tsx scripts/convert-theme-to-module.ts",

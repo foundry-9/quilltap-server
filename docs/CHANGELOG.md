@@ -4,6 +4,19 @@
 
 ### 4.13-dev
 
+#### Refactor: one modal shell (#171)
+
+- Every dialog is now `BaseModal` (`components/ui/BaseModal.tsx`) or `WizardModal` (`components/ui/WizardModal.tsx`, the tools wizards). About 55 hand-built overlays in 60 files moved onto it; net about 1,000 lines removed.
+- Fixes #171: in Add Character, a click inside Summon from Lore closed Add Character. Only the topmost dialog answers Escape or an outside click now; the stack is the DOM order of open modals, so a child dialog is never "outside" its parent. Add Character's close-reset also clears `isSummonOpen`.
+- 32 dialogs that were not portaled painted under the workspace toolbar; all now portal to `document.body`. The file preview (no Escape, no focus trap, controls in the top row) and the Photos detail dialog (no focus trap; its Escape listener fired while its tab was hidden) were the worst cases.
+- `BaseModal` gained `role` (`alertdialog`), `subtitle`, `headerActions`, `busy` (Escape, backdrop and the close button do nothing), `headerless` with `<ModalTitle>`, `bodyClassName` / `footerClassName`, `data-testid`, and sizes `5xl`–`7xl` and `wide`. The overlay carries `p-4`. A modal stands down while its kept-alive workspace tab is hidden.
+- One z-index for all dialogs (`qt-dialog-overlay`, z-60). Per-dialog overrides from z-40 to z-[101] are gone. The exception is `lib/alert.tsx`'s alert and prompt, raised to z-[100] so a confirm asked from inside the `ImageModal` lightbox paints above it.
+- Backdrop click closes by default. Dialogs holding typed input opt out (`closeOnClickOutside={false}`): memory editor, progression editor, roleplay template editor, New Chat, both Generate Image dialogs, Create Group, Summon from Lore (Aurora), and the Scriptorium create, edit and deconvert dialogs. Several confirm and viewer dialogs that previously ignored the backdrop now close on it.
+- New busy guards where a close mid-operation was possible: delete data, image generation, image upload, archive, rehydrate, external prompt, the Workbench save conflict.
+- `lib/alert.tsx` no longer mounts a second backdrop root; the file preview's action bar no longer handles Escape itself, so Escape over its delete confirmation closes only the confirmation.
+- Accessible names added where missing: file preview (its `aria-labelledby` pointed at nothing), the prompt dialog's input, the photo gallery's zoom and close buttons. `MemoryCascadeDialog` used an undefined `qt-dialog-content` class and drew no box; it now has the standard dialog surface.
+- New lint gate `scripts/check-modal-shell.mjs` in `npm run lint`: a `.tsx` file under `app/` or `components/` with `qt-dialog-overlay` or `fixed inset-0` must use the shell or be on its allowlist (the shell, the two startup gates, the three lightboxes).
+
 #### Refactor: client server-state (phase 5: drafts and stale answers)
 
 - The chat's LLM tool settings dialog reset unsaved toggles on every chat refetch (an effect keyed on array identity). Its two lists are `useDraft`s over the chat's values, so a refetch with the same values keeps the toggles; Cancel discards them. Its tool list is a query (`queryKeys.tools.availability`).

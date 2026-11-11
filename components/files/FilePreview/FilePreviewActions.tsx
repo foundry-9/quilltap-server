@@ -25,13 +25,11 @@ export default function FilePreviewActions({
   const hasPrevious = currentIndex > 0
   const hasNext = currentIndex < totalFiles - 1
 
-  // Keyboard navigation
+  // Arrow-key navigation. Escape belongs to the dialog shell (BaseModal), which
+  // answers it only when the preview is the topmost dialog.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       switch (e.key) {
-        case 'Escape':
-          onClose()
-          break
         case 'ArrowLeft':
           if (hasPrevious) onPrevious()
           break
@@ -40,7 +38,7 @@ export default function FilePreviewActions({
           break
       }
     },
-    [onClose, onPrevious, onNext, hasPrevious, hasNext]
+    [onPrevious, onNext, hasPrevious, hasNext]
   )
 
   useEffect(() => {

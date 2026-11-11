@@ -57,68 +57,37 @@ describe('Alert Dialog Utility', () => {
   })
 
   // Helper function to extract buttons from dialog render call
-  const getButtons = (): any[] => {
-    const calls = (mockRoot.render as jest.Mock).mock.calls
-    // Find the dialog render call (second call, first is overlay)
-    if (calls.length >= 2) {
-      const dialogCall = calls[1]
-      if (dialogCall && dialogCall[0] && dialogCall[0].props && dialogCall[0].props.children) {
-        // Extract button elements from the rendered content
-        return dialogCall[0].props.children.slice(-1)[0]?.props?.children || []
-      }
-    }
-    return []
-  }
-
   describe('showAlert', () => {
-    it('should create containers and append them to document body', () => {
+    // The dialog is a BaseModal, which draws its own backdrop, so one
+    // container and one root carry the whole thing.
+    it('mounts one container on the body and renders the dialog into it', () => {
       showAlert('Test message')
 
-      // Now we create 2 containers (overlay + dialog)
-      expect(document.body.children.length).toBe(2)
-      expect(document.body.children[0]).toBeInstanceOf(HTMLDivElement)
-      expect(document.body.children[1]).toBeInstanceOf(HTMLDivElement)
+      expect(document.body.children.length).toBe(1)
+      expect((document.body.children[0] as HTMLElement).getAttribute('role')).toBe('alert-dialog-content')
+      expect(createRoot).toHaveBeenCalledTimes(1)
+      expect(mockRoot.render).toHaveBeenCalledTimes(1)
     })
 
-    it('should create roots and render overlay and dialog', () => {
-      const message = 'Test alert message'
+    it.each([
+      ['empty', ''],
+      ['long', 'A'.repeat(1000)],
+      ['special-character', '<script>alert("xss")</script>\n\t"quotes"'],
+    ])('passes %s messages through to the dialog', (_label, message) => {
       showAlert(message)
 
-      // Now we create 2 roots (overlay + dialog)
-      expect(createRoot).toHaveBeenCalledTimes(2)
-      expect(mockRoot.render).toHaveBeenCalledTimes(2)
+      expect(mockRoot.render).toHaveBeenCalledTimes(1)
+      expect(mockAlertDialog).toHaveBeenCalledWith(expect.objectContaining({ message }))
     })
 
-    it('should create and append two containers', () => {
-      showAlert('Test message')
+    it('unmounts and removes its container when the dialog closes', async () => {
+      const result = showAlert('Bye', ['OK'])
+      const { onClose } = mockAlertDialog.mock.calls[0][0]
+      onClose('OK')
 
-      // Verify structure
-      expect(document.body.children.length).toBe(2)
-      expect((document.body.children[0] as HTMLElement).getAttribute('role')).toBe('alert-dialog-overlay')
-      expect((document.body.children[1] as HTMLElement).getAttribute('role')).toBe('alert-dialog-content')
-    })
-
-    it('should handle empty messages', () => {
-      showAlert('')
-
-      expect(mockRoot.render).toHaveBeenCalledTimes(2)
-      expect(document.body.children.length).toBe(2)
-    })
-
-    it('should handle long messages', () => {
-      const longMessage = 'A'.repeat(1000)
-      showAlert(longMessage)
-
-      expect(mockRoot.render).toHaveBeenCalledTimes(2)
-      expect(document.body.children.length).toBe(2)
-    })
-
-    it('should handle special characters in messages', () => {
-      const specialMessage = '<script>alert("xss")</script>\n\t"quotes"'
-      showAlert(specialMessage)
-
-      expect(mockRoot.render).toHaveBeenCalledTimes(2)
-      expect(document.body.children.length).toBe(2)
+      await expect(result).resolves.toBe('OK')
+      expect(mockRoot.unmount).toHaveBeenCalledTimes(1)
+      expect(document.body.children.length).toBe(0)
     })
   })
 })
