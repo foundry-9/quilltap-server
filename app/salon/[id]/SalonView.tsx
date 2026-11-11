@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useRealtimeFallbackPoll, useRealtimeRefetchInterval, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import { StorytellerBoard, withBid, type StorytellerRoundResponse } from '@/components/chat/StorytellerBoard'
 import type { StorytellerStreamEvent } from './hooks/useSSEStreaming'
@@ -16,13 +15,10 @@ import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
-import { useChatContext } from '@/components/providers/chat-context'
+import { ChatActionsProvider, type ChatActions } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
-import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
-import { MESSAGE_REVEAL_EVENT, takePendingMessageReveal, type MessageRevealRequest } from '@/lib/chat/message-navigation'
-import { findConversationMatches, type ConversationSearchSource } from '@/lib/chat/conversation-search'
 import {
   getConciergeProvenance,
   getConciergeReason,
@@ -37,9 +33,6 @@ import {
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { ConciergeTooltipBody } from '@/components/chat/ConciergeMark'
-import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
-import { staffAvatar } from '@/lib/chat/staff-display-names'
-import { avatarAt, indexAvatarTimeline, type SalonAvatarSegment } from '@/lib/chat/salon-avatar'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -84,10 +77,10 @@ import { groupToolMessagesIntoAssistants } from './group-tool-messages'
 import { retryUncensoredTurnUrl, type ConciergeRetryHandlers } from './concierge-retry'
 import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
+import { useSalonAvatars } from './hooks/useSalonAvatars'
+import { useMessageReveal } from './hooks/useMessageReveal'
 import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
-import { buildRenderItems, insertGreenRoomItems, renderItemMessageIds, type RenderItem } from './announcement-render-items'
-import { useSearchHighlight } from './hooks/useSearchHighlight'
-import { getAnnouncementSenderName } from './components/system-message-labels'
+import { buildRenderItems, insertGreenRoomItems } from './announcement-render-items'
 import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
@@ -117,13 +110,6 @@ import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
 import { ChatHeaderBreadcrumb } from '@/components/chat/ChatHeaderBreadcrumb'
 import { ReplyAnnouncer } from '@/components/chat/ReplyAnnouncer'
-
-/** Fallback re-read cadence for the avatar watch, while the socket is down. */
-const AVATAR_POLL_INTERVAL_MS = 5000
-/** How long the avatar watch waits before giving up on a generation. */
-const AVATAR_WATCH_TIMEOUT_MS = 2 * 60_000
-/** Fallback re-read cadence for the avatar timeline, while the socket is down. */
-const AVATAR_TIMELINE_FALLBACK_POLL_MS = 30_000
 
 export interface SalonViewProps {
   /** The conversation this Salon tab renders. */
@@ -190,7 +176,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
 
   // Quick-hide "Salon Images" withholds the backdrop along with every other
   // image in the room; the URL is still tracked so it returns on un-hide.
-  const { shouldHideByIds, hiddenTagIds, hideSalonImages } = useQuickHide()
+  const { hideSalonImages } = useQuickHide()
   const visibleStoryBackgroundUrl = hideSalonImages ? null : storyBackgroundUrl
 
   // In the workspace, surrender the story background to the single arbitrated
@@ -312,93 +298,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     const name = participant?.character?.name || 'Unknown'
     setWhisperTarget({ participantId, name })
   }, [chat?.participants])
-
-  // --- Avatar generation watch ---
-  // After triggering avatar generation, watch for the participant's avatar URL
-  // to change and then refresh the chat.
-  //
-  // The live signal is a `chats:<id>` hint, published when the
-  // CHARACTER_AVATAR_GENERATION job's writes commit — normally the very first
-  // check finds the new avatar. The interval is the fallback for a dropped
-  // socket, and the expiry keeps a failed generation from watching forever.
-  const [avatarWatch, setAvatarWatch] = useState<
-    { characterId: string; snapshotAvatarUrl: string | null; expiresAt: number } | null
-  >(null)
-
-  const checkAvatarUpdate = useCallback(async (watch: {
-    characterId: string
-    snapshotAvatarUrl: string | null
-  }) => {
-    try {
-      const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
-      if (!res.ok) return
-      const data = await res.json()
-      // Check the enriched participant avatar URL — this changes when avatarOverrides update
-      const updatedParticipant = data.chat?.participants?.find(
-        (p: { character?: { id?: string } }) => p.character?.id === watch.characterId
-      )
-      const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
-      if (newAvatarUrl && newAvatarUrl !== watch.snapshotAvatarUrl) {
-        setAvatarWatch(null)
-        await fetchChat()
-        showInfoToast('Avatar updated')
-      }
-    } catch {
-      // Silently keep watching.
-    }
-  }, [id, fetchChat])
-
-  const startAvatarPoll = useCallback((characterId: string) => {
-    // Snapshot the current avatar URL for this character to detect when it changes
-    const participant = chat?.participants.find(p => p.character?.id === characterId)
-    setAvatarWatch({
-      characterId,
-      snapshotAvatarUrl: participant?.character?.avatarUrl ?? null,
-      expiresAt: Date.now() + AVATAR_WATCH_TIMEOUT_MS,
-    })
-  }, [chat?.participants])
-
-  useRealtimeTopic('chats', () => {
-    if (avatarWatch) void checkAvatarUpdate(avatarWatch)
-  }, id)
-
-  useRealtimeFallbackPoll(
-    () => { if (avatarWatch) void checkAvatarUpdate(avatarWatch) },
-    AVATAR_POLL_INTERVAL_MS,
-    avatarWatch != null,
-  )
-
-  useEffect(() => {
-    if (!avatarWatch) return
-    const timer = setTimeout(
-      () => setAvatarWatch(null),
-      Math.max(0, avatarWatch.expiresAt - Date.now()),
-    )
-    return () => clearTimeout(timer)
-  }, [avatarWatch])
-
-  const handleRegenerateAvatar = useCallback(async (participantId: string) => {
-    const participant = chat?.participants.find(p => p.id === participantId)
-    const characterId = participant?.character?.id
-    const name = participant?.character?.name || 'Unknown'
-    if (!characterId) return
-    try {
-      const res = await fetch(`/api/v1/chats/${id}?action=regenerate-avatar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId }),
-      })
-      if (res.ok) {
-        showInfoToast(`Avatar regeneration queued for ${name}`)
-        startAvatarPoll(characterId)
-      } else {
-        const data = await res.json().catch(() => ({}))
-        showErrorToast(data.error || 'Failed to regenerate avatar')
-      }
-    } catch {
-      showErrorToast('Failed to regenerate avatar')
-    }
-  }, [chat?.participants, id, startAvatarPoll])
 
   const userParticipantIdSet = useMemo(() => {
     if (!chat?.participants) return new Set<string>()
@@ -1034,13 +933,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds, chat?.cycleOrderParticipantIds])
 
 
-  // --- Quick-hide logic ---
-  const chatContext = useChatContext()
-  const quickHideActive = hiddenTagIds.size > 0
-  const isCurrentChat = chatContext.chatId === id
-  const chatTags = chatContext.tags.map(tag => tag.id)
-  const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
-  const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
   // --- Initialization effects ---
   useEffect(() => {
@@ -1351,38 +1243,13 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     return () => setRightContent(null)
   }, [id, chatSettings?.tokenDisplaySettings?.showChatTotals, chatSettings?.llmLoggingSettings?.enabled, setRightContent, messages.length, toggleInspector, inspectorOpen])
 
-  // The chat's avatar timeline: each bubble shows its author as they looked
-  // when it was written (lib/chat/salon-avatar.ts). Rides the `chats`
-  // realtime topic; the interval is only the offline fallback.
-  const avatarTimelineRefetch = useRealtimeRefetchInterval(AVATAR_TIMELINE_FALLBACK_POLL_MS)
-  const avatarTimelineQuery = useQuery({
-    queryKey: queryKeys.chats.avatarTimeline(id),
-    queryFn: ({ signal }) =>
-      apiFetch<{ data: SalonAvatarSegment[] }>(`/api/v1/chats/${id}?action=avatar-timeline`, { signal }),
-    enabled: Boolean(id),
-    refetchInterval: avatarTimelineRefetch,
+  // --- Avatars: the regenerate-avatar watch and each bubble's face ---
+  const { handleRegenerateAvatar, getMessageAvatar } = useSalonAvatars({
+    chatId: id,
+    chat,
+    fetchChat,
+    participants: participantsWithImpersonation,
   })
-  const avatarTimelineIndex = useMemo(
-    () => indexAvatarTimeline(avatarTimelineQuery.data?.data ?? []),
-    [avatarTimelineQuery.data],
-  )
-
-  /**
-   * A character's face at the moment of one message. When the timeline
-   * answers, its URL stands alone (the enriched `defaultImage` would win in
-   * `<Avatar>` and carries the chat's current look). Otherwise the
-   * character's current avatar, exactly as before the timeline existed.
-   */
-  const faceAt = useCallback((
-    character: { id: string; avatarUrl?: string | null; defaultImage?: CharacterData['defaultImage'] | null },
-    message: Message,
-  ): { avatarUrl: string | null; defaultImage: CharacterData['defaultImage'] | null } => {
-    const answer = avatarAt(avatarTimelineIndex, character.id, message.createdAt, character.avatarUrl ?? null)
-    if (answer.from === 'character-current') {
-      return { avatarUrl: character.avatarUrl ?? null, defaultImage: character.defaultImage ?? null }
-    }
-    return { avatarUrl: answer.url, defaultImage: null }
-  }, [avatarTimelineIndex])
 
   // --- UI helpers ---
   const shouldShowAvatars = useCallback(() => {
@@ -1405,255 +1272,22 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     return participantsWithImpersonation.getFirstCharacter() ?? undefined
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
-  const getMessageAvatar = useCallback((message: Message) => {
-    // Ad-hoc announcement bubble (Insert Announcement composer button), or a
-    // Pascal outcome its tool has the rolling character announce
-    // (`announceAsCharacter`). customAnnouncer takes precedence over
-    // systemSender: when both are set, the named speaker wears the bubble.
-    if (message.customAnnouncer) {
-      if (message.customAnnouncer.kind === 'character' && message.customAnnouncer.characterId) {
-        const charId = message.customAnnouncer.characterId
-        const participant = chat?.participants.find(p => p.character?.id === charId)
-        if (participant?.character) {
-          return {
-            name: participant.character.name,
-            characterId: participant.character.id,
-            title: participant.character.title ?? null,
-            ...faceAt(participant.character, message),
-          }
-        }
-        const offScene = chat?.offSceneCharacters?.find(c => c.id === charId)
-        if (offScene) {
-          return {
-            name: offScene.name,
-            title: offScene.title,
-            avatarUrl: offScene.avatarUrl,
-            defaultImage: null,
-          }
-        }
-        // Character no longer exists; render with a placeholder name so the
-        // bubble is still legible.
-        return { name: 'Off-scene character', title: null, avatarUrl: null, defaultImage: null }
-      }
-      if (message.customAnnouncer.kind === 'custom') {
-        return {
-          name: message.customAnnouncer.displayName || 'Announcement',
-          title: null,
-          avatarUrl: null,
-          defaultImage: null,
-        }
-      }
-    }
-    // Staff-authored messages render with the member's own name and face,
-    // from the one table in lib/chat/staff-display-names.ts. Carina (null
-    // there) and an unrecognised sender fall through.
-    const staff = staffAvatar(message.systemSender)
-    if (staff) {
-      return { ...staff, defaultImage: null }
-    }
-    // Carina (inline LLM queries): a reference answer renders with the ANSWERER
-    // character's own avatar — there is no dedicated Carina staff avatar. Resolve
-    // them via carinaMeta.answererId among participants, then off-scene cards,
-    // then a legible placeholder.
-    if (message.systemSender === 'carina') {
-      const answererId = message.carinaMeta?.answererId
-      // The Brahma Console pseudocharacter has no character record; render its
-      // reference card with the dedicated Brahma name + avatar.
-      if (answererId === BRAHMA_CARINA_ANSWERER_ID) {
-        return { name: 'Brahma', title: null, avatarUrl: '/images/avatars/brahma-avatar.webp', defaultImage: null }
-      }
-      if (answererId) {
-        const participant = chat?.participants.find(p => p.character?.id === answererId)
-        if (participant?.character) {
-          return {
-            name: participant.character.name,
-            characterId: participant.character.id,
-            title: participant.character.title ?? null,
-            ...faceAt(participant.character, message),
-          }
-        }
-        const offScene = chat?.offSceneCharacters?.find(c => c.id === answererId)
-        if (offScene) {
-          return { name: offScene.name, title: offScene.title, avatarUrl: offScene.avatarUrl, defaultImage: null }
-        }
-      }
-      return { name: 'Carina', title: null, avatarUrl: null, defaultImage: null }
-    }
-    if (message.participantId) {
-      const participant = participantsWithImpersonation.getParticipantById(message.participantId)
-      if (participant) {
-        if (participant.type === 'CHARACTER' && participant.character) {
-          return { name: participant.character.name, characterId: participant.character.id, title: participant.character.title, ...faceAt(participant.character, message) }
-        }
-      }
-    }
-    if (message.role === 'USER') {
-      const userChar = participantsWithImpersonation.getFirstUserCharacter()
-      if (userChar) {
-        return { name: userChar.name, characterId: userChar.id, title: userChar.title, ...faceAt(userChar, message) }
-      } else if (chat?.user) {
-        return { name: chat.user.name || 'User', title: null, avatarUrl: chat.user.image ?? null, defaultImage: null }
-      }
-    } else if (message.role === 'ASSISTANT') {
-      const character = participantsWithImpersonation.getFirstCharacter()
-      if (character) {
-        return { name: character.name, characterId: character.id, title: character.title, ...faceAt(character, message) }
-      }
-    }
-    return null
-  }, [participantsWithImpersonation, chat?.user, chat?.participants, chat?.offSceneCharacters, faceAt])
-
-  // --- In-conversation search (header search bar) ---
-  // The header search bar looks inside this chat before searching everywhere.
-  // The source is one stable object per chat that reads the transcript through
-  // a ref, so publishing it never churns the toolbar on a streamed token.
-  const [searchHighlightQuery, setSearchHighlightQuery] = useState<string | null>(null)
-  useSearchHighlight(messagesContainerRef, searchHighlightQuery)
-  const [pendingReveal, setPendingReveal] = useState<{ messageId: string; nonce: number } | null>(null)
-  const searchStateRef = useRef({ messages, renderMessages, renderItems, getMessageAvatar, announcerNames })
-  useEffect(() => {
-    searchStateRef.current = { messages, renderMessages, renderItems, getMessageAvatar, announcerNames }
-  }, [messages, renderMessages, renderItems, getMessageAvatar, announcerNames])
-
-  // Scroll a message to the top of the transcript and flash it. The list is
-  // virtualized, so the row may not exist yet: expand a collapsed announcement
-  // (its text is only on screen expanded), ask the virtualizer for the index,
-  // then nudge until the row's top sits at the container's top.
-  const revealMessage = useCallback((messageId: string) => {
-    // A global search hit can name a line this view doesn't show — a whisper
-    // to someone else, or another variant of a reply. Say so rather than
-    // silently going nowhere.
-    const { messages: allMessages, renderMessages: shown } = searchStateRef.current
-    if (!shown.some(m => m.id === messageId)) {
-      const hidden = allMessages.find(m => m.id === messageId)
-      showInfoToast(
-        hidden?.targetParticipantIds?.length
-          ? 'That line was a whisper meant for other ears. Choose “Show all whispers” in the sidebar to see it.'
-          : 'That line isn’t on the page — it may belong to another version of a reply, or have been tidied away.',
-      )
-      return
-    }
-    const inChipGroup = searchStateRef.current.renderItems.some(
-      item => item.kind === 'announcement-group' && item.members.some(m => m.message.id === messageId),
-    )
-    if (inChipGroup) {
-      setExpandedSystemMessageIds(prev => (prev.has(messageId) ? prev : new Set(prev).add(messageId)))
-    }
-    setPendingReveal({ messageId, nonce: Date.now() })
-  }, [])
-  const revealMessageRef = useRef(revealMessage)
-  useEffect(() => {
-    revealMessageRef.current = revealMessage
-  }, [revealMessage])
-
-  // --- Scroll to a requested message (`?msg=` links, e.g. a Message search result) ---
-  // A request made before this Salon mounted (or loaded) waits in storage until
-  // the transcript is here; one made while it is open arrives as an event.
-  // Either way only a request for this chat is taken, and only once the
-  // initial scroll to the newest message is done (`isInitialScrollDone`), which would
-  // otherwise carry the view straight back down. Declared after the refs they
-  // read are refreshed, so a just-mounted Salon sees its loaded transcript.
-  const routeRevealTakenRef = useRef(false)
-  useEffect(() => {
-    if (loading || !isInitialScrollDone || messages.length === 0) return
-    let target = takePendingMessageReveal(id)
-    if (!target && revealMessageId && !routeRevealTakenRef.current) {
-      routeRevealTakenRef.current = true
-      target = revealMessageId
-    }
-    if (target) revealMessageRef.current(target)
-  }, [loading, isInitialScrollDone, messages.length, id, revealMessageId])
-  useEffect(() => {
-    if (loading || !isInitialScrollDone) return
-    const onReveal = (event: Event) => {
-      const request = (event as CustomEvent<MessageRevealRequest>).detail
-      if (request?.chatId !== id) return
-      const target = takePendingMessageReveal(id)
-      if (target) revealMessageRef.current(target)
-    }
-    window.addEventListener(MESSAGE_REVEAL_EVENT, onReveal)
-    return () => window.removeEventListener(MESSAGE_REVEAL_EVENT, onReveal)
-  }, [loading, isInitialScrollDone, id])
-
-  useEffect(() => {
-    if (!pendingReveal) return
-    const { messageId } = pendingReveal
-    const index = renderItems.findIndex((item: RenderItem) => renderItemMessageIds(item).includes(messageId))
-    if (index < 0) return
-    // Still a chip: the expansion above hasn't rendered yet; this effect re-runs when it does.
-    if (renderItems[index].kind === 'announcement-group') return
-
-    virtualizer.scrollToIndex(index, { align: 'start' })
-    let frame = 0
-    let attempts = 0
-    let lastScrollTop = -1
-    let hiddenFrames = 0
-    const settle = () => {
-      const container = messagesContainerRef.current
-      if (!container || ++attempts > 40) {
-        setPendingReveal(null)
-        return
-      }
-      // A kept-alive tab is display:none until it is activated, and a request
-      // can arrive in the same tick as the activation: wait until it shows.
-      if (container.clientHeight === 0) {
-        if (++hiddenFrames > 600) {
-          setPendingReveal(null)
-          return
-        }
-        attempts--
-        frame = requestAnimationFrame(settle)
-        return
-      }
-      const row = container.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
-      if (!row) {
-        virtualizer.scrollToIndex(index, { align: 'start' })
-        frame = requestAnimationFrame(settle)
-        return
-      }
-      const offset = row.getBoundingClientRect().top - container.getBoundingClientRect().top - 12
-      // Keep nudging while rows above are still being measured, until the row
-      // is at the top or the container can scroll no further.
-      if (Math.abs(offset) > 2 && container.scrollTop !== lastScrollTop) {
-        lastScrollTop = container.scrollTop
-        container.scrollTop += offset
-        frame = requestAnimationFrame(settle)
-        return
-      }
-      row.classList.add('qt-memory-source-highlight')
-      setTimeout(() => row.classList.remove('qt-memory-source-highlight'), 3000)
-      setPendingReveal(null)
-    }
-    frame = requestAnimationFrame(settle)
-    return () => cancelAnimationFrame(frame)
-  }, [pendingReveal, renderItems, virtualizer])
-
-  const conversationSearchSource = useMemo<ConversationSearchSource>(() => ({
+  // --- In-conversation search and reveal (header search bar, `?msg=` links) ---
+  useMessageReveal({
     chatId: id,
-    search: (query, limit) => {
-      const { renderMessages: rows, getMessageAvatar: avatarOf, announcerNames: announcers } = searchStateRef.current
-      return findConversationMatches(rows, query, {
-        limit,
-        speakerOf: message =>
-          message.systemSender
-            ? getAnnouncementSenderName(message, announcers)
-            : avatarOf(message)?.name ?? null,
-      })
-    },
-    reveal: messageId => revealMessageRef.current(messageId),
-    setHighlight: query => setSearchHighlightQuery(query),
-  }), [id])
-
-  // Offer this chat to the header search bar — not while quick-hide is
-  // covering it, when the transcript isn't on screen to search.
-  useEffect(() => {
-    if (chatHidden) return
-    setConversationSearch(conversationSearchSource)
-    return () => {
-      conversationSearchSource.setHighlight(null)
-      setConversationSearch(null)
-    }
-  }, [chatHidden, conversationSearchSource, setConversationSearch])
+    revealMessageId,
+    loading,
+    isInitialScrollDone,
+    messages,
+    renderMessages,
+    renderItems,
+    getMessageAvatar,
+    announcerNames,
+    messagesContainerRef,
+    virtualizer,
+    setExpandedSystemMessageIds,
+    setConversationSearch,
+  })
 
   // --- Reattribute handler ---
   const handleReattribute = useCallback((messageId: string) => {
@@ -1730,23 +1364,39 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     await handleImpersonateAndTakeTurn(participantId)
   }, [modals, handleImpersonateAndTakeTurn])
 
+  // The participant cards' actions, read from context by the sidebar's
+  // participant list rather than threaded through it as props.
+  const chatActions = useMemo<ChatActions>(() => ({
+    onNudge: turnManagement.handleNudge,
+    onQueue: turnManagement.handleQueue,
+    onDequeue: turnManagement.handleDequeue,
+    onTalkativenessChange: chatControls.handleTalkativenessChange,
+    onRemoveCharacter: chatControls.handleRemoveCharacter,
+    onImpersonate: handleImpersonateAndTakeTurn,
+    onStopImpersonate: impersonation.handleStopImpersonation,
+    connectionProfiles: chatControls.connectionProfiles,
+    onConnectionProfileChange: chatControls.handleConnectionProfileChange,
+    onSystemPromptChange: chatControls.handleSystemPromptChange,
+    onSubpromptsChange: chatControls.handleSubpromptsChange,
+    onRebuildSystemPrompt: chatControls.handleRebuildSystemPrompt,
+    onRegenerateAvatar: handleRegenerateAvatar,
+  }), [
+    turnManagement.handleNudge,
+    turnManagement.handleQueue,
+    turnManagement.handleDequeue,
+    chatControls.handleTalkativenessChange,
+    chatControls.handleRemoveCharacter,
+    handleImpersonateAndTakeTurn,
+    impersonation.handleStopImpersonation,
+    chatControls.connectionProfiles,
+    chatControls.handleConnectionProfileChange,
+    chatControls.handleSystemPromptChange,
+    chatControls.handleSubpromptsChange,
+    chatControls.handleRebuildSystemPrompt,
+    handleRegenerateAvatar,
+  ])
+
   // --- Early returns ---
-  if (awaitingTagInfo) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg qt-text-secondary">Loading chat...</p>
-      </div>
-    )
-  }
-
-  if (chatHidden) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <HiddenPlaceholder />
-      </div>
-    )
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -2295,6 +1945,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
       />
 
       {modals.showParticipantSidebar && (
+        <ChatActionsProvider value={chatActions}>
         <ChatSidebar
           participants={participantsWithImpersonation.participantData}
           turnState={turnState}
@@ -2310,26 +1961,13 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onNextRound={turnManagement.handleContinue}
           storytellerInviteFilter={chat?.storytellerInviteFilter === true}
           onToggleStorytellerInviteFilter={chatControls.toggleStorytellerInviteFilter}
-          onNudge={turnManagement.handleNudge}
-          onQueue={turnManagement.handleQueue}
-          onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
-          onTalkativenessChange={chatControls.handleTalkativenessChange}
           onAddCharacter={modals.openAddCharacter}
-          onRemoveCharacter={chatControls.handleRemoveCharacter}
           impersonatingParticipantIds={impersonation.impersonatingParticipantIds}
           activeTypingParticipantId={impersonation.activeTypingParticipantId}
-          onImpersonate={handleImpersonateAndTakeTurn}
-          onStopImpersonate={impersonation.handleStopImpersonation}
-          connectionProfiles={chatControls.connectionProfiles}
-          onConnectionProfileChange={chatControls.handleConnectionProfileChange}
-          onSystemPromptChange={chatControls.handleSystemPromptChange}
-          onSubpromptsChange={chatControls.handleSubpromptsChange}
-          onRebuildSystemPrompt={chatControls.handleRebuildSystemPrompt}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
           chatId={id}
-          onRegenerateAvatar={handleRegenerateAvatar}
           // Chat section
           agentModeEnabled={chatControls.agentModeEnabled}
           onAgentModeToggle={chatControls.handleToggleAgentMode}
@@ -2392,6 +2030,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
           chatMemoryCount={chatMemoryCount}
         />
+        </ChatActionsProvider>
       )}
 
       <EditEnclaveModal

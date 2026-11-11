@@ -1,6 +1,6 @@
 # Refactor 4.13 — One stream lifecycle in the Salon, then the SalonView split
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #172 by construction and #173 on the way. This is the follow-up the 4.12 set deferred: "`useSSEStreaming` at 1,831 lines and `SalonView` at 2,343: splitting them is desirable, but the bag protocol is what prevents it." The [stream-frames spec](refactor-4-12-salon-stream-frames.md) is done, so the split is unblocked.
+**Status:** Implemented (2026-11-11) on `claude/youthful-feynman-kmj4hc`; browser verification (§7) not yet done. Proposed 2026-11-10 against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #172 by construction and #173 on the way. This is the follow-up the 4.12 set deferred: "`useSSEStreaming` at 1,831 lines and `SalonView` at 2,343: splitting them is desirable, but the bag protocol is what prevents it." The [stream-frames spec](refactor-4-12-salon-stream-frames.md) is done, so the split is unblocked.
 
 Line numbers are from the audit and will drift. Re-locate each site by name before editing.
 
@@ -107,3 +107,32 @@ Sidebar props: `components/providers/chat-context.tsx` exists but `ChatProvider`
 
 1. Enter during a run: refuse with the existing toast and keep the text (proposed), or queue the message to send when the run ends?
 2. `ChatProvider`: mount it and move the pass-through sidebar props into context (proposed), or delete it?
+
+## 9. As built (2026-11-11)
+
+**Decisions taken** (the proposed answers to §8): Enter during a run is refused with the existing toast and the text stays in the composer; `ChatProvider` is mounted — renamed `ChatActionsProvider` / `useChatActions` in `components/providers/chat-context.tsx`, carrying the thirteen participant-card actions.
+
+**What the server does with a second stream** (§4's open question): it does not serialise them. `handleSendMessage` (`lib/services/chat-message/orchestrator.service.ts`) waits for earlier turns (`waitForEarlierTurns`) only for an operator whisper send; every other stream runs its turn at once, so before #172 two turns could generate concurrently.
+
+**Modules.**
+
+| Module | Holds |
+|---|---|
+| `hooks/stream-helpers.ts` | The pure helpers and shared types (re-exported from `useSSEStreaming`, so importers did not change) |
+| `hooks/useStreamingBuffers.ts` | rAF-buffered content and reasoning, `resetStreamingContent` |
+| `hooks/useStreamingToolBatches.ts` | Live tool batches, `trackToolsDetected` / `trackToolResult` |
+| `hooks/read-turn-stream.ts` | `readTurnStream(reader, handlers)` with the three `switch (frame.kind)` blocks, and `readGreenRoomFrames`; no React. Tests: `__tests__/unit/app/salon/hooks/read-turn-stream.test.ts` |
+| `hooks/useSSEStreaming.ts` | `runTurnStream` and the four request builders, Stop and Raise Hand (1,085 lines, from 1,846) |
+| `hooks/useSalonAvatars.ts` | The regenerate-avatar watch, the avatar timeline, `getMessageAvatar` |
+| `hooks/useMessageReveal.ts` | In-conversation search, the search highlight, reveal-and-flash, `?msg=` and reveal-event handling |
+
+**Deviations from §5.**
+
+- There is no separate `useTurnStream` hook. Splitting `runTurnStream` from the four builders would have meant passing the buffers, batches, hand state and handlers into a second hook as parameters — the wide bag again. `useSSEStreaming` *is* the turn-stream hook; it keeps its name because the Salon and seven test files import it.
+- `sending` is derived (`streamKind === 'send'`) rather than removed: a user send still shuts the composer (`composerLocked`), while a continue, opening or storyteller run leaves it open for typing ahead and the composer refuses Enter instead. `abortControllerRef` is no longer returned.
+- A stream's `finally` checks it still owns the claim (a token). One abandoned by Stop, whose `finally` runs after another stream has started, leaves that stream's flags, hand and optimistic bubbles alone.
+- The shared `onChainComplete` notifies the queue badges for every kind but the opening; the storyteller run used to do so only in its `finally`.
+- Of §5.4's "13 effects sorted by owner", only the avatar and reveal effects moved (with their hooks). The rest are each a few lines and read SalonView-local state; moving them would only re-thread that state.
+- SalonView's quick-hide read went with the old `useChatContext`: it compared `chatContext.chatId` (always null, the provider was never mounted) with the route, so `chatHidden` and `awaitingTagInfo` were always false. Removing them changes nothing on screen. The chat payload carries no tags, so making quick-hide cover an open Salon chat would be new work.
+
+**Sizes.** `useSSEStreaming.ts` 1,846 → 1,085; `SalonView.tsx` 2,419 → about 2,070; `ChatSidebarProps` lost 13 props.

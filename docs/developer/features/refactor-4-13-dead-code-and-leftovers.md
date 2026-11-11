@@ -57,7 +57,7 @@ Verify against the CLI (`packages/quilltap`), the Electron shell and the help do
 |---|---|---|
 | `lib/background-jobs/processor.ts` `processNextJob` / `processJobs` | Return false / zeros and log a deprecation warning; only re-exported (`index.ts:39-40`) and mocked by tests | Delete; update the tests that mock the names |
 | `components/providers/sidebar-provider.tsx` | Every callback is a no-op and `isCollapsed` is always true; one consumer left (`components/layout/left-sidebar/profile-menu.tsx:20`) | Delete the provider; the consumer uses the constant |
-| `components/providers/chat-context.tsx` | `ChatProvider` is never mounted, so `useChatContext()` (used in `SalonView.tsx`) always returns its empty fallback | Decided in the [Salon stream-lifecycles spec](refactor-4-13-salon-stream-lifecycles.md) §8: mount it or delete it |
+| `components/providers/chat-context.tsx` | `ChatProvider` is never mounted, so `useChatContext()` (used in `SalonView.tsx`) always returns its empty fallback | **Done** in the [Salon stream-lifecycles spec](refactor-4-13-salon-stream-lifecycles.md) §9: repurposed as `ChatActionsProvider` and mounted by `SalonView` |
 | `NEXT_PUBLIC_WORKSPACE_TABS` (`lib/config/feature-flags.ts:22`) | On unless set to `'0'`; nothing sets it; two readers | Decision 1 |
 | `app/salon/[id]/hooks/useFileAttachments.ts:51` `fileInputRef` | Never attached to an element; the real input's ref is in `ChatComposer` and is never reset (#179) | Fix #179 by resetting `e.currentTarget.value` in `handleFileSelect`; delete the orphan ref |
 
