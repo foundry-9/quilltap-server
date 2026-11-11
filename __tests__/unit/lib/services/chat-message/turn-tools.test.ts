@@ -11,6 +11,7 @@ jest.mock('@/lib/logging/create-logger', () => {
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   buildTools: jest.fn(),
+  toolNameOf: (tool: { function?: { name?: string }; name?: string }) => tool.function?.name || tool.name,
 }))
 
 jest.mock('@/lib/services/chat-message/pseudo-tool.service', () => ({
@@ -151,5 +152,61 @@ describe('resolveTurnToolSlate', () => {
     expect(slate.toolSettingsChanged).toBe(true)
     expect((p.repos as unknown as { chats: { update: jest.Mock } }).chats.update)
       .toHaveBeenCalledWith('chat-1', { forceToolsOnNextMessage: false })
+  })
+})
+
+describe('TurnToolSlate.formatToolsFor (#181)', () => {
+  const ANTHROPIC_SHAPE = [{ name: 'wardrobe_list', input_schema: {} }]
+  const OPENAI_SHAPE = [
+    { type: 'function', function: { name: 'wardrobe_list' } },
+    // Present for this provider only (e.g. its own web search); the primary
+    // was never offered it, so the stand-in is not either.
+    { type: 'function', function: { name: 'search_web' } },
+  ]
+  const primary = { id: 'prof-anthropic', provider: 'ANTHROPIC', modelName: 'claude', allowWebSearch: false }
+  const understudy = { id: 'prof-openai', provider: 'OPENAI', modelName: 'gpt', allowWebSearch: true }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    jest.mocked(buildTools).mockImplementation(async (options) => ({
+      tools: options.connectionProfile.provider === 'ANTHROPIC' ? ANTHROPIC_SHAPE : OPENAI_SHAPE,
+      modelSupportsNativeTools: true,
+      useNativeWebSearch: options.connectionProfile.provider === 'OPENAI',
+      customToolEffects: new Map(),
+      pluginToolEffects: new Map(),
+      offer: { kind: 'all' } as never,
+    }))
+  })
+
+  it('returns the primary\'s own format, without a rebuild, for the primary', async () => {
+    const slate = await resolveTurnToolSlate(params({ profile: primary as never }))
+    const format = await slate.formatToolsFor(primary as never)
+    expect(format.actualTools).toBe(slate.actualTools)
+    expect(jest.mocked(buildTools)).toHaveBeenCalledTimes(1)
+  })
+
+  it('rebuilds for a stand-in on another provider with the same options, narrowed to what the primary offered', async () => {
+    const slate = await resolveTurnToolSlate(params({ profile: primary as never }))
+    const format = await slate.formatToolsFor(understudy as never)
+
+    expect(jest.mocked(buildTools)).toHaveBeenCalledTimes(2)
+    const [first, second] = jest.mocked(buildTools).mock.calls.map((c) => c[0])
+    const { connectionProfile: _a, ...firstOptions } = first
+    const { connectionProfile: secondProfile, ...secondOptions } = second
+    expect(secondProfile).toBe(understudy)
+    expect(secondOptions).toEqual(firstOptions)
+
+    expect(format.actualTools).toEqual([{ type: 'function', function: { name: 'wardrobe_list' } }])
+    expect(format.resolvedToolMode).toBe('native')
+    expect(format.useNativeWebSearch).toBe(true)
+  })
+
+  it('resolves the stand-in\'s own tool mode', async () => {
+    const slate = await resolveTurnToolSlate(params({ profile: primary as never }))
+    jest.mocked(checkResolvedToolMode).mockReturnValueOnce('simple-json')
+    const format = await slate.formatToolsFor(understudy as never)
+    expect(format.resolvedToolMode).toBe('simple-json')
+    expect(format.actualTools).toEqual([])
+    expect(format.stopSequences).toBe(SIMPLE_JSON_STOP)
   })
 })

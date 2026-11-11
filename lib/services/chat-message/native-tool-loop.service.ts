@@ -109,6 +109,40 @@ function buildToolTruncationMessage(toolName: string): string {
 }
 
 /**
+ * The call the tool loop continues with: `streaming.effectiveCall` when a
+ * failover substitute holds the turn, else the slate's primary values.
+ */
+export function effectiveToolLoopCall(opts: {
+  streaming: StreamingState
+  formattedMessages: StreamOptions['messages']
+  modelParams: Record<string, unknown>
+  actualTools: unknown[]
+  useNativeWebSearch: boolean
+}): Pick<RunNativeToolLoopOptions, 'formattedMessages' | 'modelParams' | 'actualTools' | 'useNativeWebSearch'> {
+  const call = opts.streaming.effectiveCall
+  if (!call) {
+    return {
+      formattedMessages: opts.formattedMessages,
+      modelParams: opts.modelParams,
+      actualTools: opts.actualTools,
+      useNativeWebSearch: opts.useNativeWebSearch,
+    }
+  }
+  logger.debug('Tool loop continues on the substitute\'s call shape', {
+    profileId: opts.streaming.effectiveProfile.id,
+    provider: opts.streaming.effectiveProfile.provider,
+    toolCount: call.tools.length,
+    toolMode: call.toolMode,
+  })
+  return {
+    formattedMessages: call.messages,
+    modelParams: call.modelParams,
+    actualTools: call.tools,
+    useNativeWebSearch: call.useNativeWebSearch,
+  }
+}
+
+/**
  * Run the bounded native-tool loop, including agent-mode `submit_final_response`
  * extraction, the iteration-0 ghost-wrap guardrail, and the max-turns
  * force-final branch.
@@ -116,10 +150,13 @@ function buildToolTruncationMessage(toolName: string): string {
 export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise<void> {
   const {
     repos, chatId, userId, character, preGeneratedAssistantMessageId,
-    agentMode, formattedMessages, modelParams, actualTools, useNativeWebSearch,
-    toolContext, streaming, toolMessages, generatedImagePaths,
+    agentMode, toolContext, streaming, toolMessages, generatedImagePaths,
     controller, encoder, preservePartialOnError,
   } = opts
+  // A stand-in that took the turn continues on its own shape: its provider's
+  // tools, its image-budgeted messages and its params (A15). The slate's
+  // values are the primary's, and right only while the primary holds the turn.
+  const { formattedMessages, modelParams, actualTools, useNativeWebSearch } = effectiveToolLoopCall(opts)
 
   // Initial state: the primary stream's slate + response is what the loop's
   // first iteration sees. `currentResponse` accumulates per-iteration content

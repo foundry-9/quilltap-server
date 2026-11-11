@@ -8,6 +8,17 @@
 
 - `applyOutfitSelections` "bounded by the slowest character" test no longer asserts a wall-clock bound (under 120 ms), which failed on a loaded CI runner with coverage on (231 ms). Each mocked selection now waits on a barrier that only opens once all four have started, so serial resolution fails and runner speed doesn't matter.
 
+#### Refactor: one substitute call in provider failover
+
+- Every failover stand-in (same-profile retry, the Concierge's uncensored understudy, each fallback-chain candidate) is called by `callSubstitute` (`lib/services/chat-message/provider-failover.service.ts`). It formats the turn's tools for the substitute's provider, re-applies the image transport budget and model params for it, streams it, and decides whether it answered.
+- #181: a substitute on another provider was sent the primary provider's tool array. Tools are now rebuilt per profile by `TurnToolSlate.formatToolsFor` (`turn-tools.service.ts`) with the turn's options, narrowed to the tools the primary was offered.
+- #182: a substitute whose answer was only a tool call was recorded as `empty-response` and the next candidate was called. "Answered" is now prose or a detected tool call, at all three sites. After an empty-response recovery answers, the orchestrator runs the tool loops again so the call is executed.
+- A substitute whose resolved tool mode (native / simple-json / text-block) differs from the turn's is skipped and recorded on the route trail (`provider-error`); the system prompt was built for the turn's mode.
+- After a swap, the native tool loop and the text tool passes continue on the substitute's tools, image-budgeted messages and params (`StreamingState.effectiveCall`) instead of the primary's.
+- The failover stream writes every frame through `safeEnqueue`. A closed client stops the walk; it is no longer recorded as a provider failure and no further candidate is called. What arrived is kept for the partial preserver.
+- The partial preserver saves when there is prose, whether or not the primary stream started (a tool-loop continuation after a silent tool call never set the flag), and saves the TOOL rows of tools that ran before the failure.
+- The same-profile and uncensored retries now carry the turn's stop sequences (simple-json).
+
 #### Hardening: network defaults, stored files, imports and tool permissions
 
 - The server binds `127.0.0.1` by default (`server.ts`, `quilltap` CLI). Listen on every interface with `quilltap --host 0.0.0.0` or `QUILLTAP_HOST`. The Docker image still binds `0.0.0.0` inside the container. `docs/DEPLOYMENT.md` and the new `help/network-access.md` say that Quilltap has no login and how to expose it.
