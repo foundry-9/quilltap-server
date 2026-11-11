@@ -158,7 +158,17 @@ export interface ItemRouteConfigBase<S extends string = ItemTierScope> {
 export interface ItemRouteConfig<P, S extends string = ItemTierScope> extends ItemRouteConfigBase<S> {
   /** The owner id from the route params; null for General. */
   paramsToId: (params: P) => string | null;
+  /**
+   * Collection actions only one tier's route answers — the General route's
+   * cross-tier `move-to-tier` / `copy-to-tier`, for one — added to the
+   * factory's own `?action=` table. Never used to override a shared action.
+   */
+  extraGetActions?: Record<string, ItemRouteActionHandler<P>>;
+  extraPostActions?: Record<string, ItemRouteActionHandler<P>>;
 }
+
+/** A collection action handler a route adds to its factory's table. */
+export type ItemRouteActionHandler<P> = (req: NextRequest, ctx: RequestContext, params: P) => Promise<NextResponse>;
 
 /** The owner a tier's 404 names, the same for every kind. */
 export const OWNER_LABELS: Record<ItemTierScope, string> = {

@@ -86,11 +86,10 @@ export function WardrobeTransferDialog({
 
   const transfer = useMutation({
     mutationFn: async (destination: WardrobeContainer) => {
-      const result = await fetchJson('/api/v1/wardrobe/transfers', {
+      const result = await fetchJson(`/api/v1/wardrobe?action=${mode === 'move' ? 'move-to-tier' : 'copy-to-tier'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: mode,
           itemId: item.id,
           ...(sourceCharacterId ? { sourceCharacterId } : {}),
           sourceProjectId,

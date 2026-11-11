@@ -36,7 +36,7 @@ const TOAST_DELAY_MS = 3000
  * Component that shows toast notifications for plugin upgrades that occurred during startup.
  *
  * This component:
- * 1. Polls the /api/v1/system/plugins/upgrades endpoint after mount
+ * 1. Polls GET /api/v1/system/plugins?action=upgrades after mount
  * 2. If there are un-notified upgrades, shows sequential toast notifications
  * 3. Marks upgrades as notified to prevent re-notification on page refresh
  */
@@ -75,7 +75,7 @@ async function checkAndNotifyUpgrades(): Promise<void> {
     // Small delay to let the page render first
     await delay(1000)
 
-    const response = await fetch('/api/v1/system/plugins/upgrades')
+    const response = await fetch('/api/v1/system/plugins?action=upgrades')
 
     if (!response.ok) {
       console.error('Failed to fetch plugin upgrades', { status: response.status })
@@ -127,7 +127,7 @@ async function checkAndNotifyUpgrades(): Promise<void> {
     }
 
     // Mark upgrades as notified
-    await fetch('/api/v1/system/plugins/upgrades', {
+    await fetch('/api/v1/system/plugins?action=mark-upgrades-notified', {
       method: 'POST',
     })
 

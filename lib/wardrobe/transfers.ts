@@ -1,7 +1,7 @@
 /**
  * Wardrobe transfers — moving or copying one wardrobe item between tiers (a
  * character's vault, a group's or project's store, Quilltap General). The
- * one path the operator's transfer route (`POST /api/v1/wardrobe/transfers`)
+ * one path the operator's transfer route (`POST /api/v1/wardrobe?action=move-to-tier|copy-to-tier`)
  * takes; the Inventory's twin is `lib/inventory/transfers.ts`.
  *
  * For a composite (outfit), `components` brings its same-container

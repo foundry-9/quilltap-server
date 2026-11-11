@@ -4,7 +4,7 @@
 
 ### 4.13-dev
 
-#### Refactor: API inputs validated by schemas (phases 1–5, part of 6)
+#### Refactor: API inputs validated by schemas (phases 1–6)
 
 - #165: SillyTavern character export (JSON and PNG) and chat JSONL export returned 500 for a name with characters above U+00FF and broke on a `"`. They, the theme export, the backup download and the two `system/tools` downloads now build `Content-Disposition` with `buildContentDisposition`. A grep-test forbids a hand-spelled `filename=` header.
 - #166: an invalid body to `POST`/`DELETE /api/v1/projects/[id]/mount-points`, `PATCH /api/v1/mount-points/[id]` or `?action=close-document` was a 500; the `ZodError` now reaches the middleware, which answers 400.
@@ -24,6 +24,9 @@
 - `GET /api/v1/settings/chat` answers the defaults for a user with no saved settings instead of creating the row; the first PUT creates it.
 - Manual memory create answers success with a `warning` when the keystone mark is refused after the memory is saved (it answered 400, which read as "nothing saved"); the memory editor shows the warning.
 - `GET /api/v1/models` no longer reads or echoes `hasVision` / `hasStreaming`, which were never applied (cached model rows record neither).
+- Path-segment and body-discriminator actions moved to `?action=`: `wardrobe?action=analyze-image|preview-avatar|move-to-tier|copy-to-tier`, `atlas` and `inventory` `?action=move-to-tier|copy-to-tier`, `groups?action=scenarios`, `system/plugins?action=state|initialize|upgrades|mark-upgrades-notified`, `system/directories` (was `system/browse-directory`), `chats/[id]?action=turn-nudge|turn-queue|turn-dequeue|turn-query|turn-skip-user`, and `system/tools?action=tasks-queue-start|tasks-queue-stop`. The old forms answer until 4.14 through `deprecatedPath` (`lib/api/deprecated-path.ts`: one warning per path, `Deprecation` and `Link` headers). All clients use the new forms. The item-family factories take `extraGetActions` / `extraPostActions` for actions only the General route answers. `files/proxy/[...key]` and `chats/[id]/qtap-target` stay path-addressed (the page-CSP exemption in `next.config.js` matches paths, and proxy URLs are stored in content); `search-replace` already dispatched on `?action=`.
+- GETs no longer write. The default chat GET's housekeeping (cold-chunk re-embed, terminal reconcile, operator mail) is `POST /api/v1/chats/[id]?action=visit`, which the Salon posts before each full read. `?action=mailbox` reads the character's vault pointer instead of creating a vault. `GET /api/v1/system/jobs` no longer starts the processor; boot starts it (after unlock), as does every enqueue — so the toolbar poll no longer restarts a processor the operator stopped.
+- The tool picker lists `read_conversation`, `upsert_annotation`, `delete_annotation`, `terminal_list`, `terminal_read`, `doc_open_document`, `doc_close_document` and `doc_focus`, which every character was offered but nobody could switch off. `doc_move_folder` and the four `doc_*_blob` tools stay unlisted: no surface offers them.
 
 #### Refactor: the job queue's dedupe rule and the query translator's quiet failures
 

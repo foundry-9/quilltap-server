@@ -931,6 +931,13 @@ export async function register() {
         const { scheduleAutonomousRooms } = await import('./lib/background-jobs/scheduled-autonomous-rooms');
         scheduleAutonomousRooms();
 
+        // Resume jobs left pending by the last run. This used to wait for the
+        // first poll of `GET /api/v1/system/jobs`, which started the processor
+        // as a side effect; a read no longer writes, so boot starts it.
+        const { ensureProcessorRunning } = await import('./lib/background-jobs/processor');
+        ensureProcessorRunning();
+        logger.debug('Background-job processor started at boot', { context: 'instrumentation.register' });
+
         // Start filesystem watcher for real-time sync
         const { startWatcher } = await import('./lib/file-storage/watcher');
         startWatcher();

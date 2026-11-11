@@ -13,12 +13,18 @@
 
 import type { NextRequest } from 'next/server';
 import { createInventoryCollectionHandlers } from '@/lib/inventory/routes/inventory-route-factory';
+import { handleInventoryTransfer } from '@/lib/inventory/routes/transfer';
 
 const handlers = createInventoryCollectionHandlers<Record<string, never>>({
   scope: 'general',
   paramsToId: () => null,
   logTag: '[Inventory General v1]',
   logIdKey: 'generalId',
+  // Cross-tier moves live on the General collection alone.
+  extraPostActions: {
+    'move-to-tier': handleInventoryTransfer('move'),
+    'copy-to-tier': handleInventoryTransfer('copy'),
+  },
 });
 
 const noParams = { params: Promise.resolve({} as Record<string, never>) };

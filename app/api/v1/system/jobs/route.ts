@@ -32,8 +32,11 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
     const { searchParams } = req.nextUrl;
     const includeJobs = searchParams.get('includeJobs') === 'true';
     const includeByType = searchParams.get('includeByType') === 'true' || includeJobs;
-    const chatId = searchParams.get('chatId');// Ensure processor is running
-    ensureProcessorRunning();
+    const chatId = searchParams.get('chatId');
+
+    // A read only reads: the processor is started at boot and by every
+    // enqueue, never by this poll (which also used to undo an operator's
+    // "stop" from the tasks queue).
 
     // Get stats
     const stats = await getQueueStats(user.id);

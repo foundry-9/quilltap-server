@@ -193,12 +193,12 @@ export function useInventoryMutations() {
     renameFolder: folders.renameFolder,
     deleteFolder: folders.deleteFolder,
     fileItems: folders.fileItems,
-    transfer: async (body: {
+    transfer: async ({ action, ...body }: {
       action: 'move' | 'copy'
       itemId: string
       from: InventoryContainer
       to: InventoryContainer
-    }) => (await run({ url: '/api/v1/inventory/transfers', method: 'POST', body })).item as ResolvedInventoryItem,
+    }) => (await run({ url: `/api/v1/inventory?action=${action}-to-tier`, method: 'POST', body })).item as ResolvedInventoryItem,
   }
 }
 

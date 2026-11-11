@@ -57,11 +57,7 @@ export function useTasksQueue() {
         setControlLoading(true)
         setError(null)
 
-        const res = await fetch('/api/v1/system/tools?action=tasks-queue', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
-        })
+        const res = await fetch(`/api/v1/system/tools?action=tasks-queue-${action}`, { method: 'POST' })
 
         if (!res.ok) {
           throw new Error(`Failed to ${action} queue`)

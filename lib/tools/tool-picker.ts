@@ -10,9 +10,21 @@
  * tool set again (the route's hand list had: thirteen declared tools were
  * absent and `doc_copy_file` had no availability rule).
  *
+ * Unlisted: the Brahma-only tools, the two internal ones, and five tools no
+ * surface offers (`doc_move_folder` and the four `doc_*_blob` tools are
+ * executable, but `buildTools` never adds them).
+ *
  * @module tools/tool-picker
  */
 
+import { readConversationToolDefinition } from './read-conversation-tool';
+import { upsertAnnotationToolDefinition } from './upsert-annotation-tool';
+import { deleteAnnotationToolDefinition } from './delete-annotation-tool';
+import { terminalListToolDefinition } from './terminal-list-tool';
+import { terminalReadToolDefinition } from './terminal-read-tool';
+import { docOpenDocumentToolDefinition } from './doc-open-document-tool';
+import { docCloseDocumentToolDefinition } from './doc-close-document-tool';
+import { docFocusToolDefinition } from './doc-focus-tool';
 import { askCarinaToolDefinition } from './ask-carina-tool';
 import { attachImageToolDefinition } from './attach-image-tool';
 import { describeImageToolDefinition } from './describe-image-tool';
@@ -548,26 +560,77 @@ export const BUILT_IN_TOOL_PICKER: Readonly<Record<string, ToolPickerEntry>> = {
     category: 'photos',
     definition: describeImageToolDefinition,
   },
-  delete_annotation: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_close_document: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_delete_blob: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_focus: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_list_blobs: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_move_folder: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_open_document: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_read_blob: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  doc_write_blob: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
+  read_conversation: {
+    listed: true,
+    name: 'Read Conversation',
+    description: 'Read the rendered transcript of this conversation (or another, by id), optionally a slice of interchanges, with annotations',
+    category: 'search',
+    definition: readConversationToolDefinition,
+  },
+  upsert_annotation: {
+    listed: true,
+    name: 'Annotate Conversation',
+    description: "Add or revise the character's own note on a line of the conversation",
+    category: 'search',
+    definition: upsertAnnotationToolDefinition,
+  },
+  delete_annotation: {
+    listed: true,
+    name: 'Remove Annotation',
+    description: "Remove one of the character's own notes from the conversation",
+    category: 'search',
+    definition: deleteAnnotationToolDefinition,
+  },
+  terminal_list: {
+    listed: true,
+    name: 'List Terminals',
+    description: "List the chat's terminal sessions (read-only)",
+    category: 'utility',
+    definition: terminalListToolDefinition,
+  },
+  terminal_read: {
+    listed: true,
+    name: 'Read Terminal',
+    description: "Read recent output from one of the chat's terminal sessions (read-only)",
+    category: 'utility',
+    definition: terminalReadToolDefinition,
+  },
+  doc_open_document: {
+    listed: true,
+    name: 'Open Document',
+    description: 'Open a document from a linked store in a Document Mode pane beside the chat',
+    category: 'documents',
+    definition: docOpenDocumentToolDefinition,
+    requires: ['documentStores'],
+  },
+  doc_close_document: {
+    listed: true,
+    name: 'Close Document',
+    description: 'Close an open Document Mode pane',
+    category: 'documents',
+    definition: docCloseDocumentToolDefinition,
+    requires: ['documentStores'],
+  },
+  doc_focus: {
+    listed: true,
+    name: 'Focus Document',
+    description: 'Bring an open document to the front, optionally at a heading or line',
+    category: 'documents',
+    definition: docFocusToolDefinition,
+    requires: ['documentStores'],
+  },
+  doc_delete_blob: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
+  doc_list_blobs: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
+  doc_move_folder: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
+  doc_read_blob: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
+  doc_write_blob: { listed: false, reason: "Executable, but no surface offers it: `buildTools` never adds it to a tool list, so a picker switch would turn nothing off." },
   lookup_character: { listed: false, reason: "Brahma's Console only (operator surface)." },
   lookup_memories: { listed: false, reason: "Brahma's Console only (operator surface)." },
   lookup_messages: { listed: false, reason: "Brahma's Console only (operator surface)." },
-  read_conversation: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
   read_messages: { listed: false, reason: "Brahma's Console only (operator surface)." },
   request_full_context: { listed: false, reason: "A safety valve: always offered, never switchable." },
   run_sql: { listed: false, reason: "Brahma's Console only (operator surface)." },
   submit_final_response: { listed: false, reason: "Agent mode's own closing call, not a tool an operator chooses." },
-  terminal_list: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  terminal_read: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
-  upsert_annotation: { listed: false, reason: "Not yet listed: whether the picker shows it awaits decision 4 of refactor-4-13-api-input-schemas.md." },
 };
 
 /** The facts about one chat that the requirements are checked against. */

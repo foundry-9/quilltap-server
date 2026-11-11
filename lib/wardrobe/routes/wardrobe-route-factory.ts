@@ -324,7 +324,7 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
 
 
   const GET = createContextParamsHandler<P>(
-    withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders }, async (req, ctx, params) => {
+    withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders, ...config.extraGetActions }, async (req, ctx, params) => {
       // A read probe never provisions: a tier with no store yet lists as empty.
       const probed = await probe(ctx, params);
       if (!probed.ok) return probed.response;
@@ -357,6 +357,7 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
       duplicate: handleDuplicate,
       'optimize-image-prompts': handleOptimize,
       'apply-image-prompts': handleApply,
+      ...config.extraPostActions,
     }, async (req, ctx, params) => {
       // Parse before resolving: an invalid body must never provision a store.
       const body = createWardrobeSchema.parse(await req.json());

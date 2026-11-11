@@ -58,7 +58,7 @@ export type GeneralScenarioOption = ScenarioOption
 
 /**
  * Group-scoped scenario sourced from a group's `Scenarios/` folder
- * (`/api/v1/groups/scenarios`). Same shape as project and general
+ * (`/api/v1/groups?action=scenarios`). Same shape as project and general
  * scenarios, but applies when specific participant character IDs
  * belong to the group.
  */

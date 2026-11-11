@@ -80,7 +80,7 @@ export function AvatarGenerationPane({
         }
       } else {
         const result = await fetchJson<{ fileId: string; url: string }>(
-          '/api/v1/wardrobe/preview-avatar',
+          '/api/v1/wardrobe?action=preview-avatar',
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
         )
         if (!result.ok || !result.data) {

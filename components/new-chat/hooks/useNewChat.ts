@@ -164,7 +164,7 @@ type GroupScenariosResponse = {
   groupScenarios?: Array<{ groupId: string; groupName: string; scenarios?: ScenarioOption[] }>
 }
 
-/** Flatten `/api/v1/groups/scenarios`' grouped payload into picker options. */
+/** Flatten `/api/v1/groups?action=scenarios`' grouped payload into picker options. */
 function flattenGroupScenarios(data: GroupScenariosResponse): GroupScenarioOption[] {
   const flat: GroupScenarioOption[] = []
   for (const group of data.groupScenarios || []) {
@@ -383,7 +383,7 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       apiFetch<GroupScenariosResponse>(
         withArchivedParam(
-          `/api/v1/groups/scenarios?characterIds=${encodeURIComponent(groupCharacterIdsKey)}`,
+          `/api/v1/groups?action=scenarios&characterIds=${encodeURIComponent(groupCharacterIdsKey)}`,
           showArchivedScenarios,
         ),
         { signal },

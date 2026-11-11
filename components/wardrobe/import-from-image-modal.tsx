@@ -126,7 +126,7 @@ export function ImportFromImageModal({
   const [analyzedBy, setAnalyzedBy] = useState<string | null>(null)
   const visionProfilesQuery = useQuery({
     queryKey: queryKeys.wardrobe.visionProfiles,
-    queryFn: ({ signal }) => apiFetch<VisionProfilesResponse>('/api/v1/wardrobe/analyze-image', { signal }),
+    queryFn: ({ signal }) => apiFetch<VisionProfilesResponse>('/api/v1/wardrobe?action=analyze-image', { signal }),
   })
   const visionProfiles = useMemo(() => visionProfilesQuery.data?.profiles ?? [], [visionProfilesQuery.data])
   const selectedProfileId = chosenProfileId ?? visionProfilesQuery.data?.defaultProfileId ?? ''
@@ -205,7 +205,7 @@ export function ImportFromImageModal({
         proposedOutfit: ProposedOutfit | null
         provider: string
         model: string
-      }>('/api/v1/wardrobe/analyze-image', {
+      }>('/api/v1/wardrobe?action=analyze-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

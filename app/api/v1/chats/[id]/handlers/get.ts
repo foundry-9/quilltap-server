@@ -36,9 +36,6 @@ import { logger } from '@/lib/logger';
 import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
-import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
-import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reembed';
 import { projectChatTranscript } from '@/lib/chat/transcript-projection';
 import {
   handleGetAvatars,
@@ -274,30 +271,10 @@ async function handleGetChat(
       return notFound('Chat');
     }
 
-    // Un-embedded chunk re-warm: if this chat has conversation chunks with
-    // content but no embedding (an outage mid-render, a died render job, or
-    // a leftover from before chunk embeddings were kept warm
-    // unconditionally), opening it re-enqueues them through the standard
-    // embedding pipeline. Fire-and-forget (debounced + deduped inside) —
-    // never allowed to slow or break the chat load.
-    maybeEnqueueColdChunkReembed(user.id, chatId).catch((error) => {
-      logger.warn('[Chats v1] Cold-chunk re-embed check failed — continuing', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-
-    // Sweep terminal sessions whose PTYs were lost across a server restart
-    // (DB row says "live" but ptyManager doesn't have it) and post the close
-    // announcements before we read the message history below.
-    await reconcileTerminalSessionsForChat(chatId);
-
-    // The Post Office: announce any letters addressed to the operator's own
-    // character(s) before we read the history below. A user-controlled
-    // participant never takes an LLM turn, so the per-turn mail check never
-    // covers it; without this, mail to the operator's character would sit
-    // unannounced in an idle room. Idempotent and warn-only inside.
-    await surfaceOperatorMailForChat(chatId, chatMetadata.participants);
+    // A read only reads. The housekeeping this used to do on every load —
+    // the cold-chunk re-embed, terminal reconciliation, operator mail — is
+    // `POST ?action=visit` (`actions/visit.ts`), which the Salon posts before
+    // each full read.
 
     const enrichedParticipants = await Promise.all(
       chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))
@@ -308,12 +285,11 @@ async function handleGetChat(
     // (`GET /api/v1/messages?chatId=…&action=transcript`) also uses, so the two
     // reads of the same conversation cannot drift apart.
     //
-    // The counter is read here rather than taken from `chatMetadata`, which was
-    // loaded before the terminal reconciliation and the operator-mail sweep
-    // above — both of which can post a message. Reading it now, still before
-    // the projection, keeps the version no newer than the rows it is handed out
-    // with: too old only ever costs the tab a redundant read, while too new
-    // would have it answered "unchanged" for a message it never received.
+    // The counter is read here, just before the projection, so the version is
+    // never newer than the rows it is handed out with: too old only ever costs
+    // the tab a redundant read, while too new would have it answered
+    // "unchanged" for a message it never received (a visit or a turn can post
+    // between the metadata read and this one).
     const transcriptVersion = await repos.chats.getTranscriptVersion(chatId);
     const { messages, offSceneCharacters } = await projectChatTranscript(
       chatId,

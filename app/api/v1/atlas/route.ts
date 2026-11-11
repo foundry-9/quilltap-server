@@ -12,12 +12,18 @@
 
 import type { NextRequest } from 'next/server';
 import { createAtlasCollectionHandlers } from '@/lib/atlas/routes/atlas-route-factory';
+import { handleAtlasTransfer } from '@/lib/atlas/routes/transfer';
 
 const handlers = createAtlasCollectionHandlers<Record<string, never>>({
   scope: 'general',
   paramsToId: () => null,
   logTag: '[Atlas General v1]',
   logIdKey: 'generalId',
+  // Cross-tier moves live on the General collection alone.
+  extraPostActions: {
+    'move-to-tier': handleAtlasTransfer('move'),
+    'copy-to-tier': handleAtlasTransfer('copy'),
+  },
 });
 
 const noParams = { params: Promise.resolve({} as Record<string, never>) };

@@ -20,6 +20,7 @@ jest.mock('@/lib/post-office/mailbox', () => ({
   listMailbox: (...args: unknown[]) => mockListMailbox(...args),
 }));
 
+// A read never provisions a vault: the mailbox reads the row's vault pointer.
 const mockEnsureCharacterVault = jest.fn();
 jest.mock('@/lib/mount-index/character-vault', () => ({
   ensureCharacterVault: (...args: unknown[]) => mockEnsureCharacterVault(...args),
@@ -51,7 +52,7 @@ function ctx(): RequestContext {
       chats: { findById: jest.fn().mockResolvedValue(CHAT) },
       characters: {
         findByIdRaw: jest.fn((id: string) =>
-          Promise.resolve(id === PLAYER ? { id: PLAYER, name: 'Bertie' } : id === NPC ? { id: NPC, name: 'Jeeves' } : null),
+          Promise.resolve(id === PLAYER ? { id: PLAYER, name: 'Bertie', characterDocumentMountPointId: 'vault-1' } : id === NPC ? { id: NPC, name: 'Jeeves' } : null),
         ),
       },
     },
@@ -61,7 +62,16 @@ function ctx(): RequestContext {
 describe('handleGetMailbox', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockEnsureCharacterVault.mockResolvedValue({ mountPointId: 'vault-1', created: false });
+  });
+
+  it('answers no letters for a character with no vault, without creating one', async () => {
+    const context = ctx();
+    (context.repos.characters.findByIdRaw as jest.Mock).mockResolvedValueOnce({ id: PLAYER, name: 'Bertie', characterDocumentMountPointId: null });
+    const res = await handleGetMailbox(createRequest(PLAYER), 'chat-1', context);
+    expect(res.status).toBe(200);
+    expect((await res.json()).letters).toEqual([]);
+    expect(mockEnsureCharacterVault).not.toHaveBeenCalled();
+    expect(mockListMailbox).not.toHaveBeenCalled();
   });
 
   it('returns the player-character mailbox letters (newest-first, mapped)', async () => {

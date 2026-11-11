@@ -59,18 +59,27 @@ interface TurnActionResponse {
 /**
  * Call the backend turn action API to persist state changes
  */
+/** The `?action=` each turn action is sent as. */
+const TURN_ACTION_NAMES = {
+  nudge: 'turn-nudge',
+  queue: 'turn-queue',
+  dequeue: 'turn-dequeue',
+  query: 'turn-query',
+  skipUserTurn: 'turn-skip-user',
+} as const
+
 async function callTurnAction(
   chatId: string,
   action: 'nudge' | 'queue' | 'dequeue' | 'query' | 'skipUserTurn',
   participantId?: string,
 ): Promise<TurnActionResponse | null> {
   try {
-    const body: Record<string, string> = { action }
+    const body: Record<string, string> = {}
     if (participantId) {
       body.participantId = participantId
     }
 
-    const res = await fetch(`/api/v1/chats/${chatId}?action=turn`, {
+    const res = await fetch(`/api/v1/chats/${chatId}?action=${TURN_ACTION_NAMES[action]}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

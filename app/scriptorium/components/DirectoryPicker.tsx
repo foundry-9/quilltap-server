@@ -43,8 +43,8 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
     setBrowseError(null)
     try {
       const url = dirPath
-        ? `/api/v1/system/browse-directory?path=${encodeURIComponent(dirPath)}`
-        : '/api/v1/system/browse-directory'
+        ? `/api/v1/system/directories?path=${encodeURIComponent(dirPath)}`
+        : '/api/v1/system/directories'
       const res = await fetch(url)
       if (!res.ok) {
         const data = await res.json()

@@ -10,7 +10,8 @@
  *
  * Job queue — lib/system-tools/tasks-queue.ts
  *   GET  ?action=tasks-queue                  - Tasks queue status
- *   POST ?action=tasks-queue                  - Control the tasks queue (start/stop)
+ *   POST ?action=tasks-queue-start|tasks-queue-stop - Start or stop the processor
+ *   POST ?action=tasks-queue                  - (deprecated) the same, `{ action }` in the body
  *   GET  ?action=job-concurrency              - Global background-job concurrency cap
  *   POST ?action=job-concurrency              - Set the concurrency cap (1-32)
  *
@@ -37,6 +38,7 @@
 import { NextRequest } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
+import { deprecatedPath } from '@/lib/api/deprecated-path';
 import { handleDeleteData, handleDeleteDataPreview } from '@/lib/system-tools/delete-data';
 import {
   handleTasksQueue,
@@ -71,7 +73,14 @@ export const GET = createContextHandler(async (req: NextRequest, context) =>
 export const POST = createContextHandler(async (req: NextRequest, context) =>
   dispatchAction(req, {
     'delete-data': () => handleDeleteData(req, context),
-    'tasks-queue': () => handleTasksQueueControl(req, context),
+    'tasks-queue-start': () => handleTasksQueueControl('start')(req, context),
+    'tasks-queue-stop': () => handleTasksQueueControl('stop')(req, context),
+    // Deprecated: `{ action }` in the body. Answers for one release.
+    'tasks-queue': deprecatedPath(
+      'POST /api/v1/system/tools?action=tasks-queue',
+      '/api/v1/system/tools?action=tasks-queue-start|tasks-queue-stop',
+      () => handleTasksQueueControl()(req, context),
+    ),
     'job-concurrency': () => handleJobConcurrencyControl(req, context),
     'export': () => handleExport(req, context),
     'import-preview': () => handleImportPreview(req, context),

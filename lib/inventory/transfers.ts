@@ -2,7 +2,7 @@
  * Inventory transfers — moving or copying one object between tiers.
  *
  * The one path both the operator's transfer route
- * (`app/api/v1/inventory/transfers`) and a character's `inventory_give` take.
+ * (`POST /api/v1/inventory?action=move-to-tier|copy-to-tier`) and a character's `inventory_give` take.
  * A move keeps the id (so every chat's equipped set and every kit naming it
  * still do), a copy mints one and is refused when the object's resolved
  * `canCopy` is false (`NOT_COPYABLE`). The folder path is kept and created at

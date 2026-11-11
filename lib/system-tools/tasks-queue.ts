@@ -208,11 +208,17 @@ export async function handleTasksQueue(_req: NextRequest, context: RequestContex
   }
 }
 
-export async function handleTasksQueueControl(req: NextRequest, context: RequestContext) {
+/**
+ * Start or stop the processor: `POST ?action=tasks-queue-start` /
+ * `?action=tasks-queue-stop`. With no `mode` (the deprecated
+ * `POST ?action=tasks-queue` `{ action }`), the body names it.
+ */
+export function handleTasksQueueControl(mode?: 'start' | 'stop') {
+  return async (req: NextRequest, context: RequestContext) => {
   const { user } = context;
 
   try {
-    const { action } = tasksQueueControlBodySchema.parse(await req.json());
+    const { action } = mode ? { action: mode } : tasksQueueControlBodySchema.parse(await req.json());
 
     logger.info('[System Tools v1] Tasks queue control action', {
       userId: user.id,
@@ -240,6 +246,7 @@ export async function handleTasksQueueControl(req: NextRequest, context: Request
     );
     return serverError('Failed to control queue');
   }
+  };
 }
 
 export async function handleJobConcurrency(_req: NextRequest, context: RequestContext) {
