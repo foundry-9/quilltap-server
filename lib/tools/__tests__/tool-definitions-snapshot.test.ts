@@ -94,6 +94,7 @@ import { inventoryGiveToolDefinition } from '../inventory-give-tool'
 import { webSearchToolDefinition } from '../web-search-tool'
 import { whisperToolDefinition } from '../whisper-tool'
 import { BUILT_IN_TOOL_EFFECTS, effectOfToolCall, isComputedToolEffect, TOOL_EFFECTS } from '../effects'
+import { BUILT_IN_TOOL_PICKER } from '../tool-picker'
 
 const ALL_TOOLS = {
   askCarina: askCarinaToolDefinition,
@@ -193,6 +194,38 @@ describe('tool definitions: derived OpenAI parameters', () => {
       expect((tool.function.parameters as Record<string, unknown>).type).toBe('object')
     }
     expect.assertions(Object.entries(ALL_TOOLS).length * 4)
+  })
+})
+
+describe('tool definitions: the tool picker', () => {
+  // Every built-in tool is either listed in the per-chat tool picker or left
+  // out with a reason — the route's hand list drifted behind the tool set.
+  it('every declared tool has a picker entry', () => {
+    expect(Object.keys(BUILT_IN_TOOL_EFFECTS).filter((name) => !(name in BUILT_IN_TOOL_PICKER))).toEqual([])
+  })
+
+  it('every picker entry names a declared tool', () => {
+    expect(Object.keys(BUILT_IN_TOOL_PICKER).filter((name) => !(name in BUILT_IN_TOOL_EFFECTS))).toEqual([])
+  })
+
+  it('a listed entry carries its own definition, and an unlisted one a reason', () => {
+    for (const [name, entry] of Object.entries(BUILT_IN_TOOL_PICKER)) {
+      if (entry.listed) {
+        expect({ name, defines: entry.definition.function.name }).toEqual({ name, defines: name })
+        expect(entry.name.length).toBeGreaterThan(0)
+        expect(entry.description.length).toBeGreaterThan(0)
+      } else {
+        expect({ name, hasReason: entry.reason.length > 0 }).toEqual({ name, hasReason: true })
+      }
+    }
+  })
+
+  it('picker snapshot (listed category, or "unlisted")', () => {
+    expect(
+      Object.fromEntries(
+        Object.entries(BUILT_IN_TOOL_PICKER).map(([name, e]) => [name, e.listed ? `${e.category}${e.requires ? ` [${e.requires.join(', ')}]` : ''}` : 'unlisted']),
+      ),
+    ).toMatchSnapshot()
   })
 })
 

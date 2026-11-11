@@ -4,7 +4,7 @@
 
 ### 4.13-dev
 
-#### Refactor: API inputs validated by schemas (phases 1–4)
+#### Refactor: API inputs validated by schemas (phases 1–5, part of 6)
 
 - #165: SillyTavern character export (JSON and PNG) and chat JSONL export returned 500 for a name with characters above U+00FF and broke on a `"`. They, the theme export, the backup download and the two `system/tools` downloads now build `Content-Disposition` with `buildContentDisposition`. A grep-test forbids a hand-spelled `filename=` header.
 - #166: an invalid body to `POST`/`DELETE /api/v1/projects/[id]/mount-points`, `PATCH /api/v1/mount-points/[id]` or `?action=close-document` was a 500; the `ZodError` now reaches the middleware, which answers 400.
@@ -18,6 +18,12 @@
 - `jest.setup.ts` stubs `requiresBaseUrl` beside the other provider-validation questions.
 - `projects/[id]/mount-points` and `groups/[id]/mount-points` are one factory, `createOwnerMountLinkRoutes` (`lib/mount-index/owner-mount-links-routes.ts`). The group GET now also returns `officialMountPointId`. Unlink takes `?mountPointId=`; the old DELETE body is read for one release with a warning, and both clients send the query.
 - Schemas replace the hand checks in `api-keys` (create, update, test, export, import, import-preview; `lib/api-keys/api-key-input.ts`), `roleplay-templates` create and update (`lib/roleplay-templates/template-input.ts`), `system/jobs` POST (type, object payload, integer `priority`, `maxAttempts` 1–20; `priority` and `maxAttempts` of the wrong type used to be dropped silently), `system/restore` (preview and restore), `chats/[id]/files` (`link`, `attach-mount-file`), `plugins/[name]` PUT (`enabled` must be a boolean; any value was accepted) and `mount-points/[id]?action=delete-file`. The API-key import dialog shows the validation message.
+- `app/api/v1/system/tools/route.ts` (1,187 lines) is a dispatch table over six modules in `lib/system-tools/`, each with Zod schemas for its bodies and queries and `RequestContext` in place of `context: any`. An export with no `type`, an unknown export `scope`, a non-object `exportData` and a malformed Almanack generate body are now 400s.
+- `GET /api/v1/tools` maps over `BUILT_IN_TOOL_PICKER` (`lib/tools/tool-picker.ts`): each built-in tool's display name, description, category, definition and availability requirements in one entry, or an unlisted entry with a reason. The route went from 890 to 303 lines; the snapshot test fails on a declared tool with no picker entry. `doc_copy_file` now has the same project-and-stores availability rule as the other `doc_*` tools, and `?includeSchemas=true` serves parameters for every listed tool (the old hand map missed some). Thirteen character tools stay unlisted pending a decision on the picker.
+- `PUT /api/v1/chats/[id]` no longer accepts `chat.contextSummary` (it was written with no anchor or turn bookkeeping), and a `title` sent without `isManuallyRenamed` marks the chat manually renamed.
+- `GET /api/v1/settings/chat` answers the defaults for a user with no saved settings instead of creating the row; the first PUT creates it.
+- Manual memory create answers success with a `warning` when the keystone mark is refused after the memory is saved (it answered 400, which read as "nothing saved"); the memory editor shows the warning.
+- `GET /api/v1/models` no longer reads or echoes `hasVision` / `hasStreaming`, which were never applied (cached model rows record neither).
 
 #### Refactor: the job queue's dedupe rule and the query translator's quiet failures
 

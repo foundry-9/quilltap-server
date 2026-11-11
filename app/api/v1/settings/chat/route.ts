@@ -12,6 +12,7 @@ import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { ChatSettingsSchema } from '@/lib/schemas/settings.types'
 import { patchSchemaOf } from '@/lib/schemas/patch-schema'
+import { defaultChatSettings } from '@/lib/database/repositories/chat-settings.repository'
 
 /**
  * The keys a PUT may no longer carry: `dangerousContentSettings`,
@@ -94,29 +95,19 @@ async function updateChatSettings(userId: string, repos: RequestContext['repos']
 
 /**
  * GET /api/v1/settings/chat
- * Get chat settings for the authenticated user
- * Returns default settings if none exist
+ * Get chat settings for the authenticated user. A user who has never saved
+ * any gets the defaults — answered, not written: the row is created by the
+ * first PUT (`updateForUser`), so a read never writes.
  */
 export const GET = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
-
-    let chatSettings = await repos.chatSettings.findByUserId(user.id)
-
-    // If no settings exist, create default settings via update
-    if (!chatSettings) {
-      chatSettings = await repos.chatSettings.updateForUser(user.id, {
-        avatarDisplayMode: 'ALWAYS',
-        avatarDisplayStyle: 'CIRCULAR',
-        tagStyles: {},
-        themePreference: {
-          activeThemeId: null,
-          colorMode: 'system',
-          showNavThemeSelector: false,
-        },
-      })
+    const chatSettings = await repos.chatSettings.findByUserId(user.id)
+    if (chatSettings) {
+      return successResponse(chatSettings)
     }
 
-    return successResponse(chatSettings)
+    logger.debug('[Settings v1] No chat settings saved yet; answering defaults', { userId: user.id })
+    return successResponse(defaultChatSettings(user.id))
   } catch (error) {
     logger.error('[Settings v1] Error fetching chat settings', { userId: user.id }, error instanceof Error ? error : undefined)
     return serverError('Failed to fetch chat settings')

@@ -4,13 +4,13 @@
  * GET /api/v1/tools - List all available LLM tools for per-chat settings
  * GET /api/v1/tools?chatId=xxx - List tools with availability info for a specific chat
  *
- * Returns both built-in tools and plugin-provided tools.
- * Excludes request_full_context which is never user-toggleable.
+ * Returns both built-in tools and plugin-provided tools. The built-ins — which
+ * are listed, their display metadata, definitions and availability rules — are
+ * `BUILT_IN_TOOL_PICKER` (`lib/tools/tool-picker.ts`), beside the tool
+ * definitions; this route maps over it and adds the plugin tools.
  *
- * When chatId is provided, includes availability status for context-dependent tools:
- * - generate_image: requires image profile on character participant
- * - project_info: requires chat to be in a project
- * - search_web: requires connection profile to allow web search
+ * When chatId is provided, each tool carries `available` (and
+ * `unavailableReason`) from the picker entry's `requires` list.
  */
 
 import { NextRequest } from 'next/server';
@@ -21,528 +21,11 @@ import { toolRegistry } from '@/lib/plugins/tool-registry';
 import type { UniversalTool } from '@/lib/plugins/interfaces/tool-plugin';
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
 import {
-  askCarinaToolDefinition,
-  imageGenerationToolDefinition,
-  webSearchToolDefinition,
-  projectInfoToolDefinition,
-  helpSearchToolDefinition,
-  helpSettingsToolDefinition,
-  helpNavigateToolDefinition,
-  rngToolDefinition,
-  runCustomToolDefinition,
-  editCustomToolToolDefinition,
-  stateToolDefinition,
-  logCreateEntryToolDefinition,
-  logGrepToolDefinition,
-  logReadToolDefinition,
-  selfInventoryToolDefinition,
-  whisperToolDefinition,
-  wardrobeListToolDefinition,
-  wardrobeReadToolDefinition,
-  wardrobeCreateToolDefinition,
-  wardrobeUpdateToolDefinition,
-  wardrobeArchiveToolDefinition,
-  wardrobeWearToolDefinition,
-  wardrobeTakeOffToolDefinition,
-  wardrobeRollbackToolDefinition,
-  wardrobeHistoryToolDefinition,
-  sendMailToolDefinition,
-  listMailToolDefinition,
-  readMailToolDefinition,
-  discardMailToolDefinition,
-} from '@/lib/tools';
-import { INVENTORY_TOOL_DEFINITIONS } from '@/lib/tools/inventory-tool-flags';
-import {
-  searchScriptoriumToolDefinition,
-} from '@/lib/tools/search-scriptorium-tool';
-import {
-  docReadFileTool,
-  docWriteFileTool,
-  docStrReplaceTool,
-  docInsertTextTool,
-  docGrepTool,
-  docListFilesTool,
-  docReadFrontmatterTool,
-  docUpdateFrontmatterTool,
-  docReadHeadingTool,
-  docUpdateHeadingTool,
-  docMoveFileTool,
-  docCopyFileTool,
-  docDeleteFileTool,
-  docCreateFolderTool,
-  docDeleteFolderTool,
-} from '@/lib/tools';
-
-/**
- * Map from built-in tool IDs to their OpenAI-format definitions (for schema inclusion)
- */
-const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<string, unknown> } }> = {
-  ask_carina: askCarinaToolDefinition,
-  send_mail: sendMailToolDefinition,
-  list_mail: listMailToolDefinition,
-  read_mail: readMailToolDefinition,
-  discard_mail: discardMailToolDefinition,
-  generate_image: imageGenerationToolDefinition,
-  search: searchScriptoriumToolDefinition,
-  search_web: webSearchToolDefinition,
-  project_info: projectInfoToolDefinition,
-  help_search: helpSearchToolDefinition,
-  help_settings: helpSettingsToolDefinition,
-  help_navigate: helpNavigateToolDefinition,
-  rng: rngToolDefinition,
-  run_custom: runCustomToolDefinition,
-  edit_custom_tool: editCustomToolToolDefinition,
-  state: stateToolDefinition,
-  log_create_entry: logCreateEntryToolDefinition,
-  log_grep: logGrepToolDefinition,
-  log_read: logReadToolDefinition,
-  self_inventory: selfInventoryToolDefinition,
-  whisper: whisperToolDefinition,
-  wardrobe_list: wardrobeListToolDefinition,
-  wardrobe_read: wardrobeReadToolDefinition,
-  wardrobe_create: wardrobeCreateToolDefinition,
-  wardrobe_update: wardrobeUpdateToolDefinition,
-  wardrobe_archive: wardrobeArchiveToolDefinition,
-  wardrobe_wear: wardrobeWearToolDefinition,
-  wardrobe_take_off: wardrobeTakeOffToolDefinition,
-  wardrobe_rollback: wardrobeRollbackToolDefinition,
-  wardrobe_history: wardrobeHistoryToolDefinition,
-  ...Object.fromEntries(Object.values(INVENTORY_TOOL_DEFINITIONS).map((definition) => [definition.function.name, definition])),
-  doc_read_file: docReadFileTool,
-  doc_write_file: docWriteFileTool,
-  doc_str_replace: docStrReplaceTool,
-  doc_insert_text: docInsertTextTool,
-  doc_grep: docGrepTool,
-  doc_list_files: docListFilesTool,
-  doc_read_frontmatter: docReadFrontmatterTool,
-  doc_update_frontmatter: docUpdateFrontmatterTool,
-  doc_read_heading: docReadHeadingTool,
-  doc_update_heading: docUpdateHeadingTool,
-  doc_move_file: docMoveFileTool,
-  doc_copy_file: docCopyFileTool,
-  doc_delete_file: docDeleteFileTool,
-  doc_create_folder: docCreateFolderTool,
-  doc_delete_folder: docDeleteFolderTool,
-};
-
-/**
- * Built-in tool definitions (these are always available)
- */
-const BUILT_IN_TOOLS = [
-  {
-    id: 'ask_carina',
-    name: 'Ask Carina',
-    description: 'Ask a designated answerer character a quick standalone question without joining the conversation',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'send_mail',
-    name: 'Send Mail',
-    description: 'Post a Markdown letter to another character, delivered by Suparṇā into their vault mailbox',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'list_mail',
-    name: 'List Mail',
-    description: 'List the letters in your own mailbox, with the exact way to read, answer, or discard each',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'read_mail',
-    name: 'Read Mail',
-    description: 'Read a letter from your own mailbox by its file name',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'discard_mail',
-    name: 'Discard Mail',
-    description: 'Throw away a letter from your own mailbox by its file name',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'generate_image',
-    name: 'Generate Image',
-    description: 'Generate images using AI image generation providers',
-    source: 'built-in' as const,
-    category: 'media',
-  },
-  {
-    id: 'search',
-    name: 'Search',
-    description: 'Search through the Scriptorium (character memories, past conversations, and story backgrounds)',
-    source: 'built-in' as const,
-    category: 'search',
-  },
-  {
-    id: 'search_web',
-    name: 'Search Web',
-    description: 'Search the web for current information',
-    source: 'built-in' as const,
-    category: 'search',
-  },
-  {
-    id: 'project_info',
-    name: 'Project Info',
-    description: 'Access project information and files',
-    source: 'built-in' as const,
-    category: 'project',
-  },
-  {
-    id: 'help_search',
-    name: 'Help Search',
-    description: 'Search Quilltap help documentation for features, settings, and usage guidance',
-    source: 'built-in' as const,
-    category: 'help',
-  },
-  {
-    id: 'help_settings',
-    name: 'Help Settings',
-    description: 'Read instance settings to understand current configuration (API keys are never shown)',
-    source: 'built-in' as const,
-    category: 'help',
-  },
-  {
-    id: 'help_navigate',
-    name: 'Help Navigate',
-    description: 'Navigate the user\'s browser to a specific Quilltap page or settings section',
-    source: 'built-in' as const,
-    category: 'help',
-  },
-  {
-    id: 'rng',
-    name: 'Random Number Generator',
-    description: 'Roll dice, flip coins, or randomly select a chat participant (spin the bottle)',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'run_custom',
-    name: 'Custom Tools',
-    description: "Run one of this scene's user-authored custom tools (Tools/*.tool.json) — Pascal rolls it server-side and announces the outcome. Only offered when the chat can actually see at least one valid definition.",
-    source: 'built-in' as const,
-    category: 'pascal',
-  },
-  {
-    id: 'edit_custom_tool',
-    name: 'Edit Custom Tool',
-    description: "Save or validate a custom tool definition (Tools/<name>.tool.json at the top level of a document store), or fetch the definition format (JSON Schema and worked examples) to write one from scratch. Every save is schema-validated first, and an invalid definition is not written.",
-    source: 'built-in' as const,
-    category: 'pascal',
-  },
-  {
-    id: 'state',
-    name: 'State Manager',
-    description: 'Get, set, or delete persistent key-value state for the chat',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'log_create_entry',
-    name: 'Write Log Entry',
-    description: 'Write a timestamped line to the log, recorded against this chat and the writing character',
-    source: 'built-in' as const,
-    category: 'log',
-  },
-  {
-    id: 'log_grep',
-    name: 'Search Log',
-    description: 'Search every log entry in the instance by regular expression',
-    source: 'built-in' as const,
-    category: 'log',
-  },
-  {
-    id: 'log_read',
-    name: 'Read Log',
-    description: 'Read log entries by chat, by character, and/or by a span of time',
-    source: 'built-in' as const,
-    category: 'log',
-  },
-  {
-    id: 'self_inventory',
-    name: 'Self-Inventory',
-    description: 'Return an introspection report for the calling character: vault files, memory and chat stats, assembled system prompt, and last-turn LLM token usage',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'whisper',
-    name: 'Whisper',
-    description: 'Send a private message to a specific character in a multi-character chat',
-    source: 'built-in' as const,
-    category: 'utility',
-  },
-  {
-    id: 'wardrobe_list',
-    name: 'List Wardrobe',
-    description: 'Browse wardrobe items (own plus shared project / Quilltap General items) for the current character',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_read',
-    name: 'Read Wardrobe Item',
-    description: 'Read the full detail of one wardrobe item, including its Portrait Cue',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_create',
-    name: 'Create Wardrobe Item',
-    description: 'Create a new wardrobe item, optionally equip it, or gift it to another character',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_update',
-    name: 'Update Wardrobe Item',
-    description: 'Edit the stored fields of an existing wardrobe item (own items only)',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_archive',
-    name: 'Archive Wardrobe Item',
-    description: 'Retire a wardrobe item (own items only; restorable by a human)',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_wear',
-    name: 'Wear Wardrobe Items',
-    description: 'Put on one or more wardrobe items (single garments or composite outfits)',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_take_off',
-    name: 'Take Off Wardrobe Items',
-    description: 'Take off worn wardrobe items or empty slots',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_rollback',
-    name: 'Return to an Earlier Outfit',
-    description: 'Return to an outfit worn earlier in this chat, by its number',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'wardrobe_history',
-    name: 'Outfit History',
-    description: 'List the numbered outfits worn in this chat',
-    source: 'built-in' as const,
-    category: 'wardrobe',
-  },
-  {
-    id: 'inventory_list',
-    name: 'List Inventory',
-    description: "List the objects the character carries and can reach, with their states",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_read',
-    name: 'Read Inventory Object',
-    description: "Read one object in full: descriptions, metadata, archetype, kit members",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_equip',
-    name: 'Equip Objects',
-    description: "Take up objects or kits in this chat",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_unequip',
-    name: 'Unequip Objects',
-    description: "Set down carried objects in this chat",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_pick_up',
-    name: 'Pick Up Object',
-    description: "Make an instance of a reachable archetype in the character's vault, optionally equipped",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_create',
-    name: 'Create Object',
-    description: "Make a new object of the character's own",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_update',
-    name: 'Update Object',
-    description: "Change one of the character's own objects",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_archive',
-    name: 'Archive Object',
-    description: "Put away (or restore) one of the character's own objects",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  {
-    id: 'inventory_give',
-    name: 'Give Object',
-    description: "Hand one of the character's own objects to another participant",
-    source: 'built-in' as const,
-    category: 'inventory',
-  },
-  // Document editing tools (Scriptorium Phase 3.3)
-  {
-    id: 'doc_read_file',
-    name: 'Read Document',
-    description: 'Read file contents from document stores or project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_write_file',
-    name: 'Write Document',
-    description: 'Write or create a file in document stores or project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_str_replace',
-    name: 'Find & Replace in Document',
-    description: 'Find and replace exact text in a file (unique match required)',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_insert_text',
-    name: 'Insert Text in Document',
-    description: 'Insert text at a specific position in a file',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_grep',
-    name: 'Search Documents',
-    description: 'Search for text across files in document stores and project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_list_files',
-    name: 'List Documents',
-    description: 'List files available in document stores and project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_read_frontmatter',
-    name: 'Read Frontmatter',
-    description: 'Read YAML frontmatter from a markdown file',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_update_frontmatter',
-    name: 'Update Frontmatter',
-    description: 'Update YAML frontmatter properties in a markdown file',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_read_heading',
-    name: 'Read Heading Section',
-    description: 'Read all content under a specific heading in a markdown file',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_update_heading',
-    name: 'Update Heading Section',
-    description: 'Replace content under a specific heading in a markdown file',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  // Document file management tools (Scriptorium Phase 3.4)
-  {
-    id: 'doc_move_file',
-    name: 'Move/Rename Document',
-    description: 'Move or rename a file in document stores or project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_copy_file',
-    name: 'Copy Document',
-    description: 'Copy a file from one document store to a different document store',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_delete_file',
-    name: 'Delete Document',
-    description: 'Permanently delete a file from document stores or project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_create_folder',
-    name: 'Create Folder',
-    description: 'Create a new folder in document stores or project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  {
-    id: 'doc_delete_folder',
-    name: 'Delete Folder',
-    description: 'Delete an empty folder from document stores or project files',
-    source: 'built-in' as const,
-    category: 'documents',
-  },
-  // Photo album tools — keep, list, and re-attach images saved to a
-  // character's vault under photos/. Same gate as the doc-edit family.
-  {
-    id: 'keep_image',
-    name: 'Keep Image',
-    description: "Save a generated image to the character's photo album with optional caption and tags",
-    source: 'built-in' as const,
-    category: 'photos',
-  },
-  {
-    id: 'list_images',
-    name: 'List Kept Images',
-    description: 'Search or list images previously saved to the photo album',
-    source: 'built-in' as const,
-    category: 'photos',
-  },
-  {
-    id: 'attach_image',
-    name: 'Attach Kept Image',
-    description: 'Re-attach a previously kept image to the current chat message',
-    source: 'built-in' as const,
-    category: 'photos',
-  },
-  {
-    id: 'describe_image',
-    name: 'Describe Image',
-    description: 'Look at an image and report what it depicts',
-    source: 'built-in' as const,
-    category: 'photos',
-  },
-  // Note: request_full_context and submit_final_response are intentionally excluded
-  // - request_full_context is a safety valve that should always be available
-  // - submit_final_response is an agent-mode internal tool
-];
+  BUILT_IN_TOOL_PICKER,
+  listedPickerTools,
+  toolAvailability,
+  type ToolAvailabilityContext,
+} from '@/lib/tools/tool-picker';
 
 export interface AvailableTool {
   id: string;
@@ -574,25 +57,22 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
   try {
     const chatId = req.nextUrl.searchParams.get('chatId');
     const includeSchemas = req.nextUrl.searchParams.get('includeSchemas') === 'true';
-    const tools: AvailableTool[] = BUILT_IN_TOOLS.map(t => ({
-      ...t,
+    // Built-in tools come from the picker table beside their definitions
+    // (`lib/tools/tool-picker.ts`); this route only maps over it.
+    const tools: AvailableTool[] = listedPickerTools().map(([id, entry]) => ({
+      id,
+      name: entry.name,
+      description: entry.description,
+      source: 'built-in' as const,
+      category: entry.category,
       userInvocable: true,
-      ...(includeSchemas && BUILT_IN_TOOL_SCHEMAS[t.id]
-        ? { parameters: BUILT_IN_TOOL_SCHEMAS[t.id].function.parameters }
+      ...(includeSchemas && entry.definition.function.parameters
+        ? { parameters: entry.definition.function.parameters }
         : {}),
     }));
 
     // If chatId provided, get chat context for availability checks
-    let chatContext: {
-      hasImageProfile: boolean;
-      hasProject: boolean;
-      hasDocumentStores: boolean;
-      allowsWebSearch: boolean;
-      isMultiCharacter: boolean;
-      canDressThemselves: boolean;
-      canCreateOutfits: boolean;
-      canManageInventory: boolean;
-    } | null = null;
+    let chatContext: ToolAvailabilityContext | null = null;
 
     if (chatId) {
       try {
@@ -653,7 +133,17 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
             }
           }
 
-          chatContext = { hasImageProfile, hasProject, hasDocumentStores, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits, canManageInventory };
+          chatContext = {
+            hasImageProfile,
+            hasProject,
+            hasDocumentStores,
+            allowsWebSearch,
+            webSearchConfigured: allowsWebSearch && isWebSearchConfigured(),
+            isMultiCharacter,
+            canDressThemselves,
+            canCreateOutfits,
+            canManageInventory,
+          };
         }
       } catch (chatError) {
         logger.warn('[Tools v1] Failed to load chat for availability check', {
@@ -722,8 +212,8 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
             continue;
           }
 
-          // Skip if this tool is already in built-in tools
-          if (BUILT_IN_TOOLS.some(t => t.id === toolName)) {
+          // Skip if this tool is a built-in (listed or deliberately unlisted)
+          if (toolName in BUILT_IN_TOOL_PICKER) {
             continue;
           }
 
@@ -785,98 +275,21 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
       }
     }
 
-    // Set availability status for context-dependent tools
+    // Availability for context-dependent tools: each built-in names its own
+    // requirements in the picker table; plugin tools are always available.
     if (chatContext) {
       for (const tool of tools) {
-        // Default to available
-        tool.available = true;
-
-        // Check specific tool requirements
-        switch (tool.id) {
-          case 'generate_image':
-            if (!chatContext.hasImageProfile) {
-              tool.available = false;
-              tool.unavailableReason = 'Requires an image generation profile to be configured for the character';
-            }
-            break;
-          case 'project_info':
-            if (!chatContext.hasProject) {
-              tool.available = false;
-              tool.unavailableReason = 'Chat must be associated with a project';
-            }
-            break;
-          case 'search_web':
-            if (!chatContext.allowsWebSearch) {
-              tool.available = false;
-              tool.unavailableReason = 'Web search must be enabled in the connection profile';
-            } else if (!isWebSearchConfigured()) {
-              tool.available = false;
-              tool.unavailableReason = 'No search provider configured. Please add a search provider API key in Settings > API Keys.';
-            }
-            break;
-          case 'whisper':
-            if (!chatContext.isMultiCharacter) {
-              tool.available = false;
-              tool.unavailableReason = 'Whisper requires a multi-character chat with more than one active character';
-            }
-            break;
-          case 'wardrobe_list':
-          case 'wardrobe_read':
-          case 'wardrobe_wear':
-          case 'wardrobe_take_off':
-          case 'wardrobe_rollback':
-          case 'wardrobe_history':
-            if (!chatContext.canDressThemselves) {
-              tool.available = false;
-              tool.unavailableReason = 'Character does not have wardrobe self-dressing enabled';
-            }
-            break;
-          case 'wardrobe_create':
-          case 'wardrobe_update':
-          case 'wardrobe_archive':
-            if (!chatContext.canCreateOutfits) {
-              tool.available = false;
-              tool.unavailableReason = 'Character does not have wardrobe item creation enabled';
-            }
-            break;
-          case 'inventory_list':
-          case 'inventory_read':
-          case 'inventory_equip':
-          case 'inventory_unequip':
-          case 'inventory_pick_up':
-          case 'inventory_create':
-          case 'inventory_update':
-          case 'inventory_archive':
-          case 'inventory_give':
-            if (!chatContext.canManageInventory) {
-              tool.available = false;
-              tool.unavailableReason = 'Character does not have inventory management enabled';
-            }
-            break;
-          case 'doc_read_file':
-          case 'doc_write_file':
-          case 'doc_str_replace':
-          case 'doc_insert_text':
-          case 'doc_grep':
-          case 'doc_list_files':
-          case 'doc_read_frontmatter':
-          case 'doc_update_frontmatter':
-          case 'doc_read_heading':
-          case 'doc_update_heading':
-          case 'doc_move_file':
-          case 'doc_delete_file':
-          case 'doc_create_folder':
-          case 'doc_delete_folder':
-            if (!chatContext.hasProject) {
-              tool.available = false;
-              tool.unavailableReason = 'Chat must be associated with a project';
-            } else if (!chatContext.hasDocumentStores) {
-              tool.available = false;
-              tool.unavailableReason = 'Project must have linked document stores (configure in Project > The Scriptorium)';
-            }
-            break;
+        const entry = tool.source === 'built-in' ? BUILT_IN_TOOL_PICKER[tool.id] : undefined;
+        const availability = entry?.listed ? toolAvailability(entry, chatContext) : { available: true as const };
+        tool.available = availability.available;
+        if (!availability.available) {
+          tool.unavailableReason = availability.unavailableReason;
         }
       }
+      logger.debug('[Tools v1] Availability resolved', {
+        chatId,
+        unavailable: tools.filter((t) => t.available === false).length,
+      });
     }
 
     return successResponse({

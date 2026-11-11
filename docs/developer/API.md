@@ -458,7 +458,7 @@ User-specific chat and UI settings.
 
 #### `GET /api/v1/settings/chat`
 
-Get chat settings for the current user.
+Get chat settings for the current user. A user with no saved settings gets the defaults (`defaultChatSettings`, with no `id` or timestamps); the read writes nothing, and the first `PUT` creates the row.
 
 **Response**: `200 OK`
 
@@ -1346,8 +1346,8 @@ List cached models from the database.
 
 **Query Parameters**:
 - `provider` - Filter by provider (e.g., `openai`, `anthropic`)
-- `hasVision` - Filter to vision-capable models (`true`)
-- `hasStreaming` - Filter to streaming-capable models (`true`)
+
+(`hasVision` / `hasStreaming` were documented and echoed back but never applied — a cached model row records neither capability. They are no longer read.)
 
 **Response**: `200 OK`
 
@@ -1367,9 +1367,7 @@ List cached models from the database.
   ],
   "count": 25,
   "filters": {
-    "provider": "openai",
-    "hasVision": false,
-    "hasStreaming": false
+    "provider": "openai"
   },
   "cached": true
 }
@@ -6913,6 +6911,10 @@ Pause a job.
 
 Resume a paused job.
 
+#### `/api/v1/system/tools` — layout
+
+The route is a dispatch table; each feature lives in `lib/system-tools/` (`delete-data.ts`, `tasks-queue.ts`, `export.ts`, `import.ts`, `almanack-reports.ts`, `ai-import.ts`) with its Zod body and query schemas beside its handlers. A malformed body or query is the middleware's `400` (`{ error: 'Validation error', message, details }`, the old wording in `message`). Newly refused: an export `POST` with no `type`, an unknown export `scope`, a non-object `exportData` on `import-execute`, and a malformed `capabilities-report-generate` body (an empty body is still an untracked run). The `tasks-queue` `POST` still takes `{ action: 'start' | 'stop' }` in the body (a conformance item, §1.3), now validated.
+
 #### `POST /api/v1/system/tools?action=delete-data`
 
 Delete all user data (the Delete All Data card).
@@ -7056,8 +7058,11 @@ Endpoints for managing LLM tools available during chat conversations.
 
 List all available LLM tools that can be enabled/disabled per chat.
 
+The built-in tools are `BUILT_IN_TOOL_PICKER` (`lib/tools/tool-picker.ts`): one entry per declared tool, either listed (name, description, category, definition, availability `requires`) or unlisted with a reason. The tool-definitions snapshot test fails on a declared tool with no entry. Unlisted today: the Brahma-only tools, `request_full_context`, `submit_final_response`, and thirteen character tools awaiting a decision on whether the picker shows them (`delete_annotation`, `upsert_annotation`, `read_conversation`, `terminal_list`, `terminal_read`, `doc_open_document`, `doc_close_document`, `doc_focus`, `doc_move_folder`, and the four `doc_*_blob` tools).
+
 **Query Parameters:**
 - `chatId` (optional) - Chat ID to check tool availability in context
+- `includeSchemas` (optional, `true`) - include each tool's `parameters` JSON Schema (every listed built-in now has one)
 
 **Response:**
 ```json

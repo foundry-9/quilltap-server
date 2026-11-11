@@ -43,10 +43,12 @@ jest.mock('@/lib/api/responses', () => ({
 }))
 
 const mockAdmit = jest.fn()
+const mockUpdateMemory = jest.fn()
 jest.mock('@/lib/memory/recall/search', () => ({}))
 jest.mock('@/lib/memory/index-store/backfill', () => ({}))
 jest.mock('@/lib/memory/admission', () => ({
   admitCandidate: (...args: unknown[]) => mockAdmit(...args),
+  updateMemory: (...args: unknown[]) => mockUpdateMemory(...args),
   admissionInserted: (o: { action: { kind: string } }) => o.action.kind === 'insert' || o.action.kind === 'insert-linked',
 }))
 
@@ -149,6 +151,27 @@ describe('POST /api/v1/memories (manual create, bug 218)', () => {
       occurredAt: '2026-10-01T18:00:00Z',
       entities: ['Kettle'],
     })
+  })
+
+  // The row is saved before the mark is tried; a refused mark is a warning on
+  // the success, not a 400 that reads as "nothing was saved".
+  it('reports a refused keystone mark as a warning on a 201', async () => {
+    mockCtx.repos.memories.countKeystones = jest.fn(async () => 0)
+    mockAdmit.mockResolvedValue({ memory: { id: 'new-row', characterId: CHAR_ID, keystone: false }, action: { kind: 'insert' } })
+    mockUpdateMemory.mockResolvedValue({ ok: false, reason: 'keystone-refused', message: 'limit reached' })
+    const res: any = await POST(req({ ...baseBody, keystone: true }))
+    expect(res.status).toBe(201)
+    expect(res.body.memory.id).toBe('new-row')
+    expect(res.body.warning).toBe('The memory was saved, but not as a keystone: limit reached')
+  })
+
+  it('returns the marked row when the keystone mark takes', async () => {
+    mockCtx.repos.memories.countKeystones = jest.fn(async () => 0)
+    mockAdmit.mockResolvedValue({ memory: { id: 'new-row', characterId: CHAR_ID, keystone: false }, action: { kind: 'insert' } })
+    mockUpdateMemory.mockResolvedValue({ ok: true, memory: { id: 'new-row', keystone: true } })
+    const res: any = await POST(req({ ...baseBody, keystone: true }))
+    expect(res.status).toBe(201)
+    expect(res.body).toEqual({ memory: { id: 'new-row', keystone: true }, action: 'insert' })
   })
 
   it('returns 201 for insert-linked', async () => {
