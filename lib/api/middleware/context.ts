@@ -11,7 +11,8 @@ import { getServerSession, type ExtendedSession } from '@/lib/auth/session';
 import { getRepositoriesSafe, type RepositoryContainer } from '@/lib/repositories/factory';
 import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
-import { validationError, serverError } from '@/lib/api/responses';
+import { validationError, serverError, badRequest } from '@/lib/api/responses';
+import { guardRequestBodyParsers, RequestBodyParseError } from '@/lib/api/request-body';
 import type { User } from '@/lib/schemas/types';
 import { ProjectStoreUnavailableError } from '@/lib/projects/project-store/schema';
 import { GroupStoreUnavailableError } from '@/lib/groups/group-store/schema';
@@ -155,17 +156,26 @@ export async function withContextParams<P extends Record<string, string | string
 
 /**
  * Catch handler errors and return appropriate responses.
- * ZodErrors become 400 validation errors; everything else becomes 500.
+ * ZodErrors and unparseable request bodies become 400s; everything else becomes 500.
  */
 async function handleRouteError(
   request: NextRequest,
   handlerFn: () => Promise<NextResponse>
 ): Promise<NextResponse> {
+  // Tag the request's own body parsers so a malformed body is told apart
+  // from any other SyntaxError the handler might raise (#221).
+  guardRequestBodyParsers(request);
   try {
     return await handlerFn();
   } catch (error) {
     if (error instanceof z.ZodError) {
       return validationError(error);
+    }
+    if (error instanceof RequestBodyParseError) {
+      contextLogger.debug(`[${request.method} ${new URL(request.url).pathname}] Unparseable request body`, {
+        kind: error.kind,
+      });
+      return badRequest(error.message);
     }
     const method = request.method;
     const url = new URL(request.url).pathname;

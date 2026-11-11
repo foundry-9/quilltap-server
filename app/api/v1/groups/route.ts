@@ -89,7 +89,7 @@ async function handleListGroups(req: NextRequest, { user, repos }: RequestContex
 // POST Handler
 // ============================================================================
 
-export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
+async function handleCreateGroup(req: NextRequest, { user, repos }: RequestContext) {
   const body = await req.json();
   const validatedData = createGroupSchema.parse(body);
 
@@ -127,4 +127,9 @@ export const POST = createContextHandler(async (req: NextRequest, { user, repos 
   }
 
   return created({ group });
-});
+}
+
+// An unknown ?action= is a 400 from the dispatcher, never a create (#219).
+export const POST = createContextHandler((req: NextRequest, ctx: RequestContext) =>
+  dispatchAction(req, {}, () => handleCreateGroup(req, ctx))
+);

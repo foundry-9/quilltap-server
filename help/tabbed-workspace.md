@@ -42,7 +42,10 @@ consult a character's dossier on the right.
   double-click restores the even split), and **rejoin** them by gathering every
   tab back into one pane.
 - **Close a tab** with the small ✕ on its right. Close the last one and the home
-  tab reappears.
+  tab reappears. A document tab with words not yet filed saves them first, and
+  should the save be refused it stays open, edits and all, rather than let them
+  fall through the floorboards — whether you reach for the ✕, **Delete** or the
+  keyboard shortcut.
 
 Your arrangement — which tabs are open, in which pane, in what order, and how the
 split is set — is remembered between visits.

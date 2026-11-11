@@ -223,6 +223,35 @@ describe('callSubstitute, through its three sites', () => {
     })
   })
 
+  describe('#217 — the multi-character anchor follows the stand-in\'s prefill setting', () => {
+    it('an Anthropic understudy that refuses prefill is not sent the primary\'s trailing [Name]', async () => {
+      const primary = makeProfile({ provider: 'OPENAI', multiCharacterPrefill: true, fallbackProfileId: 'p-anthropic' })
+      const understudy = makeProfile({ id: 'p-anthropic', name: 'Sonnet Understudy', provider: 'ANTHROPIC', multiCharacterPrefill: false })
+      const state = makeState(primary)
+      streamScripts = [answering('Marie answers.')]
+
+      const { applyMultiCharacterTurnAnchor } =
+        require('@/lib/chat/multi-character-anchor') as typeof import('@/lib/chat/multi-character-anchor')
+      const formattedMessages = [
+        { role: 'system', content: 'You are Marie.' },
+        { role: 'user', content: '[Charlie] *I nod.*' },
+      ]
+      applyMultiCharacterTurnAnchor(formattedMessages, 'Marie', true)
+
+      const result = await attemptHardErrorFailover(hardErrorOpts(state, [primary, understudy], {
+        formattedMessages,
+        character: { id: 'ch-1', name: 'Marie' },
+        actualTools: OPENAI_TOOLS,
+      }))
+
+      expect(result.recovered).toBe(true)
+      const sent = streamCalls[0].messages as Array<{ role: string; content: string }>
+      expect(sent[sent.length - 1].role).toBe('user')
+      expect(sent.some((m) => m.role === 'assistant' && m.content === '[Marie]')).toBe(false)
+      expect(sent[0].content).toContain('Respond as Marie and ONLY Marie')
+    })
+  })
+
   describe('#182 — a tool call is an answer', () => {
     it('the chain accepts an understudy whose only answer is a tool call, and calls nobody else', async () => {
       const primary = makeProfile({ fallbackProfileId: 'p-openai', allowTierFallback: false })

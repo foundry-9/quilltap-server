@@ -132,6 +132,19 @@ describe('classifyFallbackTrigger', () => {
       .toBe('network')
   })
 
+  it("classifies Anthropic's real model-not-found error as model-missing (#223)", () => {
+    const err = new Error(
+      '404 {"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-9-9"},"request_id":"req_011"}'
+    )
+    err.name = 'NotFoundError'
+    expect(classifyFallbackTrigger(err)).toBe('model-missing')
+  })
+
+  it('leaves a not_found_error about something other than a model alone', () => {
+    const err = new Error('404 {"type":"error","error":{"type":"not_found_error","message":"file: abc"}}')
+    expect(classifyFallbackTrigger(err)).toBeNull()
+  })
+
   describe('content-moderation refusals (Concierge overhaul, phase 1)', () => {
     it('reads a thrown OpenAI content_policy_violation as a moderation refusal, not a malformed 4xx', () => {
       const err = Object.assign(new Error('400 Your request was rejected as a result of our safety system.'), {

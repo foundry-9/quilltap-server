@@ -29,6 +29,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import type { ChatEvent, MessageEvent, ChatMetadata, ChatParticipant } from '@/lib/schemas/types';
 import { MemoryCascadeActionEnum } from '@/lib/schemas/settings.types';
+import { readJsonBody } from '@/lib/api/request-body';
 
 // Validation schemas
 const editMessageSchema = z.object({
@@ -327,7 +328,9 @@ async function handleSwipeAction(
   { user, repos }: { user: { id: string }; repos: any },
   messageId: string
 ): Promise<NextResponse> {
-  const body = await req.json().catch(() => ({}));
+  // An empty body is "no swipeIndex" (regenerate); a body that is present but
+  // not JSON is a 400 from the middleware, never a regeneration (#220).
+  const body = await readJsonBody(req, {});
   const parsed = swipeActionSchema.safeParse(body);
 
   // A body that is present and fails the schema is a client error, never "no

@@ -55,6 +55,13 @@ function freshId(): string {
   return `tab-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
 }
 
+/**
+ * A tab's veto over a user-initiated close. Resolves `true` when the tab may
+ * close, `false` to keep it open (the guard tells the user why). A guard may
+ * do work first — a document tab saves its unsaved text before answering.
+ */
+export type TabCloseGuard = () => Promise<boolean>
+
 export interface OpenTabOptions {
   pane?: PaneId
   focus?: boolean
@@ -73,7 +80,23 @@ interface WorkspaceContextValue {
    * the resulting tab id (the existing one when de-duped).
    */
   openTab: (kind: TabKind, payload?: unknown, opts?: OpenTabOptions) => string
+  /**
+   * Close a tab unconditionally (and its child tabs). Programmatic closes —
+   * a view dismissing itself after it has settled, the Salon retiring its
+   * mode panes — use this. User-initiated closes use {@link requestCloseTab}.
+   */
   closeTab: (id: string) => void
+  /**
+   * The user's close (tab strip ×, Delete on a tab, Ctrl/Cmd+Alt+W): consults
+   * the close guards of the tab and of every child tab the close would cascade
+   * to, and closes only if all of them agree. Resolves whether it closed.
+   */
+  requestCloseTab: (id: string) => Promise<boolean>
+  /**
+   * Register a {@link TabCloseGuard} for a tab. Returns the unregister function.
+   * One guard per tab; a later registration replaces an earlier one.
+   */
+  registerCloseGuard: (tabId: string, guard: TabCloseGuard) => () => void
   moveTab: (id: string, toPane: PaneId, toIndex?: number) => void
   reorderTab: (id: string, toIndex: number) => void
   setActive: (pane: PaneId, id: string) => void
@@ -189,6 +212,63 @@ export function WorkspaceProvider({ children, instanceId, isChatValid }: Workspa
     [dispatchAction]
   )
 
+  // Close guards live in a ref: registering one must not re-render the
+  // workspace, and requestCloseTab reads them at call time.
+  const closeGuardsRef = useRef(new Map<string, TabCloseGuard>())
+  // A close already being decided, so a double-click on × joins it rather
+  // than running a guard (and its save) twice.
+  const pendingClosesRef = useRef(new Map<string, Promise<boolean>>())
+
+  const registerCloseGuard = useCallback<WorkspaceContextValue['registerCloseGuard']>(
+    (tabId, guard) => {
+      closeGuardsRef.current.set(tabId, guard)
+      return () => {
+        if (closeGuardsRef.current.get(tabId) === guard) closeGuardsRef.current.delete(tabId)
+      }
+    },
+    []
+  )
+
+  const requestCloseTab = useCallback<WorkspaceContextValue['requestCloseTab']>(
+    (id) => {
+      const pending = pendingClosesRef.current.get(id)
+      if (pending) return pending
+
+      const run = (async (): Promise<boolean> => {
+        const tabs = stateRef.current.tabs
+        if (!tabs[id]) return false
+        // The close cascades to child tabs, so each of them gets a say too.
+        const affected = [
+          id,
+          ...Object.values(tabs)
+            .filter((t) => t.parentTabId === id)
+            .map((t) => t.id),
+        ]
+        for (const tabId of affected) {
+          const guard = closeGuardsRef.current.get(tabId)
+          if (!guard) continue
+          let allowed = false
+          try {
+            allowed = await guard()
+          } catch (error) {
+            console.warn('[Workspace] Tab close guard threw; keeping the tab open', { tabId, error })
+            allowed = false
+          }
+          if (!allowed) return false
+        }
+        closeTab(id)
+        return true
+      })()
+
+      pendingClosesRef.current.set(id, run)
+      void run.finally(() => {
+        if (pendingClosesRef.current.get(id) === run) pendingClosesRef.current.delete(id)
+      })
+      return run
+    },
+    [closeTab]
+  )
+
   const moveTab = useCallback<WorkspaceContextValue['moveTab']>(
     (id, toPane, toIndex) => dispatchAction({ type: 'MOVE_TAB', id, toPane, toIndex }),
     [dispatchAction]
@@ -234,6 +314,8 @@ export function WorkspaceProvider({ children, instanceId, isChatValid }: Workspa
       tabs: state.tabs,
       openTab,
       closeTab,
+      requestCloseTab,
+      registerCloseGuard,
       moveTab,
       reorderTab,
       setActive,
@@ -247,6 +329,8 @@ export function WorkspaceProvider({ children, instanceId, isChatValid }: Workspa
       hydrated,
       openTab,
       closeTab,
+      requestCloseTab,
+      registerCloseGuard,
       moveTab,
       reorderTab,
       setActive,

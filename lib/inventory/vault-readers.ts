@@ -17,6 +17,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { chooseIdWinners } from '@/lib/mount-index/item-rules';
 import { getRepositories } from '@/lib/repositories/factory';
 import type {
   DocMountDocumentWithLink as DocMountDocument,
@@ -205,22 +206,16 @@ export async function scanInventoryFolder(mountPointId: string): Promise<Invento
     .filter((doc) => isInventoryItemDocumentPath(doc.relativePath))
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   // Two files may claim one id (a copy made in the Scriptorium). The one at
-  // the object's own name — the original — wins; failing that, the first by
-  // path. The rest are skipped, and the projection leaves them alone.
+  // the object's own name — the original — wins (the newest of several at
+  // their own names, #224); failing that, the first by path
+  // (`chooseIdWinners`). The rest are skipped, and the projection leaves them
+  // alone.
   const parsed: Array<{ path: string; record: InventoryRecord }> = [];
   for (const doc of objectDocs) {
     const record = parseInventoryItemFile(doc);
     if (record) parsed.push({ path: doc.relativePath, record });
   }
-  const atOwnName = ({ path, record }: { path: string; record: InventoryRecord }) =>
-    path.toLowerCase() === `${INVENTORY_FOLDER}/${inventoryFileNameFor(record)}`.toLowerCase();
-  const winnerPath = new Map<string, string>();
-  for (const entry of parsed) {
-    if (!winnerPath.has(entry.record.id) && atOwnName(entry)) winnerPath.set(entry.record.id, entry.path);
-  }
-  for (const { path, record } of parsed) {
-    if (!winnerPath.has(record.id)) winnerPath.set(record.id, path);
-  }
+  const winnerPath = chooseIdWinners(parsed, (record) => `${INVENTORY_FOLDER}/${inventoryFileNameFor(record)}`);
   const records: InventoryRecord[] = [];
   const duplicatePaths = new Set<string>();
   const ownedPaths = new Set<string>();

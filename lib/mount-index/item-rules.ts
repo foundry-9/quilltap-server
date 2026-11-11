@@ -14,6 +14,8 @@
  * @module lib/mount-index/item-rules
  */
 
+import { sameStorePath } from './store-path-fold';
+
 /** NFC, trimmed, lower-cased without a locale. */
 export function foldItemName(name: string): string {
   return name.normalize('NFC').trim().toLowerCase();
@@ -57,4 +59,39 @@ export function archivedPatch(
   const isArchived = Boolean(currentArchivedAt);
   if (isArchived === archived) return null;
   return { archivedAt: archived ? now : null };
+}
+
+/**
+ * Which file speaks for each id when several files in one folder claim it
+ * (a copy made in the Scriptorium, or the stale half of a case-only rename
+ * that predates #224). Returns id → winning path.
+ *
+ * The rule, in order: a file at the record's own name (`ownPath`, compared
+ * by the store's path rule, `sameStorePath` — never `toLowerCase()`) beats
+ * one that is not; among files at their own names, the most recently updated
+ * record wins (each file of a split case-variant pair sits at its own name, and
+ * only the newer one carries the rename); otherwise the first in `parsed`
+ * order. `parsed` is expected sorted by path, so the result is stable.
+ */
+export function chooseIdWinners<R extends { id: string; updatedAt?: string | null }>(
+  parsed: ReadonlyArray<{ path: string; record: R }>,
+  ownPath: (record: R) => string,
+): Map<string, string> {
+  const stamp = (record: R): number => {
+    const ms = record.updatedAt ? Date.parse(record.updatedAt) : NaN;
+    return Number.isNaN(ms) ? -Infinity : ms;
+  };
+  const best = new Map<string, { path: string; record: R; own: boolean }>();
+  for (const entry of parsed) {
+    const own = sameStorePath(entry.path, ownPath(entry.record));
+    const held = best.get(entry.record.id);
+    if (
+      !held
+      || (own && !held.own)
+      || (own && held.own && stamp(entry.record) > stamp(held.record))
+    ) {
+      best.set(entry.record.id, { ...entry, own });
+    }
+  }
+  return new Map([...best].map(([id, { path }]) => [id, path]));
 }

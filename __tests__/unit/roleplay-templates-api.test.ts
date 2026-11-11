@@ -40,6 +40,7 @@ const defaultSession = {
 function createMockRequest(url: string, body?: Record<string, any> | null, method = 'GET') {
   return {
     url,
+    nextUrl: new URL(url, 'http://localhost'),
     method,
     headers: new Map(),
     json: async () => body ?? {},

@@ -135,3 +135,42 @@ describe('applyMultiCharacterTurnAnchor — prose route', () => {
     expect(messages).toEqual([{ role: 'user', content: 'Hello' }])
   })
 })
+
+describe('reanchorMultiCharacterTurn — a substitute follows its own prefill setting (#217)', () => {
+  // Imported here so the module under test is the shared anchor, not the re-export.
+  const { reanchorMultiCharacterTurn } = require('@/lib/chat/multi-character-anchor')
+
+  function anchored(usePrefill: boolean) {
+    const messages = baseMessages()
+    applyMultiCharacterTurnAnchor(messages, 'Marie', usePrefill)
+    return messages
+  }
+
+  it('strips the primary prefill and adds the prose instruction for a no-prefill substitute', () => {
+    const fromPrefill = anchored(true)
+    const result = reanchorMultiCharacterTurn(fromPrefill, 'Marie', false)
+    expect(result).toEqual(anchored(false))
+    expect(result[result.length - 1].role).toBe('user')
+    // The input is untouched.
+    expect(fromPrefill[fromPrefill.length - 1]).toEqual(expect.objectContaining({ role: 'assistant', content: '[Marie]' }))
+  })
+
+  it('swaps the prose instruction for a trailing prefill for a prefilling substitute', () => {
+    const result = reanchorMultiCharacterTurn(anchored(false), 'Marie', true)
+    expect(result.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })))
+      .toEqual(anchored(true).map(m => ({ role: m.role, content: m.content })))
+  })
+
+  it('returns the same array when the anchor already matches', () => {
+    const withPrefill = anchored(true)
+    expect(reanchorMultiCharacterTurn(withPrefill, 'Marie', true)).toBe(withPrefill)
+    const withProse = anchored(false)
+    expect(reanchorMultiCharacterTurn(withProse, 'Marie', false)).toBe(withProse)
+  })
+
+  it('leaves a single-character array alone', () => {
+    const messages = baseMessages()
+    expect(reanchorMultiCharacterTurn(messages, 'Marie', true)).toBe(messages)
+    expect(reanchorMultiCharacterTurn(messages, 'Marie', false)).toBe(messages)
+  })
+})

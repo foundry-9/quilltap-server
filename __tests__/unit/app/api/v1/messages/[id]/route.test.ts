@@ -227,6 +227,7 @@ describe('POST /api/v1/messages/[id]?action=swipe&stream=1', () => {
   function swipeReq(stream: boolean) {
     return {
       json: async () => ({}),
+      text: async () => '',
       nextUrl: { searchParams: new URLSearchParams(stream ? 'stream=1' : '') },
     }
   }
@@ -334,7 +335,7 @@ describe('malformed input is a 400, not a fallback (#168)', () => {
       mockCtx = { user: { id: OWNER_ID }, repos }
 
       const res: any = await POST(
-        { json: async () => ({ swipeIndex }), nextUrl: { searchParams: new URLSearchParams() } },
+        { json: async () => ({ swipeIndex }), text: async () => JSON.stringify({ swipeIndex }), nextUrl: { searchParams: new URLSearchParams() } },
         params,
       )
 
@@ -343,6 +344,17 @@ describe('malformed input is a 400, not a fallback (#168)', () => {
       expect(regenerateMessageAsSwipe).not.toHaveBeenCalled()
     })
   }
+
+  it('refuses a body that is present but not JSON, without regenerating (#220)', async () => {
+    const repos = buildRepos()
+    mockCtx = { user: { id: OWNER_ID }, repos }
+
+    await expect(POST(
+      { json: async () => { throw new SyntaxError('bad') }, text: async () => 'not-json{', nextUrl: { searchParams: new URLSearchParams() } },
+      params,
+    )).rejects.toMatchObject({ name: 'RequestBodyParseError' })
+    expect(regenerateMessageAsSwipe).not.toHaveBeenCalled()
+  })
 
   it('rejects an unknown memoryAction before touching the message', async () => {
     const repos = buildRepos({ memories: { countBySourceMessageIds: jest.fn().mockResolvedValue(3) } })

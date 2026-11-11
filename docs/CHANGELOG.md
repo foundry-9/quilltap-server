@@ -4,6 +4,18 @@
 
 ### 4.13-dev
 
+#### Fixes: failover, API input, imports, documents, item renames and lone-character memory (#217–#225)
+
+- #217: a failover substitute gets the multi-character anchor its own profile calls for. `callShapeFor` (`provider-failover.service.ts`) re-anchors the primary's message array with `reanchorMultiCharacterTurn` and `profileUsesNamePrefill(substitute)`, so an Anthropic 4.6+ understudy is no longer sent the primary's trailing assistant `[Name]` prefill (which it rejected with a 400). The anchor code moved to `lib/chat/multi-character-anchor.ts`; `context-builder.service.ts` re-exports `applyMultiCharacterTurnAnchor` and `GROUP_SCENE_DISCIPLINE`.
+- #218: importing a groups-only bundle with Duplicate no longer links the copy to the source group's own official store. Step 7d of `execute.ts` skips the group's `officialMountPointId` among its linked stores.
+- #219: `POST /api/v1/groups`, `/api/v1/embedding-profiles` and `/api/v1/roleplay-templates` go through `dispatchAction`, so an unknown `?action=` is a 400 instead of creating a row.
+- #220: a swipe with a body that is present but not JSON is a 400. An empty body still regenerates. New `readJsonBody` (`lib/api/request-body.ts`).
+- #221: a malformed JSON body, or a non-multipart body to a form-data route, is a 400 naming the problem, not a 500. The context middleware wraps the request's own `json()` / `formData()` (`guardRequestBodyParsers`) so their failures throw `RequestBodyParseError`, which it maps to `badRequest`; the chat files route does the same in its catch.
+- #222: closing a standalone document tab from the tab strip (×, Delete, Ctrl/Cmd+Alt+W) saves unsaved text first and keeps the tab open, with the same toast as the pane's close button, when the save is refused. New `requestCloseTab` / `registerCloseGuard` on the workspace context and `useTabCloseGuard`; `closeTab` stays the unconditional programmatic close.
+- #223: Anthropic's model-not-found error (`not_found_error … model: …`) is classified `model-missing`, so the fallback chain runs.
+- #224: a case-only rename that changes a non-ASCII letter ("Café" → "CAFÉ") no longer leaves a stale file that corrupts the Wardrobe, Inventory or Atlas item. Store-path comparisons in JS use `foldStorePath` / `sameStorePath` (`lib/mount-index/store-path-fold.ts`), which fold ASCII only, like SQLite `COLLATE NOCASE`; used by the vault projection, item folders, folder ops, the database store's move, the folder repository, prompt/scenario paths and the wardrobe draft. Atlas and Inventory readers break an id tie with `chooseIdWinners` (`item-rules.ts`): a file at its own name, then the newest, so already-split items resolve to the renamed record.
+- #225: a one-character chat with no user seat now runs memory extraction each turn. New `loneCharacterHasAnswered` (`lib/chat/turn-manager/utils.ts`) is the shared rule: the orchestrator stops the chain on it, and `calculateNextSpeaker` reports the operator's floor on it, so the finalizer's turn-close work runs.
+
 #### Fixes: deletes, fail-soft reads and upsert races (#189, #191, #204, #205, #206, #207)
 
 - #189: deleting, moving or sync-deleting a document now deletes its `doc_mount_chunks` rows explicitly. `deleteWithGC` relied on an `ON DELETE CASCADE` that only pre-4.5 migrated tables carry; on schema-translator tables the deleted text and its embeddings stayed in Scriptorium search and knowledge injection. `reapOrphanedStoreChildren` gains a chunks arm (`chunks` in its result) that collects chunks already orphaned. DDL.md no longer claims the foreign key is always present.

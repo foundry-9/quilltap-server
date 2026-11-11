@@ -25,7 +25,10 @@ jest.mock('@/app/salon/[id]/components/DocumentPane', () => ({
   },
 }))
 jest.mock('@/app/salon/[id]/components/DocumentViewerPane', () => ({ DocumentViewerPane: () => null }))
-jest.mock('@/components/providers/workspace-provider', () => ({ useWorkspace: () => ({ openTab: jest.fn() }) }))
+jest.mock('@/components/providers/workspace-provider', () => ({
+  useWorkspace: () => ({ openTab: jest.fn() }),
+  useWorkspaceOptional: () => null,
+}))
 
 const closeSelf = jest.fn()
 jest.mock('@/components/workspace/useCloseSelfTab', () => ({ useCloseSelfTab: () => closeSelf }))

@@ -17,7 +17,7 @@
  * @module lib/atlas/vault-readers
  */
 
-import { foldItemName } from '@/lib/mount-index/item-rules';
+import { chooseIdWinners, foldItemName } from '@/lib/mount-index/item-rules';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
@@ -161,7 +161,8 @@ export async function readAtlasRecords(mountPointId: string): Promise<AtlasRecor
 
 /**
  * Read and parse a mount's `Atlas/` once. Two files claiming one id: the one
- * at the entry's own name wins, failing that the first by path; the rest are
+ * at the entry's own name wins (the newest of several at their own names,
+ * #224), failing that the first by path (`chooseIdWinners`); the rest are
  * skipped and left alone. Two entries sharing a canonical name (a
  * document-layer write can make them) are both kept; the first by path is the
  * one the pool sees, and a `warn` is logged.
@@ -181,15 +182,7 @@ export async function scanAtlasFolder(mountPointId: string): Promise<AtlasFolder
     const record = parseAtlasEntryFile(doc);
     if (record) parsed.push({ path: doc.relativePath, record });
   }
-  const atOwnName = ({ path, record }: { path: string; record: AtlasRecord }) =>
-    path.toLowerCase() === `${ATLAS_FOLDER}/${atlasFileNameFor(record)}`.toLowerCase();
-  const winnerPath = new Map<string, string>();
-  for (const entry of parsed) {
-    if (!winnerPath.has(entry.record.id) && atOwnName(entry)) winnerPath.set(entry.record.id, entry.path);
-  }
-  for (const { path, record } of parsed) {
-    if (!winnerPath.has(record.id)) winnerPath.set(record.id, path);
-  }
+  const winnerPath = chooseIdWinners(parsed, (record) => `${ATLAS_FOLDER}/${atlasFileNameFor(record)}`);
   const records: AtlasRecord[] = [];
   const duplicatePaths = new Set<string>();
   const ownedPaths = new Set<string>();

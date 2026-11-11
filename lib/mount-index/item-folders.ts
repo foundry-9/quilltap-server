@@ -18,6 +18,7 @@
  */
 
 import { sanitizeFileName } from '@/lib/mount-index/sanitize-file-name';
+import { foldStorePath } from '@/lib/mount-index/store-path-fold';
 
 /** The rules one item tree files by. */
 export interface ItemFolderRules {
@@ -142,7 +143,7 @@ export interface ItemFolder {
 
 /** True when `segment` is reserved by `rules`, case-insensitively. */
 export function isReservedItemFolderSegment(rules: ItemFolderRules, segment: string): boolean {
-  const lower = segment.toLowerCase();
+  const lower = foldStorePath(segment);
   return rules.reserved.some((reserved) => reserved === lower);
 }
 
@@ -245,9 +246,9 @@ export function resolveItemFolder(
     .filter((segment) => segment.length > 0);
   if (raw.length === 0) return '';
 
-  const byKey = new Map(existing.map((path) => [path.toLowerCase(), path]));
+  const byKey = new Map(existing.map((path) => [foldStorePath(path), path]));
   for (let depth = raw.length; depth > 0; depth--) {
-    const stored = byKey.get(raw.slice(0, depth).join('/').toLowerCase());
+    const stored = byKey.get(foldStorePath(raw.slice(0, depth).join('/')));
     if (!stored) continue;
     if (depth === raw.length) return stored;
     const rest = normalizeItemFolderPath(rules, raw.slice(depth).join('/'), makeError);
@@ -275,7 +276,7 @@ export function isValidItemFolderPath(rules: ItemFolderRules, path: string): boo
  */
 export function folderOfItemPath(rules: ItemFolderRules, relativePath: string): string {
   const prefix = `${rules.root}/`;
-  if (!relativePath.toLowerCase().startsWith(prefix.toLowerCase())) return '';
+  if (!foldStorePath(relativePath).startsWith(foldStorePath(prefix))) return '';
   const rest = relativePath.slice(prefix.length);
   const slash = rest.lastIndexOf('/');
   return slash < 0 ? '' : rest.slice(0, slash);
@@ -292,7 +293,7 @@ export function itemFolderStorePath(rules: ItemFolderRules, folder: string): str
  */
 export function folderUnderItemRoot(rules: ItemFolderRules, storePath: string): string | null {
   const prefix = `${rules.root}/`;
-  if (!storePath.toLowerCase().startsWith(prefix.toLowerCase())) return null;
+  if (!foldStorePath(storePath).startsWith(foldStorePath(prefix))) return null;
   const folder = storePath.slice(prefix.length);
   if (!folder) return null;
   if (isReservedItemFolderSegment(rules, folderSegments(folder)[0])) return null;
@@ -311,11 +312,11 @@ export function isItemDocumentPath(
   ext: string,
   skipFileName?: (fileName: string) => boolean,
 ): boolean {
-  const prefix = `${rules.root}/`.toLowerCase();
-  const pathLower = relativePath.toLowerCase();
+  const prefix = foldStorePath(`${rules.root}/`);
+  const pathLower = foldStorePath(relativePath);
   if (!pathLower.startsWith(prefix)) return false;
   const rest = pathLower.slice(prefix.length);
-  if (rest.length === 0 || !rest.endsWith(ext.toLowerCase())) return false;
+  if (rest.length === 0 || !rest.endsWith(foldStorePath(ext))) return false;
   const segments = rest.split('/');
   if (segments.some((segment) => segment.length === 0)) return false;
   if (segments.length > 1 && isReservedItemFolderSegment(rules, segments[0])) return false;
@@ -339,16 +340,20 @@ export function joinFolder(...parts: string[]): string {
   return parts.filter((part) => part.length > 0).join('/');
 }
 
-/** Folder names are case-insensitive: `Formal` and `formal` are one folder. */
+/**
+ * Folder names are case-insensitive the way the store is (`foldStorePath`,
+ * ASCII only): `Formal` and `formal` are one folder; `Café` and `CAFÉ` are two
+ * (#224).
+ */
 export function isSameFolder(a: string | null | undefined, b: string | null | undefined): boolean {
-  return (a ?? '').toLowerCase() === (b ?? '').toLowerCase();
+  return foldStorePath(a ?? '') === foldStorePath(b ?? '');
 }
 
 /** True when `folder` is `ancestor` or nested anywhere beneath it. */
 export function isUnderFolder(folder: string, ancestor: string): boolean {
   if (ancestor.length === 0) return true;
-  const f = folder.toLowerCase();
-  const a = ancestor.toLowerCase();
+  const f = foldStorePath(folder);
+  const a = foldStorePath(ancestor);
   return f === a || f.startsWith(`${a}/`);
 }
 

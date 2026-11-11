@@ -27,6 +27,7 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   // `selectNextSpeaker` directly, so it stands in as "no characters resolved".
   loadRoomCharacters: jest.fn().mockResolvedValue(new Map()),
   isAllLLMChat: jest.fn().mockReturnValue(false),
+  loneCharacterHasAnswered: jest.requireActual('@/lib/chat/turn-manager/utils').loneCharacterHasAnswered,
   shouldPauseForAllLLM: jest.fn().mockReturnValue(false),
   isUserDrivenSeat: (p: { id?: string; controlledBy?: string } | null | undefined, ids?: readonly string[] | null) =>
     p?.controlledBy === 'user' || (Array.isArray(ids) && !!p?.id && ids.includes(p.id)),

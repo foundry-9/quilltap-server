@@ -24,6 +24,7 @@ import { UNSAVED_EDITS_MESSAGE, type ActiveDocument } from '@/app/salon/[id]/hoo
 import type { DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
+import { useTabCloseGuard } from '@/components/workspace/useTabCloseGuard'
 import { showErrorToast } from '@/lib/toast'
 
 const AUTOSAVE_DEBOUNCE_MS = 30000
@@ -342,15 +343,28 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
     }
   }, [saveDocument, refreshTab, clearAutosaveTimer, hasUnsavedEdits])
 
-  const handleCloseDocument = useCallback(async () => {
+  /**
+   * Settle the pane before it closes: write any unsaved text, and refuse the
+   * close (with the Librarian's toast) when the store refuses it. Shared by the
+   * pane's own close button and the workspace tab's × (#222).
+   */
+  const settleBeforeClose = useCallback(async (): Promise<boolean> => {
     clearAutosaveTimer()
     // Never close over edits the store refused: the tab stays open with them.
     if (hasUnsavedEdits() && !(await saveDocument())) {
       showErrorToast(UNSAVED_EDITS_MESSAGE)
-      return
+      return false
     }
+    return true
+  }, [clearAutosaveTimer, saveDocument, hasUnsavedEdits])
+
+  // The tab strip's × (and Delete / Ctrl+Alt+W) asks this before closing.
+  useTabCloseGuard(settleBeforeClose)
+
+  const handleCloseDocument = useCallback(async () => {
+    if (!(await settleBeforeClose())) return
     closeSelf()
-  }, [clearAutosaveTimer, saveDocument, closeSelf, hasUnsavedEdits])
+  }, [settleBeforeClose, closeSelf])
 
   const handleDeleteDocument = useCallback(async () => {
     const current = docRef.current

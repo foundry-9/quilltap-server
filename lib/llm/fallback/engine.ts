@@ -136,6 +136,9 @@ export function classifyFallbackTrigger(error: unknown): FallbackTrigger | null 
   if (/\b401\b|unauthoriz|invalid api key|authentication/i.test(message)) return 'auth'
   if (/\b429\b|rate limit|too many requests/i.test(message)) return 'rate-limit'
   if (/model.*(not found|does not exist|unknown)/i.test(message)) return 'model-missing'
+  // Anthropic's SDK says it differently: `404 {"type":"not_found_error",
+  // "message":"model: claude-…"}` — no "not found" after "model" (#223).
+  if (/not_found_error/i.test(message) && /\bmodel\b/i.test(message)) return 'model-missing'
 
   // A 4xx that is none of the above is a malformed request — ours to fix, and
   // it would be malformed at the next provider too.

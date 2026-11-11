@@ -1052,7 +1052,9 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
       // index means a second write to the same path — in any casing —
       // overwrites the existing link's metadata in place rather than
       // creating a duplicate. Case-preserving: the existing row keeps its
-      // relativePath/fileName casing.
+      // relativePath/fileName casing. NOCASE folds ASCII only; JS code that
+      // must agree with this lookup compares through `foldStorePath`
+      // (`lib/mount-index/store-path-fold.ts`), never `toLowerCase()` (#224).
       const existingLink = db.prepare(
         `SELECT id, fileId, linkGroupId FROM doc_mount_file_links
          WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
@@ -1222,7 +1224,8 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
       }
 
       // Case-insensitive, case-preserving upsert: a write to `NOTES.md`
-      // updates the row stored as `notes.md` and keeps its casing.
+      // updates the row stored as `notes.md` and keeps its casing. ASCII-only
+      // (NOCASE); the JS twin of this rule is `foldStorePath` (#224).
       const existingLink = db.prepare(
         `SELECT id, fileId, linkGroupId FROM doc_mount_file_links
          WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`

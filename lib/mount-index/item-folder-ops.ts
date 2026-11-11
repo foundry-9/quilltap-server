@@ -39,6 +39,7 @@ import {
   moveDatabaseFolder,
 } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
+import { foldStorePath } from '@/lib/mount-index/store-path-fold';
 
 /** The four tiers a vault folder can belong to. */
 export type VaultFolderMountScope = 'character' | 'group' | 'project' | 'general';
@@ -158,7 +159,7 @@ export async function listFoldersIn<T extends FiledItem>(
     const segments = folderSegments(folder);
     for (let depth = 1; depth <= segments.length; depth++) {
       const path = segments.slice(0, depth).join('/');
-      if (!byKey.has(path.toLowerCase())) byKey.set(path.toLowerCase(), path);
+      if (!byKey.has(foldStorePath(path))) byKey.set(foldStorePath(path), path);
     }
   };
   for (const row of rows) {
@@ -172,7 +173,7 @@ export async function listFoldersIn<T extends FiledItem>(
   const counts = new Map<string, number>();
   for (const item of items) {
     if (item.archivedAt || !item.folder) continue;
-    const key = item.folder.toLowerCase();
+    const key = foldStorePath(item.folder);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
@@ -328,7 +329,7 @@ export async function deleteFolderIn<T extends FiledItem>(
     if (!from) throw tree.errors.notFound(folder);
     const parent = parentFolder(from);
     const storeFrom = itemFolderStorePath(rules, from);
-    const storePrefix = `${storeFrom}/`.toLowerCase();
+    const storePrefix = foldStorePath(`${storeFrom}/`);
 
     // Everything is checked before anything moves, so a refusal leaves the
     // tier exactly as it was.
@@ -336,7 +337,7 @@ export async function deleteFolderIn<T extends FiledItem>(
     // 1. Files the tier doesn't own — a picture, a `.txt`, a note (the
     //    projection never sweeps those, so the folder could not empty).
     const links = (await repos.docMountFileLinks.findByMountPointId(mount.mountPointId)).filter(
-      (link) => link.relativePath.toLowerCase().startsWith(storePrefix),
+      (link) => foldStorePath(link.relativePath).startsWith(storePrefix),
     );
     const docsByPath = new Map(
       (
@@ -346,10 +347,10 @@ export async function deleteFolderIn<T extends FiledItem>(
           tree.ext,
           { recursive: true },
         )
-      ).map((doc) => [doc.relativePath.toLowerCase(), doc]),
+      ).map((doc) => [foldStorePath(doc.relativePath), doc]),
     );
     const strays = links.filter((link) => {
-      const doc = docsByPath.get(link.relativePath.toLowerCase());
+      const doc = docsByPath.get(foldStorePath(link.relativePath));
       return !doc || !tree.isItemDocument(doc);
     });
     if (strays.length > 0) {
@@ -362,7 +363,7 @@ export async function deleteFolderIn<T extends FiledItem>(
     // 2. A subfolder sharing the folder's own name (`Formal/Formal`) would be
     //    sent up into the very place being removed.
     const rows = (await repos.docMountFolders.findByMountPointId(mount.mountPointId))
-      .filter((row) => row.path.toLowerCase().startsWith(storePrefix))
+      .filter((row) => foldStorePath(row.path).startsWith(storePrefix))
       .sort((a, b) => b.path.length - a.path.length);
     const items = await tree.read(mount);
     const moving = items.filter((item) => isUnderFolder(item.folder ?? '', from));

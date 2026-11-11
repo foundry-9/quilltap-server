@@ -98,6 +98,7 @@ export {
   getActiveLLMParticipants,
   isMultiCharacterChat,
   isAllLLMChat,
+  loneCharacterHasAnswered,
 } from './utils';
 
 // Turn order computation (display-only)

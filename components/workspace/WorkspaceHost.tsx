@@ -27,7 +27,7 @@ import { useWorkspaceShortcuts } from './useWorkspaceShortcuts'
 const DIVIDER_PX = 8
 
 export function WorkspaceHost() {
-  const { state, setActive, closeTab, moveTab, splitTo, setFocusedPane, setSplitRatio } =
+  const { state, setActive, requestCloseTab, moveTab, splitTo, setFocusedPane, setSplitRatio } =
     useWorkspace()
   useWorkspaceShortcuts()
   const gridRef = useRef<HTMLDivElement | null>(null)
@@ -46,6 +46,12 @@ export function WorkspaceHost() {
 
   const moveIntoLeft = useCallback((id: string, idx: number) => moveTab(id, 'left', idx), [moveTab])
   const moveIntoRight = useCallback((id: string, idx: number) => moveTab(id, 'right', idx), [moveTab])
+
+  // The user's close goes through the tabs' close guards (#222): a document
+  // with unsaved text saves first and stays open if the save is refused.
+  const onCloseTab = useCallback((id: string) => {
+    void requestCloseTab(id)
+  }, [requestCloseTab])
 
   const onResetRatio = useCallback(() => setSplitRatio(DEFAULT_SPLIT_RATIO), [setSplitRatio])
 
@@ -70,7 +76,7 @@ export function WorkspaceHost() {
           onDragStartTab={onDragStartTab}
           onDragEndTab={onDragEndTab}
           onSelect={(id) => setActive('left', id)}
-          onClose={closeTab}
+          onClose={onCloseTab}
           onMove={moveIntoLeft}
         />
       </div>
@@ -95,7 +101,7 @@ export function WorkspaceHost() {
               onDragStartTab={onDragStartTab}
               onDragEndTab={onDragEndTab}
               onSelect={(id) => setActive('right', id)}
-              onClose={closeTab}
+              onClose={onCloseTab}
               onMove={moveIntoRight}
             />
           </div>

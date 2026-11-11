@@ -19,6 +19,7 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
+import { foldStorePath } from '@/lib/mount-index/store-path-fold';
 import type { ResolvedPath } from '@/lib/doc-edit';
 import type { VaultContext, VaultFolderEntry } from './layout';
 
@@ -64,13 +65,15 @@ async function freePathFor(
     entry.folder,
     '.md',
   );
+  // The store's own path rule (ASCII-only NOCASE), never `toLowerCase()` (#224).
+  const own = ownPath === undefined ? undefined : foldStorePath(ownPath);
   const taken = new Set(
-    docs.map((d) => d.relativePath.toLowerCase()).filter((p) => p !== ownPath?.toLowerCase()),
+    docs.map((d) => foldStorePath(d.relativePath)).filter((p) => p !== own),
   );
   const ext = path.extname(fileName);
   const base = fileName.slice(0, fileName.length - ext.length);
   let candidate = `${entry.folder}/${fileName}`;
-  for (let n = 1; taken.has(candidate.toLowerCase()); n++) {
+  for (let n = 1; taken.has(foldStorePath(candidate)); n++) {
     candidate = `${entry.folder}/${base}-${n}${ext}`;
   }
   return candidate;

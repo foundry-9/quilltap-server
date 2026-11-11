@@ -15,6 +15,8 @@ import {
   resolveCycleOrder,
   loadRoomCharacters,
   isUsersTurn,
+  isAllLLMChat,
+  loneCharacterHasAnswered,
   turnClosesCycle,
 } from '@/lib/chat/turn-manager'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
@@ -1008,10 +1010,30 @@ export async function calculateNextSpeaker(
     chat.impersonatingParticipantIds
   )
 
+  // A lone character who has answered hands the floor back to the operator —
+  // the orchestrator stops the chain on the same rule — so the turn closes
+  // here, and the turn-close work (memory extraction) runs (#225). An
+  // autonomous room never pauses for a user.
+  const loneAnswered = loneCharacterHasAnswered({
+    reason: nextSpeakerResult.reason,
+    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+    lastSpeakerId: turnState.lastSpeakerId,
+    isAllLLM: isAllLLMChat(chat.participants),
+    userParticipantId,
+    hasUserMessages: messageEvents.some(m => m.role === 'USER'),
+    neverPauseForUser: chat.chatType === 'autonomous',
+  })
+  if (loneAnswered) {
+    logger.debug('[MessageFinalizer] Lone character has answered; turn closes for the operator', {
+      chatId,
+      participantId: nextSpeakerResult.nextSpeakerId,
+    })
+  }
+
   return {
     nextSpeakerId: nextSpeakerResult.nextSpeakerId,
     reason: nextSpeakerResult.reason,
     cycleComplete: nextSpeakerResult.cycleComplete,
-    isUsersTurn: isUsersTurn(nextSpeakerResult),
+    isUsersTurn: isUsersTurn(nextSpeakerResult) || loneAnswered,
   }
 }

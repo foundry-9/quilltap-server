@@ -402,6 +402,8 @@ When several characters share a room, each reply must be pinned to exactly one o
 
 **Unticked** — the same instruction is delivered in prose, appended quietly to the system prompt: *respond as Marie and only Marie, and never label anything with another participant's name.* The conversation is left ending on the user's turn, and the model begins its reply itself. A polite request rather than a hand on the elbow — but some models will not tolerate the hand.
 
+**Should a turn fail over to an understudy**, the understudy is pinned by *its own* profile's setting, not the first profile's. A ticked OpenAI profile may hand its turn to an unticked Anthropic understudy, and the understudy receives the prose instruction rather than the `[Marie]` it would have flatly refused.
+
 **Quilltap unticks it for you in two cases.** A new profile arrives with the box already settled, and it settles it against the prefill when either of these holds:
 
 - **Anthropic.** Their recent models refuse outright to accept a reply that someone else has already started, and will return an error on every multi-character turn. New Anthropic profiles therefore begin with the box unticked, and you should think twice before ticking it.

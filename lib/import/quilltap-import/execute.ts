@@ -848,6 +848,7 @@ async function executeImportStrict(
       const groupsData = data.groups as Array<{
         id: string;
         name?: string;
+        officialMountPointId?: string | null;
         _memberCharacterIds?: string[];
         _linkedStoreMountPointIds?: string[];
       }>;
@@ -879,6 +880,14 @@ async function executeImportStrict(
 
         // Additional document stores (beyond the official mount point)
         for (const mountPointId of groupExport._linkedStoreMountPointIds ?? []) {
+          // The group's own official store is not an "additional" link: the
+          // imported group has its own (a fresh one on create, its existing one
+          // on overwrite). Linking the source's would let a Duplicate copy read
+          // and write the original group's documents (#218).
+          if (groupExport.officialMountPointId && mountPointId === groupExport.officialMountPointId) {
+            moduleLogger.debug('Skipping the source group\'s own official store link', { groupId: groupExport.id, mountPointId });
+            continue;
+          }
           const remappedMountPointId = idMaps.mountPoints.get(mountPointId) ?? (await localStore(mountPointId));
           if (!remappedMountPointId) {
             unresolvedStores++;

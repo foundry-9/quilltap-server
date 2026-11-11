@@ -24,6 +24,7 @@ import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.type
 import type { FileAttachment } from '@/lib/llm/base';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { resolveMessageAttachmentEntries } from '@/lib/photos/chat-gallery';
+import { RequestBodyParseError } from '@/lib/api/request-body';
 
 /**
  * POST /api/v1/chats/[id]/files - Upload a file or link an existing file
@@ -125,6 +126,11 @@ async function handleUploadFile(
         }),
       });
   } catch (error) {
+    // A body that is not multipart form data is the caller's mistake (#221).
+    if (error instanceof RequestBodyParseError) {
+      logger.debug('[Chats v1 Files] Upload body is not multipart form data', { chatId });
+      return badRequest(error.message);
+    }
     logger.error('[Chats v1 Files] Error uploading chat file', { chatId }, error as Error);
 
     if (error instanceof Error) {

@@ -7,7 +7,9 @@
  * Roleplay templates provide formatting instructions that are prepended to character system prompts.
  */
 
-import { createContextHandler } from '@/lib/api/middleware';
+import { NextRequest } from 'next/server';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
@@ -54,7 +56,7 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
  *   systemPrompt: string
  * }
  */
-export const POST = createContextHandler(async (req, { user, repos }) => {
+async function handleCreateRoleplayTemplate(req: NextRequest, { user, repos }: RequestContext) {
   // A malformed body is the middleware's 400 (rethrown below).
   const input = RoleplayTemplateCreateSchema.parse(await req.json());
   try {
@@ -121,4 +123,9 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     );
     return errorResponse('Failed to create roleplay template', 500);
   }
-});
+}
+
+// An unknown ?action= is a 400 from the dispatcher, never a create (#219).
+export const POST = createContextHandler((req: NextRequest, ctx: RequestContext) =>
+  dispatchAction(req, {}, () => handleCreateRoleplayTemplate(req, ctx))
+);

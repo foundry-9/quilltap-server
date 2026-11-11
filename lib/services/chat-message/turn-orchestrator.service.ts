@@ -4,6 +4,7 @@ import {
   calculateTurnStateFromHistory,
   loadRoomCharacters,
   isAllLLMChat,
+  loneCharacterHasAnswered,
   shouldPauseForAllLLM,
   isUserDrivenSeat,
   resolveCycleOrder,
@@ -197,11 +198,15 @@ export async function shouldChainNext(
     // message (bug 249). A genuinely all-LLM chat keeps its monologue — the
     // all-LLM pause above governs it — and so does an autonomous room.
     if (
-      selectionReason === 'only_character' &&
-      nextParticipantId !== null &&
-      nextParticipantId === turnState.lastSpeakerId &&
-      !effectiveAllLLM &&
-      !guards.neverPauseForUser
+      loneCharacterHasAnswered({
+        reason: selectionReason,
+        nextSpeakerId: nextParticipantId,
+        lastSpeakerId: turnState.lastSpeakerId,
+        isAllLLM,
+        userParticipantId,
+        hasUserMessages: messageEvents.some(m => m.role === 'USER'),
+        neverPauseForUser: !!guards.neverPauseForUser,
+      })
     ) {
       logger.info('[TurnOrchestrator] Lone character has answered; floor returns to the operator', {
         chatId,

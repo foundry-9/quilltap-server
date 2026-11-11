@@ -81,6 +81,25 @@ describe('groups-only bundle', () => {
     expect(result.warnings.some((w) => w.includes('Adventurers') && w.includes('1 member'))).toBe(true)
     expect(result.warnings.some((w) => w.includes('Adventurers') && w.includes('1 linked store'))).toBe(true)
   })
+
+  it("never links a Duplicate copy to the source group's own official store (#218)", async () => {
+    const SOURCE_OFFICIAL = 'store-source-official'
+    const result = await executeImport('u', {
+      manifest: createMockExportManifest({ exportType: 'groups' }),
+      data: {
+        groups: [{
+          id: 'g-source', name: 'Adventurers', officialMountPointId: SOURCE_OFFICIAL,
+          _memberCharacterIds: [],
+          _linkedStoreMountPointIds: [SOURCE_OFFICIAL, LOCAL_STORE],
+        }],
+      },
+    } as never, { conflictStrategy: 'duplicate', includeMemories: false, includeRelatedEntities: true })
+
+    expect(link).not.toHaveBeenCalledWith(expect.anything(), SOURCE_OFFICIAL)
+    expect(link).toHaveBeenCalledWith(expect.any(String), LOCAL_STORE)
+    expect(link).toHaveBeenCalledTimes(1)
+    expect(result.warnings.some((w) => w.includes('linked store'))).toBe(false)
+  })
 })
 
 describe('truncated NDJSON export', () => {

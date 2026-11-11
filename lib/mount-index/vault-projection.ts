@@ -12,6 +12,7 @@ import {
   deleteDatabaseDocument,
 } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
+import { foldStorePath } from '@/lib/mount-index/store-path-fold';
 
 /** Options for {@link projectArrayIntoVaultFolder}. */
 export interface ProjectArrayOptions {
@@ -71,9 +72,9 @@ export async function projectArrayIntoVaultFolder<T>(
   opts?: ProjectArrayOptions,
 ): Promise<void> {
   const repos = getRepositories();
-  const preserved = new Set((opts?.preserveFileNames ?? []).map((name) => name.toLowerCase()));
+  const preserved = new Set((opts?.preserveFileNames ?? []).map((name) => foldStorePath(name)));
   const recursive = opts?.recursive;
-  const excluded = new Set((recursive?.excludeSubfolders ?? []).map((name) => name.toLowerCase()));
+  const excluded = new Set((recursive?.excludeSubfolders ?? []).map((name) => foldStorePath(name)));
   const existing = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     folder,
@@ -90,17 +91,17 @@ export async function projectArrayIntoVaultFolder<T>(
   for (const mapped of mappedItems) {
     const slash = mapped.fileName.lastIndexOf('/');
     const sub = recursive && slash >= 0 ? mapped.fileName.slice(0, slash) : '';
-    if (!subfolders.has(sub.toLowerCase())) subfolders.set(sub.toLowerCase(), sub);
+    if (!subfolders.has(foldStorePath(sub))) subfolders.set(foldStorePath(sub), sub);
   }
   // A folder already holding a document exists; ensure only the others (a
   // write would create them too, but an empty projection target must exist).
   // Flat mode keeps its one unconditional ensure.
   const occupied = new Set(
-    existing.map((d) => d.relativePath.slice(0, d.relativePath.lastIndexOf('/')).toLowerCase()),
+    existing.map((d) => foldStorePath(d.relativePath.slice(0, d.relativePath.lastIndexOf('/')))),
   );
   for (const sub of subfolders.values()) {
     const target = sub ? `${folder}/${sub}` : folder;
-    if (recursive && occupied.has(target.toLowerCase())) continue;
+    if (recursive && occupied.has(foldStorePath(target))) continue;
     await ensureFolderPath(mountPointId, target);
   }
   if (subfolders.size > 1 || (recursive && subfolders.size === 1 && !subfolders.has(''))) {
@@ -112,8 +113,12 @@ export async function projectArrayIntoVaultFolder<T>(
     });
   }
 
-  // The name pool is keyed by the full lower-cased path under `folder`, so
-  // suffixing is per folder. Preserved names are claimed in every folder the
+  // The name pool is keyed by the full folded path under `folder`, so
+  // suffixing is per folder. Every path key here is `foldStorePath` — the
+  // store's own NOCASE rule (ASCII only) — never `toLowerCase()`: a key that
+  // folds more than the store does would call `Café.md` "already written"
+  // after a write of `CAFÉ.md` minted a second row, and the sweep would keep
+  // the stale file (#224). Preserved names are claimed in every folder the
   // projection writes into (just the root in flat mode).
   const seen = new Set<string>();
   for (const key of subfolders.keys()) {
@@ -123,7 +128,7 @@ export async function projectArrayIntoVaultFolder<T>(
   for (const mapped of mappedItems) {
     let candidate = mapped.fileName;
     let n = 1;
-    while (seen.has(candidate.toLowerCase())) {
+    while (seen.has(foldStorePath(candidate))) {
       const slash = mapped.fileName.lastIndexOf('/');
       const dot = mapped.fileName.lastIndexOf('.');
       const hasExt = dot > slash;
@@ -132,23 +137,33 @@ export async function projectArrayIntoVaultFolder<T>(
       candidate = `${base}-${n}${ext}`;
       n++;
     }
-    seen.add(candidate.toLowerCase());
+    seen.add(foldStorePath(candidate));
     const relPath = `${folder}/${candidate}`;
-    writtenPaths.add(relPath.toLowerCase());
+    writtenPaths.add(foldStorePath(relPath));
     await writeDatabaseDocument(mountPointId, relPath, mapped.content);
   }
 
   const folderPrefixLength = folder.length + 1;
+  const writtenLower = new Set([...writtenPaths].map((p) => p.toLowerCase()));
   for (const [relPath, doc] of existingByPath) {
-    if (writtenPaths.has(relPath.toLowerCase())) continue;
-    const fileSegment = relPath.slice(relPath.lastIndexOf('/') + 1).toLowerCase();
+    if (writtenPaths.has(foldStorePath(relPath))) continue;
+    const fileSegment = foldStorePath(relPath.slice(relPath.lastIndexOf('/') + 1));
     if (preserved.has(fileSegment)) continue;
     if (opts?.ownsFile && !opts.ownsFile(doc)) continue;
     if (recursive) {
       const rest = relPath.slice(folderPrefixLength);
       const firstSlash = rest.indexOf('/');
-      if (firstSlash >= 0 && excluded.has(rest.slice(0, firstSlash).toLowerCase())) continue;
+      if (firstSlash >= 0 && excluded.has(foldStorePath(rest.slice(0, firstSlash)))) continue;
     }
+    logger.debug('Vault projection sweeping a stale file', {
+      characterId,
+      mountPointId,
+      relativePath: relPath,
+      // A path that only `toLowerCase()` would equate with a written one is a
+      // separate row to the store — the stale half of a non-ASCII case-only
+      // rename (#224).
+      unicodeCaseVariant: writtenLower.has(relPath.toLowerCase()),
+    });
     try {
       await deleteDatabaseDocument(mountPointId, relPath);
     } catch (err) {

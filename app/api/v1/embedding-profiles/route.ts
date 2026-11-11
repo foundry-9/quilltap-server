@@ -251,7 +251,7 @@ async function handleListModels(req: NextRequest, context: RequestContext) {
 /**
  * POST /api/v1/embedding-profiles - Create a new embedding profile
  */
-export const POST = createContextHandler(async (req, { user, repos }) => {
+async function handleCreateEmbeddingProfile(req: NextRequest, { user, repos }: RequestContext) {
   // A malformed body is the middleware's 400.
   const input = EmbeddingProfileCreateSchema.parse(await req.json());
 
@@ -299,4 +299,9 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
   }
 
   return created({ ...profile, apiKey });
-});
+}
+
+// An unknown ?action= is a 400 from the dispatcher, never a create (#219).
+export const POST = createContextHandler((req: NextRequest, ctx: RequestContext) =>
+  dispatchAction(req, {}, () => handleCreateEmbeddingProfile(req, ctx))
+);

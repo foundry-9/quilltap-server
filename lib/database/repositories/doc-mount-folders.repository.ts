@@ -17,6 +17,7 @@ import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
 import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
 import { ensureFolderNocaseUniqueIndex } from './mount-index-case-repair';
+import { foldStorePath } from '@/lib/mount-index/store-path-fold';
 
 /**
  * Document Mount Folders Repository
@@ -121,7 +122,8 @@ export class DocMountFoldersRepository extends AbstractDedicatedDbRepository<Doc
    * Find a folder by mount point and relative path. Case-insensitive with an
    * exact-match fast path: the folder namespace is case-insensitive (sibling
    * names are unique except by casing), so `Lore/Maps` resolves the folder
-   * stored as `lore/maps`. Matches the LOWER()-based file-path lookups.
+   * stored as `lore/maps`. Matches the LOWER()-based file-path lookups
+   * (ASCII-only, `foldStorePath`).
    * @param mountPointId The mount point ID
    * @param path The relative path ('' for root)
    * @returns Promise<DocMountFolder | null> The folder if found
@@ -137,11 +139,17 @@ export class DocMountFoldersRepository extends AbstractDedicatedDbRepository<Doc
           path,
         } as TypedQueryFilter<DocMountFolder>);
         if (exact) return exact;
-        const needle = path.toLowerCase();
+        // The store's NOCASE rule (ASCII only) — never `toLowerCase()`, which
+        // would equate `Café` with a distinct `CAFÉ` folder row (#224).
+        const needle = foldStorePath(path);
         const all = await this.findByFilter({
           mountPointId,
         } as TypedQueryFilter<DocMountFolder>);
-        return all.find(f => f.path.toLowerCase() === needle) ?? null;
+        const match = all.find(f => foldStorePath(f.path) === needle) ?? null;
+        logger.debug('Folder lookup fell back to the NOCASE path fold', {
+          mountPointId, path, found: Boolean(match),
+        });
+        return match;
       },
       'Error finding folder by mount point and path',
       { mountPointId, path },

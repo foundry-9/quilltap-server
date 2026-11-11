@@ -1035,3 +1035,34 @@ describe('hasWhisperTargets', () => {
     expect(hasWhisperTargets(makeMessage('m4', 'USER', 'p1'))).toBe(false)
   })
 })
+
+describe('loneCharacterHasAnswered (bug 249, #225)', () => {
+  const { loneCharacterHasAnswered } = require('@/lib/chat/turn-manager') as typeof import('@/lib/chat/turn-manager')
+  const base = {
+    reason: 'only_character',
+    nextSpeakerId: 'p-char',
+    lastSpeakerId: 'p-char',
+    isAllLLM: true,
+    userParticipantId: null,
+    hasUserMessages: true,
+    neverPauseForUser: false,
+  }
+
+  it('closes the turn for the operator in a persona-less one-on-one chat', () => {
+    expect(loneCharacterHasAnswered(base)).toBe(true)
+  })
+
+  it('keeps the monologue in an all-LLM chat with no human presence', () => {
+    expect(loneCharacterHasAnswered({ ...base, hasUserMessages: false })).toBe(false)
+  })
+
+  it('never pauses an autonomous room', () => {
+    expect(loneCharacterHasAnswered({ ...base, neverPauseForUser: true })).toBe(false)
+  })
+
+  it('does not apply to any other selection or to a different next speaker', () => {
+    expect(loneCharacterHasAnswered({ ...base, reason: 'weighted_selection' })).toBe(false)
+    expect(loneCharacterHasAnswered({ ...base, lastSpeakerId: 'p-other' })).toBe(false)
+    expect(loneCharacterHasAnswered({ ...base, nextSpeakerId: null })).toBe(false)
+  })
+})

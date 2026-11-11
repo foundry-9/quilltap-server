@@ -50,6 +50,9 @@ import {
   type FallbackRepos,
 } from '@/lib/llm/fallback'
 import type { ConnectionProfile, Character } from '@/lib/schemas/types'
+import { reanchorMultiCharacterTurn } from '@/lib/chat/multi-character-anchor'
+import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
+import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 /**
@@ -195,7 +198,7 @@ async function callShapeFor(profile: ConnectionProfile, turn: FailoverTurn, kind
   // transport budget re-applied for its own profile — count, bytes and
   // capability — with the overflow described or omitted with a note (same
   // reference back when nothing changes).
-  const messages = turn.repos
+  const budgeted = turn.repos
     ? (await applyImageTransportBudget(primaryCall.messages, profile, {
         repos: turn.repos,
         userId: turn.userId,
@@ -204,8 +207,24 @@ async function callShapeFor(profile: ConnectionProfile, turn: FailoverTurn, kind
       })).messages
     : primaryCall.messages
 
+  // The multi-character anchor was chosen for the primary's profile. A
+  // substitute that refuses assistant prefill (Anthropic 4.6+) must not
+  // inherit a trailing `[Name]` message, and one that prefills gets it (#217).
+  const anchored = reanchorMultiCharacterTurn(
+    budgeted,
+    turn.character.name,
+    profileUsesNamePrefill(
+      profile,
+      profileRunsThinkingTurn(
+        profile.provider,
+        profile.modelName,
+        profile.parameters as Record<string, unknown> | null | undefined
+      )
+    ),
+  )
+
   return {
-    messages,
+    messages: anchored,
     tools: tools.actualTools,
     toolMode: tools.resolvedToolMode,
     useNativeWebSearch: tools.useNativeWebSearch,
