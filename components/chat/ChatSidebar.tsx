@@ -20,7 +20,8 @@ import { queryKeys } from '@/lib/query/keys'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { ConciergeOffDutyHint } from './ConciergeOffDutyHint'
 import { Icon } from '@/components/ui/icon'
-import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
+import { ParticipantCard, type ParticipantData } from './ParticipantCard'
+import { useChatActions } from '@/components/providers/chat-context'
 import { CopyChatIdButton } from './CopyChatIdButton'
 import { ChatScenarioControl } from './ChatScenarioControl'
 import { shouldDismissSidebarOverlay } from './sidebar-overlay-dismiss'
@@ -162,26 +163,15 @@ export interface ChatSidebarProps {
   /** Storyteller: invite seats to bid weighted by talkativeness (off = everyone, every round). */
   storytellerInviteFilter?: boolean
   onToggleStorytellerInviteFilter?: () => void
-  onNudge: (participantId: string) => void
-  onQueue: (participantId: string) => void
-  onDequeue: (participantId: string) => void
+  // The per-participant actions (nudge, queue, impersonate, profile and
+  // prompt changes, …) come from `ChatActionsProvider`, not props.
   onSkip?: () => void
-  onTalkativenessChange?: (participantId: string, value: number) => void
   onAddCharacter?: () => void
-  onRemoveCharacter?: (participantId: string) => void
   onWhisper?: (participantId: string) => void
   impersonatingParticipantIds?: string[]
   activeTypingParticipantId?: string | null
-  onImpersonate?: (participantId: string) => void
-  onStopImpersonate?: (participantId: string) => void
-  connectionProfiles?: ConnectionProfileOption[]
-  onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
-  onSystemPromptChange?: (participantId: string, promptId: string | null) => void
-  onSubpromptsChange?: (participantId: string, subpromptIds: string[]) => void
-  onRebuildSystemPrompt?: (participantId: string) => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   chatId: string
-  onRegenerateAvatar?: (participantId: string) => void
 
   // --- Chat section ---
   agentModeEnabled?: boolean | null
@@ -827,6 +817,7 @@ interface ParticipantsSectionProps extends ChatSidebarProps {
 }
 
 function ParticipantsSection(p: ParticipantsSectionProps) {
+  const actions = useChatActions()
   const activeParticipantCount = useMemo(() => {
     return p.participants.filter(part => part.isActive).length
   }, [p.participants])
@@ -940,23 +931,23 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               isUserParticipant={isUserParticipant}
               turnPosition={turnEntry?.position ?? null}
               turnStatus={turnEntry?.status}
-              onNudge={p.onNudge}
-              onQueue={p.onQueue}
-              onDequeue={p.onDequeue}
+              onNudge={actions.onNudge}
+              onQueue={actions.onQueue}
+              onDequeue={actions.onDequeue}
               onSkip={isUserParticipant ? p.onSkip : undefined}
-              onTalkativenessChange={p.onTalkativenessChange}
-              onRemove={p.onRemoveCharacter}
+              onTalkativenessChange={actions.onTalkativenessChange}
+              onRemove={actions.onRemoveCharacter}
               canRemove={canRemove}
               canSkip={canSkip}
               isImpersonating={isImpersonating}
               isActiveTyping={isActiveTyping}
-              onImpersonate={p.onImpersonate}
-              onStopImpersonate={p.onStopImpersonate}
-              connectionProfiles={p.connectionProfiles}
-              onConnectionProfileChange={p.onConnectionProfileChange}
-              onSystemPromptChange={p.onSystemPromptChange}
-              onSubpromptsChange={p.onSubpromptsChange}
-              onRebuildSystemPrompt={p.onRebuildSystemPrompt}
+              onImpersonate={actions.onImpersonate}
+              onStopImpersonate={actions.onStopImpersonate}
+              connectionProfiles={actions.connectionProfiles}
+              onConnectionProfileChange={actions.onConnectionProfileChange}
+              onSystemPromptChange={actions.onSystemPromptChange}
+              onSubpromptsChange={actions.onSubpromptsChange}
+              onRebuildSystemPrompt={actions.onRebuildSystemPrompt}
               onActiveChange={p.onParticipantSettingsChange
                 ? (pId, active) => p.onParticipantSettingsChange!(pId, { isActive: active })
                 : undefined}
@@ -965,7 +956,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
                 : undefined}
               onWhisper={activeParticipantCount >= 3 ? p.onWhisper : undefined}
               chatId={p.chatId}
-              onRegenerateAvatar={p.onRegenerateAvatar}
+              onRegenerateAvatar={actions.onRegenerateAvatar}
               isDangerousChat={shouldShowDangerStyling({ conciergeState: p.conciergeState })}
             />
           )

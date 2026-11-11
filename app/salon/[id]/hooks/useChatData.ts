@@ -202,6 +202,8 @@ export function useChatData(chatId: string) {
       const data = await res.json()
       setChat(data.chat)
       lastReadOkRef.current = true
+      // #173: a read that came back clears whatever the last failed one said.
+      setError(null)
 
       // The chat object is always the newer answer for its own fields, but its
       // transcript half may not be: a hinted read can have applied a higher

@@ -4,6 +4,16 @@
 
 ### 4.13-dev
 
+#### Refactor: one Salon stream lifecycle
+
+- #172: Enter in the composer during a Continue, nudge, opening or storyteller run started a second turn stream over the first. `useSSEStreaming` now holds one in-flight claim (`isStreamInFlight`) that every lifecycle takes and checks; a send refused by it shows the "still speaking" toast and leaves the text in the composer. The composer's Enter path and Send button ask the same question. A claim is released only by its own stream's `finally` (or by Stop's local abandon), so an abandoned stream cannot clear a newer one's.
+- #173: one failed chat read left the Salon on its full-page error screen for the life of the tab. `useChatData` clears `error` on a successful read; `SalonView` shows the error screen only when there is no chat, and a failed refresh of a chat on screen is a toast.
+- `useSSEStreaming` (1,846 lines) split: pure helpers and shared types in `stream-helpers.ts` (re-exported from the hook), the rAF content/reasoning buffers in `useStreamingBuffers`, live tool batches in `useStreamingToolBatches`, and the frame reader in `readTurnStream` (`read-turn-stream.ts`), a plain async function with no React, now unit-tested per frame kind. The four lifecycles (send, open, continue, storyteller) are request builders over one `runTurnStream`, which owns the abort controller, the claim, the shared frame handlers and the one `finally`; the hook is about 1,080 lines. `sending` is derived (`streamKind === 'send'`) and `abortControllerRef` is no longer returned. A stream abandoned by Stop no longer runs its `finally` over a stream started after it.
+- Storyteller runs notify the queue badges on `chainComplete` as continue runs do (they did so only in their `finally`).
+- `SalonView` (2,419 lines) lost the avatar watch, avatar timeline and `getMessageAvatar` to `useSalonAvatars`, and in-conversation search and message reveal to `useMessageReveal`; about 2,070 lines remain.
+- `components/providers/chat-context.tsx` was never mounted. It is now `ChatActionsProvider` / `useChatActions`, mounted by `SalonView` around the sidebar, carrying the 13 participant-card actions (`onNudge`, `onQueue`, `onDequeue`, `onTalkativenessChange`, `onRemoveCharacter`, `onImpersonate`, `onStopImpersonate`, `connectionProfiles`, `onConnectionProfileChange`, `onSystemPromptChange`, `onSubpromptsChange`, `onRebuildSystemPrompt`, `onRegenerateAvatar`) that were threaded through `ChatSidebar` and `ParticipantsSection` untouched. `ChatSidebarProps` no longer has them.
+- Removed `SalonView`'s quick-hide check. It read the unmounted context, so it never hid anything.
+
 #### CI
 
 - The Test job's zsh install retries three times and, if the runner's Ubuntu mirror is still unreachable, posts a warning and continues instead of failing the job. Only the zsh completion-template parse check is skipped in that case. Every CI run on 2026-11-11 had failed at this step on `Temporary failure resolving 'azure.archive.ubuntu.com'` before any test ran.
