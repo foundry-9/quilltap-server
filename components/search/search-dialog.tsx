@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { createPortal } from 'react-dom'
 import { Icon } from '@/components/ui/icon'
@@ -29,23 +32,20 @@ interface SearchDialogProps {
 const ALL_TYPES = ALL_SEARCH_TYPES
 const PAGE_SIZE = 20
 const CONVERSATION_LIMIT = 50
+const EMPTY_COUNTS: CountsByType = {}
 
 export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes, conversation, onConversationReveal }: SearchDialogProps) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [selectedTypes, setSelectedTypes] = useState<SearchType[]>(ALL_TYPES)
-  const [hasSearched, setHasSearched] = useState(false)
-  const [hasMore, setHasMore] = useState(false)
-  const [totalCount, setTotalCount] = useState(0)
-  const [countsByType, setCountsByType] = useState<CountsByType>({})
+  // The search on screen: set by the debounce, a filter toggle, Enter or an
+  // initial query. It is the query key, so an answer for an earlier term or
+  // filter set can never replace a newer one.
+  const [submitted, setSubmitted] = useState<{ query: string; types: SearchType[] } | null>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const hasInitializedRef = useRef(false)
-  const currentQueryRef = useRef('')
   // "This conversation" is a filter of its own beside the global types; it is
   // on by default, and off when the dialog was opened to look at one type.
   const [includeConversation, setIncludeConversation] = useState(true)
@@ -57,73 +57,52 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
     [conversation, includeConversation, trimmedQuery],
   )
 
-  // Search function with pagination support
-  const performSearch = useCallback(async (
-    searchQuery: string,
-    types: SearchType[],
-    offset: number,
-    isNewSearch: boolean
-  ) => {
-    if (searchQuery.length < 2) {
-      setResults([])
-      setHasSearched(false)
-      setHasMore(false)
-      setTotalCount(0)
-      setCountsByType({})
-      return
-    }
-
-    if (isNewSearch) {
-      setIsLoading(true)
-      currentQueryRef.current = searchQuery
-    } else {
-      setIsLoadingMore(true)
-    }
-    setHasSearched(true)
-
-    try {
-      const typesParam = types.join(',')
-      const response = await fetch(
-        `/api/v1/ui/search?q=${encodeURIComponent(searchQuery)}&types=${typesParam}&limit=${PAGE_SIZE}&offset=${offset}`
-      )
-
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.status}`)
-      }
-
-      const data: SearchResponse = await response.json()
-
-      // Only update if this is still the current query
-      if (currentQueryRef.current === searchQuery) {
-        if (isNewSearch) {
-          setResults(data.results ?? [])
-          // Only update countsByType on new search, not load more
-          setCountsByType(data.countsByType ?? {})
-        } else {
-          // Deduplicate when appending - use type+id as unique key
-          const newResults = data.results ?? []
-          setResults(prev => {
-            const existingKeys = new Set(prev.map(r => `${r.type}-${r.id}`))
-            const uniqueNew = newResults.filter(r => !existingKeys.has(`${r.type}-${r.id}`))
-            return [...prev, ...uniqueNew]
-          })
+  const submittedQuery = submitted?.query ?? ''
+  const submittedTypes = submitted?.types ?? ALL_TYPES
+  const hasSearched = submittedQuery.length >= 2
+  const searchQuery = useInfiniteQuery({
+    queryKey: queryKeys.uiSearch.results(submittedQuery, submittedTypes),
+    queryFn: ({ pageParam, signal }) =>
+      apiFetch<SearchResponse>(
+        `/api/v1/ui/search?q=${encodeURIComponent(submittedQuery)}&types=${submittedTypes.join(',')}&limit=${PAGE_SIZE}&offset=${pageParam}`,
+        { signal },
+      ),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.hasMore ? pages.reduce((n, page) => n + (page.results?.length ?? 0), 0) : undefined,
+    enabled: isOpen && hasSearched,
+  })
+  // Pages appended in order, de-duplicated by type + id.
+  const results = useMemo<SearchResult[]>(() => {
+    const seen = new Set<string>()
+    const out: SearchResult[] = []
+    for (const page of searchQuery.data?.pages ?? []) {
+      for (const r of page.results ?? []) {
+        const key = `${r.type}-${r.id}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          out.push(r)
         }
-        setHasMore(data.hasMore ?? false)
-        setTotalCount(data.totalCount ?? 0)
-      }
-    } catch (error) {
-      console.error('Search error', { error: error instanceof Error ? error.message : String(error) })
-      if (isNewSearch) {
-        setResults([])
-      }
-      setHasMore(false)
-    } finally {
-      if (isNewSearch) {
-        setIsLoading(false)
-      } else {
-        setIsLoadingMore(false)
       }
     }
+    return out
+  }, [searchQuery.data])
+  const pages = searchQuery.data?.pages
+  const lastPage = pages?.[pages.length - 1]
+  const countsByType: CountsByType = pages?.[0]?.countsByType ?? EMPTY_COUNTS
+  const hasMore = searchQuery.hasNextPage
+  const totalCount = lastPage?.totalCount ?? 0
+  const isLoading = hasSearched && searchQuery.isPending
+  const isLoadingMore = searchQuery.isFetchingNextPage
+  useEffect(() => {
+    if (searchQuery.error) {
+      console.error('Search error', { error: searchQuery.error.message })
+    }
+  }, [searchQuery.error])
+
+  /** Submit a search now (shorter than two characters clears it). */
+  const performSearch = useCallback((q: string, types: SearchType[]) => {
+    setSubmitted({ query: q, types })
   }, [])
 
   // Focus input when dialog opens and handle initial query/types
@@ -132,7 +111,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
       // Set initial query if provided and this is a fresh open
       if (!hasInitializedRef.current) {
         if (initialQuery) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- the dialog adopts its opening props (initial query and types) on each open
           setQuery(initialQuery)
         }
         // Set initial types if provided, otherwise reset to all types
@@ -149,14 +128,9 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
     } else {
       // Reset state when closing
       setQuery('')
-      setResults([])
-      setHasSearched(false)
-      setHasMore(false)
-      setTotalCount(0)
-      setCountsByType({})
+      setSubmitted(null)
       setSelectedTypes(ALL_TYPES)
       hasInitializedRef.current = false
-      currentQueryRef.current = ''
     }
   }, [isOpen, initialQuery, initialTypes])
 
@@ -165,7 +139,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
     if (isOpen && initialQuery && initialQuery.length >= 2 && hasInitializedRef.current && !hasSearched) {
       // Use initialTypes if provided, otherwise use current selectedTypes
       const typesToSearch = (initialTypes && initialTypes.length > 0) ? initialTypes : selectedTypes
-      performSearch(initialQuery, typesToSearch, 0, true)
+      performSearch(initialQuery, typesToSearch)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialQuery, initialTypes, hasSearched])
@@ -186,7 +160,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
 
     // Debounce search by 300ms
     searchTimeoutRef.current = setTimeout(() => {
-      performSearch(newQuery, selectedTypes, 0, true)
+      performSearch(newQuery, selectedTypes)
     }, 300)
   }
 
@@ -205,16 +179,17 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
 
     // Re-search if we have a query
     if (query.length >= 2) {
-      performSearch(query, newTypes, 0, true)
+      performSearch(query, newTypes)
     }
   }
 
   // Load more results
+  const { fetchNextPage } = searchQuery
   const loadMore = useCallback(() => {
-    if (!isLoadingMore && hasMore && query.length >= 2) {
-      performSearch(query, selectedTypes, results.length, false)
+    if (!isLoadingMore && hasMore) {
+      void fetchNextPage()
     }
-  }, [isLoadingMore, hasMore, query, selectedTypes, results.length, performSearch])
+  }, [isLoadingMore, hasMore, fetchNextPage])
 
   // Infinite scroll handler
   useEffect(() => {
@@ -251,7 +226,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current)
       }
-      performSearch(query, selectedTypes, 0, true)
+      performSearch(query, selectedTypes)
     }
   }
 
@@ -300,11 +275,8 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
                 <button
                   onClick={() => {
                     setQuery('')
-                    setResults([])
-                    setHasSearched(false)
-                    setHasMore(false)
-                    setTotalCount(0)
-                    setCountsByType({})
+                    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+                    setSubmitted(null)
                     inputRef.current?.focus()
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 qt-text-secondary hover:text-foreground"

@@ -55,7 +55,7 @@ function useOptimisticChatField<T>(
   const [value, setValue] = useState<T | null>(null)
   useEffect(() => {
     if (chatValue !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes
       setValue(chatValue ?? null)
     }
   }, [chatValue])
@@ -146,7 +146,7 @@ export function useChatControls({
   const chatResolvedAgentModeEnabled = chat?.resolvedAgentModeEnabled
   useEffect(() => {
     if (chat) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes, also set by the toggle handlers
       setAgentModeEnabled(chatResolvedAgentModeEnabled ?? null)
     }
   }, [chat, chatResolvedAgentModeEnabled])
@@ -170,7 +170,7 @@ export function useChatControls({
   // Initialize documentEditingMode from chat data
   useEffect(() => {
     if (chat?.documentEditingMode !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes, also set by the toggle handlers
       setDocumentEditingMode(chat.documentEditingMode)
     }
   }, [chat?.documentEditingMode])
@@ -178,7 +178,7 @@ export function useChatControls({
   // Initialize allowCrossCharacterVaultReads from chat data
   useEffect(() => {
     if (chat?.allowCrossCharacterVaultReads !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by toggle handler
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes, also set by the toggle handler
       setAllowCrossCharacterVaultReads(chat.allowCrossCharacterVaultReads)
     }
   }, [chat?.allowCrossCharacterVaultReads])

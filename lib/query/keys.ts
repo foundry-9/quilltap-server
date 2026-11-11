@@ -40,6 +40,14 @@ export const queryKeys = {
      * collection with a separate endpoint, not a filtered view of the album.
      */
     avatarRolls: (id: string) => ['characters', id, 'avatar-rolls'] as const,
+    /**
+     * One page of the character's conversations (`?action=chats`). The search
+     * term and page are in the key, so an older term's slow answer never lands
+     * over a newer one.
+     */
+    chats: (id: string, filters: Filters) => ['characters', id, 'chats', filters ?? {}] as const,
+    /** Prefix of every `chats(id, …)` page. */
+    chatLists: (id: string) => ['characters', id, 'chats'] as const,
     /** Generated pictures of every wardrobe item the character can reach. */
     wardrobeImages: (id: string) => ['characters', id, 'wardrobe-images'] as const,
   },
@@ -252,6 +260,8 @@ export const queryKeys = {
      * composer's `/` command menu while it is open.
      */
     byChat: (chatId: string) => ['tools', 'chat', chatId] as const,
+    /** The same tools with their availability for one chat, no schemas (`?chatId=…`) — the tool settings dialog. */
+    availability: (chatId: string) => ['tools', 'availability', chatId] as const,
   },
   customTools: {
     all: ['custom-tools'] as const,
@@ -309,6 +319,14 @@ export const queryKeys = {
     /** The maintenance ledger (parent memory); the `memories` topic refreshes it after a run. */
     maintenanceStatus: ['memories', 'maintenance-status'] as const,
     characterMemoryCounts: ['memories', 'character-memory-counts'] as const,
+    /** Prefix of every `list(...)` key — invalidate after a memory write. */
+    lists: ['memories', 'list'] as const,
+    /**
+     * One page of one character's memories (`GET /api/v1/memories?…`). The
+     * search term, sort, filters and page are all in the key, so a slow
+     * response for an older search term can never land over a newer one.
+     */
+    list: (filters: Filters) => ['memories', 'list', filters ?? {}] as const,
     /** The per-chat row count the Salon sidebar renders beside its delete control. */
     chatCount: (chatId: string) => ['memories', 'chat-count', chatId] as const,
   },
@@ -485,6 +503,15 @@ export const queryKeys = {
     all: ['brahma-console'] as const,
     entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
     pastChats: ['brahma-console', 'past-chats'] as const,
+  },
+  /**
+   * The global search dialog (`GET /api/v1/ui/search`), paged as an infinite
+   * query. The term and the type filter are the key, so a slow answer for an
+   * earlier term or filter is never the one on screen.
+   */
+  uiSearch: {
+    all: ['ui-search'] as const,
+    results: (query: string, types: readonly string[]) => ['ui-search', query, [...types].sort()] as const,
   },
   home: {
     /** Home dashboard payload for the workspace home tab. */

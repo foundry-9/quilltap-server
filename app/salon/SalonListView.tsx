@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useCharactersList } from '@/lib/hooks/use-characters-list'
@@ -28,6 +28,7 @@ interface AutonomousRoomsListResponse {
 }
 
 export function SalonListView() {
+  const queryClient = useQueryClient()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
@@ -161,10 +162,12 @@ export function SalonListView() {
    * Handle import completion from the new wizard
    */
   const handleImportComplete = useCallback(async (chatId: string) => {
-    // Highlight the imported chat
+    // Re-read every chat list (it was missing until the next refetch), then
+    // highlight the imported chat.
+    await queryClient.invalidateQueries({ queryKey: queryKeys.chats.lists })
     setHighlightedChatId(chatId)
     setImportDialogOpen(false)
-  }, [])
+  }, [queryClient])
 
   if (loading) {
     return (

@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Refactor: client server-state (phase 5: drafts and stale answers)
+
+- The chat's LLM tool settings dialog reset unsaved toggles on every chat refetch (an effect keyed on array identity). Its two lists are `useDraft`s over the chat's values, so a refetch with the same values keeps the toggles; Cancel discards them. Its tool list is a query (`queryKeys.tools.availability`).
+- Search as you type: the character memory list, a character's conversation list and the global search dialog put the term (and the dialog's type filter) in the query key, so a slow answer for an earlier term can no longer replace the current one. The memory and conversation lists keep the previous page on screen while the next loads; the search dialog pages with `useInfiniteQuery`. New keys `memories.list`, `characters.chats` / `chatLists`, `uiSearch`. The memory list had no guard at all; the dialog's guarded the term but not the filter.
+- LLM log retention saved on every keystroke: typing "60" over "30" saved 6 first, and emptying the field saved 0, which means unlimited. It now saves on blur or Enter, restores the saved value for an empty or non-numeric entry, and clamps to 0–365. Help updated.
+- Importing a chat from the Salon list now refreshes the list; it highlighted a chat that was not shown until the next refetch.
+- `GenerateImageView` derives its character options instead of copying them into state; the eslint-disable reasons in touched files no longer cite SWR.
+
 #### Refactor: client server-state (phase 4: plugins; saved values re-seeded)
 
 - The Plugins tab reads the registry, the installed list, the deployment shape and the upgrade check as queries (`usePluginsQuery`, `lib/hooks/use-plugins.ts`; keys `plugins.list` / `installed` / `upgrades`, `system.deployment`) instead of eleven pieces of component state. Enable, disable, install, uninstall, upgrade and a config save invalidate `plugins.all`, which also refreshes the attention strip's plugin-error count.

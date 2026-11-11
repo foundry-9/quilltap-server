@@ -7,7 +7,7 @@
  * Allows users to generate images using their configured image profiles.
  */
 
-import { useId, useState, useRef, useEffect, useCallback } from 'react'
+import { useId, useState, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import { useCharactersList } from '@/lib/hooks/use-characters-list'
@@ -39,7 +39,6 @@ export function GenerateImageView() {
   const [imageCount, setImageCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([])
-  const [allEntities, setAllEntities] = useState<EntityOption[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [previewImage, setPreviewImage] = useState<{ src: string; filename: string } | null>(null)
@@ -48,22 +47,14 @@ export function GenerateImageView() {
 
   const { data: charactersData, isLoading } = useCharactersList<{ id: string; name: string }>()
 
-  // Load all characters for placeholder insertion
-  useEffect(() => {
-    if (charactersData) {
-      const entities: EntityOption[] = charactersData.map((c) => ({
-        id: c.id,
-        name: c.name,
-        type: 'character' as const,
-      }))
-
-      // Sort alphabetically
-      entities.sort((a, b) => a.name.localeCompare(b.name))
-
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
-      setAllEntities(entities)
-    }
-  }, [charactersData])
+  // Every character, for placeholder insertion, alphabetical.
+  const allEntities = useMemo<EntityOption[]>(
+    () =>
+      (charactersData ?? [])
+        .map((c) => ({ id: c.id, name: c.name, type: 'character' as const }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [charactersData],
+  )
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current

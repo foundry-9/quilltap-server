@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { createPortal } from 'react-dom'
 import { MemoryCard } from './memory-card'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -54,15 +57,9 @@ type SortOrder = 'asc' | 'desc'
 
 const MEMORIES_PER_PAGE = 30
 
-export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
-  const [memories, setMemories] = useState<Memory[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  // A page change keeps the current page on screen (dimmed) while the next loads.
-  const [loadingPage, setLoadingPage] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(0)
-  const [totalCount, setTotalCount] = useState(0)
+const EMPTY_MEMORIES: Memory[] = []
 
+export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -82,57 +79,55 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [showMaintenance, setShowMaintenance] = useState(false)
 
   // One page at a time, replacing what is shown — paged, not an infinite
-  // scroller that keeps growing as the bottom comes into view.
-  const fetchMemories = useCallback(async (pageNum: number, currentSearch: string) => {
-    setLoadingPage(true)
+  // scroller. Every input is in the query key: typing, sorting or filtering
+  // makes a new query, so an older search term's slow answer is simply not
+  // the query on screen (it had no guard against landing last before).
+  const filtersKey = [characterId, sortBy, sortOrder, search, sourceFilter, tierFilter, String(keystoneOnly)].join('\u0000')
+  // The page belongs to one filter set; a new one starts at the first page.
+  const [pageState, setPageState] = useState({ filtersKey, page: 0 })
+  const page = pageState.filtersKey === filtersKey ? pageState.page : 0
+  const setPage = (next: number) => setPageState({ filtersKey, page: next })
 
-    try {
+  const queryClient = useQueryClient()
+  const pageQuery = useQuery({
+    queryKey: queryKeys.memories.list({ characterId, sortBy, sortOrder, search, sourceFilter, tierFilter, keystoneOnly, page }),
+    queryFn: ({ signal }) => {
       const params = new URLSearchParams()
       params.set('characterId', characterId)
       params.set('limit', String(MEMORIES_PER_PAGE))
-      params.set('offset', String(pageNum * MEMORIES_PER_PAGE))
+      params.set('offset', String(page * MEMORIES_PER_PAGE))
       params.set('sortBy', sortBy)
       params.set('sortOrder', sortOrder)
-      if (currentSearch) params.set('search', currentSearch)
+      if (search) params.set('search', search)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
       if (tierFilter !== 'ALL') params.set('tier', tierFilter)
       if (keystoneOnly) params.set('keystone', 'true')
+      return apiFetch<{ memories?: Memory[]; totalCount?: number }>(`/api/v1/memories?${params}`, { signal })
+    },
+    // A page or filter change keeps the current page on screen (dimmed).
+    placeholderData: keepPreviousData,
+  })
+  const memories = pageQuery.data?.memories ?? EMPTY_MEMORIES
+  const totalCount = pageQuery.data?.totalCount ?? 0
+  const isLoading = pageQuery.isPending
+  const loadingPage = pageQuery.isPlaceholderData
+  const error = pageQuery.error ? apiErrorMessage(pageQuery.error, 'Failed to fetch memories') : null
 
-      const result = await fetchJson<{ memories: Memory[]; totalCount: number }>(
-        `/api/v1/memories?${params}`
-      )
+  /** Re-read this character's memory pages. */
+  const refreshMemories = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.memories.lists }),
+    [queryClient],
+  )
 
-      if (!result.ok) {
-        throw new Error(result.error || 'Failed to fetch memories')
-      }
-
-      const newMemories = result.data?.memories || []
-      const total = result.data?.totalCount ?? 0
-
-      setMemories(newMemories)
-      setTotalCount(total)
-      setError(null)
-    } catch (err) {
-      const errorMessage = getErrorMessage(err, 'Failed to fetch memories')
-      console.error('MemoryList: Fetch failed', { error: errorMessage })
-      setError(errorMessage)
-    } finally {
-      setIsLoading(false)
-      setLoadingPage(false)
-    }
-  }, [characterId, sortBy, sortOrder, sourceFilter, tierFilter, keystoneOnly])
-
-  // Reset and refetch when filters change or refreshKey changes
+  // The parent's refresh signal (an import, a regeneration) re-reads the list.
+  const lastRefreshKey = useRef(refreshKey)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- page resets to 0 whenever the paginated query key changes
-    setPage(0)
-    fetchMemories(0, search)
-  }, [fetchMemories, search, refreshKey])
+    if (lastRefreshKey.current === refreshKey) return
+    lastRefreshKey.current = refreshKey
+    void refreshMemories()
+  }, [refreshKey, refreshMemories])
 
-  const goToPage = useCallback((next: number) => {
-    setPage(next)
-    void fetchMemories(next, search)
-  }, [fetchMemories, search])
+  const goToPage = setPage
 
   // Debounced search handler
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,20 +145,19 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       if (!result.ok) {
         throw new Error(result.error || 'Failed to delete memory')
       }
-      setMemories(prev => prev.filter(m => m.id !== id))
-      setTotalCount(prev => prev - 1)
       showSuccessToast('Memory deleted')
       // Re-read the page so the next memory fills the gap; step back a page
       // when this emptied the last one.
       const lastPage = Math.max(0, Math.ceil((totalCount - 1) / MEMORIES_PER_PAGE) - 1)
       goToPage(Math.min(page, lastPage))
+      await refreshMemories()
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to delete memory')
       showErrorToast(errorMessage)
     } finally {
       setDeletingId(null)
     }
-  }, [goToPage, page, totalCount])
+  }, [goToPage, page, totalCount, refreshMemories])
 
   const handleViewDigest = useCallback(async (digestId: string) => {
     try {
@@ -192,20 +186,20 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
     setEditingMemory(null)
   }, [])
 
-  const handleEditorSave = useCallback(() => {
+  const handleEditorSave = () => {
     setShowEditor(false)
     setEditingMemory(null)
-    // Reset to first page and refetch
+    // Back to the first page, re-read
     setPage(0)
-    fetchMemories(0, search)
-  }, [fetchMemories, search])
+    void refreshMemories()
+  }
 
   // A real run is queued and works in the background; re-read the first page
   // so anything it has already finished shows.
-  const handleMaintenanceQueued = useCallback(() => {
+  const handleMaintenanceQueued = () => {
     setPage(0)
-    fetchMemories(0, search)
-  }, [fetchMemories, search])
+    void refreshMemories()
+  }
 
   // Show loading state when initially loading
   if (isLoading && memories.length === 0) {
@@ -298,7 +292,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
 
       {/* Error State */}
       {error && (
-        <ErrorAlert message={error} onRetry={() => fetchMemories(page, search)} />
+        <ErrorAlert message={error} onRetry={() => void pageQuery.refetch()} />
       )}
 
       {/* Empty State */}
