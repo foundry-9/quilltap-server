@@ -6,7 +6,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { BackgroundJobType, type BackgroundJob } from '@/lib/schemas/types';
+import { BackgroundJobType, type BackgroundJob, type BackgroundJobStatus } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { MAINTENANCE_PHASES, type MaintenancePhase, type MaintenanceReason, type MaintenanceRunSettings } from '@/lib/memory/maintenance/types';
@@ -414,101 +414,149 @@ export interface SceneStateTrackingEnqueueResult {
 }
 
 /**
- * Enqueue a chat danger classification job
- * Skips if there's already a pending/processing job for the same chat
+ * Enqueue a chat danger classification job. The classifier reads the chat
+ * when it runs, so a queued job absorbs the request and a running one does
+ * not.
  */
 export async function enqueueChatDangerClassification(
   userId: string,
   payload: ChatDangerClassificationPayload,
   options?: EnqueueJobOptions
 ): Promise<ChatDangerClassificationEnqueueResult> {
-  const repos = getRepositories();
-
-  // Check for existing pending/processing classification jobs for this chat
-  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
-  const existingJob = pendingJobs.find(job => job.type === 'CHAT_DANGER_CLASSIFICATION');
-
-  if (existingJob) {
-    logger.info('[ChatDangerClassification] Reusing existing pending job for chat', {
-      context: 'background-jobs.queue',
-      chatId: payload.chatId,
-      existingJobId: existingJob.id,
-      existingStatus: existingJob.status,
-    });
-    return { jobId: existingJob.id, isNew: false };
-  }
-
-  const jobId = await enqueueJob(userId, 'CHAT_DANGER_CLASSIFICATION', payload as unknown as Record<string, unknown>, {
+  return enqueueDeduped(userId, 'CHAT_DANGER_CLASSIFICATION', payload, {
+    key: p => p.chatId,
+    absorbs: 'pending',
+    scope: 'chatId',
+    label: 'ChatDangerClassification',
+  }, {
     // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,
   });
-  return { jobId, isNew: true };
 }
 
 /**
- * Enqueue a scene state tracking job
- * Skips if there's already a pending/processing job for the same chat
+ * Enqueue a scene state tracking job. The tracker reads the chat when it
+ * runs, so a queued job absorbs the request and a running one does not.
  */
 export async function enqueueSceneStateTracking(
   userId: string,
   payload: SceneStateTrackingPayload,
   options?: EnqueueJobOptions
 ): Promise<SceneStateTrackingEnqueueResult> {
-  const repos = getRepositories();
-
-  // Check for existing pending/processing scene state jobs for this chat
-  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
-  const existingJob = pendingJobs.find(job => job.type === 'SCENE_STATE_TRACKING');
-
-  if (existingJob) {
-    logger.info('[SceneStateTracking] Reusing existing pending job for chat', {
-      context: 'background-jobs.queue',
-      chatId: payload.chatId,
-      existingJobId: existingJob.id,
-      existingStatus: existingJob.status,
-    });
-    return { jobId: existingJob.id, isNew: false };
-  }
-
-  const jobId = await enqueueJob(userId, 'SCENE_STATE_TRACKING', payload as unknown as Record<string, unknown>, {
+  return enqueueDeduped(userId, 'SCENE_STATE_TRACKING', payload, {
+    key: p => p.chatId,
+    absorbs: 'pending',
+    scope: 'chatId',
+    label: 'SceneStateTracking',
+  }, {
     // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,
   });
-  return { jobId, isNew: true };
 }
 
 /**
- * Enqueue a conversation render job (Scriptorium)
- * Skips if there's already a pending/processing job for the same chat
+ * Enqueue a conversation render job (Scriptorium). The renderer reads the
+ * chat when it runs, so a queued job absorbs the request and a running one
+ * does not.
  */
 export async function enqueueConversationRender(
   userId: string,
   payload: ConversationRenderPayload,
   options?: EnqueueJobOptions
 ): Promise<ConversationRenderEnqueueResult> {
-  const repos = getRepositories();
-
-  // Check for existing pending/processing render jobs for this chat
-  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
-  const existingJob = pendingJobs.find(job => job.type === 'CONVERSATION_RENDER');
-
-  if (existingJob) {
-    logger.info('[ConversationRender] Reusing existing pending job for chat', {
-      context: 'background-jobs.queue',
-      chatId: payload.chatId,
-      existingJobId: existingJob.id,
-      existingStatus: existingJob.status,
-    });
-    return { jobId: existingJob.id, isNew: false };
-  }
-
-  const jobId = await enqueueJob(userId, 'CONVERSATION_RENDER', payload as unknown as Record<string, unknown>, {
+  return enqueueDeduped(userId, 'CONVERSATION_RENDER', payload, {
+    key: p => p.chatId,
+    absorbs: 'pending',
+    scope: 'chatId',
+    label: 'ConversationRender',
+  }, {
     // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,
   });
+}
+
+/**
+ * Which jobs may absorb an enqueue — the one rule every deduped enqueue
+ * states (refactor 4.13 §5.3).
+ *
+ * - `'pending'`: only a job not yet claimed. A handler that reads its inputs
+ *   when it runs is covered by any queued job, but a job already PROCESSING
+ *   has "missed the bus": it read them before this change, so the request
+ *   needs a fresh job.
+ * - `'active'`: a PROCESSING job absorbs it too. Only where a running job
+ *   provably covers a later request (the request names something immutable,
+ *   or a second run would repeat the first's work).
+ */
+export type DedupeAbsorbs = 'pending' | 'active';
+
+export interface DedupeRule<P> {
+  /** What makes two jobs "the same", computed on the queued payloads as well. */
+  key: (payload: P) => string;
+  /** Required, no default: see {@link DedupeAbsorbs}. */
+  absorbs: DedupeAbsorbs;
+  /**
+   * Narrow the queue read to jobs whose payload carries the same value in
+   * this field, so a busy type is not read whole on every enqueue. The key
+   * must imply it.
+   */
+  scope?: 'chatId' | 'entityId';
+  /** Log prefix. */
+  label: string;
+}
+
+export interface DedupedEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
+ * Enqueue a job unless one that absorbs it is already queued, by the rule's
+ * key and absorption rule. `options.skipDedupCheck` skips the read (for a
+ * caller that owns its own in-flight set). A failed read enqueues anyway: a
+ * duplicate job is wasteful, a lost one is not recoverable.
+ */
+export async function enqueueDeduped<P extends object>(
+  userId: string,
+  type: BackgroundJobType,
+  payload: P,
+  rule: DedupeRule<P>,
+  options?: EnqueueJobOptions
+): Promise<DedupedEnqueueResult> {
+  if (!options?.skipDedupCheck) {
+    try {
+      const statuses: BackgroundJobStatus[] = rule.absorbs === 'active' ? ['PENDING', 'PROCESSING'] : ['PENDING'];
+      const scopeValue = rule.scope ? (payload as Record<string, unknown>)[rule.scope] : undefined;
+      const candidates = await getRepositories().backgroundJobs.findAbsorbers(type, statuses, {
+        userId,
+        ...(rule.scope && typeof scopeValue === 'string' ? { payloadField: rule.scope, payloadValue: scopeValue } : {}),
+      });
+      const wanted = rule.key(payload);
+      const existing = candidates.find(job => rule.key(job.payload as unknown as P) === wanted);
+      if (existing) {
+        logger.debug(`[${rule.label}] Reusing a queued job`, {
+          context: 'background-jobs.queue',
+          type,
+          key: wanted,
+          absorbs: rule.absorbs,
+          existingJobId: existing.id,
+          existingStatus: existing.status,
+        });
+        return { jobId: existing.id, isNew: false };
+      }
+    } catch (error) {
+      logger.warn(`[${rule.label}] Failed to check for existing jobs during enqueue`, {
+        context: 'background-jobs.queue',
+        type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Fall through and enqueue anyway.
+    }
+  }
+
+  const jobId = await enqueueJob(userId, type, payload as unknown as Record<string, unknown>, options);
   return { jobId, isNew: true };
 }
 
@@ -553,53 +601,37 @@ export async function enqueueJob(
 /**
  * Enqueue a per-turn memory extraction job.
  *
- * Dedupe: if a PENDING or PROCESSING MEMORY_EXTRACTION job already exists
- * for the same (chatId, turnOpenerMessageId, extractionAnchorMessageId,
- * pass, cursor) key, this is a no-op that returns the existing job ID. The first
- * character to finalize in a multi-character turn creates the job; later
- * characters' finalize calls fall through to dedup. Greeting / continue
- * turns (where turnOpenerMessageId is null and no anchor is set) dedupe
- * on (chatId, null, null) so a single extraction job covers the greeting
- * tail rather than producing one per assistant message. Autonomous chats
- * set extractionAnchorMessageId per speaker so successive triggers don't
- * collapse to the same null/null key.
+ * Dedupe key: (chatId, turnOpenerMessageId, extractionAnchorMessageId, pass,
+ * cursor). The first character to finalize in a multi-character turn creates
+ * the job; later characters' finalize calls fall through to dedup. Greeting /
+ * continue turns (where turnOpenerMessageId is null and no anchor is set)
+ * dedupe on (chatId, null, null) so a single extraction job covers the
+ * greeting tail rather than producing one per assistant message. Autonomous
+ * chats set extractionAnchorMessageId per speaker so successive triggers
+ * don't collapse to the same null/null key.
+ *
+ * Absorbs `'active'`: a second job for the same key would extract the same
+ * turn again and count its memories twice (admission is keyed per job
+ * attempt, not per turn), so a running job stands for the turn.
  */
 export async function enqueueMemoryExtraction(
   userId: string,
   payload: MemoryExtractionPayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  if (options?.skipDedupCheck) {
-    return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
-  }
-
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const incomingAnchor = payload.extractionAnchorMessageId ?? null;
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'MEMORY_EXTRACTION') return false;
-      const existingPayload = j.payload as unknown as MemoryExtractionPayload;
-      const existingAnchor = existingPayload.extractionAnchorMessageId ?? null;
-      return existingPayload.chatId === payload.chatId
-        && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId
-        && existingAnchor === incomingAnchor
-        && memoryExtractionPassOf(existingPayload) === memoryExtractionPassOf(payload)
-        && (existingPayload.cursor ?? null) === (payload.cursor ?? null);
-    });
-    if (existing) {
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[MemoryExtraction] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through and enqueue anyway.
-  }
-
-  return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+  const { jobId } = await enqueueDeduped(userId, 'MEMORY_EXTRACTION', payload, {
+    key: p => JSON.stringify([
+      p.chatId,
+      p.turnOpenerMessageId ?? null,
+      p.extractionAnchorMessageId ?? null,
+      memoryExtractionPassOf(p),
+      p.cursor ?? null,
+    ]),
+    absorbs: 'active',
+    scope: 'chatId',
+    label: 'MemoryExtraction',
+  }, options);
+  return jobId;
 }
 
 /**
@@ -607,7 +639,8 @@ export async function enqueueMemoryExtraction(
  *
  * Dedupe: keyed on the posted carina message id. Each Carina answer is a
  * distinct message, so this only guards against an accidental double-enqueue
- * for the same message (e.g. a retry of `runCarinaQuery`). Works from both the
+ * for the same message (e.g. a retry of `runCarinaQuery`). The message does
+ * not change, so a running job covers it (`'active'`). Works from both the
  * main process (markup path) and the forked child (the `ask_carina` tool during
  * an autonomous-room turn) — the child buffers the create back to the parent,
  * exactly as the per-turn extractor already does.
@@ -617,62 +650,32 @@ export async function enqueueCarinaMemoryExtraction(
   payload: CarinaMemoryExtractionPayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  if (options?.skipDedupCheck) {
-    return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
-  }
-
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'CARINA_MEMORY_EXTRACTION') return false;
-      const existingPayload = j.payload as unknown as CarinaMemoryExtractionPayload;
-      return existingPayload.carinaMessageId === payload.carinaMessageId;
-    });
-    if (existing) {
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[CarinaMemoryExtraction] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through and enqueue anyway.
-  }
-
-  return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+  const { jobId } = await enqueueDeduped(userId, 'CARINA_MEMORY_EXTRACTION', payload, {
+    key: p => p.carinaMessageId,
+    absorbs: 'active',
+    scope: 'chatId',
+    label: 'CarinaMemoryExtraction',
+  }, options);
+  return jobId;
 }
 
 /**
  * Enqueue the memory job for a machine-delivered established fact. Runs once
- * per post: dedupe is keyed on the posted message id.
+ * per post: dedupe is keyed on the posted message id, which does not change,
+ * so a running job covers it (`'active'`).
  */
 export async function enqueueEstablishedFactMemories(
   userId: string,
   payload: EstablishedFactMemoriesPayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'ESTABLISHED_FACT_MEMORIES') return false;
-      return (j.payload as unknown as EstablishedFactMemoriesPayload).messageId === payload.messageId;
-    });
-    if (existing) {
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[EstablishedFactMemories] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through and enqueue anyway.
-  }
-
-  return enqueueJob(userId, 'ESTABLISHED_FACT_MEMORIES', payload as unknown as Record<string, unknown>, options);
+  const { jobId } = await enqueueDeduped(userId, 'ESTABLISHED_FACT_MEMORIES', payload, {
+    key: p => p.messageId,
+    absorbs: 'active',
+    scope: 'chatId',
+    label: 'EstablishedFactMemories',
+  }, options);
+  return jobId;
 }
 
 /** Union two phase lists; `undefined` (every phase) absorbs anything. */
@@ -748,8 +751,8 @@ async function enqueueMaintenanceAgainst(
 /** The user's PENDING maintenance jobs, or null when they cannot be read. */
 async function findPendingMaintenance(userId: string, characterId?: string): Promise<BackgroundJob[] | null> {
   try {
-    const pending = await getRepositories().backgroundJobs.findByUserId(userId, 'PENDING');
-    return pending.filter(j => j.type === 'MEMORY_MAINTENANCE');
+    // PENDING only: a running maintenance job has already read the corpus.
+    return await getRepositories().backgroundJobs.findAbsorbers('MEMORY_MAINTENANCE', ['PENDING'], { userId });
   } catch (error) {
     logger.warn('[Maintenance] Failed to check for pending jobs during enqueue', {
       characterId,
@@ -840,49 +843,30 @@ export interface CharacterHeadShouldersBackfillPayload {
 /**
  * Enqueue a head-and-shoulders backfill job for a character.
  *
- * Dedupes against in-flight (PENDING/PROCESSING) jobs for the same
- * (userId, characterId). Background priority (-1). Generation is idempotent,
- * so retries are harmless — callers may raise `maxAttempts` so a cold job
- * child (provider not yet ready) retries instead of giving up.
+ * Dedupes on the character against PENDING and PROCESSING jobs (`'active'`):
+ * the job fills a prompt the character lacks, and a second run would only
+ * find it filled. Background priority (-1). Generation is idempotent, so
+ * retries are harmless — callers may raise `maxAttempts` so a cold job child
+ * (provider not yet ready) retries instead of giving up.
  */
 export async function enqueueCharacterHeadShouldersBackfill(
   userId: string,
   payload: CharacterHeadShouldersBackfillPayload,
   options?: EnqueueJobOptions,
-): Promise<{ jobId: string; isNew: boolean }> {
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j =>
-      j.type === 'CHARACTER_HEADSHOULDERS_BACKFILL'
-      && (j.payload as Record<string, unknown>).characterId === payload.characterId);
-    if (existing) {
-      return { jobId: existing.id, isNew: false };
-    }
-  } catch (error) {
-    logger.warn('[HeadShouldersBackfill] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through and enqueue anyway.
-  }
-
-  const jobId = await enqueueJob(
-    userId,
-    'CHARACTER_HEADSHOULDERS_BACKFILL',
-    payload as unknown as Record<string, unknown>,
-    { ...options, priority: options?.priority ?? -1 },
-  );
-  return { jobId, isNew: true };
+): Promise<DedupedEnqueueResult> {
+  return enqueueDeduped(userId, 'CHARACTER_HEADSHOULDERS_BACKFILL', payload, {
+    key: p => p.characterId,
+    absorbs: 'active',
+    label: 'HeadShouldersBackfill',
+  }, { ...options, priority: options?.priority ?? -1 });
 }
 
 /**
  * Enqueue a per-chat memory regeneration job.
  *
- * Dedupes: if a PENDING or PROCESSING MEMORY_REGENERATE_CHAT job already
- * exists for the same (userId, chatId) pair, returns the existing job ID
- * rather than queuing a duplicate wipe.
+ * Dedupes on the chat against PENDING and PROCESSING jobs (`'active'`): a
+ * running regeneration is already wiping and re-queuing that chat, and a
+ * second would wipe what the first just re-extracted.
  *
  * Capped at maxAttempts: 1 — a retry would double-enqueue the per-turn
  * extraction jobs spawned by the first attempt.
@@ -892,31 +876,13 @@ export async function enqueueMemoryRegenerateChat(
   payload: MemoryRegenerateChatPayload,
   options?: EnqueueJobOptions,
 ): Promise<string> {
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'MEMORY_REGENERATE_CHAT') return false;
-      const existingPayload = j.payload as unknown as MemoryRegenerateChatPayload;
-      return existingPayload.chatId === payload.chatId;
-    });
-    if (existing) {
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[MemoryRegenerateChat] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return enqueueJob(
-    userId,
-    'MEMORY_REGENERATE_CHAT',
-    payload as unknown as Record<string, unknown>,
-    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
-  );
+  const { jobId } = await enqueueDeduped(userId, 'MEMORY_REGENERATE_CHAT', payload, {
+    key: p => p.chatId,
+    absorbs: 'active',
+    scope: 'chatId',
+    label: 'MemoryRegenerateChat',
+  }, { ...options, maxAttempts: options?.maxAttempts ?? 1 });
+  return jobId;
 }
 
 /**
@@ -925,38 +891,20 @@ export async function enqueueMemoryRegenerateChat(
  * The HTTP handler returns immediately after this; the actual chat
  * enumeration and per-chat enqueues happen inside the background job.
  *
- * Dedupes on userId (only one fan-out per user at a time). Capped at
- * maxAttempts: 1 — a retry would re-enqueue every per-chat wipe.
+ * One fan-out per user at a time (`'active'`): a running fan-out is already
+ * enqueuing every chat. Capped at maxAttempts: 1 — a retry would re-enqueue
+ * every per-chat wipe.
  */
 export async function enqueueMemoryRegenerateAll(
   userId: string,
   payload: MemoryRegenerateAllPayload,
   options?: EnqueueJobOptions,
-): Promise<{ jobId: string; isNew: boolean }> {
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(
-      (j) => j.type === 'MEMORY_REGENERATE_ALL',
-    );
-    if (existing) {
-      return { jobId: existing.id, isNew: false };
-    }
-  } catch (error) {
-    logger.warn('[MemoryRegenerateAll] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  const jobId = await enqueueJob(
-    userId,
-    'MEMORY_REGENERATE_ALL',
-    payload as unknown as Record<string, unknown>,
-    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
-  );
-  return { jobId, isNew: true };
+): Promise<DedupedEnqueueResult> {
+  return enqueueDeduped(userId, 'MEMORY_REGENERATE_ALL', payload, {
+    key: () => 'all',
+    absorbs: 'active',
+    label: 'MemoryRegenerateAll',
+  }, { ...options, maxAttempts: options?.maxAttempts ?? 1 });
 }
 
 /**
@@ -968,37 +916,19 @@ export async function enqueueMemoryRegenerateAll(
  * changes). The HTTP handler returns immediately; the enumeration + per-chat
  * vault writes happen inside the background job.
  *
- * Dedupes on userId (only one regeneration per user at a time). Capped at
- * maxAttempts: 1 — the work is idempotent, but a retry would re-walk every chat.
+ * One regeneration per user at a time (`'active'`): a running one is already
+ * walking every chat. Capped at maxAttempts: 1 — the work is idempotent, but
+ * a retry would re-walk every chat.
  */
 export async function enqueueRegenerateConversationSummaries(
   userId: string,
   options?: EnqueueJobOptions,
-): Promise<{ jobId: string; isNew: boolean }> {
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(
-      (j) => j.type === 'REGENERATE_CONVERSATION_SUMMARIES',
-    );
-    if (existing) {
-      return { jobId: existing.id, isNew: false };
-    }
-  } catch (error) {
-    logger.warn('[RegenerateConversationSummaries] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  const jobId = await enqueueJob(
-    userId,
-    'REGENERATE_CONVERSATION_SUMMARIES',
-    {},
-    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
-  );
-  return { jobId, isNew: true };
+): Promise<DedupedEnqueueResult> {
+  return enqueueDeduped(userId, 'REGENERATE_CONVERSATION_SUMMARIES', {}, {
+    key: () => 'all',
+    absorbs: 'active',
+    label: 'RegenerateConversationSummaries',
+  }, { ...options, maxAttempts: options?.maxAttempts ?? 1 });
 }
 
 /**
@@ -1015,42 +945,24 @@ export async function enqueueContextSummary(
 /**
  * Enqueue a title update job.
  *
- * Dedupe: if a PENDING or PROCESSING TITLE_UPDATE job already exists for the
- * same chatId, this is a no-op that returns the existing job ID. Multiple
- * finalizer firings at the same interchange checkpoint (multi-character
- * turns, autonomous rooms re-firing every assistant turn) all fold into a
- * single pending job.
+ * Dedupe: keyed on the chat against PENDING and PROCESSING jobs
+ * (`'active'`). Multiple finalizer firings at the same interchange checkpoint
+ * (multi-character turns, autonomous rooms re-firing every assistant turn)
+ * are one request: the running job checks that checkpoint and advances the
+ * chat's title cursor past it, and the next checkpoint fires again.
  */
 export async function enqueueTitleUpdate(
   userId: string,
   payload: TitleUpdatePayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  if (options?.skipDedupCheck) {
-    return enqueueJob(userId, 'TITLE_UPDATE', payload as unknown as Record<string, unknown>, options);
-  }
-
-  const repos = getRepositories();
-
-  try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'TITLE_UPDATE') return false;
-      const existingPayload = j.payload as unknown as TitleUpdatePayload;
-      return existingPayload.chatId === payload.chatId;
-    });
-    if (existing) {
-      return existing.id;
-    }
-  } catch (error) {
-    logger.warn('[Title Update] Failed to check for existing jobs during enqueue', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Fall through and enqueue anyway.
-  }
-
-  return enqueueJob(userId, 'TITLE_UPDATE', payload as unknown as Record<string, unknown>, options);
+  const { jobId } = await enqueueDeduped(userId, 'TITLE_UPDATE', payload, {
+    key: p => p.chatId,
+    absorbs: 'active',
+    scope: 'chatId',
+    label: 'Title Update',
+  }, options);
+  return jobId;
 }
 
 /**
@@ -1093,26 +1005,20 @@ export async function enqueueAutonomousRoomTurn(
  * Enqueue the autonomous-room scheduler tick (4.6 Private Character Rooms).
  *
  * Called once per minute by the parent-process timer in
- * `lib/background-jobs/scheduled-autonomous-rooms.ts`. Dedup-aware: if an
- * unprocessed tick is already in flight, return its ID instead of stacking
- * up duplicate scans.
+ * `lib/background-jobs/scheduled-autonomous-rooms.ts`. A queued tick absorbs
+ * the next one instead of stacking duplicate scans; a running tick has
+ * already read the schedule, so it does not (`'pending'`).
  */
 export async function enqueueAutonomousRoomScheduleTick(
   userId: string,
   options?: EnqueueJobOptions
 ): Promise<string> {
-  const repos = getRepositories();
-  const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-  const existing = pending.find((job) => job.type === 'AUTONOMOUS_ROOM_SCHEDULE_TICK');
-  if (existing) {
-    return existing.id;
-  }
-  return enqueueJob(
-    userId,
-    'AUTONOMOUS_ROOM_SCHEDULE_TICK',
-    {} as Record<string, unknown>,
-    { ...options, maxAttempts: options?.maxAttempts ?? 1, priority: options?.priority ?? -1 },
-  );
+  const { jobId } = await enqueueDeduped(userId, 'AUTONOMOUS_ROOM_SCHEDULE_TICK', {}, {
+    key: () => 'tick',
+    absorbs: 'pending',
+    label: 'AutonomousRoomScheduleTick',
+  }, { ...options, maxAttempts: options?.maxAttempts ?? 1, priority: options?.priority ?? -1 });
+  return jobId;
 }
 
 /**
@@ -1137,8 +1043,11 @@ const EMBEDDING_ENTITY_PRIORITIES: Record<EmbeddingGeneratePayload['entityType']
 };
 
 /**
- * Enqueue an embedding generate job
- * Skips if there's already a pending/processing job for the same entity.
+ * Enqueue an embedding generate job. A queued job for the same entity
+ * absorbs the request; a running one does not (`'pending'`): it may have read
+ * the entity's text before the change that prompted this request. Its write
+ * is conditional on that text still being current, so the two cannot leave a
+ * stale vector behind.
  * Priority defaults based on entity type: chat-related types (MEMORY,
  * CONVERSATION_CHUNK) get higher priority than batch types.
  */
@@ -1147,28 +1056,19 @@ export async function enqueueEmbeddingGenerate(
   payload: EmbeddingGeneratePayload,
   options?: EnqueueJobOptions
 ): Promise<EmbeddingGenerateEnqueueResult> {
-  const repos = getRepositories();
-
-  // Check for existing pending/processing embedding jobs for this entity
-  const pendingJobs = await repos.backgroundJobs.findPendingForEntity(payload.entityId);
-  const existingJob = pendingJobs.find(job => job.type === 'EMBEDDING_GENERATE');
-
-  if (existingJob) {
-    return { jobId: existingJob.id, isNew: false };
-  }
-
   const priority = options?.priority ?? EMBEDDING_ENTITY_PRIORITIES[payload.entityType] ?? 0;
-  const jobId = await enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, {
-    ...options,
-    priority,
-  });
-  return { jobId, isNew: true };
+  return enqueueDeduped(userId, 'EMBEDDING_GENERATE', payload, {
+    key: p => p.entityId,
+    absorbs: 'pending',
+    scope: 'entityId',
+    label: 'EmbeddingGenerate',
+  }, { ...options, priority });
 }
 
 /**
  * Enqueue `EMBEDDING_GENERATE` jobs for many entities at once: one read of the
- * active embedding jobs, one batch insert. An entity that already has a
- * PENDING or PROCESSING job is skipped, as `enqueueEmbeddingGenerate` skips it
+ * queued embedding jobs, one batch insert. An entity that already has a
+ * PENDING job is skipped, as `enqueueEmbeddingGenerate` skips it
  * one at a time. Returns the ids of the jobs created (skipped entities add
  * none), so its length is the number actually queued.
  */
@@ -1179,9 +1079,11 @@ export async function enqueueEmbeddingGenerateMany(
 ): Promise<string[]> {
   if (payloads.length === 0) return [];
   const repos = getRepositories();
-  const active = await repos.backgroundJobs.findActiveByType('EMBEDDING_GENERATE');
+  // PENDING only, as enqueueEmbeddingGenerate: a running job may have read
+  // the old text (its write is conditional, so it cannot clobber the new one).
+  const queued = await repos.backgroundJobs.findAbsorbers('EMBEDDING_GENERATE', ['PENDING']);
   const busy = new Set(
-    active.map((job) => (job.payload as { entityId?: unknown } | null)?.entityId).filter((id): id is string => typeof id === 'string')
+    queued.map((job) => (job.payload as { entityId?: unknown } | null)?.entityId).filter((id): id is string => typeof id === 'string')
   );
   const seen = new Set<string>();
   const fresh = payloads.filter((p) => {
@@ -1277,36 +1179,25 @@ export interface StoryBackgroundEnqueueResult {
 }
 
 /**
- * Enqueue a story background generation job
- * Skips if there's already a pending/processing job for the same chat
+ * Enqueue a story background generation job. The handler reads the chat
+ * when it runs, so a queued job absorbs the request and a running one does
+ * not.
  */
 export async function enqueueStoryBackgroundGeneration(
   userId: string,
   payload: StoryBackgroundGenerationPayload,
   options?: EnqueueJobOptions
 ): Promise<StoryBackgroundEnqueueResult> {
-  const repos = getRepositories();
-
-  // Check for existing pending/processing story background jobs for this chat
-  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
-  const existingJob = pendingJobs.find(job => job.type === 'STORY_BACKGROUND_GENERATION');
-
-  if (existingJob) {
-    logger.info('[StoryBackground] Reusing existing pending job for chat', {
-      context: 'background-jobs.queue',
-      chatId: payload.chatId,
-      existingJobId: existingJob.id,
-      existingStatus: existingJob.status,
-    });
-    return { jobId: existingJob.id, isNew: false };
-  }
-
-  const jobId = await enqueueJob(userId, 'STORY_BACKGROUND_GENERATION', payload as unknown as Record<string, unknown>, {
+  return enqueueDeduped(userId, 'STORY_BACKGROUND_GENERATION', payload, {
+    key: p => p.chatId,
+    absorbs: 'pending',
+    scope: 'chatId',
+    label: 'StoryBackground',
+  }, {
     // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,
   });
-  return { jobId, isNew: true };
 }
 
 /**
@@ -1458,99 +1349,59 @@ export async function getPendingJobsForChat(chatId: string) {
 
 /**
  * Enqueue a character avatar generation job.
- * Skips if there's already a pending/processing avatar job for the same chat+character.
+ *
+ * Collapses onto a still-PENDING avatar job for this chat+character
+ * (`'pending'`). The handler reads the outfit and the carried objects when it
+ * runs, so one queued job covers any later change. A PROCESSING job has
+ * already built its prompt, so a change made after that point needs a fresh
+ * job.
  */
 export async function enqueueCharacterAvatarGeneration(
   userId: string,
   payload: CharacterAvatarGenerationPayload,
   options?: EnqueueJobOptions
-): Promise<{ jobId: string; isNew: boolean }> {
-  const repos = getRepositories();
-
-  // Dedup: collapse onto a still-PENDING avatar job for this chat+character. The
-  // handler reads the outfit and the carried objects when it runs, so one queued
-  // job covers any later change. A PROCESSING job has already built its prompt,
-  // so a change made after that point needs a fresh job.
-  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
-  const existingJob = pendingJobs.find(
-    job => job.type === 'CHARACTER_AVATAR_GENERATION'
-      && job.status === 'PENDING'
-      && (job.payload as unknown as CharacterAvatarGenerationPayload).characterId === payload.characterId
-  );
-
-  if (existingJob) {
-    logger.info('[CharacterAvatar] Reusing existing pending job', {
-      context: 'background-jobs.queue',
-      chatId: payload.chatId,
-      characterId: payload.characterId,
-      existingJobId: existingJob.id,
-    });
-    return { jobId: existingJob.id, isNew: false };
-  }
-
-  const jobId = await enqueueJob(
-    userId,
-    'CHARACTER_AVATAR_GENERATION',
-    payload as unknown as Record<string, unknown>,
-    options
-  );
-
-  logger.info('[CharacterAvatar] Avatar generation job enqueued', {
+): Promise<DedupedEnqueueResult> {
+  const result = await enqueueDeduped(userId, 'CHARACTER_AVATAR_GENERATION', payload, {
+    key: p => p.characterId,
+    absorbs: 'pending',
+    scope: 'chatId',
+    label: 'CharacterAvatar',
+  }, options);
+  logger.info(result.isNew ? '[CharacterAvatar] Avatar generation job enqueued' : '[CharacterAvatar] Reusing existing pending job', {
     context: 'background-jobs.queue',
     chatId: payload.chatId,
     characterId: payload.characterId,
-    jobId,
+    jobId: result.jobId,
   });
-
-  return { jobId, isNew: true };
+  return result;
 }
 
 /**
  * Enqueue a picture of one wardrobe item, on behalf of a wardrobe tool.
- * Collapses against a still-PENDING job for the same item: the handler reads
- * the item when it runs, so one queued job already covers any later edit. A
- * PROCESSING job has already built its prompt, so a fresh one is enqueued.
+ * Collapses against a still-PENDING job for the same item (`'pending'`): the
+ * handler reads the item when it runs, so one queued job already covers any
+ * later edit. A PROCESSING job has already built its prompt, so a fresh one
+ * is enqueued.
  */
 export async function enqueueWardrobeItemImageGeneration(
   userId: string,
   payload: WardrobeItemImageGenerationPayload,
-): Promise<{ jobId: string; isNew: boolean }> {
-  const repos = getRepositories();
-
-  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
-  const existingJob = pendingJobs.find(
-    job => job.type === 'WARDROBE_ITEM_IMAGE_GENERATION'
-      && job.status === 'PENDING'
-      && (job.payload as unknown as WardrobeItemImageGenerationPayload).itemId === payload.itemId
-  );
-
-  if (existingJob) {
-    logger.info('[WardrobeItemImage] Reusing existing pending job', {
-      context: 'background-jobs.queue',
-      chatId: payload.chatId,
-      itemId: payload.itemId,
-      existingJobId: existingJob.id,
-    });
-    return { jobId: existingJob.id, isNew: false };
-  }
-
+): Promise<DedupedEnqueueResult> {
   // One try: a refusal or a provider failure would only be paid for again.
-  const jobId = await enqueueJob(
-    userId,
-    'WARDROBE_ITEM_IMAGE_GENERATION',
-    payload as unknown as Record<string, unknown>,
-    { maxAttempts: 1 },
-  );
-
-  logger.info('[WardrobeItemImage] Wardrobe item image job enqueued', {
+  const result = await enqueueDeduped(userId, 'WARDROBE_ITEM_IMAGE_GENERATION', payload, {
+    key: p => p.itemId,
+    absorbs: 'pending',
+    scope: 'chatId',
+    label: 'WardrobeItemImage',
+  }, { maxAttempts: 1 });
+  logger.info(result.isNew ? '[WardrobeItemImage] Wardrobe item image job enqueued' : '[WardrobeItemImage] Reusing existing pending job', {
     context: 'background-jobs.queue',
     chatId: payload.chatId,
     characterId: payload.characterId,
     itemId: payload.itemId,
-    jobId,
+    jobId: result.jobId,
   });
-
-  return { jobId, isNew: true };
+  return result;
 }
 
 /**
@@ -1570,58 +1421,32 @@ export interface WardrobeOutfitAnnouncementPayload {
  * of small slot edits could collapse into a single Aurora message. With the
  * Wardrobe dialog's "Wear this" gesture committing whole compositions in one
  * shot, the operator expects the announcement (and avatar regen) to land
- * promptly. We still collapse against any *unclaimed* pending job for the
- * same (chatId, characterId) pair so back-to-back changes don't fan out.
+ * promptly.
+ *
+ * Collapses only against a still-PENDING job for the same (chat, character)
+ * (`'pending'`). A job already claimed has snapshotted the equipped state and
+ * can't absorb fresh changes; letting it would strand post-claim slot edits
+ * with no follow-up announcement.
  */
 export async function enqueueWardrobeOutfitAnnouncement(
   userId: string,
   payload: WardrobeOutfitAnnouncementPayload,
-): Promise<{ jobId: string; isNew: boolean }> {
-  const repos = getRepositories();
+): Promise<DedupedEnqueueResult> {
   const scheduledAt = new Date();
-
-  // Only collapse against a still-PENDING job. findPendingForChat also returns
-  // PROCESSING jobs, but a job that has already been claimed and is running
-  // (or about to run) the announcement handler can't absorb fresh changes —
-  // its scheduledAt is ignored once claimed, and it has already snapshotted
-  // the equipped state. Letting that path return isNew=false strands any
-  // post-claim slot edits with no follow-up announcement. Treat PROCESSING
-  // as "missed the bus" and enqueue a fresh debounced job instead.
-  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
-  const existing = pendingJobs.find(
-    job => job.type === 'WARDROBE_OUTFIT_ANNOUNCEMENT'
-      && job.status === 'PENDING'
-      && (job.payload as unknown as WardrobeOutfitAnnouncementPayload).characterId === payload.characterId
-  );
-
-  if (existing) {
-    // A pending announcement is already on its way; let it fire as-is rather
-    // than spawning a duplicate.
-    logger.info('[WardrobeAnnouncement] Pending announcement reused', {
-      context: 'background-jobs.queue',
-      chatId: payload.chatId,
-      characterId: payload.characterId,
-      jobId: existing.id,
-    });
-    return { jobId: existing.id, isNew: false };
-  }
-
-  const jobId = await enqueueJob(
-    userId,
-    'WARDROBE_OUTFIT_ANNOUNCEMENT',
-    payload as unknown as Record<string, unknown>,
-    { scheduledAt, priority: -1 }
-  );
-
-  logger.info('[WardrobeAnnouncement] Announcement job enqueued', {
+  const result = await enqueueDeduped(userId, 'WARDROBE_OUTFIT_ANNOUNCEMENT', payload, {
+    key: p => p.characterId,
+    absorbs: 'pending',
+    scope: 'chatId',
+    label: 'WardrobeAnnouncement',
+  }, { scheduledAt, priority: -1 });
+  logger.info(result.isNew ? '[WardrobeAnnouncement] Announcement job enqueued' : '[WardrobeAnnouncement] Pending announcement reused', {
     context: 'background-jobs.queue',
     chatId: payload.chatId,
     characterId: payload.characterId,
-    jobId,
-    scheduledAt: scheduledAt.toISOString(),
+    jobId: result.jobId,
+    ...(result.isNew ? { scheduledAt: scheduledAt.toISOString() } : {}),
   });
-
-  return { jobId, isNew: true };
+  return result;
 }
 
 /**

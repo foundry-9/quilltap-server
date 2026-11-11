@@ -25,6 +25,8 @@ import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
+import { embeddedTextHash } from '@/lib/embedding/embedded-text-hash';
+import { logger } from '@/lib/logger';
 
 /**
  * A chunk matched by {@link DocMountChunksRepository.searchContent}, already
@@ -318,10 +320,32 @@ export class DocMountChunksRepository extends AbstractDedicatedDbRepository<DocM
 
   /**
    * Update the embedding vector for a chunk.
+   *
+   * With `expectedTextHash` (an embedding job's write), the vector lands only
+   * if the chunk's current text still hashes to what was embedded; a chunk
+   * rewritten or deleted since the job read it is left alone, and the job
+   * that the rewrite enqueued embeds the new text. Without it the write is
+   * unconditional and a missing chunk throws.
+   *
+   * @returns whether the vector was written
    */
-  async updateEmbedding(id: string, embedding: Float32Array): Promise<void> {
-    await this.safeQuery(
+  async updateEmbedding(
+    id: string,
+    embedding: Float32Array,
+    options: { expectedTextHash?: string } = {}
+  ): Promise<boolean> {
+    return this.safeQuery(
       async () => {
+        if (options.expectedTextHash !== undefined) {
+          const current = await this.findById(id);
+          if (!current || embeddedTextHash(current.content) !== options.expectedTextHash) {
+            logger.debug('Skipped a stale embedding write: the chunk changed since it was embedded', {
+              id,
+              reason: current ? 'text-changed' : 'chunk-gone',
+            });
+            return false;
+          }
+        }
         const updated = await this._update(id, {
           embedding,
         } as Partial<DocMountChunk>);
@@ -334,6 +358,7 @@ export class DocMountChunksRepository extends AbstractDedicatedDbRepository<DocM
         // findAllWithEmbeddingsByMountPointIds excludes this chunk, so the
         // cache that powers searchDocumentChunks won't surface it on its own.
         invalidateMountPoint(updated.mountPointId);
+        return true;
       },
       'Error updating doc mount chunk embedding',
       { id }

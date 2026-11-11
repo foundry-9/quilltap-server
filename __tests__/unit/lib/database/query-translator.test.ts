@@ -20,6 +20,7 @@ import {
   TranslatedQuery,
   TranslatedUpdate,
 } from '@/lib/database/backends/sqlite/query-translator';
+import { QueryTranslationError } from '@/lib/database/query-translation-error';
 import { TypedQueryFilter, QueryFilter, QueryOptions, UpdateSpec } from '@/lib/database/interfaces';
 
 // Mock the logger
@@ -283,15 +284,11 @@ describe('SQLite Query Translator', () => {
         expect(result.params).toEqual(['%test%']);
       });
 
-      it('should NOT anchor regex patterns — anchors pass through as literals', () => {
-        // Regression test: anchored patterns like ^folder/[^/]+\.md$ were silently
-        // matching nothing because the translator wraps in %…% and doesn't handle
-        // anchors. This test documents the known limitation so a future change
-        // doesn't accidentally "fix" $regex to anchor and break other callers.
-        const result = translateFilter({ path: { $regex: '^Prompts/[^/]+\\.md$' } });
-        expect(result.sql).toBe('"path" LIKE ?');
-        // Anchors and character classes pass through as literals in the LIKE pattern
-        expect(result.params[0]).toContain('%');
+      it('refuses an escaped pattern rather than mistranslate it (#192)', () => {
+        // An escaped user string (`Mr\\. Darcy`) would become a LIKE pattern
+        // with literal backslashes and match nothing. User text uses $contains.
+        expect(() => translateFilter({ path: { $regex: '^Prompts/[^/]+\\.md$' } })).toThrow(QueryTranslationError);
+        expect(() => translateFilter({ name: { $regex: /Mr\. Darcy/i } })).toThrow(QueryTranslationError);
       });
     });
 
@@ -1211,6 +1208,55 @@ describe('SQLite Query Translator', () => {
       ['nested $ne: value', { 'participants.characterId': { $ne: 'c1' } }, ['n']],
     ])('%s', (_label, filter, expected) => {
       expect(ids(filter)).toEqual(expected);
+    });
+  });
+
+  describe('literal text and sort, run against real SQLite (#192)', () => {
+    const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'));
+    let db: { prepare: (sql: string) => { all: (...p: unknown[]) => unknown[]; run: (...p: unknown[]) => unknown }; exec: (sql: string) => void; close: () => void };
+    const json = new Set(['keywords']);
+
+    beforeEach(() => {
+      db = new Database(':memory:');
+      db.exec('CREATE TABLE "m" ("id" TEXT PRIMARY KEY, "content" TEXT, "keywords" TEXT, "rank" INTEGER)');
+      const insert = db.prepare('INSERT INTO "m" VALUES (?, ?, ?, ?)');
+      insert.run('darcy', 'Mr. Darcy (the elder) arrived', JSON.stringify(['pride']), 3);
+      insert.run('dotless', 'Mrs Darcy arrived', JSON.stringify(['100% sure']), 1);
+      insert.run('under', 'a_b and a\\b', JSON.stringify(['a_b']), 2);
+    });
+
+    afterEach(() => db.close());
+
+    function ids(filter: QueryFilter, options?: QueryOptions): string[] {
+      const { sql, params } = buildSelectQuery('m', filter, options, json, new Set(), new Set(['id', 'content', 'keywords', 'rank']));
+      return (db.prepare(sql).all(...params) as { id: string }[]).map(r => r.id);
+    }
+
+    it.each<[string, QueryFilter, string[]]>([
+      ['punctuation matches itself', { content: { $contains: 'Mr. Darcy (the elder)' } }, ['darcy']],
+      ['a dot is not a wildcard', { content: { $contains: 'Mr.' } }, ['darcy']],
+      ['ASCII case folds', { content: { $contains: 'mr. darcy' } }, ['darcy']],
+      ['underscore is literal', { content: { $contains: 'a_b' } }, ['under']],
+      ['backslash is literal', { content: { $contains: 'a\\b' } }, ['under']],
+      ['percent is literal in an array column', { keywords: { $contains: '100%' } }, ['dotless']],
+      ['underscore is literal in an array column', { keywords: { $contains: 'a_' } }, ['under']],
+      ['prefix', { content: { $startsWith: 'mrs' } }, ['dotless']],
+    ])('$contains / $startsWith: %s', (_label, filter, expected) => {
+      expect(ids(filter).sort()).toEqual(expected);
+    });
+
+    it('$contains refuses a non-string operand', () => {
+      expect(() => ids({ content: { $contains: 3 as unknown as string } })).toThrow(QueryTranslationError);
+    });
+
+    it('sorts on a real column and refuses one that is not', () => {
+      expect(ids({}, { sort: { rank: -1 } })).toEqual(['darcy', 'under', 'dotless']);
+      // Unchecked, SQLite reads "nope" as a string literal and leaves the rows unsorted.
+      expect(() => ids({}, { sort: { nope: 1 } })).toThrow(QueryTranslationError);
+    });
+
+    it('refuses an unknown operator instead of dropping it from the filter', () => {
+      expect(() => ids({ content: { $size: 1 } as unknown as QueryFilter['content'] })).toThrow(QueryTranslationError);
     });
   });
 });

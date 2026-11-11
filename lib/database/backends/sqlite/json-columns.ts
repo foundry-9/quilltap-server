@@ -156,10 +156,18 @@ export function jsonArrayContainsAny(column: string, values: unknown[]): { sql: 
  * Used for regex-like text search on array fields like keywords
  * @param column The column name containing a JSON array
  * @param pattern The LIKE pattern to match (use % for wildcards)
+ * @param options.escaped The pattern escapes `%`/`_` with `\` (declares ESCAPE)
  */
-export function jsonArrayContainsLike(column: string, pattern: string): { sql: string; params: unknown[] } {
+export function jsonArrayContainsLike(
+  column: string,
+  pattern: string,
+  options: { escaped?: boolean } = {}
+): { sql: string; params: unknown[] } {
+  // An escaped pattern (built by escapeLikeLiteral) must declare its escape
+  // character, or the backslashes are matched literally.
+  const escape = options.escaped ? ` ESCAPE '\\'` : '';
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value LIKE ?)`,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value LIKE ?${escape})`,
     params: [pattern],
   };
 }

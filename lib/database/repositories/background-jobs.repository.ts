@@ -9,7 +9,7 @@
 
 import { BackgroundJob, BackgroundJobSchema, BackgroundJobType, BackgroundJobStatus } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
-import { TypedQueryFilter } from '../interfaces';
+import { QueryFilter, TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 import {
   ACTIVITY_KINDS,
@@ -83,7 +83,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         const results = await this.findByFilter(
           { type } as TypedQueryFilter<BackgroundJob>,
           {
-            sort: { updatedAt: -1 as any },
+            sort: { updatedAt: -1 },
             limit,
           },
         );
@@ -105,7 +105,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
       async () => {
         return await this.findByFilter(
           { type, status: { $in: ['PENDING', 'PROCESSING'] } } as TypedQueryFilter<BackgroundJob>,
-          { sort: { createdAt: 1 as any } },
+          { sort: { createdAt: 1 } },
         );
       },
       'Error finding active background jobs by type',
@@ -126,7 +126,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         }
 
         const results = await this.findByFilter(query, {
-          sort: { createdAt: -1 as any },
+          sort: { createdAt: -1 },
           limit: 100,
         });
         return results;
@@ -151,7 +151,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
             status: { $in: ['PENDING', 'PROCESSING'] },
           } as TypedQueryFilter<BackgroundJob>,
           {
-            sort: { priority: -1 as any, createdAt: 1 as any },
+            sort: { priority: -1, createdAt: 1 },
           }
         );
         return results;
@@ -163,26 +163,39 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
-   * Find pending/processing jobs for a specific entity (by payload.entityId)
-   * Used for deduplication of entity-scoped jobs like EMBEDDING_GENERATE
+   * The jobs of one type an enqueue may be absorbed by — PENDING only, or
+   * PENDING and PROCESSING — for `enqueueDeduped`. Optionally narrowed to one
+   * user and to one payload field's value (`payload.chatId`,
+   * `payload.entityId`) so a hot type is not read whole on every enqueue.
+   *
+   * No row cap: a window that crowded out the absorbing job would enqueue a
+   * duplicate. No fallback either: the caller decides what a failed read
+   * means.
    */
-  async findPendingForEntity(entityId: string): Promise<BackgroundJob[]> {
+  async findAbsorbers(
+    type: BackgroundJobType,
+    statuses: readonly BackgroundJobStatus[],
+    scope: { userId?: string; payloadField?: 'chatId' | 'entityId'; payloadValue?: string } = {},
+  ): Promise<BackgroundJob[]> {
     return this.safeQuery(
       async () => {
-        const results = await this.findByFilter(
-          {
-            'payload.entityId': entityId,
-            status: { $in: ['PENDING', 'PROCESSING'] },
-          } as TypedQueryFilter<BackgroundJob>,
-          {
-            sort: { priority: -1 as any, createdAt: 1 as any },
-          }
-        );
-        return results;
+        const filter: TypedQueryFilter<BackgroundJob> = { type, status: { $in: [...statuses] } };
+        if (scope.userId) filter.userId = scope.userId;
+        const query: QueryFilter = { ...filter };
+        if (scope.payloadField && scope.payloadValue !== undefined) {
+          query[`payload.${scope.payloadField}`] = scope.payloadValue;
+        }
+        const jobs = await this.findByFilter(query as TypedQueryFilter<BackgroundJob>, { sort: { createdAt: 1 } });
+        logger.debug('Read jobs that may absorb an enqueue', {
+          type,
+          statuses,
+          ...scope,
+          found: jobs.length,
+        });
+        return jobs;
       },
-      'Error finding pending jobs for entity',
-      { entityId },
-      []
+      'Error finding jobs that may absorb an enqueue',
+      { type, statuses }
     );
   }
 
@@ -210,7 +223,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
               updatedAt: now,
             },
             $inc: { attempts: 1 },
-          } as any,
+          },
           {
             returnDocument: 'after',
             sort: { priority: -1, createdAt: 1 },
@@ -249,7 +262,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           {
             sort: { scheduledAt: 1 },
             limit: 1,
-          } as any
+          }
         );
         if (!results.length) return null;
         const scheduledAt = (results[0] as { scheduledAt?: string }).scheduledAt;
@@ -337,25 +350,15 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   /**
    * Mark a job as completed
    */
-  async markCompleted(id: string, result?: Record<string, unknown>): Promise<BackgroundJob | null> {
+  async markCompleted(id: string): Promise<BackgroundJob | null> {
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
         const now = this.getCurrentTimestamp();
 
-        const updateData: any = {
-          status: 'COMPLETED',
-          completedAt: now,
-          updatedAt: now,
-        };
-
-        if (result) {
-          updateData['payload.result'] = result;
-        }
-
         const updated = await collection.findOneAndUpdate(
           { id },
-          { $set: updateData } as any,
+          { $set: { status: 'COMPLETED', completedAt: now, updatedAt: now } },
           { returnDocument: 'after' }
         );
 
@@ -405,8 +408,11 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
               lastError: errorMessage,
               scheduledAt,
               updatedAt: now,
+              // A terminal status is stamped finished, which is what the
+              // reaper keys on (#194). A retry is not finished.
+              ...(newStatus === 'DEAD' ? { completedAt: now } : {}),
             },
-          } as any,
+          },
           { returnDocument: 'after' }
         );
 
@@ -487,7 +493,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         for (const { key, status } of statuses) {
           const filter: TypedQueryFilter<BackgroundJob> = { status } as TypedQueryFilter<BackgroundJob>;
           if (userId) {
-            (filter as any).userId = userId;
+            filter.userId = userId;
           }
           stats[key] = await collection.countDocuments(filter);
         }
@@ -527,7 +533,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
             type: { $in: types },
           } as TypedQueryFilter<BackgroundJob>;
           if (userId) {
-            (filter as any).userId = userId;
+            filter.userId = userId;
           }
 
           counts[kind] = await collection.countDocuments(filter);
@@ -551,7 +557,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           status: { $in: ['PENDING', 'PROCESSING'] },
         };
         if (userId) {
-          (filter as any).userId = userId;
+          filter.userId = userId;
         }
 
         const jobs = await this.findByFilter(filter);
@@ -638,15 +644,17 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
         const result = await collection.updateOne(
-          { id, status: { $in: ['PENDING', 'FAILED'] } } as TypedQueryFilter<BackgroundJob>,
+          { id, status: { $in: ['PENDING', 'FAILED'] } },
           {
             $set: {
               status: 'DEAD',
               lastError: 'Cancelled by user',
-              updatedAt: this.getCurrentTimestamp(),
+              updatedAt: now,
+              completedAt: now,
             },
-          } as any
+          }
         );
 
         if (result.modifiedCount === 0) {
@@ -725,8 +733,9 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
               status: 'DEAD',
               lastError: 'Superseded by new reindex',
               updatedAt: now,
+              completedAt: now,
             },
-          } as any
+          }
         );
 
         if (result.modifiedCount > 0) {
@@ -761,7 +770,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
               status: 'PAUSED',
               updatedAt: now,
             },
-          } as any,
+          },
           { returnDocument: 'after' }
         );
 
@@ -796,7 +805,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
               scheduledAt: now,
               updatedAt: now,
             },
-          } as any,
+          },
           { returnDocument: 'after' }
         );
 
@@ -814,10 +823,6 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
     );
   }
 
-  /**
-   * Reset stuck processing jobs (for recovery after crash)
-   * Jobs that have been processing for longer than timeout are reset to FAILED
-   */
   /**
    * Kill ALL jobs in PROCESSING state on startup.
    * No job can legitimately be mid-flight when the server has just started,
@@ -840,8 +845,9 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
               status: 'DEAD',
               lastError: 'Orphaned on startup — killed',
               updatedAt: now,
+              completedAt: now,
             },
-          } as any
+          }
         );
 
         if (result.modifiedCount > 0) {
@@ -858,31 +864,45 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
     );
   }
 
+  /**
+   * Recover jobs stuck in PROCESSING longer than the timeout. One with
+   * attempts left goes back to FAILED for a retry; one at its last attempt
+   * goes to DEAD (stamped finished, so the reaper takes it) — FAILED at max
+   * attempts is never claimed again and never reaped.
+   */
   async resetStuckJobs(timeoutMinutes: number = 10): Promise<number> {
     return this.safeQuery(
       async () => {
         const collection = await this.getCollection();
         const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString();
         const now = this.getCurrentTimestamp();
+        const lastError = `Timed out after ${timeoutMinutes} minutes`;
 
-        const result = await collection.updateMany(
+        const dead = await collection.updateMany(
           {
             status: 'PROCESSING',
             startedAt: { $lt: cutoff },
+            $expr: { $gte: ['$attempts', '$maxAttempts'] },
           },
+          { $set: { status: 'DEAD', lastError, updatedAt: now, completedAt: now } }
+        );
+        const retry = await collection.updateMany(
           {
-            $set: {
-              status: 'FAILED',
-              lastError: `Timed out after ${timeoutMinutes} minutes`,
-              updatedAt: now,
-            },
-          } as any
+            status: 'PROCESSING',
+            startedAt: { $lt: cutoff },
+            $expr: { $lt: ['$attempts', '$maxAttempts'] },
+          },
+          { $set: { status: 'FAILED', lastError, updatedAt: now } }
         );
 
-        if (result.modifiedCount > 0) {
-          logger.warn('Reset stuck processing jobs', { count: result.modifiedCount });
+        const count = dead.modifiedCount + retry.modifiedCount;
+        if (count > 0) {
+          logger.warn('Reset stuck processing jobs', {
+            failedForRetry: retry.modifiedCount,
+            dead: dead.modifiedCount,
+          });
         }
-        return result.modifiedCount;
+        return count;
       },
       'Error resetting stuck jobs',
       {},

@@ -377,7 +377,7 @@ class PtyManager {
             }
           }
 
-          const repos = getRepositories() as any;
+          const repos = getRepositories();
           // Geometry is stored at spawn and again here, at its final value, so
           // `terminal_read` can replay the transcript of an exited session at
           // the size it was drawn for. (A session orphaned by a restart keeps
@@ -428,7 +428,7 @@ class PtyManager {
       // and stamps them itself; we pass our pre-generated id via options to keep PtyManager's
       // in-memory map and the DB row in sync.
       try {
-        const repos = getRepositories() as any;
+        const repos = getRepositories();
         const { id: metaId, ...createData } = meta;
         await repos.terminalSessions.create(createData, { id: metaId });
       } catch (dbErr) {

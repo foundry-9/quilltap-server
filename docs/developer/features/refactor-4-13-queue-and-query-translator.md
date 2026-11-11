@@ -1,6 +1,6 @@
 # Refactor 4.13 — The job queue's dedupe rule and the query translator's quiet failures
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #192, #194 and #196, and closes the defects traced in §4.2.
+**Status:** Implemented (2026-11-11) except §6 phase 6 — see [§9](#9-outcome). Originally proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #192, #194 and #196, and closes the defects traced in §4.2.
 
 Line numbers are from the audit and will drift. Re-locate each site by name before editing.
 
@@ -111,3 +111,12 @@ Pre-normalise blob arguments before `BEGIN` (run the transcode in `applyPartitio
 
 1. `$regex` with a backslash: throw (proposed), or translate escaped strings correctly and keep accepting them?
 2. Should `base.repository.ts`'s `_update` write only the columns the patch names? Today it rebuilds the whole row from a snapshot, which is why `patchOnlyFields()`, the out-of-schema columns (`transcriptVersion`, the refusal ledger, the opening-state columns) and their bespoke setters exist. Changing it would retire a standing CLAUDE.md rule, but any caller relying on `_update` to materialise schema defaults into old rows would change behaviour. Not proposed here; noted for a decision on whether it deserves its own spec.
+
+## 9. Outcome
+
+- **§5.1** done. #196 landed first (#198). `$contains` / `$startsWith` added; the four memory search sites moved; `$regex` throws on a backslash (decision 8.1 taken as proposed). Sort fields are checked against the live table (`PRAGMA table_info`, cached per connection, re-read on a miss) rather than the Zod schema, so migration-added columns count. Unknown operators throw too. The `safeQuery` sweep is one rule in `safe-query.ts`: a `QueryTranslationError` is always rethrown.
+- **§5.2** done for the listed files and the three named type gaps.
+- **§5.3** done. Seventeen bodies (not fifteen) became `enqueueDeduped` calls; maintenance keeps its widening logic but reads through `findAbsorbers`. Five types moved to `'pending'` as proposed. Memory extraction stays `'active'` because a second job for the same turn would count its memories twice — not strictly "provably covers"; worth a look if per-turn admission ever gets a turn-level idempotency key. The conditional write covers conversation and mount chunks; memory vectors are written through `memoryIndex.upsert`, which was not audited for the same race and is unchanged.
+- **§5.4** done, migration `backfill-dead-job-completed-at-v1`.
+- **§5.5** done (`preNormalizeWrites`, `watchForEventLoopYield` in `job-dispatcher.ts`).
+- **Phase 6, filed not fixed:** #204 (`findByCharacterIdInBatches` truncation), #205 (unchunked `IN` lists; the limit reproduced at 32,767 variables), #206 (`sweepOrphanedTranscripts` after a fail-soft `findAll`), #207 (find → update-or-create; both tables do carry a unique constraint on fresh installs, so the defect is the check-then-insert race and the read-failure-as-absence, not a missing index).

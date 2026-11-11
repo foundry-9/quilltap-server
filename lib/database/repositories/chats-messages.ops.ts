@@ -17,7 +17,7 @@ import {
 import { UUIDSchema, TimestampSchema, JsonSchema, RoleEnum } from '@/lib/schemas/common.types';
 import { QueryFilter, SortSpec } from '../interfaces';
 import { logger } from '@/lib/logger';
-import { ChatOpsContext } from './chats-ops-context';
+import type { ChatOpsContext, LegacyChatMessagesDoc } from './chats-ops-context';
 import { safeQuery } from './safe-query';
 import {
   computeSpokenThisCycleAfterMessage,
@@ -328,25 +328,26 @@ export class ChatMessagesOps {
    */
   async getMessages(chatId: string): Promise<ChatEvent[]> {
     return safeQuery(async () => {
-      const messagesCollection = await this.ctx.getMessagesCollection();
-
-      let rawMessages: any[];
+      // Rows as stored, before validation: a corrupted one may lack anything.
+      let rawMessages: ReadonlyArray<{ id?: unknown; type?: unknown } | null | undefined>;
 
       if (this.ctx.isSQLiteBackend()) {
         // SQLite: Query individual message rows, sorted by createdAt
+        const messagesCollection = await this.ctx.getMessagesCollection();
         rawMessages = await messagesCollection.find(
           { chatId } as QueryFilter,
           { sort: { createdAt: 1 } as SortSpec }
         );
       } else {
         // Legacy data compatibility: Extract from embedded array
+        const messagesCollection = await this.ctx.getMessagesCollection<LegacyChatMessagesDoc>();
         const messagesDoc = await messagesCollection.findOne({ chatId } as QueryFilter);
 
         if (!messagesDoc) {
           return [];
         }
 
-        rawMessages = (messagesDoc as any).messages || [];
+        rawMessages = messagesDoc.messages || [];
       }
 
       // Validate each message individually - skip corrupted messages rather than
@@ -397,20 +398,21 @@ export class ChatMessagesOps {
   async addMessage(chatId: string, message: ChatEvent): Promise<ChatEvent> {
     return safeQuery(async () => {
       const validated = ChatEventSchema.parse(message);
-      const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
 
       if (this.ctx.isSQLiteBackend()) {
         // SQLite: Insert as individual row with chatId
-        await messagesCollection.insertOne({ ...validated, chatId } as any);
+        const messagesCollection = await this.ctx.getMessagesCollection();
+        await messagesCollection.insertOne({ ...validated, chatId });
       } else {
         // Legacy data compatibility: Push to embedded array
+        const messagesCollection = await this.ctx.getMessagesCollection<LegacyChatMessagesDoc>();
         await messagesCollection.updateOne(
           { chatId } as QueryFilter,
           {
             $push: { messages: validated },
             $set: { updatedAt: now },
-          } as any,
+          },
         );
       }
 
@@ -461,22 +463,23 @@ export class ChatMessagesOps {
   async addMessages(chatId: string, messages: ChatEvent[]): Promise<ChatEvent[]> {
     return safeQuery(async () => {
       const validated = messages.map(msg => ChatEventSchema.parse(msg));
-      const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
 
       if (this.ctx.isSQLiteBackend()) {
         // SQLite: Insert each message as individual row with chatId
+        const messagesCollection = await this.ctx.getMessagesCollection();
         for (const msg of validated) {
-          await messagesCollection.insertOne({ ...msg, chatId } as any);
+          await messagesCollection.insertOne({ ...msg, chatId });
         }
       } else {
         // Legacy data compatibility: Push all to embedded array
+        const messagesCollection = await this.ctx.getMessagesCollection<LegacyChatMessagesDoc>();
         await messagesCollection.updateOne(
           { chatId } as QueryFilter,
           {
             $push: { messages: { $each: validated } },
             $set: { updatedAt: now },
-          } as any
+          }
         );
       }
 
@@ -530,11 +533,11 @@ export class ChatMessagesOps {
    */
   async updateMessage(chatId: string, messageId: string, updates: Partial<ChatEvent>): Promise<ChatEvent | null> {
     return safeQuery(async () => {
-      const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
 
       if (this.ctx.isSQLiteBackend()) {
         // SQLite: Find and update the specific message row
+        const messagesCollection = await this.ctx.getMessagesCollection();
         const existingMessage = await messagesCollection.findOne({ id: messageId, chatId } as QueryFilter);
         if (!existingMessage) {
           return null;
@@ -545,7 +548,7 @@ export class ChatMessagesOps {
 
         await messagesCollection.updateOne(
           { id: messageId } as QueryFilter,
-          { $set: validated } as any
+          { $set: validated }
         );
         // An edited row is a transcript change: swipes, regenerate, a typo fix
         // and a danger reclassification all land here, and an open tab must be
@@ -569,6 +572,7 @@ export class ChatMessagesOps {
         messages[messageIndex] = validated;
 
         // Update entire messages array
+        const messagesCollection = await this.ctx.getMessagesCollection<LegacyChatMessagesDoc>();
         await messagesCollection.updateOne(
           { chatId } as QueryFilter,
           {
@@ -576,7 +580,7 @@ export class ChatMessagesOps {
               messages: messages,
               updatedAt: now,
             },
-          } as any
+          }
         );
         await this.announceTranscriptChange(chatId);
         return validated;
@@ -644,11 +648,11 @@ export class ChatMessagesOps {
     if (messageIds.length === 0) return 0;
 
     return safeQuery(async () => {
-      const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
       let removed = 0;
 
       if (this.ctx.isSQLiteBackend()) {
+        const messagesCollection = await this.ctx.getMessagesCollection();
         for (const messageId of messageIds) {
           const result = await messagesCollection.deleteOne({ id: messageId, chatId } as QueryFilter);
           // `DeleteResult`, always — an id that was not there reports 0, and a
@@ -662,6 +666,7 @@ export class ChatMessagesOps {
         const remaining = existing.filter(m => !idSet.has(m.id));
         removed = existing.length - remaining.length;
         if (removed > 0) {
+          const messagesCollection = await this.ctx.getMessagesCollection<LegacyChatMessagesDoc>();
           await messagesCollection.updateOne(
             { chatId } as QueryFilter,
             {
@@ -669,7 +674,7 @@ export class ChatMessagesOps {
                 messages: remaining,
                 updatedAt: now,
               },
-            } as any,
+            },
           );
         }
       }
@@ -701,14 +706,15 @@ export class ChatMessagesOps {
    */
   async clearMessages(chatId: string): Promise<boolean> {
     return safeQuery(async () => {
-      const messagesCollection = await this.ctx.getMessagesCollection();
       const now = this.ctx.getCurrentTimestamp();
 
       if (this.ctx.isSQLiteBackend()) {
         // SQLite: Delete all message rows for this chat
+        const messagesCollection = await this.ctx.getMessagesCollection();
         await messagesCollection.deleteMany({ chatId } as QueryFilter);
       } else {
         // Legacy data compatibility: Clear embedded messages array
+        const messagesCollection = await this.ctx.getMessagesCollection<LegacyChatMessagesDoc>();
         await messagesCollection.updateOne(
           { chatId } as QueryFilter,
           {
@@ -716,7 +722,7 @@ export class ChatMessagesOps {
               messages: [],
               updatedAt: now,
             },
-          } as any,
+          },
         );
       }
 

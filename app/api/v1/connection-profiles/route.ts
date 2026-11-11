@@ -324,7 +324,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
 
     // Auto-assign sortIndex to max existing + 1
     const maxSortIndex = existingProfiles.reduce(
-      (max, p) => Math.max(max, (p as any).sortIndex ?? 0),
+      (max, p) => Math.max(max, p.sortIndex ?? 0),
       -1
     );
 
@@ -583,7 +583,7 @@ async function handleReorder(req: NextRequest, context: RequestContext) {
 
     // Bulk update sort indices
     for (const entry of order) {
-      await repos.connections.update(entry.id, { sortIndex: entry.sortIndex } as any);
+      await repos.connections.update(entry.id, { sortIndex: entry.sortIndex });
     }
 
     logger.info('[Connection Profiles v1] Profile sort order updated', {
@@ -634,7 +634,7 @@ async function handleResetSort(req: NextRequest, context: RequestContext) {
 
     // Apply updates
     for (const update of updates) {
-      await repos.connections.update(update.id, { sortIndex: update.sortIndex } as any);
+      await repos.connections.update(update.id, { sortIndex: update.sortIndex });
     }
 
     logger.info('[Connection Profiles v1] Profile sort order reset to default', {

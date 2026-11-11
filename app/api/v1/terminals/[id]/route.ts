@@ -58,7 +58,7 @@ async function handleGetSession(
       });
     }
 
-    const repos = getRepositories() as any;
+    const repos = getRepositories();
     const row = await repos.terminalSessions.findById(id);
     if (!row) {
       return notFound('Terminal session');
@@ -192,7 +192,7 @@ async function handleDelete(
     ptyManager.terminate(id);
 
     // Delete from database
-    const repos = getRepositories() as any;
+    const repos = getRepositories();
     await repos.terminalSessions.delete(id);
 
     terminalLogger.info('[Terminals API] Session deleted', { sessionId: id });

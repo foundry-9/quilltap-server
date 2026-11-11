@@ -294,7 +294,7 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
       'profile-1',
       { priority: 'background' }
     )
-    expect(repos.docMountChunks.updateEmbedding).toHaveBeenCalledWith('chunk-1', fakeEmbedding)
+    expect(repos.docMountChunks.updateEmbedding).toHaveBeenCalledWith('chunk-1', fakeEmbedding, { expectedTextHash: expect.any(String) })
     expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalledWith(
       'MOUNT_CHUNK',
       'chunk-1',
