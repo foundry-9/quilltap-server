@@ -65,7 +65,7 @@ export function HistorySection() {
             type="button"
             disabled={readOnly}
             onClick={() => setShowSearchReplace(true)}
-            className="flex items-start gap-3 rounded-lg border qt-border-default p-4 text-left transition hover:qt-bg-muted disabled:opacity-50"
+            className="flex items-start gap-3 border qt-border-default rounded-lg p-4 text-left transition hover:qt-bg-muted disabled:opacity-50"
           >
             <Icon name="search" className="mt-0.5 h-5 w-5 flex-shrink-0" />
             <span>
@@ -79,7 +79,7 @@ export function HistorySection() {
             type="button"
             disabled={readOnly}
             onClick={() => setShowRename(true)}
-            className="flex items-start gap-3 rounded-lg border qt-border-default p-4 text-left transition hover:qt-bg-muted disabled:opacity-50"
+            className="flex items-start gap-3 border qt-border-default rounded-lg p-4 text-left transition hover:qt-bg-muted disabled:opacity-50"
           >
             <Icon name="pencil" className="mt-0.5 h-5 w-5 flex-shrink-0" />
             <span>

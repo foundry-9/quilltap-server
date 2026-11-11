@@ -37,7 +37,7 @@ export function ProjectItem({ project }: ProjectItemProps) {
           <span className="qt-meta">
             {formatMessageTime(project.lastActivity)}
           </span>
-          <span className="qt-meta text-primary">
+          <span className="qt-meta qt-text-brand">
             {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
           </span>
         </div>

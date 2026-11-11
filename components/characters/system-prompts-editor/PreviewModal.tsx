@@ -61,7 +61,7 @@ export function PreviewModal({
       showCloseButton={true}
       footer={footer}
     >
-      <div className="p-4 border qt-border-default rounded-lg qt-bg-muted/30 prose prose-sm qt-prose-auto max-w-none max-h-[60vh] overflow-y-auto">
+      <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/30 prose prose-sm qt-prose-auto max-w-none max-h-[60vh] overflow-y-auto">
         <ReactMarkdown
           components={{
             a({ href, children }) {

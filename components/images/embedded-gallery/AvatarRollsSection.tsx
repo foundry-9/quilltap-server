@@ -143,7 +143,7 @@ export function AvatarRollsSection({
       {expanded && (
         <div className="mt-4">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="qt-loading-state">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 qt-border-primary"></div>
             </div>
           ) : (

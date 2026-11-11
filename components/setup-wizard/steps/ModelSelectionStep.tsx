@@ -58,7 +58,7 @@ export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps)
       }
     }
     // Only run on mount and when chatProviders change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the provider id list; chatProviders is rebuilt every render and the loading/model state is read, not tracked
   }, [chatProviders.map((p) => p.id).join(',')])
 
   const handleChatModelChange = useCallback(
@@ -237,7 +237,7 @@ export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps)
         </div>
 
         {state.cheapConfig.strategy === 'USER_DEFINED' && (
-          <div className="ml-6 space-y-4 border-l-2 border-[var(--qt-color-primary)]/20 pl-4">
+          <div className="ml-6 space-y-4 border-l-2 qt-border-primary/20 pl-4">
             <div>
               <label htmlFor={`${id}-cheap-provider`} className="qt-text-label block mb-1.5">Provider</label>
               <select

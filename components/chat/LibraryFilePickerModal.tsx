@@ -549,7 +549,7 @@ function ScopeCard({
     >
       <span className="text-xl">{icon}</span>
       <div>
-        <div className="font-medium text-foreground">{title}</div>
+        <div className="font-medium qt-text">{title}</div>
         {subtitle && <div className="qt-text-muted text-sm">{subtitle}</div>}
       </div>
     </button>

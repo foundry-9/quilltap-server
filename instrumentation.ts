@@ -67,9 +67,9 @@ export async function register() {
 
             if (legacyState === 'resolved' || legacyState === 'needs-vault-storage') {
               // Successfully extracted pepper from old vault — write .dbkey file
-              const { storeEnvPepperInDbKey, getDbKeyState } = await import('./lib/startup/dbkey');
+              const { storeEnvPepperInDbKey, getDbKeyState, overrideDbKeyState } = await import('./lib/startup/dbkey');
               // Override the state to allow storage
-              (global as any).__quilltapDbKeyState = 'needs-vault-storage';
+              overrideDbKeyState('needs-vault-storage');
               storeEnvPepperInDbKey('');
               dbKeyState = 'resolved';
             } else if (legacyState === 'needs-unlock') {

@@ -589,7 +589,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               {headerAvatar ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-foreground">
+                    <span className="font-semibold text-sm qt-text">
                       {headerAvatar.name}
                     </span>
                     {isWhisper && (
@@ -618,7 +618,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                       </span>
                     )
                   )}
-                  <span className="font-semibold text-sm text-foreground">
+                  <span className="font-semibold text-sm qt-text">
                     {info.displayName}
                   </span>
                 </div>
@@ -662,7 +662,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowRequest(!showRequest)}
-                  className="qt-text-label-xs hover:text-foreground transition-colors flex items-center gap-1"
+                  className="qt-text-label-xs hover:qt-text transition-colors flex items-center gap-1"
                   type="button"
                 >
                   <span className="w-3 inline-block">{showRequest ? '▼' : '▶'}</span>
@@ -675,7 +675,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 )}
                 <button
                   onClick={handleCopyRequest}
-                  className="p-1 qt-text-secondary hover:text-foreground transition-colors"
+                  className="p-1 qt-text-secondary hover:qt-text transition-colors"
                   title="Copy request"
                   type="button"
                 >
@@ -683,8 +683,8 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 </button>
               </div>
               {showRequest && (
-                <div className="mt-2 bg-background rounded p-3 border qt-border-default">
-                  <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
+                <div className="mt-2 qt-bg-default rounded p-3 border qt-border-default">
+                  <pre className="text-xs qt-text font-mono whitespace-pre-wrap break-words">
                     {formatRequestContent(toolData)}
                   </pre>
                 </div>
@@ -699,7 +699,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowResponse(!showResponse)}
-                  className="qt-text-label-xs hover:text-foreground transition-colors flex items-center gap-1"
+                  className="qt-text-label-xs hover:qt-text transition-colors flex items-center gap-1"
                   type="button"
                 >
                   <span className="w-3 inline-block">{showResponse ? '▼' : '▶'}</span>
@@ -718,7 +718,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 {toolData.result && (
                   <button
                     onClick={handleCopyResponse}
-                    className="p-1 qt-text-secondary hover:text-foreground transition-colors"
+                    className="p-1 qt-text-secondary hover:qt-text transition-colors"
                     title="Copy response"
                     type="button"
                   >
@@ -727,7 +727,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 )}
               </div>
               {showResponse && (
-                <div className="mt-2 bg-background rounded p-3 border qt-border-default tool-response-content">
+                <div className="mt-2 qt-bg-default rounded p-3 border qt-border-default tool-response-content">
                   {/* For image generation, show image thumbnails */}
                   {toolData.toolName === 'generate_image' && imageAttachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
@@ -765,7 +765,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                               </button>
                               <button
                                 onClick={() => handleCopyImage(attachment.filepath)}
-                                className="absolute -top-1 -right-1 p-1 bg-background border qt-border-default rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10"
+                                className="absolute -top-1 -right-1 p-1 qt-bg-default border qt-border-default rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10"
                                 title="Copy image"
                                 type="button"
                               >
@@ -779,7 +779,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   )}
                   {/* Show JSON/text result if present */}
                   {toolData.result && (
-                    <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
+                    <pre className="text-xs qt-text font-mono whitespace-pre-wrap break-words">
                       {formatResultContent(toolData)}
                     </pre>
                   )}

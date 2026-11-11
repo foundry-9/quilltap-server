@@ -43,7 +43,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     content: memory?.content || '',
     summary: memory?.summary || '',
     keywords: memory?.keywords?.join(', ') || '',
-    importance: memory?.importance || 0.5,
+    importance: memory?.importance ?? 0.5,
     keystone: memory?.keystone ?? false,
   })
 

@@ -11,7 +11,7 @@
  * @module wardrobe/history/describe-entry
  */
 
-import { WARDROBE_SLOT_TYPES, bySlot } from '@/lib/schemas/wardrobe.types';
+import { bySlot } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeHistorySource } from '@/lib/schemas/chat-wardrobe-history.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
@@ -37,20 +37,6 @@ export function resolveHistorySlots(pool: WearablePool, slots: EquippedSlots): H
         : { itemId, title: null, archived: false, missing: true };
     }),
   );
-}
-
-/** The ids in an entry that cannot be put back on: archived or gone. Deduplicated across slots. */
-export function staleItemsOf(resolved: HistorySlots): HistorySlotItem[] {
-  const seen = new Set<string>();
-  const stale: HistorySlotItem[] = [];
-  for (const slot of WARDROBE_SLOT_TYPES) {
-    for (const entry of resolved[slot]) {
-      if (!(entry.archived || entry.missing) || seen.has(entry.itemId)) continue;
-      seen.add(entry.itemId);
-      stale.push(entry);
-    }
-  }
-  return stale;
 }
 
 /**

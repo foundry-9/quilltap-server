@@ -1,13 +1,10 @@
 /**
- * Unit tests for Phase C / G / "no user character" pure-function helpers
+ * Unit tests for Phase C / G pure-function helpers
  * in lib/services/host-notifications/writer.ts
  *
  * These content builders produce the Salon messages for scenario announcements,
  * user-character introductions, multi-character rosters, silent mode, join
- * scenarios, timestamps, and the "no user-controlled character" advisory.
- *
- * The idempotence check on postHostNoUserCharacterAnnouncement is also covered
- * here as a regression test for the memory-pipeline no-user-character whisper.
+ * scenarios and timestamps.
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
@@ -52,7 +49,6 @@ import {
   buildOffSceneCharactersContent,
   buildOffSceneCharactersOpaqueContent,
   postHostOffSceneCharactersAnnouncement,
-  postHostNoUserCharacterAnnouncement,
 } from '@/lib/services/host-notifications/writer'
 import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder'
 import { isOffSceneMentionIntroduction, LEFT_BEHIND_INTRO_PREFIX } from '@/lib/services/host-notifications/off-scene-kinds'
@@ -198,115 +194,6 @@ describe('buildTimestampContent', () => {
   it('begins with the Host marking the time', () => {
     const result = buildTimestampContent('noon')
     expect(result).toMatch(/^The Host marks the time/)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// postHostNoUserCharacterAnnouncement — idempotence regression
-// ---------------------------------------------------------------------------
-
-describe('postHostNoUserCharacterAnnouncement', () => {
-  const CHAT_ID = 'chat-idempotence-test'
-
-  function makeAddMessage() {
-    return jest.fn().mockResolvedValue(undefined)
-  }
-
-  function makeChatWithNoMessages(addMessage = makeAddMessage()) {
-    return {
-      id: CHAT_ID,
-      messages: [],
-      addMessage,
-    }
-  }
-
-  function makeChatWithExistingWhisper(addMessage = makeAddMessage()) {
-    return {
-      id: CHAT_ID,
-      messages: [
-        {
-          type: 'message',
-          systemSender: 'host',
-          systemKind: 'no-user-character',
-        },
-      ],
-      addMessage,
-    }
-  }
-
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
-  it('posts the whisper when none has been sent yet', async () => {
-    const addMessage = makeAddMessage()
-    getRepositories.mockReturnValue({
-      chats: {
-        findById: jest.fn().mockResolvedValue(makeChatWithNoMessages(addMessage)),
-        addMessage,
-      },
-    } as unknown as ReturnType<typeof getRepositories>)
-
-    const result = await postHostNoUserCharacterAnnouncement({ chatId: CHAT_ID })
-    expect(addMessage).toHaveBeenCalledTimes(1)
-    expect(result).not.toBeNull()
-  })
-
-  it('is idempotent — does NOT post a second whisper when one already exists', async () => {
-    const addMessage = makeAddMessage()
-    getRepositories.mockReturnValue({
-      chats: {
-        findById: jest.fn().mockResolvedValue(makeChatWithExistingWhisper(addMessage)),
-        addMessage,
-      },
-    } as unknown as ReturnType<typeof getRepositories>)
-
-    const result = await postHostNoUserCharacterAnnouncement({ chatId: CHAT_ID })
-    expect(addMessage).not.toHaveBeenCalled()
-    expect(result).toBeNull()
-  })
-
-  it('returns null and does not throw when the chat is not found', async () => {
-    getRepositories.mockReturnValue({
-      chats: {
-        findById: jest.fn().mockResolvedValue(null),
-        addMessage: makeAddMessage(),
-      },
-    } as unknown as ReturnType<typeof getRepositories>)
-
-    const result = await postHostNoUserCharacterAnnouncement({ chatId: 'missing-chat' })
-    expect(result).toBeNull()
-  })
-
-  it('returns null and does not throw when the repo call rejects', async () => {
-    getRepositories.mockReturnValue({
-      chats: {
-        findById: jest.fn().mockRejectedValue(new Error('DB failure')),
-        addMessage: makeAddMessage(),
-      },
-    } as unknown as ReturnType<typeof getRepositories>)
-
-    const result = await postHostNoUserCharacterAnnouncement({ chatId: CHAT_ID })
-    expect(result).toBeNull()
-  })
-
-  it('the posted message carries the host-no-user-character systemKind', async () => {
-    const addMessage = makeAddMessage()
-    getRepositories.mockReturnValue({
-      chats: {
-        findById: jest.fn().mockResolvedValue(makeChatWithNoMessages()),
-        addMessage,
-      },
-    } as unknown as ReturnType<typeof getRepositories>)
-
-    await postHostNoUserCharacterAnnouncement({ chatId: CHAT_ID })
-
-    const [chatIdArg, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
-    expect(chatIdArg).toBe(CHAT_ID)
-    expect(message.systemSender).toBe('host')
-    expect(message.systemKind).toBe('no-user-character')
-    expect(typeof message.content).toBe('string')
-    expect((message.content as string).length).toBeGreaterThan(0)
   })
 })
 

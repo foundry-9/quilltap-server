@@ -37,7 +37,7 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
           styleMap[tag.id] = tag.visualStyle;
         }
       }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- style map is derived from the tags query into local state, which updateStyles() also overwrites directly
       setStyles(styleMap);
     } else if (status !== 'authenticated') {
       setStyles({});

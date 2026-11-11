@@ -1,15 +1,9 @@
 /**
- * Photos Route
- *
- * Thin wrapper around {@link PhotosView}; the view body is extracted so it can also
- * render as a workspace tab. When the tabbed workspace is enabled, this route
- * redirects into it. See `docs/developer/features/complete/tabbed-workspace.md`.
+ * Photos Route — redirects into the tabbed workspace's Photos tab.
  */
 
-import { PhotosView } from './PhotosView'
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
 export default function PhotosPage() {
-  redirectToWorkspaceTab('photos')
-  return <PhotosView />
+  return redirectToWorkspaceTab('photos')
 }

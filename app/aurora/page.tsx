@@ -1,15 +1,9 @@
 /**
- * Characters Route (Aurora)
- *
- * Thin wrapper around {@link AuroraView}; the view body is extracted so it can also
- * render as a workspace tab. When the tabbed workspace is enabled, this route
- * redirects into it. See `docs/developer/features/complete/tabbed-workspace.md`.
+ * Characters Route (Aurora) — redirects into the tabbed workspace's Aurora tab.
  */
 
-import { AuroraView } from './AuroraView'
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
 export default function CharactersPage() {
-  redirectToWorkspaceTab('aurora')
-  return <AuroraView />
+  return redirectToWorkspaceTab('aurora')
 }

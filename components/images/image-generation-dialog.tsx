@@ -245,7 +245,7 @@ export function ImageGenerationDialog({
         <div className="px-6 py-4 space-y-6">
           {/* Provider Selection */}
           <div>
-            <label htmlFor={`${id}-profile`} className="block text-sm qt-text-primary mb-2">
+            <label htmlFor={`${id}-profile`} className="qt-label mb-2">
               Provider
             </label>
             {loadingProfiles ? (
@@ -274,7 +274,7 @@ export function ImageGenerationDialog({
 
           {/* Prompt Input */}
           <div>
-            <label htmlFor={`${id}-prompt`} className="block text-sm qt-text-primary mb-2">
+            <label htmlFor={`${id}-prompt`} className="qt-label mb-2">
               Prompt
             </label>
             <textarea

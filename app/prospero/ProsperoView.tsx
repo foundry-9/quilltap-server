@@ -62,7 +62,7 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading projects...</p>
+        <p className="text-lg qt-text">Loading projects...</p>
       </div>
     )
   }
@@ -134,7 +134,7 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
 function ProsperoListShell({ children }: { children: ReactNode }) {
   const bgStyle = useSubsystemBackgroundStyle('prospero')
   return (
-    <div className="qt-page-container text-foreground" style={bgStyle}>
+    <div className="qt-page-container qt-text" style={bgStyle}>
       {children}
     </div>
   )

@@ -75,7 +75,7 @@ export function RestoreDialog({
           className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
             state.restoreMode === 'replace'
               ? 'qt-border-destructive qt-bg-destructive/10'
-              : 'qt-border-default bg-background'
+              : 'qt-border-default qt-bg-default'
           }`}
         >
           <input
@@ -101,7 +101,7 @@ export function RestoreDialog({
           className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
             state.restoreMode === 'import'
               ? 'qt-border-primary qt-bg-primary/10'
-              : 'qt-border-default bg-background'
+              : 'qt-border-default qt-bg-default'
           }`}
         >
           <input
@@ -135,7 +135,7 @@ export function RestoreDialog({
                 type="checkbox"
                 checked={state.confirmReplace}
                 onChange={(e) => actions.setConfirmReplace(e.target.checked)}
-                className="w-4 h-4 qt-text-destructive rounded focus:ring-ring"
+                className="w-4 h-4 qt-text-destructive rounded qt-focus-ring"
               />
               <span className="text-sm qt-text-destructive">
                 I understand this action cannot be undone
@@ -148,7 +148,7 @@ export function RestoreDialog({
                 type="checkbox"
                 checked={state.keepArchiveBundles}
                 onChange={(e) => actions.setKeepArchiveBundles(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded focus:ring-ring"
+                className="mt-0.5 w-4 h-4 rounded qt-focus-ring"
               />
               <span className="text-sm qt-text-primary">
                 Leave any archived-character bundles on the shelf

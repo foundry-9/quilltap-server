@@ -12,7 +12,7 @@
  */
 
 import { QtapCustomToolSchema } from '@/lib/pascal/custom-tool.types'
-import { collectToolVocabulary, isEmptyVocabulary } from '@/lib/pascal/tool-vocabulary'
+import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary'
 
 /** Parse through the real schema, so no test can assert on an invalid tool. */
 function define(partial: Record<string, unknown>) {
@@ -220,7 +220,6 @@ describe('collectToolVocabulary', () => {
     expect(vocabulary.equips).toEqual(['Excalibur'])
     expect(vocabulary.unequips).toEqual(['lantern'])
     expect(vocabulary.picksUp).toEqual(['magic bow'])
-    expect(isEmptyVocabulary(vocabulary)).toBe(false)
   })
 
   it('reports a tool that quotes {{character}}', () => {
@@ -291,7 +290,6 @@ describe('collectToolVocabulary', () => {
     // A gesture is not a write.
     expect(vocabulary.stateWrites).toEqual([])
     expect(vocabulary.metadataWrites).toEqual([])
-    expect(isEmptyVocabulary(vocabulary)).toBe(false)
   })
 
   it('collects the metadata keys an availability gate reads', () => {
@@ -318,15 +316,5 @@ describe('collectToolVocabulary', () => {
       })
     )
     expect(vocabulary.metadata).toEqual(['luck', 'rank'])
-  })
-})
-
-describe('isEmptyVocabulary', () => {
-  it('is true only when nothing at all is quoted', () => {
-    const bare = define({})
-    expect(isEmptyVocabulary(collectToolVocabulary(bare))).toBe(true)
-
-    const speaks = define({ outcomes: [{ when: true, message: 'A {{value}}.', state: 'info' }] })
-    expect(isEmptyVocabulary(collectToolVocabulary(speaks))).toBe(false)
   })
 })

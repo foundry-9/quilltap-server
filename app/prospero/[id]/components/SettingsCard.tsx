@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import type { Project } from '../types'
 import StateEditorModal from '@/components/state/StateEditorModal'
-import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { Icon } from '@/components/ui/icon'
 
@@ -42,27 +42,16 @@ export function SettingsCard({
   const [showStateEditorModal, setShowStateEditorModal] = useState(false)
 
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden col-span-full">
-      {/* Header - always visible */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
+    <>
+      <CollapsibleCard
+        icon={<Icon name="settings" className="w-5 h-5 qt-text-primary" />}
+        title="Project Settings"
+        description="Instructions & project state"
+        className="col-span-full"
+        isOpen={expanded}
+        onOpenChange={() => onToggle()}
       >
-        <div className="flex items-center gap-3">
-          <Icon name="settings" className="w-5 h-5 qt-text-primary" />
-          <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">Project Settings</h3>
-            <p className="qt-text-small qt-text-secondary">
-              Instructions &amp; project state
-            </p>
-          </div>
-        </div>
-        <ChevronIcon className="w-5 h-5 qt-text-secondary" expanded={expanded} />
-      </button>
-
-      {/* Content - expandable */}
-      {expanded && (
-        <div className="border-t qt-border-default p-4 space-y-4">
+        <div className="space-y-4">
           {/* Project Instructions */}
           <div>
             <label className="qt-text-label block mb-2">Project Instructions</label>
@@ -87,7 +76,7 @@ export function SettingsCard({
           {/* Project State */}
           <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
             <div>
-              <h4 className="qt-label text-foreground">Project State</h4>
+              <h4 className="qt-label qt-text">Project State</h4>
               <p className="qt-text-xs qt-text-secondary">
                 Persistent JSON data for games, inventory, and session tracking.
               </p>
@@ -100,7 +89,7 @@ export function SettingsCard({
             </button>
           </div>
         </div>
-      )}
+      </CollapsibleCard>
 
       {/* State Editor Modal */}
       <StateEditorModal
@@ -111,6 +100,6 @@ export function SettingsCard({
         entityName={project.name}
         onSuccess={onProjectUpdate}
       />
-    </div>
+    </>
   )
 }

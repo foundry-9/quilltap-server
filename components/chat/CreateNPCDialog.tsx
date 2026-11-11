@@ -264,8 +264,8 @@ export default function CreateNPCDialog({
       }
     >
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
+        <div className="qt-loading-state py-12">
+          <svg className="animate-spin h-8 w-8 qt-text-brand" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
@@ -274,7 +274,7 @@ export default function CreateNPCDialog({
         <div className="space-y-4">
           {/* Name (required) */}
           <div>
-            <label htmlFor="npc-name" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="npc-name" className="qt-label mb-2">
               Name <span className="qt-text-destructive">*</span>
             </label>
             <input
@@ -291,7 +291,7 @@ export default function CreateNPCDialog({
 
           {/* Description (required) */}
           <div>
-            <label htmlFor="npc-description" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="npc-description" className="qt-label mb-2">
               Description <span className="qt-text-destructive">*</span>
             </label>
             <p className="qt-text-xs mb-2">
@@ -309,7 +309,7 @@ export default function CreateNPCDialog({
 
           {/* Physical Description (optional) */}
           <div>
-            <label htmlFor="npc-physical" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="npc-physical" className="qt-label mb-2">
               Physical Description <span className="qt-text-secondary font-normal">(optional)</span>
             </label>
             <p className="qt-text-xs mb-2">
@@ -327,7 +327,7 @@ export default function CreateNPCDialog({
 
           {/* Scenario (optional) */}
           <div>
-            <label htmlFor="npc-scenario" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="npc-scenario" className="qt-label mb-2">
               Scenario <span className="qt-text-secondary font-normal">(optional)</span>
             </label>
             <p className="qt-text-xs mb-2">
@@ -345,7 +345,7 @@ export default function CreateNPCDialog({
 
           {/* System Prompt (optional) */}
           <div>
-            <label htmlFor="npc-system-prompt" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="npc-system-prompt" className="qt-label mb-2">
               System Prompt <span className="qt-text-secondary font-normal">(optional)</span>
             </label>
             <p className="qt-text-xs mb-2">
@@ -363,7 +363,7 @@ export default function CreateNPCDialog({
 
           {/* Connection Profile (required) */}
           <div>
-            <label htmlFor="npc-profile" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="npc-profile" className="qt-label mb-2">
               Connection Profile <span className="qt-text-destructive">*</span>
             </label>
             <select
@@ -389,7 +389,7 @@ export default function CreateNPCDialog({
 
           {/* Avatar (optional) */}
           <div>
-            <label className="block text-sm qt-text-primary mb-2">
+            <label className="qt-label mb-2">
               Avatar <span className="qt-text-secondary font-normal">(optional)</span>
             </label>
             <div className="flex items-center gap-3">

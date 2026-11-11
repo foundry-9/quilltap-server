@@ -52,7 +52,7 @@ export function RaisedHandChip({ status, onLower, onDismiss }: Readonly<RaisedHa
                 name="hand-raised"
                 className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info"
               />
-              <span className="text-foreground">{label}</span>
+              <span className="qt-text">{label}</span>
               {!waiting && (
                 <Tooltip content={lowers ? 'Lower your hand' : 'Dismiss'}>
                   <button

@@ -109,7 +109,7 @@ export function ThemeCard({
         className={`
           relative flex flex-col items-start p-4 rounded-lg border-2 transition-all
           text-left w-full overflow-hidden
-          ${isActive ? 'qt-border-primary' : 'qt-border-default hover:border-input'}
+          ${isActive ? 'qt-border-primary' : 'qt-border-default hover:qt-border-input'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
         style={{

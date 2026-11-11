@@ -270,8 +270,8 @@ export function WardrobeBrowser({
                   onClick={() => setKindFilter(k)}
                   className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                     kindFilter === k
-                      ? 'qt-bg-default text-foreground shadow-sm'
-                      : 'qt-text-secondary hover:text-foreground'
+                      ? 'qt-bg-default qt-text shadow-sm'
+                      : 'qt-text-secondary hover:qt-text'
                   }`}
                 >
                   {k === 'items' ? 'Items' : 'Outfits'}

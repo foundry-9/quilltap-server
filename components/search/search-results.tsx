@@ -389,7 +389,7 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
   }, {} as Record<SearchType, SearchResult[]>)
 
   return (
-    <div className="divide-y divide-border">
+    <div className="divide-y qt-divide-default">
       {Object.entries(groupedResults).map(([type, typeResults]) => {
         const searchType = type as SearchType
         // Use total count from API if available, otherwise fall back to displayed count
@@ -404,7 +404,7 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
             {onTypeCountClick && hasMore ? (
               <button
                 onClick={() => onTypeCountClick(searchType)}
-                className="text-primary hover:underline cursor-pointer"
+                className="qt-text-brand hover:underline cursor-pointer"
                 aria-label={`Show all ${totalForType} ${TYPE_LABELS_PLURAL[searchType].toLowerCase()}`}
                 title={`Show all ${totalForType} ${TYPE_LABELS_PLURAL[searchType].toLowerCase()}`}
               >

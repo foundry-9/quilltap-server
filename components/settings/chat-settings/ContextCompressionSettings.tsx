@@ -158,7 +158,7 @@ export function ContextCompressionSettingsComponent({
             aria-labelledby={`${id}-enabled`}
           >
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
+              className={`inline-block h-4 w-4 transform rounded-full qt-bg-default transition-transform ${
                 compressionSettings.enabled ? 'translate-x-6' : 'translate-x-1'
               }`}
             />

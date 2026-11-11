@@ -24,8 +24,7 @@
  *   - the dedup order is defined exactly once (`dedupeTierTriple`);
  *   - the resolution (DB lookups, ownership gate, participant vaults, graceful
  *     global-null) lives in one place (`resolveTieredMountPool`);
- *   - features can test mount membership uniformly (`classifyMountTier`,
- *     `flattenTierPool`).
+ *   - features can test mount membership uniformly (`flattenTierPool`).
  *
  * @module mount-index/tiered-mount-pool
  */
@@ -519,21 +518,4 @@ export function flattenTierPool(
     if (pool.globalMountPointId) ids.add(pool.globalMountPointId);
   }
   return [...ids];
-}
-
-/**
- * Classify which tier a mount belongs to within a resolved pool, or `null` when
- * the mount is outside the pool. Precedence: character > participant > group >
- * project > global.
- */
-export function classifyMountTier(
-  mountPointId: string,
-  pool: TieredMountPool,
-): MountTier | null {
-  if (mountPointId === pool.characterMountPointId) return 'character';
-  if (pool.participantMountPointIds.includes(mountPointId)) return 'participant';
-  if (pool.groupMountPointIds.includes(mountPointId)) return 'group';
-  if (pool.projectMountPointIds.includes(mountPointId)) return 'project';
-  if (mountPointId === pool.globalMountPointId) return 'global';
-  return null;
 }

@@ -34,7 +34,7 @@ export function usePrompts() {
     if (result) {
       setTemplates(result)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchOp is a fresh object each render, but its execute is a stable useCallback
   }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)
 
   /**
@@ -102,7 +102,7 @@ export function usePrompts() {
 
       return null
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveOp is a fresh object each render, but its execute is a stable useCallback
     [] // saveOp.execute is stable (empty deps in useAsyncOperation)
   )
 
@@ -130,7 +130,7 @@ export function usePrompts() {
         setTimeout(() => setSuccess(null), 3000)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deleteOp is a fresh object each render, but its execute is a stable useCallback
     [] // deleteOp.execute is stable (empty deps in useAsyncOperation)
   )
 

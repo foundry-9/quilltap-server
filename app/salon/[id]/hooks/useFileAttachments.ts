@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { FileConflictInfo, ConflictResolution } from '@/components/chat/FileConflictDialog'
@@ -48,7 +48,6 @@ type UploadResponse = UploadSuccessResponse | UploadDuplicateResponse | { error:
 export function useFileAttachments(chatId: string, projectId?: string | null) {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [uploadingFile, setUploadingFile] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Conflict handling state
   const [conflictInfo, setConflictInfo] = useState<FileConflictInfo | null>(null)
@@ -119,7 +118,9 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
   }, [chatId])
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    // Held now: React clears `currentTarget` once the handler yields (#179).
+    const input = e.currentTarget
+    const file = input.files?.[0]
     if (!file) return
 
     setUploadingFile(true)
@@ -134,10 +135,8 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to upload file')
     } finally {
       setUploadingFile(false)
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      // Reset the input so choosing the same file again fires a change (#179).
+      input.value = ''
     }
   }
 
@@ -199,7 +198,6 @@ export function useFileAttachments(chatId: string, projectId?: string | null) {
     attachedFiles,
     setAttachedFiles,
     uploadingFile,
-    fileInputRef,
     handleFileSelect,
     removeAttachedFile,
     uploadFile, // Expose for direct file uploads (e.g., from paste)

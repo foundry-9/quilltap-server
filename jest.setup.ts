@@ -385,14 +385,11 @@ jest.mock('@/lib/services/llm-logging.service', () => ({
   getLogsForMessage: jest.fn().mockResolvedValue([]),
   getLogsForChat: jest.fn().mockResolvedValue([]),
   getLogsForCharacter: jest.fn().mockResolvedValue([]),
-  messageHasLogs: jest.fn().mockResolvedValue(false),
-  getLogsForUser: jest.fn().mockResolvedValue([]),
   getRecentLogs: jest.fn().mockResolvedValue([]),
   countLogsForUser: jest.fn().mockResolvedValue(0),
   getTotalTokenUsage: jest.fn().mockResolvedValue({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
   getLogsByType: jest.fn().mockResolvedValue([]),
   cleanupOldLogs: jest.fn().mockResolvedValue(0),
-  deleteAllLogsForUser: jest.fn().mockResolvedValue(0),
   getStandaloneLogs: jest.fn().mockResolvedValue([]),
 }))
 
@@ -430,7 +427,6 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
   generateEmbedding: jest.fn(),
   getDefaultEmbeddingProfile: jest.fn().mockResolvedValue(null),
   getEmbeddingProfile: jest.fn().mockResolvedValue(null),
-  getUserEmbeddingProfiles: jest.fn().mockResolvedValue([]),
 }))
 
 // Mock the in-process memory-index cache (only `lib/memory/index-store` uses it)
@@ -457,7 +453,6 @@ jest.mock('@/lib/embedding/vector-store', () => {
   }
   return {
     getVectorStoreManager: jest.fn(() => manager),
-    getCharacterVectorStore: jest.fn().mockResolvedValue(store),
     isHotVector: jest.fn((metadata: { tier?: string }) => metadata.tier !== 'cold'),
     CharacterVectorStore: jest.fn(),
     VectorStoreManager: jest.fn(),

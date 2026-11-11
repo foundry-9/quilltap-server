@@ -488,7 +488,7 @@ export function WardrobeItemEditor({
         {!isEditing && sharedContainer && (
           <div>
             <span className="qt-label mb-1 block">Add to</span>
-            <p className="text-sm text-foreground">
+            <p className="text-sm qt-text">
               {containerLabel ??
                 (sharedContainer.scope === 'general'
                   ? 'Quilltap General'
@@ -531,8 +531,8 @@ export function WardrobeItemEditor({
                   onClick={() => setCreateScope(scope)}
                   className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
                     createScope === scope
-                      ? 'qt-bg-default text-foreground shadow-sm'
-                      : 'qt-text-secondary hover:text-foreground'
+                      ? 'qt-bg-default qt-text shadow-sm'
+                      : 'qt-text-secondary hover:qt-text'
                   }`}
                 >
                   {label}
@@ -562,8 +562,8 @@ export function WardrobeItemEditor({
             onClick={() => handleModeChange('single')}
             className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
               editorMode === 'single'
-                ? 'qt-bg-default text-foreground shadow-sm'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-bg-default qt-text shadow-sm'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Single garment
@@ -575,8 +575,8 @@ export function WardrobeItemEditor({
             onClick={() => handleModeChange('bundle')}
             className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
               editorMode === 'bundle'
-                ? 'qt-bg-default text-foreground shadow-sm'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-bg-default qt-text shadow-sm'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Outfit bundle
@@ -680,7 +680,7 @@ export function WardrobeItemEditor({
               onChange={handleChange}
               className="qt-checkbox mt-0.5"
             />
-            <span className="text-sm text-foreground">{defaultOutfitLabel}</span>
+            <span className="text-sm qt-text">{defaultOutfitLabel}</span>
           </label>
         </div>
 
@@ -742,7 +742,7 @@ export function WardrobeItemEditor({
 
         {/* Description (Markdown) */}
         <div>
-          <label htmlFor="wardrobe-description" className="block text-sm qt-text-primary mb-1">
+          <label htmlFor="wardrobe-description" className="qt-label mb-1">
             Description
           </label>
           <p className="text-xs qt-text-secondary mb-2">

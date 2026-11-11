@@ -1,6 +1,6 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-11
 **Tool Used**: knip
 **Codebase**: Quilltap v4.13-dev
 
@@ -18,6 +18,68 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 | Unused Exported Types | 982 (2026-11-10; 984 before the sweep). 859 (2026-11-02; 860 before the sweep). 856 (2026-10-26). 915 (2026-10-13; 918 before the sweep). 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 4 in ErrorCode (preserved for future use; `UNAUTHORIZED` joined the list on 2026-09-04 when its only consumer, `requireAuth`, was removed) |
 | Duplicate Exports | 88 (2026-11-10). 78 (2026-11-02, unchanged). 78 (2026-10-26). 68 (2026-10-13; named + default pattern and schema aliases, low priority) |
+
+---
+
+## 2026-11-11 — Refactor 4.13: dead code knip cannot see, legacy shims
+
+Carried out [refactor-4-13-dead-code-and-leftovers.md](features/refactor-4-13-dead-code-and-leftovers.md). knip's two blind spots were the target: it treats test files as entry points (so an export used only by its own test looks alive), and `knip.json` ignored `migrations/lib/**`. Every symbol below was re-checked with a whole-word `git grep` over tracked files immediately before it was removed.
+
+knip afterwards: **0 unused files, 0 unused or unlisted dependencies**; 477 unused exports, 290 unused exported types, 1 enum member, 87 duplicate exports (compact reporter, knip 6.45.1, `tsconfig.build.json`). These figures are not comparable with the 2026-11-10 ones, which used a different reporter and config.
+
+### Removed — files
+
+| File | Why |
+|------|-----|
+| `migrations/lib/json-store/**`, `migrations/lib/file-manager.ts` | ~5,100 lines of Mongo-era JSON-store code with no importer outside the pair. |
+| `lib/navigation/route-flags.ts` (+ test) | `getRouteFlags` had no production caller; the module had no other export. |
+| `lib/terminal/clean-output.ts` (+ test) | No production importer at all (the terminal read path changed under bug 255), not just `cleanTerminalOutput`. |
+| `lib/config/feature-flags.ts` (+ test) | `NEXT_PUBLIC_WORKSPACE_TABS` removed (decision 1): nothing set it. |
+| `components/providers/sidebar-provider.tsx` | Every callback a no-op, `isCollapsed` always true; the profile menu renders its collapsed form directly. |
+| `app/api/v1/files/actions/cleanup-stale.ts` | `POST /api/v1/files?action=cleanup-stale` — no caller in the app, the CLI package or the help docs (decision 3; the Electron shell is a separate repo and was not searched). |
+| `app/aurora/[id]/CharacterPageClient.tsx`, `app/aurora/groups/[id]/GroupEditorPageClient.tsx`, `app/prospero/[id]/ProjectDetailPageClient.tsx`, `app/salon/[id]/terminal/[sessionId]/TerminalPopoutPageClient.tsx`, `app/salon/new/NewChatPageClient.tsx`, `app/scriptorium/[id]/DocumentStoreDetailPageClient.tsx` | The legacy full-page renders behind the workspace flag. With the flag gone every old route only redirects (`redirectToWorkspaceTab` returns `never`), so these had no importer. |
+
+### Removed — functions / consts / types
+
+| File | Removed |
+|------|---------|
+| `lib/api/responses.ts` | `deprecatedRedirect`, `withDeprecationHeaders`, `buildRedirectUrl`, `DeprecationInfo` |
+| `lib/atlas/item-mutations.ts`, `match.ts` | `setAtlasEntryArchived` (archiving is `updateAtlasEntry({ archived })`; its tests now go through that), `firstAtlasMention` |
+| `lib/chat/turn-control.ts` | `hasActiveTurn` (tests probe the registry through `setHandRaised`'s count) |
+| `lib/embedding/embedding-service.ts`, `vector-store.ts` | `prepareForSearch`, `SearchPreparationResult`, `getUserEmbeddingProfiles`, `getCharacterVectorStore` (and their `jest.setup.ts` mocks) |
+| `lib/llm/cheap-llm.ts`, `fallback-data.ts` | `RECOMMENDED_CHEAP_MODELS`, `LEGACY_RECOMMENDED_CHEAP_MODELS` |
+| `lib/memory/policy-protection.ts` | `partitionByPolicyProtection` |
+| `lib/mount-index/tiered-mount-pool.ts`, `lib/scenarios/location.ts` | `classifyMountTier`, `classifyScenarioMount` (superseded by `classifyMount` in `reach.ts`; an archived-vault refusal test moved onto `lookupScenarioRef`) |
+| `lib/pascal/tool-vocabulary.ts` | `isEmptyVocabulary` |
+| `lib/photos/photo-link-summary.ts` | `getPhotoLinkSummaryByFileId` |
+| `lib/repositories/dry-scope.ts` | `dryScopeDiscardedWrites` (the test asserts the scope's closing log line instead) |
+| `lib/services/host-notifications/writer.ts` | `postHostNoUserCharacterAnnouncement` and its content builder |
+| `lib/services/llm-logging.service.ts` | `messageHasLogs`, `getLogsForUser`, `deleteAllLogsForUser` (data deletion enumerates logs through `lib/backup/owned-rows.ts` since #202) |
+| `lib/settings/registry.ts` | `topLevelCardsOf` |
+| `lib/startup/db-encryption-state.ts` | `isDatabaseEncrypted` (its tests read `getDatabaseEncryptionState` directly) |
+| `lib/themes/utils.ts`, `default-tokens.ts` | `themeColorsToCSS`, `themeTokensToStyleObject`, `mergeWithDefaultTheme`, `colorPalettesEqual`, `themeTokensEqual`, `getThemeDifferences`; the five `getDefault*` getters |
+| `lib/tools/effects.ts` | `highestToolEffect` |
+| `lib/wardrobe/folders.ts`, `history/describe-entry.ts`, `wardrobe-container.ts` | `normalizeWardrobeFolderName`, `wardrobeFolderStorePath`, `staleItemsOf`, `sameWardrobeContainer` |
+| `lib/memory/cheap-llm-tasks/chat-tasks.ts` | `summarizeChat`, `updateContextSummary` and their two prompts |
+| `components/chat/lexical/typeahead/useTypeaheadShell.tsx`, `components/settings/embedding-profiles/types.ts` | `$insertWithTrailingSpace`, `PROVIDER_COLORS` |
+| `lib/background-jobs/processor.ts` | `processNextJob`, `processJobs` (deprecated no-ops) |
+| `app/api/v1/chats/[id]/actions/documents.ts` | `handleActiveDocument` — `POST /api/v1/chats/[id]?action=active-document` (legacy single-pane; decision 3) |
+| `migrations/lib/secrets.ts`, `logger.ts` | `decryptSecrets`, `createMigrationLogger` — surfaced once knip could see `migrations/lib` |
+
+### Kept — with reason
+
+- **`float32ToBlobRaw`** (`lib/embedding/float32-conversion.ts`) — the only way four suites build a *legacy* raw-Float32 blob to prove the reader, the quantize migration and the dimension reconciler still accept one. A test fixture for a format that still exists on disk.
+- **`HELP_SECTION_EMBEDDING_MAX_TOKENS`** (`lib/help/help-doc-chunking.ts`) — the budget `help-doc-size.test.ts` holds every help section to; a policy constant next to the chunker it describes.
+- **`POST /api/v1/mount-points/[id]?action=embed`** — the CLI calls it (`quilltap docs embed`, `packages/quilltap/lib/docs-commands.js`).
+- The report's standing keeps (plugin registry accessors, `lib/themes/crypto.ts`, `pepper-vault.ts`'s legacy unlock, `invalidateAllFrozenArchives`, `__reset*ForTests`, reserved `ErrorCode` members) were not touched.
+
+### `knip.json`
+
+Removed the `migrations/lib/**` ignore (so this tree is checked from now on), the stale `tar` dependency ignore, the `du` binary ignore and the missing `lib/chat/context/index.ts` entry.
+
+### Closed
+
+- The `ChatProvider` follow-up above: repurposed as `ChatActionsProvider` and mounted by `SalonView` in the Salon stream-lifecycles refactor.
 
 ---
 

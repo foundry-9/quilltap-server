@@ -216,7 +216,7 @@ export const LexicalComposerWrapper = forwardRef<
       },
     }),
     // Only compute once on mount — editable state is updated via effect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- LexicalComposer reads initialConfig only at mount; later disabled changes are applied by an effect
     [],
   )
 

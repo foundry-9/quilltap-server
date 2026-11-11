@@ -280,7 +280,7 @@ export function ImportWizard({
                 className="hidden"
               />
               <Icon name="cloud-upload" className="w-12 h-12 mx-auto mb-3 qt-text-secondary" />
-              <p className="text-foreground font-medium">
+              <p className="qt-text font-medium">
                 {selectedFile ? selectedFile.name : 'Drag and drop a chat file here'}
               </p>
               <p className="qt-text-secondary text-sm mt-1">
@@ -331,7 +331,7 @@ export function ImportWizard({
                   className="mt-1"
                 />
                 <div>
-                  <div className="text-foreground font-medium">Analyze messages for memories</div>
+                  <div className="qt-text font-medium">Analyze messages for memories</div>
                   <div className="qt-text-small qt-text-secondary">
                     Queue each message for AI analysis to extract meaningful memories in the background
                   </div>
@@ -480,7 +480,7 @@ export function ImportWizard({
                   )}
                 </div>
                 <span className={`text-xs hidden sm:inline ${
-                  i === currentStepIndex ? 'text-foreground font-medium' : 'qt-text-secondary'
+                  i === currentStepIndex ? 'qt-text font-medium' : 'qt-text-secondary'
                 }`}>
                   {s.label}
                 </span>

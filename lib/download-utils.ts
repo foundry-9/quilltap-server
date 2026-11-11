@@ -22,12 +22,9 @@ function isElectron(): boolean {
  */
 export async function triggerDownload(blob: Blob, filename: string): Promise<void> {
   if (isElectron()) {
-    console.debug('[download-utils] Saving blob via Electron IPC', { filename, size: blob.size });
     const arrayBuffer = await blob.arrayBuffer();
-    const saved = await window.quilltap!.saveFile(arrayBuffer, filename);
-    if (!saved) {
-      console.debug('[download-utils] Save dialog cancelled by user', { filename });
-    }
+    // A falsy result means the user cancelled the save dialog; nothing to do.
+    await window.quilltap!.saveFile(arrayBuffer, filename);
     return;
   }
 
@@ -48,7 +45,6 @@ export async function triggerDownload(blob: Blob, filename: string): Promise<voi
  * on a non-2xx answer so the caller can toast in its own words.
  */
 export async function downloadFetchedFile(url: string, filename: string): Promise<void> {
-  console.debug('[download-utils] Fetching file for download', { url, filename });
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
   const blob = await res.blob();
@@ -65,7 +61,6 @@ export async function downloadFetchedFile(url: string, filename: string): Promis
  */
 export async function triggerUrlDownload(url: string, filename: string): Promise<void> {
   if (isElectron()) {
-    console.debug('[download-utils] Triggering Electron downloadURL', { url, filename });
     await window.quilltap!.downloadUrl(url);
     return;
   }
@@ -113,7 +108,6 @@ function splitHash(url: string): [string, string] {
  * genuinely wanted in hand — copying an image to the clipboard, for instance.
  */
 export async function downloadImageUrl(url: string, filename: string): Promise<void> {
-  console.debug('[download-utils] Downloading image by URL', { url, filename });
   await triggerUrlDownload(withDownloadFlag(url), filename);
 }
 

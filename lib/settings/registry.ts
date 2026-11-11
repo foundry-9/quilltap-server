@@ -722,11 +722,6 @@ export function isSettingsGroupId(id: string | null | undefined): id is Settings
   return !!id && GROUP_BY_ID.has(id as SettingsGroupId)
 }
 
-/** Cards rendered at the top level of a group's column (hosted cards excluded). */
-export function topLevelCardsOf(group: SettingsGroupId): SettingsCard[] {
-  return SETTINGS_CARDS.filter((c) => c.group === group && !c.hostedBy)
-}
-
 /** Cards hosted inside another card's body. */
 export function hostedCardsOf(hostId: string): SettingsCard[] {
   return SETTINGS_CARDS.filter((c) => c.hostedBy === hostId)

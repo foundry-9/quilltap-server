@@ -24,7 +24,7 @@ export function SearchInput({
       placeholder={placeholder}
       aria-label={placeholder || 'Search'}
       disabled={disabled}
-      className="w-full px-3 py-2 border qt-border-default rounded-lg bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+      className="qt-input disabled:opacity-50"
     />
   )
 }

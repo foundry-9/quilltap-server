@@ -172,7 +172,7 @@ export function SalonListView() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading chats...</p>
+        <p className="text-lg qt-text">Loading chats...</p>
       </div>
     )
   }
@@ -186,7 +186,7 @@ export function SalonListView() {
   }
 
   return (
-    <div className="chat-page qt-page-container text-foreground" style={bgStyle}>
+    <div className="chat-page qt-page-container qt-text" style={bgStyle}>
       {/* Highlight animation styles */}
       <style>{`
         @keyframes chatCardHighlight {
@@ -204,13 +204,13 @@ export function SalonListView() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
           >
             Import SillyTavern Chat
           </button>
           <Link
             href="/salon/new?autonomous=1"
-            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
             title="Create an autonomous character-to-character room"
           >
             New Autonomous Room
@@ -235,7 +235,7 @@ export function SalonListView() {
           <p className="mb-4 text-lg qt-text-small">No chats yet</p>
           <Link
             href="/salon/new"
-            className="font-medium text-primary hover:text-primary/80"
+            className="font-medium qt-text-brand hover:qt-text-brand/80"
           >
             Start a new chat
           </Link>

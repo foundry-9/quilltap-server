@@ -208,7 +208,7 @@ export function SearchBar() {
                 clearQuery()
                 inputRef.current?.focus()
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 qt-text-secondary hover:text-foreground"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 qt-text-secondary hover:qt-text"
               aria-label="Clear search"
             >
               <Icon name="close" className="w-4 h-4" />
@@ -257,7 +257,7 @@ export function SearchBar() {
                     setIsDialogOpen(true)
                     setShowDropdown(false)
                   }}
-                  className="text-xs text-primary hover:underline"
+                  className="text-xs qt-text-brand hover:underline"
                 >
                   See all results →
                 </button>

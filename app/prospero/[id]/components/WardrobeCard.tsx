@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { Icon } from '@/components/ui/icon'
 import { showConfirmation } from '@/lib/alert'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
@@ -43,36 +43,24 @@ export function WardrobeCard({ projectId, projectName, expanded, onToggle }: War
   })
 
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
+    <>
+      <CollapsibleCard
+        icon={<Icon name="wardrobe" className="w-5 h-5 qt-text-primary" />}
+        title={`Wardrobe (${data.listItems.length})`}
+        description="Shared garments every character in this project can wear"
+        isOpen={expanded}
+        onOpenChange={() => onToggle()}
       >
-        <div className="flex items-center gap-3">
-          <Icon name="wardrobe" className="w-5 h-5 qt-text-primary" />
-          <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">Wardrobe ({data.listItems.length})</h3>
-            <p className="qt-text-small qt-text-secondary">
-              Shared garments every character in this project can wear
-            </p>
-          </div>
-        </div>
-        <ChevronIcon className="w-5 h-5 qt-text-secondary" expanded={expanded} />
-      </button>
-
-      {expanded && (
-        <div className="border-t qt-border-default p-4">
-          <WardrobeInstructionsSection container={container} />
-          <WardrobeBrowser
-            container={container}
-            data={data}
-            actions={actions}
-            showArchived={showArchived}
-            onShowArchivedChange={setShowArchived}
-            scrollList={false}
-          />
-        </div>
-      )}
+        <WardrobeInstructionsSection container={container} />
+        <WardrobeBrowser
+          container={container}
+          data={data}
+          actions={actions}
+          showArchived={showArchived}
+          onShowArchivedChange={setShowArchived}
+          scrollList={false}
+        />
+      </CollapsibleCard>
 
       <WardrobeItemOverlays
         container={container}
@@ -80,6 +68,6 @@ export function WardrobeCard({ projectId, projectName, expanded, onToggle }: War
         data={data}
         actions={actions}
       />
-    </div>
+    </>
   )
 }

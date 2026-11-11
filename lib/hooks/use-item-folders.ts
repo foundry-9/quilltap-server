@@ -148,7 +148,7 @@ export function useItemFolders(kind: ItemKind, container: ItemContainer | null):
   const spec = KIND_SPECS[kind]
   const tierKey = itemFolderTierKey(container)
   // The URL is a pure function of the kind and container, which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container and spec are left out: tierKey encodes the container and spec.folderKey is the kind's own namespace
   const query = useQuery({
     queryKey: spec.folderKey(tierKey),
     queryFn: async ({ signal }) => {

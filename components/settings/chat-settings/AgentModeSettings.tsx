@@ -48,10 +48,10 @@ export function AgentModeSettings({
               checked={agentModeSettings.defaultEnabled}
               onChange={(e) => onDefaultEnabledChange(e.target.checked)}
               disabled={saving}
-              className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              className="mt-1 qt-checkbox"
             />
             <div className="flex-1">
-              <div className="font-medium text-foreground">
+              <div className="font-medium qt-text">
                 Enable Agent Mode by Default
               </div>
               <div className="qt-text-small mt-1">
@@ -64,7 +64,7 @@ export function AgentModeSettings({
 
         {/* Max Turns Setting */}
         <div className="space-y-2">
-          <label className="block font-medium text-foreground" htmlFor={`${id}-max-turns`}>
+          <label className="block font-medium qt-text" htmlFor={`${id}-max-turns`}>
             Maximum Agent Turns
           </label>
           <p className="qt-text-small">
@@ -76,7 +76,7 @@ export function AgentModeSettings({
             value={agentModeSettings.maxTurns}
             onChange={(e) => onMaxTurnsChange(parseInt(e.target.value, 10))}
             disabled={saving}
-            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 qt-text focus:qt-border-primary focus:outline-none focus:ring-1 qt-focus-ring"
           >
             {MAX_TURNS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -87,8 +87,8 @@ export function AgentModeSettings({
         </div>
 
         {/* Info Box */}
-        <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4">
-          <h4 className="font-medium text-foreground mb-2">How Agent Mode Works</h4>
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
+          <h4 className="font-medium qt-text mb-2">How Agent Mode Works</h4>
           <ul className="qt-text-small space-y-1 list-disc list-inside">
             <li>The AI uses tools iteratively to gather information and verify results</li>
             <li>Each tool use counts as one &quot;turn&quot; toward the maximum</li>

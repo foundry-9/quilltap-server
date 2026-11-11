@@ -17,7 +17,7 @@ function FilesPageContent({ bgStyle }: { bgStyle: ReturnType<typeof useSubsystem
   const selectedFileId = searchParams.get('fileId')
 
   return (
-    <div className="qt-page-container text-foreground" style={bgStyle}>
+    <div className="qt-page-container qt-text" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
           <h1 className="qt-heading-1 leading-tight">Files</h1>
@@ -34,7 +34,7 @@ function FilesPageContent({ bgStyle }: { bgStyle: ReturnType<typeof useSubsystem
         />
       </div>
 
-      <div className="mt-8 p-4 border qt-border-default rounded-lg qt-bg-muted/50">
+      <div className="mt-8 border qt-border-default rounded-lg p-4 qt-bg-muted/50">
         <h3 className="font-medium mb-2">About General Files</h3>
         <ul className="qt-text-small qt-text-secondary space-y-1 list-disc list-inside">
           <li>General files are not associated with any project</li>
@@ -51,9 +51,9 @@ export function FilesView() {
   const bgStyle = useSubsystemBackgroundStyle('commonplace-book')
   return (
     <Suspense fallback={
-      <div className="qt-page-container text-foreground" style={bgStyle}>
+      <div className="qt-page-container qt-text" style={bgStyle}>
         <div className="flex min-h-screen items-center justify-center">
-          <p className="text-lg text-foreground">Loading files...</p>
+          <p className="text-lg qt-text">Loading files...</p>
         </div>
       </div>
     }>

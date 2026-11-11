@@ -482,7 +482,7 @@ export function OutfitSelector({
 
   return (
     <div className="space-y-2">
-      <label className="mb-2 block text-sm qt-text-primary">Starting Outfit</label>
+      <label className="mb-2 qt-label">Starting Outfit</label>
       {characters.map((char) => {
         const choice = changed.get(char.id)
         return (

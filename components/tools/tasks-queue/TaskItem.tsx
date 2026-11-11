@@ -97,7 +97,7 @@ export function TaskItem({
                 {job.typeName}
               </span>
               {job.priority > 0 && (
-                <span className="text-xs px-1.5 py-0.5 qt-bg-primary/10 text-primary rounded">
+                <span className="text-xs px-1.5 py-0.5 qt-bg-primary/10 qt-text-brand rounded">
                   P{job.priority}
                 </span>
               )}

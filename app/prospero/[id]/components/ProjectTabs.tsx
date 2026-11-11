@@ -37,8 +37,8 @@ export function ProjectTabs({ activeTab, onTabChange, chatCount, fileCount, char
           onClick={() => onTabChange(tab)}
           className={`px-4 py-2 qt-label border-b-2 transition-colors ${
             activeTab === tab
-              ? 'qt-border-primary text-primary'
-              : 'border-transparent qt-text-secondary hover:text-foreground'
+              ? 'qt-border-primary qt-text-brand'
+              : 'border-transparent qt-text-secondary hover:qt-text'
           }`}
         >
           {getTabLabel(tab)}

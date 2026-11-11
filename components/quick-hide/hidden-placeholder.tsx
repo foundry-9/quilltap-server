@@ -11,7 +11,7 @@ export function HiddenPlaceholder({ label }: HiddenPlaceholderProps) {
       <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed qt-border-default qt-bg-muted/30 px-6 py-8 text-center">
         <Icon name="eye-off" className="h-12 w-12 qt-text-secondary" />
         <div>
-          <p className="qt-heading-4 text-foreground">Hidden</p>
+          <p className="qt-heading-4 qt-text">Hidden</p>
           {label && (
             <p className="text-sm qt-text-secondary">
               {label}

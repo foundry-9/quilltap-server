@@ -62,7 +62,7 @@ export function useWardrobeTier(
   const url = tier ? wardrobeTierUrl(tier, { includeArchived }) : ''
 
   // `url` is a pure function of `tierKey` + `includeArchived`, both in the key.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- url is left out: it is a pure function of tierKey and includeArchived, both in the key
   const query = useQuery({
     queryKey: queryKeys.wardrobe.list(tierKey, { includeArchived }),
     queryFn: async ({ signal }) => {

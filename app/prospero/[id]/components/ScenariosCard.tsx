@@ -10,7 +10,7 @@
  * @module app/prospero/[id]/components/ScenariosCard
  */
 
-import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { ScenariosIcon } from '@/components/scenarios/ScenariosIcon'
 import { ScenariosManager } from '@/components/scenarios/ScenariosManager'
 import { useProjectScenarios } from '../hooks'
@@ -27,35 +27,19 @@ export function ScenariosCard({ projectId, projectName, expanded, onToggle }: Sc
   const mutator = useProjectScenarios(projectId)
 
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg">
-      <button
-        onClick={onToggle}
-        className={`w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors ${
-          expanded ? 'rounded-t-lg' : 'rounded-lg'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <ScenariosIcon className="w-5 h-5 qt-text-primary" />
-          <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">Scenarios ({mutator.scenarios.length})</h3>
-            <p className="qt-text-small qt-text-secondary">
-              Reusable starting scenes for new chats in this project
-            </p>
-          </div>
-        </div>
-        <ChevronIcon className="w-5 h-5 qt-text-secondary" expanded={expanded} />
-      </button>
-
-      {expanded && (
-        <div className="border-t qt-border-default p-4">
-          <ScenariosManager
-            mutator={mutator}
-            scopeLabel="project"
-            shelf={{ kind: 'project', projectId, projectName }}
-            emptyMessage="No scenarios yet. Create one and it'll be offered when starting new chats in this project."
-          />
-        </div>
-      )}
-    </div>
+    <CollapsibleCard
+      icon={<ScenariosIcon className="w-5 h-5 qt-text-primary" />}
+      title={`Scenarios (${mutator.scenarios.length})`}
+      description="Reusable starting scenes for new chats in this project"
+      isOpen={expanded}
+      onOpenChange={() => onToggle()}
+    >
+      <ScenariosManager
+        mutator={mutator}
+        scopeLabel="project"
+        shelf={{ kind: 'project', projectId, projectName }}
+        emptyMessage="No scenarios yet. Create one and it'll be offered when starting new chats in this project."
+      />
+    </CollapsibleCard>
   )
 }

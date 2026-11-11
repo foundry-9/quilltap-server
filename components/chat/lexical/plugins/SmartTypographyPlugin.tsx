@@ -281,10 +281,6 @@ export function SmartTypographyPlugin(): null {
         { tag: UPDATE_TAG },
       )
 
-      // One line per SUBSTITUTION — never per keystroke; this handler runs on
-      // every key the composer sees.
-      console.debug(`[smart-typography] ${result.rule}: ${literal} → ${result.insert}`)
-
       return true
     }
 

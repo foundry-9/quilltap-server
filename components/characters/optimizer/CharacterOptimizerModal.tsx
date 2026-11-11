@@ -58,14 +58,14 @@ function ProgressStep({
     <div className={`flex items-center gap-3 py-2 px-3 rounded-md transition-colors ${isActive ? 'qt-bg-primary/10' : isDone ? 'opacity-60' : 'opacity-40'}`}>
       <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
         {isActive ? (
-          <Icon name="refresh" className="w-4 h-4 text-primary animate-spin" />
+          <Icon name="refresh" className="w-4 h-4 qt-text-brand animate-spin" />
         ) : isDone ? (
           <Icon name="check" className="w-4 h-4 qt-text-success" />
         ) : (
           <div className="w-2 h-2 rounded-full qt-bg-muted-foreground" />
         )}
       </div>
-      <span className={`text-sm ${isActive ? 'text-foreground font-medium' : 'qt-text-secondary'}`}>
+      <span className={`text-sm ${isActive ? 'qt-text font-medium' : 'qt-text-secondary'}`}>
         {label}
       </span>
     </div>
@@ -150,7 +150,7 @@ export function CharacterOptimizerModal({
       <div className="qt-dialog-header flex items-start justify-between flex-shrink-0">
         <div className="flex flex-col gap-0.5">
           <ModalTitle className="qt-dialog-title flex items-center gap-2">
-            <Icon name="book" className="w-5 h-5 text-primary" />
+            <Icon name="book" className="w-5 h-5 qt-text-brand" />
             Refine from Memories &amp; Instructions
           </ModalTitle>
           <p className="qt-dialog-description">
@@ -281,7 +281,7 @@ export function CharacterOptimizerModal({
             {profiles.length > 0 && useMemories && (
               <div className="flex flex-col gap-2">
                 <label className="qt-label" htmlFor="optimizer-max-memories">
-                  Maximum Memories to Analyse: <span className="text-primary font-semibold">{maxMemories}</span>
+                  Maximum Memories to Analyse: <span className="qt-text-brand font-semibold">{maxMemories}</span>
                 </label>
                 <input
                   id="optimizer-max-memories"

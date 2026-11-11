@@ -47,7 +47,7 @@ export function PromptDialog({
     >
       <form onSubmit={handleSubmit}>
         <div className="qt-dialog-body !px-0 !py-0 mb-4">
-          <ModalTitle className="text-sm font-normal text-foreground whitespace-pre-wrap break-words">
+          <ModalTitle className="text-sm font-normal qt-text whitespace-pre-wrap break-words">
             {message}
           </ModalTitle>
         </div>

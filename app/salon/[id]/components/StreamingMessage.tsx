@@ -106,7 +106,7 @@ export function StreamingMessage({
             <QuillAnimation size="lg" />
           </div>
         ) : (
-          <div className="flex-1 min-w-0 px-4 py-3 rounded-lg qt-bg-card border qt-border-default text-foreground">
+          <div className="flex-1 min-w-0 px-4 py-3 rounded-lg qt-bg-card border qt-border-default qt-text">
             {streamingReasoning.trim().length > 0 && (
               <ThinkingBlock
                 content={streamingReasoning}

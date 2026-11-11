@@ -3,7 +3,8 @@
  * repository, the LLM log still lands, and nothing changes outside a scope.
  */
 
-import { dryRepositories, dryScopeDiscardedWrites, isInDryScope, runDry } from '../dry-scope'
+import { logger } from '@/lib/logger'
+import { dryRepositories, isInDryScope, runDry } from '../dry-scope'
 import type { RepositoryContainer } from '../factory'
 
 jest.mock('@/lib/logger', () => ({
@@ -51,8 +52,10 @@ describe('dry scope', () => {
       expect(created).toMatchObject({ id: expect.any(String), v: 3 })
       const added = await dry.chats.addMessage('chat', { id: 'm1', content: 'hello' })
       expect(added).toEqual({ id: 'm1', content: 'hello' })
-      expect(Object.fromEntries(dryScopeDiscardedWrites())).toEqual({ 'chats.update': 1, 'chats.create': 1, 'chats.addMessage': 1 })
     })
+    expect(logger.debug).toHaveBeenCalledWith('Dry scope discarded writes', expect.objectContaining({
+      discarded: { 'chats.update': 1, 'chats.create': 1, 'chats.addMessage': 1 },
+    }))
     expect(real.chats.writes).toBe(0)
     expect(real.chats.rows.get('a')?.v).toBe(1)
   })

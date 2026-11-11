@@ -78,7 +78,7 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
   useEffect(() => {
     const isValid = validateAll()
     onValidChange(isValid)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- revalidate only when values or included optionals change; onValidChange is an unmemoized parent callback
   }, [values, includedOptionals])
 
   const handleChange = useCallback((key: string, value: unknown) => {

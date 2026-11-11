@@ -34,7 +34,7 @@ export function GroupCard({ group, onClick, onDelete, onOpen }: GroupCardProps) 
             {group.icon || <Icon name="users" className="w-5 h-5 qt-text-secondary" />}
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-foreground">{group.name}</h2>
+            <h2 className="text-xl font-semibold qt-text">{group.name}</h2>
             <p className="qt-text-small">
               {group.memberCount ?? 0} member{group.memberCount !== 1 ? 's' : ''}
             </p>

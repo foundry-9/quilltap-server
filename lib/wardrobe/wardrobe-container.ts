@@ -203,15 +203,6 @@ export function decodeWardrobeContainer(value: string): WardrobeContainer | null
   return { scope: scopeRaw, id }
 }
 
-/** True when two containers name the same place. */
-export function sameWardrobeContainer(
-  a: WardrobeContainer | null | undefined,
-  b: WardrobeContainer | null | undefined,
-): boolean {
-  if (!a || !b) return false
-  return a.scope === b.scope && (a.id ?? null) === (b.id ?? null)
-}
-
 /**
  * Collection endpoint for a container (list with GET, create with POST).
  *

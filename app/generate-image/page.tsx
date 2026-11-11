@@ -1,13 +1,9 @@
 /**
- * Generate Image Route — thin wrapper around {@link GenerateImageView}. When the
- * tabbed workspace is enabled, redirects into it; otherwise renders the view.
- * See `docs/developer/features/complete/tabbed-workspace.md`.
+ * Generate Image Route — redirects into the tabbed workspace's image tab.
  */
 
-import { GenerateImageView } from './GenerateImageView'
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
 export default function GenerateImagePage() {
-  redirectToWorkspaceTab('generate-image')
-  return <GenerateImageView />
+  return redirectToWorkspaceTab('generate-image')
 }

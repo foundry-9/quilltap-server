@@ -167,7 +167,7 @@ function useActivitySnapshot(): { counts: Counts; pulsing: Set<ActivityKind> } {
       )
     }
     // `started` is derived fresh each render; `data` identity is the real signal.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- started is recomputed every render; data identity is the real change signal
   }, [data])
 
   // Clear any pulse timers still running when the toolbar unmounts.

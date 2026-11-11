@@ -343,7 +343,7 @@ export function SidebarFooter() {
               <Icon name="themes" className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'themes' && (
-              <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
+              <div className="absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
                 <NavUserMenuThemeContent onThemeSelected={handleThemeSelected} />
               </div>
             )}
@@ -361,7 +361,7 @@ export function SidebarFooter() {
               <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'quickHide' && (
-              <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
+              <div className="absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
                 <NavUserMenuQuickHideContent />
               </div>
             )}

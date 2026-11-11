@@ -54,7 +54,7 @@ export function ExportTypeStep({
             className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors ${
               entityType === type
                 ? 'qt-border-primary qt-bg-primary/10'
-                : 'qt-border-default bg-background hover:qt-border-primary/50'
+                : 'qt-border-default qt-bg-default hover:qt-border-primary/50'
             }`}
           >
             <input
@@ -65,7 +65,7 @@ export function ExportTypeStep({
               onChange={() => onEntityTypeChange(type)}
               className="w-4 h-4"
             />
-            <span className="ml-3 font-medium text-foreground">
+            <span className="ml-3 font-medium qt-text">
               {ENTITY_TYPE_LABELS[type]}
             </span>
           </label>

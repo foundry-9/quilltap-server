@@ -37,7 +37,7 @@ export default function ConnectionProfilesTab() {
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
     triggerAutoAssociate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire-and-forget once on mount; triggerAutoAssociate is a stable useCallback
   }, [])
 
   const handleModalSuccess = useCallback(() => {

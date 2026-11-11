@@ -12,7 +12,7 @@ export default function ProviderSetupPage() {
       mode="setup"
       onComplete={() => {
         // Full page load to re-initialize session provider and all client state
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load wanted to re-initialize the session provider and all client state after first-run setup
         window.location.href = '/'
       }}
     />

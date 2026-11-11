@@ -53,8 +53,6 @@ export function AutoLockProvider() {
     if (lockingRef.current) return;
     lockingRef.current = true;
 
-    console.debug('[AutoLock] Idle timeout reached — locking application');
-
     // Save current location for return after unlock
     const returnPath = window.location.pathname + window.location.search;
     sessionStorage.setItem('quilltap-autolock-return', returnPath);
@@ -72,7 +70,7 @@ export function AutoLockProvider() {
     // Full page reload to /unlock to reset all client state. This is the point
     // of the auto-lock: router.push() would leave decrypted data alive in
     // memory and in client caches, which is exactly what locking must discard.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load wanted: locking must discard decrypted data held in memory and client caches
     window.location.href = '/unlock';
   }, []);
 

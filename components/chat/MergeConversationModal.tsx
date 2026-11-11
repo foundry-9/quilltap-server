@@ -328,7 +328,7 @@ export function MergeConversationModal({
 
               {/* Who joins? — the gate. Default all in; uncheck to exclude. */}
               <div>
-                <label className="mb-2 block text-sm qt-text-primary">Who joins</label>
+                <label className="mb-2 qt-label">Who joins</label>
                 <div className="space-y-1.5">
                   {incomingCharacters.map((c) => (
                     <label

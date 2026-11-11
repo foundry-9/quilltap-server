@@ -6,7 +6,7 @@
 
 /* Raw <a> elements are intentional here — they simulate the un-wired links
    (e.g. the Settings footer) the interceptor is meant to catch. */
-/* eslint-disable @next/next/no-html-link-for-pages */
+/* eslint-disable @next/next/no-html-link-for-pages -- raw <a> elements stand in for the un-wired links the interceptor must catch */
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/workspace',

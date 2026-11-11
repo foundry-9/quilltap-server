@@ -28,7 +28,6 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
 }))
 
 jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
   getVectorStoreManager: jest.fn(),
 }))
 
@@ -55,9 +54,6 @@ const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
 }
 const embeddingMock = jest.requireMock('@/lib/embedding/embedding-service') as {
   generateEmbeddingForUser: jest.Mock
-}
-const vectorStoreMock = jest.requireMock('@/lib/embedding/vector-store') as {
-  getCharacterVectorStore: jest.Mock
 }
 
 const baseTime = '2026-04-01T00:00:00.000Z'

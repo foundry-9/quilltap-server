@@ -139,7 +139,7 @@ export function TabooSettings() {
         <div className="qt-settings-section-heading">Add a phrase</div>
         <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
           <label className="flex flex-col gap-1 flex-1">
-            <span className="qt-text-small text-muted-foreground">Forbidden phrase</span>
+            <span className="qt-text-small qt-text-secondary">Forbidden phrase</span>
             <input
               type="text"
               value={draft}
@@ -166,7 +166,7 @@ export function TabooSettings() {
       <div className="qt-settings-shell space-y-2">
         <div className="qt-settings-section-heading">Forbidden phrases</div>
         {phrases.length === 0 ? (
-          <p className="qt-text-small text-muted-foreground italic">
+          <p className="qt-text-small qt-text-secondary italic">
             Nothing forbidden yet &mdash; every tongue in the house runs free.
           </p>
         ) : (

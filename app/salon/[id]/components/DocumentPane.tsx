@@ -459,7 +459,7 @@ export default function DocumentPane({
         console.error('[DocumentPane] Editor error:', error)
       },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- LexicalComposer reads initialConfig only at mount; later isLLMEditing changes reach the editor via editor.setEditable
     [],
   )
 

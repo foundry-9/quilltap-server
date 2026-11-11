@@ -70,7 +70,7 @@ export function WardrobeInstructionsSection({ container }: WardrobeInstructionsS
     <div className="border qt-border-default rounded-lg mb-3">
       <button
         type="button"
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm qt-text-secondary hover:text-foreground"
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm qt-text-secondary hover:qt-text"
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
       >

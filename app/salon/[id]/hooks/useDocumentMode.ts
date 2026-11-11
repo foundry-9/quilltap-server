@@ -745,7 +745,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
   // documentMode changes (e.g. an LLM open/close persisted the flag).
   useEffect(() => {
     if (!chat) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; contract predates the query migration
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors the server chat row into local document-mode state whenever its documentMode changes
     const mode = applyChatState(chat)
     if (mode !== 'normal') {
       void reconcileOpenDocuments()
@@ -754,7 +754,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       setOpenDocs([])
       setFocusedDocId(null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on chat.documentMode/dividerPosition so a refetched chat object does not re-reconcile; chat, reconcileOpenDocuments and removeEntry omitted on purpose
   }, [applyChatState, chat?.documentMode, chat?.dividerPosition])
 
   // Cleanup all autosave timers on unmount.

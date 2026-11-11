@@ -349,8 +349,8 @@ export default function AddCharacterDialog({
         }
       >
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
+          <div className="qt-loading-state py-12">
+            <svg className="animate-spin h-8 w-8 qt-text-brand" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
@@ -359,7 +359,7 @@ export default function AddCharacterDialog({
           <div className="space-y-6">
             {/* Character Selection */}
             <div>
-              <label className="block text-sm qt-text-primary mb-2">
+              <label className="qt-label mb-2">
                 Select Character
               </label>
 
@@ -395,7 +395,7 @@ export default function AddCharacterDialog({
                           className={`
                             p-3 rounded-lg border text-left transition-all
                             ${isSelected
-                              ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                              ? 'qt-border-primary qt-bg-primary/10 ring-2 qt-ring-brand'
                               : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
                             }
                             disabled:opacity-50 disabled:cursor-not-allowed
@@ -412,7 +412,7 @@ export default function AddCharacterDialog({
 
                             {/* Info */}
                             <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-foreground truncate">
+                              <div className="font-semibold qt-text truncate">
                                 {character.name}
                               </div>
                               {character.title && (
@@ -424,7 +424,7 @@ export default function AddCharacterDialog({
 
                             {/* Selected indicator */}
                             {isSelected && (
-                              <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
+                              <Icon name="check-circle" className="w-5 h-5 qt-text-brand flex-shrink-0" />
                             )}
                           </div>
                         </button>
@@ -453,7 +453,7 @@ export default function AddCharacterDialog({
                               className={`
                                 p-3 rounded-lg border text-left transition-all
                                 ${isSelected
-                                  ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                                  ? 'qt-border-primary qt-bg-primary/10 ring-2 qt-ring-brand'
                                   : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
                                 }
                                 disabled:opacity-50 disabled:cursor-not-allowed
@@ -470,7 +470,7 @@ export default function AddCharacterDialog({
 
                                 {/* Info */}
                                 <div className="min-w-0 flex-1">
-                                  <div className="font-semibold text-foreground truncate">
+                                  <div className="font-semibold qt-text truncate">
                                     {character.name}
                                   </div>
                                   {character.title && (
@@ -482,7 +482,7 @@ export default function AddCharacterDialog({
 
                                 {/* Selected indicator */}
                                 {isSelected && (
-                                  <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
+                                  <Icon name="check-circle" className="w-5 h-5 qt-text-brand flex-shrink-0" />
                                 )}
                               </div>
                             </button>
@@ -499,13 +499,13 @@ export default function AddCharacterDialog({
                     >
                       <div className="flex items-center gap-3">
                         {/* User Plus Icon */}
-                        <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
+                        <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 qt-text-brand flex-shrink-0">
                           <Icon name="user-plus" className="w-6 h-6" />
                         </div>
 
                         {/* Text */}
                         <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-primary truncate">
+                          <div className="font-semibold qt-text-brand truncate">
                             Create New NPC
                           </div>
                           <div className="qt-text-xs qt-text-secondary truncate">
@@ -523,13 +523,13 @@ export default function AddCharacterDialog({
                     >
                       <div className="flex items-center gap-3">
                         {/* Sparkles Icon */}
-                        <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
+                        <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 qt-text-brand flex-shrink-0">
                           <Icon name="sparkles" className="w-6 h-6" />
                         </div>
 
                         {/* Text */}
                         <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-primary truncate">
+                          <div className="font-semibold qt-text-brand truncate">
                             Summon from Lore
                           </div>
                           <div className="qt-text-xs qt-text-secondary truncate">
@@ -546,7 +546,7 @@ export default function AddCharacterDialog({
             {/* Connection Profile Selection */}
             {selectedCharacterId && (
               <div>
-                <label htmlFor={`${id}-profile`} className="block text-sm qt-text-primary mb-2">
+                <label htmlFor={`${id}-profile`} className="qt-label mb-2">
                   Controlled By
                 </label>
                 <select
@@ -593,7 +593,7 @@ export default function AddCharacterDialog({
                   checked={hasHistoryAccess}
                   onChange={(e) => setHasHistoryAccess(e.target.checked)}
                   disabled={isAdding}
-                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                  className="mt-1 qt-checkbox"
                 />
                 <div>
                   <label htmlFor="hasHistoryAccess" className="text-sm qt-text-primary cursor-pointer">
@@ -609,7 +609,7 @@ export default function AddCharacterDialog({
             {/* Join Scenario */}
             {selectedCharacterId && (
               <div>
-                <label htmlFor="joinScenario" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="joinScenario" className="qt-label mb-2">
                   How did they join? <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
                 <p className="qt-text-xs mb-2">

@@ -75,7 +75,6 @@ export type {
 
 // Chat tasks
 export {
-  summarizeChat,
   stripToolArtifacts,
   extractVisibleConversation,
   toVisibleConversationMessage,
@@ -85,7 +84,6 @@ export {
   generateHelpChatTitleFromSummary,
   generateTitleFromSummary,
   considerTitleUpdate,
-  updateContextSummary,
   foldChatSummary,
 } from './chat-tasks'
 export type { FoldSummaryInput } from './chat-tasks'

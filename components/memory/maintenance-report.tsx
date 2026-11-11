@@ -255,7 +255,7 @@ export function MaintenanceReportsTable({ reports }: { reports: MaintenanceRepor
         <tbody>
           {rows.map((r) => (
             <tr key={r.characterId}>
-              <td className="px-3 py-2 text-foreground truncate max-w-[160px]">{r.characterName ?? 'Unnamed'}</td>
+              <td className="px-3 py-2 qt-text truncate max-w-[160px]">{r.characterName ?? 'Unnamed'}</td>
               <td className="text-right px-3 py-2">{r.fold ? r.fold.folded : '—'}</td>
               <td className={`text-right px-3 py-2 ${r.demote && r.demote.excess > 0 ? 'qt-text-destructive' : ''}`}>
                 {r.demote ? `${r.demote.demotable.toLocaleString()} / ${r.demote.cap.toLocaleString()}` : '—'}

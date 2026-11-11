@@ -351,22 +351,13 @@ export function PunctuationLintPlugin({ proseMode = false }: PunctuationLintPlug
 
   useEffect(() => {
     const owner = ownerRef.current
-    if (!highlightsSupported()) {
-      console.debug('[punctuation-lint] CSS Custom Highlight API unavailable; warnings disabled')
-      return
-    }
+    // Without the CSS Custom Highlight API there is nothing to paint with.
+    if (!highlightsSupported()) return
 
-    console.debug('[punctuation-lint] mounted', { warnings: enabled, proseMode })
-    let lastCount = -1
     const refresh = () => {
       const painting = paint(editor, enabled, proseMode)
       paintedRef.current = painting.explained
       publishRanges(owner, painting)
-      // One line when the number of warnings changes — never per keystroke.
-      if (paintedRef.current.length !== lastCount) {
-        lastCount = paintedRef.current.length
-        console.debug(`[punctuation-lint] ${lastCount} warning(s)`)
-      }
     }
 
     refresh()

@@ -242,7 +242,7 @@ export function BaseModal({
       type="button"
       onClick={() => { if (!busy) onClose() }}
       disabled={busy}
-      className="qt-text-secondary hover:text-foreground transition-colors disabled:opacity-50"
+      className="qt-text-secondary hover:qt-text transition-colors disabled:opacity-50"
       aria-label="Close"
     >
       <Icon name="close" className="w-5 h-5" />

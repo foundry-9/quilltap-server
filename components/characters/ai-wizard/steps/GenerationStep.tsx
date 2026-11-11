@@ -110,23 +110,23 @@ export function GenerationStep({
           {isExpanded && (
             <div className="space-y-2 text-sm">
               <div>
-                <strong className="text-foreground">Short ({pd.shortPrompt.length} chars):</strong>
+                <strong className="qt-text">Short ({pd.shortPrompt.length} chars):</strong>
                 <p className="qt-text-secondary">{pd.shortPrompt}</p>
               </div>
               <div>
-                <strong className="text-foreground">Medium ({pd.mediumPrompt.length} chars):</strong>
+                <strong className="qt-text">Medium ({pd.mediumPrompt.length} chars):</strong>
                 <p className="qt-text-secondary">{pd.mediumPrompt}</p>
               </div>
               <div>
-                <strong className="text-foreground">Long ({pd.longPrompt.length} chars):</strong>
+                <strong className="qt-text">Long ({pd.longPrompt.length} chars):</strong>
                 <p className="qt-text-secondary">{pd.longPrompt}</p>
               </div>
               <div>
-                <strong className="text-foreground">Complete ({pd.completePrompt.length} chars):</strong>
+                <strong className="qt-text">Complete ({pd.completePrompt.length} chars):</strong>
                 <p className="qt-text-secondary">{pd.completePrompt}</p>
               </div>
               <div>
-                <strong className="text-foreground">Full Description:</strong>
+                <strong className="qt-text">Full Description:</strong>
                 <div className="prose prose-sm qt-prose-auto max-w-none mt-1">
                   <ReactMarkdown
                     components={{
@@ -154,7 +154,7 @@ export function GenerationStep({
         <div className="mt-2 space-y-2">
           {scenarios.map((s, idx) => (
             <div key={idx} className="text-sm">
-              <strong className="text-foreground">{s.title}</strong>
+              <strong className="qt-text">{s.title}</strong>
               <p className="qt-text-secondary mt-0.5 whitespace-pre-wrap">{s.content}</p>
             </div>
           ))}
@@ -176,7 +176,7 @@ export function GenerationStep({
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="qt-heading-4 text-foreground mb-2">
+          <h3 className="qt-heading-4 qt-text mb-2">
             Ready to Generate
           </h3>
           <p className="text-sm qt-text-secondary">
@@ -185,8 +185,8 @@ export function GenerationStep({
         </div>
 
         {/* Selected fields summary */}
-        <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20">
-          <h4 className="font-medium text-foreground mb-2">Fields to Generate</h4>
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/20">
+          <h4 className="font-medium qt-text mb-2">Fields to Generate</h4>
           <ul className="space-y-1">
             {Array.from(selectedFields).map((field) => (
               <li key={field} className="flex items-center gap-2 text-sm qt-text-secondary">
@@ -224,7 +224,7 @@ export function GenerationStep({
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="qt-heading-4 text-foreground mb-2">
+          <h3 className="qt-heading-4 qt-text mb-2">
             Generating Content...
           </h3>
           <p className="text-sm qt-text-secondary">
@@ -232,9 +232,9 @@ export function GenerationStep({
           </p>
         </div>
 
-        <div className="flex items-center justify-center py-8">
+        <div className="qt-loading-state">
           <div className="flex flex-col items-center gap-4">
-            <svg className="w-12 h-12 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
+            <svg className="w-12 h-12 qt-text-brand animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
@@ -273,7 +273,7 @@ export function GenerationStep({
                   ) : hasError ? (
                     <Icon name="close" className="w-5 h-5 qt-text-destructive flex-shrink-0" />
                   ) : isCurrent ? (
-                    <svg className="w-5 h-5 text-primary animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 qt-text-brand animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -283,7 +283,7 @@ export function GenerationStep({
                     </svg>
                   )}
                   <div className="flex-1 min-w-0">
-                    <span className={`font-medium ${isCompleted ? 'text-foreground' : 'qt-text-secondary'}`}>
+                    <span className={`font-medium ${isCompleted ? 'qt-text' : 'qt-text-secondary'}`}>
                       {FIELD_LABELS[field]}
                     </span>
                     {/* Show snippet for completed fields */}
@@ -312,7 +312,7 @@ export function GenerationStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="qt-heading-4 text-foreground mb-2 flex items-center gap-2">
+        <h3 className="qt-heading-4 qt-text mb-2 flex items-center gap-2">
           <Icon name="check-circle" className="w-6 h-6 qt-text-success" />
           Generation Complete
         </h3>
@@ -365,7 +365,7 @@ export function GenerationStep({
                       <circle cx="12" cy="12" r="10" strokeWidth={2} />
                     </svg>
                   )}
-                  <span className="font-medium text-foreground">{FIELD_LABELS[field]}</span>
+                  <span className="font-medium qt-text">{FIELD_LABELS[field]}</span>
                 </div>
                 <Icon name="chevron-down" className={`w-5 h-5 qt-text-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
               </button>
