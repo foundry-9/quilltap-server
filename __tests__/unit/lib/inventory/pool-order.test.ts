@@ -85,6 +85,6 @@ it('lists consulted stores in tier order, not read-settlement order (#155)', asy
 
   const pool = await loadInventoryPool(repos(), { characterId: 'c-viv', projectId: 'project-1' })
 
-  // Own, then the group tier (read weakest-first), then project, then General.
-  expect(pool.consultedMounts).toEqual(['mp-c-viv', 'mp-dangling', 'mp-covenant', 'mp-project', 'mp-general'])
+  // Own, then the group tier (strongest first, as the kernel reads every tier), then project, then General.
+  expect(pool.consultedMounts).toEqual(['mp-c-viv', 'mp-covenant', 'mp-dangling', 'mp-project', 'mp-general'])
 })

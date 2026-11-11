@@ -32,6 +32,7 @@ import { readInventoryRecords } from '@/lib/inventory/vault-readers';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryOrigin, InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { findRecordsAnywhere } from '@/lib/inventory/dependents';
+import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-store';
 import { GENERAL_INVENTORY_ORIGIN, type InventoryLocation } from '@/lib/inventory/location';
 import { resolveItem, type InventoryRecordWithOrigin } from '@/lib/inventory/resolve';
 
@@ -40,11 +41,8 @@ export interface InventoryTierMounts {
   projectMountPointIds: string[];
 }
 
-/** A tier mount the pool could not read, and why. Fail-soft readers skip it; the title lint refuses on it. */
-export interface UnreadInventoryMount {
-  mountPointId: string;
-  error: string;
-}
+/** A tier mount the pool could not read, and why. Fail-soft readers skip it; the title lint and equip refuse to guess on it. */
+export type UnreadInventoryMount = UnreadMount;
 
 export interface InventoryPool {
   /** The character whose reach this is; null for a shared tier's pool. */
@@ -73,11 +71,8 @@ export interface InventoryPool {
 
 type Layer = readonly InventoryRecordWithOrigin[];
 
-function shadow(layers: readonly Layer[]): Map<string, InventoryRecordWithOrigin> {
-  const byId = new Map<string, InventoryRecordWithOrigin>();
-  for (const layer of layers) for (const record of layer) byId.set(record.id, record);
-  return byId;
-}
+/** Shadow layers given strongest first by id (the kernel's one rule). */
+const shadow = (layers: readonly Layer[]) => shadowLayers(layers, (record) => record.id).byKey;
 
 /**
  * Build a pool from tiers already in hand. Pure but for the parent map the
@@ -92,12 +87,12 @@ export function buildInventoryPool(
   unreadMounts: readonly UnreadInventoryMount[] = [],
   consultedMounts: readonly string[] = [],
 ): InventoryPool {
-  const weakestFirst = [layers.general, layers.project, layers.group, layers.own];
-  const byId = shadow(weakestFirst);
+  const strongestFirst = [layers.own, layers.group, layers.project, layers.general];
+  const byId = shadow(strongestFirst);
   let reachableCache: InventoryRecordWithOrigin[] | null = null;
   const reachable = () => {
     reachableCache ??= Array.from(
-      shadow(weakestFirst.map((layer) => layer.filter((record) => !record.archivedAt))).values(),
+      shadow(strongestFirst.map((layer) => layer.filter((record) => !record.archivedAt))).values(),
     );
     return reachableCache;
   };
@@ -137,50 +132,17 @@ export function buildInventoryPool(
   };
 }
 
-/**
- * Read one tier's mounts, tagging each record. The mounts come strongest-
- * first, in the settled within-tier order (`orderMounts`: membership order for
- * groups, the official store first for the project), so an earlier mount's
- * record wins a same-id collision; the pool shadows later-over-earlier, hence
- * the reverse. Fails soft per mount, noting each failure in `unread` so a
- * caller that must not guess can tell "this tier is empty" from "this tier
- * was not read". Each tier keeps its own bookkeeping so the caller can
- * concatenate it in tier order after concurrent reads settle (#155).
- */
-interface TierRead {
-  records: InventoryRecordWithOrigin[];
-  /** The mounts this tier tried, in the order it tried them. */
-  consulted: string[];
-  /** The mounts this tier could not read. */
-  unread: UnreadInventoryMount[];
-}
-
-async function readTier(
+/** One tier of the pool: its mounts strongest first, each record tagged with its origin. */
+function inventoryTier(
   mountPointIds: readonly string[],
   originOf: (mountPointId: string) => InventoryOrigin,
-): Promise<TierRead> {
-  const records: InventoryRecordWithOrigin[] = [];
-  const consulted: string[] = [];
-  const unread: UnreadInventoryMount[] = [];
-  for (const mountPointId of [...mountPointIds].reverse()) {
-    consulted.push(mountPointId);
-    try {
-      const read = await readInventoryRecords(mountPointId);
-      records.push(...read.map((record) => ({ ...record, origin: originOf(mountPointId), mountPointId })));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      unread.push({ mountPointId, error: message });
-      logger.warn('[InventoryPool] Failed to read an Inventory tier; skipping it', {
-        mountPointId,
-        context: 'inventory',
-        error: message,
-      });
-    }
-  }
-  return { records, consulted, unread };
+): TierSpec<InventoryRecordWithOrigin> {
+  return {
+    mountPointIds,
+    read: async (mountPointId) =>
+      (await readInventoryRecords(mountPointId)).map((record) => ({ ...record, origin: originOf(mountPointId), mountPointId })),
+  };
 }
-
-const EMPTY_TIER: TierRead = { records: [], consulted: [], unread: [] };
 
 /**
  * The archetypes instances in the pool name that the pool itself cannot see.
@@ -267,26 +229,24 @@ export async function loadInventoryPool(
   const ownOrigin: InventoryOrigin = { scope: 'character', id: characterId, name: character?.name ?? '' };
   const projectOrigin: InventoryOrigin = { scope: 'project', id: projectId, name: projectName };
 
-  const ownTier: Promise<TierRead> = opts.ownRecords
-    ? Promise.resolve({
-        records: opts.ownRecords.map((record) => ({ ...record, origin: ownOrigin, mountPointId: ownMountPointId ?? undefined })),
-        consulted: ownMountPointId ? [ownMountPointId] : [],
-        unread: [],
-      })
-    : ownMountPointId
-      ? readTier([ownMountPointId], () => ownOrigin)
-      : Promise.resolve(EMPTY_TIER);
-  // The reads run concurrently; the bookkeeping is joined in tier order
-  // (own, group, project, General) so it never depends on settlement (#155).
-  const tierReads = await Promise.all([
-    ownTier,
-    readTier(Array.from(groupOriginByMount.keys()), (mp) => groupOriginByMount.get(mp) as InventoryOrigin),
-    readTier(projectMountPointIds.filter((mp) => mp !== ownMountPointId), () => projectOrigin),
-    readTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_INVENTORY_ORIGIN),
+  // The own tier comes from the caller when it has just read it; otherwise
+  // it is a tier like the rest. `readTiers` reads concurrently and joins the
+  // bookkeeping in tier order (own, group, project, General), #155.
+  const ownPreread = opts.ownRecords?.map((record) => ({
+    ...record,
+    origin: ownOrigin,
+    mountPointId: ownMountPointId ?? undefined,
+  }));
+  const read = await readTiers('inventory', [
+    inventoryTier(!ownPreread && ownMountPointId ? [ownMountPointId] : [], () => ownOrigin),
+    inventoryTier(Array.from(groupOriginByMount.keys()), (mp) => groupOriginByMount.get(mp) as InventoryOrigin),
+    inventoryTier(projectMountPointIds.filter((mp) => mp !== ownMountPointId), () => projectOrigin),
+    inventoryTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_INVENTORY_ORIGIN),
   ]);
-  const [own, group, project, general] = tierReads.map((tier) => tier.records);
-  const unread = tierReads.flatMap((tier) => tier.unread);
-  const consulted = tierReads.flatMap((tier) => tier.consulted);
+  const [readOwn, group, project, general] = read.layers;
+  const own: InventoryRecordWithOrigin[] = ownPreread ?? readOwn;
+  const unread = read.unread;
+  const consulted = ownPreread && ownMountPointId ? [ownMountPointId, ...read.consulted] : read.consulted;
   const layers = { own, group, project, general };
   const pool = buildInventoryPool(
     characterId,
@@ -332,10 +292,10 @@ export async function loadPoolForLocation(
     mountPointId: location.mountPointId,
   }));
   const generalMountPointId = location.scope === 'general' ? null : await getGeneralMountPointId();
-  const generalTier = generalMountPointId
-    ? await readTier([generalMountPointId], () => GENERAL_INVENTORY_ORIGIN)
-    : EMPTY_TIER;
-  const general = generalTier.records;
+  const generalTier = await readTiers('inventory', [
+    inventoryTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_INVENTORY_ORIGIN),
+  ]);
+  const [general] = generalTier.layers;
   const unread = generalTier.unread;
   const consulted = [location.mountPointId, ...generalTier.consulted];
   const empty: InventoryRecordWithOrigin[] = [];

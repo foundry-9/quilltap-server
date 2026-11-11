@@ -18,6 +18,18 @@ jest.mock('@/lib/instance-settings', () => require('@/__tests__/helpers/inventor
 jest.mock('@/lib/mount-index/tiered-mount-pool', () => require('@/__tests__/helpers/inventory-fake-store').tieredPoolModule())
 jest.mock('@/lib/mount-index/ensure-owner-store', () => ({ ensureOwnerOfficialStore: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
+/** Mounts whose Atlas read fails. */
+const unreadableMounts = new Set<string>()
+jest.mock('@/lib/atlas/vault-readers', () => {
+  const actual = jest.requireActual('@/lib/atlas/vault-readers')
+  return {
+    ...actual,
+    readAtlasRecords: async (mountPointId: string) => {
+      if (unreadableMounts.has(mountPointId)) throw new Error('disk on fire')
+      return actual.readAtlasRecords(mountPointId)
+    },
+  }
+})
 
 import { addCharacter, getFakeRepos, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
 import { resolveAtlasLocation, type AtlasLocation } from '@/lib/atlas/location'
@@ -31,6 +43,7 @@ const make = (loc: AtlasLocation, name: string, knowledge: string) =>
   createAtlasEntry(loc, { name, aliases: [], knowledge, metadata: {} } as never)
 
 beforeEach(() => {
+  unreadableMounts.clear()
   resetStore()
   addCharacter('c-a', 'Agatha')
   addCharacter('c-b', 'Bertie')
@@ -90,4 +103,13 @@ it('shadowAtlasLayers is pure: strongest layer first', () => {
     ({ id, name, aliases: [], archivedAt, origin: { scope: 'general', id: null, name: '' }, mountPointId: 'm' }) as never
   const view = shadowAtlasLayers([[e('1', 'A', 'x')], [e('2', 'a'), e('3', 'B')], [e('4', 'b')]])
   expect(view.entries.map((x: { id: string }) => x.id)).toEqual(['2', '3'])
+})
+
+it('remembers a tier it failed to read, and keeps the rest', async () => {
+  await make(await at('project', 'project-1'), 'Lighthouse', 'project')
+  await make(await at('general', null), 'Convertible', 'general')
+  unreadableMounts.add('mp-project')
+  const pool = await loadAtlasPool(repos(), { characterId: 'c-a', projectId: 'project-1' })
+  expect(pool.entries.map((e) => e.knowledge)).toEqual(['general'])
+  expect(pool.unread).toEqual([{ mountPointId: 'mp-project', error: 'disk on fire' }])
 })

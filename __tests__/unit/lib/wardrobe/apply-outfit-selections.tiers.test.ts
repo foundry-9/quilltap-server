@@ -439,9 +439,9 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       { userId: 'u1', projectMountPointIds: ['mp-a', 'mp-b'], narrator: progress as never },
     )
 
-    // Read weakest-first (the repository shadows later over earlier), so the
-    // first project store, which wins, is read last.
-    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-b', 'mp-a']]))
+    // One mount per read, strongest first (the item-store kernel's `readTiers`),
+    // so a failed mount is recorded as unread rather than swallowed.
+    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-a'], ['mp-b']]))
     expect(mockResolve).toHaveBeenCalledTimes(1)
     const [pool, slots] = mockResolve.mock.calls[0]
     expect(pool.characterId).toBe(CHAR_ID)

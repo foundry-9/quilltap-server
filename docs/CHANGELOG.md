@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Refactor: item-family kernel (phase 2: one tier reader)
+
+- New `lib/mount-index/item-store.ts`, the item-store kernel shared by the Wardrobe, the Inventory and the Atlas. `readTiers` reads a reach's tiers (concurrently, each tier's mounts strongest first) and returns `{ layers, unread, consulted }` in tier order; `shadowLayers` shadows them strongest first, first claim wins. All three pools build from it, so the Inventory no longer reads each tier reversed and shadows last-wins.
+- Every pool now knows what it failed to read: the Atlas pool and cast view gained `unread` (they swallowed a failed tier), and the wearable pool gained `unread` (the repository swallowed a failed shared store; it now reads one mount at a time with `readSharedTiers(..., { strict: true })`). The Inventory's `consultedMounts` lists a tier's mounts strongest first.
+
 #### Refactor: item-family kernel (phase 1: #186)
 
 - #186: one failed read of an Inventory tier made the next equip, unequip or pick-up rewrite the carried set without every object carried from that tier. The rewrite now keeps any stored id the pool could not resolve while a tier is unread (`heldForUnreadTiers`, `lib/inventory/equipped-set.ts`); with every tier read, an unresolvable id is still pruned. The Wardrobe does not share the shape: it edits the stored slots, never a pool-filtered copy.
