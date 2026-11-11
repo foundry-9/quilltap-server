@@ -25,6 +25,7 @@
  */
 
 import type { Database as DatabaseType } from 'better-sqlite3';
+import { checkRegexSafety } from '@/lib/utils/safe-regex';
 
 /** The SQL-visible name. SQLite's `REGEXP` operator resolves to it. */
 export const REGEXP_FUNCTION_NAME = 'regexp';
@@ -51,6 +52,8 @@ export function compileSqlRegexp(
   const key = `${flags}/${pattern}`;
   const cached = cache.get(key);
   if (cached) return { ok: true, regexp: cached };
+  const safety = checkRegexSafety(pattern);
+  if (!safety.ok) return { ok: false, reason: safety.reason };
   try {
     const regexp = new RegExp(pattern, flags);
     if (cache.size >= CACHE_LIMIT) cache.clear();

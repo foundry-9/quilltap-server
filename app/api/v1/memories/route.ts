@@ -83,6 +83,7 @@ import { patchSchemaOf } from '@/lib/schemas/patch-schema';
 import { KEYSTONES_PER_SUBJECT_MAX, MemoryKindEnum } from '@/lib/schemas/memory.types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { MemoryListSortSchema, MemoryListSortOrderSchema } from '@/lib/memory/list-sort';
 import { notFound, badRequest, serverError, validationError, successResponse, errorResponse } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
@@ -319,8 +320,16 @@ async function listMemoriesByCharacter(
   const tierParam = searchParams.get('tier');
   const tier: 'hot' | 'cold' | undefined = tierParam === 'hot' || tierParam === 'cold' ? tierParam : undefined;
   const keystoneOnly = searchParams.get('keystone') === 'true';
-  const sortBy = searchParams.get('sortBy') || 'createdAt';
-  const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+  const sortByParsed = MemoryListSortSchema.safeParse(searchParams.get('sortBy') || 'createdAt');
+  if (!sortByParsed.success) {
+    return badRequest(`Invalid sortBy; expected one of: ${MemoryListSortSchema.options.join(', ')}`);
+  }
+  const sortOrderParsed = MemoryListSortOrderSchema.safeParse(searchParams.get('sortOrder') || 'desc');
+  if (!sortOrderParsed.success) {
+    return badRequest('Invalid sortOrder; expected asc or desc');
+  }
+  const sortBy = sortByParsed.data;
+  const sortOrder = sortOrderParsed.data;
 
   // Pagination params (default: no limit = return all for backward compat)
   const limitParam = searchParams.get('limit');

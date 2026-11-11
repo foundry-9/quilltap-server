@@ -322,7 +322,11 @@ export interface BackupData {
   llmLogs: LLMLog[];
 
   /** Array of PluginConfig entities (user plugin configurations) */
-  pluginConfigs?: PluginConfig[];
+  /**
+   * Plugin configs with secret keys removed; `_redactedKeys` names what was
+   * withheld (`['*']` when the plugin's manifest was unavailable).
+   */
+  pluginConfigs?: Array<PluginConfig & { _redactedKeys?: string[] }>;
 
   /** Array of ChatSettings entities (user chat/display settings) */
   chatSettings?: ChatSettings[];
@@ -569,8 +573,17 @@ export interface RestoreSummary {
   /** Number of WardrobeItem entities restored */
   wardrobeItems?: number;
 
-  /** Number of npm plugins restored */
+  /**
+   * Number of npm plugins restored. Restore never installs plugin code, so a
+   * completed restore reports 0; a preview reports how many the backup holds.
+   */
   npmPlugins?: number;
+
+  /**
+   * Names of the npm plugins the backup holds. They are not installed by a
+   * restore; the operator reinstalls the ones they want.
+   */
+  npmPluginNames?: string[];
 
   /** Number of CharacterPluginData entities restored */
   characterPluginData?: number;

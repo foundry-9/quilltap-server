@@ -247,6 +247,10 @@ A delimiter's span may hold another's: emphasis inside dialogue (`"I said *stop*
 
 A delimiter is defined once and drives three things at once: the composer toolbar button, and how matching text is styled in both the live chat and the server-rendered views — so they always agree.
 
+#### Class Names and Patterns, Kept Respectable
+
+A rendering pattern's CSS class name (and a dialogue class name) takes only letters, digits, underscores, hyphens and spaces; offer it anything else and the save is politely refused, while older stored names are tidied on read. A pattern itself may run to 500 characters and may not nest repetition after the fashion of `(a+)+`; such a pattern is refused on save, and one already on the shelf is simply skipped when the text is dressed.
+
 #### Draft Formatting Instructions
 
 Next to the **LLM Prompt** label is a **Draft formatting instructions** button. Click it to append a starter paragraph describing your current delimiters to the prompt (for example, "Narration and action: wrap in `*…*`"). It knows about unmarked narration, curly-quote and unclosed-paragraph wraps, and a template that has taken the asterisk from Markdown. It is only a starting point — edit the text freely; the prompt remains exactly what is sent to the model.

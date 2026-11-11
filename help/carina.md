@@ -112,6 +112,8 @@ Brahma is a creature apart, and a few particulars follow from that:
 
 Because those powers are considerable, **not everyone may ring Brahma's bell.** The line opens for you, the proprietor, whenever you type the markup yourself; for your own user-controlled persona; and for any character granted **system transparency** (the same covenant that lets a character see behind the establishment's staff curtain). A character without that standing who writes `@Brahma:` — or reaches for the tool — receives the very same "no answerer by that name" reply as if Brahma had never existed. The Console stays invisible to those not in the know.
 
+In a turn limited to looking things up (a Storyteller bid, or an autonomous room's capped turn), asking Brahma is refused and Prospero says so; every other answerer works under the same limit as the turn that asked.
+
 Finally, a point of precedence: should you happen to keep a real character of your own named "Brahma," **your character wins.** The Console only answers to the name when no character of yours bears it, so your own creations are never shadowed.
 
 ## Errors

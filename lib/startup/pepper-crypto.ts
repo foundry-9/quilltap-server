@@ -107,8 +107,11 @@ export function decryptPepperWithParams(
       params.algorithm as 'aes-256-gcm',
       new Uint8Array(key),
       new Uint8Array(iv),
+      { authTagLength: 16 },
     )
-    decipher.setAuthTag(new Uint8Array(Buffer.from(bundle.authTag, 'hex')))
+    const tag = Buffer.from(bundle.authTag, 'hex')
+    if (tag.length !== 16) return null
+    decipher.setAuthTag(new Uint8Array(tag))
     let plaintext = decipher.update(bundle.ciphertext, 'hex', 'utf8')
     plaintext += decipher.final('utf8')
     return plaintext

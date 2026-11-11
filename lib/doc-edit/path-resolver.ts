@@ -14,6 +14,7 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { PathOutsideBaseError, resolveInsideDetailed } from '@/lib/paths/resolve-inside';
 import { getFilesDir } from '@/lib/paths';
 import { getRepositories } from '@/lib/repositories/factory';
 import { projectRosterAdmits, PROJECT_ROSTER_REFUSAL } from '@/lib/projects/roster-access';
@@ -209,54 +210,23 @@ function isAbsolutePath(p: string): boolean {
 }
 
 /**
- * Safely resolve a real path with fallback to path.resolve if realpath fails.
- *
- * When the leaf doesn't exist yet (e.g. a new file we're about to write),
- * walks up the path to the deepest existing ancestor, realpaths *that*, then
- * re-attaches the missing tail. This keeps boundary checks correct on data
- * directories that live behind a symlink — e.g. `~/iCloud` on macOS, which
- * resolves to `~/Library/Mobile Documents/com~apple~CloudDocs`. Without the
- * walk-up, the file's realpath would expand the symlink while a missing
- * sibling's `path.resolve` would not, and the two sides of a containment
- * check would disagree even though both refer to the same tree.
+ * Resolve `relativePath` under `baseDir` with symlinks resolved on both sides
+ * (`resolveInsideDetailed`). A leaf that does not exist yet is resolved
+ * through its deepest existing ancestor, so data directories behind a symlink
+ * (e.g. `~/iCloud` on macOS) compare correctly, and a link inside the base
+ * that points elsewhere is reported as outside.
  */
-async function safeRealpath(p: string): Promise<string> {
+async function containedRealpaths(
+  baseDir: string,
+  relativePath: string
+): Promise<{ realBase: string; realPath: string; inside: boolean }> {
   try {
-    return await fs.realpath(p);
-  } catch {
-    // Walk up to the deepest existing ancestor and realpath that, then
-    // re-attach the unresolved tail. This handles "file doesn't exist yet"
-    // without losing symlink resolution on the parent directory.
-    const tail: string[] = [];
-    let current = path.resolve(p);
-    while (current !== path.dirname(current)) {
-      const parent = path.dirname(current);
-      try {
-        const realParent = await fs.realpath(parent);
-        return path.join(realParent, ...tail.reverse(), path.basename(current));
-      } catch {
-        tail.push(path.basename(current));
-        current = parent;
-      }
-    }
-    return path.resolve(p);
+    const resolved = await resolveInsideDetailed(baseDir, relativePath, { realpath: true });
+    return { realBase: resolved.realBase, realPath: resolved.realPath, inside: true };
+  } catch (err) {
+    if (!(err instanceof PathOutsideBaseError)) throw err;
+    return { realBase: baseDir, realPath: path.resolve(baseDir, relativePath), inside: false };
   }
-}
-
-/**
- * Verify that a resolved path stays within the expected base directory.
- * Both arguments must already be realpath'd (or both unresolved) so symlink
- * expansion is symmetric — see `safeRealpath` for why that matters.
- */
-function verifyPathIsWithinBase(resolvedPath: string, baseDir: string): boolean {
-  // Normalize both paths for comparison
-  const normalizedResolved = path.normalize(resolvedPath);
-  const normalizedBase = path.normalize(baseDir);
-
-  // Ensure base ends with separator for proper containment check
-  const baseDirWithSep = normalizedBase.endsWith(path.sep) ? normalizedBase : normalizedBase + path.sep;
-
-  return normalizedResolved.startsWith(baseDirWithSep) || normalizedResolved === normalizedBase;
 }
 
 /**
@@ -577,14 +547,10 @@ async function resolveDocumentStorePath(
   }
 
   const baseDir = mountPoint.basePath;
-  const joinedPath = path.join(baseDir, relativePath);
-  const [realBase, realPath] = await Promise.all([
-    safeRealpath(baseDir),
-    safeRealpath(joinedPath),
-  ]);
+  const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
 
   // Verify path stays within base directory
-  if (!verifyPathIsWithinBase(realPath, realBase)) {
+  if (!inside) {
     logger.warn(
       `Path resolution escaped base directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
@@ -657,12 +623,8 @@ async function resolveProjectPath(
       }
 
       const baseDir = mountPoint.basePath;
-      const joinedPath = path.join(baseDir, relativePath);
-      const [realBase, realPath] = await Promise.all([
-        safeRealpath(baseDir),
-        safeRealpath(joinedPath),
-      ]);
-      if (!verifyPathIsWithinBase(realPath, realBase)) {
+      const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
+      if (!inside) {
         logger.warn(
           `Path resolution escaped official project mount: ${relativePath} -> ${realPath} (base: ${realBase})`
         );
@@ -688,14 +650,10 @@ async function resolveProjectPath(
 
   const filesDir = getFilesDir();
   const baseDir = path.join(filesDir, context.projectId);
-  const joinedPath = path.join(baseDir, relativePath);
-  const [realBase, realPath] = await Promise.all([
-    safeRealpath(baseDir),
-    safeRealpath(joinedPath),
-  ]);
+  const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
 
   // Verify path stays within project directory
-  if (!verifyPathIsWithinBase(realPath, realBase)) {
+  if (!inside) {
     logger.warn(
       `Path resolution escaped project directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
@@ -722,14 +680,10 @@ async function resolveGeneralPath(
 ): Promise<ResolvedPath> {
   const filesDir = getFilesDir();
   const baseDir = path.join(filesDir, '_general');
-  const joinedPath = path.join(baseDir, relativePath);
-  const [realBase, realPath] = await Promise.all([
-    safeRealpath(baseDir),
-    safeRealpath(joinedPath),
-  ]);
+  const { realBase, realPath, inside } = await containedRealpaths(baseDir, relativePath);
 
   // Verify path stays within general directory
-  if (!verifyPathIsWithinBase(realPath, realBase)) {
+  if (!inside) {
     logger.warn(
       `Path resolution escaped general directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );

@@ -30,7 +30,7 @@ import {
 } from '@/lib/chat/impersonation-voice-legacy';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
-import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
+import { getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { rawQuery } from '@/lib/database/manager';
 import {
@@ -48,6 +48,7 @@ import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
+import { readArchiveFile, listNpmPluginsInExtractedBackup } from './archive-guard';
 import { deleteUserData } from './delete-service';
 import {
   planAtlasImagePointerFixes,
@@ -510,7 +511,7 @@ export async function restore(
     let pluginConfigsRestored = 0;
     for (const config of data.pluginConfigs || []) {
       try {
-        const { id, createdAt, updatedAt, ...configData } = config;
+        const { id, createdAt, updatedAt, _redactedKeys, ...configData } = config;
         // Use upsert to merge with existing configs or create new ones.
         // `enabled` rides along: without it a plugin the user had switched
         // off silently came back on after a restore.
@@ -521,6 +522,15 @@ export async function restore(
           configData.enabled
         );
         pluginConfigsRestored++;
+        const redacted = _redactedKeys ?? [];
+        if (redacted.length > 0) {
+          moduleLogger.debug('Restored plugin config without its secrets', { pluginName: config.pluginName, redacted });
+          warnings.push(
+            redacted.includes('*')
+              ? `Plugin "${config.pluginName}" was backed up without its settings because its manifest was unavailable; re-enter them.`
+              : `Plugin "${config.pluginName}" was restored without these secret settings: ${redacted.join(', ')}. Re-enter them.`
+          );
+        }
       } catch (error) {
         warnings.push(`Failed to restore plugin config for "${config.pluginName}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore plugin config', { pluginName: config.pluginName, error });
@@ -916,8 +926,9 @@ export async function restore(
           const blob = (data.docMountBlobs || [])[i];
           const original = originalBlobs[i] ?? blob;
           try {
-            const bytesPath = path.join(blobsDir, original.id);
-            const bytes = await fs.promises.readFile(bytesPath);
+            // The id comes from the archive's own JSON; the read is held
+            // inside mount-blobs/ and must be a regular file.
+            const bytes = await readArchiveFile(blobsDir, original.id);
             insert.run(
               blob.id,
               blob.fileId,
@@ -1325,41 +1336,19 @@ export async function restore(
       }
     }
 
-    // 23. NPM Plugins (copy from extracted dir to plugins/npm directory)
-    let npmPluginsRestored = 0;
-    const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
-
-    try {
-      const pluginEntries = await fs.promises.readdir(npmPluginsSrcDir, { withFileTypes: true });
-      const npmPluginsDir = getNpmPluginsDir();
-
-      // Ensure the npm plugins directory exists
-      await fs.promises.mkdir(npmPluginsDir, { recursive: true });
-
-      for (const entry of pluginEntries) {
-        if (entry.isDirectory()) {
-          try {
-            const srcPath = path.join(npmPluginsSrcDir, entry.name);
-            const destPath = path.join(npmPluginsDir, entry.name);
-            await fs.promises.cp(srcPath, destPath, { recursive: true });
-            npmPluginsRestored++;
-            moduleLogger.debug('Restored npm plugin', { pluginName: entry.name });
-          } catch (error) {
-            warnings.push(`Failed to restore npm plugin "${entry.name}": ${error instanceof Error ? error.message : String(error)}`);
-            moduleLogger.warn('Failed to restore npm plugin', { pluginName: entry.name, error });
-          }
-        }
-      }
-
-      if (npmPluginsRestored > 0) {
-        moduleLogger.info('Restored npm plugins', {
-          count: npmPluginsRestored,
-          plugins: pluginEntries.filter((e) => e.isDirectory()).map((e) => e.name),
-        });
-      }
-    } catch {
-      // No plugins/npm directory in the backup — that's fine
-      moduleLogger.debug('No npm plugins directory in backup');
+    // 23. NPM plugins. A restore never installs plugin code: the backup's
+    // plugins/npm/ directory is left in the archive, and the operator is told
+    // which plugins it held so they can reinstall them from the Foundry.
+    const npmPluginsInBackup = await listNpmPluginsInExtractedBackup(rootPath);
+    if (npmPluginsInBackup.length > 0) {
+      warnings.push(
+        `Plugins were not reinstalled from the backup; reinstall them from the Foundry if you still want them: ${npmPluginsInBackup.join(', ')}`
+      );
+      moduleLogger.info('Backup carried npm plugins; not installed by restore', {
+        plugins: npmPluginsInBackup,
+      });
+    } else {
+      moduleLogger.debug('No npm plugins in backup');
     }
 
     // 24. User-installed theme bundles (copy from extracted dir to themes directory)
@@ -1512,7 +1501,8 @@ export async function restore(
       chatSettings: chatSettingsRestored,
       folders: foldersRestored,
       wardrobeItems: wardrobeItemsRestored,
-      npmPlugins: npmPluginsRestored,
+      npmPlugins: 0,
+      npmPluginNames: npmPluginsInBackup,
       characterPluginData: characterPluginDataRestored,
       conversationAnnotations: conversationAnnotationsRestored,
       userInstalledThemes: userInstalledThemesRestored,

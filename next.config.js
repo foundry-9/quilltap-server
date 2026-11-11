@@ -124,6 +124,36 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
+          {
+            key: 'Permissions-Policy',
+            value: 'geolocation=(), microphone=(), camera=()',
+          },
+        ],
+      },
+      {
+        // The page CSP goes everywhere except the routes that serve stored
+        // bytes (lib/api/serve-stored-bytes.ts), which send a stricter
+        // sandbox policy of their own. Next lets a config header win over a
+        // route's header of the same name, so those paths must be left out
+        // here or their policy never reaches the browser.
+        source:
+          '/:path((?!api/v1/files/|api/v1/mount-points/|api/themes/|api/v1/chats/[^/]+/qtap-target).*)',
+        headers: [
+          {
+            // Set here rather than in proxy.ts so it reaches every response,
+            // request bodies and static assets (SVG included) alike.
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js requires unsafe-eval
+              "style-src 'self' 'unsafe-inline'", // Tailwind requires unsafe-inline
+              "img-src 'self' data: https:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://api.openai.com https://api.anthropic.com https://openrouter.ai",
+              "frame-src 'self'",
+              "frame-ancestors 'self'",
+            ].join('; '),
+          },
         ],
       },
     ];

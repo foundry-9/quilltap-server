@@ -65,9 +65,24 @@ describe('authenticateUpgrade', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('accepts the opaque null origin', async () => {
+  it('refuses the opaque null origin (a sandboxed frame on any site)', async () => {
     const result = await authenticateUpgrade(req({ host: 'localhost:3000', origin: 'null' }));
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+  });
+
+  it('refuses an upgrade addressed to a host name the server does not answer to', async () => {
+    const result = await authenticateUpgrade(
+      req({ host: 'rebound.example:3000', origin: 'http://rebound.example:3000' }),
+    );
+    expect(result.ok).toBe(false);
+    expect(mockGetServerSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a cross-site upgrade flagged by Sec-Fetch-Site', async () => {
+    const result = await authenticateUpgrade(
+      req({ host: 'localhost:3000', 'sec-fetch-site': 'cross-site' }),
+    );
+    expect(result.ok).toBe(false);
   });
 
   it('refuses a cross-origin upgrade', async () => {

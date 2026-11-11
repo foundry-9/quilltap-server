@@ -64,6 +64,12 @@ import type {
   GroupCharacterMember,
 } from '@/lib/schemas/mount-index.types';
 import {
+  inspectBackupArchive,
+  verifyExtractedTree,
+  readArchiveFile,
+} from './archive-guard';
+import { isPathOutsideBaseError } from '@/lib/paths/resolve-inside';
+import {
   readJsonFile,
   readJsonArrayFile,
   readJsonArrayFileOptional,
@@ -103,11 +109,28 @@ export async function cleanupDir(dirPath: string): Promise<void> {
 async function extractZipToTemp(zipPath: string): Promise<{ extractDir: string; rootFolder: string }> {
   const extractDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'quilltap-restore-'));
 
+  // The archive is listed first: entry count, expanded size, entry names and
+  // symlink entries are checked before anything touches the disk.
+  try {
+    await inspectBackupArchive(zipPath);
+  } catch (error) {
+    await cleanupDir(extractDir);
+    throw error;
+  }
+
   moduleLogger.debug('Extracting backup zip', { zipPath, extractDir });
 
-  await execFileAsync('unzip', ['-o', zipPath, '-d', extractDir], {
-    maxBuffer: 10 * 1024 * 1024,
-  });
+  try {
+    await execFileAsync('unzip', ['-o', '-q', zipPath, '-d', extractDir], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    // The listing's sizes are the archive's own claim; the extracted tree is
+    // measured for real and must hold no symbolic links.
+    await verifyExtractedTree(extractDir);
+  } catch (error) {
+    await cleanupDir(extractDir);
+    throw error;
+  }
 
   // Find the root folder (quilltap-backup-{timestamp})
   const entries = await fs.promises.readdir(extractDir, { withFileTypes: true });
@@ -358,22 +381,30 @@ export async function getFileFromExtractedBackup(
   const usesStorageKeyLayout = (backupFormat ?? 1) >= 2 && Boolean(file.storageKey);
   const oldFormatRelPath = path.join('files', file.category, `${file.id}_${file.originalFilename}`);
 
+  // Both layouts are built from files.json, so each read is resolved inside
+  // the archive's files/ directory and must be a regular file.
+  const filesRoot = path.join(rootPath, 'files');
+
   if (usesStorageKeyLayout) {
-    const newFormatPath = path.join(rootPath, 'files', file.storageKey!);
     try {
-      await fs.promises.access(newFormatPath);
-      return await fs.promises.readFile(newFormatPath);
-    } catch {
+      return await readArchiveFile(filesRoot, file.storageKey!);
+    } catch (error) {
+      if (isPathOutsideBaseError(error)) {
+        moduleLogger.warn('Refusing backup file path outside the archive', { fileId: file.id });
+        return null;
+      }
       // Fall through to old format as fallback
     }
   }
 
   // Old format (backupFormat: 1 or unset): files/{CATEGORY}/{fileId}_{originalFilename}
-  const oldFormatPath = path.join(rootPath, oldFormatRelPath);
   try {
-    await fs.promises.access(oldFormatPath);
-    return await fs.promises.readFile(oldFormatPath);
-  } catch {
+    return await readArchiveFile(filesRoot, path.join(file.category, `${file.id}_${file.originalFilename}`));
+  } catch (error) {
+    if (isPathOutsideBaseError(error)) {
+      moduleLogger.warn('Refusing backup file path outside the archive', { fileId: file.id });
+      return null;
+    }
     moduleLogger.warn('File not found in extracted backup', {
       fileId: file.id,
       triedPaths: usesStorageKeyLayout
@@ -381,19 +412,5 @@ export async function getFileFromExtractedBackup(
         : [oldFormatRelPath],
     });
     return null;
-  }
-}
-
-/**
- * Counts npm plugin directories in the extracted backup
- */
-export async function countNpmPluginsInExtractedBackup(rootPath: string): Promise<number> {
-  const pluginsPath = path.join(rootPath, 'plugins', 'npm');
-
-  try {
-    const entries = await fs.promises.readdir(pluginsPath, { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).length;
-  } catch {
-    return 0;
   }
 }

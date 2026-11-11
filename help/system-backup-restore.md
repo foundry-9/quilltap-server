@@ -166,6 +166,8 @@ problem: a thin pipe, a full disc, a mail attachment that will not have it.
    - npm plugins are extracted and ready to use
    - The restore summary may mention re-indexing; see below
 
+**A word on plugins and secrets.** A restore never installs plugin code from a backup; the preview and the result simply list the plugins that were aboard, so that you may reinstall them from the Plugins page at your leisure. Archives containing symbolic links, or an unreasonable number of entries or quantity of data, are refused at the door. Plugin settings a plugin marks as secret (the MCP plugin's server list, tokens and all, for one) are not kept in backups, and must be typed in again after a restore; any values already on the instance are left undisturbed.
+
 ## After a Restore: The Indexing Sweep
 
 Every restore now ends with a brief inspection of the search indexes it has just

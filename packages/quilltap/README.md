@@ -37,6 +37,7 @@ quilltap [options]
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
+  --host <address>        Address to bind (default: 127.0.0.1)
   -d, --data-dir <path>   Data directory (default: platform-specific)
   -o, --open              Open browser after server starts
   -v, --version           Show version number
@@ -55,6 +56,10 @@ quilltap --port 8080
 
 # Use a custom data directory
 quilltap --data-dir /mnt/data/quilltap
+
+# Listen on every interface (Quilltap has no login: trusted networks only;
+# reach it by IP address, or list host names in QUILLTAP_ALLOWED_HOSTS)
+quilltap --host 0.0.0.0
 
 # Start and open browser automatically
 quilltap --open

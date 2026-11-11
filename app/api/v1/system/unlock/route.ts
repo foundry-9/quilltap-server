@@ -16,7 +16,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, successResponse, unauthorized } from '@/lib/api/responses';
+import { badRequest, errorResponse, serverError, successResponse, unauthorized } from '@/lib/api/responses';
+import {
+  unlockRetryAfterSeconds,
+  recordUnlockFailure,
+  recordUnlockSuccess,
+} from '@/lib/startup/unlock-throttle';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 
 export const dynamic = 'force-dynamic';
@@ -76,7 +81,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   return dispatchAction(request, {
     setup: () => runUnlockAction(request, 'setup', (body) => handleSetup(getPassphrase(body))),
-    unlock: () => runUnlockAction(request, 'unlock', (body) => handleUnlock(getPassphrase(body))),
+    unlock: () => runUnlockAction(request, 'unlock', (body) => handleThrottledUnlock(getPassphrase(body))),
     store: () => runUnlockAction(request, 'store', (body) => handleStore(getPassphrase(body))),
     'change-passphrase': () => runUnlockAction(request, 'change-passphrase', handleChangePassphrase),
     lock: () => runUnlockAction(request, 'lock', () => handleLock()),
@@ -239,6 +244,32 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
     requiresRestart,
     message: 'Encryption key generated and stored. Save this value — it will not be displayed again.',
   });
+}
+
+/**
+ * Apply the attempt throttle around {@link handleUnlock}: refuse with 429 and
+ * Retry-After while a lockout window is open, count a 401 as a failure, and
+ * clear the counter on success.
+ */
+async function handleThrottledUnlock(passphrase: string): Promise<NextResponse> {
+  const retryAfter = unlockRetryAfterSeconds();
+  if (retryAfter > 0) {
+    unlockLogger.warn('Unlock attempt refused: too many failed attempts', { retryAfterSeconds: retryAfter });
+    const response = errorResponse('Too many failed unlock attempts. Try again later.', 429, {
+      retryAfterSeconds: retryAfter,
+    });
+    response.headers.set('Retry-After', String(retryAfter));
+    return response;
+  }
+
+  const response = await handleUnlock(passphrase);
+  if (response.status === 401) {
+    recordUnlockFailure();
+    unlockLogger.debug('Unlock failure recorded for throttling');
+  } else if (response.ok) {
+    recordUnlockSuccess();
+  }
+  return response;
 }
 
 /**

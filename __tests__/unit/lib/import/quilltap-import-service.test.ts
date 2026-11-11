@@ -241,6 +241,25 @@ describe('quilltap-import-service', () => {
       expect(preview.entities.memories!.count).toBe(2);
     });
 
+    it('shows the folder a host-path document store names, and none for a database store', async () => {
+      const exportData = createMockQuilltapExport();
+      Object.assign(exportData.data as any, {
+        mountPoints: [
+          { id: 'fs-1', name: 'Notes', basePath: '/home/someone/notes', mountType: 'filesystem',
+            storeType: 'documents', includePatterns: [], excludePatterns: [], enabled: true },
+          { id: 'db-1', name: 'Lore', basePath: '', mountType: 'database',
+            storeType: 'documents', includePatterns: [], excludePatterns: [], enabled: true },
+        ],
+      });
+
+      const preview = await previewImport(testUserId, exportData);
+
+      const stores = preview.entities.documentStores!;
+      expect(stores[0].basePath).toBe('/home/someone/notes');
+      expect(stores[0].detail).toMatch(/disabled/);
+      expect(stores[1].basePath).toBeUndefined();
+    });
+
     it('should report no conflicts when all entities are new', async () => {
       const exportData = createMockQuilltapExport();
 

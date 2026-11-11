@@ -30476,69 +30476,168 @@ function getQuilltapUserAgent() {
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // url-validator.ts
-var PRIVATE_IP_PATTERNS = [
-  /^127\./,
-  // Loopback
-  /^10\./,
-  // Private Class A
-  /^192\.168\./,
-  // Private Class C
-  /^172\.(1[6-9]|2[0-9]|3[01])\./,
-  // Private Class B (172.16-31.x.x)
-  /^169\.254\./,
-  // Link-local
-  /^0\./,
-  // Current network
-  /^::1$/,
-  // IPv6 loopback
-  /^fe80:/i,
-  // IPv6 link-local
-  /^fc00:/i,
-  // IPv6 unique local
-  /^fd[0-9a-f]{2}:/i
-  // IPv6 unique local
-];
-var BLOCKED_HOSTNAMES = [
-  "localhost",
-  "localhost.localdomain",
-  "local",
-  "0.0.0.0",
-  "::",
-  "::1"
-];
+var import_node_net = require("node:net");
+var import_node_dns = require("node:dns");
+function normalizeHost(host) {
+  let h = host.trim();
+  if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
+  const zone = h.indexOf("%");
+  if (zone !== -1) h = h.slice(0, zone);
+  return h.toLowerCase().replace(/\.$/, "");
+}
+function parseIPv4(ip) {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  const out = [];
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p)) return null;
+    const n = Number(p);
+    if (n > 255) return null;
+    out.push(n);
+  }
+  return out;
+}
+function parseIPv6(ip) {
+  let s = ip;
+  if (s.includes(".")) {
+    const lastColon = s.lastIndexOf(":");
+    const v4 = parseIPv4(s.slice(lastColon + 1));
+    if (!v4) return null;
+    s = `${s.slice(0, lastColon + 1)}${(v4[0] << 8 | v4[1]).toString(16)}:${(v4[2] << 8 | v4[3]).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const toGroups = (part) => {
+    if (part === "") return [];
+    const groups = [];
+    for (const g of part.split(":")) {
+      if (!/^[0-9a-f]{1,4}$/i.test(g)) return null;
+      groups.push(parseInt(g, 16));
+    }
+    return groups;
+  };
+  const head = toGroups(halves[0]);
+  if (!head) return null;
+  if (halves.length === 1) return head.length === 8 ? head : null;
+  const tail = toGroups(halves[1]);
+  if (!tail) return null;
+  const fill = 8 - head.length - tail.length;
+  if (fill < 1) return null;
+  return [...head, ...new Array(fill).fill(0), ...tail];
+}
+function isPrivateIPv4Bytes(b) {
+  const [a, c, d] = b;
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 100 && c >= 64 && c <= 127) return true;
+  if (a === 169 && c === 254) return true;
+  if (a === 172 && c >= 16 && c <= 31) return true;
+  if (a === 192 && c === 0 && (d === 0 || d === 2)) return true;
+  if (a === 192 && c === 168) return true;
+  if (a === 198 && (c === 18 || c === 19)) return true;
+  if (a === 198 && c === 51 && d === 100) return true;
+  if (a === 203 && c === 0 && d === 113) return true;
+  return a >= 224;
+}
+var v4From = (hi, lo) => [hi >> 8, hi & 255, lo >> 8, lo & 255];
+function isNonPublicAddress(address) {
+  const ip = normalizeHost(address);
+  const family = (0, import_node_net.isIP)(ip);
+  if (family === 4) {
+    const b = parseIPv4(ip);
+    return b === null || isPrivateIPv4Bytes(b);
+  }
+  if (family === 6) {
+    const g = parseIPv6(ip);
+    if (!g) return true;
+    if (g.slice(0, 5).every((x) => x === 0) && g[5] === 65535) return isPrivateIPv4Bytes(v4From(g[6], g[7]));
+    if (g.slice(0, 6).every((x) => x === 0)) {
+      if (g[6] === 0 && g[7] <= 1) return true;
+      return isPrivateIPv4Bytes(v4From(g[6], g[7]));
+    }
+    if (g[0] === 100 && g[1] === 65435 && g.slice(2, 6).every((x) => x === 0)) return isPrivateIPv4Bytes(v4From(g[6], g[7]));
+    if (g[0] === 8194) return isPrivateIPv4Bytes(v4From(g[1], g[2]));
+    if (g[0] === 8193 && (g[1] === 0 || g[1] === 3512)) return true;
+    if (g[0] === 256 && g[1] === 0 && g[2] === 0 && g[3] === 0) return true;
+    if ((g[0] & 65024) === 64512) return true;
+    if ((g[0] & 65472) === 65152 || (g[0] & 65472) === 65216) return true;
+    if ((g[0] & 65280) === 65280) return true;
+    return false;
+  }
+  return true;
+}
+function isPrivateHost(hostname) {
+  const h = normalizeHost(hostname);
+  if (h === "localhost" || h.endsWith(".localhost") || h === "localhost.localdomain" || h === "local") {
+    return true;
+  }
+  if ((0, import_node_net.isIP)(h)) return isNonPublicAddress(h);
+  return false;
+}
+var escapeRegex = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+var globToSegment = (s) => escapeRegex(s).replace(/\*/g, "[^/]*");
 function parseUrlPatterns(patternsString) {
   if (!patternsString || typeof patternsString !== "string") {
     return [];
   }
-  return patternsString.split("\n").map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith("#")).map((pattern) => {
-    const isWildcard = pattern.includes("*");
-    let regexStr = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-    if (!regexStr.startsWith("http")) {
-      regexStr = `^https?://${regexStr}`;
-    } else {
-      regexStr = `^${regexStr}`;
+  const out = [];
+  for (const raw of patternsString.split("\n")) {
+    const pattern = raw.trim();
+    if (!pattern || pattern.startsWith("#")) continue;
+    let rest = pattern;
+    let scheme = null;
+    const schemeMatch = rest.match(/^(https?):\/\//i);
+    if (schemeMatch) {
+      scheme = schemeMatch[1].toLowerCase();
+      rest = rest.slice(schemeMatch[0].length);
+    } else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(rest)) {
+      continue;
     }
-    if (!regexStr.endsWith(".*")) {
-      regexStr = `${regexStr}($|/|\\?|#)`;
+    const cut = rest.search(/[/?#]/);
+    const hostPort = cut === -1 ? rest : rest.slice(0, cut);
+    let pathPart = cut === -1 ? "" : rest.slice(cut);
+    pathPart = pathPart.split(/[?#]/)[0].replace(/\/+$/, "");
+    let host = hostPort;
+    let port = null;
+    const portMatch = hostPort.match(/^(.*):(\d+)$/);
+    if (portMatch && !(portMatch[1].includes(":") && !portMatch[1].endsWith("]"))) {
+      host = portMatch[1];
+      port = portMatch[2];
     }
-    return {
+    host = normalizeHost(host);
+    if (!host) continue;
+    out.push({
       pattern,
-      isWildcard,
-      regex: new RegExp(regexStr, "i")
-    };
-  });
+      isWildcard: pattern.includes("*"),
+      scheme,
+      hostRegex: new RegExp(`^${globToSegment(host)}$`, "i"),
+      port,
+      pathRegex: pathPart ? new RegExp(`^${globToSegment(pathPart)}(?:/.*)?$`, "i") : null
+    });
+  }
+  return out;
 }
 function urlMatchesPatterns(url, patterns) {
   if (patterns.length === 0) {
     return false;
   }
-  return patterns.some((pattern) => pattern.regex.test(url));
-}
-function isPrivateHost(hostname) {
-  if (BLOCKED_HOSTNAMES.includes(hostname.toLowerCase())) {
-    return true;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
   }
-  return PRIVATE_IP_PATTERNS.some((pattern) => pattern.test(hostname));
+  const scheme = parsed.protocol.replace(":", "");
+  if (scheme !== "http" && scheme !== "https") return false;
+  const host = normalizeHost(parsed.hostname);
+  const defaultPort = scheme === "https" ? "443" : "80";
+  const effectivePort = parsed.port || defaultPort;
+  return patterns.some((p) => {
+    if (p.scheme && p.scheme !== scheme) return false;
+    if (!p.hostRegex.test(host)) return false;
+    if ((p.port ?? defaultPort) !== effectivePort) return false;
+    if (p.pathRegex && !p.pathRegex.test(parsed.pathname)) return false;
+    return true;
+  });
 }
 function validateUrlSecurity(urlString) {
   try {
@@ -30582,6 +30681,26 @@ function validateUrl(urlString, allowedPatterns) {
   }
   return { valid: true };
 }
+async function validateUrlResolved(urlString, allowedPatterns, lookup = (h) => import_node_dns.promises.lookup(h, { all: true, verbatim: true })) {
+  const basic = validateUrl(urlString, allowedPatterns);
+  if (!basic.valid) return basic;
+  const host = normalizeHost(new URL(urlString).hostname);
+  if ((0, import_node_net.isIP)(host)) return { valid: true };
+  try {
+    const addresses = await lookup(host);
+    if (!addresses.length) {
+      return { valid: false, error: `DNS lookup failed: no addresses for ${host}` };
+    }
+    for (const a of addresses) {
+      if (isNonPublicAddress(a.address)) {
+        return { valid: false, error: `Access to private/local addresses is blocked: ${host}` };
+      }
+    }
+  } catch {
+    return { valid: false, error: `DNS lookup failed: Could not resolve hostname` };
+  }
+  return { valid: true };
+}
 
 // curl-handler.ts
 var DEFAULTS = {
@@ -30592,6 +30711,31 @@ var DEFAULTS = {
   followRedirects: true
 };
 var MAX_TIMEOUT = 60;
+var MAX_REDIRECT_HOPS = 5;
+var MAX_READ_BYTES = 10 * 1024 * 1024;
+async function readBodyCapped(response, ceiling) {
+  if (!response.body) {
+    return { text: "", exceeded: false };
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  let exceeded = false;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > ceiling) {
+      chunks.push(value.slice(0, value.length - (total - ceiling)));
+      exceeded = true;
+      await reader.cancel();
+      break;
+    }
+    chunks.push(value);
+  }
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(Buffer.concat(chunks));
+  return { text, exceeded };
+}
 function parseHeaders(headerInput) {
   const headers = new Headers();
   if (!headerInput) {
@@ -30638,7 +30782,7 @@ async function executeCurlRequest(input, config, browserUserAgent) {
     ...config
   };
   const allowedPatterns = parseUrlPatterns(effectiveConfig.allowedUrlPatterns);
-  const urlValidation = validateUrl(input.url, allowedPatterns);
+  const urlValidation = await validateUrlResolved(input.url, allowedPatterns);
   if (!urlValidation.valid) {
     return {
       success: false,
@@ -30663,7 +30807,7 @@ async function executeCurlRequest(input, config, browserUserAgent) {
       method,
       headers,
       signal: controller.signal,
-      redirect: followRedirects ? "follow" : "manual"
+      redirect: "manual"
     };
     if (input.data && ["POST", "PUT", "PATCH"].includes(method)) {
       fetchOptions.body = input.data;
@@ -30675,9 +30819,47 @@ async function executeCurlRequest(input, config, browserUserAgent) {
         }
       }
     }
-    const response = await fetch(input.url, fetchOptions);
+    let currentUrl = input.url;
+    let response = await fetch(currentUrl, fetchOptions);
+    if (followRedirects) {
+      for (let hop = 0; response.status >= 300 && response.status < 400 && response.headers.get("location"); hop++) {
+        if (hop >= MAX_REDIRECT_HOPS) {
+          clearTimeout(timeoutId);
+          await response.body?.cancel();
+          return {
+            success: false,
+            error: `Too many redirects (limit ${MAX_REDIRECT_HOPS})`,
+            timing: { totalMs: Date.now() - startTime }
+          };
+        }
+        const nextUrl = new URL(response.headers.get("location"), currentUrl).toString();
+        await response.body?.cancel();
+        const hopValidation = await validateUrlResolved(nextUrl, allowedPatterns);
+        if (!hopValidation.valid) {
+          clearTimeout(timeoutId);
+          return {
+            success: false,
+            error: `Redirect blocked: ${hopValidation.error}`,
+            timing: { totalMs: Date.now() - startTime }
+          };
+        }
+        const sameOrigin = new URL(nextUrl).origin === new URL(currentUrl).origin;
+        if (!sameOrigin) {
+          headers.delete("Authorization");
+          headers.delete("Cookie");
+        }
+        if (response.status === 303 || (response.status === 301 || response.status === 302) && fetchOptions.method === "POST") {
+          fetchOptions.method = "GET";
+          delete fetchOptions.body;
+          headers.delete("Content-Type");
+        }
+        currentUrl = nextUrl;
+        response = await fetch(currentUrl, fetchOptions);
+      }
+    }
     clearTimeout(timeoutId);
-    let bodyText = await response.text();
+    const bodyRead = await readBodyCapped(response, MAX_READ_BYTES);
+    let bodyText = bodyRead.text;
     if (input.render) {
       const contentType = response.headers.get("content-type") || "";
       if (contentType.includes("text/html")) {
@@ -30692,10 +30874,12 @@ async function executeCurlRequest(input, config, browserUserAgent) {
         });
       }
     }
-    const { body, truncated, originalSize } = truncateBody(
+    const truncation = truncateBody(
       bodyText,
       effectiveConfig.maxResponseSize
     );
+    const { body, originalSize } = truncation;
+    const truncated = truncation.truncated || bodyRead.exceeded;
     const output = {
       success: true,
       statusCode: response.status,
@@ -30708,8 +30892,8 @@ async function executeCurlRequest(input, config, browserUserAgent) {
     if (truncated) {
       output.originalSize = originalSize;
     }
-    if (response.redirected && response.url !== input.url) {
-      output.finalUrl = response.url;
+    if (currentUrl !== input.url) {
+      output.finalUrl = currentUrl;
     }
     return output;
   } catch (error2) {

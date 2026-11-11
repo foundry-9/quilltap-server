@@ -473,6 +473,11 @@ describe('SQLite Query Translator', () => {
       expect(result).toBe('');
     });
 
+    it('should escape embedded double quotes in a sort field', () => {
+      const result = translateSort({ 'a" DESC, (SELECT 1) --': 1 });
+      expect(result).toBe('ORDER BY "a"" DESC, (SELECT 1) --" ASC');
+    });
+
     it('should handle single field ascending with 1', () => {
       const result = translateSort({ name: 1 });
       expect(result).toBe('ORDER BY "name" ASC');

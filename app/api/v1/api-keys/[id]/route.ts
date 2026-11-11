@@ -74,7 +74,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
           lastUsed: apiKey.lastUsed,
           createdAt: apiKey.createdAt,
           updatedAt: apiKey.updatedAt,
-          keyPreview: maskApiKey(apiKey.key_value.substring(0, 32)),
+          keyPreview: maskApiKey(apiKey.key_value),
         },
       });
     } catch (error) {

@@ -78,6 +78,8 @@ Behind every character, every conversation, every memory and document and tallie
 Three points of etiquette govern the arrangement:
 
 - **It reads only; it never writes.** The Console may pore over the ledgers to its heart's content, but the pen is locked away. Any attempt to alter, add, or erase is refused before it can run — querying is perfectly safe, and you may invite it to explore freely.
+- **Only the introspection PRAGMAs are admitted.** `run_sql` accepts `table_info`, `table_xinfo`, `table_list`, `index_list`, `index_info`, `index_xinfo` and `foreign_key_list` (or the `SELECT * FROM pragma_table_info('x')` forms), and runs on a read-only connection.
+
 - **The three ledgers are kept in separate rooms.** There is the **main** ledger (characters, chats, messages, memories, profiles, projects), the **engine log** (every model call, its tokens, its cost, its duration), and the **document index** (the document stores, and the full text of every character, project, and group vault). A single question reaches into one room at a time; for a question that spans rooms, the Console carries the answer from one to the next.
 - **Inspection is not remembrance.** That the Console may now *read* the memory ledger — to summarise it, to count it, to chart how importance is distributed — is a different thing entirely from *recalling* a memory. Reading the table changes nothing and is filed nowhere; the Console still forms no memories of its own, and its search still cannot draw upon them as a source.
 

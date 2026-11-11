@@ -26,6 +26,7 @@ import {
   assertOwnVaultFileOpen,
   ownVaultEntryFilter,
   assertWriteDoesNotTargetPeerVault,
+  assertCharacterMayWrite,
   docStoreUriFor,
   buildDocStoreUriResolver,
   resolveActorOrigin,
@@ -332,7 +333,44 @@ export async function handleDeleteBlob(
   const deleteRefusal = ownVaultBlobRefusal(mp, target.path, context);
   if (deleteRefusal) return deleteRefusal;
   const repos = getRepositories();
-  const deleted = await repos.docMountBlobs.deleteByMountPointAndPath(mp.id, target.path);
+  // Only a blob is deleted here: a path whose file carries no blob bytes, or
+  // whose file is a document, is refused — documents are deleted through
+  // `doc_delete_file` (the document core).
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(mp.id, target.path);
+  const isDocument = blob ? !!(await repos.docMountDocuments.findByFileId(blob.fileId)) : false;
+  if (!blob || isDocument) {
+    const link = blob ?? (await repos.docMountFileLinks.findByMountPointAndPath(mp.id, target.path));
+    logger.debug('doc_delete_blob: refused a path that is not a blob', {
+      mountPointId: mp.id,
+      relativePath: target.path,
+      exists: !!link,
+      isDocument,
+    });
+    return {
+      success: false,
+      error: link
+        ? `Not a blob: ${target.path} is a document or a file kept outside the blob store; use doc_delete_file to delete it.`
+        : `Blob not found: ${target.path}`,
+    };
+  }
+  // The same per-document write policy every other doc write honours.
+  try {
+    await assertCharacterMayWrite(
+      {
+        absolutePath: '',
+        scope: 'document_store',
+        mountPointId: mp.id,
+        mountPointName: mp.name,
+        basePath: '',
+        relativePath: blob.relativePath,
+        ownVaultGuarded: mp.ownVaultGuarded,
+      },
+      context
+    );
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  const deleted = await repos.docMountBlobs.deleteByMountPointAndPath(mp.id, blob.relativePath);
   if (!deleted) {
     return { success: false, error: `Blob not found: ${target.path}` };
   }

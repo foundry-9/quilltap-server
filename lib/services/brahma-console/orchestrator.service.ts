@@ -205,7 +205,7 @@ async function processBrahmaResponse(
   // (read/write) on, no wardrobe, no Carina, workspace tools stripped, search
   // without memories. Web search & curl flow from the profile / installed
   // plugins exactly as elsewhere.
-  const { tools, modelSupportsNativeTools } = await buildTools({
+  const { tools, modelSupportsNativeTools, offer: toolOffer, pluginToolEffects } = await buildTools({
     connectionProfile,
     userId,
     agentModeEnabled: true,
@@ -511,6 +511,8 @@ async function processBrahmaResponse(
         chatId,
         userId,
         operatorSurface: true,
+        toolOffer,
+        pluginToolEffects,
         ...newWardrobeTurnContainers(),
       }
 

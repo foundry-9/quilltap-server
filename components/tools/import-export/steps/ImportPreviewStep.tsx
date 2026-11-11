@@ -12,6 +12,8 @@ interface EntityPreview {
   exists: boolean
   /** Short note from the server, e.g. which plugin secrets were withheld. */
   detail?: string
+  /** A document store that reads a folder on this machine: the folder it names. */
+  basePath?: string
 }
 
 interface ImportPreview {
@@ -123,6 +125,13 @@ export function ImportPreviewStep({
                       {entity.detail && (
                         <span className="block qt-text-small qt-text-secondary">
                           {entity.detail}
+                        </span>
+                      )}
+                      {entity.basePath !== undefined && (
+                        <span className="block qt-text-small qt-text-warning">
+                          Points at a folder on this machine:{' '}
+                          <code className="break-all">{entity.basePath || '(no path given)'}</code>.
+                          Kindly inspect it in the Scriptorium before lighting the lamps.
                         </span>
                       )}
                     </span>

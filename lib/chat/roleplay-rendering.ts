@@ -15,6 +15,8 @@
  */
 
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import { sanitizeClassName } from '@/lib/utils/css-class'
+import { checkRegexSafety } from '@/lib/utils/safe-regex'
 
 // ============================================================================
 // SHARED DEFAULTS (single copy; both renderers import these)
@@ -108,14 +110,26 @@ export interface CompiledRule {
  * `inline` for legacy patterns that predate the field.
  */
 export function compileRenderingPatterns(patterns: RenderingPattern[]): CompiledRule[] {
-  return patterns
-    .filter((p) => p.scope !== 'literal' && p.scope !== 'strip')
-    .map((p) => ({
-      regex: new RegExp(p.pattern, (p.flags || '').replace('g', '')),
-      className: p.className,
+  const rules: CompiledRule[] = []
+  for (const p of patterns) {
+    if (p.scope === 'literal' || p.scope === 'strip') continue
+    // A pattern that is over-long, shaped for catastrophic backtracking, or
+    // not valid regex is skipped rather than failing the whole message.
+    if (!checkRegexSafety(p.pattern).ok) continue
+    let regex: RegExp
+    try {
+      regex = new RegExp(p.pattern, (p.flags || '').replace('g', ''))
+    } catch {
+      continue
+    }
+    rules.push({
+      regex,
+      className: sanitizeClassName(p.className),
       scope: p.scope === 'line' ? 'line' : p.scope === 'unmarked' ? 'unmarked' : 'inline',
       hideDelimiters: p.hideDelimiters ?? false,
-    }))
+    })
+  }
+  return rules
 }
 
 /**
@@ -377,7 +391,7 @@ export function segmentsToHtml(segments: Segment[]): string {
   let out = ''
   for (const seg of segments) {
     const body = seg.children ? segmentsToHtml(seg.children) : seg.text
-    out += seg.className ? `<span class="${seg.className}">${body}</span>` : body
+    out += seg.className ? `<span class="${sanitizeClassName(seg.className)}">${body}</span>` : body
   }
   return out
 }
@@ -403,6 +417,7 @@ function hasRpBodyGroup(pattern: RenderingPattern): boolean {
 function escapeRpBodyInterior(part: string, pattern: RenderingPattern): string {
   const baseFlags = (pattern.flags || '').replace('g', '')
   let re: RegExp
+  if (!checkRegexSafety(pattern.pattern).ok) return part
   try {
     re = new RegExp(pattern.pattern, `${baseFlags}g`)
   } catch {
@@ -557,6 +572,7 @@ function applyPreParse(
   if (patterns.length === 0) return part
   const regexes: RegExp[] = []
   for (const p of patterns) {
+    if (!checkRegexSafety(p.pattern).ok) continue
     try {
       regexes.push(new RegExp(`(?<!\\\\)(?:${p.pattern})`, `${(p.flags || '').replace('g', '')}g`))
     } catch {

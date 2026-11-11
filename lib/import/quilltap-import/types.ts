@@ -97,6 +97,12 @@ export interface ImportPreviewEntity {
    * re-entered by hand.
    */
   detail?: string;
+  /**
+   * For a document store that reads a folder on this machine (filesystem or
+   * Obsidian): the folder the archive names. Such a store is imported
+   * disabled, and an existing store's folder is never replaced.
+   */
+  basePath?: string;
 }
 
 export interface ImportPreview {

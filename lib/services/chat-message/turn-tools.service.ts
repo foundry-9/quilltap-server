@@ -13,7 +13,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { lowerToolEffect, type ToolEffect } from '@/lib/tools/effects'
+import { lowerToolEffect, offeredTools, type ToolEffect, type ToolOffer } from '@/lib/tools/effects'
 import type { RosterContext as CustomToolRosterContext } from '@/lib/pascal/custom-tools'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -65,6 +65,8 @@ export interface TurnToolSlate {
   effectCeiling: ToolEffect | undefined
   customToolEffects: Map<string, ToolEffect>
   pluginToolEffects: Map<string, ToolEffect>
+  /** The tool names this seat was offered this turn; the executor refuses any other. */
+  toolOffer: ToolOffer
   /** The operator changed tool settings since the last turn (the tool-change notice fires). */
   toolSettingsChanged: boolean
 }
@@ -117,6 +119,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
       effectCeiling: params.storytellerCeiling,
       customToolEffects: new Map(),
       pluginToolEffects: new Map(),
+      toolOffer: offeredTools([]),
       toolSettingsChanged,
     }
   }
@@ -212,6 +215,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     effectCeiling,
     customToolEffects: built.customToolEffects,
     pluginToolEffects: built.pluginToolEffects,
+    toolOffer: built.offer,
     toolSettingsChanged,
   }
 }
@@ -328,7 +332,7 @@ export function buildTurnToolContext(params: {
   imageProfileId: string | null
   browserUserAgent?: string
   builtContext: Pick<BuiltContext, 'debugMemories' | 'debugInterCharacterMemories' | 'debugMemoryRecap'>
-  slate: Pick<TurnToolSlate, 'customToolEffects' | 'pluginToolEffects' | 'effectCeiling'>
+  slate: Pick<TurnToolSlate, 'customToolEffects' | 'pluginToolEffects' | 'effectCeiling' | 'toolOffer'>
   emitCarinaAnswer: (message: MessageEvent) => void
   emitPascalResult: (message: MessageEvent) => void
 }): ToolExecutionContext {
@@ -361,6 +365,8 @@ export function buildTurnToolContext(params: {
   toolContext.customToolEffects = slate.customToolEffects
   toolContext.pluginToolEffects = slate.pluginToolEffects
   if (slate.effectCeiling) toolContext.effectCeiling = slate.effectCeiling
+  // The executor admits only the tools this seat was offered.
+  toolContext.toolOffer = slate.toolOffer
   return toolContext
 }
 

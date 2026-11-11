@@ -76,6 +76,8 @@ When enabled, Quilltap monitors your activity (or, more precisely, the absence t
 
 Every ledger is shuttered when the lock falls — the main database, the conversation logs, and the document-store index together — and every one of them is opened again on your passphrase. The establishment need not be stopped and started to come back to its senses; it merely wakes up.
 
+Should the wrong passphrase be offered several times running, the unlock screen makes you wait a little longer before each further attempt.
+
 **To configure auto-lock:**
 
 1. Navigate to **Settings > Security > Auto-Lock** (or use the navigation tool below)

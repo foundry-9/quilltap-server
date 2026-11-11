@@ -85,7 +85,7 @@
       "description": "ID of theme to extend/inherit from"
     },
     "previewImage": {
-      "type": "string",
+      "$ref": "#/$defs/BundleRelativePath",
       "description": "Relative path to preview image"
     },
     "tokens": {
@@ -93,11 +93,11 @@
       "description": "Inline theme design tokens"
     },
     "tokensPath": {
-      "type": "string",
+      "$ref": "#/$defs/BundleRelativePath",
       "description": "Relative path to tokens JSON file"
     },
     "stylesPath": {
-      "type": "string",
+      "$ref": "#/$defs/BundleRelativePath",
       "description": "Relative path to CSS overrides file"
     },
     "fonts": {
@@ -111,8 +111,7 @@
         "pattern": "^[a-z][a-z0-9-]*$"
       },
       "additionalProperties": {
-        "type": "string",
-        "minLength": 1
+        "$ref": "#/$defs/BundleRelativePath"
       },
       "description": "Per-icon override map: icon name -> bundle-relative asset path (svg or webp). SVG overrides keep currentColor tinting; WebP overrides bake in their own color."
     },
@@ -135,6 +134,12 @@
     { "required": ["tokensPath"] }
   ],
   "$defs": {
+    "BundleRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!(.*[/\\\\])?\\.\\.([/\\\\]|$))[^\\u0000]+$",
+      "description": "A path inside the theme bundle: relative, with no leading separator, drive letter or '..' segment"
+    },
     "ColorPalette": {
       "type": "object",
       "required": [
@@ -263,8 +268,7 @@
           "description": "Font family name"
         },
         "src": {
-          "type": "string",
-          "minLength": 1,
+          "$ref": "#/$defs/BundleRelativePath",
           "description": "Font file path relative to bundle root"
         },
         "weight": {

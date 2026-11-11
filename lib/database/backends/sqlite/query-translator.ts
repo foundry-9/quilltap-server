@@ -413,7 +413,8 @@ export function translateSort(sort?: SortSpec): string {
 
   for (const [field, direction] of Object.entries(sort)) {
     const dir = direction === 'desc' || direction === -1 ? 'DESC' : 'ASC';
-    orderClauses.push(`"${field}" ${dir}`);
+    // Quote the identifier, doubling any embedded quote so it stays one identifier.
+    orderClauses.push(`"${field.replace(/"/g, '""')}" ${dir}`);
   }
 
   return orderClauses.length > 0 ? `ORDER BY ${orderClauses.join(', ')}` : '';

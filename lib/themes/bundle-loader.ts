@@ -13,7 +13,9 @@ import path from 'node:path';
 import os from 'node:os';
 import yauzl from 'yauzl';
 import { logger } from '@/lib/logger';
+import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 import { getThemesDir } from '@/lib/paths';
+import { resolveInside, resolveInsideSync } from '@/lib/paths/resolve-inside';
 import { getErrorMessage } from '@/lib/error-utils';
 import {
   type QtapThemeManifest,
@@ -181,10 +183,14 @@ async function extractZipToDir(zipPath: string, destDir: string): Promise<void> 
       zipFile.readEntry();
       zipFile.on('entry', async (entry: yauzl.Entry) => {
         try {
-          const entryPath = path.join(destDir, entry.fileName);
-
-          // Security: prevent path traversal
-          if (!entryPath.startsWith(destDir + path.sep) && entryPath !== destDir) {
+          // Every entry must land inside the extraction directory.
+          let entryPath: string;
+          try {
+            entryPath = resolveInsideSync(destDir, entry.fileName);
+          } catch {
+            bundleLogger.warn('Refusing theme bundle entry outside the extraction directory', {
+              entry: entry.fileName,
+            });
             reject(new Error(`Path traversal detected: ${entry.fileName}`));
             return;
           }
@@ -323,8 +329,8 @@ export async function validateThemeBundle(zipPath: string): Promise<ValidationRe
 
       // Validate tokens if referenced by path
       if (manifest.tokensPath) {
-        const tokensFilePath = path.join(tempDir, manifest.tokensPath);
         try {
+          const tokensFilePath = await resolveInside(tempDir, manifest.tokensPath, { realpath: true });
           const tokensData = await fs.readFile(tokensFilePath, 'utf-8');
           const tokensJson = JSON.parse(tokensData);
           const tokensResult = safeValidateThemeTokens(tokensJson);
@@ -339,8 +345,8 @@ export async function validateThemeBundle(zipPath: string): Promise<ValidationRe
       // Validate referenced font files exist
       if (manifest.fonts) {
         for (const font of manifest.fonts) {
-          const fontPath = path.join(tempDir, font.src);
           try {
+            const fontPath = await resolveInside(tempDir, font.src, { realpath: true });
             await fs.access(fontPath);
           } catch {
             errors.push(`Font file not found: ${font.src}`);
@@ -350,8 +356,8 @@ export async function validateThemeBundle(zipPath: string): Promise<ValidationRe
 
       // Validate preview image exists if referenced
       if (manifest.previewImage) {
-        const previewPath = path.join(tempDir, manifest.previewImage);
         try {
+          const previewPath = await resolveInside(tempDir, manifest.previewImage, { realpath: true });
           await fs.access(previewPath);
         } catch {
           warnings.push(`Preview image not found: ${manifest.previewImage}`);
@@ -539,23 +545,21 @@ export async function installThemeBundleFromUrl(url: string): Promise<InstallRes
   const tempFile = path.join(tempDir, 'theme.qtap-theme');
 
   try {
-    // Download the file
-    const response = await fetch(url);
+    // Download the file (public destinations only, body capped while streaming)
+    let response;
+    try {
+      response = await safeFetch(url, { maxBytes: MAX_BUNDLE_SIZE, timeoutMs: 60_000 });
+    } catch (err) {
+      if (err instanceof SafeFetchError && err.code === 'TOO_LARGE') {
+        return { success: false, error: `Bundle exceeds maximum size of ${MAX_BUNDLE_SIZE / 1024 / 1024}MB` };
+      }
+      throw err;
+    }
     if (!response.ok) {
       return { success: false, error: `Download failed: HTTP ${response.status}` };
     }
 
-    const contentLength = response.headers.get('content-length');
-    if (contentLength && parseInt(contentLength) > MAX_BUNDLE_SIZE) {
-      return { success: false, error: `Bundle exceeds maximum size of ${MAX_BUNDLE_SIZE / 1024 / 1024}MB` };
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength > MAX_BUNDLE_SIZE) {
-      return { success: false, error: `Bundle exceeds maximum size of ${MAX_BUNDLE_SIZE / 1024 / 1024}MB` };
-    }
-
-    await fs.writeFile(tempFile, Buffer.from(arrayBuffer));
+    await fs.writeFile(tempFile, response.body);
 
     // Install from local file
     const result = await installThemeBundle(tempFile);
@@ -679,7 +683,7 @@ export async function loadInstalledBundles(): Promise<LoadedBundleTheme[]> {
       if (manifest.tokens) {
         tokens = manifest.tokens;
       } else if (manifest.tokensPath) {
-        const tokensPath = path.join(themePath, manifest.tokensPath);
+        const tokensPath = await resolveInside(themePath, manifest.tokensPath, { realpath: true });
         const tokensData = await fs.readFile(tokensPath, 'utf-8');
         const tokensJson = JSON.parse(tokensData);
         const tokensResult = safeValidateThemeTokens(tokensJson);
@@ -701,7 +705,7 @@ export async function loadInstalledBundles(): Promise<LoadedBundleTheme[]> {
       if (manifest.stylesPath) {
         try {
           cssOverrides = await fs.readFile(
-            path.join(themePath, manifest.stylesPath),
+            await resolveInside(themePath, manifest.stylesPath, { realpath: true }),
             'utf-8'
           );
         } catch {
@@ -802,7 +806,7 @@ export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundl
       if (manifest.tokens) {
         tokens = manifest.tokens;
       } else if (manifest.tokensPath) {
-        const tokensPath = path.join(themePath, manifest.tokensPath);
+        const tokensPath = await resolveInside(themePath, manifest.tokensPath, { realpath: true });
         const tokensData = await fs.readFile(tokensPath, 'utf-8');
         const tokensJson = JSON.parse(tokensData);
         const tokensResult = safeValidateThemeTokens(tokensJson);
@@ -824,7 +828,7 @@ export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundl
       if (manifest.stylesPath) {
         try {
           cssOverrides = await fs.readFile(
-            path.join(themePath, manifest.stylesPath),
+            await resolveInside(themePath, manifest.stylesPath, { realpath: true }),
             'utf-8'
           );
         } catch {
@@ -920,9 +924,9 @@ export async function exportThemeAsBundle(
     if (themeData.fonts) {
       for (const font of themeData.fonts) {
         if (font.filePath) {
-          const destPath = path.join(tempDir, font.src);
-          await fs.mkdir(path.dirname(destPath), { recursive: true });
           try {
+            const destPath = await resolveInside(tempDir, font.src);
+            await fs.mkdir(path.dirname(destPath), { recursive: true });
             await fs.copyFile(font.filePath, destPath);
           } catch {
             bundleLogger.warn('Failed to copy font file for export', {
@@ -962,13 +966,16 @@ export async function exportThemeAsBundle(
 
     // Create zip using a simple approach with Node.js zlib
     // We use the archiver approach via a spawned process since we already have yauzl for reading
-    const { execSync } = await import('node:child_process');
+    const { execFileSync } = await import('node:child_process');
 
     // Ensure output directory exists
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
-    // Use the zip command (available on macOS and Linux)
-    execSync(`cd "${tempDir}" && zip -r "${path.resolve(outputPath)}" .`, {
+    // Use the zip command (available on macOS and Linux). Arguments are passed
+    // as an array, never through a shell.
+    bundleLogger.debug('Zipping theme export', { themeId, tempDir, outputPath });
+    execFileSync('zip', ['-r', path.resolve(outputPath), '.'], {
+      cwd: tempDir,
       stdio: 'pipe',
     });
 

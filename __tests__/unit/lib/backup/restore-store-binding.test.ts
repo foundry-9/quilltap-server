@@ -471,3 +471,27 @@ describe('restore binds entities to their archived stores (bug 185)', () => {
     expect(summary.files).toBe(2)
   })
 })
+
+describe('plugins in a backup', () => {
+  it('are never installed; their names are reported instead', async () => {
+    const realFs = jest.requireActual('fs') as typeof import('fs')
+    const realOs = jest.requireActual('os') as typeof import('os')
+    const realPath = jest.requireActual('path') as typeof import('path')
+    const extractDir = realFs.mkdtempSync(realPath.join(realOs.tmpdir(), 'qt-restore-plugins-'))
+    realFs.mkdirSync(realPath.join(extractDir, 'plugins', 'npm', 'qtap-plugin-example'), { recursive: true })
+    realFs.writeFileSync(realPath.join(extractDir, 'plugins', 'npm', 'qtap-plugin-example', 'index.js'), '')
+    try {
+      buildRepoMocks()
+      mockedParseBackupZip.mockResolvedValue({ data: makeBackupData({}) as never, extractDir, rootFolder: '' })
+
+      const summary = await restore('/tmp/backup.zip', { mode: 'replace', targetUserId: 'user-1' })
+
+      expect(summary.npmPlugins).toBe(0)
+      expect(summary.npmPluginNames).toEqual(['qtap-plugin-example'])
+      expect(summary.warnings.some((w) => w.includes('qtap-plugin-example'))).toBe(true)
+      expect(realFs.existsSync('/tmp/qt-test-plugins/qtap-plugin-example')).toBe(false)
+    } finally {
+      realFs.rmSync(extractDir, { recursive: true, force: true })
+    }
+  })
+})

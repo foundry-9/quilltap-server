@@ -25,6 +25,7 @@ import rehypeStringify from 'rehype-stringify';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import remarkSmartypants from 'remark-smartypants';
+import { rehypeSafeUrls } from '@/lib/markdown/safe-urls';
 import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math';
 import { SMARTYPANTS_OPTIONS, shouldCurlQuotes } from '@/lib/markdown/typography';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
@@ -107,6 +108,9 @@ function createMarkdownProcessor(curlQuotes: boolean) {
 
   return processor
     .use(remarkRehype)
+    // URL protocol allowlist + link hardening: the same rule the client applies
+    // through react-markdown's urlTransform (lib/markdown/safe-urls.ts).
+    .use(rehypeSafeUrls)
     .use(rehypeKatex)
     .use(rehypeHighlight, {
       // Don't auto-detect language for unlabeled code blocks - causes incorrect

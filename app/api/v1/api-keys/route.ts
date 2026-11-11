@@ -81,7 +81,7 @@ export const GET = createContextHandler(async (req, { user }) => {
       lastUsed: key.lastUsed,
       createdAt: key.createdAt,
       updatedAt: key.updatedAt,
-      keyPreview: maskApiKey(key.key_value.substring(0, 32)),
+      keyPreview: maskApiKey(key.key_value),
     }));
 
     const response = NextResponse.json({
@@ -234,7 +234,7 @@ async function handleExport(req: NextRequest, user: { id: string }) {
       iv: encrypted.iv,
       authTag: encrypted.authTag,
     });
-    const signature = signWithPassphrase(payloadJson, passphrase);
+    const signature = signWithPassphrase(payloadJson, passphrase, encrypted.iterations);
 
     // Build the export file
     const exportFile = {
@@ -245,7 +245,7 @@ async function handleExport(req: NextRequest, user: { id: string }) {
       encryption: {
         algorithm: 'aes-256-gcm',
         kdf: 'pbkdf2',
-        kdfIterations: 100000,
+        kdfIterations: encrypted.iterations,
         salt: encrypted.salt,
       },
       payload: {
@@ -309,6 +309,7 @@ async function handleImport(req: NextRequest, user: { id: string }) {
           iv: importFile.payload.iv,
           ciphertext: importFile.payload.ciphertext,
           authTag: importFile.payload.authTag,
+          iterations: importFile.encryption.kdfIterations,
         },
         passphrase
       );
@@ -464,13 +465,21 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
       !importFile.payload?.authTag
     ) {
       return NextResponse.json({ valid: false, error: 'Invalid file structure' }, { status: 400 });
-    }// Verify signature (warn but don't block if invalid)
+    }
+
+    // Verify signature (warn but don't block if invalid)
     const payloadJson = JSON.stringify({
       ciphertext: importFile.payload.ciphertext,
       iv: importFile.payload.iv,
       authTag: importFile.payload.authTag,
     });
-    const signatureValid = verifyWithPassphrase(payloadJson, importFile.signature, passphrase);
+    // Files written before the iteration count was raised carry 100,000.
+    const signatureValid = verifyWithPassphrase(
+      payloadJson,
+      importFile.signature,
+      passphrase,
+      importFile.encryption.kdfIterations ?? 100_000,
+    );
 
     if (!signatureValid) {
       logger.warn('[API Keys v1] Import file signature verification failed', { userId: user.id });
@@ -485,6 +494,7 @@ async function handleImportPreview(req: NextRequest, user: { id: string }) {
           iv: importFile.payload.iv,
           ciphertext: importFile.payload.ciphertext,
           authTag: importFile.payload.authTag,
+          iterations: importFile.encryption.kdfIterations,
         },
         passphrase
       );

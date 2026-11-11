@@ -237,7 +237,7 @@ async function processHelpResponse(
   }
 
   // Build tools — agent mode always enabled for help chats, help tools always enabled
-  const { tools, modelSupportsNativeTools } = await buildTools({
+  const { tools, modelSupportsNativeTools, offer: toolOffer } = await buildTools({
     connectionProfile,
     userId,
     agentModeEnabled: true,
@@ -500,6 +500,7 @@ async function processHelpResponse(
         undefined, // embeddingProfileId
         null, // projectId
       )
+      toolContext.toolOffer = toolOffer
 
       const toolResult = await processToolCalls(
         toolCallsToProcess,

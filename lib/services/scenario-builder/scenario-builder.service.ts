@@ -228,6 +228,9 @@ export async function runScenarioBuilder(
       projectId: input.projectId ?? undefined,
       // embeddingProfileId omitted → the user's default embedding profile.
       mountPool,
+      // The executor admits only the slate built above.
+      toolOffer: built.offer,
+      pluginToolEffects: built.pluginToolEffects,
     }
 
     const result = await runOneShotToolLoop({

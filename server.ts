@@ -5,7 +5,11 @@ import type { Duplex } from 'node:stream';
 import { logger } from './lib/logger';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.HOSTNAME ?? '0.0.0.0';
+// Loopback by default: Quilltap has no login, so listening on every interface
+// hands the whole API to anyone on the network. Opt in to a wider bind with
+// QUILLTAP_HOST (or the HOSTNAME Next's standalone server reads; the Docker
+// image sets it to 0.0.0.0, where the published port is the boundary).
+const hostname = process.env.QUILLTAP_HOST || process.env.HOSTNAME || '127.0.0.1';
 const port = Number(process.env.PORT ?? 3000);
 
 const moduleLogger = logger.child({ module: 'server' });

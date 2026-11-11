@@ -1189,6 +1189,7 @@ async function processMessage(
         allProfiles,
       },
       storyteller: storytellerTurn,
+      effectCeiling: slate.effectCeiling,
       triggers: {
         conciergePolicy,
         chatSettings,

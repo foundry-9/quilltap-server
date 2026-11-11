@@ -91,6 +91,8 @@ Some plugins have custom settings:
 4. Adjust settings for the plugin
 5. Click **Save** to apply changes
 
+Plugin authors may mark a config field `secret: true`; such fields are left out of exports and backups, and must be entered afresh on a new instance. The curl plugin's allowlist patterns match the parts of a URL (a `*` in a host matches within that host only, and a pattern without a port allows only the scheme's default port), and redirects are followed only to allowlisted public addresses.
+
 **Common plugin settings:**
 
 - Themes can configure colors and styles

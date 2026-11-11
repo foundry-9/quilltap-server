@@ -4,6 +4,23 @@
 
 ### 4.13-dev
 
+#### Hardening: network defaults, stored files, imports and tool permissions
+
+- The server binds `127.0.0.1` by default (`server.ts`, `quilltap` CLI). Listen on every interface with `quilltap --host 0.0.0.0` or `QUILLTAP_HOST`. The Docker image still binds `0.0.0.0` inside the container. `docs/DEPLOYMENT.md` and the new `help/network-access.md` say that Quilltap has no login and how to expose it.
+- One request-origin check (`lib/api/request-origin.ts`) for HTTP (`proxy.ts`) and WebSocket upgrades: requests addressed to an unrecognized host name are refused, and API requests a browser marks as cross-site or cross-origin are refused. Loopback names, IP addresses, the host of `BASE_URL` and `QUILLTAP_ALLOWED_HOSTS` are accepted. No CORS headers are sent. The CSP and other security headers now come from `next.config.js` for every response.
+- Stored files are served through one helper (`lib/api/serve-stored-bytes.ts`): raster images, PDF and plain text may display inline; everything else downloads, with `nosniff` and a sandboxing CSP.
+- One path-containment helper (`lib/paths/resolve-inside.ts`, realpath-aware) for document stores, the file store, theme bundles and theme routes. Theme manifest paths must be relative to the bundle. Symlinks in a filesystem store that point outside it are refused.
+- Server-rendered message HTML applies the same link protocol rules as the client renderer (`lib/markdown/safe-urls.ts`). Roleplay template class names are limited to letters, digits, `_`, `-` and spaces, and template patterns to 500 characters without nested repetition (`lib/utils/safe-regex.ts`); doc grep and `log_grep` share the regex limits.
+- `run_sql` accepts only introspection PRAGMAs (`table_info`, `table_xinfo`, `table_list`, `index_list`, `index_info`, `index_xinfo`, `foreign_key_list`) and runs on a read-only connection.
+- Tool calls go through one permit (`resolveToolPermit`, `lib/tools/effects.ts`): a tool not offered to the character this turn is refused, and the turn's effect ceiling carries into Carina answerers. `@Brahma` / `ask_carina` to Brahma is refused in a turn limited to reads. `doc_open_document` with a URI that names no file is an error; `doc_delete_blob` deletes blobs only and honours write permissions.
+- Outbound fetches for image import by URL, theme install by URL and the theme and plugin registries go through `safeFetch` (`lib/net/safe-fetch.ts`): http(s) only, public addresses only, redirects checked per hop, size-capped. The curl plugin checks redirects per hop, resolves DNS and matches allowlist patterns against the parsed URL; NanoGPT and Z.AI image downloads require https and a public host.
+- `.qtap` import: filesystem and Obsidian stores arrive disabled, and the preview shows their folder; Overwrite keeps an existing store's folder and type.
+- Backup restore no longer installs plugin code (the restore lists the plugins to reinstall), refuses archives with symlinks or over the entry and size caps, and reads archive-named files only inside the archive.
+- Theme registries with a key refuse an index or bundle whose signature fails; cached indexes are re-verified. The verifier accepts both the CLI's and the library's signature formats.
+- Plugin config fields can be marked `secret: true`; secret fields are left out of `.qtap` exports and backups. The MCP plugin's server list is marked secret.
+- API key previews show the last four characters. New API-key export files use 600,000 PBKDF2 iterations (older files still import). Repeated wrong passphrases at unlock are throttled (429 with `Retry-After`). `GET /api/v1/memories` validates `sortBy` / `sortOrder`. Download filenames escape quotes and backslashes.
+- Plugin versions: curl 1.0.36, MCP 1.1.49, NanoGPT 1.2.16, Z.AI 1.1.37.
+
 #### Fix: setup wizard and first-run defaults
 
 - Setup wizard API keys: Validate tests a key before storing it. `?action=test-connection` on `/api/v1/connection-profiles` takes an unsaved `apiKey`. A rejected key is no longer saved, re-validating replaces the row the wizard stored instead of adding another, and in settings mode an untouched masked field tests the existing key instead of saving the literal `********` (`components/setup-wizard/key-validation.ts`).
@@ -13,6 +30,7 @@
 - Default image profile: a new chat with no project or character image profile gets the instance's default image profile (one with an API key), and the Start Chat dialog shows it. An explicit "No image generation" is now sent as `imageProfileId: null` and honored; the create schema accepts null. The chat and standalone Generate Image dialogs preselect the default profile (`ImageProfilePicker` `preselectDefault`).
 - An empty character wardrobe is logged at debug instead of as an error ("wardrobe is unreadable") on every turn.
 - Help: rewrote Cheap LLM Configuration for the strategy card; updated the setup wizard, startup wizard, chats and Courier pages.
+
 
 #### Fix: first-run and restart failures found dogfooding a fresh instance
 

@@ -378,3 +378,51 @@ it('mints a fresh id under the duplicate strategy when the archive id already ex
   expect(createOptions).toBeUndefined();
   expect(idMaps.mountPoints.get('store-X')).toBe('freshly-minted-id');
 });
+
+describe('host-path stores', () => {
+  it('imports a filesystem store disabled, keeping its basePath for the operator to review', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([]);
+    const warnings: string[] = [];
+    await importDocumentStores(
+      [store({ id: 'fs-1', name: 'Notes', mountType: 'filesystem', basePath: '/home/someone', enabled: true })],
+      [], [], [], [], opts('overwrite'), {} as never, makeIdMaps(), warnings
+    );
+    const [data] = globalRepos.docMountPoints.create.mock.calls[0];
+    expect(data).toEqual(expect.objectContaining({ mountType: 'filesystem', basePath: '/home/someone', enabled: false }));
+    expect(warnings.some((w) => w.includes('/home/someone') && w.includes('disabled'))).toBe(true);
+  });
+
+  it('imports an obsidian store disabled', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([]);
+    await run([store({ id: 'ob-1', mountType: 'obsidian', basePath: '/vault', enabled: true })], opts('skip'), makeIdMaps());
+    const [data] = globalRepos.docMountPoints.create.mock.calls[0];
+    expect(data.enabled).toBe(false);
+  });
+
+  it('keeps a database store enabled as archived', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([]);
+    await run([store({ id: 'db-1', mountType: 'database', basePath: '/ignored', enabled: true })], opts('skip'), makeIdMaps());
+    const [data] = globalRepos.docMountPoints.create.mock.calls[0];
+    expect(data).toEqual(expect.objectContaining({ basePath: '', enabled: true }));
+  });
+
+  it('never replaces an existing store\'s basePath or mountType on overwrite', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([
+      { id: 'store-X', name: 'Lore', mountType: 'database', basePath: '', storeType: 'documents', enabled: true },
+    ]);
+    await run([store({ id: 'store-X', mountType: 'filesystem', basePath: '/etc', enabled: true })], opts('overwrite'), makeIdMaps());
+    const [, patch] = globalRepos.docMountPoints.update.mock.calls[0];
+    expect(patch).not.toHaveProperty('basePath');
+    expect(patch).not.toHaveProperty('mountType');
+  });
+
+  it('keeps an existing host-path store\'s enabled flag on overwrite', async () => {
+    globalRepos.docMountPoints.findAll.mockResolvedValue([
+      { id: 'fs-1', name: 'Notes', mountType: 'filesystem', basePath: '/mine', storeType: 'documents', enabled: false },
+    ]);
+    await run([store({ id: 'fs-1', name: 'Notes', mountType: 'filesystem', basePath: '/theirs', enabled: true })], opts('overwrite'), makeIdMaps());
+    const [, patch] = globalRepos.docMountPoints.update.mock.calls[0];
+    expect(patch.enabled).toBe(false);
+    expect(patch).not.toHaveProperty('basePath');
+  });
+});

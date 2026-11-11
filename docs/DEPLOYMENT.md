@@ -82,7 +82,19 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `QUILLTAP_HOST` | Address the server binds to. Outside Docker the default is loopback only; set `0.0.0.0` to listen on every interface (see [Network exposure](#network-exposure)). The CLI's `--host` flag sets it | `127.0.0.1` (`0.0.0.0` in the Docker image, via `HOSTNAME`) |
+| `QUILLTAP_ALLOWED_HOSTS` | Comma-separated host names the server answers to, besides loopback names, IP addresses and the host of `BASE_URL`. `*.example.com` matches subdomains | — |
 | `QUILLTAP_HOST_IP` | Host gateway IP for localhost URL rewriting. Auto-detected in Docker; **required** to enable rewriting in a self-managed VM | Auto-detected in Docker |
+
+### Network exposure
+
+**Quilltap has no login.** It is a single-user application: anyone who can reach its port can read and change everything in it, run terminals, and install plugins. Treat the port as the boundary.
+
+- **Bare metal / CLI:** the server listens on `127.0.0.1` only. To reach it from another machine, start it with `quilltap --host 0.0.0.0` (or `QUILLTAP_HOST=0.0.0.0`) and only do so on a network you trust.
+- **Docker:** the image listens on `0.0.0.0` *inside* the container, and the port you publish with `-p` is the boundary. Prefer `-p 127.0.0.1:3000:3000` unless other machines need it.
+- **Host names:** the server refuses requests addressed to a host name it does not recognise. Loopback names (`localhost`, `*.localhost`) and IP addresses always work; the host of `BASE_URL` is added automatically; add any other name (`nas.local`, a reverse proxy's domain) to `QUILLTAP_ALLOWED_HOSTS`.
+- **Other sites:** API requests that a browser marks as coming from another site or origin are refused, and no CORS headers are sent.
+- **Internet exposure:** put it behind a reverse proxy that adds authentication (HTTP basic auth, an SSO proxy, a VPN). TLS alone is not enough.
 
 ### Encryption
 
@@ -173,7 +185,7 @@ In Docker this overrides `host.docker.internal`. In a **self-managed virtual mac
 
 ## Reverse Proxy Setup
 
-For production with HTTPS, put a reverse proxy in front of Quilltap. Here are examples for common proxies:
+For production with HTTPS, put a reverse proxy in front of Quilltap. Quilltap has no login of its own, so the proxy should also authenticate (see [Network exposure](#network-exposure)). Set `BASE_URL` to the public URL (or list the domain in `QUILLTAP_ALLOWED_HOSTS`); otherwise requests forwarded with the public `Host` header are refused. Here are examples for common proxies:
 
 ### Nginx
 
@@ -481,7 +493,8 @@ docker exec quilltap sqlite3 /app/quilltap/data/quilltap.db "SELECT COUNT(*) FRO
 Before going live, verify:
 
 - [ ] Data directory is mounted with proper permissions (uid 1001)
-- [ ] `BASE_URL` is set to your production URL (if using a custom domain)
+- [ ] `BASE_URL` is set to your production URL (if using a custom domain), and any other host name is in `QUILLTAP_ALLOWED_HOSTS`
+- [ ] The published port is reachable only by machines you trust, or the reverse proxy authenticates (Quilltap has no login)
 - [ ] Encryption key is securely backed up
 - [ ] Reverse proxy is configured with SSL (if exposing to internet)
 - [ ] SQLite database backup is scheduled
@@ -497,6 +510,7 @@ Before going live, verify:
 - [ ] Regular security updates
 - [ ] Strong encryption key (32+ characters)
 - [ ] SSL/TLS via reverse proxy
+- [ ] Authentication via reverse proxy, VPN or SSO (Quilltap has none of its own)
 - [ ] Rate limiting via reverse proxy
 - [ ] No sensitive files in version control
 - [ ] Container running as non-root user (built-in)

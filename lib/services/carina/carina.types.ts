@@ -9,12 +9,15 @@
 
 import type { MessageEvent } from '@/lib/schemas/types';
 
-/** The failure that prevented a Carina query from being answered. */
-export type CarinaErrorKind = 'not-found' | 'no-profile' | 'llm-failed';
+/**
+ * The failure that prevented a Carina query from being answered. `refused`:
+ * the answerer may not be consulted under the asking turn's effect ceiling.
+ */
+export type CarinaErrorKind = 'not-found' | 'no-profile' | 'llm-failed' | 'refused';
 
 export interface CarinaError {
   kind: CarinaErrorKind;
-  /** Short summary for the `llm-failed` case (network/rate-limit/etc.). */
+  /** Short summary for the `llm-failed` case (network/rate-limit/etc.) or the `refused` reason. */
   detail?: string;
   /** The resolved answerer's name, when known (null for `not-found`). */
   characterName?: string | null;

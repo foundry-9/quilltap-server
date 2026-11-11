@@ -13,7 +13,7 @@ import { successResponse, errorResponse, notFound, forbidden } from '@/lib/api/r
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
-import { TemplateDelimiterSchema, UnmarkedStyleSchema } from '@/lib/schemas/template.types';
+import { TemplateDelimiterSchema, UnmarkedStyleSchema, StrictRenderingPatternSchema, StrictDialogueDetectionSchema } from '@/lib/schemas/template.types';
 
 // ============================================================================
 // Schemas
@@ -25,8 +25,8 @@ const updateRoleplayTemplateSchema = z.object({
   systemPrompt: z.string().min(1).optional(),
   tags: z.array(z.uuid()).optional(),
   delimiters: z.array(TemplateDelimiterSchema).optional(),
-  renderingPatterns: z.array(z.any()).optional(),
-  dialogueDetection: z.any().optional().nullable(),
+  renderingPatterns: z.array(StrictRenderingPatternSchema).optional(),
+  dialogueDetection: StrictDialogueDetectionSchema.optional().nullable(),
   // null = narration is unmarked plain prose
   narrationDelimiters: z.union([
     z.string().min(1),

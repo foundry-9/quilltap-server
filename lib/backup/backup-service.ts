@@ -16,6 +16,7 @@ import { promisify } from 'util';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { logger } from '@/lib/logger';
+import { redactPluginConfigSecrets } from '@/lib/plugins/config-secrets';
 import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -363,6 +364,18 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Keep apiKeyId reference but note that actual keys aren't backed up
   }));
 
+  // Plugin config secrets (password-typed or `secret` fields) are left out of
+  // backups, as API keys are; `_redactedKeys` tells the restore what to ask
+  // the operator to re-enter.
+  const sanitizedPluginConfigs = pluginConfigs.map((config) => {
+    const { config: safeConfig, redactedKeys } = redactPluginConfigSecrets(config.pluginName, config.config);
+    return {
+      ...config,
+      config: safeConfig,
+      ...(redactedKeys.length > 0 && { _redactedKeys: redactedKeys }),
+    };
+  });
+
   // Wrap chatSettings in an array for backup (it's a single record per user)
   const chatSettings = chatSettingsResult ? [chatSettingsResult] : [];
 
@@ -381,7 +394,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     projects,
     groups,
     llmLogs,
-    pluginConfigs,
+    pluginConfigs: sanitizedPluginConfigs,
     chatSettings,
     folders,
     wardrobeItems,

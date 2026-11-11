@@ -7,6 +7,7 @@
 import { computedToolEffect, type ToolEffectSpec } from './effect-types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { parseQtapUri } from '@/lib/doc-edit/qtap-uri';
 
 /**
  * Zod schema for the doc-open-document tool's input.
@@ -78,12 +79,33 @@ export interface DocOpenDocumentOutput {
 }
 
 /**
- * What this tool does to the world: opening an existing file is a read;
- * omitting the path creates a new blank document, which is a write.
+ * The file path a call names, after its `uri` (which supersedes `path`) is
+ * parsed: null when it names none — a path-less URI such as `qtap://general`,
+ * an absent or blank `path` — or when the URI does not parse.
+ */
+export function docOpenDocumentTargetPath(input: Pick<DocOpenDocumentInput, 'uri' | 'path'>): string | null {
+  let raw: string | undefined;
+  if (input.uri) {
+    try {
+      raw = parseQtapUri(input.uri).path;
+    } catch {
+      return null;
+    }
+  } else {
+    raw = input.path;
+  }
+  const trimmed = (raw ?? '').trim().replace(/^\/+|\/+$/g, '');
+  return trimmed === '' ? null : trimmed;
+}
+
+/**
+ * What this tool does to the world: opening an existing file — a call that
+ * names a non-empty path — is a read; anything else may create a new blank
+ * document, which is a write.
  */
 export const docOpenDocumentToolEffect: ToolEffectSpec = computedToolEffect({
   schema: docOpenDocumentToolInputSchema,
-  resolve: (input) => (input.uri || input.path ? 'read' : 'write'),
+  resolve: (input) => (docOpenDocumentTargetPath(input) !== null ? 'read' : 'write'),
   maxEffect: 'write',
   notes: {
     read: 'This turn allows only opening an existing file (pass `path` or `uri`); creating a blank document will be refused.',

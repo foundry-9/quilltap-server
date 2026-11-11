@@ -32,7 +32,7 @@ If you would rather see every key you own in one place — the old-fashioned, al
 Whichever view you are in, a key appears the same way:
 
 - **Label** — The name you gave the key (e.g., "My OpenAI Account", "Work Account")
-- **Provider and Key Preview** — Which service the key is for, and the first and last few characters of the key itself, for verification without exposure
+- **Provider and Key Preview** — Which service the key is for, and the last four characters of the key itself, for verification without exposure
 - **Last Used** — When the key was last used to make a request
 - **Test** — Asks the provider whether the key still opens the door
 - **Delete** — Removes the key, after a confirming word
@@ -131,6 +131,8 @@ You can export all your API keys for backup purposes. Exporting and importing wo
 4. Store this file securely (it contains sensitive credentials)
 
 **Security tip:** Keep exported keys in a secure location. Treat them like passwords.
+
+Key previews show only the last four characters (for example `••••abcd`). New export files are sealed with a stronger key derivation; export files from earlier days still import as ever.
 
 ## Importing API Keys
 

@@ -8,7 +8,7 @@
  * links so non-Salon surfaces can reuse the existing fullscreen image viewer.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { promises as fs } from 'fs'
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware'
@@ -18,6 +18,8 @@ import type { DocEditScope } from '@/lib/doc-edit'
 import { documentAccessContextForChat, resolveOperatorDocPath } from '@/lib/documents/operator-doc-actions'
 import { readMountFileBytes } from '@/lib/mount-index/read-file'
 import { mimeForExtension } from '@/lib/mount-index/path-utils'
+import { dispositionFor } from '@/lib/api/content-disposition'
+import { serveStoredBytes } from '@/lib/api/serve-stored-bytes'
 
 type Params = { id: string }
 
@@ -63,13 +65,12 @@ export const GET = createContextParamsHandler<Params>(
       }
 
       const body = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-      return new NextResponse(body as unknown as BodyInit, {
-        status: 200,
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': String(bytes.byteLength),
-          'Cache-Control': 'private, max-age=3600',
-        },
+      logger.debug('[Chats v1] Streaming qtap target', { chatId, scope: parsed.data.scope, mimeType })
+      return serveStoredBytes(body, {
+        mimeType,
+        filename: resolved.relativePath.split('/').pop() || 'file',
+        requested: dispositionFor(req),
+        cacheControl: 'private, max-age=3600',
       })
     } catch (error) {
       const code = error instanceof Error && 'code' in error ? (error as NodeJS.ErrnoException).code : undefined

@@ -43,6 +43,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { listDatabaseFiles, listDatabaseBlobTexts } from '@/lib/mount-index/database-store';
 import { readDocument, writeDocument } from '@/lib/documents/core';
 import { compilePathGlob } from '@/lib/doc-edit/path-glob';
+import { compileSafeRegex } from '@/lib/utils/safe-regex';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   logger,
@@ -600,7 +601,11 @@ export async function handleGrep(
   let searchPattern: RegExp;
   try {
     if (input.is_regex) {
-      searchPattern = new RegExp(input.query, input.case_sensitive ? 'g' : 'gi');
+      const compiled = compileSafeRegex(input.query, input.case_sensitive ? 'g' : 'gi');
+      if (!compiled.ok) {
+        return { success: false, error: `Invalid regex pattern: ${compiled.reason}` };
+      }
+      searchPattern = compiled.regexp;
     } else {
       // Escape regex special chars for literal matching
       const escaped = input.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

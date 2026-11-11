@@ -1,87 +1,60 @@
 /**
- * Next.js Proxy for security headers and CORS
- * Runs on Edge Runtime before requests reach API routes
+ * Next.js Proxy: the request-origin gate
  *
- * Note: Authentication is no longer handled here (single-user mode only)
+ * Quilltap is single-user with no login, so this proxy is the boundary between
+ * the API and every other web page the operator's browser visits. Every request
+ * is checked by `checkRequestOrigin` (`lib/api/request-origin.ts`, shared with
+ * the WebSocket upgrade):
+ *
+ *  - any request whose `Host` the server does not answer to is refused (DNS
+ *    rebinding);
+ *  - an `/api/` request a browser marks as coming from another site or origin
+ *    is refused, whatever its method.
+ *
+ * No CORS headers are sent: the app is same-origin and needs none.
+ *
+ * Only headers are read here, never the body, so large uploads pass through
+ * untouched. Static security headers (CSP and friends) are set for every path
+ * in `next.config.js` `headers()`, so they cover bodies and static assets too.
  */
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-/**
- * Security headers to add to all responses
- */
-const securityHeaders = {
-  // Prevent clickjacking
-  'X-Frame-Options': 'SAMEORIGIN',
-  // Prevent MIME type sniffing
-  'X-Content-Type-Options': 'nosniff',
-  // Enable XSS protection
-  'X-XSS-Protection': '1; mode=block',
-  // Referrer policy
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  // Permissions policy
-  'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
-  // Content Security Policy
-  'Content-Security-Policy': [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js requires unsafe-eval
-    "style-src 'self' 'unsafe-inline'", // Tailwind requires unsafe-inline
-    "img-src 'self' data: https:",
-    "font-src 'self' data:",
-    "connect-src 'self' https://api.openai.com https://api.anthropic.com https://openrouter.ai",
-    "frame-src 'self'", // Allow embedding same-origin content in iframes
-    "frame-ancestors 'self'", // Allow this page to be embedded by same-origin
-  ].join('; '),
-};
+import { checkRequestOrigin } from '@/lib/api/request-origin';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isApi = pathname.startsWith('/api/');
 
-  // Handle preflight OPTIONS requests early
-  if (pathname.startsWith('/api/') && request.method === 'OPTIONS') {
+  const verdict = checkRequestOrigin(
+    {
+      host: request.headers.get('host'),
+      origin: request.headers.get('origin'),
+      secFetchSite: request.headers.get('sec-fetch-site'),
+    },
+    { requireSameOrigin: isApi },
+  );
+
+  if (!verdict.ok) {
+    console.warn(`[proxy] refused ${request.method} ${pathname}: ${verdict.reason}`);
+    return new NextResponse(
+      JSON.stringify({ error: 'Forbidden', message: verdict.reason }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  // Same-origin preflight: nothing to grant, since no CORS is offered.
+  if (isApi && request.method === 'OPTIONS') {
     return new NextResponse(null, { status: 204 });
   }
 
-  // For requests with bodies, use NextResponse.next() without modifying it
-  // to avoid locking the request body
-  if (request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH') {
-    return NextResponse.next();
-  }
-
-  // For requests without bodies, we can safely add headers
-  const response = NextResponse.next();
-
-  // Add security headers to all responses
-  Object.entries(securityHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value);
-  });
-
-  // CORS headers for API routes
-  if (pathname.startsWith('/api/')) {
-    response.headers.set('Access-Control-Allow-Origin', request.headers.get('origin') || '*');
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
-  }
-
-  return response;
+  return NextResponse.next();
 }
 
 /**
- * Configure which routes the proxy should run on
+ * Run on every path except Next's own build output.
  */
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public directory)
-     * - /api/images (file upload endpoint - incompatible with middleware body handling)
-     * - /api/tools/backup (backup endpoints handle large file uploads)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|api/images|api/tools/backup|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image).*)'],
 };

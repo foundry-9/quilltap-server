@@ -14,6 +14,16 @@ function encodeExtValue(value: string): string {
   );
 }
 
+/** Drop CR, LF and other control characters; they cannot appear in a header value. */
+function stripControlChars(value: string): string {
+  return value.replace(/[\x00-\x1F\x7F]/g, '');
+}
+
+/** Escape a value for use inside a quoted-string: backslash and double quote. */
+function quoteForHeader(value: string): string {
+  return value.replace(/[\\"]/g, (c) => '\\' + c);
+}
+
 /**
  * Content-Disposition header construction shared by every route that serves
  * a download. RFC 5987: plain `filename="…"` for ASCII names, ASCII fallback
@@ -23,12 +33,13 @@ export function buildContentDisposition(
   filename: string,
   disposition: 'inline' | 'attachment' = 'inline'
 ): string {
+  filename = stripControlChars(filename);
   const hasNonAscii = /[^\x00-\x7F]/.test(filename);
   if (!hasNonAscii) {
-    return `${disposition}; filename="${filename}"`;
+    return `${disposition}; filename="${quoteForHeader(filename)}"`;
   }
 
-  const asciiFilename = filename.replace(/[^\x00-\x7F]/g, '_');
+  const asciiFilename = quoteForHeader(filename.replace(/[^\x00-\x7F]/g, '_'));
   const encodedFilename = encodeExtValue(filename);
   return `${disposition}; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`;
 }

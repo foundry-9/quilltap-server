@@ -70,6 +70,7 @@ complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'completion' -d 'Genera
 
 # Global options
 complete -c quilltap -n '__quilltap_no_subcommand' -l 'port' -s 'p' -d 'Port to listen on' -x
+complete -c quilltap -n '__quilltap_no_subcommand' -l 'host' -d 'Address to bind (default 127.0.0.1)' -x
 complete -c quilltap -n '__quilltap_no_subcommand' -l 'data-dir' -s 'd' -d 'Data directory' -r -F
 complete -c quilltap -n '__quilltap_no_subcommand' -l 'instance' -s 'i' -d 'Use registered instance' -x -a '(__quilltap_instance_names)'
 complete -c quilltap -n '__quilltap_no_subcommand' -l 'open' -s 'o' -d 'Open browser after start'

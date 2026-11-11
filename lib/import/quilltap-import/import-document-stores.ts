@@ -21,6 +21,15 @@ import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-n
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
+/**
+ * A store that reads a directory on this machine (filesystem or Obsidian)
+ * rather than living in the database. An archive may describe such a store,
+ * but it may not choose where it points or switch it on: the operator does.
+ */
+export function isHostPathStore(mp: { mountType?: string | null }): boolean {
+  return mp.mountType !== 'database';
+}
+
 export async function importDocumentStores(
   mountPoints: ExportedDocumentStore[],
   folders: any[],
@@ -90,14 +99,22 @@ export async function importDocumentStores(
                   mp.name
                 );
           takenNames.add(overwriteName);
+          // An archive never re-points an existing store: its basePath and
+          // mountType stay as the operator set them. A host-path store also
+          // keeps its own enabled flag.
+          if (existing.basePath !== (mp.basePath ?? '') || existing.mountType !== mp.mountType) {
+            moduleLogger.debug('Overwrite keeps the existing store location', {
+              mountPointId: existing.id,
+              existingMountType: existing.mountType,
+              archiveMountType: mp.mountType,
+            });
+          }
           await globalRepos.docMountPoints.update(existing.id, {
             name: overwriteName,
-            basePath: mp.mountType === 'database' ? '' : mp.basePath,
-            mountType: mp.mountType,
             storeType: mp.storeType ?? 'documents',
             includePatterns: mp.includePatterns,
             excludePatterns: mp.excludePatterns,
-            enabled: mp.enabled,
+            enabled: isHostPathStore(existing) ? existing.enabled : mp.enabled,
           });
           idMap.set(mp.id, existing.id);
           counts.mountPoints++;
@@ -121,15 +138,28 @@ export async function importDocumentStores(
         : !existing
           ? { id: mp.id }
           : undefined;
+      // A host-path store arrives switched off: it is not scanned until the
+      // operator has seen where it points and enabled it.
+      const hostPath = isHostPathStore(mp);
+      if (hostPath) {
+        moduleLogger.debug('Importing host-path store disabled', {
+          sourceMountPointId: mp.id,
+          mountType: mp.mountType,
+          basePath: mp.basePath,
+        });
+        warnings.push(
+          `Document store "${name}" points at a folder on this machine (${mp.basePath || 'no path'}) and was imported disabled; check its path and enable it in the Scriptorium.`
+        );
+      }
       const created = await globalRepos.docMountPoints.create(
         {
           name,
-          basePath: mp.mountType === 'database' ? '' : mp.basePath,
+          basePath: hostPath ? mp.basePath : '',
           mountType: mp.mountType,
           storeType: mp.storeType ?? 'documents',
           includePatterns: mp.includePatterns,
           excludePatterns: mp.excludePatterns,
-          enabled: mp.enabled,
+          enabled: hostPath ? false : mp.enabled,
           lastScannedAt: null,
           scanStatus: 'idle',
           lastScanError: null,

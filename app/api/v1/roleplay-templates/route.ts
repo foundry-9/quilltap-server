@@ -13,7 +13,7 @@ import { createContextHandler } from '@/lib/api/middleware';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
-import { TemplateDelimiterSchema, UnmarkedStyleSchema } from '@/lib/schemas/template.types';
+import { TemplateDelimiterSchema, UnmarkedStyleSchema, StrictRenderingPatternSchema, StrictDialogueDetectionSchema } from '@/lib/schemas/template.types';
 
 /**
  * GET /api/v1/roleplay-templates
@@ -118,6 +118,16 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     }
     const unmarkedStyle = unmarkedResult.data ?? null;
     const markdownAsterisks: boolean = body.markdownAsterisks ?? true;
+
+    // Rendering patterns and dialogue detection: strict write-side validation
+    const patternsResult = z.array(StrictRenderingPatternSchema).optional().safeParse(body.renderingPatterns);
+    if (!patternsResult.success) {
+      return errorResponse(`Invalid rendering patterns: ${patternsResult.error.issues[0]?.message ?? 'malformed'}`, 400);
+    }
+    const dialogueResult = StrictDialogueDetectionSchema.nullable().optional().safeParse(body.dialogueDetection);
+    if (!dialogueResult.success) {
+      return errorResponse(`Invalid dialogue detection: ${dialogueResult.error.issues[0]?.message ?? 'malformed'}`, 400);
+    }
 
     // Auto-generate rendering patterns from delimiters if not explicitly provided
     const templateDelimiters = delimitersResult.data || [];

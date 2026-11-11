@@ -153,9 +153,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "1.5.73",
+  sdkVersion: "1.5.84",
   genVersion: "2.950.13",
-  userAgent: "speakeasy-sdk/typescript 1.5.73 2.950.13 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 1.5.84 2.950.13 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/files.js
@@ -3619,7 +3619,7 @@ var ExtractionListAnswer$inboundSchema = z62.object({
   guess: z62.array(z62.union([z62.string(), z62.number()])).optional(),
   p_null: z62.number().optional(),
   source: ExtractionListAnswerSource$inboundSchema.optional(),
-  spans: z62.array(z62.array(z62.int())).optional(),
+  spans: z62.array(z62.nullable(z62.array(z62.int()))).optional(),
   spell_confidence: z62.number().optional(),
   type: z62.literal("list"),
   value: z62.nullable(z62.array(z62.union([z62.string(), z62.number()])))
@@ -3770,6 +3770,7 @@ var ExtractionAssetFormat = {
   Png: "png",
   Jpg: "jpg",
   Jpeg: "jpeg",
+  Webp: "webp",
   Pdf: "pdf"
 };
 var ExtractionAssetType = {
@@ -3793,7 +3794,8 @@ var z69 = __toESM(require("zod/v4"), 1);
 var ExtractionDateField$outboundSchema = z69.object({
   instructions: z69.string().optional(),
   nullThreshold: z69.number().optional(),
-  type: z69.literal("date")
+  type: z69.literal("date"),
+  unit: z69.string().optional()
 }).transform((v) => {
   return remap(v, {
     nullThreshold: "null_threshold"
@@ -3805,7 +3807,8 @@ var z70 = __toESM(require("zod/v4"), 1);
 var ExtractionDatetimeField$outboundSchema = z70.object({
   instructions: z70.string().optional(),
   nullThreshold: z70.number().optional(),
-  type: z70.literal("datetime")
+  type: z70.literal("datetime"),
+  unit: z70.string().optional()
 }).transform((v) => {
   return remap(v, {
     nullThreshold: "null_threshold"
@@ -3933,9 +3936,11 @@ var Items$outboundSchema = outboundSchema(Items);
 var ExtractionListField$outboundSchema = z74.object({
   decimals: z74.int().optional(),
   instructions: z74.string().optional(),
+  integer: z74.boolean().optional(),
   items: Items$outboundSchema,
   nullThreshold: z74.number().optional(),
-  type: z74.literal("list")
+  type: z74.literal("list"),
+  unit: z74.string().optional()
 }).transform((v) => {
   return remap(v, {
     nullThreshold: "null_threshold"
@@ -3962,7 +3967,8 @@ var z76 = __toESM(require("zod/v4"), 1);
 var ExtractionTextField$outboundSchema = z76.object({
   instructions: z76.string().optional(),
   nullThreshold: z76.number().optional(),
-  type: z76.literal("text")
+  type: z76.literal("text"),
+  unit: z76.string().optional()
 }).transform((v) => {
   return remap(v, {
     nullThreshold: "null_threshold"
@@ -3974,7 +3980,8 @@ var z77 = __toESM(require("zod/v4"), 1);
 var ExtractionTimeField$outboundSchema = z77.object({
   instructions: z77.string().optional(),
   nullThreshold: z77.number().optional(),
-  type: z77.literal("time")
+  type: z77.literal("time"),
+  unit: z77.string().optional()
 }).transform((v) => {
   return remap(v, {
     nullThreshold: "null_threshold"
@@ -4010,7 +4017,7 @@ var ExtractionsRequest$outboundSchema = z78.object({
   provider: z78.nullable(ProviderPreferences$outboundSchema).optional(),
   referenceDate: z78.string().optional(),
   sessionId: z78.string().optional(),
-  state: z78.string(),
+  state: z78.string().default(""),
   trace: TraceConfig$outboundSchema.optional(),
   user: z78.string().optional()
 }).transform((v) => {
@@ -4762,7 +4769,7 @@ var Analytics = class extends ClientSDK {
    * Get user activity grouped by endpoint
    *
    * @remarks
-   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days. Pass `workspace_id` to scope the response to a single workspace. Pass `group_by=workspace` to split each row per workspace and include `workspace_id` on every item; by default rows are aggregated across workspaces and `workspace_id` is not returned. Activity recorded before workspace resolution existed is permanently attributed to the account default workspace (no backfill is possible). [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Returns user activity data grouped by endpoint for the last 30 (completed) UTC days. Pass `workspace_id` to scope the response to a single workspace. Pass `group_by=workspace` to split each row per workspace and include `workspace_id` on every item; by default rows are aggregated across workspaces and `workspace_id` is not returned. Activity recorded before workspace resolution existed is permanently attributed to the account default workspace (no backfill is possible). A workspace-scoped management key needs `activity:view_all` on its own workspace and reads only that workspace: an omitted `workspace_id` defaults to it, a `workspace_id` naming any other workspace returns 403, `api_key_hash` and `user_id` resolve only keys and members of that workspace, and legacy activity with no workspace is excluded (including for the default workspace). [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async getUserActivity(request, options) {
     return unwrapAsync(analyticsGetUserActivity(this, request, options));
@@ -4771,7 +4778,7 @@ var Analytics = class extends ClientSDK {
    * Get available analytics metrics and dimensions
    *
    * @remarks
-   * Returns the available metrics, dimensions, filter operators, and granularities for the analytics query endpoint. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Returns the available metrics, dimensions, filter operators, and granularities for the analytics query endpoint. Workspace-scoped management keys are accepted. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async getAnalyticsMeta(request, options) {
     return unwrapAsync(analyticsGetAnalyticsMeta(this, request, options));
@@ -4780,7 +4787,7 @@ var Analytics = class extends ClientSDK {
    * Query analytics data
    *
    * @remarks
-   * Execute an analytics query with specified metrics, dimensions, filters, and time range. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Execute an analytics query with specified metrics, dimensions, filters, and time range. A workspace-scoped management key needs `activity:view_all` on its own workspace and reads only that workspace: it is refused a `workspace` filter naming another workspace, it excludes legacy rows with no workspace (including for the default workspace), and possible-cache metrics such as `possible_cached_tokens` return 400. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async queryAnalytics(request, options) {
     return unwrapAsync(analyticsQueryAnalytics(this, request, options));
@@ -10049,6 +10056,7 @@ var ReasoningFormat = {
   BedrockXaiResponsesV1: "bedrock-xai-responses-v1",
   XaiResponsesV1: "xai-responses-v1",
   MetaResponsesV1: "meta-responses-v1",
+  GoogleVertexResponsesV1: "google-vertex-responses-v1",
   OpenrouterStealthV1: "openrouter-stealth-v1",
   AnthropicClaudeV1: "anthropic-claude-v1",
   GoogleGeminiV1: "google-gemini-v1"
@@ -19091,7 +19099,7 @@ var BYOK = class extends ClientSDK {
    * List BYOK provider credentials
    *
    * @remarks
-   * List the bring-your-own-key (BYOK) provider credentials for the authenticated entity's default workspace. Use the `workspace_id` query parameter to scope the result to a different workspace, or the `provider` query parameter to filter by upstream provider. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * List the bring-your-own-key (BYOK) provider credentials for the authenticated entity's default workspace, or a workspace-scoped management key's own workspace. Use the `workspace_id` query parameter to scope the result to a different workspace, or the `provider` query parameter to filter by upstream provider. A workspace-scoped management key can only list its own workspace; any other `workspace_id` returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async list(request, options) {
     return unwrapResultIterator(byokList(this, request, options));
@@ -19100,7 +19108,7 @@ var BYOK = class extends ClientSDK {
    * Create a BYOK provider credential
    *
    * @remarks
-   * Create a new bring-your-own-key (BYOK) provider credential. The raw key is encrypted at rest and never returned in API responses. When `workspace_id` is omitted, the credential is created in the default workspace; if that default has been deleted, the request returns a 400 and you must pass `workspace_id` explicitly. Treat the raw key as write-only; it is never returned after creation. Use `allowed_api_key_hashes` to restrict the credential to specific OpenRouter API keys. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Create a new bring-your-own-key (BYOK) provider credential. The raw key is encrypted at rest and never returned in API responses. When `workspace_id` is omitted, the credential is created in the default workspace; if that default has been deleted, the request returns a 400 and you must pass `workspace_id` explicitly. A workspace-scoped management key creates the credential in its own workspace when `workspace_id` is omitted, and any other `workspace_id` returns 403. Treat the raw key as write-only; it is never returned after creation. Use `allowed_api_key_hashes` to restrict the credential to specific OpenRouter API keys. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async create(request, options) {
     return unwrapAsync(byokCreate(this, request, options));
@@ -19109,7 +19117,7 @@ var BYOK = class extends ClientSDK {
    * Delete a BYOK provider credential
    *
    * @remarks
-   * Delete (soft-delete) a bring-your-own-key (BYOK) provider credential by its `id`. The encrypted key material is wiped and the record is marked as deleted. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Delete (soft-delete) a bring-your-own-key (BYOK) provider credential by its `id`. The encrypted key material is wiped and the record is marked as deleted. A workspace-scoped management key only reaches credentials in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async delete(request, options) {
     return unwrapAsync(byokDelete(this, request, options));
@@ -19118,7 +19126,7 @@ var BYOK = class extends ClientSDK {
    * Get a BYOK provider credential
    *
    * @remarks
-   * Get a single bring-your-own-key (BYOK) provider credential by its `id`. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Get a single bring-your-own-key (BYOK) provider credential by its `id`. A workspace-scoped management key only reaches credentials in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async get(request, options) {
     return unwrapAsync(byokGet(this, request, options));
@@ -19127,7 +19135,7 @@ var BYOK = class extends ClientSDK {
    * Update a BYOK provider credential
    *
    * @remarks
-   * Update an existing bring-your-own-key (BYOK) provider credential by its `id`. Include the `key` field to rotate the raw provider API key in-place (the previous key material is overwritten). Use `allowed_api_key_hashes` to restrict the credential to specific OpenRouter API keys (`null` clears the restriction). [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Update an existing bring-your-own-key (BYOK) provider credential by its `id`. Include the `key` field to rotate the raw provider API key in-place (the previous key material is overwritten). Use `allowed_api_key_hashes` to restrict the credential to specific OpenRouter API keys (`null` clears the restriction). A workspace-scoped management key only reaches credentials in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async update(request, options) {
     return unwrapAsync(byokUpdate(this, request, options));
@@ -31265,7 +31273,7 @@ var Guardrails = class extends ClientSDK {
    * List guardrails
    *
    * @remarks
-   * List all guardrails for the authenticated user. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * List all guardrails for the authenticated user. A workspace-scoped management key lists only its own workspace, which `workspace_id` defaults to; naming another workspace returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async list(request, options) {
     return unwrapResultIterator(guardrailsList(this, request, options));
@@ -31274,7 +31282,7 @@ var Guardrails = class extends ClientSDK {
    * Create a guardrail
    *
    * @remarks
-   * Create a new guardrail for the authenticated user. A newly created guardrail enforces nothing until it is assigned to API keys or organization members; `workspace_id` places the guardrail in a workspace but does not apply it to that workspace's traffic. To restrict all traffic in a workspace, update the workspace's default guardrail instead. Set `allowed_data_regions` to enforce [In-Region Routing](/docs/guides/features/in-region-routing#enforcing-in-region-routing-with-guardrails): governed requests must arrive through one of the listed OpenRouter domains and are rejected with a 403 otherwise. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Create a new guardrail for the authenticated user. A newly created guardrail enforces nothing until it is assigned to API keys or organization members; `workspace_id` places the guardrail in a workspace but does not apply it to that workspace's traffic. To restrict all traffic in a workspace, update the workspace's default guardrail instead. Set `allowed_data_regions` to enforce [In-Region Routing](/docs/guides/features/in-region-routing#enforcing-in-region-routing-with-guardrails): governed requests must arrive through one of the listed OpenRouter domains and are rejected with a 403 otherwise. A workspace-scoped management key creates in its own workspace, which `workspace_id` defaults to; naming another workspace returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async create(request, options) {
     return unwrapAsync(guardrailsCreate(this, request, options));
@@ -31283,7 +31291,7 @@ var Guardrails = class extends ClientSDK {
    * Delete a guardrail
    *
    * @remarks
-   * Delete an existing guardrail. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Delete an existing guardrail. A workspace-scoped management key reaches only guardrails in its own workspace; any other guardrail returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async delete(request, options) {
     return unwrapAsync(guardrailsDelete(this, request, options));
@@ -31292,7 +31300,7 @@ var Guardrails = class extends ClientSDK {
    * Get a guardrail
    *
    * @remarks
-   * Get a single guardrail by ID. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Get a single guardrail by ID. A workspace-scoped management key reaches only guardrails in its own workspace; any other guardrail returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async get(request, options) {
     return unwrapAsync(guardrailsGet(this, request, options));
@@ -31301,7 +31309,7 @@ var Guardrails = class extends ClientSDK {
    * Update a guardrail
    *
    * @remarks
-   * Update an existing guardrail, or materialize an unconfigured workspace default guardrail. Collection fields use replace semantics: send the full desired set on every update. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Update an existing guardrail, or materialize an unconfigured workspace default guardrail. Collection fields use replace semantics: send the full desired set on every update. A workspace-scoped management key reaches only guardrails in its own workspace; any other guardrail returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async update(request, options) {
     return unwrapAsync(guardrailsUpdate(this, request, options));
@@ -31310,7 +31318,7 @@ var Guardrails = class extends ClientSDK {
    * List key assignments for a guardrail
    *
    * @remarks
-   * List all API key assignments for a specific guardrail. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * List all API key assignments for a specific guardrail. A workspace-scoped management key reaches only guardrails in its own workspace; any other guardrail returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async listGuardrailKeyAssignments(request, options) {
     return unwrapResultIterator(guardrailsListGuardrailKeyAssignments(this, request, options));
@@ -31319,7 +31327,7 @@ var Guardrails = class extends ClientSDK {
    * Bulk assign keys to a guardrail
    *
    * @remarks
-   * Assign multiple API keys to a specific guardrail. A key may hold at most one guardrail; assigning replaces any existing assignment. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Assign multiple API keys to a specific guardrail. A key may hold at most one guardrail; assigning replaces any existing assignment. A workspace-scoped management key reaches only guardrails in its own workspace (any other returns 404), and a batch naming an unknown or out-of-workspace key hash is rejected with 400 before anything changes. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async bulkAssignKeys(request, options) {
     return unwrapAsync(guardrailsBulkAssignKeys(this, request, options));
@@ -31328,7 +31336,7 @@ var Guardrails = class extends ClientSDK {
    * Bulk unassign keys from a guardrail
    *
    * @remarks
-   * Unassign multiple API keys from a specific guardrail. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Unassign multiple API keys from a specific guardrail. A workspace-scoped management key reaches only guardrails in its own workspace (any other returns 404), and a batch naming an unknown or out-of-workspace key hash is rejected with 400 before anything changes. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async bulkUnassignKeys(request, options) {
     return unwrapAsync(guardrailsBulkUnassignKeys(this, request, options));
@@ -31337,7 +31345,7 @@ var Guardrails = class extends ClientSDK {
    * List member assignments for a guardrail
    *
    * @remarks
-   * List all organization member assignments for a specific guardrail. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * List all organization member assignments for a specific guardrail. A workspace-scoped management key reaches only guardrails in its own workspace; any other guardrail returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async listGuardrailMemberAssignments(request, options) {
     return unwrapResultIterator(guardrailsListGuardrailMemberAssignments(this, request, options));
@@ -31346,7 +31354,7 @@ var Guardrails = class extends ClientSDK {
    * Bulk assign members to a guardrail
    *
    * @remarks
-   * Assign multiple organization members to a specific guardrail. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Assign multiple organization members to a specific guardrail. Requires an organization-scoped management key; workspace-scoped management keys return 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async bulkAssignMembers(request, options) {
     return unwrapAsync(guardrailsBulkAssignMembers(this, request, options));
@@ -31355,7 +31363,7 @@ var Guardrails = class extends ClientSDK {
    * Bulk unassign members from a guardrail
    *
    * @remarks
-   * Unassign multiple organization members from a specific guardrail. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Unassign multiple organization members from a specific guardrail. Requires an organization-scoped management key; workspace-scoped management keys return 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async bulkUnassignMembers(request, options) {
     return unwrapAsync(guardrailsBulkUnassignMembers(this, request, options));
@@ -31364,7 +31372,7 @@ var Guardrails = class extends ClientSDK {
    * List all key assignments
    *
    * @remarks
-   * List all API key guardrail assignments for the authenticated user. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * List all API key guardrail assignments for the authenticated user. A workspace-scoped management key lists only its own workspace, which `workspace_id` defaults to; naming another workspace returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async listKeyAssignments(request, options) {
     return unwrapResultIterator(guardrailsListKeyAssignments(this, request, options));
@@ -31373,7 +31381,7 @@ var Guardrails = class extends ClientSDK {
    * List all member assignments
    *
    * @remarks
-   * List all organization member guardrail assignments for the authenticated user. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * List all organization member guardrail assignments for the authenticated user. A workspace-scoped management key lists only its own workspace, which `workspace_id` defaults to; naming another workspace returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async listMemberAssignments(request, options) {
     return unwrapResultIterator(guardrailsListMemberAssignments(this, request, options));
@@ -31620,10 +31628,12 @@ var ImageGenerationProviderPreferences$outboundSchema = z768.object({
 var ImageGenerationRequestAspectRatio = {
   Eleven: "1:1",
   Twelve: "1:2",
+  Thirteen: "1:3",
   Fourteen: "1:4",
   Eighteen: "1:8",
   TwentyOne: "2:1",
   TwentyThree: "2:3",
+  ThirtyOne: "3:1",
   TwoDot351: "2.35:1",
   ThirtyTwo: "3:2",
   ThirtyFour: "3:4",
@@ -33144,7 +33154,7 @@ async function $do93(client, request, options) {
   const responseFields = {
     HttpMeta: { Response: response, Request: req }
   };
-  const [result] = await match(json(200, CreateAuthKeysCodeResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
+  const [result] = await match(json(200, CreateAuthKeysCodeResponse$inboundSchema), jsonErr(400, BadRequestResponseError$inboundSchema), jsonErr(401, UnauthorizedResponseError$inboundSchema), jsonErr(403, ForbiddenResponseError$inboundSchema), jsonErr(409, ConflictResponseError$inboundSchema), jsonErr(500, InternalServerResponseError$inboundSchema), jsonErr(503, ServiceUnavailableResponseError$inboundSchema), fail("4XX"), fail("5XX"))(response, req, { extraFields: responseFields });
   if (!result.ok) {
     return [result, { status: "complete", request: req, response }];
   }
@@ -35243,7 +35253,7 @@ var Observability = class extends ClientSDK {
    * List observability destinations
    *
    * @remarks
-   * List the observability destinations configured for the authenticated entity's default workspace. Use the `workspace_id` query parameter to scope the result to a different workspace. Only destinations with stable release status are surfaced — destinations of other types are excluded. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * List the observability destinations configured for the authenticated entity's default workspace, or a workspace-scoped management key's own workspace. Use the `workspace_id` query parameter to scope the result to a different workspace. A workspace-scoped management key can only list its own workspace; any other `workspace_id` returns 403. Only destinations with stable release status are surfaced — destinations of other types are excluded. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async list(request, options) {
     return unwrapResultIterator(observabilityList(this, request, options));
@@ -35252,7 +35262,7 @@ var Observability = class extends ClientSDK {
    * Create an observability destination
    *
    * @remarks
-   * Create a new observability destination. A maximum of 5 destinations per type is allowed. Defaults to the authenticated entity's default workspace; use the `workspace_id` body field to scope to a different workspace. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Create a new observability destination. A maximum of 5 destinations per type is allowed. Defaults to the authenticated entity's default workspace, or a workspace-scoped management key's own workspace; use the `workspace_id` body field to scope to a different workspace. A workspace-scoped management key can only create in its own workspace; any other `workspace_id` returns 403. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async create(request, options) {
     return unwrapAsync(observabilityCreate(this, request, options));
@@ -35261,7 +35271,7 @@ var Observability = class extends ClientSDK {
    * Delete an observability destination
    *
    * @remarks
-   * Delete an existing observability destination. This performs a soft delete. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Delete an existing observability destination. This performs a soft delete. A workspace-scoped management key only reaches destinations in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async delete(request, options) {
     return unwrapAsync(observabilityDelete(this, request, options));
@@ -35270,7 +35280,7 @@ var Observability = class extends ClientSDK {
    * Get an observability destination
    *
    * @remarks
-   * Fetch a single observability destination by its UUID. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Fetch a single observability destination by its UUID. A workspace-scoped management key only reaches destinations in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async get(request, options) {
     return unwrapAsync(observabilityGet(this, request, options));
@@ -35279,7 +35289,7 @@ var Observability = class extends ClientSDK {
    * Update an observability destination
    *
    * @remarks
-   * Update an existing observability destination. Only the fields provided in the request body are updated. [Management key](/docs/guides/overview/auth/management-api-keys) required.
+   * Update an existing observability destination. Only the fields provided in the request body are updated. A workspace-scoped management key only reaches destinations in its own workspace; any other `id` returns 404. [Management key](/docs/guides/overview/auth/management-api-keys) required.
    */
   async update(request, options) {
     return unwrapAsync(observabilityUpdate(this, request, options));

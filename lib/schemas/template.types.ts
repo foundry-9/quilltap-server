@@ -8,6 +8,8 @@
  */
 
 import { z } from 'zod';
+import { checkRegexSafety } from '@/lib/utils/safe-regex';
+import { CLASS_NAME_REGEX, CLASS_NAME_MAX, sanitizeClassName } from '@/lib/utils/css-class';
 import {
   UUIDSchema,
   TimestampSchema,
@@ -190,11 +192,20 @@ export type AnnotationButton = {
  * Pattern for styling roleplay text in message content.
  * Defines how to match and style specific text patterns (narration, OOC, etc.)
  */
+export const TEMPLATE_CLASS_NAME_REGEX = CLASS_NAME_REGEX;
+export const TEMPLATE_CLASS_NAME_MAX = CLASS_NAME_MAX;
+export const TEMPLATE_PATTERN_MAX = 500;
+
+/** Lenient read-side form: strips disallowed characters rather than rejecting. Writes use the Strict schemas below. */
+const sanitizeTemplateClassName = sanitizeClassName;
+
+const lenientClassName = z.string().transform(sanitizeTemplateClassName);
+
 export const RenderingPatternSchema = z.object({
   /** Regex pattern as a string (converted to RegExp at runtime) */
   pattern: z.string().min(1),
   /** CSS class to apply to matched text (e.g., qt-chat-narration, qt-chat-ooc); unused (may be empty) for `literal`/`strip` */
-  className: z.string(),
+  className: lenientClassName,
   /** Optional regex flags (e.g., 'm' for multiline) */
   flags: z.string().optional(),
   /**
@@ -240,10 +251,34 @@ export const DialogueDetectionSchema = z.object({
   /** Closing quote characters to detect (e.g., ['"', '\u201d']) */
   closingChars: z.array(z.string()),
   /** CSS class to apply to dialogue paragraphs */
-  className: z.string().min(1),
+  className: lenientClassName.pipe(z.string().min(1)),
 });
 
 export type DialogueDetection = z.infer<typeof DialogueDetectionSchema>;
+
+// Write-side (API / import) validation: reports an error instead of sanitising.
+const strictClassName = z.string().max(TEMPLATE_CLASS_NAME_MAX).regex(TEMPLATE_CLASS_NAME_REGEX, {
+  message: 'className may contain only letters, digits, underscores, hyphens and spaces',
+});
+
+export const StrictRenderingPatternSchema = z.object({
+  pattern: z.string().min(1).max(TEMPLATE_PATTERN_MAX).refine((p) => checkRegexSafety(p).ok, {
+    message: 'pattern is too complex (nested repetition) or too long',
+  }),
+  className: strictClassName.or(z.literal('')),
+  flags: z.string().max(10).optional(),
+  scope: z.enum(['inline', 'line', 'unmarked', 'literal', 'strip']).optional(),
+  hideDelimiters: z.boolean().optional(),
+}).refine(
+  (p) => p.scope === 'literal' || p.scope === 'strip' || p.className.length > 0,
+  { message: 'className is required for span-styling patterns', path: ['className'] },
+);
+
+export const StrictDialogueDetectionSchema = z.object({
+  openingChars: z.array(z.string()),
+  closingChars: z.array(z.string()),
+  className: strictClassName.min(1),
+});
 
 // ============================================================================
 // NARRATION DELIMITERS

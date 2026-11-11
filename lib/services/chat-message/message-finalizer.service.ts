@@ -42,6 +42,7 @@ import { runReplyTriggers } from './trigger-phrase-sites'
 import { buildRouteTrail } from './route-trail'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { StorytellerTurnContext } from '@/lib/storyteller/types'
+import type { ToolEffect } from '@/lib/tools/effects'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -71,6 +72,12 @@ export interface FinalizeMessageResponseOptions {
    * classification wait for the round's end (`runStorytellerRoundHousekeeping`).
    */
   storyteller?: StorytellerTurnContext
+  /**
+   * The turn's effect ceiling (a storyteller bid, an autonomous room without
+   * destructive permission), so a Carina query this reply's markup starts
+   * runs under it. Unset = no ceiling.
+   */
+  effectCeiling?: ToolEffect
 }
 
 /**
@@ -96,6 +103,7 @@ export async function finalizeMessageResponse({
   compression,
   triggers,
   storyteller,
+  effectCeiling,
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
   const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
@@ -515,6 +523,7 @@ export async function finalizeMessageResponse({
       // Surface the answer live (before this turn's done event) so the Salon
       // renders the card immediately rather than at the post-turn refresh.
       onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+      effectCeiling,
     })
   }
 

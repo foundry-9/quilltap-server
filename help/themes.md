@@ -63,6 +63,8 @@ Theme bundles require no build tools, npm packages, or JavaScript code -- they a
 4. Select a `.qtap-theme` file from your computer
 5. The theme appears in your theme list immediately
 
+A bundle's manifest may name its styles, tokens, preview image, fonts and icons only by relative paths that stay inside the bundle. A registry that publishes a signing key has its index and signed bundles verified, and an install whose signature does not check out is refused. Installing a theme by URL, like importing an image by URL, fetches only from public http(s) addresses and within sensible size limits.
+
 #### Uninstalling a Theme Bundle
 
 Bundle themes can be uninstalled from the Appearance settings:

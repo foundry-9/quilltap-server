@@ -12,6 +12,7 @@ import { applySqlcipherKey } from './sqlcipher-key';
 import { registerTextCodecFunction } from './text-codec-function';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
+import { closeReadonlyQueryClients } from './readonly-query-client';
 import { closeMountIndexSQLiteClient } from './mount-index-client';
 import { releaseActiveInstanceLock, registerInstanceLockShutdownHandler } from './instance-lock';
 
@@ -175,6 +176,7 @@ function configurePragmas(db: DatabaseType, config: SQLiteConfig): void {
  * the WAL into the main database file, then optimizes and closes.
  */
 export function closeSQLiteClient(): void {
+  closeReadonlyQueryClients();
   const db = getDb();
   if (db) {
     try {

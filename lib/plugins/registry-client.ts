@@ -16,6 +16,7 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import * as tar from 'tar';
 import { logger } from '@/lib/logger';
+import { safeFetch } from '@/lib/net/safe-fetch';
 
 const log = logger.child({ module: 'RegistryClient' });
 
@@ -26,6 +27,17 @@ const log = logger.child({ module: 'RegistryClient' });
 const DEFAULT_REGISTRY_URL = 'https://registry.npmjs.org';
 const VERSION_CHECK_TIMEOUT = 30_000;   // 30 seconds
 const DOWNLOAD_TIMEOUT = 120_000;       // 2 minutes
+const MAX_METADATA_BYTES = 50 * 1024 * 1024; // full npm packuments can be large
+const MAX_TARBALL_BYTES = 100 * 1024 * 1024;
+
+/**
+ * The default registry is a public host and is held to public destinations.
+ * A registry URL the operator configured explicitly (for example a mirror on
+ * the local network) may be private; that choice is theirs.
+ */
+function isCustomRegistry(registryUrl: string): boolean {
+  return registryUrl.replace(/\/+$/, '') !== DEFAULT_REGISTRY_URL;
+}
 
 // ============================================================================
 // TYPES
@@ -80,27 +92,20 @@ function encodePackageName(packageName: string): string {
 async function fetchRegistryJson<T>(
   url: string,
   timeoutMs: number,
+  allowPrivate: boolean,
 ): Promise<T> {
+  const response = await safeFetch(url, {
+    maxBytes: MAX_METADATA_BYTES,
+    timeoutMs,
+    allowPrivate,
+    headers: { Accept: 'application/json' },
+  });
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Registry returned HTTP ${response.status} for ${url}`);
-    }
-
-    return (await response.json()) as T;
-  } finally {
-    clearTimeout(timer);
+  if (!response.ok) {
+    throw new Error(`Registry returned HTTP ${response.status} for ${url}`);
   }
+
+  return response.json<T>();
 }
 
 /**
@@ -109,25 +114,19 @@ async function fetchRegistryJson<T>(
 async function downloadBuffer(
   url: string,
   timeoutMs: number,
+  allowPrivate: boolean,
 ): Promise<Buffer> {
+  const response = await safeFetch(url, {
+    maxBytes: MAX_TARBALL_BYTES,
+    timeoutMs,
+    allowPrivate,
+  });
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Download failed with HTTP ${response.status} for ${url}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  } finally {
-    clearTimeout(timer);
+  if (!response.ok) {
+    throw new Error(`Download failed with HTTP ${response.status} for ${url}`);
   }
+
+  return response.body;
 }
 
 // ============================================================================
@@ -152,6 +151,7 @@ export async function getLatestVersion(
     const metadata = await fetchRegistryJson<NpmPackageMetadata>(
       url,
       VERSION_CHECK_TIMEOUT,
+      isCustomRegistry(registryUrl),
     );
 
     const latest = metadata['dist-tags']?.latest;
@@ -206,6 +206,7 @@ export async function installPackageFromRegistry(
     const metadata = await fetchRegistryJson<NpmPackageMetadata>(
       url,
       VERSION_CHECK_TIMEOUT,
+      isCustomRegistry(registryUrl),
     );
 
     const latestTag = metadata['dist-tags']?.latest;
@@ -224,7 +225,7 @@ export async function installPackageFromRegistry(
     }
 
     // 2. Download the tarball
-    const tarballBuffer = await downloadBuffer(tarballUrl, DOWNLOAD_TIMEOUT);
+    const tarballBuffer = await downloadBuffer(tarballUrl, DOWNLOAD_TIMEOUT, isCustomRegistry(registryUrl));
 
     // 3. Prepare the extraction target
     const extractDir = path.join(targetDir, 'node_modules', packageName);

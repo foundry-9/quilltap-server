@@ -13,6 +13,7 @@ import { logger } from './logger';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { getInheritedTags, mergeTags } from './files/tag-inheritance';
 import { convertToWebP } from './files/webp-conversion';
+import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 
 export interface ImageUploadResult {
   id: string;
@@ -265,25 +266,28 @@ export async function uploadImage(file: File, userId: string, linkedTo: string[]
  * Import an image from a URL
  */
 export async function importImageFromUrl(url: string, userId: string, linkedTo: string[] = []): Promise<ImageUploadResult> {
-  // Fetch the image
-  const response = await fetch(url);
+  // Fetch the image (public destinations only, body capped at the upload limit)
+  let response;
+  try {
+    response = await safeFetch(url, { maxBytes: MAX_FILE_SIZE, timeoutMs: 30_000 });
+  } catch (err) {
+    if (err instanceof SafeFetchError && err.code === 'TOO_LARGE') {
+      throw new Error(`Image size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024} MB`);
+    }
+    throw new Error(`Failed to fetch image from URL: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
   }
 
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
 
   if (!ALLOWED_IMAGE_TYPES.includes(contentType)) {
     throw new Error(`Invalid image type from URL. Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`);
   }
 
-  // Get buffer
-  const buffer = Buffer.from(await response.arrayBuffer());
-
-  if (buffer.length > MAX_FILE_SIZE) {
-    throw new Error(`Image size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024} MB`);
-  }
+  const buffer = response.body;
 
   // Get image dimensions
   const dimensions = await getImageDimensions(buffer, contentType);
