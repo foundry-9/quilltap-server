@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Refactor: client server-state (the project and group pages)
+
+- The project page's chats, files and linked stores, and the group page's record, members and linked stores, are queries instead of effect-and-state loaders. Chats page through `useInfiniteQuery` (`queryKeys.projects.chats`); files are `useProjectFilesQuery` (`lib/hooks/use-project-files.ts`, `projects.files`); a project's or a group's linked stores and their link / unlink writes are `useOwnerStoreLinks` (`lib/hooks/use-owner-store-links.ts`, `projects.stores` / `groups.stores`), the client half of the shared owner-links route. The project store browser reads the same entry. `useProjectFiles`, `useProjectDocumentStores` and `useGroupMountPoints` are gone. The project page's image-profile selector reads the shared list.
+- The group list is one query (`useGroupsQuery`, `lib/hooks/use-groups.ts`): the Aurora list, the container catalogue and Save Scenario share it. The group page's form is a `useDraft` (`useGroupDetail`), so a tab switch back no longer threatens an edit, and a save, a member change, a create or a delete refreshes the list without the hand-rolled refetch on Back. A member change also refreshes the character's stats. New keys `groups.detail` / `members` / `stores` / `byCharactersAll`.
+- The Prospero and Aurora tab refetch also re-read the store list (the pages' store pickers).
+- The Move-to-Project folder picker read a project's files from `/api/v1/projects/{id}/files`, which does not exist, so folders known only from a project's files never appeared. It reads `?action=list-files` through the shared hook.
 #### Refactor: one modal shell (#171)
 
 - Every dialog is now `BaseModal` (`components/ui/BaseModal.tsx`) or `WizardModal` (`components/ui/WizardModal.tsx`, the tools wizards). About 55 hand-built overlays in 60 files moved onto it; net about 1,000 lines removed.

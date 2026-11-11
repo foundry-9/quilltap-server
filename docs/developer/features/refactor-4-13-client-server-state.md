@@ -115,5 +115,12 @@ Number inputs that save on change (`LLMLoggingSettings`) save on blur or after a
 
 **Left as plain calls, deliberately**: `app/setup/page.tsx`, `app/setup/profile/page.tsx` and `components/startup/pepper-vault-gate.tsx` read the character or profile list once to choose a redirect; the setup wizard's `fetchExistingConfig` and `updateChatSettings` run before any settings view is mounted (the wizard invalidates the lists when it finishes).
 
-**What remains** (not entity lists, so outside §5.1's named hooks; candidates for a follow-up): other effect-and-state loaders the audit counted, among them `useProjectChats`, `useProjectFiles`, `useProjectDocumentStores`, `useGroupMembers`' member list, `GroupDetailView` and `useGroupMountPoints`. None is one of the stale-dropdown or draft-loss cases.
+**Follow-up (2026-11-11): the remaining loaders.** The effect-and-state loaders listed here as remaining are now queries:
 
+- `useProjectChats` is one `useInfiniteQuery` (`projects.chats(id)`); a removal re-reads it and the project counts.
+- `useProjectFiles` is gone: `useProjectFilesQuery` (`lib/hooks/use-project-files.ts`, `projects.files(id)`) is the one read of `?action=list-files`, shared with the Move-to-Project `FolderPicker` — which had been reading a route that does not exist (`/api/v1/projects/{id}/files`).
+- `useProjectDocumentStores` and `useGroupMountPoints` are gone: `useOwnerStoreLinks(kind, id)` (`lib/hooks/use-owner-store-links.ts`) mirrors the server's shared owner-links route factory — `useOwnerStoresQuery` is the one read (`projects.stores` / `groups.stores`, shared with `ProjectStoreBrowser`), link and unlink are mutations that re-read the owner's list and the store.
+- `useGroupMembers`' member list is a query (`groups.members(id)`); add and remove are one mutation that re-reads the `groups` prefix and the character's stats.
+- `GroupDetailView` reads through `useGroupDetail` (`groups.detail(id)`) with the form a `useDraft`; the save writes the cache and re-reads the group lists.
+- Found on the way, an entity list §5.1 did not name: the group list had two inline `queryFn`s and a hand-rolled loader (`useGroups`). It is `useGroupsQuery` (`lib/hooks/use-groups.ts`), and the Aurora view's mount, tab and Back refetches are gone — the writes invalidate it.
+- The project page's inline image-profile fetch reads `useImageProfilesQuery`. Its and the group page's `useOnTabActivated` refreshes are gone: every key is under the prefix the tab refetch sweeps, and the `prospero` and `aurora` tabs now also sweep `mountPoints.lists` for the store pickers.

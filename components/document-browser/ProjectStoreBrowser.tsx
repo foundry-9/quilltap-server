@@ -9,25 +9,13 @@
  * @module components/document-browser/ProjectStoreBrowser
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useOwnerStoresQuery } from '@/lib/hooks/use-owner-store-links'
 import { pickPrimaryProjectStore, type StoreLike } from '@/lib/mount-index/project-store-naming'
 import { DocumentStoreBrowser, type DocumentStoreBrowserProps } from './DocumentStoreBrowser'
 
-interface ProjectStoresResponse {
-  mountPoints: Array<StoreLike & { id: string }>
-  officialMountPointId: string | null
-}
-
 /** The id of a project's own store, once known (null when it has none). */
 export function useProjectStoreId(projectId: string | null) {
-  const query = useQuery({
-    queryKey: queryKeys.projects.stores(projectId ?? ''),
-    queryFn: ({ signal }) =>
-      apiFetch<ProjectStoresResponse>(`/api/v1/projects/${projectId}/mount-points`, { signal }),
-    enabled: !!projectId,
-  })
+  const query = useOwnerStoresQuery<StoreLike & { id: string }>({ kind: 'project', id: projectId ?? '' })
   const data = query.data
   const storeId = data ? (data.officialMountPointId ?? pickPrimaryProjectStore(data.mountPoints)?.id ?? null) : null
   return { storeId, isLoading: !!projectId && query.isLoading, isError: query.isError }

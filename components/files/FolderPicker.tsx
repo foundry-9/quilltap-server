@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useProjectFilesQuery } from '@/lib/hooks/use-project-files'
 
 interface FolderInfo {
   path: string
@@ -29,7 +30,8 @@ interface DbFolder {
 }
 
 /** Stable empty arrays, so the memo below isn't invalidated on every render. */
-const NO_FILES: Array<{ folderPath?: string }> = []
+type FileRow = { folderPath?: string | null }
+const NO_FILES: FileRow[] = []
 const NO_FOLDERS: DbFolder[] = []
 const NO_PATHS: string[] = []
 
@@ -63,17 +65,19 @@ export default function FolderPicker({
     paths: [],
   })
 
-  // Fetch files and folders via TanStack Query. URLs are built inside the
-  // queryFn from `projectId` so the key (which encodes projectId) stays the
-  // single source of cache identity.
-  const { data: filesData, isLoading: filesLoading } = useQuery({
-    queryKey: projectId ? queryKeys.projects.files(projectId) : queryKeys.files.list({ filter: 'general' }),
-    queryFn: ({ signal }) =>
-      apiFetch<{ files: Array<{ folderPath?: string }> }>(
-        projectId ? `/api/v1/projects/${projectId}/files` : '/api/v1/files?filter=general',
-        { signal }
-      ),
+  // Files: a project's through the shared project-files read (the one the
+  // project page's Files card uses), general files otherwise. Exactly one of
+  // the two is enabled.
+  const projectFiles = useProjectFilesQuery<FileRow>(projectId ?? '', { enabled: !!projectId })
+  const generalFiles = useQuery({
+    queryKey: queryKeys.files.list({ filter: 'general' }),
+    queryFn: ({ signal }) => apiFetch<{ files: FileRow[] }>('/api/v1/files?filter=general', { signal }),
+    select: (data) => data.files,
+    enabled: !projectId,
   })
+  const filesQuery = projectId ? projectFiles : generalFiles
+  const filesData = filesQuery.data
+  const filesLoading = filesQuery.isLoading
   const { data: foldersData, isLoading: foldersLoading, refetch: refetchFolders } = useQuery({
     queryKey: queryKeys.files.folders(projectId ?? undefined),
     queryFn: ({ signal }) =>
@@ -84,7 +88,7 @@ export default function FolderPicker({
   })
 
   const loading = filesLoading || foldersLoading
-  const files = filesData?.files ?? NO_FILES
+  const files = filesData ?? NO_FILES
   const dbFolders = foldersData?.folders ?? NO_FOLDERS
 
   const localPaths = localFolders.projectId === projectId ? localFolders.paths : NO_PATHS

@@ -3,93 +3,93 @@
 /**
  * useGroups Hook
  *
- * Manages groups data and CRUD operations.
+ * The Aurora group list (the shared `useGroupsQuery` read, with the member
+ * count lifted out of `_count`) and its create / delete writes. Every write
+ * invalidates the `groups` prefix, so the list, the group pickers and an open
+ * group page re-read together.
  *
  * @module app/aurora/hooks/useGroups
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useGroupsQuery } from '@/lib/hooks/use-groups'
 import type { Group, UseGroupsReturn } from '../types'
 
+type GroupRow = Group & { _count?: { members: number } }
+
+const EMPTY_GROUPS: Group[] = []
+const withMemberCount = (rows: GroupRow[]): Group[] =>
+  rows.map((g) => ({ ...g, memberCount: g._count?.members ?? 0 }))
+
 export function useGroups(): UseGroupsReturn {
-  const [groups, setGroups] = useState<Group[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const query = useGroupsQuery<GroupRow, Group[]>({ select: withMemberCount })
+
+  const invalidateGroups = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.groups.all }),
+    [queryClient],
+  )
 
   const fetchGroups = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
+    await invalidateGroups()
+  }, [invalidateGroups])
 
-      const res = await fetch('/api/v1/groups')
-      if (!res.ok) throw new Error('Failed to fetch groups')
-
-      const data = await res.json()
-      // Map API response to expected format (API returns _count.members, UI expects memberCount)
-      const mappedGroups = data.groups.map((g: Group & { _count?: { members: number } }) => ({
-        ...g,
-        memberCount: g._count?.members ?? 0,
-      }))
-      setGroups(mappedGroups)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-      console.error('useGroups: fetch error', { error: errorMsg })
-      setError(errorMsg)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const createGroup = useCallback(async (name: string, description?: string | null): Promise<Group | null> => {
-    try {
-      const res = await fetch('/api/v1/groups', {
+  const { mutateAsync: postGroup } = useMutation({
+    mutationFn: (body: { name: string; description?: string | null }) =>
+      apiFetch<{ group: Group }>('/api/v1/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description }),
-      })
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => invalidateGroups(),
+  })
 
-      if (!res.ok) throw new Error('Failed to create group')
+  const { mutateAsync: removeGroup } = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/v1/groups/${id}`, { method: 'DELETE' }),
+    onSuccess: () => invalidateGroups(),
+  })
 
-      const data = await res.json()
-      // New groups have 0 members
-      const newGroup: Group = {
-        ...data.group,
-        memberCount: 0,
+  const createGroup = useCallback(
+    async (name: string, description?: string | null): Promise<Group | null> => {
+      try {
+        const data = await postGroup({ name, description })
+        showSuccessToast('Group created successfully!')
+        // New groups have no members yet.
+        return { ...data.group, memberCount: 0 }
+      } catch (err) {
+        const message = apiErrorMessage(err, 'Failed to create group')
+        console.error('useGroups: create error', { error: message })
+        showErrorToast(message)
+        return null
       }
-      setGroups(prev => [newGroup, ...prev])
-      showSuccessToast('Group created successfully!')
+    },
+    [postGroup],
+  )
 
-      return newGroup
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to create group'
-      console.error('useGroups: create error', { error: errorMsg })
-      showErrorToast(errorMsg)
-      return null
-    }
-  }, [])
-
-  const deleteGroup = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/v1/groups/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete group')
-
-      setGroups(prev => prev.filter(g => g.id !== id))
-      showSuccessToast('Group deleted successfully!')
-
-      return true
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to delete group'
-      console.error('useGroups: delete error', { error: errorMsg, groupId: id })
-      showErrorToast(errorMsg)
-      return false
-    }
-  }, [])
+  const deleteGroup = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        await removeGroup(id)
+        showSuccessToast('Group deleted successfully!')
+        return true
+      } catch (err) {
+        const message = apiErrorMessage(err, 'Failed to delete group')
+        console.error('useGroups: delete error', { error: message, groupId: id })
+        showErrorToast(message)
+        return false
+      }
+    },
+    [removeGroup],
+  )
 
   return {
-    groups,
-    loading,
-    error,
+    groups: query.data ?? EMPTY_GROUPS,
+    loading: query.isLoading,
+    error: query.error ? apiErrorMessage(query.error, 'Failed to fetch groups') : null,
     fetchGroups,
     createGroup,
     deleteGroup,
