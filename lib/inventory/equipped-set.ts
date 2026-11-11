@@ -5,7 +5,10 @@
  * against the character's pool and drops any that no longer resolve to
  * something carriable (missing, archived, an archetype or a kit), each logged
  * at `debug`. Nothing is written: a dropped id leaves the column at the next
- * equip write (`equip.ts` prunes it).
+ * equip write (`equip.ts` prunes it) — unless the pool failed to read a tier.
+ * **A whole-set rewrite never treats "unread" as "gone"** (#186): while any
+ * tier is unread, an id that resolves nowhere may live in that tier, so
+ * {@link heldForUnreadTiers} hands it back for the rewrite to keep.
  *
  * {@link loadEquippedSet} is the readers' door (the prompt section, the image
  * phrase): it answers an empty set without reading any pool when the chat
@@ -57,6 +60,31 @@ export function readEquippedSet(
     out.push(item);
   }
   return out;
+}
+
+/**
+ * The stored ids a whole-set rewrite must keep because the pool could not
+ * read every tier: each one that resolves nowhere in the pool, since it may
+ * live in a tier that failed to read (#186). Empty when every tier was read —
+ * then an unresolved id really is gone and the rewrite prunes it.
+ */
+export function heldForUnreadTiers(
+  chat: { id?: string; equippedInventory?: unknown },
+  characterId: string,
+  pool: Pick<InventoryPool, 'byId' | 'unreadMounts'>,
+): string[] {
+  if (pool.unreadMounts.length === 0) return [];
+  const held = equippedIdsOf(chat, characterId).filter((id) => !pool.byId.has(id));
+  if (held.length > 0) {
+    logger.warn('[InventoryEquippedSet] A tier was unread; keeping carried ids it may hold', {
+      chatId: chat.id,
+      characterId,
+      heldIds: held,
+      unreadMounts: pool.unreadMounts.map((mount) => mount.mountPointId),
+      context: 'inventory',
+    });
+  }
+  return held;
 }
 
 /**

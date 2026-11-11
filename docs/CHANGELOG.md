@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Refactor: item-family kernel (phase 1: #186)
+
+- #186: one failed read of an Inventory tier made the next equip, unequip or pick-up rewrite the carried set without every object carried from that tier. The rewrite now keeps any stored id the pool could not resolve while a tier is unread (`heldForUnreadTiers`, `lib/inventory/equipped-set.ts`); with every tier read, an unresolvable id is still pruned. The Wardrobe does not share the shape: it edits the stored slots, never a pool-filtered copy.
+
 #### Refactor: client server-state (phase 5: drafts and stale answers)
 
 - The chat's LLM tool settings dialog reset unsaved toggles on every chat refetch (an effect keyed on array identity). Its two lists are `useDraft`s over the chat's values, so a refetch with the same values keeps the toggles; Cancel discards them. Its tool list is a query (`queryKeys.tools.availability`).
