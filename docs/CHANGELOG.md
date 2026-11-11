@@ -4,6 +4,36 @@
 
 ### 4.13-dev
 
+#### Refactor: item-family kernel (phase 6: shared rules; done)
+
+- `archivedPatch` and `nextCopyTitle` moved from `lib/wardrobe/` to `lib/mount-index/item-rules.ts` (beside `foldItemName`, which `nextCopyTitle` now uses); all three families import them from there. `lib/wardrobe/archived-patch.ts` and `lib/wardrobe/next-copy-title.ts` are gone.
+- The Atlas and Inventory client request helpers are one `createItemRequest` (`lib/mount-index/item-request.ts`); `AtlasRequestError` / `InventoryRequestError` keep their names.
+- CLAUDE.md's Wardrobe, Inventory and Atlas paragraphs name the kernel and the rule that a whole-set rewrite never treats an unread tier as gone. The spec (`refactor-4-13-item-family-kernel.md`) records the outcome.
+
+#### Refactor: item-family kernel (phase 5: item pictures)
+
+- `createItemImages` (`lib/mount-index/item-family-images.ts`) owns the Atlas's and the Inventory's pictures: list (with a parent's pictures showing through, marked `inherited`), add, set-current, delete, cleanup, transfer carry, home resolution, and synchronous generation through the Concierge's image failover. `lib/atlas/item-images.ts` and `lib/inventory/item-images.ts` are bindings with their subject prompt, wording and log type; the two `item-image-generation.ts` files re-export the generation names. All exported names are unchanged.
+- The images routes were already adapters of the 4.12 `createItemImagesRoute`; they still call the families' named exports. The Wardrobe's route stays as it is: its extra lines are its own `link-image` action and error mapping, already on the shared factory.
+
+#### Refactor: item-family kernel (phase 4: the folder store)
+
+- `createItemFolderStore` (`lib/mount-index/item-store.ts`) is the one writer of an item family's folder: create, batched update (with `remove` keys and `requireAll`), delete (with follow-on patches), the five folder operations, and an in-lock write `guard`, each serialised per folder and parsing the folder once. The Atlas and the Inventory `vault-writes.ts` are bindings of it with their serialiser and scan (the Inventory also passes its title-lint mark as `wrapWrite`); their exported names are unchanged. `locationWriter` and `cleanPatch` are the location write wrapper both locations used to copy.
+- `defineItemFolderErrors` and `defineItemFolderFamily` (`lib/mount-index/item-folders.ts`, client-safe) replace the three copies of the four folder-error subclasses and the folder-helper delegates; the Wardrobe, Inventory and Atlas `folders.ts` are bindings. The tier reader moved to `item-tiers.ts` (re-exported by the kernel) so a pool does not load the writer.
+- New kernel test (`__tests__/unit/lib/mount-index/item-store.test.ts`) binds the store with a toy serialiser. The Atlas chokepoint test holds that only the two `vault-writes.ts` bind the store and no family projects its folder directly.
+
+#### Refactor: item-family kernel (phase 3: one name fold)
+
+- `foldItemName` (`lib/mount-index/item-names.ts`, client-safe; re-exported by the kernel) is NFC + trim + locale-free lower case, and is the one fold for comparing item names and titles: the Atlas pool's shadowing key, its matcher terms, the vault scan's duplicate-name warning, the uniqueness rule and transfers; the Inventory's references, kin rule and title lint; the Wardrobe's title match and copy titles. The Atlas used `toLocaleLowerCase` in some sites and `toLowerCase` in others, so under a Turkish locale its uniqueness rule and its matcher could disagree; some sites also skipped the trim.
+- The Atlas's free-name check ran before the write's lock, so two concurrent creates of one name both passed. It is now a write guard run inside the folder's write chain against the current records (`location.create` / `update` take `{ guard }`).
+
+#### Refactor: item-family kernel (phase 2: one tier reader)
+
+- New `lib/mount-index/item-store.ts`, the item-store kernel shared by the Wardrobe, the Inventory and the Atlas. `readTiers` reads a reach's tiers (concurrently, each tier's mounts strongest first) and returns `{ layers, unread, consulted }` in tier order; `shadowLayers` shadows them strongest first, first claim wins. All three pools build from it, so the Inventory no longer reads each tier reversed and shadows last-wins.
+- Every pool now knows what it failed to read: the Atlas pool and cast view gained `unread` (they swallowed a failed tier), and the wearable pool gained `unread` (the repository swallowed a failed shared store; it now reads one mount at a time with `readSharedTiers(..., { strict: true })`). The Inventory's `consultedMounts` lists a tier's mounts strongest first.
+
+#### Refactor: item-family kernel (phase 1: #186)
+
+- #186: one failed read of an Inventory tier made the next equip, unequip or pick-up rewrite the carried set without every object carried from that tier. The rewrite now keeps any stored id the pool could not resolve while a tier is unread (`heldForUnreadTiers`, `lib/inventory/equipped-set.ts`); with every tier read, an unresolvable id is still pruned. The Wardrobe does not share the shape: it edits the stored slots, never a pool-filtered copy.
 #### Refactor: dead code, legacy shims and raw token colours
 
 - Removed `migrations/lib/json-store/**` and `migrations/lib/file-manager.ts` (about 5,100 lines with no importer). `knip.json` no longer ignores `migrations/lib/**`, and its stale `tar`, `du` and `lib/chat/context/index.ts` entries are gone. Two dead helpers knip then found there (`decryptSecrets`, `createMigrationLogger`) are removed.

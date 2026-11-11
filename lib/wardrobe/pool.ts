@@ -29,6 +29,7 @@ import { rosterGatedProjectId } from '@/lib/projects/roster-access';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { matchWearableTitle } from '@/lib/wardrobe/wearable-ref';
+import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-tiers';
 import {
   GENERAL_WARDROBE_ORIGIN,
   type WardrobeItemWithOrigin,
@@ -47,11 +48,19 @@ export interface WardrobeTierMounts {
 export interface SharedTierItems {
   general: WardrobeItemWithOrigin[];
   project: WardrobeItemWithOrigin[];
+  /** Shared mounts that failed to read. */
+  unread?: UnreadMount[];
 }
 
 export interface WearablePool {
   characterId: string;
   tiers: WardrobeTierMounts;
+  /**
+   * Sources whose items are missing because the read failed: shared mounts by
+   * id, and the character's own vault by the character's id (it is read
+   * through its owner). A whole-set rewrite must not treat these as gone.
+   */
+  unread: readonly UnreadMount[];
   /** Every reachable item, archived included, shadowed character > group > project > general. */
   byId: ReadonlyMap<string, WardrobeItemWithOrigin>;
   /**
@@ -88,19 +97,20 @@ export interface LoadWearablePoolOptions {
 }
 
 /**
- * Read one tier's shared mounts, tagging each item via `originOf`. The mounts
- * come strongest-first, in the settled within-tier order (`orderMounts`:
- * membership order for groups, the official store first for the project), so
- * an earlier mount's item wins a same-id collision. The repository shadows
- * later-over-earlier, hence the reverse.
+ * One shared tier: its mounts strongest first, in the settled within-tier
+ * order (`orderMounts`: membership order for groups, the official store first
+ * for the project), read one at a time so a failed mount is recorded as
+ * unread rather than swallowed.
  */
-async function readTier(
+function wardrobeTier(
   repos: Pick<RepositoryContainer, 'wardrobe'>,
   mountPointIds: readonly string[],
   originOf: (mountPointId: string) => WardrobeOrigin,
-): Promise<WardrobeItemWithOrigin[]> {
-  if (mountPointIds.length === 0) return [];
-  return repos.wardrobe.readSharedTiers([...mountPointIds].reverse(), true, originOf);
+): TierSpec<WardrobeItemWithOrigin> {
+  return {
+    mountPointIds,
+    read: (mountPointId) => repos.wardrobe.readSharedTiers([mountPointId], true, originOf, { strict: true }),
+  };
 }
 
 /** Read Quilltap General and the given project stores, archived included. */
@@ -110,15 +120,12 @@ export async function loadSharedTiers(
   projectOrigin?: WardrobeOrigin,
 ): Promise<SharedTierItems> {
   const generalMountPointId = await getGeneralMountPointId();
-  const [general, project] = await Promise.all([
-    readTier(repos, generalMountPointId ? [generalMountPointId] : [], () => GENERAL_WARDROBE_ORIGIN),
-    readTier(
-      repos,
-      projectMountPointIds,
-      () => projectOrigin ?? { scope: 'project', id: null, name: 'Project' },
-    ),
+  const read = await readTiers('wardrobe', [
+    wardrobeTier(repos, generalMountPointId ? [generalMountPointId] : [], () => GENERAL_WARDROBE_ORIGIN),
+    wardrobeTier(repos, projectMountPointIds, () => projectOrigin ?? { scope: 'project', id: null, name: 'Project' }),
   ]);
-  return { general, project };
+  const [general, project] = read.layers;
+  return { general, project, unread: read.unread };
 }
 
 /**
@@ -139,7 +146,7 @@ export function createSharedTierLoader(
           context: 'wardrobe',
           error: error instanceof Error ? error.message : String(error),
         });
-        return { general: [], project: [] };
+        return { general: [], project: [], unread: [] };
       });
     }
     return pending;
@@ -184,14 +191,9 @@ export async function resolveProjectTierForChat(
   return resolveProjectMountPointIds(gated);
 }
 
-/** Shadow tiers weakest-first into one id map. */
-function shadow(tiers: ReadonlyArray<readonly WardrobeItemWithOrigin[]>): Map<string, WardrobeItemWithOrigin> {
-  const byId = new Map<string, WardrobeItemWithOrigin>();
-  for (const tier of tiers) {
-    for (const item of tier) byId.set(item.id, item);
-  }
-  return byId;
-}
+/** Shadow tiers given strongest first into one id map (the kernel's one rule). */
+const shadow = (tiers: ReadonlyArray<readonly WardrobeItemWithOrigin[]>) =>
+  shadowLayers(tiers, (item) => item.id).byKey;
 
 /**
  * Build a pool from tiers already in hand. Pure — the loader below and tests
@@ -206,15 +208,16 @@ export function buildWearablePool(
     project: readonly WardrobeItemWithOrigin[];
     general: readonly WardrobeItemWithOrigin[];
   },
+  unread: readonly UnreadMount[] = [],
 ): WearablePool {
-  const weakestFirst = [layers.general, layers.project, layers.group, layers.own];
-  const byId = shadow(weakestFirst);
+  const strongestFirst = [layers.own, layers.group, layers.project, layers.general];
+  const byId = shadow(strongestFirst);
   let wearableCache: WardrobeItemWithOrigin[] | null = null;
 
   const wearable = (): WardrobeItemWithOrigin[] => {
     if (!wearableCache) {
       wearableCache = Array.from(
-        shadow(weakestFirst.map((tier) => tier.filter((item) => !item.archivedAt))).values(),
+        shadow(strongestFirst.map((tier) => tier.filter((item) => !item.archivedAt))).values(),
       );
     }
     return wearableCache;
@@ -225,6 +228,7 @@ export function buildWearablePool(
   return {
     characterId,
     tiers: tierMounts,
+    unread,
     byId,
     wearable,
     get: (id) => byId.get(id),
@@ -269,44 +273,34 @@ export async function loadWearablePool(
       ? Array.from(projectMountPointIds)
       : await resolveProjectTierForChat(repos, opts.chatId, characterId, { operator: opts.operator });
 
-  const [groups, shared, own] = await Promise.all([
+  const [groups, shared] = await Promise.all([
     groupMountsFor(characterId),
     opts.sharedTiers ?? createSharedTierLoader(repos, projectIds)(),
-    opts.ownItems
-      ? Promise.resolve(Array.from(opts.ownItems))
-      : repos.wardrobe.findByCharacterId(characterId, true).catch((error) => {
-          logger.warn('[WearablePool] Failed to read the character wardrobe; using shared tiers alone', {
-            characterId,
-            context: 'wardrobe',
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return [] as WardrobeItem[];
-        }),
   ]);
 
   const groupOriginByMount: Map<string, WardrobeOrigin> = groupOriginMap(groups);
   const groupMountPointIds = Array.from(groupOriginByMount.keys());
-  const group = await readTier(repos, groupMountPointIds, (mp) => groupOriginByMount.get(mp)!).catch(
-    (error) => {
-      logger.warn('[WearablePool] Failed to read the group wardrobe tier; skipping it', {
-        characterId,
-        context: 'wardrobe',
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [] as WardrobeItemWithOrigin[];
-    },
-  );
-
   const ownOrigin: WardrobeOrigin = { scope: 'character', id: characterId, name: '' };
+  // The own tier is read through its owner (the vault overlay resolves the
+  // mount), so it is keyed by the character's id; skipped when handed over.
+  const read = await readTiers<WardrobeItemWithOrigin>('wardrobe', [
+    {
+      mountPointIds: opts.ownItems ? [] : [characterId],
+      read: async () => (await repos.wardrobe.findByCharacterId(characterId, true)).map((item) => ({ ...item, characterId, origin: ownOrigin })),
+    },
+    wardrobeTier(repos, groupMountPointIds, (mp) => groupOriginByMount.get(mp)!),
+  ]);
+  const own = opts.ownItems
+    ? opts.ownItems.map((item) => ({ ...item, characterId, origin: ownOrigin }))
+    : read.layers[0];
+  const group = read.layers[1];
+  const unread = [...read.unread, ...(shared.unread ?? [])];
+
   const pool = buildWearablePool(
     characterId,
     { groupMountPointIds, projectMountPointIds: projectIds },
-    {
-      own: own.map((item) => ({ ...item, characterId, origin: ownOrigin })),
-      group,
-      project: shared.project,
-      general: shared.general,
-    },
+    { own, group, project: shared.project, general: shared.general },
+    unread,
   );
 
   logger.debug('[WearablePool] Loaded wearable pool', {
@@ -318,6 +312,7 @@ export async function loadWearablePool(
     reachable: pool.byId.size,
     groupMountCount: groupMountPointIds.length,
     projectMountCount: projectIds.length,
+    unread: unread.length,
     context: 'wardrobe',
   });
   return pool;

@@ -17,6 +17,7 @@
  * @module lib/atlas/item-mutations
  */
 
+import { archivedPatch, foldItemName, nextCopyTitle } from '@/lib/mount-index/item-rules';
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -26,8 +27,6 @@ import {
   type AtlasRecord,
   type AtlasUpdateBody,
 } from '@/lib/schemas/atlas.types';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
 import {
   ATLAS_FOLDER_RULES,
   AtlasEntryNotInLocationError,
@@ -36,7 +35,7 @@ import {
 } from '@/lib/atlas/folders';
 import { moveItemsToFolderIn, type ItemFolderKind } from '@/lib/mount-index/item-folder-location';
 import { AtlasNameTakenError, AtlasRefusal, AtlasShapeError } from '@/lib/atlas/errors';
-import type { AtlasLocation } from '@/lib/atlas/location';
+import type { AtlasLocation, AtlasWriteGuard } from '@/lib/atlas/location';
 import { cleanupAtlasEntryImages } from '@/lib/atlas/item-images';
 
 /** The Atlas's folder kind: its rules and its path error. */
@@ -67,18 +66,18 @@ function cleanText(value: string | null | undefined): string | null {
   return trimmed.trim().length > 0 ? trimmed : null;
 }
 
-/** Refuse when a live entry other than `selfId` already holds `name` in this tier. */
-async function assertNameFree(
-  location: AtlasLocation,
-  name: string,
-  selfId: string | null,
-  meta: Record<string, unknown>,
-): Promise<void> {
-  const key = name.trim().toLocaleLowerCase();
-  const clash = (await location.readEntries(false)).find(
-    (entry) => entry.id !== selfId && entry.name.trim().toLocaleLowerCase() === key,
-  );
-  if (clash) refuse(new AtlasNameTakenError(name.trim(), clash.id), meta);
+/**
+ * A write guard refusing when a live entry other than `selfId` already holds
+ * `name` in this tier. It runs inside the folder's write chain (the
+ * location's `guard`), so two concurrent creates of one name cannot both
+ * pass it.
+ */
+function nameFree(name: string, selfId: string | null, meta: Record<string, unknown>): AtlasWriteGuard {
+  const key = foldItemName(name);
+  return (records) => {
+    const clash = records.find((entry) => !entry.archivedAt && entry.id !== selfId && foldItemName(entry.name) === key);
+    if (clash) refuse(new AtlasNameTakenError(name.trim(), clash.id), meta);
+  };
 }
 
 // ============================================================================
@@ -99,7 +98,7 @@ export async function createAtlasEntry(
   const name = body.name.trim();
   const meta = { scope: location.scope, mountPointId: location.mountPointId, op: 'create', name };
   if (!name) refuse(new AtlasShapeError('An entry needs a name'), meta);
-  if (!opts.preserve?.archivedAt) await assertNameFree(location, name, null, meta);
+  const guard = opts.preserve?.archivedAt ? undefined : nameFree(name, null, meta);
   const now = new Date().toISOString();
   const record: AtlasRecord = {
     id: opts.preserve?.id ?? randomUUID(),
@@ -114,7 +113,7 @@ export async function createAtlasEntry(
     createdAt: opts.preserve?.createdAt ?? now,
     updatedAt: opts.preserve?.updatedAt ?? now,
   };
-  const stored = await location.create(record);
+  const stored = await location.create(record, { guard });
   logOp('Created entry', location, { entryId: stored.id, aliases: stored.aliases.length, folder: stored.folder });
   return stored;
 }
@@ -152,11 +151,11 @@ export async function updateAtlasEntry(
   }
 
   const liveAfter = !(patch.archivedAt !== undefined ? patch.archivedAt : current.archivedAt);
-  const renamed = patch.name !== undefined && patch.name.toLocaleLowerCase() !== current.name.toLocaleLowerCase();
+  const renamed = patch.name !== undefined && foldItemName(patch.name) !== foldItemName(current.name);
   const restored = patch.archivedAt === null && !!current.archivedAt;
-  if (liveAfter && (renamed || restored)) await assertNameFree(location, nextName, current.id, meta);
+  const guard = liveAfter && (renamed || restored) ? nameFree(nextName, current.id, meta) : undefined;
 
-  const updated = await location.update(current.id, patch);
+  const updated = await location.update(current.id, patch, { guard });
   logOp('Updated entry', location, { entryId: current.id, fields: Object.keys(patch), found: updated !== null });
   return updated;
 }

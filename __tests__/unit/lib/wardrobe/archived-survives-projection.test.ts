@@ -51,7 +51,7 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
 }));
 
 import { projectVaultWardrobe } from '@/lib/wardrobe/vault-sync';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
+import { archivedPatch } from '@/lib/mount-index/item-rules';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 const MOUNT_ID = 'm-1';

@@ -18,6 +18,7 @@
  */
 
 import { buildNameMatcher } from '@/lib/chat/name-mentions';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 
 /** What matching needs of an entry. */
 export interface MatchableAtlasEntry {
@@ -46,9 +47,9 @@ export interface NamedAtlasEntry<E extends MatchableAtlasEntry = MatchableAtlasE
   offset: number;
 }
 
-/** A term folded for comparison. */
+/** A term folded for comparison: the item-store kernel's one name fold. */
 export function foldAtlasTerm(term: string): string {
-  return term.trim().toLowerCase();
+  return foldItemName(term);
 }
 
 /** Every term of an entry: its name, then its aliases. */

@@ -2210,7 +2210,7 @@ Get a specific archetype wardrobe item.
 
 Update an archetype wardrobe item. All fields optional.
 
-Accepts **`archived: boolean`** alongside the content fields — the same field the character, project and group item `PUT`s take. It is translated into `archivedAt` by `archivedPatch()` (`lib/wardrobe/archived-patch.ts`): archiving is **idempotent** (re-archiving keeps the original `archivedAt` rather than resetting the clock), restoring sets it to `null`, and omitting the field leaves the current state alone. Archiving does **not** unequip a garment a character is presently wearing.
+Accepts **`archived: boolean`** alongside the content fields — the same field the character, project and group item `PUT`s take. It is translated into `archivedAt` by `archivedPatch()` (`lib/mount-index/item-rules.ts`, the item-store kernel's shared rules): archiving is **idempotent** (re-archiving keeps the original `archivedAt` rather than resetting the clock), restoring sets it to `null`, and omitting the field leaves the current state alone. Archiving does **not** unequip a garment a character is presently wearing.
 
 #### `DELETE /api/v1/wardrobe/[itemId]`
 

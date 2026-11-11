@@ -64,12 +64,15 @@ export class WardrobeRepository {
    * weakest-tier-first. Each item is tagged by `originOf(mountPointId)`.
    *
    * A mount that can't be read is logged and skipped: one unreadable store
-   * must not cost a character the rest of their wardrobe.
+   * must not cost a character the rest of their wardrobe. With `strict` the
+   * failure is thrown instead — the pool reads one mount at a time through
+   * the item-store kernel (`readTiers`), which records it as unread.
    */
   async readSharedTiers(
     mountPointIds: readonly string[],
     includeArchived: boolean,
     originOf: (mountPointId: string) => WardrobeOrigin,
+    opts: { strict?: boolean } = {},
   ): Promise<WardrobeItemWithOrigin[]> {
     if (mountPointIds.length === 0) return [];
     const { readSharedWardrobe } = await import('@/lib/mount-index/shared-wardrobe');
@@ -81,6 +84,7 @@ export class WardrobeRepository {
           byId.set(item.id, { ...item, origin });
         }
       } catch (error) {
+        if (opts.strict) throw error;
         logger.warn('Failed to read shared wardrobe tier; skipping', {
           mountPointId,
           context: 'wardrobe',

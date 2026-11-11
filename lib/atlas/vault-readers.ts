@@ -17,6 +17,7 @@
  * @module lib/atlas/vault-readers
  */
 
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
@@ -208,7 +209,7 @@ export async function scanAtlasFolder(mountPointId: string): Promise<AtlasFolder
     records.push(record);
     ownedPaths.add(path);
     if (!record.archivedAt) {
-      const key = record.name.toLocaleLowerCase();
+      const key = foldItemName(record.name);
       const first = liveNames.get(key);
       if (first) {
         logger.warn('Two Atlas entries in one tier share a canonical name; the first by path wins', {

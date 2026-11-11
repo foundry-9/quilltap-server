@@ -55,6 +55,17 @@ it('refuses a second live entry of the same name in a tier, case-insensitively (
   await expect(createAtlasEntry(general, { name: 'convertible', aliases: [], metadata: {} } as never)).rejects.toBeInstanceOf(AtlasNameTakenError)
 })
 
+it('checks the name inside the write chain: two concurrent creates of one name, one lands', async () => {
+  const results = await Promise.allSettled([
+    createAtlasEntry(general, { name: 'Convertible', aliases: [], metadata: {} } as never),
+    createAtlasEntry(general, { name: 'CONVERTIBLE', aliases: [], metadata: {} } as never),
+  ])
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+  const [refused] = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+  expect(refused.reason).toBeInstanceOf(AtlasNameTakenError)
+  expect(pathsIn(GENERAL_MP)).toHaveLength(1)
+})
+
 it('refuses a rename into a taken name, and a restore into one; an alias overlap is fine', async () => {
   const a = await createAtlasEntry(general, { name: 'Convertible', aliases: ['car'], metadata: {} } as never)
   const b = await createAtlasEntry(general, { name: 'Lighthouse', aliases: ['car'], metadata: {} } as never)

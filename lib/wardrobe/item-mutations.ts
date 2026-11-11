@@ -31,7 +31,7 @@ import { logger } from '@/lib/logger';
 import { isComposite } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
+import { archivedPatch } from '@/lib/mount-index/item-rules';
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types';
 import { wardrobeItemFromCreateBody, type WardrobeCreateBody } from '@/lib/wardrobe/create-body';
 import { clampWardrobeImagePrompt } from '@/lib/wardrobe/image-prompt-limit';

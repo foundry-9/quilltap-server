@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
+import { nextCopyTitle } from '@/lib/mount-index/item-rules'
 
 describe('nextCopyTitle', () => {
   it('appends "(copy)" when no copy exists', () => {

@@ -8,9 +8,9 @@
  * path on projection, never stored in frontmatter. Folders organise what the
  * operator sees; they carry no meaning for what a character can wear.
  *
- * The rules themselves are shared with the Inventory and live in
- * `lib/mount-index/item-folders.ts`; everything here is a delegate over
- * {@link WARDROBE_FOLDER_RULES}.
+ * A binding of the rules shared with the Inventory and the Atlas
+ * (`lib/mount-index/item-folders.ts`: `defineItemFolderErrors`,
+ * `defineItemFolderFamily`); the rules live once.
  *
  * Client-safe: pure, no server imports.
  *
@@ -18,16 +18,8 @@
  */
 
 import {
-  folderOfItemPath,
-  ItemFolderConflictError,
-  ItemFolderNotFoundError,
-  ItemFolderPathError,
-  ItemNotInLocationError,
-  isSafeItemFolderPath,
-  isValidItemFolderPath,
-  normalizeItemFolderPath,
-  normalizeItemFolderPathOrRoot,
-  resolveItemFolder,
+  defineItemFolderErrors,
+  defineItemFolderFamily,
   type ItemFolder,
   type ItemFolderRules,
 } from '@/lib/mount-index/item-folders';
@@ -60,75 +52,43 @@ export const WARDROBE_FOLDER_RULES: ItemFolderRules = {
   noun: 'wardrobe',
 };
 
+const errors = defineItemFolderErrors('Wardrobe', 'wardrobe');
+
 /** A folder path that breaks the rules (a 400 at the route). */
-export class WardrobeFolderPathError extends ItemFolderPathError {
-  constructor(message: string) {
-    super(message);
-    this.name = 'WardrobeFolderPathError';
-  }
-}
+export const WardrobeFolderPathError = errors.FolderPathError;
+export type WardrobeFolderPathError = InstanceType<typeof WardrobeFolderPathError>;
 
 /** The folder named doesn't exist (a 404 at the route). */
-export class WardrobeFolderNotFoundError extends ItemFolderNotFoundError {
-  constructor(folder: string) {
-    super(folder, 'wardrobe');
-    this.name = 'WardrobeFolderNotFoundError';
-  }
-}
+export const WardrobeFolderNotFoundError = errors.FolderNotFoundError;
+export type WardrobeFolderNotFoundError = InstanceType<typeof WardrobeFolderNotFoundError>;
 
-/**
- * The folder change collides with what's already there — a sibling holding
- * the name, or a folder holding files that aren't items (a 409 at the route).
- */
-export class WardrobeFolderConflictError extends ItemFolderConflictError {
-  constructor(folder: string, message?: string) {
-    super(folder, message, 'wardrobe');
-    this.name = 'WardrobeFolderConflictError';
-  }
-}
+/** The folder change collides with what's already there (a 409 at the route). */
+export const WardrobeFolderConflictError = errors.FolderConflictError;
+export type WardrobeFolderConflictError = InstanceType<typeof WardrobeFolderConflictError>;
 
-/**
- * A filing request named items that aren't filed in this wardrobe — a
- * borrowed item seen from a character's merged view (a 400 at the route).
- */
-export class WardrobeItemNotInLocationError extends ItemNotInLocationError {
-  constructor(itemIds: string[]) {
-    super(itemIds, 'wardrobe');
-    this.name = 'WardrobeItemNotInLocationError';
-  }
-}
+/** A filing request named items filed in another tier (a 400 at the route). */
+export const WardrobeItemNotInLocationError = errors.NotInLocationError;
+export type WardrobeItemNotInLocationError = InstanceType<typeof WardrobeItemNotInLocationError>;
 
 /** A folder as the browser and the folder routes see it. */
 export type WardrobeFolder = ItemFolder;
 
-const pathError = (message: string) => new WardrobeFolderPathError(message);
+const family = defineItemFolderFamily(WARDROBE_FOLDER_RULES, '.md', errors);
 
 /** Normalise an operator-typed folder path (see `normalizeItemFolderPath`). */
-export function normalizeWardrobeFolderPath(input: string | null | undefined): string {
-  return normalizeItemFolderPath(WARDROBE_FOLDER_RULES, input, pathError);
-}
+export const normalizeWardrobeFolderPath = family.normalizePath;
 
 /** A folder an existing item carries, in normal form or the root. */
-export function normalizeWardrobeFolderPathOrRoot(input: string | null | undefined): string {
-  return normalizeItemFolderPathOrRoot(WARDROBE_FOLDER_RULES, input);
-}
+export const normalizeWardrobeFolderPathOrRoot = family.normalizeOrRoot;
 
 /** True when `path` is structurally safe to write under `Wardrobe/`. */
-export function isSafeWardrobeFolderPath(path: string): boolean {
-  return isSafeItemFolderPath(WARDROBE_FOLDER_RULES, path);
-}
+export const isSafeWardrobeFolderPath = family.isSafe;
 
 /** Resolve an operator's requested folder against the folders a wardrobe already has. */
-export function resolveWardrobeFolder(existing: readonly string[], requested: string | null | undefined): string {
-  return resolveItemFolder(WARDROBE_FOLDER_RULES, existing, requested, pathError);
-}
+export const resolveWardrobeFolder = family.resolve;
 
 /** True when `path` is already in normal form. */
-export function isValidWardrobeFolderPath(path: string): boolean {
-  return isValidItemFolderPath(WARDROBE_FOLDER_RULES, path);
-}
+export const isValidWardrobeFolderPath = family.isValid;
 
 /** The folder a `Wardrobe/` document lives in: `Wardrobe/A/B/x.md` → `A/B`. */
-export function folderOfWardrobePath(relativePath: string): string {
-  return folderOfItemPath(WARDROBE_FOLDER_RULES, relativePath);
-}
+export const folderOfWardrobePath = family.folderOf;
