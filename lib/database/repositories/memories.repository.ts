@@ -632,8 +632,11 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     at: string,
     by: number = 1,
   ): Promise<{ reinforcementCount: number; reinforcedImportance: number; lastReinforcedAt: string } | null> {
-    if (!Number.isInteger(by) || by < 1) {
-      throw new Error(`Memory reinforcement: delta must be a positive integer (got ${by})`);
+    // `by = 0` counts nothing but still moves `lastReinforcedAt` forward and
+    // recomputes `reinforcedImportance` (a digest at its count cap that took
+    // members in this consolidation).
+    if (!Number.isInteger(by) || by < 0) {
+      throw new Error(`Memory reinforcement: delta must be a non-negative integer (got ${by})`);
     }
     return this.safeQuery(
       async () => {
@@ -1536,6 +1539,98 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error removing members from digest',
       { characterId, digestId, count: memberIds.length },
       0,
+    );
+  }
+
+  /**
+   * Add `memberIds` to one digest's `consolidatedFrom`, against the row as it
+   * stands at write time — the delta twin of {@link removeConsolidatedMembers}.
+   * Ids already listed, and the digest's own id, are skipped; order is kept.
+   * Consolidation's writer (`lib/memory/admission/consolidation-writes.ts`)
+   * is the caller: a whole-array write built from the run's snapshot would put
+   * back a member `retireMemories` took out since the read (A9). Returns the
+   * list as written, or null when the row is missing.
+   */
+  async addConsolidatedMembers(
+    characterId: string,
+    digestId: string,
+    memberIds: readonly string[],
+  ): Promise<string[] | null> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawDatabase();
+        if (!db) {
+          throw new Error('Digest member add: the main database is not initialized');
+        }
+        const adding = Array.from(new Set(memberIds.filter((id) => typeof id === 'string' && id.length > 0)));
+        const now = this.getCurrentTimestamp();
+        const result = db.transaction(() => {
+          const row = db
+            .prepare('SELECT "consolidatedFrom" FROM "memories" WHERE "id" = ? AND "characterId" = ?')
+            .get(digestId, characterId) as { consolidatedFrom: string | null } | undefined;
+          if (!row) return null;
+          const current = parseJsonIdList(row.consolidatedFrom);
+          const present = new Set(current);
+          const next = [...current];
+          for (const id of adding) {
+            if (id === digestId || present.has(id)) continue;
+            present.add(id);
+            next.push(id);
+          }
+          if (next.length !== current.length) {
+            db.prepare('UPDATE "memories" SET "consolidatedFrom" = ?, "updatedAt" = ? WHERE "id" = ?')
+              .run(JSON.stringify(next), now, digestId);
+          }
+          return { list: next, added: next.length - current.length };
+        })();
+        if (!result) {
+          logger.warn('Digest not found for member add', { digestId, characterId });
+          return null;
+        }
+        logger.debug('Added members to digest', { characterId, digestId, requested: adding.length, added: result.added });
+        return result.list;
+      },
+      'Error adding members to digest',
+      { characterId, digestId, count: memberIds.length },
+    );
+  }
+
+  /**
+   * One holder's rows whose `relatedMemoryIds` name any of `ids`, read at the
+   * moment of asking — consolidation re-aims these links at the digest that
+   * superseded their target, so a link admission added after the run's corpus
+   * read is re-aimed too (A9). Read-only.
+   */
+  async findIdsLinkingTo(
+    characterId: string,
+    ids: readonly string[],
+  ): Promise<Array<{ id: string; relatedMemoryIds: string[] }>> {
+    return this.safeQuery(
+      async () => {
+        const targets = Array.from(new Set(ids));
+        if (targets.length === 0) return [];
+        const seen = new Map<string, string[]>();
+        for (const chunk of chunkArray(targets, SQLITE_VARIABLE_CHUNK_SIZE - 1)) {
+          const rows = await rawQuery<Array<{ id: string; relatedMemoryIds: string | null }>>(
+            `SELECT m.id AS id, m.relatedMemoryIds AS relatedMemoryIds
+               FROM memories m
+              WHERE m.characterId = ?
+                AND m.relatedMemoryIds IS NOT NULL
+                AND m.relatedMemoryIds <> '[]'
+                AND json_valid(m.relatedMemoryIds)
+                AND EXISTS (
+                      SELECT 1 FROM json_each(m.relatedMemoryIds)
+                       WHERE value IN (${chunk.map(() => '?').join(',')})
+                    )`,
+            [characterId, ...chunk],
+          );
+          for (const row of rows) seen.set(row.id, parseJsonIdList(row.relatedMemoryIds));
+        }
+        return Array.from(seen, ([id, relatedMemoryIds]) => ({ id, relatedMemoryIds }));
+      },
+      'Error finding rows linking to memories',
+      { characterId, count: ids.length },
+      [],
     );
   }
 

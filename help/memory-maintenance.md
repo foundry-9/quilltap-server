@@ -146,7 +146,7 @@ If you find yourself pressing **Run maintenance…** constantly, consider turnin
 In a character's memory list:
 
 - The **tier** filter shows *Active* memories, *Archived* ones, or both. Archived memories are dimmed and labelled.
-- An archived memory that a digest replaced has a **Superseded by a digest** link that shows you the digest.
+- An archived memory that something newer replaced has a **Superseded by a newer memory** link that shows you its replacement. Usually that is the digest it was folded into; when the consolidation found two memories contradicting one another, it is whichever carries the more recent version of the facts — and should the old fact be stated again later, the archived memory is brought back to active duty rather than being swallowed by its contradiction.
 - Digests carry a **Digest** badge and say how many notes they were made from; the source filter can show digests alone.
 - Keystones carry a **Keystone** badge, and **Keystones only** narrows the list to them.
 - **Maintenance** opens the run dialog for this character.

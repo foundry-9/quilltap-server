@@ -1,6 +1,6 @@
 # Refactor 4.13 — Consolidation writes as deltas, and one date stamp and transcript renderer for memory prompts
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #187. Finishes what the [memory-system refactor](complete/memory-system-refactor.md) recorded as left for its Phase F.
+**Status:** Complete (2026-11-11). Phases 1–6 done; phase 7 struck (decision 1: no column — see §9); decision 3 answered with a startup migration. Originally proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #187. Finishes what the [memory-system refactor](complete/memory-system-refactor.md) recorded as left for its Phase F.
 
 Line numbers are from the audit and will drift. Re-locate each site by name before editing.
 
@@ -103,3 +103,32 @@ Key the ring by character (a map of three-slot lists) or keep one list and filte
 1. A separate contradiction marker with a new column (proposed), or keep `supersededById` and rely on the `resolveDigest` guard alone?
 2. The anti-repetition ring: three slots per character (proposed), or keep it per chat and widen it?
 3. Existing rows whose counts or links were damaged by A9, if it reproduces: leave them, or add a repair arm to `?action=repair` beside `scrubDanglingMemoryLinks`?
+
+## 9. Outcome (2026-11-11)
+
+Phase 1's tests decided the scope; every item in §4.2 reproduced, none was struck.
+
+| Item | Test | Fix |
+|---|---|---|
+| A9 | `__tests__/unit/lib/memory/consolidation-writes.test.ts` (admission reinforces the digest, links to it, links to a member, and retires a link target between the read and the write) | `applyConsolidationPlan` (`lib/memory/admission/consolidation-writes.ts`), parent only, host-RPC `applyConsolidation` from the child. One lock per cluster. Count by `incrementReinforcement(by)` capped at write time, members by `addConsolidatedMembers`, links by `linkBothWays` / `removeRelatedMemoryIds`, inbound links re-aimed from `findIdsLinkingTo` at write time. |
+| A7 | `lib/memory/__tests__/admission-neighbours.test.ts` ("a contradicted row is not a member") | `resolveDigest` follows a hop only to a `CONSOLIDATED` row whose `consolidatedFrom` lists the member. No schema change. |
+| A13 | `__tests__/unit/lib/memory/admission-admit.test.ts` ("dated to its source message") | `row.sourceMessageTimestamp ?? now` for both reinforcement paths. |
+| A14 | `__tests__/unit/lib/memory/ranking-blend.test.ts` ("in a room of four"), `recall-replay.test.ts` | Ring keyed by character (decision 2 as proposed). Not in export or backup (`ndjson-writer.ts` strips it; a restore carries the column as an opaque JSON value). |
+| A20 | `lib/memory/time/__tests__/day-references.test.ts`, `memory-date-stamp.test.ts` | Latest *past* match wins; `parseInstantOnCalendar` for zone-less ISO strings. The old test that pinned "future suppresses past" was the defect, and was flipped. |
+| #187 | `memory-date-stamp.test.ts` (03:44Z on America/Chicago) | `memoryDateStamp` at every site; grep-test in `scoring-chokepoint.test.ts`. |
+| Transcripts | `__tests__/unit/lib/chat/labelled-transcript.test.ts` (with grep-test) | `renderLabelledTranscript`. |
+
+**One deliberate deviation from §5.1.** The spec says the writer "drops any id that no longer exists". It does that for link targets, tier moves and re-aims, but a digest whose *member* is gone (or whose existing text changed since the read — a footnote landed) is not written at all: the model's text summarises that member, and writing it would put a fact the operator deleted back into the book. The cluster is reported `changed` and stays unconsidered, so the next run re-plans it from the rows as they are.
+
+**Decision 1 — no new column (2026-11-11).** An audit of every reader of `supersededById` found none that mistreats a contradicted row once the `resolveDigest` guard is in:
+
+- Digest liveness in `retireMemories` asks `consolidatedFrom` first, so a contradicted row never keeps a digest alive.
+- Deleting the row that carries the newer fact clears the contradicted row's `supersededById` (the orphan scrub), and it re-enters consolidation as a demoted row. That is the right outcome: the evidence against it is gone.
+- Retention retires a contradicted cold row on the same clock as a folded member.
+- Graph repair and the CLI's `memories validate` flag only a superseder that no longer exists.
+- Labels were the only casualty: the memory card's "Superseded by a digest" now reads "Superseded by a newer memory", and the Brahma SQL prompt describes both meanings.
+
+**Decision 3 — a startup migration, not a repair arm.** Rewound counts left by A9 cannot be recovered (nothing records what they should have been), and links to retired ids are already `scrubDanglingMemoryLinks`' work. One-way links can be found and fixed exactly, so `symmetrize-memory-links-v1` adds the missing reverse side between two existing rows of the same holder, once, at startup. It removes nothing and leaves cross-holder links alone.
+
+**Not done:** phase 7 (struck by decision 1). The `recall-replay` before/after comparison on a real corpus (§7) is for the human to run on V4test.
+

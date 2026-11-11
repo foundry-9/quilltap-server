@@ -134,7 +134,7 @@ describe('gatherNeighbours', () => {
 
   describe('cold members and digests', () => {
     it('replaces a superseded cold member with its digest', async () => {
-      put(mem('cold', { tier: 'cold', supersededById: 'digest' }), mem('digest', { source: 'CONSOLIDATED' }))
+      put(mem('cold', { tier: 'cold', supersededById: 'digest' }), mem('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['cold'] }))
       search.mockResolvedValue([hit('cold', 0.95)])
       const { neighbours } = await gatherNeighbours('char-1', EMBEDDING)
       expect(neighbours).toEqual([expect.objectContaining({ cosine: 0.95, via: 'cold', memory: expect.objectContaining({ id: 'digest' }) })])
@@ -144,8 +144,8 @@ describe('gatherNeighbours', () => {
     it('follows a chain of digests up to three hops', async () => {
       put(
         mem('m', { tier: 'cold', supersededById: 'd1' }),
-        mem('d1', { tier: 'cold', supersededById: 'd2', source: 'CONSOLIDATED' }),
-        mem('d2', { source: 'CONSOLIDATED' }),
+        mem('d1', { tier: 'cold', supersededById: 'd2', source: 'CONSOLIDATED', consolidatedFrom: ['m'] }),
+        mem('d2', { source: 'CONSOLIDATED', consolidatedFrom: ['d1'] }),
       )
       search.mockResolvedValue([hit('m', 0.9)])
       const { neighbours } = await gatherNeighbours('char-1', EMBEDDING)
@@ -157,7 +157,7 @@ describe('gatherNeighbours', () => {
       put(
         mem('cold1', { tier: 'cold', supersededById: 'digest' }),
         mem('cold2', { tier: 'cold', supersededById: 'digest' }),
-        mem('digest', { source: 'CONSOLIDATED' }),
+        mem('digest', { source: 'CONSOLIDATED', consolidatedFrom: ['cold1', 'cold2'] }),
       )
       search.mockResolvedValue([hit('cold1', 0.78), hit('cold2', 0.74)])
       const { neighbours } = await gatherNeighbours('char-1', EMBEDDING)
@@ -173,6 +173,33 @@ describe('gatherNeighbours', () => {
       expect(neighbours).toEqual([expect.objectContaining({ danglingDigest: true, memory: expect.objectContaining({ id: 'cold' }) })])
       expect(neighbours[0].via).toBeUndefined()
       expect(decide(neighbours)).toEqual({ kind: 'promote-and-reinforce', into: 'cold', withFootnotes: false })
+    })
+
+    describe('a contradicted row is not a member (A7)', () => {
+      // "prefers coffee" went cold, superseded by the digest that carries
+      // "prefers tea now"; the digest never took it in. Extraction then
+      // produces "prefers coffee" again.
+      it('does not redirect to a digest that does not list the row', async () => {
+        put(
+          mem('coffee', { tier: 'cold', supersededById: 'tea-digest', content: 'prefers coffee' }),
+          mem('tea-digest', { source: 'CONSOLIDATED', consolidatedFrom: ['tea-1', 'tea-2'], content: 'prefers tea now' }),
+        )
+        search.mockResolvedValue([hit('coffee', 0.95)])
+        const { neighbours } = await gatherNeighbours('char-1', EMBEDDING)
+        expect(neighbours).toHaveLength(1)
+        expect(neighbours[0]).toMatchObject({ danglingDigest: true, memory: { id: 'coffee' } })
+        expect(neighbours[0].via).toBeUndefined()
+        // The reverted fact comes back hot; the digest saying the opposite gains nothing.
+        expect(decide(neighbours)).toEqual({ kind: 'promote-and-reinforce', into: 'coffee', withFootnotes: false })
+      })
+
+      it('does not redirect to a standalone newer row', async () => {
+        put(mem('old', { tier: 'cold', supersededById: 'newer' }), mem('newer'))
+        search.mockResolvedValue([hit('old', 0.95)])
+        const { neighbours } = await gatherNeighbours('char-1', EMBEDDING)
+        expect(neighbours[0]).toMatchObject({ danglingDigest: true, memory: { id: 'old' } })
+        expect(decide(neighbours).kind).toBe('promote-and-reinforce')
+      })
     })
 
     it('passes a hot row through untouched', async () => {

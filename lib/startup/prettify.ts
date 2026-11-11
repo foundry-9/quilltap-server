@@ -164,6 +164,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-chat-opening-state-v1': 'Chalking on every call-sheet whether the curtain has yet gone up',
   'rekey-built-in-roleplay-templates-v1': 'Engraving the house styles with names that travel well',
   'backfill-dead-job-completed-at-v1': 'Dating the death certificates of errands long abandoned',
+  'symmetrize-memory-links-v1': 'Seeing that every cross-reference in the Commonplace Book points both ways…',
   'seed-chat-wardrobe-history-v1': 'Noting down what everyone has on at the moment',
   'add-chat-wardrobe-history-tool-name-v1': 'Ruling a column for the contraption that did the dressing',
   'add-chat-equipped-inventory-v1': "Fitting each chat with a croupier's ledger of what everyone is carrying",

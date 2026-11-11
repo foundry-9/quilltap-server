@@ -1987,7 +1987,7 @@ describe('Context Manager', () => {
         expect(last.role).toBe('user')
         expect(last.content).toContain('Lyra lit the lighthouse lamp at dusk')
         expect(repoMock.memories.updateAccessTimeBulk).toHaveBeenCalledWith('char-a', ['mem-head'])
-        expect(repoMock.chats.update).toHaveBeenCalledWith('chat-continue', { commonplaceRecallHistory: { turns: [['mem-head']] } })
+        expect(repoMock.chats.update).toHaveBeenCalledWith('chat-continue', { commonplaceRecallHistory: { byCharacter: { 'char-a': [['mem-head']] } } })
         expect(result.recallDebugLog).toContain('[Recall:ring] mem-head')
       })
 

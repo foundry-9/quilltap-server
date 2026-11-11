@@ -6,6 +6,7 @@ import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/r
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { TargetingTags } from '../candidate'
 import type { KnownThing } from '@/lib/atlas/image-reference'
+import type { SpeakerNames } from '@/lib/chat/speaker-names'
 
 /**
  * A memory as an extractor's parser yields it: the model's part of a
@@ -51,6 +52,15 @@ export interface MemoryDraft {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
+  /**
+   * The seat that wrote the line, when the source row had one. Resolved to a
+   * name by `renderLabelledTranscript` (`lib/chat/speaker-names.ts`) against
+   * the `SpeakerNames` the caller passes; absent, the line is labelled
+   * `User` / `Character`.
+   */
+  participantId?: string | null
+  /** A transcript label the caller already resolved; wins over `participantId`. */
+  speaker?: string
 }
 
 /**
@@ -171,6 +181,8 @@ export interface DeriveSceneContextInput {
   recentMessages: ChatMessage[]
   /** Names of characters in the chat */
   characterNames: string[]
+  /** participantId → name for labelling `recentMessages` (`resolveSpeakerNames`); absent, lines read `User` / `Character`. */
+  speakerNames?: SpeakerNames
 }
 
 /**
@@ -199,6 +211,8 @@ export interface SceneStateInput {
   messageCount: number
   /** Chat-level scenario/system prompt that establishes the opening scene */
   chatScenario?: string
+  /** participantId → name for labelling `recentMessages` (`resolveSpeakerNames`); absent, lines read `User` / `Character`. */
+  speakerNames?: SpeakerNames
 }
 
 /**

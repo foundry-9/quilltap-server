@@ -75,3 +75,96 @@ export function speakerLabel(
   if (resolved) return resolved
   return m.role === 'USER' ? 'User' : 'Character'
 }
+
+/**
+ * One line of a transcript bound for a cheap LLM. `role` is either case — a
+ * `MessageEvent` role (`USER` / `ASSISTANT`) or a cheap-task `ChatMessage`
+ * role (`user` / `assistant` / `system`).
+ *
+ * `speaker`, when present, is a label the caller already resolved (the
+ * context-summary fold resolves its own so it can frame established facts)
+ * and wins outright. Otherwise the label comes from {@link speakerLabel}.
+ */
+export interface TranscriptLine {
+  content: string
+  role: string
+  participantId?: string | null
+  speaker?: string
+  systemSender?: string | null
+  systemKind?: string | null
+  createdAt?: string | null
+}
+
+export interface RenderTranscriptOptions {
+  /**
+   * Per-line content cap in characters. A line over it is cut and given
+   * `...`. Either a single number, or a function of the line's position so a
+   * caller can weight recent lines (the title pass gives the last ten 500
+   * characters and older ones 150). Absent, or a non-finite result: no cap.
+   */
+  maxChars?: number | ((index: number, total: number) => number | undefined)
+  /**
+   * Turns a line's `createdAt` into the `YYYY-MM-DD` prefix (`[2026-11-10] `).
+   * Pass `memoryDateStamp` with the instance clock — never slice the ISO
+   * string (#187). A null return, or a line without `createdAt`, gets none.
+   */
+  dateStamp?: (iso: string) => string | null
+  /** Between lines. Default a blank line (`'\n\n'`). */
+  separator?: string
+}
+
+/**
+ * The label a transcript line gets — {@link speakerLabel} over either role
+ * case. A caller-resolved `speaker` wins. A `system`-role line that resolves
+ * to no seat (and is not an established fact) is labelled `System`: it is
+ * neither the operator nor a character, and calling it `Character` would
+ * hand the model a speaker that never spoke.
+ */
+export function transcriptLineLabel(m: TranscriptLine, names: SpeakerNames): string {
+  const given = m.speaker?.trim()
+  if (given) return given
+  const role = (m.role || '').toUpperCase()
+  if (
+    role === 'SYSTEM' &&
+    !isEstablishedFactAnnouncement(m) &&
+    !(m.participantId && names.get(m.participantId))
+  ) {
+    return 'System'
+  }
+  return speakerLabel(
+    {
+      participantId: m.participantId ?? null,
+      role: role === 'USER' ? 'USER' : 'ASSISTANT',
+      systemSender: (m.systemSender ?? null) as MessageEvent['systemSender'],
+      systemKind: (m.systemKind ?? null) as MessageEvent['systemKind'],
+    },
+    names,
+  )
+}
+
+/**
+ * Render a transcript for a cheap-LLM prompt: `Name: content` per line,
+ * labelled by speaker, never by role. The one formatter every cheap-LLM pass
+ * over conversation turns uses; names come from {@link resolveSpeakerNames}
+ * where the caller has a chat, and the `User` / `Character` fallback stands
+ * where it does not. Pure.
+ */
+export function renderLabelledTranscript(
+  messages: ReadonlyArray<TranscriptLine>,
+  speakerNames: SpeakerNames = new Map(),
+  opts: RenderTranscriptOptions = {},
+): string {
+  const total = messages.length
+  return messages
+    .map((m, i) => {
+      const cap = typeof opts.maxChars === 'function' ? opts.maxChars(i, total) : opts.maxChars
+      const text =
+        cap !== undefined && Number.isFinite(cap) && cap >= 0 && m.content.length > cap
+          ? m.content.substring(0, cap) + '...'
+          : m.content
+      const day = m.createdAt && opts.dateStamp ? opts.dateStamp(m.createdAt) : null
+      const stamp = day ? `[${day}] ` : ''
+      return `${stamp}${transcriptLineLabel(m, speakerNames)}: ${text}`
+    })
+    .join(opts.separator ?? '\n\n')
+}

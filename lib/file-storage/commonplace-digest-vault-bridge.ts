@@ -22,6 +22,7 @@
  */
 
 import { logger } from '@/lib/logger';
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCharacterVaultStore } from './character-vault-bridge';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
@@ -145,6 +146,8 @@ export async function writeCommonplaceDigestsToVault(
       }
     }
 
+    // Episode dates print on the memory calendar (#187).
+    const timeZone = toWrite.length > 0 ? await refreshMemoryTimeZone() : undefined;
     for (const file of toWrite) {
       const path = commonplacePathFor(
         file.isSelf ? 'self' : { id: file.subjectCharacterId, name: file.subjectName }
@@ -156,6 +159,7 @@ export async function writeCommonplaceDigestsToVault(
           isSelf: file.isSelf,
           digests: file.digests,
           updatedAt: input.updatedAt,
+          timeZone,
         });
         const existing = await readDatabaseDocumentIfExists(target.mountPointId, path);
         if (existing !== null && stripUpdatedAt(existing) === stripUpdatedAt(rendered.content)) {

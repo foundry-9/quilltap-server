@@ -13,6 +13,11 @@ jest.mock('@/lib/memory/cheap-llm-tasks/core-execution', () => ({
   executeCheapLLMTask: (...args: any[]) => executeCheapLLMTask(...args),
 }))
 
+// The instance calendar the fold dates turns on (#187).
+jest.mock('@/lib/memory/time/calendar-refresh', () => ({
+  refreshMemoryTimeZone: async () => 'America/Chicago',
+}))
+
 const { foldChatSummary } = require('@/lib/memory/cheap-llm-tasks/chat-tasks') as typeof import('@/lib/memory/cheap-llm-tasks/chat-tasks')
 
 const fakeSelection: any = { provider: 'anthropic', modelName: 'claude-haiku-4-5-20251001' }
@@ -61,6 +66,27 @@ describe('foldChatSummary prompt', () => {
     expect(userMsg.content).toContain('Friday: hello')
     expect(userMsg.content).not.toContain('USER:')
     expect(userMsg.content).not.toContain('ASSISTANT:')
+  })
+
+  it('dates a turn on the instance calendar, not the UTC day (#187)', async () => {
+    await foldChatSummary(
+      {
+        priorSummary: null,
+        newTurns: [
+          // 03:44Z on 11 November is the evening of the 10th in Chicago.
+          { speaker: 'Charlie', role: 'user', content: 'late night', createdAt: '2026-11-11T03:44:00.000Z' },
+          { speaker: 'Friday', role: 'assistant', content: 'undated' },
+        ],
+      },
+      fakeSelection,
+      'user-1',
+    )
+
+    const [, llmMessages] = executeCheapLLMTask.mock.calls[0]
+    const userMsg = (llmMessages as any[]).find(m => m.role === 'user')
+    expect(userMsg.content).toContain('[2026-11-10] Charlie: late night')
+    expect(userMsg.content).not.toContain('[2026-11-11]')
+    expect(userMsg.content).toContain('\n\nFriday: undated')
   })
 
   it('embeds the prior summary verbatim when present', async () => {

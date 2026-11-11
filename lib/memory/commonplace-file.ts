@@ -21,6 +21,7 @@
 
 import { estimateTokens } from '@/lib/tokens/token-counter'
 import { sanitizeFileName } from '@/lib/mount-index/character-vault'
+import { memoryDateStamp, type MemoryClock } from './time/clock'
 
 /** Vault folder holding the digest mirrors. */
 export const COMMONPLACE_FOLDER = 'Commonplace'
@@ -69,14 +70,15 @@ export interface CommonplaceFileInput {
   digests: CommonplaceDigestEntry[]
   /** ISO timestamp stamped as frontmatter `updatedAt`. */
   updatedAt: string
+  /** The memory calendar episode dates print on (#187); the cached instance zone when absent. */
+  timeZone?: string
 }
 
-function renderEntry(d: CommonplaceDigestEntry): string {
+function renderEntry(d: CommonplaceDigestEntry, clock?: Pick<MemoryClock, 'timeZone'>): string {
   const text = d.content.replace(/\s*\n\s*/g, ' ').trim()
-  if (d.kind === 'episodic' && d.occurredAt) {
-    return `- [${d.occurredAt.slice(0, 10)}] ${text}`
-  }
-  return `- ${text}`
+  // The episode's day on the memory calendar, not UTC's (#187).
+  const stamp = d.kind === 'episodic' ? memoryDateStamp(d.occurredAt, clock) : null
+  return stamp ? `- [${stamp}] ${text}` : `- ${text}`
 }
 
 /**
@@ -97,7 +99,7 @@ export function renderCommonplaceFile(input: CommonplaceFileInput): {
   let tokens = estimateTokens(heading)
   let written = 0
   for (const digest of ordered) {
-    const line = renderEntry(digest)
+    const line = renderEntry(digest, input.timeZone ? { timeZone: input.timeZone } : undefined)
     const cost = estimateTokens(line)
     if (written > 0 && tokens + cost > COMMONPLACE_FILE_TOKEN_BUDGET) break
     lines.push(line)

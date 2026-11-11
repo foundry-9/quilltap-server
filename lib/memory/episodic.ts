@@ -18,7 +18,8 @@
  * forked job child.
  */
 
-import { getMemoryTimeZone, zonedDateStamp } from './time/calendar'
+import { getMemoryTimeZone } from './time/calendar'
+import { memoryDateStamp } from './time/clock'
 
 /** Structural view of the episodic fields (keeps this module Memory-import-free). */
 export interface EpisodicAnchorView {
@@ -54,11 +55,8 @@ export function buildMemoryAnchorLine(view: EpisodicAnchorView, timeZone?: strin
     // midnight stored as UTC east of Greenwich would otherwise read a day early.
     // Legacy UTC-midnight point dates were re-stamped at local midnight by the
     // rezone-legacy-memory-occurred-at-v1 migration, so they read their own day.
-    const parsed = Date.parse(occurredAt)
-    const dateOnly = Number.isFinite(parsed)
-      ? zonedDateStamp(parsed, timeZone ?? getMemoryTimeZone())
-      : occurredAt.slice(0, 10)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    const dateOnly = memoryDateStamp(occurredAt, { timeZone: timeZone ?? getMemoryTimeZone() })
+    if (dateOnly) {
       parts.push(`${ANCHOR_LABELS[0]}: ${dateOnly}`)
     }
   }

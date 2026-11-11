@@ -581,6 +581,29 @@ describe('Cheap LLM Tasks Service', () => {
       expect(result.result).toContain('...')
     })
 
+    it('labels the transcript by speaker, never by role', async () => {
+      const messages: ChatMessage[] = [
+        { role: 'user', content: 'Shall we set sail?', participantId: 'p-charlie' },
+        { role: 'assistant', content: 'At dawn, and not a minute later.', participantId: 'p-friday' },
+        { role: 'assistant', content: 'Aye.', participantId: 'p-unknown' },
+      ]
+
+      mockSendMessage.mockResolvedValue({
+        content: 'Sailing at Dawn',
+        usage: { promptTokens: 80, completionTokens: 10, totalTokens: 90 },
+      })
+
+      const names = new Map([['p-charlie', 'Charlie'], ['p-friday', 'Friday']])
+      await titleChat(messages, undefined, testSelection, testUserId, 'chat-1', names)
+
+      const sent = mockSendMessage.mock.calls[0][0].messages as Array<{ role: string; content: string }>
+      const transcript = sent.find(m => m.role === 'user')!.content
+      expect(transcript).toBe(
+        'Charlie: Shall we set sail?\n\nFriday: At dawn, and not a minute later.\n\nCharacter: Aye.',
+      )
+      expect(transcript).not.toMatch(/USER:|ASSISTANT:/)
+    })
+
     it('should consider existing title when updating', async () => {
       const messages: ChatMessage[] = [
         { role: 'user', content: 'Actually, let us talk about cooking instead' },

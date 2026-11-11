@@ -39,7 +39,7 @@ describe('occasionsAreDistinct', () => {
 
 describe('retro-signature spam guard (recall-history)', () => {
   it('round-trips signatures through the ring buffer, capped', () => {
-    let history = appendRecallTurn(null, ['m1'])
+    let history = appendRecallTurn(null, 'c1', ['m1'])
     history = appendRetroSignature(history, 'sig-a')
     history = appendRetroSignature(history, 'sig-b')
     history = appendRetroSignature(history, 'sig-c')
@@ -54,10 +54,10 @@ describe('retro-signature spam guard (recall-history)', () => {
   })
 
   it('carries signatures forward through appendRecallTurn', () => {
-    let history = appendRetroSignature(appendRecallTurn(null, ['m1']), 'sig-a')
-    history = appendRecallTurn(history, ['m2'])
+    let history = appendRetroSignature(appendRecallTurn(null, 'c1', ['m1']), 'sig-a')
+    history = appendRecallTurn(history, 'c1', ['m2'])
     expect(history.retroSignatures).toEqual(['sig-a'])
-    expect(history.turns).toEqual([['m1'], ['m2']])
+    expect(history.byCharacter).toEqual({ c1: [['m1'], ['m2']] })
   })
 
   it('parses garbage to an empty list', () => {

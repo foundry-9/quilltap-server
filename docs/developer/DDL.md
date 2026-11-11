@@ -1566,7 +1566,7 @@ CREATE TABLE "memories" (
   "updatedAt" TEXT NOT NULL,
   "reinforcementCount" INTEGER DEFAULT 1,
   "lastReinforcedAt" TEXT DEFAULT NULL,
-  "relatedMemoryIds" TEXT DEFAULT '[]',
+  "relatedMemoryIds" TEXT DEFAULT '[]',  -- JSON ids; two-way between a holder's own rows (both sides written). One-way links left by pre-4.13 consolidation were given their other side by symmetrize-memory-links-v1 (4.13).
   "reinforcedImportance" REAL DEFAULT 0.5,
   "witnessedContext" TEXT DEFAULT NULL,  -- added in 4.6 (add-autonomous-rooms-fields-v1): 'user_present' | 'autonomous_room' | 'manual'. NULL on legacy rows.
   "occurredAt" TEXT DEFAULT NULL,        -- added in 4.9 (add-episodic-memory-fields-v1): ISO wall-clock EVENT time (vs createdAt, the write clock). Backfilled from the source message's createdAt, else the memory's own createdAt. Resolved dates are local window starts on the instance memory calendar; legacy UTC-midnight values were re-stamped at local midnight of the same date in 4.10 (rezone-legacy-memory-occurred-at-v1).
@@ -1574,7 +1574,7 @@ CREATE TABLE "memories" (
   "entities" TEXT DEFAULT '[]',          -- added in 4.9: JSON string[] of the episode's proper nouns (places, people, named things)
   "kind" TEXT DEFAULT 'semantic',        -- added in 4.9: 'semantic' (standing fact) | 'episodic' (specific dated occurrence)
   "tier" TEXT DEFAULT 'hot',             -- added in 4.10 (add-memory-tiers-v1): 'hot' | 'cold'. Cold = consolidated member or cap-pressure demotion; hidden from ordinary recall, still read by the gate, search tool, UI and CLI
-  "supersededById" TEXT DEFAULT NULL,    -- added in 4.10: id of the CONSOLIDATED digest that replaced this cold row
+  "supersededById" TEXT DEFAULT NULL,    -- added in 4.10: id of the row that replaced this cold row — the CONSOLIDATED digest that folded it in (and lists it in consolidatedFrom), or, for the older side of a contradiction, the row carrying the newer fact (no consolidatedFrom entry). Admission redirects only in the first case (4.13).
   "supersededAt" TEXT DEFAULT NULL,      -- added in 4.10 (add-memory-superseded-at-v1): when the row went cold under its digest; set/cleared with supersededById. Cold retention ages by it, not updatedAt (bug 225). Backfilled from updatedAt for rows already superseded
   "consolidatedFrom" TEXT DEFAULT '[]',  -- added in 4.10: on a digest, JSON string[] of the member memory ids it folds
   "consolidatedAt" TEXT DEFAULT NULL,    -- added in 4.10: last time the consolidator considered this row

@@ -471,6 +471,7 @@ import { addChatAvatarTimelineTableMigration } from './add-chat-avatar-timeline-
 import { addChatOpeningStateMigration } from './add-chat-opening-state-v1';
 import { rekeyBuiltInRoleplayTemplatesMigration } from './rekey-built-in-roleplay-templates-v1';
 import { backfillDeadJobCompletedAtMigration } from './backfill-dead-job-completed-at-v1';
+import { symmetrizeMemoryLinksMigration } from './symmetrize-memory-links-v1';
 
 /**
  * All available migrations.
@@ -974,6 +975,8 @@ export const migrations: Migration[] = [
   rekeyBuiltInRoleplayTemplatesMigration,
   // Background jobs: completedAt on DEAD rows, so the reaper can retire them (#194)
   backfillDeadJobCompletedAtMigration,
+  // Memory: one-way links left by the pre-4.13 consolidation writes made two-way (A9)
+  symmetrizeMemoryLinksMigration,
 ];
 
 export {
@@ -1444,5 +1447,6 @@ export {
   addChatOpeningStateMigration,
   rekeyBuiltInRoleplayTemplatesMigration,
   backfillDeadJobCompletedAtMigration,
+  symmetrizeMemoryLinksMigration,
 };
 

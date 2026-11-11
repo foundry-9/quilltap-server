@@ -29,6 +29,7 @@ import {
   classifyContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { logger } from '@/lib/logger'
+import type { SpeakerNames } from '@/lib/chat/speaker-names'
 import {
   isHumanoid,
   NON_HUMANOID_IMAGE_DIRECTION,
@@ -265,6 +266,33 @@ export async function resolveCharacterAppearances(
 }
 
 /**
+ * The chat's seats resolved to names, so the transcript the resolver reads is
+ * labelled by speaker, never by role. Fails soft to an empty map — every line
+ * then reads `User` / `Character`, the sanctioned fallback.
+ */
+async function speakerNamesForChat(chatId: string): Promise<SpeakerNames> {
+  try {
+    const { getRepositories } = await import('@/lib/repositories/factory')
+    const { resolveSpeakerNames } = await import('@/lib/chat/speaker-names')
+    const chat = await getRepositories().chats.findById(chatId)
+    const names = chat ? await resolveSpeakerNames(chat) : new Map<string, string>()
+    logger.debug('[AppearanceResolution] Resolved transcript speaker names', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      namedSeats: names.size,
+    })
+    return names
+  } catch (error) {
+    logger.warn('[AppearanceResolution] Could not resolve speaker names; using role fallbacks', {
+      context: 'image-gen.appearance-resolution',
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return new Map()
+  }
+}
+
+/**
  * Add what each character carries in the chat (the Inventory) to its
  * resolved appearance. The one place the image pipelines learn of it; fails
  * soft to the appearances as they were.
@@ -367,7 +395,8 @@ async function resolveAppearancesWithoutInventory(
     imagePrompt,
     cheapLLMSelection,
     userId,
-    chatId
+    chatId,
+    chatId ? await speakerNamesForChat(chatId) : new Map()
   )
 
   if (!result.success || !result.result || result.result.length === 0) {

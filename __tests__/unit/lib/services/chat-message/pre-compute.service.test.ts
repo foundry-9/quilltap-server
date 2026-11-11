@@ -39,6 +39,10 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   stripToolArtifacts: (s: string) => mockStripToolArtifacts(s),
 }))
 
+jest.mock('@/lib/chat/speaker-names', () => ({
+  resolveSpeakerNames: jest.fn(async () => new Map([['p-char', 'Alice']])),
+}))
+
 jest.mock('@/lib/memory/recall/search', () => ({
   searchRecall: (...args: any[]) => mockSearchRecall(...args),
 }))
@@ -57,7 +61,7 @@ const {
   runPreContextPreCompute,
 } = require('@/lib/services/chat-message/pre-compute.service') as typeof import('@/lib/services/chat-message/pre-compute.service')
 
-const baseChat = { id: 'chat-1', isDangerousChat: false } as any
+const baseChat = { id: 'chat-1', isDangerousChat: false, participants: [] } as any
 const baseCharacter = { id: 'char-1', name: 'Alice' } as any
 const baseConciergePolicy = resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any)
 const baseCheapLLM = { provider: 'OPENAI', modelName: 'gpt-4.1-mini' } as any
@@ -186,6 +190,10 @@ describe('pre-compute.service', () => {
       const callArgs = mockExtractMemorySearchKeywords.mock.calls[0] as unknown[]
       const sentMessages = callArgs[0] as Array<{ role: string; content: string }>
       expect(sentMessages.map(m => m.content)).toEqual(['a new question', 'a fresh user line'])
+      // Lines keep their seats and the resolved names ride along, so the
+      // transcript is labelled by speaker, never by role.
+      expect((sentMessages[0] as { participantId?: string }).participantId).toBe('p-user')
+      expect(callArgs[8]).toEqual(new Map([['p-char', 'Alice']]))
 
       // The distilled keywords drive the embedding query, and the turn-level
       // guess + present-character set + scope policy ride along in recallContext.
