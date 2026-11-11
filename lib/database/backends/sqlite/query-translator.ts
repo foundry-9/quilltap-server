@@ -146,8 +146,12 @@ function translateFieldFilter(
     for (const [op, opValue] of Object.entries(conditions)) {
       switch (op) {
         case '$eq':
-          clauses.push(`${columnExpr} = ?`);
-          params.push(toSqliteParam(opValue));
+          if (opValue === null || opValue === undefined) {
+            clauses.push(`${columnExpr} IS NULL`);
+          } else {
+            clauses.push(`${columnExpr} = ?`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$ieq':
@@ -159,8 +163,12 @@ function translateFieldFilter(
           break;
 
         case '$ne':
-          clauses.push(`${columnExpr} != ?`);
-          params.push(toSqliteParam(opValue));
+          if (opValue === null || opValue === undefined) {
+            clauses.push(`${columnExpr} IS NOT NULL`);
+          } else {
+            clauses.push(`${columnExpr} != ?`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$gt':
