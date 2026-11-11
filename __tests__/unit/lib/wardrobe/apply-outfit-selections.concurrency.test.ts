@@ -164,22 +164,37 @@ describe('applyOutfitSelections — concurrent resolve, serial commit', () => {
   })
 
   it('is bounded by the slowest character, not their sum', async () => {
+    // A barrier, not a stopwatch: each call waits until all four have
+    // started. Concurrent resolution reaches the barrier; serial resolution
+    // can't (the first call never sees the others start) and falls through
+    // on the escape timer. A wall-clock bound flaked on loaded CI runners.
+    const cast = ['a', 'b', 'c', 'd']
+    let started = 0
+    let releaseAll!: () => void
+    const allStarted = new Promise<'barrier'>((r) => {
+      releaseAll = () => r('barrier')
+    })
+    const outcomes: string[] = []
     mockChooseLLMOutfit.mockImplementation(async () => {
-      await new Promise((r) => setTimeout(r, 40))
+      started += 1
+      if (started === cast.length) releaseAll()
+      const outcome = await Promise.race([
+        allStarted,
+        new Promise<'escaped'>((r) => setTimeout(() => r('escaped'), 250)),
+      ])
+      outcomes.push(outcome)
       return chose({ top: ['house-coat'] })
     })
 
     const { repos } = makeRepos()
-    const startedAt = Date.now()
     await applyOutfitSelections(
       'chat-1',
-      ['a', 'b', 'c', 'd'].map((characterId) => ({ characterId, mode: 'llm_choose' as const })),
+      cast.map((characterId) => ({ characterId, mode: 'llm_choose' as const })),
       repos as never,
       { userId: 'u1', projectMountPointIds: [] },
     )
 
-    // Four 40ms calls: ~40ms concurrent, ~160ms serial. Generous margin for CI.
-    expect(Date.now() - startedAt).toBeLessThan(120)
+    expect(outcomes).toEqual(cast.map(() => 'barrier'))
   })
 
   it('never runs two equipped-outfit writes at once, and loses no character', async () => {

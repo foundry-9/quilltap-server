@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Test: deterministic outfit-selection concurrency check
+
+- `applyOutfitSelections` "bounded by the slowest character" test no longer asserts a wall-clock bound (under 120 ms), which failed on a loaded CI runner with coverage on (231 ms). Each mocked selection now waits on a barrier that only opens once all four have started, so serial resolution fails and runner speed doesn't matter.
+
 #### Hardening: network defaults, stored files, imports and tool permissions
 
 - The server binds `127.0.0.1` by default (`server.ts`, `quilltap` CLI). Listen on every interface with `quilltap --host 0.0.0.0` or `QUILLTAP_HOST`. The Docker image still binds `0.0.0.0` inside the container. `docs/DEPLOYMENT.md` and the new `help/network-access.md` say that Quilltap has no login and how to expose it.
