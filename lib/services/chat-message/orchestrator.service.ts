@@ -1024,6 +1024,11 @@ async function processMessage(
   // Idempotent partial-response preserver shared across every streamMessage
   // call this turn: the first call that finds streamed content writes it with
   // an OOC marker, later calls no-op so the original error still propagates.
+  // The turn's tool results, live: the partial preserver reads them so a tool
+  // that ran before a stall keeps its TOOL row.
+  const toolMessages: ToolMessage[] = []
+  const generatedImagePaths: GeneratedImage[] = []
+
   const preservePartialOnError = makePreservePartialOnError({
     repos,
     chatId,
@@ -1035,6 +1040,7 @@ async function processMessage(
     // informs exactly as a completed one does.
     informRowIds: builtContext.informRowIds,
     mailAlertsOwed: builtContext.mailAlertsOwed,
+    getToolArtifacts: () => ({ toolMessages, generatedImagePaths }),
   })
 
   const primaryStreamResult = await runPrimaryStream({
@@ -1051,6 +1057,8 @@ async function processMessage(
     actualTools: slate.actualTools,
     useNativeWebSearch: slate.useNativeWebSearch,
     stop: slate.stopSequences,
+    resolvedToolMode: slate.resolvedToolMode,
+    formatToolsFor: slate.formatToolsFor,
     preGeneratedAssistantMessageId,
     attachedFiles: fileProcessing.attachedFiles,
     originalMessage: options.content,
@@ -1073,9 +1081,8 @@ async function processMessage(
 
   // Native function-calling loop (agent-mode submit_final_response, the
   // ghost-wrap guardrail and the max-turns force-final pass live there too),
-  // then the text-format passes.
-  const toolMessages: ToolMessage[] = []
-  const generatedImagePaths: GeneratedImage[] = []
+  // then the text-format passes. Both read `streamingState.effectiveCall`
+  // first, so after a failover swap they continue on the stand-in's shape.
   const toolLoopShared = {
     chatId,
     userId,
@@ -1091,21 +1098,24 @@ async function processMessage(
     encoder,
     preservePartialOnError,
   }
-  await runNativeToolLoop({
-    ...toolLoopShared,
-    repos,
-    characterParticipant,
-    agentMode,
-    actualTools: slate.actualTools,
-    useNativeWebSearch: slate.useNativeWebSearch,
-  })
-  await runTurnTextToolPasses({
-    ...toolLoopShared,
-    resolvedToolMode: slate.resolvedToolMode,
-    useTextBlockTools: slate.useTextBlockTools,
-    actualTools: slate.actualTools,
-    useNativeWebSearch: slate.useNativeWebSearch,
-  })
+  const runToolLoops = async (): Promise<void> => {
+    await runNativeToolLoop({
+      ...toolLoopShared,
+      repos,
+      characterParticipant,
+      agentMode,
+      actualTools: slate.actualTools,
+      useNativeWebSearch: slate.useNativeWebSearch,
+    })
+    await runTurnTextToolPasses({
+      ...toolLoopShared,
+      resolvedToolMode: slate.resolvedToolMode,
+      useTextBlockTools: slate.useTextBlockTools,
+      actualTools: slate.actualTools,
+      useNativeWebSearch: slate.useNativeWebSearch,
+    })
+  }
+  await runToolLoops()
 
   const recovery = await attemptEmptyResponseRecovery({
     state: streamingState,
@@ -1118,6 +1128,8 @@ async function processMessage(
     modelParams,
     actualTools: slate.actualTools,
     useNativeWebSearch: slate.useNativeWebSearch,
+    resolvedToolMode: slate.resolvedToolMode,
+    formatToolsFor: slate.formatToolsFor,
     userId,
     chatId,
     character,
@@ -1136,6 +1148,19 @@ async function processMessage(
       needsTools: slate.actualTools.length > 0,
     },
   })
+
+  // The recovery's answer arrived after the tool loops ran. An answer that is
+  // only a tool call (or carries text-protocol markers) has not been acted on
+  // yet, so the loops run again — on the stand-in's own shape (#182). With no
+  // calls in the response both loops return at once.
+  if (recovery.recovered) {
+    logger.debug('Running the tool loops on the recovered response', {
+      chatId,
+      profileId: streamingState.effectiveProfile.id,
+      routeVia: streamingState.routeVia,
+    })
+    await runToolLoops()
+  }
 
   // ==========================================================================
   // 7. Settle — reply, pass, yield, stop or empty

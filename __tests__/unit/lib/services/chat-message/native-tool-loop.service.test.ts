@@ -589,3 +589,56 @@ describe('native-tool-loop.service', () => {
     expect(opts.preservePartialOnError).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('native-tool-loop.service — after a failover swap (A15)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    streamMessageCalls.length = 0
+    nextStreamMessageScripts = []
+    nextStreamMessageBehaviours = []
+    nextStreamMessageErrors = []
+    mockDetectToolCalls.mockReset()
+    mockProcessToolCalls.mockReset()
+  })
+
+  it('continues on the stand-in\'s tools, budgeted messages and params, not the slate\'s', async () => {
+    mockDetectToolCalls
+      .mockReturnValueOnce([{ name: 'search', arguments: { query: 'moor' }, callId: 'tc-1' }])
+      .mockReturnValueOnce([])
+    mockProcessToolCalls.mockResolvedValueOnce({
+      toolMessages: [{ toolName: 'search', content: 'found', callId: 'tc-1', success: true }],
+      generatedImagePaths: [],
+    })
+    nextStreamMessageScripts = [[{ content: 'Found it.' }, { done: true, rawResponse: { id: 'raw-2' } }]]
+
+    const substituteTools = [{ type: 'function', function: { name: 'search' } }]
+    // The image the stand-in cannot take was described in its array; the
+    // slate's array still carries the bytes.
+    const substituteMessages = [{ role: 'user', content: 'Hi [image described]' }]
+    const opts = makeBaseOpts({
+      formattedMessages: [{ role: 'user', content: 'Hi', attachments: [{ id: 'img' }] }],
+      actualTools: [{ name: 'search', input_schema: {} }],
+      modelParams: { temperature: 0.7 },
+      streaming: makeStreaming({
+        fullResponse: '',
+        effectiveProfile: { id: 'p-openai', provider: 'OPENAI', modelName: 'gpt-4o', baseUrl: null },
+        rawResponse: { id: 'raw-1' },
+        effectiveCall: {
+          messages: substituteMessages,
+          tools: substituteTools,
+          toolMode: 'native',
+          useNativeWebSearch: true,
+          modelParams: { temperature: 0.2 },
+        },
+      }),
+    })
+
+    await runNativeToolLoop(opts as any)
+
+    const sent = streamMessageCalls[0]!
+    expect(sent.tools).toBe(substituteTools)
+    expect(sent.modelParams).toEqual({ temperature: 0.2 })
+    expect(sent.useNativeWebSearch).toBe(true)
+    expect((sent.messages as Array<{ content: string }>)[0]).toMatchObject({ content: 'Hi [image described]' })
+  })
+})

@@ -1,6 +1,6 @@
 # Refactor 4.13 — One substitute call in provider failover
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #181 and #182 by construction and closes three further defects traced in the audit (§4.2).
+**Status:** Implemented (2026-11-11). Proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #181 and #182 by construction and closes three further defects traced in the audit (§4.2).
 
 Line numbers are from the audit and will drift. Re-locate each site by name before editing.
 
@@ -110,3 +110,28 @@ It, and only it:
 
 1. A substitute whose tool mode differs from the primary's: skip it (proposed), or rebuild the system prompt for it?
 2. When the client has gone away mid-substitute: stop the walk and save the partial (proposed), or let the substitute finish server-side as an ordinary turn would?
+
+## 9. Outcome (2026-11-11)
+
+**Decisions taken.** Both §8 proposals: (1) a substitute whose resolved tool mode differs from the turn's is skipped and recorded on the route trail as `failed` / `provider-error`; (2) when the client goes away mid-substitute the walk stops, nothing is recorded against the substitute, and whatever arrived stays in the buffers for the partial preserver.
+
+**Phase 1.** Every item reproduced: the new tests fail on the pre-refactor code and pass after. None was struck.
+
+- #181, #182: `__tests__/unit/lib/services/chat-message/failover-substitute-call.test.ts` (chain, uncensored reroute, same-profile retry).
+- A15: `native-tool-loop.service.test.ts` ("after a failover swap").
+- A16: `failover-substitute-call.test.ts` (a closed controller).
+- A3: `primary-stream.service.test.ts` (the two `A3:` cases). The continuation flag was confirmed by reading: `runNativeToolLoop`'s continuation never sets `hasStartedStreaming`.
+
+**What landed.**
+
+- `TurnToolSlate.formatToolsFor(profile)` (`turn-tools.service.ts`). The primary returns its own format; any other profile calls `buildTools` again with the turn's options (the fallback §5.1 allowed — there is no cheap reformat from a provider-shaped list), resolves its tool mode, and keeps only the tool names the primary was offered, since the executor's permit is the primary's. `TurnToolSlate` now extends `ProfileToolFormat` (`types.ts`).
+- `callSubstitute(candidate, turn)` with `SubstituteResult.outcome` of `answered | empty | error | skipped | client-gone` (`skipped` is the §8.1 case). `responseAnswered` is the one predicate. On an answer it sets `effectiveProfile`, `effectiveApiKey` and `effectiveCall` — the four separate `effective*` fields of §5.2 became one `EffectiveCall` object (messages, tools, tool mode, native web search, params, stop sequences); the tool mode is always the turn's, since mismatches are skipped.
+- `restreamInto` is private, writes every frame through `safeEnqueue`, and returns `{ clientGone }`.
+- The tool loops read `streaming.effectiveCall` first (`effectiveToolLoopCall`, `native-tool-loop.service.ts`; `runTurnTextToolPasses` uses it too).
+- `EmptyResponseRecoveryFlags.recovered`: the orchestrator runs the tool loops again after a recovery that answered, which is what executes a tool-only answer from the empty path (the loops had already run for the primary).
+- `makePreservePartialOnError` gates on prose alone and takes `getToolArtifacts`.
+
+**Size.** The failover service did not shrink: it is about 180 lines longer, most of it the new call's contract and comments. The three sites lost their own buffer resets, budget calls and try/catch blocks; the substance moved into `callSubstitute` rather than disappearing.
+
+**Not done here.** Phase 5's live check on V4test needs a running instance with two providers' keys; it is left for the release checklist.
+

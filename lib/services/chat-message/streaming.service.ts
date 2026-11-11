@@ -149,7 +149,7 @@ function isToolDisabled(
 }
 
 /** Name and description slots of a provider-format tool, whichever shape it takes. */
-function toolNameOf(tool: unknown): string | undefined {
+export function toolNameOf(tool: unknown): string | undefined {
   const toolObj = tool as { function?: { name?: string }; name?: string }
   return toolObj.function?.name || toolObj.name
 }

@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+import { formatToolsForFixture, toolsShapedFor } from '@/__tests__/helpers/failover-tools'
 
 const mockStreamMessageImpl = jest.fn<(opts: Record<string, unknown>) => AsyncGenerator<any>>()
 const mockSafeEnqueue = jest.fn()
@@ -16,6 +17,11 @@ jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
     debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(),
   })),
+}))
+
+// The answer predicate's tool-call half: a stub raw response names its calls.
+jest.mock('@/lib/services/chat-message/tool-execution.service', () => ({
+  detectToolCallsInResponse: (raw: unknown) => ((raw as { toolCalls?: unknown[] } | null)?.toolCalls ?? []),
 }))
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({
@@ -99,7 +105,9 @@ function baseOpts(state: StreamingState, repos: ReturnType<typeof makeRepos>) {
     },
     formattedMessages: [{ role: 'user', content: 'hello' }],
     modelParams: {},
-    actualTools: [],
+    actualTools: toolsShapedFor('ANTHROPIC'),
+    resolvedToolMode: 'native' as const,
+    formatToolsFor: formatToolsForFixture,
     useNativeWebSearch: false,
     chatId: 'chat-1',
     character: { id: 'ch-1', name: 'Alice' },

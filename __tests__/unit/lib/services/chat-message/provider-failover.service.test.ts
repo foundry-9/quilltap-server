@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+import { formatToolsForFixture, toolsShapedFor } from '@/__tests__/helpers/failover-tools'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 
 /** The Concierge on duty with a Moderated chat: a refusal may fail over. */
@@ -25,6 +26,11 @@ jest.mock('@/lib/logging/create-logger', () => ({
     warn: jest.fn(),
     error: jest.fn(),
   })),
+}))
+
+// The answer predicate's tool-call half: a stub raw response names its calls.
+jest.mock('@/lib/services/chat-message/tool-execution.service', () => ({
+  detectToolCallsInResponse: (raw: unknown) => ((raw as { toolCalls?: unknown[] } | null)?.toolCalls ?? []),
 }))
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({
@@ -139,7 +145,9 @@ describe('provider-failover.service', () => {
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
-      actualTools: [],
+      actualTools: toolsShapedFor('OPENAI'),
+      resolvedToolMode: 'native' as const,
+      formatToolsFor: formatToolsForFixture,
       useNativeWebSearch: false,
       userId: 'user-1',
       chatId: 'chat-1',
@@ -200,7 +208,9 @@ describe('provider-failover.service', () => {
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
-      actualTools: [],
+      actualTools: toolsShapedFor('OPENAI'),
+      resolvedToolMode: 'native' as const,
+      formatToolsFor: formatToolsForFixture,
       useNativeWebSearch: false,
       userId: 'user-1',
       chatId: 'chat-1',
@@ -240,7 +250,9 @@ describe('provider-failover.service', () => {
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
-      actualTools: [],
+      actualTools: toolsShapedFor('OPENAI'),
+      resolvedToolMode: 'native' as const,
+      formatToolsFor: formatToolsForFixture,
       useNativeWebSearch: false,
       userId: 'user-1',
       chatId: 'chat-1',
@@ -337,7 +349,9 @@ describe('provider-failover.service', () => {
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
-        actualTools: [],
+        actualTools: toolsShapedFor('OPENAI'),
+        resolvedToolMode: 'native' as const,
+        formatToolsFor: formatToolsForFixture,
         useNativeWebSearch: false,
         userId: 'user-1',
         chatId: 'chat-1',
@@ -374,7 +388,9 @@ describe('provider-failover.service', () => {
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
-        actualTools: [],
+        actualTools: toolsShapedFor('OPENAI'),
+        resolvedToolMode: 'native' as const,
+        formatToolsFor: formatToolsForFixture,
         useNativeWebSearch: false,
         userId: 'user-1',
         chatId: 'chat-1',
@@ -417,7 +433,9 @@ describe('provider-failover.service', () => {
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
-        actualTools: [],
+        actualTools: toolsShapedFor('OPENAI'),
+        resolvedToolMode: 'native' as const,
+        formatToolsFor: formatToolsForFixture,
         useNativeWebSearch: false,
         userId: 'user-1',
         chatId: 'chat-1',
@@ -465,7 +483,9 @@ describe('provider-failover.service', () => {
         connectionProfile: visionPrimary,
         formattedMessages: [{ role: 'user', content: 'Two pictures', attachments: [older, newer] }],
         modelParams: {},
-        actualTools: [],
+        actualTools: toolsShapedFor('OPENAI'),
+        resolvedToolMode: 'native' as const,
+        formatToolsFor: formatToolsForFixture,
         useNativeWebSearch: false,
         userId: 'user-1',
         chatId: 'chat-1',
@@ -542,7 +562,9 @@ describe('provider-failover.service — the route trail', () => {
     connectionProfile: baseProfile,
     formattedMessages: [{ role: 'user', content: 'Hello' }],
     modelParams: {},
-    actualTools: [],
+    actualTools: toolsShapedFor('OPENAI'),
+    resolvedToolMode: 'native' as const,
+    formatToolsFor: formatToolsForFixture,
     useNativeWebSearch: false,
     userId: 'user-1',
     chatId: 'chat-1',

@@ -36,31 +36,36 @@ import {
   stripSimpleJsonFromResponse,
   stripTextBlockMarkersFromResponse,
 } from './pseudo-tool.service'
-import { buildTools } from './streaming.service'
+import { buildTools, toolNameOf, type BuildToolsOptions } from './streaming.service'
 import { createToolContext } from './tool-execution.service'
+import { effectiveToolLoopCall } from './native-tool-loop.service'
 import { runTextToolPass, type RunTextToolPassOptions, type TextToolStrategy } from './text-tool-loop.service'
 import { getProvider } from '@/lib/plugins/provider-registry'
 import { hasTextBlockMarkers } from '@/lib/tools'
 import { characterKindPolicy } from '@/lib/characters/kind'
+import type { FormatToolsFor, ProfileToolFormat } from './types'
 
 const logger = createServiceLogger('TurnTools')
 
-type ResolvedToolMode = ReturnType<typeof checkResolvedToolMode>
 type PseudoToolMode = 'auto' | 'native' | 'simple-json' | 'text-block'
 
-export interface TurnToolSlate {
+/**
+ * The primary's tool format (`actualTools`, `resolvedToolMode`,
+ * `useTextBlockTools`, `useNativeWebSearch`, `stopSequences`) comes from
+ * `formatToolsFor(profile)`, the same function failover calls for a stand-in.
+ */
+export interface TurnToolSlate extends ProfileToolFormat {
   /** Every tool the character holds this turn, ceiling applied. */
   tools: unknown[]
-  /** The tools sent natively beside the messages (empty under a text protocol). */
-  actualTools: unknown[]
-  resolvedToolMode: ResolvedToolMode
-  /** The model calls tools through a text protocol rather than natively. */
-  useTextBlockTools: boolean
-  useNativeWebSearch: boolean
   /** Tool rules for the system prompt (undefined when none are needed). */
   toolInstructions: string | undefined
-  /** Provider stop sequences for the primary stream (simple-json only). */
-  stopSequences: string[] | undefined
+  /**
+   * Formats this turn's tools for another profile: rebuilt for its provider's
+   * tool shape and its own tool mode, and narrowed to the tools the primary
+   * offered (the executor's permit is the primary's). Failover calls it for
+   * every substitute (#181). The primary's own id returns the primary format.
+   */
+  formatToolsFor: FormatToolsFor
   /** The highest effect a tool call may have this turn; unset = no ceiling. */
   effectCeiling: ToolEffect | undefined
   customToolEffects: Map<string, ToolEffect>
@@ -108,14 +113,18 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
   // The Courier transport exposes no tools (the external LLM cannot reach
   // them) and injects no tool instructions into the system prompt.
   if (profile.transport === 'courier') {
-    return {
-      tools: [],
+    const noTools: ProfileToolFormat = {
       actualTools: [],
       resolvedToolMode: 'native', // Courier sends no tools anyway; the value is unused.
       useTextBlockTools: false,
       useNativeWebSearch: false,
-      toolInstructions: undefined,
       stopSequences: undefined,
+    }
+    return {
+      ...noTools,
+      tools: [],
+      toolInstructions: undefined,
+      formatToolsFor: async () => noTools,
       effectCeiling: params.storytellerCeiling,
       customToolEffects: new Map(),
       pluginToolEffects: new Map(),
@@ -144,8 +153,7 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     isAskCarinaOffered(repos, chatId, characterIsTransparent),
   ])
 
-  const built = await buildTools({
-    connectionProfile: profile,
+  const buildOptions: Omit<BuildToolsOptions, 'connectionProfile'> = {
     userId,
     imageProfileId,
     imageProfile: params.imageProfile,
@@ -163,12 +171,11 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     askCarinaEnabled,
     customToolContext: customToolRosterFor(chat, userId, character, chatSettings),
     effectCeiling,
-  })
+  }
+  const built = await buildTools({ ...buildOptions, connectionProfile: profile })
 
-  const profilePseudoToolMode = (profile as { pseudoToolMode?: PseudoToolMode }).pseudoToolMode
-  const resolvedToolMode = checkResolvedToolMode(built.modelSupportsNativeTools, profilePseudoToolMode)
-  const useTextBlockTools = resolvedToolMode !== 'native'
-  const actualTools = useTextBlockTools ? [] : built.tools
+  const primaryFormat = profileToolFormat(built, profile)
+  const { resolvedToolMode, actualTools } = primaryFormat
 
   let toolInstructions: string | undefined
   if (resolvedToolMode === 'simple-json' || resolvedToolMode === 'text-block') {
@@ -202,21 +209,65 @@ export async function resolveTurnToolSlate(params: TurnToolSlateParams): Promise
     toolSettingsChanged,
   })
 
+  const formatToolsFor: FormatToolsFor = async (candidate) => {
+    if (candidate.id === profile.id) return primaryFormat
+    // The names the primary was offered. A stand-in never gets more: the
+    // executor's permit and the system prompt's tool rules are the primary's.
+    const offeredNames = new Set(built.tools.map(toolNameOf).filter((n): n is string => !!n))
+    const candidateBuilt = await buildTools({ ...buildOptions, connectionProfile: candidate })
+    const narrowed = {
+      ...candidateBuilt,
+      tools: candidateBuilt.tools.filter((tool) => {
+        const name = toolNameOf(tool)
+        return !name || offeredNames.has(name)
+      }),
+    }
+    const format = profileToolFormat(narrowed, candidate)
+    logger.debug('[TurnTools] Tools formatted for a substitute profile', {
+      chatId,
+      primaryProfileId: profile.id,
+      primaryProvider: profile.provider,
+      substituteProfileId: candidate.id,
+      substituteProvider: candidate.provider,
+      primaryMode: resolvedToolMode,
+      substituteMode: format.resolvedToolMode,
+      toolCount: format.actualTools.length,
+    })
+    return format
+  }
+
   return {
+    ...primaryFormat,
     tools: built.tools,
-    actualTools,
-    resolvedToolMode,
-    useTextBlockTools,
-    useNativeWebSearch: built.useNativeWebSearch,
     toolInstructions,
-    // simple-json hard-cuts the model at the closing `</tool_call>` tag, on the
-    // primary stream and on every continuation.
-    stopSequences: resolvedToolMode === 'simple-json' ? SIMPLE_JSON_STOP : undefined,
+    formatToolsFor,
     effectCeiling,
     customToolEffects: built.customToolEffects,
     pluginToolEffects: built.pluginToolEffects,
     toolOffer: built.offer,
     toolSettingsChanged,
+  }
+}
+
+/**
+ * One profile's tool format from a built tool list: its resolved tool mode,
+ * the tools sent natively (none under a text protocol) and the stop sequences
+ * the mode needs. simple-json hard-cuts the model at the closing
+ * `</tool_call>` tag, on the primary stream and on every continuation.
+ */
+function profileToolFormat(
+  built: { tools: unknown[]; modelSupportsNativeTools: boolean; useNativeWebSearch: boolean },
+  profile: ConnectionProfile,
+): ProfileToolFormat {
+  const profilePseudoToolMode = (profile as { pseudoToolMode?: PseudoToolMode }).pseudoToolMode
+  const resolvedToolMode = checkResolvedToolMode(built.modelSupportsNativeTools, profilePseudoToolMode)
+  const useTextBlockTools = resolvedToolMode !== 'native'
+  return {
+    actualTools: useTextBlockTools ? [] : built.tools,
+    resolvedToolMode,
+    useTextBlockTools,
+    useNativeWebSearch: built.useNativeWebSearch,
+    stopSequences: resolvedToolMode === 'simple-json' ? SIMPLE_JSON_STOP : undefined,
   }
 }
 
@@ -400,7 +451,11 @@ const formatBracketedToolResult = (toolName: string, content: string) => `[Tool 
  * native web search, so the model cannot re-emit the markers just stripped.
  */
 export async function runTurnTextToolPasses(opts: TurnTextToolPassesOptions): Promise<void> {
-  const { resolvedToolMode, useTextBlockTools, actualTools, useNativeWebSearch, ...shared } = opts
+  const { resolvedToolMode, useTextBlockTools, ...rest } = opts
+  // A failover stand-in continues on its own tools, messages and params (A15).
+  // Its tool mode is the turn's: one in another mode is never called.
+  const { actualTools, useNativeWebSearch, formattedMessages, modelParams } = effectiveToolLoopCall(opts)
+  const shared = { ...rest, formattedMessages, modelParams }
 
   const plugin = getProvider(opts.streaming.effectiveProfile.provider)
   if (plugin?.hasTextToolMarkers && plugin.parseTextToolCalls && plugin.stripTextToolMarkers) {

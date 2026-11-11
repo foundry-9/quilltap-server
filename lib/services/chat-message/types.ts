@@ -341,6 +341,56 @@ export interface DangerResolutionResult {
  * Passed by reference to sub-services (failover, finalizer) which mutate it directly,
  * eliminating large destructure/reassign patterns.
  */
+/** How a turn's tools travel for one profile: natively, or as a text protocol. */
+export type TurnToolMode = 'native' | 'simple-json' | 'text-block'
+
+/**
+ * The tool half of a call, formatted for one connection profile. A substitute
+ * is often on another provider, so the primary's provider-formatted array is
+ * wrong for it (#181); `TurnToolSlate.formatToolsFor` builds this per profile.
+ */
+export interface ProfileToolFormat {
+  /** Tools sent natively beside the messages (empty under a text protocol). */
+  actualTools: unknown[]
+  resolvedToolMode: TurnToolMode
+  /** The model calls tools through a text protocol rather than natively. */
+  useTextBlockTools: boolean
+  useNativeWebSearch: boolean
+  /** Provider stop sequences (simple-json only). */
+  stopSequences: string[] | undefined
+}
+
+/** Formats the turn's tools for one profile. */
+export type FormatToolsFor = (profile: ConnectionProfile) => Promise<ProfileToolFormat>
+
+/** One message in a provider call, as the turn assembles it. */
+export interface TurnCallMessage {
+  role: string
+  content: string
+  attachments?: unknown[]
+  name?: string
+  thoughtSignature?: string
+  reasoningContent?: string
+  toolCallId?: string
+  toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
+  cacheControl?: { type: 'ephemeral' }
+}
+
+/**
+ * Everything about a call that depends on which profile is being called.
+ * Written onto `StreamingState.effectiveCall` by `callSubstitute` when a
+ * stand-in answers, so the tool loops continue on the stand-in's own shape.
+ */
+export interface EffectiveCall {
+  /** The message array, image-budgeted for this profile. */
+  messages: TurnCallMessage[]
+  tools: unknown[]
+  toolMode: TurnToolMode
+  useNativeWebSearch: boolean
+  modelParams: Record<string, unknown>
+  stop?: string[]
+}
+
 export interface StreamingState {
   fullResponse: string
   effectiveProfile: ConnectionProfile
@@ -383,6 +433,13 @@ export interface StreamingState {
    * tried.
    */
   routeVia: RouteAttemptVia
+  /**
+   * The call shape of the profile now holding the turn, when a substitute
+   * answered (`callSubstitute`). Absent means the turn is still on its
+   * primary's shape. The tool loops read their tools, messages and params
+   * from here before the slate.
+   */
+  effectiveCall?: EffectiveCall
 }
 
 /**

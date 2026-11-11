@@ -543,6 +543,21 @@ see is passed over. The picture has already been packed into the request, and
 handing it to a model with no eyes would be refused at the door — so the turn
 goes to the next candidate rather than being spent on a certainty.
 
+Tools travel properly with the understudy, too. Each provider expects the
+character's instruments laid out in its own particular fashion, and an
+understudy from another house is now handed them in *its* fashion rather than
+the one the original performer was used to — so a chat with tools switched on
+fails over between providers as readily as one without. An understudy who
+answers by reaching straight for a tool, without a word of prose first, is
+taken at their word: the tool is used and the scene continues, exactly as it
+would have for the performer you cast.
+
+One case is still passed over. Some models are taught their tools in the prompt
+itself rather than handed them natively, and the prompt for this turn was
+written for whichever arrangement the profile you cast prefers. An understudy
+who would need the *other* arrangement is skipped, and the reply's list marks
+them so, rather than being sent a set of instructions meant for someone else.
+
 ### What counts as an indisposition
 
 A fallback fires for problems of *availability*: a rejected key, a rate limit, a
