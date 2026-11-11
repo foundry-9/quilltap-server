@@ -11,10 +11,13 @@
 import { useCallback, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { GroupMember, UseGroupMembersReturn } from '../../types'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+
+const EMPTY_MEMBERS: GroupMember[] = []
+const toMembers = (rows: GroupMember[]): GroupMember[] => rows.map((c) => ({ id: c.id, name: c.name }))
 
 export function useGroupMembers(groupId: string): UseGroupMembersReturn {
   const [members, setMembers] = useState<GroupMember[]>([])
-  const [allCharacters, setAllCharacters] = useState<GroupMember[]>([])
   const [loading, setLoading] = useState(false)
 
   const fetchMembers = useCallback(async () => {
@@ -32,25 +35,14 @@ export function useGroupMembers(groupId: string): UseGroupMembersReturn {
     }
   }, [groupId])
 
+  // Every character the group could take in: the shared list, narrowed.
+  const { data: allCharacters = EMPTY_MEMBERS, refetch: refetchCharacters } = useCharactersList<
+    GroupMember,
+    GroupMember[]
+  >(undefined, { select: toMembers })
   const fetchAllCharacters = useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/v1/characters')
-      if (res.ok) {
-        const data = await res.json()
-        // Map characters to GroupMember format
-        const characters = data.characters.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-        }))
-        setAllCharacters(characters)
-      }
-    } catch (err) {
-      console.error('useGroupMembers: fetchAllCharacters error', err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    await refetchCharacters()
+  }, [refetchCharacters])
 
   const addMember = useCallback(async (characterId: string): Promise<boolean> => {
     try {

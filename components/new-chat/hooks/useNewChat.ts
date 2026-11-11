@@ -23,6 +23,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { withArchivedParam } from '@/components/scenarios/archived-query'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { useConnectionProfilesQuery, useImageProfilesQuery, useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
@@ -306,17 +307,14 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
 
   // --- Reference data ------------------------------------------------------
 
-  const charactersQuery = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: Character[] }>('/api/v1/characters', { signal }),
-  })
+  const charactersQuery = useCharactersList<Character>()
   const profilesQuery = useConnectionProfilesQuery<ConnectionProfile>()
   const imageProfilesQuery = useImageProfilesQuery<ImageProfile>()
   const projectsQuery = useProjectsQuery<Project>()
   const templatesQuery = useRoleplayTemplatesQuery<{ id: string; name: string; description?: string | null; isBuiltIn?: boolean }>()
   const { data: chatSettings } = useChatSettingsQuery()
 
-  const characters = charactersQuery.data?.characters ?? EMPTY_CHARACTERS
+  const characters = charactersQuery.data ?? EMPTY_CHARACTERS
   const profiles = profilesQuery.data ?? EMPTY_PROFILES
   const imageProfiles = imageProfilesQuery.data ?? EMPTY_IMAGE_PROFILES
   const availableProjects = useMemo<ProjectListEntry[]>(

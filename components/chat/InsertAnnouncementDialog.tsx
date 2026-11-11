@@ -7,6 +7,7 @@ import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
 import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 type StaffId =
@@ -69,6 +70,8 @@ interface AudienceCandidate {
   status?: 'active' | 'silent' | 'absent' | 'removed'
 }
 
+const EMPTY_CARDS: CharacterCard[] = []
+
 interface InsertAnnouncementDialogProps {
   isOpen: boolean
   onClose: () => void
@@ -100,8 +103,7 @@ export default function InsertAnnouncementDialog({
   const [characterId, setCharacterId] = useState<string>('')
   const [customName, setCustomName] = useState('')
   const [content, setContent] = useState('')
-  const [characters, setCharacters] = useState<CharacterCard[]>([])
-  const [charsLoading, setCharsLoading] = useState(false)
+  const [wantCharacters, setWantCharacters] = useState(false)
   const [charSearch, setCharSearch] = useState('')
   // Shared connection-profile list, fetched only while the dialog is open.
   const { data: profiles = [], error: profilesError } = useConnectionProfilesQuery<ProfileCard>({ enabled: isOpen })
@@ -122,20 +124,16 @@ export default function InsertAnnouncementDialog({
   // renders this component (`{insertAnnouncementOpen && <... />}`), so each
   // open is a fresh mount and useState() initializers fire again.
 
-  const loadCharactersIfNeeded = useCallback(() => {
-    if (characters.length > 0 || charsLoading) return
-    setCharsLoading(true)
-    fetch('/api/v1/characters')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data) => {
-        const all: CharacterCard[] = data.characters || []
-        setCharacters(all)
-      })
-      .catch((err) => {
-        showErrorToast(`Failed to load characters: ${err.message}`)
-      })
-      .finally(() => setCharsLoading(false))
-  }, [characters.length, charsLoading])
+  // The roster is read once the "character" tab is first opened.
+  const loadCharactersIfNeeded = useCallback(() => setWantCharacters(true), [])
+  const {
+    data: characters = EMPTY_CARDS,
+    isLoading: charsLoading,
+    error: charsError,
+  } = useCharactersList<CharacterCard>(undefined, { enabled: wantCharacters })
+  useEffect(() => {
+    if (charsError) showErrorToast(`Failed to load characters: ${charsError.message}`)
+  }, [charsError])
 
   useEffect(() => {
     if (profilesError) {

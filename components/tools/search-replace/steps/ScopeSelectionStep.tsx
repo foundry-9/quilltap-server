@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import type { SearchReplaceScope } from '../types';
+import { useCharactersList } from '@/lib/hooks/use-characters-list';
 
 interface ScopeSelectionStepProps {
   scope: SearchReplaceScope | null;
@@ -25,6 +26,8 @@ interface Character {
 
 type ScopeType = 'chat' | 'character';
 
+const EMPTY_CHARACTERS: Character[] = [];
+
 export function ScopeSelectionStep({
   scope,
   onScopeChange,
@@ -37,32 +40,11 @@ export function ScopeSelectionStep({
       ? scope.type
       : (currentChatId ? 'chat' : 'character')
   );
-  const [characters, setCharacters] = useState<Character[]>([]);
+  // Every character, former personas (controlledBy: 'user') included.
+  const { data: characters = EMPTY_CHARACTERS, isLoading: loading } = useCharactersList<Character>();
   const [selectedCharacterId, setSelectedCharacterId] = useState<string>(
     scope?.type === 'character' ? scope.characterId : ''
   );
-  const [loading, setLoading] = useState(false);
-
-  // Fetch characters (includes former personas with controlledBy: 'user')
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const charsRes = await fetch('/api/v1/characters');
-
-        if (charsRes.ok) {
-          const data = await charsRes.json();
-          setCharacters(data.characters || data || []);
-        }
-      } catch (error) {
-        console.error('[ScopeSelectionStep] Error fetching data', { error });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
 
   // Update scope when selection changes
   useEffect(() => {

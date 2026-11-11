@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import BaseModal from '@/components/ui/BaseModal'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { showSuccessToast } from '@/lib/toast'
 
@@ -104,11 +105,7 @@ export function SaveScenarioDialog({
   })
   const { data: projectData } = useProjectsQuery<NamedRow>({ enabled: isOpen && everywhere })
   // The list endpoint already leaves archived characters out: a tombstone takes no new scenarios.
-  const { data: characterData } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: NamedRow[] }>('/api/v1/characters', { signal }),
-    enabled: isOpen && everywhere,
-  })
+  const { data: characterData } = useCharactersList<NamedRow>(undefined, { enabled: isOpen && everywhere })
 
   const projects: NamedRow[] = useMemo(() => {
     if (everywhere) return [...(projectData ?? [])].sort(byName)
@@ -119,7 +116,7 @@ export function SaveScenarioDialog({
     [everywhere, allGroupData, castGroupData],
   )
   const characters: NamedRow[] = useMemo(
-    () => (everywhere ? [...(characterData?.characters ?? [])].sort(byName) : cast),
+    () => (everywhere ? [...(characterData ?? [])].sort(byName) : cast),
     [everywhere, characterData, cast],
   )
 

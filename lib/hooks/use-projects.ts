@@ -14,17 +14,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import type { EntityListOptions, EntityRow } from './use-profiles'
+import { useEnvelopeSelect, type EntityListOptions, type EntityRow } from './use-profiles'
+
+const unwrapProjects = <P,>(data: { projects?: P[] }) => data.projects
 
 export function useProjectsQuery<P = EntityRow, R = P[]>(options?: EntityListOptions<P, R>) {
-  const select = options?.select
+  const select = useEnvelopeSelect<{ projects?: P[] }, P, R>(unwrapProjects, options?.select)
   return useQuery({
     queryKey: queryKeys.projects.list(),
     queryFn: ({ signal }) => apiFetch<{ projects?: P[] }>('/api/v1/projects', { signal }),
-    select: (data) => {
-      const rows = data.projects ?? []
-      return select ? select(rows) : (rows as unknown as R)
-    },
+    select,
     enabled: options?.enabled,
     staleTime: options?.staleTime,
     refetchOnMount: options?.refetchOnMount,

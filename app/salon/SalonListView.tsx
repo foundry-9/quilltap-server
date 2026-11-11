@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
@@ -48,11 +49,7 @@ export function SalonListView() {
         { signal }
       ),
   })
-  const { data: charactersData, isLoading: charactersLoading } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters', { signal }),
-  })
+  const { data: charactersData, isLoading: charactersLoading } = useCharactersList<{ id: string; name: string; title?: string | null }>()
   const { data: profilesData, isLoading: profilesLoading } = useConnectionProfilesQuery()
 
   // Whether the user actually owns any autonomous rooms — used to decide
@@ -67,7 +64,7 @@ export function SalonListView() {
 
   const chats = useMemo(() => chatsData?.chats ?? [], [chatsData])
   const characters = useMemo(
-    () => (charactersData?.characters ?? []).map((c) => ({ id: c.id, name: c.name, title: c.title })),
+    () => (charactersData ?? []).map((c) => ({ id: c.id, name: c.name, title: c.title })),
     [charactersData]
   )
   const profiles = useMemo(

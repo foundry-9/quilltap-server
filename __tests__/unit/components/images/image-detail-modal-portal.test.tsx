@@ -14,6 +14,7 @@
 
 import React from 'react'
 import { render, screen } from '@testing-library/react'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 import ImageDetailModal from '@/components/images/image-detail/ImageDetailModal'
 import type { ImageData } from '@/components/images/image-detail/types'
 
@@ -74,7 +75,7 @@ function renderInIsolatingWorkspace(isOpen = true) {
   workspace.style.isolation = 'isolate'
   document.body.appendChild(workspace)
 
-  const view = render(
+  const view = renderWithQuery(
     <ImageDetailModal isOpen={isOpen} image={image} onClose={jest.fn()} />,
     { container: workspace }
   )

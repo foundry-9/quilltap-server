@@ -25,7 +25,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { GuardedTypeaheadMenuPlugin } from '../typeahead/GuardedTypeaheadMenuPlugin'
 import type { MenuRenderFn, MenuTextMatch } from '@lexical/react/LexicalTypeaheadMenuPlugin'
@@ -49,8 +48,8 @@ import {
   type TextNode,
 } from 'lexical'
 
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+import { $textBeforeCursor, $isGluedToPreviousRun } from '../typeahead/trigger-context'
 import {
   canKeepLineStartAt,
   classifyLineStartMention,
@@ -65,7 +64,6 @@ import {
   toMenuTextMatch,
   $insertTypeaheadText,
 } from '../typeahead/useTypeaheadShell'
-import { $textBeforeCursor, $isGluedToPreviousRun } from '../typeahead/trigger-context'
 
 /** Rows visible at once; the menu scrolls with the keyboard beyond this. */
 const MENU_LIMIT = 10
@@ -74,10 +72,6 @@ const LISTBOX_ID = 'qt-mention-typeahead-listbox'
 const EMPTY_LABEL = 'No such personage in the register'
 const LOADING_LABEL = 'Consulting the register\u2026'
 const ERROR_LABEL = 'The register could not be reached'
-
-interface CharactersResponse {
-  characters?: MentionCandidate[]
-}
 
 /** A line-start `@Name` whose `@` is still awaiting its verdict. */
 interface PendingLineStart {
@@ -205,11 +199,7 @@ export function MentionTypeaheadPlugin({
 
   // Same key and URL as the spellcheck dictionary feed, so the list is shared.
   // The endpoint already leaves archived characters out.
-  const { data, isPending, isError } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<CharactersResponse>('/api/v1/characters', { signal }),
-    enabled: query !== null,
-  })
+  const { data, isPending, isError } = useCharactersList<MentionCandidate>(undefined, { enabled: query !== null })
 
   const priorityKey = priorityCharacterIds?.join('|') ?? ''
   const prioritySet = useMemo(
@@ -231,7 +221,7 @@ export function MentionTypeaheadPlugin({
 
   const options = useMemo(() => {
     if (query === null) return []
-    const candidates = mentionCandidatesFor(data?.characters ?? [], atLineStart)
+    const candidates = mentionCandidatesFor(data ?? [], atLineStart)
     return rankMentionCandidates(candidates, query, prioritySet, MENU_LIMIT).map(
       (character) =>
         new TypeaheadOption<MentionCandidate>(

@@ -1,7 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 
 interface UserCharacterBasic {
   id: string
@@ -30,17 +28,13 @@ interface UseUserCharacterDisplayNameResult {
   loading: boolean
 }
 
-// The API may return either a bare array or a `{ characters }` envelope.
-type UserCharactersResponse = UserCharacterBasic[] | { characters?: UserCharacterBasic[] }
-
 /**
  * Derive the set of names shared by more than one user-controlled character.
  * Used as the query `select` so the duplicate-name Set is memoised by TanStack
  * Query (referentially stable across renders), which matters because every
  * ChatCard mounts this hook — an unstable Set identity would thrash their memo.
  */
-function computeDuplicateNames(data: UserCharactersResponse): Set<string> {
-  const characters: UserCharacterBasic[] = Array.isArray(data) ? data : (data.characters || [])
+function computeDuplicateNames(characters: UserCharacterBasic[]): Set<string> {
 
   const nameCounts = new Map<string, number>()
   for (const character of characters) {
@@ -63,13 +57,10 @@ const EMPTY_NAMES: Set<string> = new Set()
  * Backed by the shared TanStack Query cache so multiple ChatCard instances share a single fetch.
  */
 export function useUserCharacterDisplayName(): UseUserCharacterDisplayNameResult {
-  const { data: duplicateNames = EMPTY_NAMES, isLoading: loading } = useQuery({
-    queryKey: queryKeys.characters.list({ controlledBy: 'user' }),
-    queryFn: ({ signal }) =>
-      apiFetch<UserCharactersResponse>('/api/v1/characters?controlledBy=user', { signal }),
-    select: computeDuplicateNames,
-    staleTime: Infinity,
-  })
+  const { data: duplicateNames = EMPTY_NAMES, isLoading: loading } = useCharactersList<
+    UserCharacterBasic,
+    Set<string>
+  >({ controlledBy: 'user' }, { select: computeDuplicateNames, staleTime: Infinity })
 
   const needsDisambiguation = useCallback(
     (name: string) => duplicateNames.has(name),

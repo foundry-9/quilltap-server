@@ -10,9 +10,7 @@
 import { useId, useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { downloadFetchedFile } from '@/lib/download-utils'
@@ -48,15 +46,12 @@ export function GenerateImageView() {
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: charactersData, isLoading } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters', { signal }),
-  })
+  const { data: charactersData, isLoading } = useCharactersList<{ id: string; name: string }>()
 
   // Load all characters for placeholder insertion
   useEffect(() => {
-    if (charactersData?.characters) {
-      const entities: EntityOption[] = charactersData.characters.map((c) => ({
+    if (charactersData) {
+      const entities: EntityOption[] = charactersData.map((c) => ({
         id: c.id,
         name: c.name,
         type: 'character' as const,

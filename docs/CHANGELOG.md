@@ -4,6 +4,11 @@
 
 ### 4.13-dev
 
+#### Refactor: client server-state (phase 4: the character list)
+
+- New `useCharactersList(filters)` (`lib/hooks/use-characters-list.ts`): the one read of `GET /api/v1/characters`. Its filters (`controlledBy`, `archived`, `npc`) are the endpoint's query parameters and are folded into `queryKeys.characters.list(filters)`. Eleven inline `queryFn`s (New Chat, the Salon list, Add Character, Compose Mail, Generate Image, the mention typeahead, the spellcheck feed, Save Scenario, the container catalogue, the project roster card, the entity search), the persona reads (`useUserCharacterDisplayName`, the character page's user-character list), the Aurora roster, and four effect loaders (group members, the image detail modal, Insert Announcement, search-and-replace scope) now use it, so a character created or archived anywhere shows in all of them.
+- The shared list hooks' `select` wrapper (`useEnvelopeSelect`) is stable while the caller's `select` is, so TanStack memoises its result (`useUserCharacterDisplayName` depends on a stable `Set`).
+
 #### Refactor: client server-state (phase 4: projects and document stores)
 
 - The Prospero project list and the Scriptorium store list read shared queries (`useProjectsQuery`, `lib/hooks/use-projects.ts`; `useDocumentStoresQuery`, `lib/hooks/use-document-stores.ts`) instead of component state, so the `projects` and `mountPoints` realtime topics now refresh them: a background scan, embedding pass or conversion shows without a tab switch. Creates and deletes invalidate the shared keys, so the New Chat dialog, the move-to-project and library pickers, Save Scenario, the container catalogue and the document destination dialog see them. The Scriptorium's optimistic scan and conversion states edit the cached list. New key prefix `queryKeys.projects.lists`.

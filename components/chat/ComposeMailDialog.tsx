@@ -8,6 +8,7 @@ import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { formatDate } from '@/lib/format-time'
 
 export interface ComposeMailParticipant {
@@ -87,14 +88,9 @@ export default function ComposeMailDialog({
   // To = ANY character in the workspace (not just this chat's participants),
   // minus the chosen From. self-mail is allowed server-side but a confusing
   // default in the UI, so the From is excluded.
-  const charactersQuery = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: WorkspaceCharacter[] }>('/api/v1/characters', { signal }),
-    enabled: isOpen,
-  })
+  const charactersQuery = useCharactersList<WorkspaceCharacter>(undefined, { enabled: isOpen })
   const recipients = useMemo(() => {
-    const all = charactersQuery.data?.characters ?? []
+    const all = charactersQuery.data ?? []
     return all
       .filter((c) => c.id !== fromCharacterId)
       .sort((a, b) => a.name.localeCompare(b.name))

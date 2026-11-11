@@ -40,17 +40,32 @@ export interface EntityListOptions<P, R> {
   refetchOnMount?: boolean | 'always'
 }
 
-function narrow<P, R>(rows: P[], select?: (rows: P[]) => R): R {
-  return select ? select(rows) : (rows as unknown as R)
+/**
+ * The query's `select`: unwrap the envelope, then the caller's narrowing.
+ * Stable while the caller's `select` is, so TanStack memoises the result —
+ * pass a module-level or memoised `select` when its output's identity matters.
+ */
+export function useEnvelopeSelect<E, P, R>(unwrap: (data: E) => P[] | undefined, select?: (rows: P[]) => R) {
+  return useCallback(
+    (data: E): R => {
+      const rows = unwrap(data) ?? []
+      return select ? select(rows) : (rows as unknown as R)
+    },
+    [unwrap, select],
+  )
 }
+
+const unwrapProfiles = <P,>(data: { profiles?: P[] }) => data.profiles
+const unwrapApiKeys = <K,>(data: { apiKeys?: K[] }) => data.apiKeys
+const unwrapArray = <T,>(data: T[]) => data
 
 /** `GET /api/v1/connection-profiles` → `profiles`. */
 export function useConnectionProfilesQuery<P = EntityRow, R = P[]>(options?: EntityListOptions<P, R>) {
-  const select = options?.select
+  const select = useEnvelopeSelect<{ profiles?: P[] }, P, R>(unwrapProfiles, options?.select)
   return useQuery({
     queryKey: queryKeys.connectionProfiles.all,
     queryFn: ({ signal }) => apiFetch<{ profiles?: P[] }>('/api/v1/connection-profiles', { signal }),
-    select: (data) => narrow(data.profiles ?? [], select),
+    select,
     enabled: options?.enabled,
     staleTime: options?.staleTime,
     refetchOnMount: options?.refetchOnMount,
@@ -59,11 +74,11 @@ export function useConnectionProfilesQuery<P = EntityRow, R = P[]>(options?: Ent
 
 /** `GET /api/v1/image-profiles` → `profiles`. */
 export function useImageProfilesQuery<P = EntityRow, R = P[]>(options?: EntityListOptions<P, R>) {
-  const select = options?.select
+  const select = useEnvelopeSelect<{ profiles?: P[] }, P, R>(unwrapProfiles, options?.select)
   return useQuery({
     queryKey: queryKeys.imageProfiles.all,
     queryFn: ({ signal }) => apiFetch<{ profiles?: P[] }>('/api/v1/image-profiles', { signal }),
-    select: (data) => narrow(data.profiles ?? [], select),
+    select,
     enabled: options?.enabled,
     staleTime: options?.staleTime,
     refetchOnMount: options?.refetchOnMount,
@@ -72,11 +87,11 @@ export function useImageProfilesQuery<P = EntityRow, R = P[]>(options?: EntityLi
 
 /** `GET /api/v1/embedding-profiles` → `profiles`. */
 export function useEmbeddingProfilesQuery<P = EntityRow, R = P[]>(options?: EntityListOptions<P, R>) {
-  const select = options?.select
+  const select = useEnvelopeSelect<{ profiles?: P[] }, P, R>(unwrapProfiles, options?.select)
   return useQuery({
     queryKey: queryKeys.embeddingProfiles.all,
     queryFn: ({ signal }) => apiFetch<{ profiles?: P[] }>('/api/v1/embedding-profiles', { signal }),
-    select: (data) => narrow(data.profiles ?? [], select),
+    select,
     enabled: options?.enabled,
     staleTime: options?.staleTime,
     refetchOnMount: options?.refetchOnMount,
@@ -87,11 +102,11 @@ export function useEmbeddingProfilesQuery<P = EntityRow, R = P[]>(options?: Enti
 export function useApiKeysQuery<K = { id: string; label: string; provider: string }, R = K[]>(
   options?: EntityListOptions<K, R>,
 ) {
-  const select = options?.select
+  const select = useEnvelopeSelect<{ apiKeys?: K[] }, K, R>(unwrapApiKeys, options?.select)
   return useQuery({
     queryKey: queryKeys.apiKeys.all,
     queryFn: ({ signal }) => apiFetch<{ apiKeys?: K[] }>('/api/v1/api-keys', { signal }),
-    select: (data) => narrow(data.apiKeys ?? [], select),
+    select,
     enabled: options?.enabled,
     staleTime: options?.staleTime,
     refetchOnMount: options?.refetchOnMount,
@@ -100,11 +115,11 @@ export function useApiKeysQuery<K = { id: string; label: string; provider: strin
 
 /** `GET /api/v1/roleplay-templates` → the array itself (built-ins and the user's own). */
 export function useRoleplayTemplatesQuery<T = EntityRow, R = T[]>(options?: EntityListOptions<T, R>) {
-  const select = options?.select
+  const select = useEnvelopeSelect<T[], T, R>(unwrapArray, options?.select)
   return useQuery({
     queryKey: queryKeys.roleplayTemplates.all,
     queryFn: ({ signal }) => apiFetch<T[]>('/api/v1/roleplay-templates', { signal }),
-    select: (data) => narrow(data ?? [], select),
+    select,
     enabled: options?.enabled,
     staleTime: options?.staleTime,
     refetchOnMount: options?.refetchOnMount,

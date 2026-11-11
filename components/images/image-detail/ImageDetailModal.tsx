@@ -9,6 +9,9 @@ import { ImageActions } from './ImageActions'
 import { ImageMetadata } from './ImageMetadata'
 import { useImageActions } from './hooks/useImageActions'
 import type { ImageDetailModalProps, Character, CharacterGalleryLink } from './types'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+
+const EMPTY_CHARACTERS: Character[] = []
 
 export default function ImageDetailModal({
   isOpen,
@@ -18,8 +21,10 @@ export default function ImageDetailModal({
   onNext,
   onAvatarSet,
 }: ImageDetailModalProps) {
-  const [characters, setCharacters] = useState<Character[]>([])
-  const [loadingEntities, setLoadingEntities] = useState(true)
+  const { data: characters = EMPTY_CHARACTERS, isLoading: loadingCharacters } =
+    useCharactersList<Character>(undefined, { enabled: isOpen })
+  const [loadingLinks, setLoadingLinks] = useState(true)
+  const loadingEntities = loadingCharacters || loadingLinks
   const [imageMissing, setImageMissing] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
@@ -38,21 +43,13 @@ export default function ImageDetailModal({
     updateCharacterGalleryLinks,
   } = useImageActions(image, characters, onAvatarSet)
 
-  // Load characters and character gallery links on mount
+  // Load the image's character gallery links on open (the characters are the shared list above).
   useEffect(() => {
     const loadEntities = async () => {
       try {
-        setLoadingEntities(true)
+        setLoadingLinks(true)
 
-        const [charsRes, imageRes] = await Promise.all([
-          fetch('/api/v1/characters'),
-          fetch(`/api/v1/images/${image.id}`),
-        ])
-
-        if (charsRes.ok) {
-          const charsData = await charsRes.json()
-          setCharacters(charsData.characters || [])
-        }
+        const imageRes = await fetch(`/api/v1/images/${image.id}`)
 
         if (imageRes.ok) {
           const imageData = await imageRes.json()
@@ -64,7 +61,7 @@ export default function ImageDetailModal({
           error: error instanceof Error ? error.message : String(error),
         })
       } finally {
-        setLoadingEntities(false)
+        setLoadingLinks(false)
       }
     }
 
