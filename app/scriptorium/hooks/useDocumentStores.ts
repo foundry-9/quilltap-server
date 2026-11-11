@@ -86,7 +86,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       showErrorToast(errorMsg)
       return null
     }
-  }, [setStores, refresh])
+  }, [refresh])
 
   const updateStore = useCallback(async (id: string, data: UpdateDocumentStoreData): Promise<DocumentStore | null> => {
     try {
@@ -128,7 +128,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
       showErrorToast(errorMsg)
       return false
     }
-  }, [setStores, refresh])
+  }, [setStores, queryClient])
 
   const scanStore = useCallback(async (id: string): Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null> => {
     try {
