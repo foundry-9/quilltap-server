@@ -4,7 +4,7 @@
 
 ### 4.13-dev
 
-#### Refactor: API inputs validated by schemas (phases 1–3)
+#### Refactor: API inputs validated by schemas (phases 1–4)
 
 - #165: SillyTavern character export (JSON and PNG) and chat JSONL export returned 500 for a name with characters above U+00FF and broke on a `"`. They, the theme export, the backup download and the two `system/tools` downloads now build `Content-Disposition` with `buildContentDisposition`. A grep-test forbids a hand-spelled `filename=` header.
 - #166: an invalid body to `POST`/`DELETE /api/v1/projects/[id]/mount-points`, `PATCH /api/v1/mount-points/[id]` or `?action=close-document` was a 500; the `ZodError` now reaches the middleware, which answers 400.
@@ -16,6 +16,8 @@
 - Image and embedding profiles likewise (`lib/image-gen/image-profile-input.ts`, `lib/embedding/embedding-profile-input.ts`), on shared identity fields in `lib/schemas/profile-input.ts`. An image-profile update with an empty `apiKeyId` cleared it instead of answering 404; an embedding profile's `provider` is checked against its enum instead of cast. The embedding profile editor sends `null` for a cleared key, URL or dimension count; it sent `undefined`, which JSON drops, so an edit could never clear them.
 - `validationError` responses carry a `message` summarising the issues (`name: Name is required`); `fetchJson` and the image profile form show it instead of "Validation error" (`readErrorMessage`, `lib/fetch-helpers.ts`).
 - `jest.setup.ts` stubs `requiresBaseUrl` beside the other provider-validation questions.
+- `projects/[id]/mount-points` and `groups/[id]/mount-points` are one factory, `createOwnerMountLinkRoutes` (`lib/mount-index/owner-mount-links-routes.ts`). The group GET now also returns `officialMountPointId`. Unlink takes `?mountPointId=`; the old DELETE body is read for one release with a warning, and both clients send the query.
+- Schemas replace the hand checks in `api-keys` (create, update, test, export, import, import-preview; `lib/api-keys/api-key-input.ts`), `roleplay-templates` create and update (`lib/roleplay-templates/template-input.ts`), `system/jobs` POST (type, object payload, integer `priority`, `maxAttempts` 1–20; `priority` and `maxAttempts` of the wrong type used to be dropped silently), `system/restore` (preview and restore), `chats/[id]/files` (`link`, `attach-mount-file`), `plugins/[name]` PUT (`enabled` must be a boolean; any value was accepted) and `mount-points/[id]?action=delete-file`. The API-key import dialog shows the validation message.
 
 #### Refactor: the job queue's dedupe rule and the query translator's quiet failures
 

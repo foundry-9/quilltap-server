@@ -696,10 +696,12 @@ Create a new API key.
 }
 ```
 
-**Validation**:
-- `provider`: Required, provider ID from enabled plugins
-- `label`: Required, 1-100 characters
-- `apiKey`: Required, will be encrypted with AES-256-GCM
+**Validation** (`ApiKeyCreateSchema`, `lib/api-keys/api-key-input.ts`, strict):
+- `provider`: Required, non-blank, trimmed. An unregistered provider is accepted with a logged warning (a plugin may arrive later).
+- `label`: Required, non-blank, trimmed
+- `apiKey`: Required, non-blank, stored exactly as sent
+
+Every body on `/api/v1/api-keys` and `/api/v1/api-keys/[id]` (create, update, `test`, `export`, `import`, `import-preview`) is a schema in that module; a malformed one is the middleware's `400` with the old messages (`Label is required`, `Passphrase must be at least 8 characters`, `Invalid file format`, `Unsupported file version: N`, …) in `message`. `import-preview` still answers `{ valid: false, error }` for a well-formed file that will not open.
 
 **Response**: `201 Created`
 
@@ -709,7 +711,7 @@ Get a specific API key (masked).
 
 #### `PUT /api/v1/api-keys/[id]`
 
-Update an API key's label or active status.
+Update an API key's `label`, `isActive` or `apiKey` (any subset; strict).
 
 #### `DELETE /api/v1/api-keys/[id]`
 
@@ -5483,6 +5485,8 @@ Per-chat roleplay formatting templates.
 - `PUT /api/v1/roleplay-templates/[id]` - Update template
 - `DELETE /api/v1/roleplay-templates/[id]` - Delete template
 
+Both bodies derive from one input object (`lib/roleplay-templates/template-input.ts`, strict). Create requires `name` (1–100, trimmed), `systemPrompt` and `narrationDelimiters` (a string, a `[open, close]` pair, or `null` for unmarked prose), and takes `description` (≤ 500; blank is none), `delimiters`, `renderingPatterns`, `dialogueDetection`, `unmarkedStyle`, `markdownAsterisks`; tags are attached afterwards with the tag actions. Update takes any subset of those plus `tags`. A malformed body is the middleware's `400`.
+
 ---
 
 ### Images
@@ -6889,6 +6893,10 @@ tell that work passed through between two polls.
 }
 ```
 
+#### `POST /api/v1/system/jobs`
+
+Enqueue a background job by hand (an operator tool; no UI calls it). Body (strict): `type` (a `BackgroundJobType`), `payload` (an object), optional `priority` (integer) and `maxAttempts` (integer 1–20). A malformed body is a `400`. The payload is not yet checked per job type. Answers `201 { jobId, message }`.
+
 #### `GET /api/v1/system/jobs/[id]`
 
 Get job details.
@@ -7493,7 +7501,9 @@ Link a mount point to the project. Body: `{ mountPointId }`.
 
 #### `DELETE /api/v1/projects/[id]/mount-points`
 
-Unlink a mount point from the project. Body: `{ mountPointId }`.
+Unlink a mount point from the project: `?mountPointId=`. The JSON body `{ mountPointId }` this used to take is still read for one release (with a logged warning). No such link is a `400`.
+
+The project and group routes are one factory, `createOwnerMountLinkRoutes` (`lib/mount-index/owner-mount-links-routes.ts`); both answer the same shapes and both send a malformed body to the middleware's `400`.
 
 #### `GET /api/v1/projects/[id]/wardrobe`
 
@@ -7557,7 +7567,7 @@ A group's linked document stores are managed through `/api/v1/groups/[id]/mount-
 
 #### `GET /api/v1/groups/[id]/mount-points`
 
-List the mount points linked to a group.
+List the mount points linked to a group. Returns `{ mountPoints, officialMountPointId }`, as the project route does.
 
 #### `POST /api/v1/groups/[id]/mount-points`
 
@@ -7565,7 +7575,7 @@ Link a mount point to the group. Body: `{ mountPointId }`.
 
 #### `DELETE /api/v1/groups/[id]/mount-points`
 
-Unlink a mount point from the group. Body: `{ mountPointId }`.
+Unlink a mount point from the group: `?mountPointId=` (the old JSON body is read for one release).
 
 #### `GET /api/v1/groups/[id]/wardrobe`
 

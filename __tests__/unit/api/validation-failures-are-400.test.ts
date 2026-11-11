@@ -10,6 +10,11 @@ import { z } from 'zod'
 import { POST as linkProjectMount, DELETE as unlinkProjectMount } from '../../../app/api/v1/projects/[id]/mount-points/route'
 import { PATCH as patchMountPoint } from '../../../app/api/v1/mount-points/[id]/route'
 import { handleCloseDocument } from '../../../app/api/v1/chats/[id]/actions/documents'
+import { POST as postMountPointAction } from '../../../app/api/v1/mount-points/[id]/route'
+import { POST as postChatFiles } from '../../../app/api/v1/chats/[id]/files/route'
+import { PUT as putPlugin } from '../../../app/api/v1/plugins/[name]/route'
+import { POST as postJob } from '../../../app/api/v1/system/jobs/route'
+import { POST as postRestore } from '../../../app/api/v1/system/restore/route'
 import { getServerSession } from '../../../lib/auth/session'
 import { getRepositories, getRepositoriesSafe } from '../../../lib/repositories/factory'
 import { createMockRepositoryContainer, setupAuthMocks } from '../lib/fixtures/mock-repositories'
@@ -61,5 +66,21 @@ describe('validation failures are 400 (#166)', () => {
     await expect(
       handleCloseDocument(jsonRequest('http://localhost/api/v1/chats/c1?action=close-document', 'POST', { chatDocumentId: 7 }), 'c1', ctx),
     ).rejects.toBeInstanceOf(z.ZodError)
+  })
+
+  // Phase 4: the remaining hand-validated bodies, each now a schema.
+  it.each([
+    ['delete-file with no path', () => postMountPointAction(jsonRequest('http://localhost/api/v1/mount-points/mp-1?action=delete-file', 'POST', { path: '  ' }), params('mp-1'))],
+    ['chat file link with a numeric fileId', () => postChatFiles(jsonRequest('http://localhost/api/v1/chats/c1/files?action=link', 'POST', { fileId: 7 }), params('c1'))],
+    ['chat attach-mount-file with no path', () => postChatFiles(jsonRequest('http://localhost/api/v1/chats/c1/files?action=attach-mount-file', 'POST', { mountPointId: 'mp-1' }), params('c1'))],
+    ['plugin enable with a string', () => putPlugin(jsonRequest('http://localhost/api/v1/plugins/p', 'PUT', { enabled: 'yes' }), { params: Promise.resolve({ name: 'p' }) })],
+    ['job with an unknown type', () => postJob(jsonRequest('http://localhost/api/v1/system/jobs', 'POST', { type: 'NOPE', payload: {} }))],
+    ['job with a string payload', () => postJob(jsonRequest('http://localhost/api/v1/system/jobs', 'POST', { type: 'MEMORY_EXTRACTION', payload: 'x' }))],
+    ['restore with an unknown mode', () => postRestore(jsonRequest('http://localhost/api/v1/system/restore', 'POST', { uploadId: 'u', mode: 'merge' }))],
+    ['restore preview with no uploadId', () => postRestore(jsonRequest('http://localhost/api/v1/system/restore?action=preview', 'POST', {}))],
+  ])('%s is a 400', async (_label, call) => {
+    mockRepos.chats.findById = jest.fn(async () => ({ id: 'c1', userId: 'user-123', participants: [] }))
+    const res = await (call as () => Promise<any>)()
+    expect(res.status).toBe(400)
   })
 })

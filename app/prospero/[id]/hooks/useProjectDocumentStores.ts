@@ -83,11 +83,10 @@ export function useProjectDocumentStores(projectId: string): UseProjectDocumentS
 
   const unlinkStore = useCallback(async (mountPointId: string): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/v1/projects/${projectId}/mount-points`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mountPointId }),
-      })
+      const res = await fetch(
+        `/api/v1/projects/${projectId}/mount-points?mountPointId=${encodeURIComponent(mountPointId)}`,
+        { method: 'DELETE' }
+      )
       if (res.ok) {
         await fetchLinkedStores()
         return true

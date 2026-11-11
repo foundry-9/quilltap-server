@@ -11,7 +11,8 @@ import { getQueueStats, getActiveCountsByType, getActivitySnapshot, enqueueJob, 
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { badRequest, serverError } from '@/lib/api/responses';
+import { created, serverError } from '@/lib/api/responses';
+import { z } from 'zod';
 
 /**
  * GET /api/v1/system/jobs - Get queue statistics and optionally recent jobs
@@ -72,47 +73,40 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
 });
 
 /**
+ * The POST envelope. The job type is checked against the enum and the payload
+ * must be an object; what each type's payload must hold is not yet schema'd
+ * per type (the handlers read it defensively), so this endpoint stays an
+ * operator tool rather than a general API.
+ */
+const CreateJobSchema = z
+  .object({
+    type: BackgroundJobTypeEnum,
+    payload: z.record(z.string(), z.unknown(), { error: 'Payload is required and must be an object' }),
+    priority: z.number().int().optional(),
+    maxAttempts: z.number().int().min(1).max(20).optional(),
+  })
+  .strict();
+
+/**
  * POST /api/v1/system/jobs - Create a new background job
  *
  * Body: {
  *   type: BackgroundJobType,
  *   payload: object,
- *   priority?: number,
- *   maxAttempts?: number
+ *   priority?: integer,
+ *   maxAttempts?: integer 1–20
  * }
  */
 export const POST = createContextHandler(async (req: NextRequest, { user }: RequestContext) => {
-  try {
-    const body = await req.json();
-    const { type, payload, priority, maxAttempts } = body;
+  // A malformed body is the middleware's 400.
+  const { type, payload, priority, maxAttempts } = CreateJobSchema.parse(await req.json());
 
-    // Validate type
-    const typeValidation = BackgroundJobTypeEnum.safeParse(type);
-    if (!typeValidation.success) {
-      return badRequest(`Invalid job type. Must be one of: ${BackgroundJobTypeEnum.options.join(', ')}`);
-    }
+  logger.info('[System Jobs v1] Creating job', { userId: user.id, type });
 
-    if (!payload || typeof payload !== 'object') {
-      return badRequest('Payload is required and must be an object');
-    }
+  ensureProcessorRunning();
 
-    logger.info('[System Jobs v1] Creating job', {
-      userId: user.id,
-      type,
-    });
+  // `enqueueJob` is typed per job; this endpoint takes any type by design.
+  const jobId = await enqueueJob(user.id, type, payload as never, { priority, maxAttempts });
 
-    // Ensure processor is running
-    ensureProcessorRunning();
-
-    const jobId = await enqueueJob(user.id, type, payload, {
-      priority: typeof priority === 'number' ? priority : undefined,
-      maxAttempts: typeof maxAttempts === 'number' ? maxAttempts : undefined,
-    });
-
-    return NextResponse.json({ jobId, message: 'Job created successfully' }, { status: 201 });
-  } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    logger.error('[System Jobs v1] Error in POST', { error: errorMessage });
-    return serverError(errorMessage);
-  }
+  return created({ jobId, message: 'Job created successfully' });
 });
