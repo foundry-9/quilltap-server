@@ -44,8 +44,7 @@ import {
   type InventoryUpdateBody,
   type ResolvedInventoryItem,
 } from '@/lib/schemas/inventory.types';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
+import { archivedPatch, nextCopyTitle } from '@/lib/mount-index/item-rules';
 import {
   INVENTORY_FOLDER_RULES,
   InventoryFolderPathError,

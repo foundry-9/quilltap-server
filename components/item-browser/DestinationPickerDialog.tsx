@@ -194,7 +194,7 @@ export function DestinationPickerDialog({
                   disabled={current}
                   onClick={() => setHighlighted(row.path)}
                   className={`w-full text-left px-2 py-1 rounded text-sm ${
-                    selected ? 'qt-bg-muted text-foreground' : 'qt-text-secondary'
+                    selected ? 'qt-bg-muted qt-text' : 'qt-text-secondary'
                   } disabled:opacity-50`}
                   style={{ paddingLeft: `${row.depth * 16 + 8}px` }}
                   title={current ? 'Already here' : undefined}

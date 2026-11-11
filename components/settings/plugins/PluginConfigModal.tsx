@@ -178,7 +178,7 @@ export function PluginConfigModal({
               id={field.key}
               checked={Boolean(value ?? field.default)}
               onChange={(e) => handleFieldChange(field.key, e.target.checked)}
-              className="w-4 h-4 rounded border-input"
+              className="qt-checkbox"
             />
             <span className="qt-text-small">{field.description || 'Enable'}</span>
           </label>
@@ -223,7 +223,7 @@ export function PluginConfigModal({
       }
     >
       {loading ? (
-        <div className="flex items-center justify-center py-8">
+        <div className="qt-loading-state">
           <div className="flex items-center gap-3">
             <div className="h-5 w-5 animate-spin rounded-full border-2 qt-border-primary border-r-transparent" />
             <span className="qt-text-small">Loading configuration...</span>

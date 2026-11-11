@@ -1,10 +1,8 @@
 'use client'
 
-import { useState, useCallback, useRef, useId } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useState, useCallback, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { createPortal } from 'react-dom'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { formatBytes } from '@/lib/utils/format-bytes'
@@ -85,10 +83,6 @@ export function ImportWizard({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isProcessing = step === 'analyzing' || step === 'importing'
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-  useEscapeKey(() => { if (!isProcessing) onClose() }, !showMemoryDialog)
 
   /**
    * Handle file selection
@@ -286,7 +280,7 @@ export function ImportWizard({
                 className="hidden"
               />
               <Icon name="cloud-upload" className="w-12 h-12 mx-auto mb-3 qt-text-secondary" />
-              <p className="text-foreground font-medium">
+              <p className="qt-text font-medium">
                 {selectedFile ? selectedFile.name : 'Drag and drop a chat file here'}
               </p>
               <p className="qt-text-secondary text-sm mt-1">
@@ -337,7 +331,7 @@ export function ImportWizard({
                   className="mt-1"
                 />
                 <div>
-                  <div className="text-foreground font-medium">Analyze messages for memories</div>
+                  <div className="qt-text font-medium">Analyze messages for memories</div>
                   <div className="qt-text-small qt-text-secondary">
                     Queue each message for AI analysis to extract meaningful memories in the background
                   </div>
@@ -449,100 +443,59 @@ export function ImportWizard({
     }
   }
 
-  if (typeof document === 'undefined') return null
-
   const currentStepIndex = getStepIndex(step)
 
-  return createPortal(
+  return (
     <>
-      {/* Overlay */}
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none"
-        onClick={handleClose}
-        disabled={isProcessing}
-        aria-label="Close dialog"
-        type="button"
-      />
-
-      {/* Dialog */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[61] pointer-events-auto w-[90vw] max-w-2xl">
-        <div
-          className="qt-dialog w-full max-h-[90vh] flex flex-col"
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-        >
-          {/* Header */}
-          <div className="qt-dialog-header flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 id={titleId} className="qt-dialog-title">Import SillyTavern Chat</h2>
-                <p className="qt-dialog-description mt-0.5">
-                  Step {currentStepIndex + 1} of {STEPS.length}
-                </p>
-              </div>
-              <button
-                onClick={handleClose}
-                disabled={isProcessing}
-                className="qt-text-secondary hover:text-foreground disabled:opacity-50"
-                aria-label="Close dialog"
-              >
-                <Icon name="close" className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Step indicator */}
-            <div className="flex items-center gap-1 mt-4">
-              {STEPS.map((s, i) => (
-                <div key={s.key} className="flex items-center gap-1 flex-1">
-                  <div className="flex items-center gap-2 flex-1">
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center qt-text-label-xs flex-shrink-0 transition-colors ${
-                        i < currentStepIndex
-                          ? 'qt-bg-primary qt-text-on-primary'
-                          : i === currentStepIndex
-                            ? 'qt-bg-primary qt-text-on-primary'
-                            : 'qt-bg-muted qt-text-secondary'
-                      }`}
-                    >
-                      {i < currentStepIndex ? (
-                        <Icon name="check" className="w-3.5 h-3.5" />
-                      ) : (
-                        i + 1
-                      )}
-                    </div>
-                    <span className={`text-xs hidden sm:inline ${
-                      i === currentStepIndex ? 'text-foreground font-medium' : 'qt-text-secondary'
-                    }`}>
-                      {s.label}
-                    </span>
-                  </div>
-                  {i < STEPS.length - 1 && (
-                    <div className={`h-px flex-1 min-w-4 ${
-                      i < currentStepIndex ? 'qt-bg-primary' : 'bg-border'
-                    }`} />
+      <BaseModal
+        isOpen
+        onClose={handleClose}
+        title="Import SillyTavern Chat"
+        subtitle={`Step ${currentStepIndex + 1} of ${STEPS.length}`}
+        showCloseButton
+        busy={isProcessing}
+        maxWidth="2xl"
+        className="w-[90vw]"
+        footer={renderFooter()}
+        footerClassName="qt-dialog-footer flex-shrink-0"
+      >
+        {/* Step indicator */}
+        <div className="flex items-center gap-1 mb-4">
+          {STEPS.map((s, i) => (
+            <div key={s.key} className="flex items-center gap-1 flex-1">
+              <div className="flex items-center gap-2 flex-1">
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center qt-text-label-xs flex-shrink-0 transition-colors ${
+                    i < currentStepIndex
+                      ? 'qt-bg-primary qt-text-on-primary'
+                      : i === currentStepIndex
+                        ? 'qt-bg-primary qt-text-on-primary'
+                        : 'qt-bg-muted qt-text-secondary'
+                  }`}
+                >
+                  {i < currentStepIndex ? (
+                    <Icon name="check" className="w-3.5 h-3.5" />
+                  ) : (
+                    i + 1
                   )}
                 </div>
-              ))}
+                <span className={`text-xs hidden sm:inline ${
+                  i === currentStepIndex ? 'qt-text font-medium' : 'qt-text-secondary'
+                }`}>
+                  {s.label}
+                </span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div className={`h-px flex-1 min-w-4 ${
+                  i < currentStepIndex ? 'qt-bg-primary' : 'bg-border'
+                }`} />
+              )}
             </div>
-          </div>
-
-          {/* Body */}
-          <div className="qt-dialog-body overflow-y-auto flex-1">
-            {renderStepContent()}
-          </div>
-
-          {/* Footer */}
-          {renderFooter() && (
-            <div className="qt-dialog-footer flex-shrink-0">
-              {renderFooter()}
-            </div>
-          )}
+          ))}
         </div>
-      </div>
+
+        {renderStepContent()}
+      </BaseModal>
 
       {showMemoryDialog && importedChat && (
         <MemoryCreationDialog
@@ -550,7 +503,6 @@ export function ImportWizard({
           onClose={handleMemoryDialogClose}
         />
       )}
-    </>,
-    document.body
+    </>
   )
 }

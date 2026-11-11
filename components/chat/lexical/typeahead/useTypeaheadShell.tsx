@@ -6,8 +6,9 @@
  * Two deltas from what `composer-typeahead.md` Phase 1 originally described,
  * both introduced by the emoji layer that built this shell:
  *
- * 1. `insertWithTrailingSpace()` gained a sibling, `insertWithoutTrailingSpace()`.
- *    Chips want the space; emoji does not.
+ * 1. Insertion takes a `trailingSpace` option (`$insertTypeaheadText()`), and
+ *    emoji uses the no-space preset, `$insertWithoutTrailingSpace()`. Chips
+ *    want the space; emoji does not.
  * 2. The shell does NOT own trigger detection. A consumer hands it a
  *    precomputed match, so the "where does the trigger start and end" decision
  *    stays in framework-free logic that quilltap-v5 can copy (for emoji, that is
@@ -86,14 +87,9 @@ export function $insertTypeaheadText(
   nodeToReplace.select(inserted.length, inserted.length)
 }
 
-/** Layer 2's chips: a chip is a word, so it gets a trailing space. */
-export function $insertWithTrailingSpace(nodeToReplace: TextNode | null, text: string): void {
-  $insertTypeaheadText(nodeToReplace, text, { trailingSpace: true })
-}
-
 /**
  * Emoji: NO trailing space. An emoji is punctuation-adjacent and writers
- * frequently want `word😄` or `😄😄`. Diverging from `$insertWithTrailingSpace`
+ * frequently want `word😄` or `😄😄`. Diverging from the chips' trailing space
  * here is deliberate — please do not "fix" it into consistency.
  */
 export function $insertWithoutTrailingSpace(nodeToReplace: TextNode | null, text: string): void {

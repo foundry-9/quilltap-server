@@ -1,6 +1,6 @@
 # Refactor 4.13 — One modal shell
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #171 and closes the class behind bugs 40, 99 and 229.
+**Status:** Implemented (2026-11-11) on `claude/ecstatic-thompson-8r7d62`; as built in §8. Browser verification not yet done. Proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #171 and closes the class behind bugs 40, 99 and 229.
 
 Counts and line numbers are the audit's and will drift. Re-run the greps in §4 before starting and correct them here.
 
@@ -90,3 +90,32 @@ A lint script beside `scripts/check-qt-classes.mjs`, wired into `npm run lint`: 
 
 1. Backdrop click: closes by default with `busy` and dirty forms opting out (proposed), or never closes?
 2. One z-index for all dialogs, with stacking by DOM order (proposed), or keep a higher tier for confirms?
+
+## 8. As built (2026-11-11)
+
+**Decisions taken** (§7): the proposed answers. Backdrop click closes by default; `busy` and dialogs holding typed input opt out (`closeOnClickOutside={false}`). One z-index for every dialog, stacking by DOM order — with one exception: `lib/alert.tsx`'s alert and prompt are raised to `z-[100]`, because they are summoned imperatively and a confirm asked from inside the `ImageModal` lightbox (z-[100]) must paint above it.
+
+**Re-measured scope.** 41 un-portaled files plus 20 portaled hand-built ones (not 52); about 57 dialogs. All moved; `node scripts/check-modal-shell.mjs` reports none left.
+
+**The shell** (`components/ui/BaseModal.tsx`):
+
+- Props added as in §5.1: `role`, `subtitle`, `busy`, sizes `5xl` / `6xl` / `7xl` / `wide`, `headerless`. The backdrop knob kept its existing name, `closeOnClickOutside` (48 call sites), rather than becoming `closeOnBackdrop`. Also added: `headerActions`, `bodyClassName` / `footerClassName` (replace the defaults, for split panes and dialogs whose own layout did not fit), `data-testid`.
+- `headerless` dialogs name themselves with `<ModalTitle>`, which reads the shell's title id from context. A title that was an `h3` is now an `h2` with the same classes.
+- **The stack is the DOM order of open modals** (`data-qt-modal`). Every modal paints at the same z-index, so the one later in the document is on top; nothing keeps a list. Only the topmost answers Escape or an outside click. Focus or a click still in a BaseModal beneath does not make it the owner — that is what lets a child that has not yet taken focus answer Escape. A non-BaseModal dialog (a lightbox, the floating Brahma console) or an open `alertdialog` still owns events as before.
+- **A modal stands down while its kept-alive workspace tab is hidden** (`useWorkspaceTabVisible`). Portaling to the body would otherwise float a dialog opened in one tab over the tab the user moved to. The caller's state is untouched, so the dialog returns with the tab. Not in the spec; found while migrating the Photos detail dialog.
+- The overlay carries `p-4`, so a dialog keeps a margin on a phone; most hand-built overlays had it.
+
+**`WizardModal`** (`components/ui/WizardModal.tsx`): step line, busy guard, Back / Cancel / forward footer, `done` → one Close. Export, import, restore, backup and delete data use it. The Almanack and the import wizard are plain `BaseModal`s (the Almanack is a viewer; the import wizard shows no footer at all while working). `footer={null}` means no footer.
+
+**Fallout fixed alongside:** `lib/alert.tsx` mounted a second backdrop root under its dialogs (gone; test updated); `FilePreviewActions` answered Escape from a window listener that ignored the stack (Escape removed there; arrows stay); the file preview's `aria-labelledby` pointed at nothing; `MemoryCascadeDialog` used an undefined `qt-dialog-content` class and drew no box.
+
+**Look changes, deliberate or unavoidable:** delete data, the Workbench conflict prompt, the destination picker and the progression editor now wear the standard `qt-dialog` surface instead of one-off `qt-card` boxes; the Almanack is `h-[90vh]` and lost its hand-rolled body scroll lock; the import wizard's step indicator moved from the header to the top of the body; several dialogs went from `max-h-[85vh]` to the shell's 90vh; `WardrobeModeChangePrompt` from 420px to `md`.
+
+**Tests:** `__tests__/unit/components/ui/BaseModal-shell.test.tsx` (portal, labels, `alertdialog`, `headerless`, `busy`, Escape without backdrop, the stack: child click, Escape before focus moves, backdrop with a child open; `WizardModal`), the existing `BaseModal-layered.test.tsx`, and `__tests__/unit/components/chat/AddCharacterDialog-summon.test.tsx` for #171 (real Add Character and Summon from Lore).
+
+**Still owed:**
+
+- The browser check of §6 on V4test (workspace tab and plain route: above the toolbar, focus trapped and restored) and `/release-checklist-13-ui`'s dialog section.
+- Shell wishes from the migration, not done: a `maxHeight` prop (five dialogs use `!max-h-[80vh]` / `!max-h-[92vh]`), an arbitrary width (the photo gallery uses `!max-w-[90vw]`), an optional body scroll lock.
+- `FullScreenImageViewer` never takes focus and is not in the stack, so `PhotoGalleryModal` keeps a `closeOnEscape={!childOpen}` guard. Folding the lightboxes into one viewer (the follow-up in the index) should mark it as a stack member.
+- `ItemControlDialogShell`'s `overlayOpen` lock is now redundant with the stack; harmless, left alone.

@@ -36,7 +36,7 @@ export type { BrahmaSqlToolCallData }
 /** Shared chevron-led summary for the two collapsible panes. */
 function PaneSummary({ label, hint }: { label: string; hint?: string }) {
   return (
-    <summary className="flex items-center gap-1 cursor-pointer select-none qt-text-secondary hover:text-foreground text-xs font-medium list-none [&::-webkit-details-marker]:hidden">
+    <summary className="flex items-center gap-1 cursor-pointer select-none qt-text-secondary hover:qt-text text-xs font-medium list-none [&::-webkit-details-marker]:hidden">
       <Icon name="chevron-right" className="w-3 h-3 transition-transform group-open:rotate-90" />
       <span>{label}</span>
       {hint && <span className="qt-text-xs qt-text-secondary font-normal ml-1">{hint}</span>}

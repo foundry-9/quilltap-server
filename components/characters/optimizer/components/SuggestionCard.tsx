@@ -69,7 +69,7 @@ function MemoryExcerpts({ excerpts }: { excerpts: string[] }) {
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 qt-caption hover:text-foreground transition-colors w-full text-left"
+        className="flex items-center gap-1.5 qt-caption hover:qt-text transition-colors w-full text-left"
       >
         <Icon name="chevron-right" className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} />
         <span>
@@ -181,7 +181,7 @@ export function SuggestionCard({
           )}
 
           <div className="flex flex-col gap-1">
-            <span className="qt-caption uppercase tracking-wider text-primary/70">
+            <span className="qt-caption uppercase tracking-wider qt-text-brand/70">
               {isEdited ? 'Your Amended Wording' : 'Proposed Refinement'}
             </span>
             <p className={`qt-body-sm rounded-md p-3 leading-relaxed border ${

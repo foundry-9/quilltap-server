@@ -57,9 +57,5 @@ export function captureScrollAnchor(anchor: HTMLElement): () => void {
     apply()
     if (anchor.isConnected) anchor.focus({ preventScroll: true })
     requestAnimationFrame(apply)
-    console.debug('[diagrams] Restored transcript position after lightbox', {
-      anchored: anchor.isConnected,
-      savedTop,
-    })
   }
 }

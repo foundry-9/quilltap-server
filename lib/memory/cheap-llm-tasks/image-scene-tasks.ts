@@ -2,6 +2,7 @@
  * Image, scene, and attachment-focused cheap LLM tasks.
  */
 
+import { z } from 'zod'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
@@ -701,6 +702,26 @@ Based on this conversation, describe the scene these characters might be in:`,
 }
 
 /**
+ * What the scene-state tracker's model answers with: the stored `SceneState`
+ * minus the timestamps the handler adds, read leniently. A model may leave a
+ * field out (a missing or "Unknown" location is how a refusal shows up, and the
+ * handler retries on it), and keys the schema does not name pass through to the
+ * stored row untouched. Only a reply that is not this shape at all is refused.
+ */
+const SceneStateLLMCharacterSchema = z.looseObject({
+  characterId: z.string().optional(),
+  clothing: z.unknown().optional(),
+  clothingHash: z.string().nullable().optional(),
+})
+
+export const SceneStateLLMResultSchema = z.looseObject({
+  location: z.string().optional(),
+  characters: z.array(SceneStateLLMCharacterSchema).optional(),
+})
+
+export type SceneStateLLMResult = z.infer<typeof SceneStateLLMResultSchema>
+
+/**
  * Updates scene state based on conversation messages
  *
  * Tracks the current state of a scene including location, character actions,
@@ -719,7 +740,7 @@ export async function updateSceneState(
   userId: string,
   chatId?: string,
   uncensoredFallback?: UncensoredFallbackOptions
-): Promise<CheapLLMTaskResult<Record<string, unknown>>> {
+): Promise<CheapLLMTaskResult<SceneStateLLMResult>> {
   // Format recent messages for the prompt — no truncation for scene state tracking,
   // because clothing/appearance details often appear deep in longer messages
   const messageText = renderLabelledTranscript(input.recentMessages, input.speakerNames)
@@ -808,7 +829,14 @@ Update the scene state based on these new messages:`,
       }
 
       const cleanContent = stripCodeFences(content)
-      const parsed = JSON.parse(cleanContent)
+      const shaped = SceneStateLLMResultSchema.safeParse(JSON.parse(cleanContent))
+      if (!shaped.success) {
+        logger.warn('[SceneStateTracking] LLM response is not a scene state', {
+          issues: shaped.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`),
+        })
+        throw new Error('LLM response is not a scene state')
+      }
+      const parsed = shaped.data
 
       // Validate the parsed result has meaningful content
       if (!parsed.location || parsed.location === 'Unknown' || parsed.location === 'unknown') {
@@ -820,14 +848,8 @@ Update the scene state based on these new messages:`,
 
       // Defensively cap each character's clothing summary to the ≤200-char
       // budget the prompt requests, so a verbose model can't bloat the whisper.
-      if (Array.isArray(parsed.characters)) {
-        for (const ch of parsed.characters) {
-          if (ch && typeof ch === 'object' && 'clothing' in ch) {
-            ;(ch as { clothing?: unknown }).clothing = capClothingSummary(
-              (ch as { clothing?: unknown }).clothing,
-            )
-          }
-        }
+      for (const ch of parsed.characters ?? []) {
+        if ('clothing' in ch) ch.clothing = capClothingSummary(ch.clothing)
       }
 
       return parsed

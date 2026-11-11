@@ -15,9 +15,8 @@
  */
 
 import dynamic from 'next/dynamic'
-import { useCallback, useId, useRef } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useCallback } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast } from '@/lib/toast'
@@ -41,10 +40,6 @@ export default function SummonFromLoreModal({
   onSummoned,
 }: SummonFromLoreModalProps) {
   const queryClient = useQueryClient()
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-  useEscapeKey(onClose, isOpen)
 
   const handleImportSuccess = useCallback(
     (characterIds?: string[]) => {
@@ -71,28 +66,28 @@ export default function SummonFromLoreModal({
 
   if (!isOpen) return null
 
+  // Headerless: the card keeps its own look (rounded card, padded, scrolling
+  // as one piece) and draws its own title row.
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 id={titleId} className="qt-dialog-title text-foreground">Summon From Lore</h3>
-          <button
-            onClick={onClose}
-            className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
-          >
-            Close
-          </button>
-        </div>
-        <AIImportWizard onClose={onClose} onImportSuccess={handleImportSuccess} />
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      headerless
+      maxWidth="4xl"
+     
+      className="overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
+      bodyClassName=""
+    >
+      <div className="flex items-center justify-between mb-4">
+        <ModalTitle className="qt-dialog-title qt-text">Summon From Lore</ModalTitle>
+        <button
+          onClick={onClose}
+          className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
+        >
+          Close
+        </button>
       </div>
-    </div>
+      <AIImportWizard onClose={onClose} onImportSuccess={handleImportSuccess} />
+    </BaseModal>
   )
 }

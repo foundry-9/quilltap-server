@@ -6,9 +6,9 @@
  * Step 2: Select the source for physical description generation.
  */
 
-import { useState, useRef, useId } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useState, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { ImageGallery, type ImageData } from '@/components/images/image-gallery'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { DescriptionSourceType } from '../types'
@@ -57,9 +57,6 @@ export function DescriptionSourceStep({
   const [showGallery, setShowGallery] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const documentInputRef = useRef<HTMLInputElement>(null)
-  const galleryTitleId = useId()
-  const galleryDialogRef = useRef<HTMLDivElement>(null)
-  const handleGalleryFocusKeyDown = useDialogFocus(galleryDialogRef, showGallery)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -165,7 +162,7 @@ export function DescriptionSourceStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="qt-heading-4 text-foreground mb-2">
+        <h3 className="qt-heading-4 qt-text mb-2">
           Physical Description Source
         </h3>
         <p className="text-sm qt-text-secondary">
@@ -193,7 +190,7 @@ export function DescriptionSourceStep({
               className="mt-1"
             />
             <div>
-              <div className="font-medium text-foreground">{option.label}</div>
+              <div className="font-medium qt-text">{option.label}</div>
               <div className="text-sm qt-text-secondary">{option.description}</div>
             </div>
           </label>
@@ -202,8 +199,8 @@ export function DescriptionSourceStep({
 
       {/* Upload Section */}
       {source === 'upload' && (
-        <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20 space-y-4">
-          <h4 className="font-medium text-foreground">Upload Image</h4>
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/20 space-y-4">
+          <h4 className="font-medium qt-text">Upload Image</h4>
 
           {uploadedImageUrl ? (
             <div className="space-y-3">
@@ -271,8 +268,8 @@ export function DescriptionSourceStep({
 
       {/* Gallery Section */}
       {source === 'gallery' && (
-        <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20 space-y-4">
-          <h4 className="font-medium text-foreground">Select from Gallery</h4>
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/20 space-y-4">
+          <h4 className="font-medium qt-text">Select from Gallery</h4>
 
           {selectedGalleryImageUrl ? (
             <div className="space-y-3">
@@ -303,60 +300,50 @@ export function DescriptionSourceStep({
           )}
 
           {/* Gallery Modal */}
-          {showGallery && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay-caption">
-              <div
-                ref={galleryDialogRef}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={galleryTitleId}
-                tabIndex={-1}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    e.stopPropagation()
-                    setShowGallery(false)
-                    return
-                  }
-                  handleGalleryFocusKeyDown(e)
-                }}
-                className="qt-dialog w-full max-w-4xl max-h-[80vh] m-4 flex flex-col"
+          {/* Opens over the AI Wizard; the shell's stack keeps Escape and
+              outside clicks with this one while it is on top. */}
+          <BaseModal
+            isOpen={showGallery}
+            onClose={() => setShowGallery(false)}
+            headerless
+            maxWidth="4xl"
+            className="w-full !max-h-[80vh] m-4"
+            bodyClassName="flex-1 min-h-0 flex flex-col"
+          >
+            <div className="qt-dialog-header flex justify-between items-center">
+              <ModalTitle className="qt-heading-4">Select Image</ModalTitle>
+              <button
+                aria-label="Close gallery"
+                type="button"
+                onClick={() => setShowGallery(false)}
+                className="qt-button-icon qt-button-ghost"
               >
-                <div className="qt-dialog-header flex justify-between items-center">
-                  <h3 id={galleryTitleId} className="qt-heading-4">Select Image</h3>
-                  <button
-                    aria-label="Close gallery"
-                    type="button"
-                    onClick={() => setShowGallery(false)}
-                    className="qt-button-icon qt-button-ghost"
-                  >
-                    <Icon name="close" className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="p-4 overflow-y-auto flex-1">
-                  <ImageGallery
-                    tagType={characterId ? 'CHARACTER' : undefined}
-                    tagId={characterId}
-                    onSelectImage={handleGalleryImageSelect}
-                    selectedImageId={selectedGalleryImageId || undefined}
-                  />
-                </div>
-              </div>
+                <Icon name="close" className="w-5 h-5" />
+              </button>
             </div>
-          )}
+            <div className="p-4 overflow-y-auto flex-1">
+              <ImageGallery
+                tagType={characterId ? 'CHARACTER' : undefined}
+                tagId={characterId}
+                onSelectImage={handleGalleryImageSelect}
+                selectedImageId={selectedGalleryImageId || undefined}
+              />
+            </div>
+          </BaseModal>
         </div>
       )}
 
       {/* Document Upload Section */}
       {source === 'document' && (
-        <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20 space-y-4">
-          <h4 className="font-medium text-foreground">Upload Document</h4>
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/20 space-y-4">
+          <h4 className="font-medium qt-text">Upload Document</h4>
 
           {uploadedDocumentName ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 rounded-lg border qt-border-default bg-background">
+              <div className="flex items-center gap-3 p-3 rounded-lg border qt-border-default qt-bg-default">
                 <Icon name="file" className="w-8 h-8 qt-text-secondary flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-foreground truncate">{uploadedDocumentName}</div>
+                  <div className="font-medium qt-text truncate">{uploadedDocumentName}</div>
                   <div className="text-sm qt-text-secondary">Document uploaded</div>
                 </div>
               </div>
@@ -420,7 +407,7 @@ export function DescriptionSourceStep({
           <div className="flex items-start gap-2">
             <Icon name="alert-triangle" className="w-5 h-5 qt-text-warning mt-0.5 flex-shrink-0" />
             <div>
-              <h4 className="font-medium text-foreground">Vision Profile Required</h4>
+              <h4 className="font-medium qt-text">Vision Profile Required</h4>
               <p className="text-sm qt-text-secondary">
                 Your selected AI model cannot process images. Please select a vision-capable model to analyze the image.
               </p>

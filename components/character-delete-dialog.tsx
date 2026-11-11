@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { useEffect, useState } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 
 interface ExclusiveChat {
   id: string
@@ -40,12 +39,6 @@ export function CharacterDeleteDialog({
   const [deleteChats, setDeleteChats] = useState(true)
   const [deleteImages, setDeleteImages] = useState(true)
 
-  useEscapeKey(onClose)
-
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-
   useEffect(() => {
     const fetchPreview = async () => {
       try {
@@ -74,133 +67,122 @@ export function CharacterDeleteDialog({
   }
 
   return (
-    <>
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-[100]"
-        onClick={onClose}
-        aria-label="Close dialog"
-        type="button"
-      />
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[101] pointer-events-auto">
-        <div
-          ref={dialogRef}
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog max-w-lg p-6"
-        >
-          <h2 id={titleId} className="qt-dialog-title text-xl mb-4">
-            Delete Character
-          </h2>
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      role="alertdialog"
+      headerless
+      className="p-6"
+      bodyClassName="overflow-y-auto"
+    >
+      <ModalTitle className="qt-dialog-title text-xl mb-4">
+        Delete Character
+      </ModalTitle>
 
-          {loading ? (
-            <div className="py-8 text-center qt-text-small">
-              Loading...
-            </div>
-          ) : error ? (
-            <div className="py-4 qt-text-destructive">
-              {error}
-            </div>
-          ) : (
-            <>
-              <p className="qt-text-small mb-4">
-                Are you sure you want to delete <strong className="text-foreground">{characterName}</strong>?
+      {loading ? (
+        <div className="py-8 text-center qt-text-small">
+          Loading...
+        </div>
+      ) : error ? (
+        <div className="py-4 qt-text-destructive">
+          {error}
+        </div>
+      ) : (
+        <>
+          <p className="qt-text-small mb-4">
+            Are you sure you want to delete <strong className="qt-text">{characterName}</strong>?
+          </p>
+
+          {hasExclusiveData && (
+            <div className="qt-alert-warning mb-4">
+              <p className="font-medium mb-3">
+                This character has associated data:
               </p>
 
-              {hasExclusiveData && (
-                <div className="qt-alert-warning mb-4">
-                  <p className="font-medium mb-3">
-                    This character has associated data:
+              {preview!.exclusiveChats.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-sm mb-2">
+                    <strong>{preview!.exclusiveChats.length}</strong> exclusive chat{preview!.exclusiveChats.length !== 1 ? 's' : ''} (only with this character):
                   </p>
-
-                  {preview!.exclusiveChats.length > 0 && (
-                    <div className="mb-3">
-                      <p className="text-sm mb-2">
-                        <strong>{preview!.exclusiveChats.length}</strong> exclusive chat{preview!.exclusiveChats.length !== 1 ? 's' : ''} (only with this character):
-                      </p>
-                      <ul className="text-sm opacity-80 ml-4 list-disc max-h-32 overflow-y-auto">
-                        {preview!.exclusiveChats.map(chat => (
-                          <li key={chat.id}>
-                            {chat.title} ({chat.messageCount} message{chat.messageCount !== 1 ? 's' : ''})
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {preview!.totalExclusiveImageCount > 0 && (
-                    <p className="text-sm">
-                      <strong>{preview!.totalExclusiveImageCount}</strong> exclusive image{preview!.totalExclusiveImageCount !== 1 ? 's' : ''} (not used elsewhere)
-                    </p>
-                  )}
-
-                  {preview!.memoryCount > 0 && (
-                    <p className="text-sm">
-                      <strong>{preview!.memoryCount}</strong> memor{preview!.memoryCount !== 1 ? 'ies' : 'y'} (will always be deleted)
-                    </p>
-                  )}
+                  <ul className="text-sm opacity-80 ml-4 list-disc max-h-32 overflow-y-auto">
+                    {preview!.exclusiveChats.map(chat => (
+                      <li key={chat.id}>
+                        {chat.title} ({chat.messageCount} message{chat.messageCount !== 1 ? 's' : ''})
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
-              {hasExclusiveData && (
-                <div className="space-y-3 mb-6">
-                  {preview!.exclusiveChats.length > 0 && (
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={deleteChats}
-                        onChange={(e) => setDeleteChats(e.target.checked)}
-                        className="w-4 h-4 rounded qt-border-default qt-text-destructive focus:ring-destructive"
-                      />
-                      <span className="qt-text-secondary">
-                        Delete exclusive chats
-                      </span>
-                    </label>
-                  )}
-
-                  {preview!.totalExclusiveImageCount > 0 && (
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={deleteImages}
-                        onChange={(e) => setDeleteImages(e.target.checked)}
-                        className="w-4 h-4 rounded qt-border-default qt-text-destructive focus:ring-destructive"
-                      />
-                      <span className="qt-text-secondary">
-                        Delete exclusive images
-                      </span>
-                    </label>
-                  )}
-                </div>
-              )}
-
-              {!hasExclusiveData && (
-                <p className="qt-text-small mb-4">
-                  This character has no exclusive chats or images that would be deleted.
+              {preview!.totalExclusiveImageCount > 0 && (
+                <p className="text-sm">
+                  <strong>{preview!.totalExclusiveImageCount}</strong> exclusive image{preview!.totalExclusiveImageCount !== 1 ? 's' : ''} (not used elsewhere)
                 </p>
               )}
-            </>
+
+              {preview!.memoryCount > 0 && (
+                <p className="text-sm">
+                  <strong>{preview!.memoryCount}</strong> memor{preview!.memoryCount !== 1 ? 'ies' : 'y'} (will always be deleted)
+                </p>
+              )}
+            </div>
           )}
 
-          <div className="flex gap-3 justify-end">
-            <button
-              onClick={onClose}
-              className="qt-button qt-button-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={loading}
-              className="qt-button qt-button-destructive"
-            >
-              Delete Character
-            </button>
-          </div>
-        </div>
+          {hasExclusiveData && (
+            <div className="space-y-3 mb-6">
+              {preview!.exclusiveChats.length > 0 && (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={deleteChats}
+                    onChange={(e) => setDeleteChats(e.target.checked)}
+                    className="w-4 h-4 rounded qt-border-default qt-text-destructive focus:ring-destructive"
+                  />
+                  <span className="qt-text-secondary">
+                    Delete exclusive chats
+                  </span>
+                </label>
+              )}
+
+              {preview!.totalExclusiveImageCount > 0 && (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={deleteImages}
+                    onChange={(e) => setDeleteImages(e.target.checked)}
+                    className="w-4 h-4 rounded qt-border-default qt-text-destructive focus:ring-destructive"
+                  />
+                  <span className="qt-text-secondary">
+                    Delete exclusive images
+                  </span>
+                </label>
+              )}
+            </div>
+          )}
+
+          {!hasExclusiveData && (
+            <p className="qt-text-small mb-4">
+              This character has no exclusive chats or images that would be deleted.
+            </p>
+          )}
+        </>
+      )}
+
+      <div className="flex gap-3 justify-end">
+        <button
+          onClick={onClose}
+          className="qt-button qt-button-secondary"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleConfirm}
+          disabled={loading}
+          className="qt-button qt-button-destructive"
+        >
+          Delete Character
+        </button>
       </div>
-    </>
+    </BaseModal>
   )
 }

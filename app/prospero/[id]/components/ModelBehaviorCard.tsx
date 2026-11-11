@@ -9,7 +9,7 @@
 import { useId, useState, useCallback, useMemo } from 'react'
 import type { Project } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
-import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { Icon } from '@/components/ui/icon'
 import { useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import type { RoleplayTemplate } from '@/lib/schemas/template.types'
@@ -69,30 +69,18 @@ export function ModelBehaviorCard({
   }, [onProjectUpdate])
 
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
-      {/* Header - always visible */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
+    <>
+      <CollapsibleCard
+        icon={<Icon name="cpu" className="w-5 h-5 qt-text-primary" />}
+        title="Model Behavior"
+        description="Agent mode, roleplay template, inline Brahma & tool defaults"
+        isOpen={expanded}
+        onOpenChange={() => onToggle()}
       >
-        <div className="flex items-center gap-3">
-          <Icon name="cpu" className="w-5 h-5 qt-text-primary" />
-          <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">Model Behavior</h3>
-            <p className="qt-text-small qt-text-secondary">
-              Agent mode, roleplay template, inline Brahma &amp; tool defaults
-            </p>
-          </div>
-        </div>
-        <ChevronIcon className="w-5 h-5 qt-text-secondary" expanded={expanded} />
-      </button>
-
-      {/* Content - expandable */}
-      {expanded && (
-        <div className="border-t qt-border-default p-4 space-y-4">
+        <div className="space-y-4">
           {/* Agent Mode Setting */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 id={`${fieldId}-f0`} className="qt-label text-foreground mb-1">Agent Mode</h4>
+            <h4 id={`${fieldId}-f0`} className="qt-label qt-text mb-1">Agent Mode</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               Default agent mode for chats in this project. Agent mode allows iterative tool use with self-correction.
             </p>
@@ -113,7 +101,7 @@ export function ModelBehaviorCard({
 
           {/* Answer Confirmation */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 id={`${fieldId}-f1`} className="qt-label text-foreground mb-1">Answer Confirmation</h4>
+            <h4 id={`${fieldId}-f1`} className="qt-label qt-text mb-1">Answer Confirmation</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               Vet looked-up answers in this project&apos;s chats against what the character actually knew this turn. On enables it for every chat here; individual chats may still overrule.
             </p>
@@ -134,7 +122,7 @@ export function ModelBehaviorCard({
 
           {/* Default Roleplay Template */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 id={`${fieldId}-f2`} className="qt-label text-foreground mb-1">Default Roleplay Template</h4>
+            <h4 id={`${fieldId}-f2`} className="qt-label qt-text mb-1">Default Roleplay Template</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               The roleplay template applied to new chats started in this project. Leave on inherit to use your global default.
             </p>
@@ -153,7 +141,7 @@ export function ModelBehaviorCard({
 
           {/* Inline Brahma engine */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 id={`${fieldId}-f3`} className="qt-label text-foreground mb-1">Inline Brahma Engine</h4>
+            <h4 id={`${fieldId}-f3`} className="qt-label qt-text mb-1">Inline Brahma Engine</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               The connection profile Brahma consults on when summoned with <code>@Brahma:</code> or <code>@Brahma?</code> in this project&apos;s chats. Leave on inherit to use the engine named under Settings &rarr; Chat &rarr; Brahma Console.
             </p>
@@ -169,7 +157,7 @@ export function ModelBehaviorCard({
           {/* Default Tool Settings */}
           <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
             <div>
-              <h4 className="qt-label text-foreground">Default Tool Settings</h4>
+              <h4 className="qt-label qt-text">Default Tool Settings</h4>
               <p className="qt-text-xs qt-text-secondary">
                 {toolSummary}
               </p>
@@ -182,7 +170,7 @@ export function ModelBehaviorCard({
             </button>
           </div>
         </div>
-      )}
+      </CollapsibleCard>
 
       {/* Tool Settings Modal */}
       <ProjectToolSettingsModal
@@ -193,6 +181,6 @@ export function ModelBehaviorCard({
         disabledToolGroups={localDisabledToolGroups}
         onSuccess={handleToolSettingsSuccess}
       />
-    </div>
+    </>
   )
 }

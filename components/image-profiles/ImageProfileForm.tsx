@@ -607,7 +607,7 @@ export function ImageProfileForm({
           onChange={e => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
           className="h-4 w-4 rounded"
         />
-        <label htmlFor="isDefault" className="ml-2 text-sm text-foreground">
+        <label htmlFor="isDefault" className="ml-2 text-sm qt-text">
           Set as default profile for image generation
         </label>
       </div>
@@ -621,7 +621,7 @@ export function ImageProfileForm({
           onChange={e => setFormData(prev => ({ ...prev, isDangerousCompatible: e.target.checked }))}
           className="h-4 w-4 rounded"
         />
-        <label htmlFor="isDangerousCompatible" className="ml-2 text-sm text-foreground">
+        <label htmlFor="isDangerousCompatible" className="ml-2 text-sm qt-text">
           Uncensored-compatible (suitable for dangerous/sensitive content routing)
         </label>
       </div>

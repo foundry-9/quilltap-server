@@ -289,7 +289,7 @@ export function ProfileModal({
     )
     // Re-running on every keystroke would fight the checkbox; the model list
     // landing is the one event that changes the answer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-running on form changes would fight the checkbox; only the model list landing changes the answer
   }, [storedPrefillIsUnset, fetchedModelsWithInfo, runsThinkingTurn])
 
   // Directive state: schema fields marked `affects: 'modelInput'` toggle
@@ -360,7 +360,7 @@ export function ProfileModal({
       form.setField('apiKeyId', keysForProvider[0].id)
     }
     // Once per opening: re-running on every render would undo the user's own choice.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening; handleProviderChange, form and apiKeys omitted so re-renders do not undo the user's choice
   }, [isOpen, initialProvider, profile?.id])
 
   // Handle model change - auto-fill name if empty (new profile only)

@@ -17,6 +17,74 @@
 - New startup migration `symmetrize-memory-links-v1`: adds the missing reverse side of one-way links between two of a holder's memories, left by the old absolute consolidation writes. Adds only; skips cross-holder and missing targets.
 - No separate contradiction column: an audit of `supersededById` readers found the `resolveDigest` guard sufficient. The memory card now says "Superseded by a newer memory" (a contradicted row's replacement need not be a digest); help and the Brahma SQL prompt updated.
 
+#### Refactor: item-family kernel (phase 6: shared rules; done)
+
+- `archivedPatch` and `nextCopyTitle` moved from `lib/wardrobe/` to `lib/mount-index/item-rules.ts` (beside `foldItemName`, which `nextCopyTitle` now uses); all three families import them from there. `lib/wardrobe/archived-patch.ts` and `lib/wardrobe/next-copy-title.ts` are gone.
+- The Atlas and Inventory client request helpers are one `createItemRequest` (`lib/mount-index/item-request.ts`); `AtlasRequestError` / `InventoryRequestError` keep their names.
+- CLAUDE.md's Wardrobe, Inventory and Atlas paragraphs name the kernel and the rule that a whole-set rewrite never treats an unread tier as gone. The spec (`refactor-4-13-item-family-kernel.md`) records the outcome.
+
+#### Refactor: item-family kernel (phase 5: item pictures)
+
+- `createItemImages` (`lib/mount-index/item-family-images.ts`) owns the Atlas's and the Inventory's pictures: list (with a parent's pictures showing through, marked `inherited`), add, set-current, delete, cleanup, transfer carry, home resolution, and synchronous generation through the Concierge's image failover. `lib/atlas/item-images.ts` and `lib/inventory/item-images.ts` are bindings with their subject prompt, wording and log type; the two `item-image-generation.ts` files re-export the generation names. All exported names are unchanged.
+- The images routes were already adapters of the 4.12 `createItemImagesRoute`; they still call the families' named exports. The Wardrobe's route stays as it is: its extra lines are its own `link-image` action and error mapping, already on the shared factory.
+
+#### Refactor: item-family kernel (phase 4: the folder store)
+
+- `createItemFolderStore` (`lib/mount-index/item-store.ts`) is the one writer of an item family's folder: create, batched update (with `remove` keys and `requireAll`), delete (with follow-on patches), the five folder operations, and an in-lock write `guard`, each serialised per folder and parsing the folder once. The Atlas and the Inventory `vault-writes.ts` are bindings of it with their serialiser and scan (the Inventory also passes its title-lint mark as `wrapWrite`); their exported names are unchanged. `locationWriter` and `cleanPatch` are the location write wrapper both locations used to copy.
+- `defineItemFolderErrors` and `defineItemFolderFamily` (`lib/mount-index/item-folders.ts`, client-safe) replace the three copies of the four folder-error subclasses and the folder-helper delegates; the Wardrobe, Inventory and Atlas `folders.ts` are bindings. The tier reader moved to `item-tiers.ts` (re-exported by the kernel) so a pool does not load the writer.
+- New kernel test (`__tests__/unit/lib/mount-index/item-store.test.ts`) binds the store with a toy serialiser. The Atlas chokepoint test holds that only the two `vault-writes.ts` bind the store and no family projects its folder directly.
+
+#### Refactor: item-family kernel (phase 3: one name fold)
+
+- `foldItemName` (`lib/mount-index/item-names.ts`, client-safe; re-exported by the kernel) is NFC + trim + locale-free lower case, and is the one fold for comparing item names and titles: the Atlas pool's shadowing key, its matcher terms, the vault scan's duplicate-name warning, the uniqueness rule and transfers; the Inventory's references, kin rule and title lint; the Wardrobe's title match and copy titles. The Atlas used `toLocaleLowerCase` in some sites and `toLowerCase` in others, so under a Turkish locale its uniqueness rule and its matcher could disagree; some sites also skipped the trim.
+- The Atlas's free-name check ran before the write's lock, so two concurrent creates of one name both passed. It is now a write guard run inside the folder's write chain against the current records (`location.create` / `update` take `{ guard }`).
+
+#### Refactor: item-family kernel (phase 2: one tier reader)
+
+- New `lib/mount-index/item-store.ts`, the item-store kernel shared by the Wardrobe, the Inventory and the Atlas. `readTiers` reads a reach's tiers (concurrently, each tier's mounts strongest first) and returns `{ layers, unread, consulted }` in tier order; `shadowLayers` shadows them strongest first, first claim wins. All three pools build from it, so the Inventory no longer reads each tier reversed and shadows last-wins.
+- Every pool now knows what it failed to read: the Atlas pool and cast view gained `unread` (they swallowed a failed tier), and the wearable pool gained `unread` (the repository swallowed a failed shared store; it now reads one mount at a time with `readSharedTiers(..., { strict: true })`). The Inventory's `consultedMounts` lists a tier's mounts strongest first.
+
+#### Refactor: item-family kernel (phase 1: #186)
+
+- #186: one failed read of an Inventory tier made the next equip, unequip or pick-up rewrite the carried set without every object carried from that tier. The rewrite now keeps any stored id the pool could not resolve while a tier is unread (`heldForUnreadTiers`, `lib/inventory/equipped-set.ts`); with every tier read, an unresolvable id is still pruned. The Wardrobe does not share the shape: it edits the stored slots, never a pool-filtered copy.
+#### Refactor: dead code, legacy shims and raw token colours
+
+- Removed `migrations/lib/json-store/**` and `migrations/lib/file-manager.ts` (about 5,100 lines with no importer). `knip.json` no longer ignores `migrations/lib/**`, and its stale `tar`, `du` and `lib/chat/context/index.ts` entries are gone. Two dead helpers knip then found there (`decryptSecrets`, `createMigrationLogger`) are removed.
+- Removed about forty exports that only their own tests used (full list in `docs/developer/DEAD-CODE-REPORT.md`), including the API deprecation-redirect helpers, `summarizeChat` / `updateContextSummary`, the theme comparison utilities, and the whole `lib/terminal/clean-output.ts` and `lib/navigation/route-flags.ts` modules. Tests that used a removed export as a probe now go through the live path.
+- Removed `POST /api/v1/files?action=cleanup-stale` and `POST /api/v1/chats/[id]?action=active-document`, which had no callers. `mount-points/[id]?action=embed` stays: the CLI uses it.
+- Removed the `NEXT_PUBLIC_WORKSPACE_TABS` flag. The tabbed workspace is always on; the legacy routes always redirect into it (`redirectToWorkspaceTab` returns `never`), and the six page-only clients that rendered them without the workspace are gone.
+- Removed the no-op `SidebarProvider` and the deprecated `processNextJob` / `processJobs` shims.
+- #179: attaching the same file twice in a row in the Salon did nothing the second time. The file input is now reset after each pick; the orphaned `fileInputRef` in `useFileAttachments` is gone.
+- #180: a memory with importance 0 opened in the editor as 0.5 (`||` instead of `??`).
+- Client `console.debug` traces removed; the few that report a failure (diagram drawing, PNG font embedding, the Graphviz sketch fallback, two settings saves) are `console.warn`.
+- Every `eslint-disable` now states its reason; the ones that cited SWR describe what the code does now.
+- The scene-state tracker's model reply is validated by a Zod schema (`SceneStateLLMResultSchema`, lenient: optional fields, unknown keys kept); the handler's `as any` casts are gone. A reply that is not an object of that shape fails the task. The two `(global as any).__quilltapDbKeyState` writes go through a typed `overrideDbKeyState`; the Salon's tool-result handler reads its free-form result without `as any`.
+- Documented `SQLITE_FOREIGN_KEYS`, `SQLITE_SYNCHRONOUS`, `SQLITE_CACHE_SIZE`, `QUILLTAP_SKIP_CLOUD_MATERIALIZE`, `QUILLTAP_CLOUD_MATERIALIZE_STALL_MS`, `QTAP_OFFICIAL_REGISTRY_PUBLIC_KEY` (and its `QUILLTAP_` alias) and `ELECTRON_DEV` in `docs/DEPLOYMENT.md`.
+- Raw shadcn token colours replaced by `qt-*` utilities: `text-foreground` → `qt-text`, `text-primary` → `qt-text-brand`, `bg-background` → `qt-bg-default`, `border-input` → `qt-border-input`, `focus:ring-ring` / `focus:ring-primary` / `focus-visible:ring-ring` → `qt-focus-ring`, `ring-primary` → `qt-ring-brand`, plus `text-muted-foreground`, `bg-accent`, `text-accent-foreground`, `bg-popover`, `text-destructive` and `divide-border`. A swap was skipped wherever it could change which colour wins. New utilities: `qt-border-input`, `qt-divide-default`, `qt-focus-ring`, `qt-ring-brand`, `qt-text/80`, `qt-text-brand/70` and hover forms. `packages/theme-storybook` regenerated (1.0.113).
+- The setup wizard's step indicator, check mark and dividers used `var(--qt-color-primary)` / `var(--qt-border-color)`, which do not exist, so they drew no colour. They use `qt-bg-primary`, `qt-text-brand`, `qt-ring-brand`, `qt-border-default` and `qt-divide-default`.
+- Hand-styled settings checkboxes use `qt-checkbox`; 60 hand-spelled labels use `qt-label`; ten raw inputs and selects use `qt-input` / `qt-select`; 34 centred loading rows use the new `qt-loading-state`.
+- Twelve hand-spelled settings links use the `lib/settings/hrefs.ts` builders.
+- The thirteen expandable cards on the Prospero project page and the Aurora group page use `CollapsibleCard` (controlled) instead of a hand-copied header; eleven of them had no `aria-expanded`. `CollapsibleCard` takes an optional `className`. Headers now use the collapsible-card title, divider and chevron, and five bodies that had no padding get the card's body padding.
+
+#### Refactor: client server-state (the project and group pages)
+
+- The project page's chats, files and linked stores, and the group page's record, members and linked stores, are queries instead of effect-and-state loaders. Chats page through `useInfiniteQuery` (`queryKeys.projects.chats`); files are `useProjectFilesQuery` (`lib/hooks/use-project-files.ts`, `projects.files`); a project's or a group's linked stores and their link / unlink writes are `useOwnerStoreLinks` (`lib/hooks/use-owner-store-links.ts`, `projects.stores` / `groups.stores`), the client half of the shared owner-links route. The project store browser reads the same entry. `useProjectFiles`, `useProjectDocumentStores` and `useGroupMountPoints` are gone. The project page's image-profile selector reads the shared list.
+- The group list is one query (`useGroupsQuery`, `lib/hooks/use-groups.ts`): the Aurora list, the container catalogue and Save Scenario share it. The group page's form is a `useDraft` (`useGroupDetail`), so a tab switch back no longer threatens an edit, and a save, a member change, a create or a delete refreshes the list without the hand-rolled refetch on Back. A member change also refreshes the character's stats. New keys `groups.detail` / `members` / `stores` / `byCharactersAll`.
+- The Prospero and Aurora tab refetch also re-read the store list (the pages' store pickers).
+- The Move-to-Project folder picker read a project's files from `/api/v1/projects/{id}/files`, which does not exist, so folders known only from a project's files never appeared. It reads `?action=list-files` through the shared hook.
+#### Refactor: one modal shell (#171)
+
+- Every dialog is now `BaseModal` (`components/ui/BaseModal.tsx`) or `WizardModal` (`components/ui/WizardModal.tsx`, the tools wizards). About 55 hand-built overlays in 60 files moved onto it; net about 1,000 lines removed.
+- Fixes #171: in Add Character, a click inside Summon from Lore closed Add Character. Only the topmost dialog answers Escape or an outside click now; the stack is the DOM order of open modals, so a child dialog is never "outside" its parent. Add Character's close-reset also clears `isSummonOpen`.
+- 32 dialogs that were not portaled painted under the workspace toolbar; all now portal to `document.body`. The file preview (no Escape, no focus trap, controls in the top row) and the Photos detail dialog (no focus trap; its Escape listener fired while its tab was hidden) were the worst cases.
+- `BaseModal` gained `role` (`alertdialog`), `subtitle`, `headerActions`, `busy` (Escape, backdrop and the close button do nothing), `headerless` with `<ModalTitle>`, `bodyClassName` / `footerClassName`, `data-testid`, and sizes `5xl`–`7xl` and `wide`. The overlay carries `p-4`. A modal stands down while its kept-alive workspace tab is hidden.
+- One z-index for all dialogs (`qt-dialog-overlay`, z-60). Per-dialog overrides from z-40 to z-[101] are gone. The exception is `lib/alert.tsx`'s alert and prompt, raised to z-[100] so a confirm asked from inside the `ImageModal` lightbox paints above it.
+- Backdrop click closes by default. Dialogs holding typed input opt out (`closeOnClickOutside={false}`): memory editor, progression editor, roleplay template editor, New Chat, both Generate Image dialogs, Create Group, Summon from Lore (Aurora), and the Scriptorium create, edit and deconvert dialogs. Several confirm and viewer dialogs that previously ignored the backdrop now close on it.
+- New busy guards where a close mid-operation was possible: delete data, image generation, image upload, archive, rehydrate, external prompt, the Workbench save conflict.
+- `lib/alert.tsx` no longer mounts a second backdrop root; the file preview's action bar no longer handles Escape itself, so Escape over its delete confirmation closes only the confirmation.
+- Accessible names added where missing: file preview (its `aria-labelledby` pointed at nothing), the prompt dialog's input, the photo gallery's zoom and close buttons. `MemoryCascadeDialog` used an undefined `qt-dialog-content` class and drew no box; it now has the standard dialog surface.
+- New lint gate `scripts/check-modal-shell.mjs` in `npm run lint`: a `.tsx` file under `app/` or `components/` with `qt-dialog-overlay` or `fixed inset-0` must use the shell or be on its allowlist (the shell, the two startup gates, the three lightboxes).
+
 #### Refactor: client server-state (phase 5: drafts and stale answers)
 
 - The chat's LLM tool settings dialog reset unsaved toggles on every chat refetch (an effect keyed on array identity). Its two lists are `useDraft`s over the chat's values, so a refetch with the same values keeps the toggles; Cancel discards them. Its tool list is a query (`queryKeys.tools.availability`).

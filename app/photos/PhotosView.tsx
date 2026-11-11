@@ -27,6 +27,7 @@ import { copyImageToClipboard } from '@/lib/clipboard-utils';
 import { Icon } from '@/components/ui/icon';
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider';
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context';
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal';
 
 interface PhotoLinker {
   linkId: string;
@@ -259,7 +260,7 @@ export function PhotosView() {
 
   return (
     <div
-      className="qt-page-container text-foreground"
+      className="qt-page-container qt-text"
       style={bgStyle}
     >
       <header className="flex flex-wrap items-end justify-between gap-6 border-b qt-border-default/60 pb-6">
@@ -437,7 +438,7 @@ function PhotoCard({ entry, onClick }: { entry: GalleryEntry; onClick: () => voi
       <button
         type="button"
         onClick={onClick}
-        className="group relative flex w-full flex-col overflow-hidden rounded-2xl border qt-border-default/60 qt-bg-card/90 text-left qt-shadow-sm transition-all hover:-translate-y-0.5 hover:qt-border-primary/60 hover:qt-shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group relative flex w-full flex-col overflow-hidden rounded-2xl border qt-border-default/60 qt-bg-card/90 text-left qt-shadow-sm transition-all hover:-translate-y-0.5 hover:qt-border-primary/60 hover:qt-shadow-md focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
         aria-label={primaryCaption}
       >
         <div className="relative aspect-square w-full overflow-hidden qt-bg-muted/40">
@@ -458,7 +459,7 @@ function PhotoCard({ entry, onClick }: { entry: GalleryEntry; onClick: () => voi
           )}
         </div>
         <div className="flex flex-1 flex-col gap-1.5 px-4 py-3">
-          <p className="line-clamp-2 text-sm font-medium text-foreground" title={primaryCaption}>
+          <p className="line-clamp-2 text-sm font-medium qt-text" title={primaryCaption}>
             {primaryCaption}
           </p>
           <p className="qt-text-muted truncate text-xs" title={linkerLabel}>
@@ -482,14 +483,6 @@ function PhotoDetailModal({
   onDelete: () => void;
 }) {
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
 
   const handleDownload = useCallback(async () => {
     setDownloading(true);
@@ -516,131 +509,127 @@ function PhotoDetailModal({
   const primaryCaption = entry.caption || entry.fileName;
 
   return (
-    <div
-      className="qt-dialog-overlay p-4"
-      onClick={onClose}
-      role="presentation"
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      headerless
+      maxWidth="5xl"
+     
+      className="relative overflow-hidden rounded-2xl border qt-border-default qt-bg-card qt-shadow-lg"
+      bodyClassName=""
     >
-      <div
-        className="relative max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border qt-border-default qt-bg-card qt-shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="photo-detail-title"
-      >
-        <header className="flex items-start justify-between gap-4 border-b qt-border-default/60 px-6 py-4">
-          <div className="min-w-0">
-            <h2 id="photo-detail-title" className="qt-heading-3 truncate">
-              {primaryCaption}
-            </h2>
-            <p className="qt-text-muted mt-1 text-xs">
-              Saved {new Date(entry.keptAt).toLocaleString()}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="qt-button-secondary qt-text-muted px-3 py-1 text-lg leading-none"
-          >
-            ×
-          </button>
-        </header>
-        <div className="grid max-h-[calc(90vh-9rem)] gap-6 overflow-y-auto px-6 py-5 md:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="flex items-start justify-center">
-            <img
-              src={entry.blobUrl}
-              alt={primaryCaption}
-              className="max-h-[70vh] w-full rounded-xl object-contain qt-shadow-sm"
-            />
-          </div>
-          <div className="space-y-5">
-            {entry.generationPromptExcerpt && (
-              <Section title="Original prompt">
-                <p className="qt-text-small leading-relaxed">{entry.generationPromptExcerpt}</p>
-              </Section>
-            )}
-
-            {entry.tags.length > 0 && (
-              <Section title="Tags">
-                <div className="flex flex-wrap gap-1.5">
-                  {entry.tags.map((t) => (
-                    <span key={t} className="qt-badge qt-badge-muted">{t}</span>
-                  ))}
-                </div>
-              </Section>
-            )}
-
-            <Section
-              title={`Linked in ${entry.linkSummary.count} ${entry.linkSummary.count === 1 ? 'place' : 'places'}`}
-            >
-              <ul className="space-y-2">
-                {entry.linkSummary.linkers.map((linker) => (
-                  <li
-                    key={linker.linkId}
-                    className="rounded-lg border qt-border-default/50 qt-bg-muted/40 px-3 py-2 text-sm"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="truncate font-medium text-foreground">
-                        {linker.linkedBy ?? linker.mountPointName}
-                      </span>
-                      <span className="qt-badge qt-badge-muted whitespace-nowrap text-[10px] uppercase">
-                        {linker.mountStoreType === 'character' ? 'Vault' : 'Album'}
-                      </span>
-                    </div>
-                    <p className="qt-text-muted mt-1 break-all font-mono text-xs">
-                      {linker.relativePath}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-
-            <Section title="Identity">
-              <p className="qt-text-muted break-all font-mono text-[11px]">
-                sha256: {entry.sha256}
-              </p>
-              <p className="qt-text-muted break-all font-mono text-[11px]">
-                linkId: {entry.linkId}
-              </p>
-            </Section>
-          </div>
+      <header className="flex items-start justify-between gap-4 border-b qt-border-default/60 px-6 py-4">
+        <div className="min-w-0">
+          <ModalTitle className="qt-heading-3 truncate">
+            {primaryCaption}
+          </ModalTitle>
+          <p className="qt-text-muted mt-1 text-xs">
+            Saved {new Date(entry.keptAt).toLocaleString()}
+          </p>
         </div>
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t qt-border-default/60 px-6 py-4">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="qt-button-secondary qt-text-muted px-3 py-1 text-lg leading-none"
+        >
+          ×
+        </button>
+      </header>
+      <div className="grid max-h-[calc(90vh-9rem)] gap-6 overflow-y-auto px-6 py-5 md:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="flex items-start justify-center">
+          <img
+            src={entry.blobUrl}
+            alt={primaryCaption}
+            className="max-h-[70vh] w-full rounded-xl object-contain qt-shadow-sm"
+          />
+        </div>
+        <div className="space-y-5">
+          {entry.generationPromptExcerpt && (
+            <Section title="Original prompt">
+              <p className="qt-text-small leading-relaxed">{entry.generationPromptExcerpt}</p>
+            </Section>
+          )}
+
+          {entry.tags.length > 0 && (
+            <Section title="Tags">
+              <div className="flex flex-wrap gap-1.5">
+                {entry.tags.map((t) => (
+                  <span key={t} className="qt-badge qt-badge-muted">{t}</span>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          <Section
+            title={`Linked in ${entry.linkSummary.count} ${entry.linkSummary.count === 1 ? 'place' : 'places'}`}
+          >
+            <ul className="space-y-2">
+              {entry.linkSummary.linkers.map((linker) => (
+                <li
+                  key={linker.linkId}
+                  className="rounded-lg border qt-border-default/50 qt-bg-muted/40 px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate font-medium qt-text">
+                      {linker.linkedBy ?? linker.mountPointName}
+                    </span>
+                    <span className="qt-badge qt-badge-muted whitespace-nowrap text-[10px] uppercase">
+                      {linker.mountStoreType === 'character' ? 'Vault' : 'Album'}
+                    </span>
+                  </div>
+                  <p className="qt-text-muted mt-1 break-all font-mono text-xs">
+                    {linker.relativePath}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Section>
+
+          <Section title="Identity">
+            <p className="qt-text-muted break-all font-mono text-[11px]">
+              sha256: {entry.sha256}
+            </p>
+            <p className="qt-text-muted break-all font-mono text-[11px]">
+              linkId: {entry.linkId}
+            </p>
+          </Section>
+        </div>
+      </div>
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t qt-border-default/60 px-6 py-4">
+        <button
+          type="button"
+          className="qt-button qt-button-destructive"
+          onClick={onDelete}
+          disabled={deleting}
+        >
+          {deleting ? 'Removing…' : 'Remove from this album'}
+        </button>
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            className="qt-button qt-button-destructive"
-            onClick={onDelete}
-            disabled={deleting}
+            className="qt-button-secondary inline-flex items-center gap-2"
+            onClick={handleDownload}
+            disabled={downloading}
           >
-            {deleting ? 'Removing…' : 'Remove from this album'}
+            <Icon name="download" className="h-4 w-4" aria-hidden="true" />
+            {downloading ? 'Downloading…' : 'Download'}
           </button>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="qt-button-secondary inline-flex items-center gap-2"
-              onClick={handleDownload}
-              disabled={downloading}
-            >
-              <Icon name="download" className="h-4 w-4" aria-hidden="true" />
-              {downloading ? 'Downloading…' : 'Download'}
-            </button>
-            <button
-              type="button"
-              className="qt-button-secondary inline-flex items-center gap-2"
-              onClick={handleCopy}
-              title="Copy image to clipboard"
-            >
-              <Icon name="copy" className="h-4 w-4" aria-hidden="true" />
-              Copy
-            </button>
-            <button type="button" className="qt-button-secondary" onClick={onClose}>
-              Close
-            </button>
-          </div>
-        </footer>
-      </div>
-    </div>
+          <button
+            type="button"
+            className="qt-button-secondary inline-flex items-center gap-2"
+            onClick={handleCopy}
+            title="Copy image to clipboard"
+          >
+            <Icon name="copy" className="h-4 w-4" aria-hidden="true" />
+            Copy
+          </button>
+          <button type="button" className="qt-button-secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </footer>
+    </BaseModal>
   );
 }
 

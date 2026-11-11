@@ -43,7 +43,7 @@ export function SubpromptsSection({ characterId, characterName }: SubpromptsSect
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="qt-heading-4 text-foreground">Subprompts</h3>
+          <h3 className="qt-heading-4 qt-text">Subprompts</h3>
           <p className="qt-text-small">
             Smaller instructions {characterName} may carry into a particular chat. Each lives as a Markdown file in the vault&rsquo;s <code>Subprompts/</code> folder, and is switched on or off per conversation from the New Chat dialog or the Participants drawer. Write them to the character in the second person, as you would a system prompt.
           </p>
@@ -98,7 +98,7 @@ export function SubpromptsSection({ characterId, characterName }: SubpromptsSect
                     </button>
                     {deleteConfirm === s.id && (
                       <div className="absolute right-0 top-full mt-1 p-3 qt-bg-card border qt-border-default rounded-lg qt-shadow-lg z-10 min-w-[220px]">
-                        <p className="text-sm text-foreground mb-2">
+                        <p className="text-sm qt-text mb-2">
                           Delete this subprompt? Any chat with it in play drops it.
                         </p>
                         <div className="flex gap-2">

@@ -203,7 +203,7 @@ describe('wardrobe tool handlers', () => {
       const result = await executeWardrobeListTool({}, context)
 
       expect(tieredMountPool.resolveGroupMountsForCharacter).toHaveBeenCalledWith('char-1')
-      expect(repos.wardrobe.readSharedTiers).toHaveBeenCalledWith(['grp-mount'], true, expect.any(Function))
+      expect(repos.wardrobe.readSharedTiers).toHaveBeenCalledWith(['grp-mount'], true, expect.any(Function), { strict: true })
       const byId = Object.fromEntries(result.items.map((i: any) => [i.item_id, i]))
       expect(byId['grp-item'].title).toBe('House Livery')
       expect(byId['grp-item'].is_own).toBe(false)

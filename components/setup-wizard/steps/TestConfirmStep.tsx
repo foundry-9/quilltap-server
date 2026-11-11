@@ -193,7 +193,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       <div className="space-y-3">
         <h3 className="qt-text-label">Configuration Summary</h3>
 
-        <div className="border border-[var(--qt-border-color)] rounded-lg divide-y divide-[var(--qt-border-color)]">
+        <div className="border qt-border-default rounded-lg divide-y qt-divide-default">
           {/* Chat */}
           <div className="flex items-center justify-between p-3">
             <div className="flex-1">

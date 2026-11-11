@@ -38,7 +38,7 @@ import { WardrobeItemNotInLocationError } from '@/lib/wardrobe/folders';
 import { carryItemImages } from '@/lib/wardrobe/item-images';
 import { createItem, moveItemsToFolder } from '@/lib/wardrobe/item-mutations';
 import type { WardrobeLocation } from '@/lib/wardrobe/location';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
+import { nextCopyTitle } from '@/lib/mount-index/item-rules';
 
 /** What travels with an outfit filed into a folder: its components, or nothing. */
 export type FolderComponentMode = 'move' | 'copy' | 'none';

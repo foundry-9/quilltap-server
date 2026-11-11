@@ -159,7 +159,7 @@ export function CoreWhisperSection() {
         </div>
 
         {/* Info box */}
-        <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4 qt-text-small space-y-1">
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50 qt-text-small space-y-1">
           <p className="qt-settings-section-heading">A note on overrides</p>
           <p>
             Per-chat and per-character overrides are available on their respective settings panels. Resolution precedence is <strong>chat &rarr; character &rarr; global</strong> &mdash; an explicit value on a chat wins over an explicit value on a character, which in turn wins over these global defaults.

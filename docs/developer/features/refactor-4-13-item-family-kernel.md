@@ -1,6 +1,6 @@
 # Refactor 4.13 — An item-store kernel for the Wardrobe, the Inventory and the Atlas
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #186 and settles four points the three families disagree on.
+**Status:** Done (2026-11-11). Proposed 2026-11-10, written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Fixes #186 and settles four points the three families disagree on. See [§9 Outcome](#9-outcome) for what landed and where it departs from the plan.
 
 Line numbers are from the audit and will drift. Re-locate each site by name before editing.
 
@@ -106,3 +106,30 @@ Behaviour is identical after each of phases 2 and 4–6; the existing family tes
 
 1. On an unread tier during equip: keep the unresolved ids and proceed (proposed), or refuse the change with a message?
 2. Should the Atlas's failed-tier read be surfaced anywhere the operator can see, or stay a log line?
+
+## 9. Outcome
+
+Landed in six commits, one per phase; the full unit suite was green after each.
+
+**Decisions taken** (§8): on an unread tier, equip keeps the unresolved ids and proceeds (the proposal). The Atlas's failed-tier read stays a `warn` log line; the pool now carries `unread`, so surfacing it later is a read of a field that exists.
+
+**Where the code is.**
+
+| Piece | File |
+|---|---|
+| Tier reads, shadowing, `UnreadMount` | `lib/mount-index/item-tiers.ts` (kept apart from the writer so a pool does not load it) |
+| `foldItemName`, `nextCopyTitle`, `archivedPatch` | `lib/mount-index/item-rules.ts` (client-safe) |
+| `createItemFolderStore`, `locationWriter`, `cleanPatch` | `lib/mount-index/item-store.ts` (re-exports the two above) |
+| `defineItemFolderErrors`, `defineItemFolderFamily` | `lib/mount-index/item-folders.ts` (client-safe, beside the rules they bind) |
+| `createItemImages` | `lib/mount-index/item-family-images.ts` |
+| `createItemRequest` (the client `request.ts` pair) | `lib/mount-index/item-request.ts` |
+
+**Corrections to §4 and §5.**
+
+- The Wardrobe answered "does a pool remember which tiers it failed to read?" with *no*: `WardrobeRepository.readSharedTiers` swallowed a failed store and the pool swallowed a failed character read. The wearable pool now reads one mount at a time (`readSharedTiers(…, { strict: true })`) and carries `unread`.
+- The Wardrobe's `commitEquippedOutfit` path does not have #186's shape: `applyDisplacement` edits the stored slots it reads, never a pool-filtered copy, so an unread tier cannot drop a garment.
+- §5.4's route factory already existed (4.12's `createItemImagesRoute`); the Atlas and Inventory route files were already adapters and stay so, calling the families' named exports (their tests mock those). The Wardrobe's 118-line route stays as it is: its extra lines are its own `link-image` action and error mapping, already on the shared factory, not preamble.
+- `assertNameFree` became a write `guard` that the location's `create` / `update` run inside the folder's write chain, against the records that write is about to rewrite.
+- The Wardrobe's `vault-writes.ts` and `location.ts` were not bound to the store (§6 named only its `folders.ts`): its writer is the repository's overlay path, with composite and history concerns the other two lack.
+
+**Size.** `lib/` and `app/` came out about 90 lines smaller net (1,684 added, 1,777 removed), not the 550–750 §7 expected. The verbatim copies are gone, but the kernel states each rule once with its documentation, and the per-family bindings keep every exported name so no caller changed.

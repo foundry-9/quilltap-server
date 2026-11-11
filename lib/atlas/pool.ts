@@ -23,6 +23,8 @@ import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { castGroupMounts, groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { readAtlasRecords } from '@/lib/atlas/vault-readers';
+import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-tiers';
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import { GENERAL_ATLAS_ORIGIN, type AtlasLocation } from '@/lib/atlas/location';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { AtlasEntryWithOrigin, AtlasOrigin, AtlasRecord } from '@/lib/schemas/atlas.types';
@@ -37,52 +39,40 @@ export interface AtlasPool {
   entries: readonly PooledAtlasEntry[];
   /** How many live entries a stronger one hid. */
   shadowedCount: number;
+  /**
+   * Mounts whose entries are missing because the read failed. Readers here
+   * only look things up, so they fail soft; a failure is a `warn` in the log.
+   */
+  unread: readonly UnreadMount[];
 }
 
-const nameKey = (name: string) => name.trim().toLocaleLowerCase();
+const nameKey = foldItemName;
 
 /**
  * Shadow layers given strongest first: archived dropped per layer, then the
  * first entry to claim a canonical name keeps it. Pure.
  */
-export function shadowAtlasLayers(layers: readonly (readonly PooledAtlasEntry[])[]): AtlasPool {
-  const seen = new Set<string>();
-  const entries: PooledAtlasEntry[] = [];
-  let shadowedCount = 0;
-  for (const layer of layers) {
-    for (const entry of layer) {
-      if (entry.archivedAt) continue;
-      const key = nameKey(entry.name);
-      if (seen.has(key)) {
-        shadowedCount++;
-        continue;
-      }
-      seen.add(key);
-      entries.push(entry);
-    }
-  }
-  return { entries, shadowedCount };
+export function shadowAtlasLayers(
+  layers: readonly (readonly PooledAtlasEntry[])[],
+  unread: readonly UnreadMount[] = [],
+): AtlasPool {
+  const { byKey, shadowedCount } = shadowLayers(
+    layers.map((layer) => layer.filter((entry) => !entry.archivedAt)),
+    (entry) => nameKey(entry.name),
+  );
+  return { entries: Array.from(byKey.values()), shadowedCount, unread };
 }
 
-/** Read mounts (strongest first, each fail-soft), tagging every record. */
-async function readMounts(
+/** One tier: its mounts strongest first, each record tagged with its origin. */
+function atlasTier(
   mountPointIds: readonly string[],
   originOf: (mountPointId: string) => AtlasOrigin,
-): Promise<PooledAtlasEntry[]> {
-  const out: PooledAtlasEntry[] = [];
-  for (const mountPointId of mountPointIds) {
-    try {
-      const records = await readAtlasRecords(mountPointId);
-      for (const record of records) out.push({ ...record, origin: originOf(mountPointId), mountPointId });
-    } catch (error) {
-      logger.warn('[AtlasPool] Failed to read an Atlas tier; skipping it', {
-        mountPointId,
-        context: 'atlas',
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-  return out;
+): TierSpec<PooledAtlasEntry> {
+  return {
+    mountPointIds,
+    read: async (mountPointId) =>
+      (await readAtlasRecords(mountPointId)).map((record) => ({ ...record, origin: originOf(mountPointId), mountPointId })),
+  };
 }
 
 async function projectOrigin(
@@ -144,13 +134,14 @@ export async function loadAtlasPool(
     projectOrigin(repos, projectId),
   ]);
   const groupOrigins = groupOriginMap(groups);
-  const [ownLayer, groupLayer, projectLayer, generalLayer] = await Promise.all([
-    own ? readMounts([own.mountPointId], () => own.origin) : Promise.resolve([]),
-    readMounts(Array.from(groupOrigins.keys()), (mp) => groupOrigins.get(mp) as AtlasOrigin),
-    readMounts(projectMounts.filter((mp) => mp !== own?.mountPointId), () => projectTag),
-    readMounts(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_ATLAS_ORIGIN),
+  const read = await readTiers('atlas', [
+    atlasTier(own ? [own.mountPointId] : [], () => (own as { origin: AtlasOrigin }).origin),
+    atlasTier(Array.from(groupOrigins.keys()), (mp) => groupOrigins.get(mp) as AtlasOrigin),
+    atlasTier(projectMounts.filter((mp) => mp !== own?.mountPointId), () => projectTag),
+    atlasTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_ATLAS_ORIGIN),
   ]);
-  const pool = shadowAtlasLayers([ownLayer, groupLayer, projectLayer, generalLayer]);
+  const [ownLayer, groupLayer, projectLayer, generalLayer] = read.layers;
+  const pool = shadowAtlasLayers(read.layers, read.unread);
   logger.debug('[AtlasPool] Loaded atlas pool', {
     characterId,
     projectId,
@@ -161,6 +152,7 @@ export async function loadAtlasPool(
     generalCount: generalLayer.length,
     kept: pool.entries.length,
     shadowed: pool.shadowedCount,
+    unread: pool.unread.length,
     op: 'pool',
     context: 'atlas',
   });
@@ -218,13 +210,13 @@ export async function loadAtlasViewFor(
   const groupOrigins = groupOriginMap(groupsByCharacter.flat());
   const groupOnly = groupMounts.filter((mp) => !ownMounts.has(mp));
   const projectOnly = projectMounts.filter((mp) => !ownMounts.has(mp) && !groupOnly.includes(mp));
-  const ownLayers = await Promise.all(ownTiers.map((own) => readMounts([own.mountPointId], () => own.origin)));
-  const [groupLayer, projectLayer, generalLayer] = await Promise.all([
-    readMounts(groupOnly, (mp) => groupOrigins.get(mp) ?? { scope: 'group', id: null, name: 'Group' }),
-    readMounts(projectOnly, () => projectTag),
-    readMounts(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_ATLAS_ORIGIN),
+  const read = await readTiers('atlas', [
+    ...ownTiers.map((own) => atlasTier([own.mountPointId], () => own.origin)),
+    atlasTier(groupOnly, (mp) => groupOrigins.get(mp) ?? { scope: 'group', id: null, name: 'Group' }),
+    atlasTier(projectOnly, () => projectTag),
+    atlasTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_ATLAS_ORIGIN),
   ]);
-  const view = shadowAtlasLayers([...ownLayers, groupLayer, projectLayer, generalLayer]);
+  const view = shadowAtlasLayers(read.layers, read.unread);
   logger.debug('[AtlasPool] Loaded cast atlas view', {
     chatId: opts.chatId ?? null,
     projectId,
@@ -234,6 +226,7 @@ export async function loadAtlasViewFor(
     projectMounts: projectOnly.length,
     kept: view.entries.length,
     shadowed: view.shadowedCount,
+    unread: view.unread.length,
     op: 'cast-view',
     context: 'atlas',
   });
@@ -254,17 +247,21 @@ export async function loadAtlasPoolForLocation(
   if (location.characterId) {
     const groups = groupOriginMap(await groupMountsFor(location.characterId));
     const generalMountPointId = await getGeneralMountPointId();
-    const layers = await Promise.all([
+    const [own, shared] = await Promise.all([
       location.readEntries(false).then((records) => tag(records, location.origin, location.mountPointId)),
-      readMounts(Array.from(groups.keys()), (mp) => groups.get(mp) as AtlasOrigin),
-      readMounts(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_ATLAS_ORIGIN),
+      readTiers('atlas', [
+        atlasTier(Array.from(groups.keys()), (mp) => groups.get(mp) as AtlasOrigin),
+        atlasTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_ATLAS_ORIGIN),
+      ]),
     ]);
-    return layers.flat().filter((entry) => !entry.archivedAt);
+    return [own, ...shared.layers].flat().filter((entry) => !entry.archivedAt);
   }
   const own = tag(await location.readEntries(false), location.origin, location.mountPointId);
   if (location.scope === 'general') return own;
   const generalMountPointId = await getGeneralMountPointId();
-  const general = generalMountPointId ? await readMounts([generalMountPointId], () => GENERAL_ATLAS_ORIGIN) : [];
+  const general = (
+    await readTiers('atlas', [atlasTier(generalMountPointId ? [generalMountPointId] : [], () => GENERAL_ATLAS_ORIGIN)])
+  ).layers[0];
   return [...own, ...general.filter((entry) => !entry.archivedAt)];
 }
 

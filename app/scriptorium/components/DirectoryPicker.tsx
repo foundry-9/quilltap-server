@@ -140,7 +140,7 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
                   key={dir.path}
                   type="button"
                   onClick={() => handleNavigate(dir.path)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-foreground hover:qt-bg-muted/50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm qt-text hover:qt-bg-muted/50 transition-colors"
                 >
                   <Icon name="folder" className="w-4 h-4 qt-text-secondary shrink-0" />
                   <span className="truncate">{dir.name}</span>

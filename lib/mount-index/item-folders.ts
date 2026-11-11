@@ -69,6 +69,67 @@ export class ItemNotInLocationError extends Error {
   }
 }
 
+/**
+ * The four folder errors for one family, each a subclass of the shared base
+ * (so the routes' status mapping holds) named for the family — e.g.
+ * `defineItemFolderErrors('Inventory', 'inventory')` gives
+ * `InventoryFolderPathError` … `InventoryItemNotInLocationError`. `member`
+ * names what is filed (`Entry` for the Atlas).
+ */
+export function defineItemFolderErrors(prefix: string, noun: string, member = 'Item') {
+  class FolderPathError extends ItemFolderPathError {
+    constructor(message: string) {
+      super(message);
+      this.name = `${prefix}FolderPathError`;
+    }
+  }
+  class FolderNotFoundError extends ItemFolderNotFoundError {
+    constructor(folder: string) {
+      super(folder, noun);
+      this.name = `${prefix}FolderNotFoundError`;
+    }
+  }
+  class FolderConflictError extends ItemFolderConflictError {
+    constructor(folder: string, message?: string) {
+      super(folder, message, noun);
+      this.name = `${prefix}FolderConflictError`;
+    }
+  }
+  class NotInLocationError extends ItemNotInLocationError {
+    constructor(ids: string[]) {
+      super(ids, noun);
+      this.name = `${prefix}${member}NotInLocationError`;
+    }
+  }
+  return { FolderPathError, FolderNotFoundError, FolderConflictError, NotInLocationError };
+}
+
+/**
+ * One family's folder helpers, bound to its rules and file extension: what
+ * each family's `folders.ts` re-exports under its own names, so the rules
+ * live once.
+ */
+export function defineItemFolderFamily(rules: ItemFolderRules, ext: string, errors: { FolderPathError: new (message: string) => Error }) {
+  const pathError = (message: string) => new errors.FolderPathError(message);
+  return {
+    /** Normalise an operator-typed folder path. */
+    normalizePath: (input: string | null | undefined): string => normalizeItemFolderPath(rules, input, pathError),
+    /** A folder an existing item carries, in normal form or the root. */
+    normalizeOrRoot: (input: string | null | undefined): string => normalizeItemFolderPathOrRoot(rules, input),
+    /** True when `path` is structurally safe to write under the root. */
+    isSafe: (path: string): boolean => isSafeItemFolderPath(rules, path),
+    /** Resolve an operator's requested folder against the folders a tier already has. */
+    resolve: (existing: readonly string[], requested: string | null | undefined): string =>
+      resolveItemFolder(rules, existing, requested, pathError),
+    /** True when `path` is already in normal form. */
+    isValid: (path: string): boolean => isValidItemFolderPath(rules, path),
+    /** The folder a document lives in: `Root/A/B/x.ext` → `A/B`. */
+    folderOf: (relativePath: string): string => folderOfItemPath(rules, relativePath),
+    /** True for a document path that can hold an item: an `ext` file under the root, outside reserved folders. */
+    isDocumentPath: (relativePath: string): boolean => isItemDocumentPath(rules, relativePath, ext),
+  };
+}
+
 /** A folder as the browser and the folder routes see it. */
 export interface ItemFolder {
   /** Path relative to the root folder, e.g. `Formal/Evening`. Never `''`. */

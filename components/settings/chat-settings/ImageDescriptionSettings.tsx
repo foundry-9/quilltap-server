@@ -4,6 +4,7 @@ import { useId } from 'react'
 import Link from 'next/link'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import { ChatSettings, ConnectionProfile } from './types'
+import { settingsCardHref } from '@/lib/settings/hrefs'
 
 export interface ImageDescriptionSettingsProps {
   settings: ChatSettings
@@ -71,7 +72,7 @@ export function ImageDescriptionSettings({
         <p className="qt-text-xs">
           The uncensored fallback, for when this profile refuses to describe an image, now keeps company with the
           Concierge: see its vision profile under{' '}
-          <Link href="/settings?section=uncensored-desk" className="qt-link">
+          <Link href={settingsCardHref('uncensored-desk')} className="qt-link">
             The Concierge → The Uncensored Desk
           </Link>.
         </p>

@@ -490,7 +490,7 @@ export function ChatComposer({
             <div className="qt-chat-attachment-list mb-2">
               <div className="qt-chat-tool-result-chip">
                 <Icon name="deus-ex-machina" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
-                <span className="text-foreground">Deus Ex Machina: this line will be established as fact</span>
+                <span className="qt-text">Deus Ex Machina: this line will be established as fact</span>
                 <Tooltip content="Disarm Deus Ex Machina">
                   <button
                     type="button"
@@ -520,7 +520,7 @@ export function ChatComposer({
                 ) : (
                   <Icon name="file" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
                 )}
-                <span className="text-foreground max-w-[150px] truncate">
+                <span className="qt-text max-w-[150px] truncate">
                   {file.filename}
                 </span>
                 <Tooltip content="Remove attachment">
@@ -552,7 +552,7 @@ export function ChatComposer({
                   anchorClassName="gap-2 min-w-0"
                 >
                   <span className="text-base leading-none">{result.icon}</span>
-                  <span className="text-foreground max-w-[200px] truncate">
+                  <span className="qt-text max-w-[200px] truncate">
                     {result.summary}
                   </span>
                 </Tooltip>

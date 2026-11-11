@@ -58,7 +58,7 @@ export function ItemFolderBar({
           <>
             <button
               type="button"
-              className="qt-text-secondary hover:text-foreground"
+              className="qt-text-secondary hover:qt-text"
               onClick={onNavigateRoot}
               aria-current={inOwnTier && currentFolder === '' ? 'page' : undefined}
             >
@@ -69,7 +69,7 @@ export function ItemFolderBar({
                 <span className="qt-text-secondary" aria-hidden>›</span>
                 <button
                   type="button"
-                  className="qt-text-secondary hover:text-foreground"
+                  className="qt-text-secondary hover:qt-text"
                   onClick={onNavigateTier}
                   aria-current={currentFolder === '' ? 'page' : undefined}
                 >
@@ -85,7 +85,7 @@ export function ItemFolderBar({
                   <span className="qt-text-secondary" aria-hidden>›</span>
                   <button
                     type="button"
-                    className={last ? 'text-foreground font-medium' : 'qt-text-secondary hover:text-foreground'}
+                    className={last ? 'qt-text font-medium' : 'qt-text-secondary hover:qt-text'}
                     onClick={() => onNavigateFolder(path)}
                     aria-current={last ? 'page' : undefined}
                   >

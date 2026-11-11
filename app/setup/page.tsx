@@ -44,7 +44,7 @@ export default function SetupPage() {
           // Full page load, not router.push: the database was just unlocked, so
           // the session provider and all client caches must be rebuilt from
           // scratch before the next setup step reads them.
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load wanted: the just-unlocked database needs a fresh session provider and empty client caches
           window.location.href = '/setup/providers';
           return;
         }
@@ -54,7 +54,7 @@ export default function SetupPage() {
     }
 
     // Full page load to re-initialize session provider and all client state
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load wanted: the just-unlocked database needs a fresh session provider and empty client caches
     window.location.href = '/';
   }, [router]);
 
@@ -76,7 +76,7 @@ export default function SetupPage() {
   }, [navigateAfterSetup, router]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot unlock-state check on mount; checkState fetches and sets dbKeyState/error after the await, then may navigate
     checkState();
   }, [checkState]);
 

@@ -29,7 +29,7 @@ export function ScenariosView() {
   })
 
   return (
-    <div className="qt-page-container min-h-screen text-foreground">
+    <div className="qt-page-container min-h-screen qt-text">
       <div>
         <div className="mb-6 flex items-start gap-3">
           <ScenariosIcon className="w-8 h-8 qt-text-primary mt-1" />

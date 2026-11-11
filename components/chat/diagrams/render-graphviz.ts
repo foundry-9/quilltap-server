@@ -108,7 +108,7 @@ export function renderGraphviz(
       const sketched = await sketch(clean, source, options.host)
       return { svg: serializer.serializeToString(sketched) }
     } catch (err) {
-      console.debug('[diagrams] Hand-drawn Graphviz sketch failed; showing the clean drawing', {
+      console.warn('[diagrams] Hand-drawn Graphviz sketch failed; showing the clean drawing', {
         error: err instanceof Error ? err.message : String(err),
       })
       return { svg: cleanMarkup }

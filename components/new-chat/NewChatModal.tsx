@@ -8,10 +8,8 @@
  * @module components/new-chat/NewChatModal
  */
 
-import { useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useState } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { NewChatFormProvider, useNewChatForm } from './NewChatFormContext'
 import { NewChatDialogBody, useNewChatCanSubmit } from './NewChatDialogBody'
 import type { TimestampConfig } from '@/lib/schemas/types'
@@ -99,11 +97,6 @@ function NewChatModalFrame({
   const isAutonomous = state.autonomous.enabled
   const [pickerExpanded, setPickerExpanded] = useState(initialPickerExpanded)
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-  useEscapeKey(onClose, !creating)
-
   const handleStart = async () => {
     // The chat exists once this returns; the Salon runs its opening, so the
     // dialog closes at once.
@@ -113,68 +106,65 @@ function NewChatModalFrame({
 
   const widthClass = pickerExpanded ? 'md:max-w-5xl' : 'md:max-w-3xl'
 
-  const modalContent = (
-    <div className="new-chat-modal qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className={`w-full max-w-md ${widthClass} rounded-2xl border qt-border-default qt-bg-card p-6 qt-shadow-lg max-h-[90vh] flex flex-col`}
-      >
-        <div className="mb-4 flex items-start justify-between gap-4 flex-shrink-0">
-          <h3 id={titleId} className="qt-dialog-title">
-            {isAutonomous
-              ? 'New Autonomous Room'
-              : isContinuation
-                ? 'Continue Conversation Elsewhere'
-                : selectedCharacters.length > 1
-                  ? `Start Chat (${selectedCharacters.length} characters)`
-                  : characterName
-                    ? `Start Chat with ${characterName}`
-                    : 'Start Chat'}
-          </h3>
-          <button
-            type="button"
-            onClick={() => setPickerExpanded((v) => !v)}
-            className="qt-action flex-shrink-0"
-            disabled={creating}
-          >
-            {pickerExpanded ? '− Hide character picker' : '+ Add another character'}
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <p className="qt-text-secondary">Loading...</p>
-          </div>
-        ) : (
-          <div className="overflow-y-auto flex-1 pr-2 -mr-2">
-            <NewChatDialogBody pickerExpanded={pickerExpanded} />
-          </div>
-        )}
-
-        <div className="mt-6 flex justify-end gap-3 flex-shrink-0">
-          <button type="button" onClick={onClose} className="qt-button qt-button-secondary">
-            Cancel
-          </button>
-          <button type="button" onClick={handleStart} disabled={!canSubmit} className="qt-button-success">
-            {creating
-              ? (isContinuation ? 'Continuing...' : 'Creating...')
-              : (isAutonomous ? 'Create Autonomous Room' : isContinuation ? 'Continue' : 'Start Chat')}
-          </button>
-        </div>
+  // The shell portals to the document root, so the dialog hovers over the
+  // WHOLE workspace rather than being trapped in one split pane's stacking
+  // context. The portal preserves React context (form, navigation, theming).
+  // The card draws its own header; the form does not close on a stray
+  // backdrop click.
+  return (
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      headerless
+      maxWidth="md"
+      busy={creating}
+      closeOnClickOutside={false}
+      overlayClassName="new-chat-modal"
+      className={`${widthClass} rounded-2xl border qt-border-default qt-bg-card p-6 qt-shadow-lg`}
+      bodyClassName="flex flex-col flex-1 min-h-0"
+    >
+      <div className="mb-4 flex items-start justify-between gap-4 flex-shrink-0">
+        <ModalTitle className="qt-dialog-title">
+          {isAutonomous
+            ? 'New Autonomous Room'
+            : isContinuation
+              ? 'Continue Conversation Elsewhere'
+              : selectedCharacters.length > 1
+                ? `Start Chat (${selectedCharacters.length} characters)`
+                : characterName
+                  ? `Start Chat with ${characterName}`
+                  : 'Start Chat'}
+        </ModalTitle>
+        <button
+          type="button"
+          onClick={() => setPickerExpanded((v) => !v)}
+          className="qt-action flex-shrink-0"
+          disabled={creating}
+        >
+          {pickerExpanded ? '− Hide character picker' : '+ Add another character'}
+        </button>
       </div>
-    </div>
-  )
 
-  // Render at the document root so the dialog hovers over the WHOLE workspace.
-  // Inside a split pane, a `fixed` overlay is otherwise trapped in that pane's
-  // stacking context (`.qt-tab-pane` z-index) and the other pane paints over its
-  // far half. The portal preserves React context, so the form context,
-  // useWorkspaceNavigate and theming still work.
-  if (typeof document === 'undefined') return null
-  return createPortal(modalContent, document.body)
+      {loading ? (
+        <div className="qt-loading-state">
+          <p className="qt-text-secondary">Loading...</p>
+        </div>
+      ) : (
+        <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+          <NewChatDialogBody pickerExpanded={pickerExpanded} />
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-end gap-3 flex-shrink-0">
+        <button type="button" onClick={onClose} className="qt-button qt-button-secondary">
+          Cancel
+        </button>
+        <button type="button" onClick={handleStart} disabled={!canSubmit} className="qt-button-success">
+          {creating
+            ? (isContinuation ? 'Continuing...' : 'Creating...')
+            : (isAutonomous ? 'Create Autonomous Room' : isContinuation ? 'Continue' : 'Start Chat')}
+        </button>
+      </div>
+    </BaseModal>
+  )
 }

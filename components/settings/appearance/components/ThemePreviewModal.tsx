@@ -213,7 +213,7 @@ export function ThemePreviewModal({
         {/* 4b. Live element preview */}
         <section>
           {isLoading && !previewTokens && (
-            <div className="flex items-center justify-center py-12">
+            <div className="qt-loading-state py-12">
               <div className="qt-spinner" />
               <span className="ml-2 qt-text-small">Loading theme preview...</span>
             </div>
@@ -337,7 +337,7 @@ function ThemeIconSheet({
       </div>
 
       <div
-        className={`${scopeClass} rounded-lg border qt-border-default p-4`}
+        className={`${scopeClass} border qt-border-default rounded-lg p-4`}
         style={{ height: 'auto', minHeight: 'auto', maxHeight: 'none' }}
       >
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">

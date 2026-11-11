@@ -20,6 +20,18 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => require('@/__tests__/help
 jest.mock('@/lib/pascal/tool-gate-keys', () => require('@/__tests__/helpers/inventory-fake-store').toolGateKeysModule())
 jest.mock('@/lib/mount-index/ensure-owner-store', () => ({ ensureOwnerOfficialStore: jest.fn() }))
 jest.mock('@/lib/inventory/item-images', () => ({ cleanupInventoryItemImages: jest.fn(async () => undefined) }))
+/** Mounts whose Inventory read fails (#186). */
+const unreadableMounts = new Set<string>()
+jest.mock('@/lib/inventory/vault-readers', () => {
+  const actual = jest.requireActual('@/lib/inventory/vault-readers')
+  return {
+    ...actual,
+    readInventoryRecords: async (mountPointId: string) => {
+      if (unreadableMounts.has(mountPointId)) throw new Error('disk on fire')
+      return actual.readInventoryRecords(mountPointId)
+    },
+  }
+})
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('@/lib/services/pascal/writer', () => ({ postPascalInventoryChange: jest.fn(async () => ({ id: 'm' })) }))
 jest.mock('@/lib/wardrobe/outfit-change-effects', () => ({ refreshAvatarForAppearance: jest.fn(async () => undefined) }))
@@ -39,6 +51,7 @@ import { loadInventoryPool } from '@/lib/inventory/pool'
 import { readEquippedSet } from '@/lib/inventory/equipped-set'
 import { InventoryCapExceededError, InventoryNotEquippableError } from '@/lib/inventory/errors'
 import type { InventoryCreateBody } from '@/lib/schemas/inventory.types'
+import { PROJECT_MP } from '@/__tests__/helpers/inventory-fake-store'
 
 const repos = () => getFakeRepos() as never
 const CTX = { userId: 'user-1', provenance: 'operator' as const, announce: true }
@@ -86,6 +99,35 @@ describe('the kin cap', () => {
     const project = await loc('project', 'project-1')
     const bow = await createInventoryItem(repos(), project, body({ name: 'bow', isArchetype: true }))
     await expect(equipItems(repos(), addChat('chat-1', ['c-viv']), 'c-viv', [bow.id], CTX)).rejects.toBeInstanceOf(InventoryNotEquippableError)
+  })
+})
+
+describe('an unread tier (#186)', () => {
+  afterEach(() => unreadableMounts.clear())
+
+  it('an equip while the project tier is unread keeps what was carried from it', async () => {
+    const project = await loc('project', 'project-1')
+    const lantern = await createInventoryItem(repos(), project, body({ name: 'lantern' }))
+    const viv = await loc('character', 'c-viv')
+    const knife = await createInventoryItem(repos(), viv, body({ name: 'knife' }))
+    const chat = addChat('chat-1', ['c-viv'])
+    await equipItems(repos(), chat, 'c-viv', [lantern.id], CTX)
+    expect(carried('chat-1', 'c-viv')).toEqual([lantern.id])
+
+    unreadableMounts.add(PROJECT_MP)
+    await equipItems(repos(), chat, 'c-viv', [knife.id], CTX)
+    expect(carried('chat-1', 'c-viv')).toEqual(expect.arrayContaining([lantern.id, knife.id]))
+    await unequipItems(repos(), chat, 'c-viv', [knife.id], CTX)
+    expect(carried('chat-1', 'c-viv')).toEqual([lantern.id])
+  })
+
+  it('with every tier read, an id that resolves nowhere is still pruned', async () => {
+    const viv = await loc('character', 'c-viv')
+    const knife = await createInventoryItem(repos(), viv, body({ name: 'knife' }))
+    const chat = addChat('chat-1', ['c-viv'])
+    chat.equippedInventory = { 'c-viv': ['gone-for-good'] }
+    await equipItems(repos(), chat, 'c-viv', [knife.id], CTX)
+    expect(carried('chat-1', 'c-viv')).toEqual([knife.id])
   })
 })
 

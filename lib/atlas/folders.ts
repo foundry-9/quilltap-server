@@ -4,8 +4,8 @@
  * is the root, at most eight segments, `images` reserved at any depth,
  * case-insensitively unique siblings.
  *
- * Every helper is a delegate over {@link ATLAS_FOLDER_RULES}; the rules live
- * once in `lib/mount-index/item-folders.ts`.
+ * A binding of the shared rules (`lib/mount-index/item-folders.ts`:
+ * `defineItemFolderErrors`, `defineItemFolderFamily`); the rules live once.
  *
  * Client-safe: pure, no server imports.
  *
@@ -13,16 +13,8 @@
  */
 
 import {
-  folderOfItemPath,
-  ItemFolderConflictError,
-  ItemFolderNotFoundError,
-  ItemFolderPathError,
-  ItemNotInLocationError,
-  isItemDocumentPath,
-  isSafeItemFolderPath,
-  isValidItemFolderPath,
-  normalizeItemFolderPathOrRoot,
-  resolveItemFolder,
+  defineItemFolderErrors,
+  defineItemFolderFamily,
   type ItemFolder,
   type ItemFolderRules,
 } from '@/lib/mount-index/item-folders';
@@ -58,73 +50,47 @@ export const ATLAS_FOLDER_RULES: ItemFolderRules = {
   noun: 'atlas',
 };
 
+const errors = defineItemFolderErrors('Atlas', 'atlas', 'Entry');
+
 /** A folder path that breaks the rules (a 400 at the route). */
-export class AtlasFolderPathError extends ItemFolderPathError {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AtlasFolderPathError';
-  }
-}
+export const AtlasFolderPathError = errors.FolderPathError;
+export type AtlasFolderPathError = InstanceType<typeof AtlasFolderPathError>;
 
 /** The folder named doesn't exist (a 404 at the route). */
-export class AtlasFolderNotFoundError extends ItemFolderNotFoundError {
-  constructor(folder: string) {
-    super(folder, 'atlas');
-    this.name = 'AtlasFolderNotFoundError';
-  }
-}
+export const AtlasFolderNotFoundError = errors.FolderNotFoundError;
+export type AtlasFolderNotFoundError = InstanceType<typeof AtlasFolderNotFoundError>;
 
 /** The folder change collides with what's already there (a 409 at the route). */
-export class AtlasFolderConflictError extends ItemFolderConflictError {
-  constructor(folder: string, message?: string) {
-    super(folder, message, 'atlas');
-    this.name = 'AtlasFolderConflictError';
-  }
-}
+export const AtlasFolderConflictError = errors.FolderConflictError;
+export type AtlasFolderConflictError = InstanceType<typeof AtlasFolderConflictError>;
 
 /** A filing request named entries filed in another tier (a 400 at the route). */
-export class AtlasEntryNotInLocationError extends ItemNotInLocationError {
-  constructor(entryIds: string[]) {
-    super(entryIds, 'atlas');
-    this.name = 'AtlasEntryNotInLocationError';
-  }
-}
+export const AtlasEntryNotInLocationError = errors.NotInLocationError;
+export type AtlasEntryNotInLocationError = InstanceType<typeof AtlasEntryNotInLocationError>;
 
 /** A folder as the browser and the folder routes see it. */
 export type AtlasFolder = ItemFolder;
 
-const pathError = (message: string) => new AtlasFolderPathError(message);
+const family = defineItemFolderFamily(ATLAS_FOLDER_RULES, '.md', errors);
 
 /** A folder an existing entry carries, in normal form or the root. */
-export function normalizeAtlasFolderPathOrRoot(input: string | null | undefined): string {
-  return normalizeItemFolderPathOrRoot(ATLAS_FOLDER_RULES, input);
-}
+export const normalizeAtlasFolderPathOrRoot = family.normalizeOrRoot;
 
 /** True when `path` is structurally safe to write under `Atlas/`. */
-export function isSafeAtlasFolderPath(path: string): boolean {
-  return isSafeItemFolderPath(ATLAS_FOLDER_RULES, path);
-}
+export const isSafeAtlasFolderPath = family.isSafe;
 
 /** Resolve an operator's requested folder against the folders a tier already has. */
-export function resolveAtlasFolder(existing: readonly string[], requested: string | null | undefined): string {
-  return resolveItemFolder(ATLAS_FOLDER_RULES, existing, requested, pathError);
-}
+export const resolveAtlasFolder = family.resolve;
 
 /** True when `path` is already in normal form. */
-export function isValidAtlasFolderPath(path: string): boolean {
-  return isValidItemFolderPath(ATLAS_FOLDER_RULES, path);
-}
+export const isValidAtlasFolderPath = family.isValid;
 
 /** The folder an `Atlas/` document lives in: `Atlas/A/B/x.md` → `A/B`. */
-export function folderOfAtlasPath(relativePath: string): string {
-  return folderOfItemPath(ATLAS_FOLDER_RULES, relativePath);
-}
+export const folderOfAtlasPath = family.folderOf;
 
 /**
  * True for a document path that can hold an Atlas entry: a `.md` file
  * anywhere under `Atlas/` except under `Atlas/images/`. Whether its
  * frontmatter makes it an entry is `isAtlasEntryDocument`'s question.
  */
-export function isAtlasEntryDocumentPath(relativePath: string): boolean {
-  return isItemDocumentPath(ATLAS_FOLDER_RULES, relativePath, '.md');
-}
+export const isAtlasEntryDocumentPath = family.isDocumentPath;

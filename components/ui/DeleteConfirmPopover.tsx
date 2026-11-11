@@ -34,7 +34,7 @@ export function DeleteConfirmPopover({
   return (
     <div className="absolute top-0 left-0 z-50">
       <div className="qt-popover mt-2 min-w-48">
-        <p className="text-sm text-foreground mb-4">
+        <p className="text-sm qt-text mb-4">
           {message}
         </p>
         <div className="flex gap-2 justify-end">

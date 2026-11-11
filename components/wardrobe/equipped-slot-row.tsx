@@ -126,7 +126,7 @@ export function EquippedSlotRow({
                   type="button"
                   aria-label={`Remove ${item?.title ?? 'item'}`}
                   onClick={() => onRemove(slot, id)}
-                  className="qt-text-secondary hover:text-foreground"
+                  className="qt-text-secondary hover:qt-text"
                 >
                   ×
                 </button>
@@ -175,7 +175,7 @@ export function EquippedSlotRow({
                       className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:qt-bg-muted"
                     >
                       <WardrobeItemThumbnail fileId={c.imageFileId} size={28} />
-                      <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+                      <span className="min-w-0 flex-1 break-words text-sm qt-text">
                         {c.title}
                       </span>
                       <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">

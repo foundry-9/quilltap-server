@@ -97,7 +97,7 @@ export function useInstanceNumberSetting({
       showSuccessToast(successToast)
     },
     onError: (err) => {
-      console.debug('[BoundedNumberInstanceSetting] Save failed', { url, field, error: getErrorMessage(err) })
+      console.warn('[BoundedNumberInstanceSetting] Save failed', { url, field, error: getErrorMessage(err) })
       showErrorToast(settingErrorMessage(err, saveFailureMessage))
       setDraft(null)
     },

@@ -29,7 +29,6 @@ import {
   deleteAtlasEntry,
   duplicateAtlasEntry,
   moveAtlasEntriesToFolder,
-  setAtlasEntryArchived,
   updateAtlasEntry,
 } from '@/lib/atlas/item-mutations'
 import { AtlasNameTakenError } from '@/lib/atlas/errors'
@@ -56,27 +55,38 @@ it('refuses a second live entry of the same name in a tier, case-insensitively (
   await expect(createAtlasEntry(general, { name: 'convertible', aliases: [], metadata: {} } as never)).rejects.toBeInstanceOf(AtlasNameTakenError)
 })
 
+it('checks the name inside the write chain: two concurrent creates of one name, one lands', async () => {
+  const results = await Promise.allSettled([
+    createAtlasEntry(general, { name: 'Convertible', aliases: [], metadata: {} } as never),
+    createAtlasEntry(general, { name: 'CONVERTIBLE', aliases: [], metadata: {} } as never),
+  ])
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+  const [refused] = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+  expect(refused.reason).toBeInstanceOf(AtlasNameTakenError)
+  expect(pathsIn(GENERAL_MP)).toHaveLength(1)
+})
+
 it('refuses a rename into a taken name, and a restore into one; an alias overlap is fine', async () => {
   const a = await createAtlasEntry(general, { name: 'Convertible', aliases: ['car'], metadata: {} } as never)
   const b = await createAtlasEntry(general, { name: 'Lighthouse', aliases: ['car'], metadata: {} } as never)
   await expect(updateAtlasEntry(general, b, { name: 'CONVERTIBLE' })).rejects.toBeInstanceOf(AtlasNameTakenError)
 
-  await setAtlasEntryArchived(general, a, true)
+  await updateAtlasEntry(general, a, { archived: true })
   const renamed = await updateAtlasEntry(general, b, { name: 'Convertible' })
   expect(renamed?.name).toBe('Convertible')
   const archivedA = (await general.findEntry(a.id))!
-  await expect(setAtlasEntryArchived(general, archivedA, false)).rejects.toBeInstanceOf(AtlasNameTakenError)
+  await expect(updateAtlasEntry(general, archivedA, { archived: false })).rejects.toBeInstanceOf(AtlasNameTakenError)
 })
 
 it('archives idempotently and restores', async () => {
   const a = await createAtlasEntry(general, { name: 'Lighthouse', aliases: [], metadata: {} } as never)
-  const first = await setAtlasEntryArchived(general, a, true)
-  expect(first.changed).toBe(true)
-  const again = await setAtlasEntryArchived(general, first.entry!, true)
-  expect(again.changed).toBe(false)
+  const first = (await updateAtlasEntry(general, a, { archived: true }))!
+  expect(first.archivedAt).not.toBeNull()
+  const again = (await updateAtlasEntry(general, first, { archived: true }))!
+  expect(again.archivedAt).toBe(first.archivedAt)
   expect((await general.readEntries(false)).map((e) => e.id)).toEqual([])
-  const back = await setAtlasEntryArchived(general, first.entry!, false)
-  expect(back.entry?.archivedAt).toBeNull()
+  const back = await updateAtlasEntry(general, first, { archived: false })
+  expect(back?.archivedAt).toBeNull()
 })
 
 it('duplicates beside the original as "(copy)" with no picture', async () => {

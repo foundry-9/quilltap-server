@@ -52,7 +52,7 @@ export default function UnlockPage() {
   }, [returnToApp, router]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot unlock-state check on mount; checkState fetches and sets state/error after the await, then may navigate
     checkState();
   }, [checkState]);
 

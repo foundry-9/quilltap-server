@@ -146,7 +146,7 @@ export function Avatar({
   const containerClasses = [
     'overflow-hidden qt-bg-muted flex items-center justify-center',
     style === 'CIRCULAR' ? 'rounded-full' : '',
-    isActive ? 'ring-2 ring-primary ring-offset-1 ring-offset-card' : '',  /* ring-primary uses shadcn token */
+    isActive ? 'ring-2 qt-ring-brand ring-offset-1 ring-offset-card' : '',  /* ring-primary uses shadcn token */
   ].filter(Boolean).join(' ')
 
   const containerStyle: React.CSSProperties = {
@@ -194,7 +194,7 @@ export function Avatar({
   const nameElement = (showName || showTitle) ? (
     <div className="qt-avatar-labels text-center mt-1">
       {showName && (
-        <div className="qt-avatar-name text-sm font-semibold text-foreground line-clamp-2">
+        <div className="qt-avatar-name text-sm font-semibold qt-text line-clamp-2">
           {name}
         </div>
       )}

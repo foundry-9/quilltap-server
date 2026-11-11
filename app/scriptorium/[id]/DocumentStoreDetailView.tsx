@@ -73,12 +73,12 @@ export function DocumentStoreDetailView({ storeId, onBack, style, onOpenStore }:
     : 'Never'
 
   return (
-    <div className="qt-page-container text-foreground" style={style}>
+    <div className="qt-page-container qt-text" style={style}>
       {/* Header */}
       <div className="mb-6">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-1 text-sm qt-text-secondary hover:text-foreground mb-4 transition-colors"
+          className="inline-flex items-center gap-1 text-sm qt-text-secondary hover:qt-text mb-4 transition-colors"
         >
           <Icon name="chevron-left" className="w-4 h-4" />
           Back to The Scriptorium
@@ -129,11 +129,11 @@ export function DocumentStoreDetailView({ storeId, onBack, style, onOpenStore }:
       {/* Info cards */}
       <div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-4">
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <div className="qt-heading-2 text-foreground">{store.fileCount}</div>
+          <div className="qt-heading-2 qt-text">{store.fileCount}</div>
           <div className="text-xs qt-text-secondary">Indexed Files</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <div className="qt-heading-2 text-foreground">{formatBytes(store.totalSizeBytes)}</div>
+          <div className="qt-heading-2 qt-text">{formatBytes(store.totalSizeBytes)}</div>
           <div className="text-xs qt-text-secondary">Total Size</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">

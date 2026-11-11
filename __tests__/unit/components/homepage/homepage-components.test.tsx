@@ -245,7 +245,7 @@ describe('WelcomeSection', () => {
   it('renders name with primary text class', () => {
     const { container } = render(<WelcomeSection displayName="John" />)
     const span = container.querySelector('span')
-    expect(span).toHaveClass('text-primary')
+    expect(span).toHaveClass('qt-text-brand')
   })
 })
 

@@ -58,7 +58,7 @@ export async function loadImageAtlasView(
       context: 'atlas',
       error: getErrorMessage(error),
     });
-    return { entries: [], shadowedCount: 0 };
+    return { entries: [], shadowedCount: 0, unread: [] };
   }
 }
 

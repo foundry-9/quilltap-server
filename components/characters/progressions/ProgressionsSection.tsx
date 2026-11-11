@@ -94,7 +94,7 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="qt-heading-4 text-foreground">Progressions</h3>
+          <h3 className="qt-heading-4 qt-text">Progressions</h3>
           <p className="qt-text-small">
             Spans of time {characterName} is carrying — a gestation, a recharging weapon, a fermentation. Each
             turn, Quilltap works out how far along it is and tells them so, without the model having to do
@@ -199,7 +199,7 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
                       </button>
                       {deleteConfirm === id && (
                         <div className="absolute right-0 top-full mt-1 p-3 qt-bg-card border qt-border-default rounded-lg qt-shadow-lg z-10 min-w-[240px]">
-                          <p className="text-sm text-foreground mb-2">
+                          <p className="text-sm qt-text mb-2">
                             Remove this progression? Any tool addressing <code>{id}</code> stops finding it.
                           </p>
                           <div className="flex gap-2">

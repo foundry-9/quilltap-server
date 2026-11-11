@@ -6,7 +6,9 @@
  * Plan, then write (spec §5.6):
  *
  *   1. Load the character's pool and the current equipped set (ids that no
- *      longer resolve are dropped here, and so pruned by this write).
+ *      longer resolve are dropped here, and so pruned by this write — unless
+ *      a tier failed to read, when they are kept: "unread" is never "gone",
+ *      #186).
  *   2. Expand kits: an archetype member becomes an instance in the
  *      character's vault (an unequipped instance they already own is reused
  *      rather than a fresh one minted), an item member is itself, and a
@@ -52,7 +54,7 @@ import {
   type InventoryRefusal,
 } from '@/lib/inventory/errors';
 import { notifyInventoryChanged, type InventoryChangeContext } from '@/lib/inventory/equip-effects';
-import { readEquippedSet } from '@/lib/inventory/equipped-set';
+import { heldForUnreadTiers, readEquippedSet } from '@/lib/inventory/equipped-set';
 import { instantiate } from '@/lib/inventory/item-mutations';
 import { resolveInventoryLocation, type InventoryLocation } from '@/lib/inventory/location';
 import { loadInventoryPool, type InventoryPool } from '@/lib/inventory/pool';
@@ -324,6 +326,7 @@ async function equipUnserialized(
   const chat = await freshChat(repos, staleChat);
   const pool = opts.pool ?? (await poolFor(repos, chat, characterId));
   const current = readEquippedSet(chat, characterId, pool);
+  const held = heldForUnreadTiers(chat, characterId, pool);
   const currentIds = new Set(current.map((item) => item.id));
   const carriedParents = new Set(current.map((item) => item.parentId).filter((id): id is string => !!id));
 
@@ -412,6 +415,7 @@ async function equipUnserialized(
   for (const plan of accepted) if (plan.kind === 'existing') result.equipped.push(plan.item);
 
   await writeCarriedSet(repos, chat.id, characterId, [
+    ...held,
     ...current.map((item) => item.id),
     ...result.equipped.map((item) => item.id),
   ]);
@@ -442,6 +446,7 @@ export async function unequipItems(
     const fresh = await freshChat(repos, chat);
     const pool = await poolFor(repos, fresh, characterId);
     const current = readEquippedSet(fresh, characterId, pool);
+    const held = heldForUnreadTiers(fresh, characterId, pool);
     const removing = new Set<string>();
     const notEquipped: string[] = [];
 
@@ -465,7 +470,7 @@ export async function unequipItems(
         repos,
         fresh.id,
         characterId,
-        current.filter((item) => !removing.has(item.id)).map((item) => item.id),
+        [...held, ...current.filter((item) => !removing.has(item.id)).map((item) => item.id)],
       );
     }
     logger.debug('[InventoryEquip] Unequipped', {
@@ -510,6 +515,7 @@ export async function pickUpItems(
     const fresh = await freshChat(repos, chat);
     const pool = await poolFor(repos, fresh, characterId);
     const current = readEquippedSet(fresh, characterId, pool);
+    const held = heldForUnreadTiers(fresh, characterId, pool);
 
     const archetypes: ResolvedInventoryItem[] = [];
     for (const id of archetypeIds) {
@@ -544,6 +550,7 @@ export async function pickUpItems(
 
     if (equip && created.length > 0) {
       await writeCarriedSet(repos, fresh.id, characterId, [
+        ...held,
         ...current.map((item) => item.id),
         ...created.map((item) => item.id),
       ]);

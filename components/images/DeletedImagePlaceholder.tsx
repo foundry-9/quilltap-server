@@ -71,7 +71,7 @@ export default function DeletedImagePlaceholder({
       style={style}
     >
       <Icon name="image" className={`qt-text-secondary ${isCompact ? 'w-6 h-6 mb-1' : 'w-12 h-12 mb-2'}`} />
-      <p className={`text-foreground font-medium text-center ${isCompact ? 'text-[10px] mb-0.5' : 'text-sm mb-2'}`}>
+      <p className={`qt-text font-medium text-center ${isCompact ? 'text-[10px] mb-0.5' : 'text-sm mb-2'}`}>
         Image Deleted
       </p>
       {!isCompact && (

@@ -48,7 +48,7 @@ export function ImageProviderStep({ state, dispatch }: StepProps) {
   // Fetch models when provider changes
   useEffect(() => {
     if (selectedProvider) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- refetches the model list into local state whenever the selected provider changes
       loadModels(selectedProvider)
     } else {
       setModels([])

@@ -57,7 +57,7 @@ export function CarryingNowPane({
   return (
     <section className="flex flex-col min-h-0 gap-2" data-testid="inventory-carrying-now">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm text-foreground">Carrying now · {characterName} in this chat</h3>
+        <h3 className="text-sm qt-text">Carrying now · {characterName} in this chat</h3>
         <div className="flex items-center gap-1">
           <button type="button" className="qt-button-secondary qt-button-sm" onClick={() => setPicking(true)} disabled={busy}>
             Take up…
@@ -139,7 +139,7 @@ export function CarryingNowPane({
                   >
                     <InventoryPicture item={item} />
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm text-foreground truncate">{inventoryDisplayName(item)}</span>
+                      <span className="block text-sm qt-text truncate">{inventoryDisplayName(item)}</span>
                       {item.description && <span className="block qt-text-xs qt-text-secondary truncate">{item.description}</span>}
                     </span>
                   </button>

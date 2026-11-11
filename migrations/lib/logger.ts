@@ -172,10 +172,3 @@ class MigrationLogger {
  * Logger instance for migrations
  */
 export const logger = new MigrationLogger();
-
-/**
- * Create a child logger with migration-specific context
- */
-export function createMigrationLogger(migrationId: string) {
-  return logger.child({ context: `migration.${migrationId}` });
-}

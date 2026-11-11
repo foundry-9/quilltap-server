@@ -12,7 +12,6 @@
 import { useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
-import { SidebarProvider } from '@/components/providers/sidebar-provider'
 import { PageToolbarProvider } from '@/components/providers/page-toolbar-provider'
 import { HelpChatProvider } from '@/components/providers/help-chat-provider'
 import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
@@ -32,7 +31,6 @@ import FooterWrapper from '@/components/footer-wrapper'
 import { StartupProgress, useStartupPhase } from '@/components/loading/StartupProgress'
 import { useDictionaryFeed } from '@/lib/spellcheck/useDictionaryFeed'
 import { WorkspaceProviders } from '@/components/workspace/WorkspaceProviders'
-import { isWorkspaceTabsEnabled } from '@/lib/config/feature-flags'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -79,7 +77,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   // Setup and unlock pages bypass session check entirely (pepper may not be resolved yet)
   if (isSetupPage || isUnlockPage) {
     return (
-      <div className="flex flex-col h-screen bg-background text-foreground">
+      <div className="flex flex-col h-screen qt-bg-default qt-text">
         <main className="flex-1 min-h-0 overflow-auto">
           {children}
         </main>
@@ -98,7 +96,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   // Don't show sidebar/header for auth pages or unauthenticated users
   if (isAuthPage || !session) {
     return (
-      <div className="flex flex-col h-screen bg-background text-foreground">
+      <div className="flex flex-col h-screen qt-bg-default qt-text">
         <main className="flex-1 min-h-0 overflow-auto">
           {children}
         </main>
@@ -106,10 +104,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     )
   }
 
-  // Rail + content. When the tabbed workspace is enabled, the workspace store
-  // and registries live HERE (in the root layout, which never unmounts across
-  // navigation) so the shared left rail and the content both read one store and
-  // in-app navigation is pure openTab with full keep-alive.
+  // Rail + content. The workspace store and registries live HERE (in the root
+  // layout, which never unmounts across navigation) so the shared left rail and
+  // the content both read one store and in-app navigation is pure openTab with
+  // full keep-alive.
   const railAndContent = (
     <div className="qt-app-layout">
       <a href="#main-content" className="qt-skip-link">Skip to content</a>
@@ -133,13 +131,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           <InventoryDialogProvider>
             <AtlasDialogProvider>
               <DictionaryFeedMount />
-              {isWorkspaceTabsEnabled() ? (
-                <WorkspaceProviders>
-                  <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-                </WorkspaceProviders>
-              ) : (
+              <WorkspaceProviders>
                 <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
-              )}
+              </WorkspaceProviders>
               <HelpChatDialog />
               <BrahmaConsoleDialog />
               <BrahmaConsoleLauncher />
@@ -157,7 +151,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 /**
  * Renderless component that feeds Aurora character names into the Electron
  * shell's custom spellchecker dictionary. Mounts only inside the authenticated
- * branch so the `/api/v1/characters` SWR call doesn't fire on auth pages.
+ * branch so the `/api/v1/characters` query doesn't fire on auth pages.
  */
 function DictionaryFeedMount() {
   useDictionaryFeed()
@@ -169,10 +163,8 @@ function DictionaryFeedMount() {
  */
 export function AppLayout({ children }: AppLayoutProps) {
   return (
-    <SidebarProvider>
-      <PageToolbarProvider>
-        <AppLayoutInner>{children}</AppLayoutInner>
-      </PageToolbarProvider>
-    </SidebarProvider>
+    <PageToolbarProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </PageToolbarProvider>
   )
 }

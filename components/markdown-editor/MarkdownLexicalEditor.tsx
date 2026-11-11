@@ -225,7 +225,7 @@ export default function MarkdownLexicalEditor({
     // Lexical's initialConfig is read once at mount; we force re-mount via
     // the `key` on LexicalComposer below when remountKey or the source-leave
     // counter changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- LexicalComposer reads initialConfig only at mount; changes force a remount through its key instead
     [],
   )
 

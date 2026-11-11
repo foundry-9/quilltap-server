@@ -41,10 +41,10 @@ export function StoryBackgroundsSettings({
               checked={storyBackgroundsSettings.enabled}
               onChange={(e) => onEnabledChange(e.target.checked)}
               disabled={saving}
-              className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              className="mt-1 qt-checkbox"
             />
             <div className="flex-1">
-              <div className="font-medium text-foreground">
+              <div className="font-medium qt-text">
                 Enable Story Backgrounds
               </div>
               <div className="qt-text-small mt-1">
@@ -57,7 +57,7 @@ export function StoryBackgroundsSettings({
 
         {/* Image Profile Selection */}
         <div className="space-y-2">
-          <label className="block font-medium text-foreground" htmlFor={`${id}-image-profile`}>
+          <label className="block font-medium qt-text" htmlFor={`${id}-image-profile`}>
             Image Generation Profile
           </label>
           <p className="qt-text-small">
@@ -69,7 +69,7 @@ export function StoryBackgroundsSettings({
             value={storyBackgroundsSettings.defaultImageProfileId ?? ''}
             onChange={(e) => onProfileChange(e.target.value || null)}
             disabled={saving || loadingProfiles || !storyBackgroundsSettings.enabled}
-            className="w-full max-w-md rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+            className="w-full max-w-md rounded-lg border qt-border-default qt-bg-card px-3 py-2 qt-text focus:qt-border-primary focus:outline-none focus:ring-1 qt-focus-ring disabled:opacity-50"
           >
             <option value="">Use default profile</option>
             {imageProfiles.map((profile) => (
@@ -86,8 +86,8 @@ export function StoryBackgroundsSettings({
         </div>
 
         {/* Info Box */}
-        <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4">
-          <h4 className="font-medium text-foreground mb-2">How Story Backgrounds Work</h4>
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
+          <h4 className="font-medium qt-text mb-2">How Story Backgrounds Work</h4>
           <ul className="qt-text-small space-y-1 list-disc list-inside">
             <li>Backgrounds are generated automatically when the chat title is updated</li>
             <li>The AI creates atmospheric landscape scenes featuring your characters as small figures</li>

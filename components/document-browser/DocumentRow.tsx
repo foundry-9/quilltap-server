@@ -65,7 +65,7 @@ export function DocumentRow({
         ) : (
           <button
             type="button"
-            className="block w-full text-left text-sm text-foreground truncate"
+            className="block w-full text-left text-sm qt-text truncate"
             title={entry.relativePath}
             onClick={() => (selectMode ? onToggle() : onAction('open', entry))}
           >

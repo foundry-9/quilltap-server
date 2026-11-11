@@ -134,7 +134,7 @@ export function AutonomousRoomsCard() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <a
                     href={`/salon/${room.id}`}
-                    className="font-medium text-foreground hover:underline truncate"
+                    className="font-medium qt-text hover:underline truncate"
                   >
                     {room.title || '(untitled autonomous room)'}
                   </a>

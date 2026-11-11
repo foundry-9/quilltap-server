@@ -89,7 +89,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center py-12 ${className}`}>
+      <div className={`qt-loading-state py-12 ${className}`}>
         <div className="qt-text-secondary">Loading images...</div>
       </div>
     );
@@ -97,7 +97,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
 
   if (error) {
     return (
-      <div className={`flex items-center justify-center py-12 ${className}`}>
+      <div className={`qt-loading-state py-12 ${className}`}>
         <div className="qt-text-destructive">Error: {error}</div>
       </div>
     );
@@ -105,7 +105,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
 
   if (images.length === 0) {
     return (
-      <div className={`flex items-center justify-center py-12 ${className}`}>
+      <div className={`qt-loading-state py-12 ${className}`}>
         <div className="qt-text-secondary">No images found</div>
       </div>
     );
@@ -136,7 +136,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
           key={image.id}
           className={`qt-card relative group overflow-hidden transition-all p-0 ${
             selectedImageId === image.id
-              ? 'ring-2 ring-primary'
+              ? 'ring-2 qt-ring-brand'
               : ''
           } ${onSelectImage ? 'cursor-pointer' : ''}`}
           onClick={() => onSelectImage?.(image)}

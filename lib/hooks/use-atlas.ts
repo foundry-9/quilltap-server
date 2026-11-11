@@ -53,7 +53,7 @@ const EMPTY_OVERLAPS: AtlasOverlap[] = []
 export function useAtlasList(container: AtlasContainer | null, opts: { includeArchived: boolean }) {
   const tierKey = container ? atlasTierKey(container) : 'none'
   // The URL is a pure function of the container, which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container is left out: tierKey encodes it, and the URL is a pure function of it
   const query = useQuery({
     queryKey: queryKeys.atlas.list(tierKey, { includeArchived: opts.includeArchived }),
     queryFn: async ({ signal }) => {
@@ -78,7 +78,7 @@ export function useAtlasFolders(container: AtlasContainer | null): { folders: At
 export function useAtlasOverlaps(container: AtlasContainer | null) {
   const tierKey = container ? atlasTierKey(container) : 'none'
   // The URL is a pure function of the container, which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container is left out: tierKey encodes it, and the URL is a pure function of it
   const query = useQuery({
     queryKey: queryKeys.atlas.overlaps(tierKey),
     queryFn: async ({ signal }) => {
@@ -92,8 +92,8 @@ export function useAtlasOverlaps(container: AtlasContainer | null) {
 
 /** One entry's pictures. */
 export function useAtlasImages(container: AtlasContainer | null, entryId: string | null) {
-  // The URL is a pure function of the container and entry, which the key encodes.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  // The URL is a pure function of the container and entry; the key names the entry alone.
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- container is left out: an entry id names one entry in one tier, so entryId alone keys its pictures
   const query = useQuery({
     queryKey: queryKeys.atlas.images(entryId ?? 'none'),
     queryFn: ({ signal }) =>

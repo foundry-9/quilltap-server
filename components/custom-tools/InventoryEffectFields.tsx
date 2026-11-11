@@ -107,7 +107,7 @@ export function InventoryEffectFields({
             >
               <InventoryPicture item={item} size={28} />
               <span className="min-w-0 flex-1 space-y-0.5">
-                <span className="block break-words text-sm text-foreground">{inventoryDisplayName(item)}</span>
+                <span className="block break-words text-sm qt-text">{inventoryDisplayName(item)}</span>
                 <span className="flex flex-wrap items-center gap-1">
                   {item.isArchetype && <span className="qt-badge qt-badge-info">archetype</span>}
                   {item.kind === 'kit' && <span className="qt-badge qt-badge-outline">kit</span>}

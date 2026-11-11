@@ -33,6 +33,15 @@ it('nothing outside lib/atlas/vault-writes.ts projects or writes an Atlas file',
   expect(writers.filter((f) => !['lib/atlas/vault-writes.ts', 'lib/atlas/location.ts'].includes(f))).toEqual([])
 })
 
+it('the Atlas and the Inventory write only through the item-store kernel, bound once each', () => {
+  // The projection itself lives in the kernel (lib/mount-index/item-store.ts);
+  // a family that called it directly would bypass the bound serialiser.
+  const projectors = grep('projectArrayIntoVaultFolder\\(', ['lib/atlas/*.ts', 'lib/inventory/*.ts'])
+  expect(projectors).toEqual([])
+  const binders = grep('createItemFolderStore[<(]', SOURCE)
+  expect(binders.sort()).toEqual(['lib/atlas/vault-writes.ts', 'lib/inventory/vault-writes.ts', 'lib/mount-index/item-store.ts'])
+})
+
 it('nothing outside lib/atlas/match.ts builds an Atlas matcher', () => {
   const builders = grep('caseInsensitive:\\s*true', SOURCE)
   expect(builders.filter((f) => f !== 'lib/atlas/match.ts')).toEqual([])

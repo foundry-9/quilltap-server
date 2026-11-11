@@ -94,7 +94,7 @@ export default function ApiKeysTab() {
       {/* API Keys List */}
       <div className="mb-8">
         <div className="flex items-center justify-between gap-4 mb-4">
-          <h2 className="qt-text-section text-foreground flex-1">
+          <h2 className="qt-text-section qt-text flex-1">
             Your API Keys ({sortedKeys.length})
           </h2>
           <div className="flex gap-2 flex-shrink-0">

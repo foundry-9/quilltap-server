@@ -643,7 +643,7 @@ function WardrobeFields({
             >
               <WardrobeItemThumbnail fileId={item.imageFileId} size={28} />
               <span className="min-w-0 flex-1 space-y-0.5">
-                <span className="block break-words text-sm text-foreground">
+                <span className="block break-words text-sm qt-text">
                   {item.title}
                   {isComposite(item) && <span className="qt-text-secondary"> · outfit</span>}
                 </span>

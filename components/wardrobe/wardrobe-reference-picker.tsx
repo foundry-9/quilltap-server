@@ -146,7 +146,7 @@ function PickerBody({
           >
             <WardrobeItemThumbnail fileId={item.imageFileId} size={40} />
             <span className="min-w-0 flex-1 space-y-1">
-              <span className="block break-words text-sm text-foreground">
+              <span className="block break-words text-sm qt-text">
                 {item.isDefault && (
                   <span title="Default outfit" aria-label="Default outfit">
                     ★{' '}

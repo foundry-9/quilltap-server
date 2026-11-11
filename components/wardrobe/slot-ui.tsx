@@ -60,7 +60,7 @@ export function SlotCheckboxGroup({
               disabled={isLocked}
               onChange={() => onToggle(slot)}
             />
-            <span className="text-sm text-foreground">{WARDROBE_SLOT_META[slot].label}</span>
+            <span className="text-sm qt-text">{WARDROBE_SLOT_META[slot].label}</span>
           </label>
         )
       })}

@@ -152,7 +152,7 @@ export function transformCharacterChatToCardData(chat: CharacterChatShape): Chat
 /**
  * Confirm deletion with the user, DELETE the chat, and return whether the
  * delete succeeded. Surfaces failures via toast. Callers own their list
- * refresh (SWR mutate, local state update, etc.).
+ * refresh (query invalidation, local state update, etc.).
  */
 export async function confirmAndDeleteChat(chatId: string): Promise<boolean> {
   const confirmed = await showConfirmation('Are you sure you want to delete this chat?')

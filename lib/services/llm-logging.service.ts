@@ -252,48 +252,6 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
 }
 
 /**
- * Check if a message has any associated LLM logs
- */
-export async function messageHasLogs(messageId: string): Promise<boolean> {
-  try {
-    const repos = getRepositories();
-    const count = await repos.llmLogs.countByMessageId(messageId);
-
-    const hasLogs = count > 0;
-    return hasLogs;
-  } catch (error) {
-    logger.error('Failed to check if message has logs', {
-      messageId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return false;
-  }
-}
-
-/**
- * Get logs for a specific user with pagination
- */
-export async function getLogsForUser(
-  userId: string,
-  limit: number = 50,
-  offset: number = 0
-): Promise<LLMLog[]> {
-  try {
-    const repos = getRepositories();
-    const logs = await repos.llmLogs.findByUserId(userId, limit, offset);
-    return logs;
-  } catch (error) {
-    logger.error('Failed to get logs for user', {
-      userId,
-      limit,
-      offset,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-/**
  * Get total token usage for a user
  */
 export async function getTotalTokenUsage(
@@ -326,25 +284,6 @@ export async function cleanupOldLogs(userId: string, retentionDays: number): Pro
     logger.error('Failed to cleanup old logs for user', {
       userId,
       retentionDays,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return 0;
-  }
-}
-
-/**
- * Delete all logs for a user (for account cleanup)
- */
-export async function deleteAllLogsForUser(userId: string): Promise<number> {
-  try {
-    const repos = getRepositories();
-    const deletedCount = await repos.llmLogs.deleteByUserId(userId);
-
-    logger.info('Deleted all logs for user', { userId, deletedCount });
-    return deletedCount;
-  } catch (error) {
-    logger.error('Failed to delete all logs for user', {
-      userId,
       error: error instanceof Error ? error.message : String(error),
     });
     return 0;

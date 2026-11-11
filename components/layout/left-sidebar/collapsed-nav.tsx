@@ -42,7 +42,7 @@ export function CollapsedNav() {
   return (
     <nav className="qt-collapsed-nav" aria-label="Quick navigation">
       {/* Plain <a> tags — no Link/router.push to avoid startTransition stall on chat page */}
-      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- plain <a> on purpose: next/link navigation stalls in startTransition on the chat page */}
       <a
         href="/"
         onClick={(e) => openInWorkspace('/', e)}

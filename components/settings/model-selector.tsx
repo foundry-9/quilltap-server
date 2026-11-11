@@ -165,7 +165,7 @@ export function ModelSelector({
     return (
       <span className="ml-2 inline-flex gap-1">
         {info.experimental && (
-          <span className="text-xs px-1.5 py-0.5 rounded qt-bg-primary/10 text-primary">
+          <span className="text-xs px-1.5 py-0.5 rounded qt-bg-primary/10 qt-text-brand">
             experimental
           </span>
         )}
@@ -255,7 +255,7 @@ export function ModelSelector({
                     className={`w-full text-left px-3 py-2 qt-hover-accent transition-colors ${
                       value === model
                         ? 'qt-bg-primary qt-text-on-primary'
-                        : 'text-foreground'
+                        : 'qt-text'
                     }`}
                   >
                     <span className="flex items-center justify-between">

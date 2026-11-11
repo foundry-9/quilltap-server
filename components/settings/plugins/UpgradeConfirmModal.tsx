@@ -88,7 +88,7 @@ export function UpgradeConfirmModal({
         <div className="qt-alert-warning flex items-start gap-3">
           <Icon name="alert-triangle" className="w-5 h-5 flex-shrink-0 mt-0.5 qt-text-warning" />
           <div>
-            <h4 className="font-medium text-foreground">
+            <h4 className="font-medium qt-text">
               Breaking Changes Detected
             </h4>
             <p className="qt-text-small mt-1 qt-text-secondary">
@@ -100,7 +100,7 @@ export function UpgradeConfirmModal({
 
         {/* Plugin info */}
         <div className="qt-card p-4">
-          <h3 className="font-semibold text-foreground">{upgrade.pluginTitle}</h3>
+          <h3 className="font-semibold qt-text">{upgrade.pluginTitle}</h3>
           <p className="qt-text-small qt-text-secondary mt-1">{upgrade.packageName}</p>
 
           {upgrade.pluginDescription && (
