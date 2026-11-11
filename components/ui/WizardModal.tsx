@@ -40,7 +40,7 @@ export interface WizardModalProps {
   /** Hide Cancel (and the forward action) — e.g. while the work runs */
   hideActions?: boolean
   cancelLabel?: ReactNode
-  /** Replaces the whole standard footer */
+  /** Replaces the whole standard footer; `null` shows no footer at all */
   footer?: ReactNode
   /** Classes for the body wrapper, as BaseModal's `bodyClassName` */
   bodyClassName?: string
@@ -110,7 +110,7 @@ export function WizardModal({
       maxWidth={maxWidth}
       className="w-[90vw]"
       bodyClassName={bodyClassName}
-      footer={footer ?? standardFooter}
+      footer={footer === undefined ? standardFooter : footer}
       footerClassName={`qt-dialog-footer flex gap-3 flex-shrink-0 ${onBack || done ? 'justify-between' : ''}`}
     >
       {children}
