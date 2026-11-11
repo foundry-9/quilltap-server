@@ -19,6 +19,20 @@ interface EditDocumentStoreDialogProps {
   onSubmit: (id: string, data: UpdateDocumentStoreData) => void
 }
 
+function parsePatterns(raw: string): string[] {
+  return raw.split(',').map(p => p.trim()).filter(Boolean)
+}
+
+function samePatterns(a: string[], b: string[] | undefined): boolean {
+  const other = b ?? []
+  return a.length === other.length && a.every((p, i) => p === other[i])
+}
+
+/**
+ * Seeds its form state from `store` once, on mount — so a caller that keeps
+ * it mounted must give it `key={store.id}` (or mount it only while a store is
+ * being edited), or the form keeps the first store's values.
+ */
 export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocumentStoreDialogProps) {
   const fieldId = useId()
   const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>(store?.mountType || 'filesystem')
@@ -42,21 +56,23 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
     const includeStr = (formData.get('includePatterns') as string) ?? ''
     const excludeStr = (formData.get('excludePatterns') as string) ?? ''
 
-    const data: UpdateDocumentStoreData = {
-      name,
-      basePath: isDatabaseBacked ? '' : basePath,
-      mountType,
-      storeType,
-      enabled,
-    }
+    // Send only what changed (#169): a field the operator never touched must
+    // not be re-sent, so an edit can never re-enable a disabled store or
+    // reclassify its type by accident.
+    const data: UpdateDocumentStoreData = {}
+    if (name !== store.name) data.name = name
+    if (mountType !== store.mountType) data.mountType = mountType
+    if (storeType !== store.storeType) data.storeType = storeType
+    if (enabled !== store.enabled) data.enabled = enabled
+    const nextBasePath = isDatabaseBacked ? '' : basePath
+    if (nextBasePath !== (store.basePath ?? '')) data.basePath = nextBasePath
 
     if (!isDatabaseBacked) {
-      if (includeStr.trim()) {
-        data.includePatterns = includeStr.split(',').map(p => p.trim()).filter(Boolean)
-      }
-      if (excludeStr.trim()) {
-        data.excludePatterns = excludeStr.split(',').map(p => p.trim()).filter(Boolean)
-      }
+      // An emptied field is sent as an empty list, so patterns can be cleared.
+      const includePatterns = parsePatterns(includeStr)
+      const excludePatterns = parsePatterns(excludeStr)
+      if (!samePatterns(includePatterns, store.includePatterns)) data.includePatterns = includePatterns
+      if (!samePatterns(excludePatterns, store.excludePatterns)) data.excludePatterns = excludePatterns
     }
 
     onSubmit(store.id, data)

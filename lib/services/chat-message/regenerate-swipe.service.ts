@@ -298,6 +298,20 @@ export async function regenerateMessageAsSwipe({
     if (chunk.thoughtSignature) thoughtSignature = chunk.thoughtSignature
   }
 
+  // An empty reply (a content filter, a reasoning-only stream, an empty
+  // understudy) is no alternative: refuse it before any write, so no blank
+  // swipe is filed and the original line keeps its memories (#183).
+  if (!content.trim()) {
+    logger.warn('[RegenerateSwipe] Provider returned no content; nothing filed', {
+      chatId: chat.id,
+      targetMessageId: targetMessage.id,
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+      hadReasoning: !!reasoningContent,
+    })
+    throw new Error('The provider returned an empty reply. The original line is kept as it was.')
+  }
+
   onProgress?.({
     kind: 'status',
     stage: 'saving',

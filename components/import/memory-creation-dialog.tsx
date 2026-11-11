@@ -87,50 +87,28 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
     setCreating(true)
 
     try {
-      // Build message pairs
-      const messages = chat.messages.filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
-      const messagePairs: Array<{
-        userMessageId: string
-        assistantMessageId: string
-        userContent: string
-        assistantContent: string
-      }> = []
-
-      for (let i = 0; i < messages.length - 1; i++) {
-        if (messages[i].role === 'USER' && messages[i + 1].role === 'ASSISTANT') {
-          messagePairs.push({
-            userMessageId: messages[i].id,
-            assistantMessageId: messages[i + 1].id,
-            userContent: messages[i].content,
-            assistantContent: messages[i + 1].content,
-          })
-        }
-      }
-
-      if (messagePairs.length === 0) {
+      if (messagePairCount === 0) {
         showInfoToast('No message pairs found to analyze')
         onClose()
         return
       }
 
-      // Queue the jobs via the chat-specific endpoint
-      const response = await fetch(`/api/v1/chats/${chat.id}/queue-memories`, {
+      // The chat's queue-memories action (#178: there is no /queue-memories
+      // path segment). It queues one extraction job per turn of the whole
+      // chat, every character that spoke, so it takes no body.
+      const response = await fetch(`/api/v1/chats/${chat.id}?action=queue-memories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characterId: firstCharacter.id,
-          characterName: firstCharacter.name,
-          connectionProfileId: firstCharacter.connectionProfileId,
-          messagePairs,
-        }),
+        body: JSON.stringify({}),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to queue memory analysis jobs')
+        const errorBody = await response.json().catch(() => null) as { error?: string } | null
+        throw new Error(errorBody?.error || 'Failed to queue memory analysis jobs')
       }
 
       const result = await response.json()
-      showSuccessToast(`Queued ${result.jobCount || messagePairs.length} messages for memory analysis`)
+      showSuccessToast(`Queued ${result.jobCount ?? messagePairCount} turns for memory analysis`)
 
       onClose()
     } catch (err) {
@@ -138,11 +116,11 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
         chatId: chat.id,
         error: err instanceof Error ? err.message : String(err),
       })
-      showErrorToast('Failed to queue memory analysis')
+      showErrorToast(err instanceof Error && err.message ? err.message : 'Failed to queue memory analysis')
     } finally {
       setCreating(false)
     }
-  }, [chat.id, chat.messages, firstCharacter, onClose])
+  }, [chat.id, firstCharacter, messagePairCount, onClose])
 
   // If memories were already queued during import, show status
   if (chat.memoryJobCount && chat.memoryJobCount > 0) {

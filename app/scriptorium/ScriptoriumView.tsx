@@ -181,11 +181,14 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
         onSubmit={handleCreate}
       />
 
-      <EditDocumentStoreDialog
-        store={editStore}
-        onClose={() => setEditStore(null)}
-        onSubmit={handleUpdate}
-      />
+      {editStore && (
+        <EditDocumentStoreDialog
+          key={editStore.id}
+          store={editStore}
+          onClose={() => setEditStore(null)}
+          onSubmit={handleUpdate}
+        />
+      )}
 
       <DeleteDocumentStoreDialog
         open={deleteStoreId !== null}

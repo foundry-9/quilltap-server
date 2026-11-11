@@ -100,6 +100,14 @@ function resolveComponentItems(
   const seen = new Set<string>();
   const resolved: WardrobeItem[] = [];
   const add = (item: WardrobeItem) => {
+    // An archived item is retired from the wardrobe; a new composite may not
+    // carry it back into an outfit (#184).
+    if (item.archivedAt) {
+      throw new WardrobeCreateError(
+        `Component item "${item.title}" is archived and cannot be part of a new outfit`,
+        'VALIDATION_ERROR',
+      );
+    }
     if (seen.has(item.id)) return;
     seen.add(item.id);
     resolved.push(item);

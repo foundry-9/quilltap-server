@@ -99,6 +99,7 @@ import { buildTurnToolContext, resolveTurnToolSlate, runTurnTextToolPasses, type
 import { settleTurn } from './turn-outcome.service'
 import { runOpening, waitForOpening } from '@/lib/chat/opening/run'
 import { frameNarrator } from '@/lib/chat/opening/narrator-frames'
+import { openBeforeSend } from './open-before-send'
 import { finalizeScriptedOpener } from './message-finalizer.service'
 import { processCharacterTemplates } from '@/lib/templates/processor'
 
@@ -200,6 +201,11 @@ export async function handleSendMessage(
   return openTurnStream(chatId, async (controller, encoder, ledger) => {
     // A chat still opening finishes first: its greeting is the first line.
     await waitForOpening(chatId)
+    // A chat never opened (an API client that casts and sends without
+    // `?action=open`, or a send that beats the Salon's mount) opens now, before
+    // the turn — dressed, packed and briefed, but without a greeting: the
+    // operator's line is the first one (#185).
+    await openBeforeSend(repos, chatId, userId, frameNarrator(controller, encoder))
     const isWhisper = isOperatorWhisperSend(options)
     if (isWhisper) {
       const waitedOn = await waitForEarlierTurns(chatId)

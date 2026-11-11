@@ -428,6 +428,18 @@ describe('wardrobe tool handlers', () => {
       )
     })
 
+    it('refuses an archived component (#184)', async () => {
+      ownItems = [makeWardrobeItem({ id: 'boots', title: 'Old Boots', types: ['footwear'], archivedAt: now })]
+
+      const result = await executeWardrobeCreateTool(
+        { title: 'Walking Out', types: ['footwear'], component_item_ids: ['boots'] },
+        context
+      )
+
+      expect(result.success).toBe(false)
+      expect(location.create).not.toHaveBeenCalled()
+    })
+
     it('does not fire the outfit-change effects when the item is only hung up', async () => {
       await executeWardrobeCreateTool({ title: 'Boots', types: ['footwear'] }, context)
 

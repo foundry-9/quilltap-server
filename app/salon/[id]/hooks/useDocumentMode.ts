@@ -114,7 +114,8 @@ export interface UseDocumentModeReturn {
   deleteDocument: (docId: string) => Promise<void>
   handleContentChange: (docId: string, content: string) => void
   flushSave: (docId: string) => void
-  saveDocument: (docId: string) => Promise<void>
+  /** Resolves false when the store refused the write and edits remain unsaved. */
+  saveDocument: (docId: string) => Promise<boolean>
   setDocAttentionTop: (docId: string, top: number | null) => void
   clearDocFocusRequest: (docId: string) => void
 
@@ -142,6 +143,10 @@ export interface UseDocumentModeReturn {
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 30000
+
+/** Toast shown when a close or rename is held because the store refused a save. */
+export const UNSAVED_EDITS_MESSAGE =
+  "The Librarian could not file your latest changes, so the document stays open with them intact. Do try again in a moment."
 
 function isMarkdownDocument(document: Pick<ActiveDocument, 'filePath'>): boolean {
   const dot = document.filePath.lastIndexOf('.')
@@ -200,6 +205,8 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
   // Last-saved content per doc, to distinguish real edits from Lexical re-sync.
   const savedContentRefs = useRef(new Map<string, string>())
   const autosaveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  // The save running for each document, so a second call joins it.
+  const inFlightSaves = useRef(new Map<string, Promise<boolean>>())
   // When true, the next handleContentChange for this doc is Lexical's
   // post-remount re-serialization and is adopted as the baseline, not flagged dirty.
   const absorbNextRefs = useRef(new Map<string, boolean>())
@@ -313,78 +320,109 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
 
   // ---- Save / edit (per document) ----------------------------------------
 
-  const saveDocument = useCallback(async (docId: string) => {
-    const entry = openDocsRef.current.find(e => e.document.id === docId)
-    if (!entry || !entry.isDirty) return
-    const doc = entry.document
+  /** Whether the pane holds text that has not been written to the store. */
+  const hasUnsavedEdits = useCallback((docId: string) => {
+    return (contentRefs.current.get(docId) ?? '') !== (savedContentRefs.current.get(docId) ?? '')
+  }, [])
 
-    setOpenDocs(prev => prev.map(e => (e.document.id === docId ? { ...e, isSaving: true } : e)))
-    try {
-      // Generate the diff client-side so the server can post a single Librarian
-      // save announcement with the human-readable diff in the same round-trip.
-      const oldContentForDiff = savedContentRefs.current.get(docId) ?? ''
-      const newContentForDiff = contentRefs.current.get(docId) ?? ''
-      const diffContent = oldContentForDiff !== newContentForDiff
-        ? formatAutosaveNotification(
+  /**
+   * Write a document's unsaved text. Resolves `true` when nothing unsaved
+   * remains, `false` when a write was refused (a 409 or any error) and the
+   * edits are still only in the pane.
+   *
+   * One save runs per document at a time; a call while one is in flight joins
+   * it. Text typed while a write is in flight is written by the same run
+   * before it resolves (#174) — the success path records what it actually
+   * sent, never marks later edits as saved.
+   */
+  const saveDocument = useCallback((docId: string): Promise<boolean> => {
+    const inFlight = inFlightSaves.current.get(docId)
+    if (inFlight) return inFlight
+
+    const run = (async (): Promise<boolean> => {
+      const entry = openDocsRef.current.find(e => e.document.id === docId)
+      if (!entry || !hasUnsavedEdits(docId)) return true
+      const doc = entry.document
+      let mtime = doc.mtime
+
+      setOpenDocs(prev => prev.map(e => (e.document.id === docId ? { ...e, isSaving: true } : e)))
+      try {
+        while (hasUnsavedEdits(docId)) {
+          // Generate the diff client-side so the server can post a single Librarian
+          // save announcement with the human-readable diff in the same round-trip.
+          const oldContentForDiff = savedContentRefs.current.get(docId) ?? ''
+          const newContentForDiff = contentRefs.current.get(docId) ?? ''
+          const diffContent = formatAutosaveNotification(
             oldContentForDiff,
             newContentForDiff,
             doc.displayTitle || doc.filePath,
           ) || undefined
-        : undefined
 
-      const res = await requestDocumentWrite(chatId, {
-        filePath: doc.filePath,
-        scope: doc.scope,
-        mountPoint: doc.mountPoint,
-        content: newContentForDiff,
-        mtime: doc.mtime,
-        diffContent,
-      })
-
-      if (res.status === 409) {
-        // The file was written elsewhere (likely the LLM) while we had it open.
-        // Re-read the disk content. If the user has no pending edits, silently
-        // adopt the server version; otherwise keep the unsaved content and just
-        // refresh mtime so the next save can succeed.
-        const localContent = contentRefs.current.get(docId) ?? ''
-        const hadLocalEdits = localContent !== (savedContentRefs.current.get(docId) ?? '')
-        try {
-          const latest = await readDocumentContent(doc.filePath, doc.scope, doc.mountPoint)
-          if (!hadLocalEdits) {
-            applyDocContent({ ...doc, content: latest.content || '', mtime: latest.mtime })
-          } else {
-            updateEntry(docId, e => ({ ...e, document: { ...e.document, mtime: latest.mtime } }))
-          }
-          console.warn('[DocumentMode] Document changed on disk during save; reloaded mtime', {
+          const res = await requestDocumentWrite(chatId, {
             filePath: doc.filePath,
-            hadLocalEdits,
+            scope: doc.scope,
+            mountPoint: doc.mountPoint,
+            content: newContentForDiff,
+            mtime,
+            diffContent,
           })
-        } catch (reloadError) {
-          console.warn('[DocumentMode] Failed to reload document after save conflict', reloadError)
+
+          if (res.status === 409) {
+            // The file was written elsewhere (likely the LLM) while we had it open.
+            // Re-read the disk content. If the user has no pending edits, silently
+            // adopt the server version; otherwise keep the unsaved content and just
+            // refresh mtime so the next save can succeed.
+            const hadLocalEdits = hasUnsavedEdits(docId)
+            try {
+              const latest = await readDocumentContent(doc.filePath, doc.scope, doc.mountPoint)
+              if (!hadLocalEdits) {
+                applyDocContent({ ...doc, content: latest.content || '', mtime: latest.mtime })
+              } else {
+                updateEntry(docId, e => ({ ...e, document: { ...e.document, mtime: latest.mtime } }))
+              }
+              console.warn('[DocumentMode] Document changed on disk during save; reloaded mtime', {
+                filePath: doc.filePath,
+                hadLocalEdits,
+              })
+            } catch (reloadError) {
+              console.warn('[DocumentMode] Failed to reload document after save conflict', reloadError)
+            }
+            return !hadLocalEdits
+          }
+
+          if (!res.ok) {
+            const bodyText = await res.text().catch(() => '')
+            console.warn('[DocumentMode] Failed to save document', { status: res.status, body: bodyText })
+            return false
+          }
+
+          const data = await res.json()
+          // Record what was sent as saved — not whatever the pane holds now.
+          savedContentRefs.current.set(docId, newContentForDiff)
+          mtime = data.mtime
+          const stillDirty = hasUnsavedEdits(docId)
+          updateEntry(docId, e => ({ ...e, isDirty: stillDirty, document: { ...e.document, mtime: data.mtime } }))
+
+          const notifyLibrarian = onLibrarianMessageRef.current
+          if (notifyLibrarian && data.librarianMessage) {
+            notifyLibrarian(data.librarianMessage as Message)
+          }
         }
-        return
+        return true
+      } catch (error) {
+        console.error('[DocumentMode] Failed to save document', error)
+        return false
+      } finally {
+        setOpenDocs(prev => prev.map(e => (e.document.id === docId ? { ...e, isSaving: false } : e)))
       }
+    })()
 
-      if (!res.ok) {
-        const bodyText = await res.text().catch(() => '')
-        console.warn('[DocumentMode] Failed to save document', { status: res.status, body: bodyText })
-        return
-      }
-
-      const data = await res.json()
-      savedContentRefs.current.set(docId, newContentForDiff)
-      updateEntry(docId, e => ({ ...e, isDirty: false, document: { ...e.document, mtime: data.mtime } }))
-
-      const notifyLibrarian = onLibrarianMessageRef.current
-      if (notifyLibrarian && data.librarianMessage) {
-        notifyLibrarian(data.librarianMessage as Message)
-      }
-    } catch (error) {
-      console.error('[DocumentMode] Failed to save document', error)
-    } finally {
-      setOpenDocs(prev => prev.map(e => (e.document.id === docId ? { ...e, isSaving: false } : e)))
-    }
-  }, [chatId, readDocumentContent, applyDocContent, updateEntry])
+    inFlightSaves.current.set(docId, run)
+    void run.finally(() => {
+      if (inFlightSaves.current.get(docId) === run) inFlightSaves.current.delete(docId)
+    })
+    return run
+  }, [chatId, readDocumentContent, applyDocContent, updateEntry, hasUnsavedEdits])
 
   const handleContentChange = useCallback((docId: string, content: string) => {
     contentRefs.current.set(docId, content)
@@ -416,11 +454,10 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
 
   const flushSave = useCallback((docId: string) => {
     clearTimerFor(docId)
-    const entry = openDocsRef.current.find(e => e.document.id === docId)
-    if (entry?.isDirty) {
-      saveDocument(docId)
+    if (hasUnsavedEdits(docId)) {
+      void saveDocument(docId)
     }
-  }, [clearTimerFor, saveDocument])
+  }, [clearTimerFor, saveDocument, hasUnsavedEdits])
 
   // ---- Open / close / rename / delete ------------------------------------
 
@@ -465,9 +502,12 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     const targetId = docId ?? focusedDocIdRef.current
     if (!targetId) return
 
-    const entry = openDocsRef.current.find(e => e.document.id === targetId)
-    if (entry?.isDirty) {
-      await saveDocument(targetId)
+    // Never close over edits the store refused (#175): the pane stays open
+    // with its text, and the operator is told why.
+    clearTimerFor(targetId)
+    if (hasUnsavedEdits(targetId) && !(await saveDocument(targetId))) {
+      showErrorToast(UNSAVED_EDITS_MESSAGE)
+      return
     }
 
     try {
@@ -484,7 +524,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
       setDocumentMode('normal')
       await persistMode('normal')
     }
-  }, [chatId, saveDocument, removeEntry, persistMode])
+  }, [chatId, saveDocument, removeEntry, persistMode, clearTimerFor, hasUnsavedEdits])
 
   const renameDocument = useCallback(async (docId: string, newTitle: string) => {
     const entry = openDocsRef.current.find(e => e.document.id === docId)
@@ -492,8 +532,10 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     const trimmed = newTitle.trim()
     if (!trimmed || trimmed === entry.document.displayTitle) return
 
-    if (entry.isDirty) {
-      await saveDocument(docId)
+    clearTimerFor(docId)
+    if (hasUnsavedEdits(docId) && !(await saveDocument(docId))) {
+      showErrorToast(UNSAVED_EDITS_MESSAGE)
+      return
     }
 
     try {
@@ -514,7 +556,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     } catch (error) {
       console.error('[DocumentMode] Failed to rename document', error)
     }
-  }, [chatId, saveDocument, updateEntry])
+  }, [chatId, saveDocument, updateEntry, clearTimerFor, hasUnsavedEdits])
 
   const deleteDocument = useCallback(async (docId: string) => {
     const entry = openDocsRef.current.find(e => e.document.id === docId)

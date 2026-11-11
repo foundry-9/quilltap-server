@@ -511,3 +511,41 @@ describe('dropOverlappingEnsembles', () => {
     expect(dropOverlappingEnsembles(slots, lookup(linen, jewels, pearls, updo)).droppedIds).toEqual([])
   })
 })
+
+// #184: an archived component never goes on with its composite — the same
+// rule as the default outfit and rollback — unless it is already worn.
+describe('archived composite components', () => {
+  const coat = makeItem('coat', ['top'])
+  const boots = makeItem('boots', ['footwear'], [], { archivedAt: NOW })
+  const ensemble = makeItem('ensemble', ['top', 'footwear'], ['coat', 'boots'])
+  const map = buildMap([coat, boots, ensemble])
+
+  it('wears only the live components', () => {
+    const slots = wearItemIntoSlots(empty(), ensemble, map)
+    expect(slots.top).toEqual(['coat'])
+    expect(slots.footwear).toEqual([])
+  })
+
+  it('keeps an archived component already worn when a replace re-lays its slot', () => {
+    const current = { ...empty(), footwear: ['boots'] }
+    const slots = computeDisplacedSlots(current, { mode: 'replace', item: ensemble, itemsById: map })
+    expect(slots.top).toEqual(['coat'])
+    expect(slots.footwear).toEqual(['boots'])
+  })
+
+  it('puts nothing on when every component is archived', () => {
+    const shawl = makeItem('shawl', ['top'], [], { archivedAt: NOW })
+    const allArchived = makeItem('all-archived', ['top'], ['shawl'])
+    const archivedMap = buildMap([shawl, allArchived])
+    expect(dissolveCompositeToLeaves(allArchived, archivedMap)).toEqual([])
+    expect(wearItemIntoSlots(empty(), allArchived, archivedMap).top).toEqual([])
+    expect(addItemToSlot(empty(), 'top', allArchived, archivedMap).top).toEqual([])
+  })
+
+  it('leaves archived components out of a composite dissolved in a snapshot', () => {
+    const { slots, wornBundles } = dissolveCompositesInSlots({ ...empty(), top: ['ensemble'] }, map)
+    expect(slots.top).toEqual(['coat'])
+    expect(slots.footwear).toEqual([])
+    expect(wornBundles).toEqual([{ id: 'ensemble', leafIds: ['coat'] }])
+  })
+})

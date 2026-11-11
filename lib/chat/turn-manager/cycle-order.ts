@@ -6,7 +6,7 @@
  * weighted permutation — the same successive-sampling draw the per-turn
  * selection used to make one pick at a time — so the *distribution* of
  * rotations is unchanged. What changes is that the whole permutation is decided
- * up front and persisted, so every reader (the chain loop, the `?action=turn`
+ * up front and persisted, so every reader (the chain loop, the `?action=turn-query`
  * projection, the participant sidebar) sees the same answer to "who is after
  * whom", and the sidebar can show a real position rather than a guess.
  *

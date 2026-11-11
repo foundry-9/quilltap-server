@@ -106,18 +106,27 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
       const body = await req.json();
       const validatedData = updateMountPointSchema.parse(body);
 
-      if (validatedData.name !== undefined && validatedData.name !== existing.name) {
-        // A live character vault is named after its character; renaming the
-        // vault alone would be undone by the next store-name reconcile.
+      const renames = validatedData.name !== undefined && validatedData.name !== existing.name;
+      const retypes =
+        (validatedData.storeType !== undefined && validatedData.storeType !== existing.storeType) ||
+        (validatedData.mountType !== undefined && validatedData.mountType !== existing.mountType);
+      if (renames || retypes) {
+        // A live character vault is named after its character and must stay a
+        // database-backed character store; renaming or retyping it alone would
+        // be undone by the next reconcile or break the character (#169).
         const owner = await repos.characters.findByStorePointerRaw(id);
         if (owner) {
-          logger.warn('[Mount Points v1] Rejected rename of a live character vault', {
+          logger.warn('[Mount Points v1] Rejected rename/retype of a live character vault', {
             mountPointId: id,
             characterId: owner.id,
+            renames,
+            retypes,
             userId: user.id,
           });
           return conflict(
-            `This vault belongs to ${owner.name} and is named after them. Rename the character to rename the vault.`
+            renames
+              ? `This vault belongs to ${owner.name} and is named after them. Rename the character to rename the vault.`
+              : `This vault belongs to ${owner.name}; its store type and mount type cannot be changed.`
           );
         }
       }

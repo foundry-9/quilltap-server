@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import DocumentPane from '@/app/salon/[id]/components/DocumentPane'
 import { DocumentViewerPane } from '@/app/salon/[id]/components/DocumentViewerPane'
 import type { DocumentViewTarget } from '@/lib/folder-browser/document-actions'
-import type { ActiveDocument } from '@/app/salon/[id]/hooks/useDocumentMode'
+import { UNSAVED_EDITS_MESSAGE, type ActiveDocument } from '@/app/salon/[id]/hooks/useDocumentMode'
 import type { DocumentStandaloneTabPayload } from '@/lib/workspace/types'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
@@ -70,13 +70,14 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
 
   // Live mirrors so the memoized save/close callbacks read current values.
   const docRef = useRef<ActiveDocument | null>(null)
-  const isDirtyRef = useRef(false)
   const contentRef = useRef('')
   const savedContentRef = useRef('')
   // When true, the next content change is Lexical's post-remount
   // re-serialization and is adopted as the baseline, not flagged dirty.
   const absorbNextRef = useRef(false)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The save running now, so a second call joins it.
+  const inFlightSaveRef = useRef<Promise<boolean> | null>(null)
   const scrollPositionsRef = useRef(new Map<string, number>())
   // The in-flight open request, shared across effect re-runs (StrictMode runs
   // the mount effect twice in dev — without this, a blank open would CREATE
@@ -89,7 +90,6 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
   }> | null>(null)
 
   useEffect(() => { docRef.current = doc }, [doc])
-  useEffect(() => { isDirtyRef.current = isDirty }, [isDirty])
 
   const clearAutosaveTimer = useCallback(() => {
     if (autosaveTimerRef.current) {
@@ -174,68 +174,98 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open once on mount; the payload identity is fixed for this tab
   }, [])
 
-  const saveDocument = useCallback(async () => {
-    const current = docRef.current
-    if (!current || !isDirtyRef.current) return
+  /** Whether the pane holds text that has not been written to the store. */
+  const hasUnsavedEdits = useCallback(() => contentRef.current !== savedContentRef.current, [])
 
-    setIsSaving(true)
-    try {
-      const content = contentRef.current
-      const res = await postDocumentsAction('write-document', {
-        filePath: current.filePath,
-        scope: current.scope,
-        mountPoint: current.mountPoint ?? undefined,
-        content,
-        mtime: current.mtime,
-      })
+  /**
+   * Write the pane's unsaved text. Resolves `true` when nothing unsaved
+   * remains, `false` when a write was refused (a 409 or any error) and the
+   * edits are still only in the pane.
+   *
+   * One save runs at a time; a call while one is in flight joins it. Text
+   * typed while a write is in flight is written by the same run before it
+   * resolves — the success path records what it actually sent, never marks
+   * later edits as saved (the same rule as Document Mode, #174 / #175).
+   */
+  const saveDocument = useCallback((): Promise<boolean> => {
+    if (inFlightSaveRef.current) return inFlightSaveRef.current
 
-      if (res.status === 409) {
-        // The file was written elsewhere while we had it open. Re-read the
-        // disk content: with no pending edits, silently adopt the disk
-        // version; otherwise keep the unsaved content and just refresh mtime
-        // so the next save can succeed.
-        const hadLocalEdits = contentRef.current !== savedContentRef.current
-        try {
-          const readRes = await postDocumentsAction('read-document', {
+    const run = (async (): Promise<boolean> => {
+      const current = docRef.current
+      if (!current || !hasUnsavedEdits()) return true
+      let mtime = current.mtime
+
+      setIsSaving(true)
+      try {
+        while (hasUnsavedEdits()) {
+          const content = contentRef.current
+          const res = await postDocumentsAction('write-document', {
             filePath: current.filePath,
             scope: current.scope,
             mountPoint: current.mountPoint ?? undefined,
+            content,
+            mtime,
           })
-          if (readRes.ok) {
-            const latest = await readRes.json()
-            if (!hadLocalEdits) {
-              adoptDocument({ ...current, content: latest.content || '', mtime: latest.mtime })
-            } else {
-              setDoc(prev => (prev ? { ...prev, mtime: latest.mtime } : prev))
+
+          if (res.status === 409) {
+            // The file was written elsewhere while we had it open. Re-read the
+            // disk content: with no pending edits, silently adopt the disk
+            // version; otherwise keep the unsaved content and just refresh mtime
+            // so the next save can succeed.
+            const hadLocalEdits = hasUnsavedEdits()
+            try {
+              const readRes = await postDocumentsAction('read-document', {
+                filePath: current.filePath,
+                scope: current.scope,
+                mountPoint: current.mountPoint ?? undefined,
+              })
+              if (readRes.ok) {
+                const latest = await readRes.json()
+                if (!hadLocalEdits) {
+                  adoptDocument({ ...current, content: latest.content || '', mtime: latest.mtime })
+                } else {
+                  setDoc(prev => (prev ? { ...prev, mtime: latest.mtime } : prev))
+                }
+              }
+              console.warn('[StandaloneDocument] Document changed on disk during save; reloaded mtime', {
+                filePath: current.filePath,
+                hadLocalEdits,
+              })
+            } catch (reloadError) {
+              console.warn('[StandaloneDocument] Failed to reload document after save conflict', reloadError)
             }
+            return !hadLocalEdits
           }
-          console.warn('[StandaloneDocument] Document changed on disk during save; reloaded mtime', {
-            filePath: current.filePath,
-            hadLocalEdits,
-          })
-        } catch (reloadError) {
-          console.warn('[StandaloneDocument] Failed to reload document after save conflict', reloadError)
+
+          if (!res.ok) {
+            const bodyText = await res.text().catch(() => '')
+            console.warn('[StandaloneDocument] Failed to save document', { status: res.status, body: bodyText })
+            return false
+          }
+
+          const data = await res.json()
+          // Record what was sent as saved — not whatever the pane holds now.
+          savedContentRef.current = content
+          mtime = data.mtime
+          setBaselineContent(content)
+          setIsDirty(hasUnsavedEdits())
+          setDoc(prev => (prev ? { ...prev, mtime: data.mtime } : prev))
         }
-        return
+        return true
+      } catch (error) {
+        console.error('[StandaloneDocument] Failed to save document', error)
+        return false
+      } finally {
+        setIsSaving(false)
       }
+    })()
 
-      if (!res.ok) {
-        const bodyText = await res.text().catch(() => '')
-        console.warn('[StandaloneDocument] Failed to save document', { status: res.status, body: bodyText })
-        return
-      }
-
-      const data = await res.json()
-      savedContentRef.current = content
-      setBaselineContent(content)
-      setIsDirty(false)
-      setDoc(prev => (prev ? { ...prev, mtime: data.mtime } : prev))
-    } catch (error) {
-      console.error('[StandaloneDocument] Failed to save document', error)
-    } finally {
-      setIsSaving(false)
-    }
-  }, [adoptDocument])
+    inFlightSaveRef.current = run
+    void run.finally(() => {
+      if (inFlightSaveRef.current === run) inFlightSaveRef.current = null
+    })
+    return run
+  }, [adoptDocument, hasUnsavedEdits])
 
   const handleContentChange = useCallback((content: string) => {
     contentRef.current = content
@@ -266,10 +296,10 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
 
   const flushSave = useCallback(() => {
     clearAutosaveTimer()
-    if (isDirtyRef.current) {
+    if (hasUnsavedEdits()) {
       void saveDocument()
     }
-  }, [clearAutosaveTimer, saveDocument])
+  }, [clearAutosaveTimer, saveDocument, hasUnsavedEdits])
 
   const handleTitleChange = useCallback(async (newTitle: string) => {
     const current = docRef.current
@@ -277,8 +307,11 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
     const trimmed = newTitle.trim()
     if (!trimmed || trimmed === current.displayTitle) return
 
-    if (isDirtyRef.current) {
-      await saveDocument()
+    // Never rename over edits the store refused: the text stays in the pane.
+    clearAutosaveTimer()
+    if (hasUnsavedEdits() && !(await saveDocument())) {
+      showErrorToast(UNSAVED_EDITS_MESSAGE)
+      return
     }
 
     try {
@@ -307,15 +340,17 @@ export function StandaloneDocumentView({ payload }: { payload: DocumentStandalon
     } catch (error) {
       console.error('[StandaloneDocument] Failed to rename document', error)
     }
-  }, [saveDocument, refreshTab])
+  }, [saveDocument, refreshTab, clearAutosaveTimer, hasUnsavedEdits])
 
   const handleCloseDocument = useCallback(async () => {
     clearAutosaveTimer()
-    if (isDirtyRef.current) {
-      await saveDocument()
+    // Never close over edits the store refused: the tab stays open with them.
+    if (hasUnsavedEdits() && !(await saveDocument())) {
+      showErrorToast(UNSAVED_EDITS_MESSAGE)
+      return
     }
     closeSelf()
-  }, [clearAutosaveTimer, saveDocument, closeSelf])
+  }, [clearAutosaveTimer, saveDocument, closeSelf, hasUnsavedEdits])
 
   const handleDeleteDocument = useCallback(async () => {
     const current = docRef.current
