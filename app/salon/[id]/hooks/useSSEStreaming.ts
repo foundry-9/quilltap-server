@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } from '@/lib/toast'
+import { showErrorToast, showInfoToast, showWarningToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
@@ -9,187 +9,71 @@ import { findActiveUserParticipant, isAllLLMChat } from '@/lib/chat/turn-manager
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { useToolExecutionStatus } from './useToolExecutionStatus'
-import { splitSseBuffer } from '@/components/agent-stream/parse-agent-stream'
-import type { StorytellerBid, StorytellerOrder, StorytellerRound } from '@/lib/schemas/storyteller.types'
+import { useStreamingBuffers } from './useStreamingBuffers'
+import { useStreamingToolBatches } from './useStreamingToolBatches'
+import { readGreenRoomFrames, readTurnStream, type TurnStreamCallbacks } from './read-turn-stream'
+import type { StorytellerOrder } from '@/lib/schemas/storyteller.types'
+import { doneLeavesNoReply, type DoneFrame, type GreenRoomEvent, type ResponseStatus } from '@/lib/chat/stream-frames'
 import {
-  assertNever,
-  doneLeavesNoReply,
-  parseFrame,
-  type ConfirmationResultFrame,
-  type DoneFrame,
-  type FrameOf,
-  type PostedFrame,
-  type GreenRoomEvent,
-  type ResponseStatus,
-  type StreamFrame,
-  type ToolResultFrame,
-  type ToolsDetectedFrame,
-} from '@/lib/chat/stream-frames'
+  appendMessageOnce,
+  assistantMessageFromDone,
+  isHandUp,
+  SalonSendError,
+  SEND_FAILURE_TOAST_MS,
+  sendFailureToastText,
+  settleHandAtStreamEnd,
+  type ConcurrentStream,
+  type RaisedHandStatus,
+  type StorytellerStreamEvent,
+} from './stream-helpers'
 
-/** Storyteller frames the Salon's board reads off a send's stream. */
-export type StorytellerStreamEvent =
-  | { kind: 'round'; round: StorytellerRound }
-  | { kind: 'bid'; roundId: string; bid: StorytellerBid }
-  | { kind: 'open'; roundId: string }
-
-/** One live bubble for a concurrent ("all at once") storyteller turn. */
-export interface ConcurrentStream {
-  participantId: string
-  content: string
-}
-
-export interface PendingToolCall {
-  id: string
-  name: string
-  status: 'pending' | 'success' | 'error'
-  result?: unknown
-  arguments?: Record<string, unknown>
-}
-
-/**
- * A batch of in-progress tool calls plus the offset into the streamed response
- * text at which they were invoked. Lets the streaming bubble splice each batch
- * back into the live prose at the point the model paused to call it — the live
- * analogue of the persisted `anchorOffset` carried on saved tool messages.
- */
-export interface StreamingToolBatch {
-  offset: number
-  calls: PendingToolCall[]
-}
-
-// The tool-execution notice owns its own lifetime (bug 77); re-exported here
-// because this hook's consumers import the type from it.
+// The pure helpers and shared types moved to `stream-helpers.ts`; re-exported
+// here because this hook's consumers (and their tests) import them from it.
+export * from './stream-helpers'
+// The tool-execution notice owns its own lifetime (bug 77).
 export type { ToolExecutionStatus } from './useToolExecutionStatus'
 
-export type { ResponseStatus } from '@/lib/chat/stream-frames'
-
 /**
- * Pull the human-readable failure sentence out of a `toolResult` frame.
- *
- * The emitter (`lib/services/chat-message/tool-execution.service.ts`) puts the
- * text in `error`, a **sibling** of `result`, because `result` itself is null on
- * failure. The nested `result.error` read is kept only as a fallback in case a
- * provider ever puts it there. The executor wraps the sentence in its own
- * `Error: ` prefix, which is stripped so display sites don't read
- * "Image generation failed: Error: ..." (Bug 84).
+ * The four kinds of turn stream the Salon opens. Each is a request builder
+ * over one `runTurnStream`, which owns the abort controller, the in-flight
+ * claim, the shared frame handlers and the `finally`.
  */
-export function resolveToolResultErrorText(
-  toolResult: { result?: unknown; error?: string } | undefined
-): string | undefined {
-  const raw = toolResult?.error || (toolResult?.result as { error?: string } | null | undefined)?.error
-  return raw?.replace(/^Error:\s*/, '').trim() || undefined
+export type StreamKind = 'send' | 'open' | 'continue' | 'storyteller'
+
+/** The responder of the turn a stream is carrying, updated on each `turnStart`. */
+interface TurnCursor {
+  participantId: string | null
 }
 
-/**
- * Compose the warning for attachments the provider plugin could not put on the
- * wire. The `attachmentResults` ledger has always been emitted and was never
- * displayed (bug 94), so an image that silently failed to reach a vision model
- * looked exactly like a model that had seen it and ignored it.
- *
- * Returns null when there is nothing to warn about, so the caller can raise the
- * toast unconditionally on a non-null result.
- */
-export function buildFailedAttachmentWarning(
-  failed: Array<{ id: string; error: string }> | null | undefined
-): string | null {
-  if (!Array.isArray(failed) || failed.length === 0) return null
-  const first = failed[0]?.error ?? 'unknown reason'
-  const more = failed.length > 1 ? ` (and ${failed.length - 1} more)` : ''
-  const subject = failed.length === 1 ? 'An attachment was' : `${failed.length} attachments were`
-  return `${subject} not sent to the model${more}: ${first}`
+/** The "the room is still speaking" refusals (bug 136, #172). */
+const STILL_SPEAKING = 'One moment — the room is still speaking.'
+const STILL_SPEAKING_KEEP_TEXT = 'One moment — the room is still speaking. Your remark waits in the composer.'
+
+/** The refusal message of a non-2xx turn request, or `fallback`. */
+async function refusalMessage(res: Response, fallback: string): Promise<string> {
+  const data = await res.json().catch(() => ({})) as { error?: unknown }
+  return typeof data.error === 'string' && data.error ? data.error : fallback
 }
 
-/**
- * A send that failed with a server-side error frame (or an HTTP refusal before
- * any stream opened). Carries what the server said about whether the user's
- * submission reached the database, so the send path can decide whether to hand
- * the typed text back to the composer (bug 241). `undefined` means the server
- * did not say.
- */
-export class SalonSendError extends Error {
-  readonly userMessagePersisted: boolean | undefined
-  readonly pendingToolResultsPersisted: boolean | undefined
-
-  constructor(
-    message: string,
-    persisted: { userMessagePersisted?: boolean; pendingToolResultsPersisted?: boolean } = {},
-  ) {
-    super(message)
-    this.name = 'SalonSendError'
-    this.userMessagePersisted = persisted.userMessagePersisted
-    this.pendingToolResultsPersisted = persisted.pendingToolResultsPersisted
-  }
-}
-
-/** The toast text for a stream that ended without a done, chainComplete or error. */
-export const STREAM_CLOSED_EARLY_MESSAGE = 'The connection closed before the reply was finished. Please try again.'
-
-/**
- * The stream ended without any terminal event. Every server path closes a turn
- * with `done`, `chainComplete` or an error frame, so a bare EOF is a dropped
- * connection — once read as a quiet success (bug 241). Whether the user's
- * message was saved is unknown here.
- */
-export class StreamClosedEarlyError extends Error {
-  constructor() {
-    super(STREAM_CLOSED_EARLY_MESSAGE)
-    this.name = 'StreamClosedEarlyError'
-  }
-}
-
-/** Appended to the failure toast when the typed text was put back in the composer. */
-export const SUBMISSION_RESTORED_NOTE = 'Your message is back in the composer.'
-
-/** The failure toast's text, with the restored note as its own sentence. */
-export function sendFailureToastText(message: string, restored: boolean): string {
-  if (!restored) return message
-  const trimmed = message.trimEnd()
-  const sentence = /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`
-  return `${sentence} ${SUBMISSION_RESTORED_NOTE}`
-}
-
-/** How long a failed-send toast stays up — long enough to actually read it. */
-export const SEND_FAILURE_TOAST_MS = 8000
-
-/**
- * The optimistic assistant bubble a `done` frame closes, shown until the
- * post-turn `fetchChat()` replaces it with the authoritative row (same id).
- * The server's `participantId` is authoritative; `fallback` covers a frame
- * that omits it, and a placeholder id for one with no `messageId`.
- */
-export function assistantMessageFromDone(
-  frame: DoneFrame,
-  content: string,
-  fallback: { participantId: string | null; id?: string },
-): Message {
-  return {
-    id: frame.messageId || fallback.id || '',
-    role: 'ASSISTANT',
-    content,
-    createdAt: new Date().toISOString(),
-    participantId: frame.participantId || fallback.participantId,
-    provider: frame.provider || null,
-    modelName: frame.modelName || null,
-    routeTrail: frame.routeTrail ?? null,
-    isSilentMessage: frame.isSilentMessage || undefined,
-    reasoningContent: frame.reasoningContent ?? null,
-    reasoningSegments: frame.reasoningSegments ?? null,
-  }
-}
-
-/** A message the server already saved, as the Salon's message list holds it. */
-function postedAsMessage(frame: PostedFrame): Message {
-  return frame.message as unknown as Message
-}
-
-/**
- * Append a server-posted message to the live list unless it is already there.
- * Messages surfaced mid-turn (Carina answers, Host turn-pass notes, Pascal
- * outcomes, Librarian announcements) are inserted optimistically and later
- * reconciled by the post-turn `fetchChat()`, so the same id can arrive twice.
- */
-export function appendMessageOnce(messages: Message[], message: Message): Message[] {
-  return messages.some(m => m.id === message.id) ? messages : [...messages, message]
+interface RunTurnStreamOptions {
+  kind: StreamKind
+  /** Toast shown when another stream holds the floor; silent when absent. */
+  refusal?: string
+  /** First responder, before the stream's own `turnStart` says otherwise. */
+  participantId?: string | null
+  /**
+   * Runs once the claim is held, before the request. Returning `false`
+   * declines the run (the claim is released and nothing is fetched).
+   */
+  before?: () => boolean | void
+  /** Open the stream. Throw to refuse (a non-2xx answer). */
+  request: (signal: AbortSignal) => Promise<Response>
+  /** The kind's own handlers, laid over the shared ones. `onDone` is required. */
+  handlers: (turn: TurnCursor) => Partial<TurnStreamCallbacks> & Pick<TurnStreamCallbacks, 'onDone'>
+  /** A non-abort failure. Defaults to a toast of the error's message. */
+  onError?: (err: unknown) => void | Promise<void>
+  /** The kind's own clean-up, after the shared `finally`. */
+  after?: () => void | Promise<void>
 }
 
 interface UseSSEStreamingParams {
@@ -229,35 +113,6 @@ interface UseSSEStreamingParams {
 }
 
 /**
- * Where the operator's raised hand stands, shown beside the composer
- * (`RaisedHandChip`). `raised` is up and nobody asked yet; `asked` names the
- * speaker weighing it; the last three are the outcome, kept until the
- * operator dismisses it or speaks again.
- */
-export type RaisedHandStatus =
-  | { kind: 'raised' }
-  | { kind: 'asked'; characterName: string }
-  | { kind: 'yielded'; characterName: string }
-  | { kind: 'declined'; characterName: string }
-  | { kind: 'unasked' }
-
-/** Is the hand still up — raised, or being weighed by a speaker? */
-export function isHandUp(status: RaisedHandStatus | null): boolean {
-  return status?.kind === 'raised' || status?.kind === 'asked'
-}
-
-/**
- * The stream has ended. A hand nobody was asked about is said so; one whose
- * speaker never answered (a stop, an error) simply goes down; an outcome
- * stays where it is.
- */
-function settleHandAtStreamEnd(prev: RaisedHandStatus | null): RaisedHandStatus | null {
-  if (prev?.kind === 'raised') return { kind: 'unasked' }
-  if (prev?.kind === 'asked') return null
-  return prev
-}
-
-/**
  * The Salon's live message transport, built on Fetch Streams (SSE-style events).
  *
  * TanStack Query boundary: this is deliberately NOT a TanStack Query concern.
@@ -272,14 +127,11 @@ function settleHandAtStreamEnd(prev: RaisedHandStatus | null): RaisedHandStatus 
  */
 export function useSSEStreaming({
   chatId,
-  chat,
-  messages,
   setMessages,
   isMultiChar,
   hasActiveCharacters,
   participantsAsBase,
   isPaused,
-  respondingParticipantId,
   setRespondingParticipantId,
   activeTypingParticipantId,
   impersonatingParticipantIds,
@@ -291,7 +143,7 @@ export function useSSEStreaming({
   inputRef,
   getFirstCharacterParticipant,
   setPauseState,
-  onToolResult: onToolResultCallback,
+  onToolResult,
   onStorytellerEvent,
   onGreenRoom,
 }: UseSSEStreamingParams) {
@@ -299,14 +151,15 @@ export function useSSEStreaming({
   useEffect(() => {
     onGreenRoomRef.current = onGreenRoom
   }, [onGreenRoom])
-  // Storyteller: live bubbles for concurrent turns, keyed by participant.
-  const [concurrentStreams, setConcurrentStreams] = useState<ConcurrentStream[]>([])
   const onStorytellerEventRef = useRef(onStorytellerEvent)
   useEffect(() => {
     onStorytellerEventRef.current = onStorytellerEvent
   }, [onStorytellerEvent])
-  const [sending, setSending] = useState(false)
+  // Storyteller: live bubbles for concurrent turns, keyed by participant.
+  const [concurrentStreams, setConcurrentStreams] = useState<ConcurrentStream[]>([])
   const [streaming, setStreaming] = useState(false)
+  const [waitingForResponse, setWaitingForResponse] = useState(false)
+  const [responseStatus, setResponseStatus] = useState<ResponseStatus | null>(null)
   // The operator's interrupts (lib/chat/turn-control.ts on the server): a
   // raised hand waiting for the next speaker's answer, and a hard stop the
   // server is still putting away.
@@ -314,7 +167,6 @@ export function useSSEStreaming({
   const handRaised = isHandUp(handStatus)
   const [stopping, setStopping] = useState(false)
   const stoppingRef = useRef(false)
-  const [streamingContent, setStreamingContent] = useState('')
   // Mirror the live "Speaking As" selection into a ref so the send/continue
   // callbacks read the current value without re-creating on every selection.
   const activeTypingParticipantIdRef = useRef(activeTypingParticipantId)
@@ -333,14 +185,7 @@ export function useSSEStreaming({
   useEffect(() => {
     participantsAsBaseRef.current = participantsAsBase
   }, [participantsAsBase])
-  // Live cumulative reasoning ("thinking") for the in-progress turn. DISPLAY ONLY.
-  const [streamingReasoning, setStreamingReasoning] = useState('')
-  const [waitingForResponse, setWaitingForResponse] = useState(false)
-  // In-progress tool calls for the turn being streamed, grouped into batches by
-  // the point in the prose where each fired (see StreamingToolBatch). Replaces a
-  // single flat list so the streaming bubble can interleave them with the text.
-  const [streamingToolBatches, setStreamingToolBatches] = useState<StreamingToolBatch[]>([])
-  const [responseStatus, setResponseStatus] = useState<ResponseStatus | null>(null)
+
   // The tool-execution notice: raised, self-expiring, and dismissable from one
   // place. The banner used to be cleared only from the send path's onDone, so
   // any turn that finished by another route — a chain's intermediate done,
@@ -352,82 +197,38 @@ export function useSSEStreaming({
     dismissToolExecutionStatus,
     clearPendingToolExecutionStatus,
   } = useToolExecutionStatus()
+  const {
+    streamingContent,
+    streamingReasoning,
+    scheduleStreamingContent,
+    scheduleStreamingReasoning,
+    resetStreamingContent,
+  } = useStreamingBuffers()
+  const {
+    streamingToolBatches,
+    trackToolsDetected,
+    trackToolResult,
+    clearStreamingToolBatches,
+  } = useStreamingToolBatches({ publishToolExecutionStatus, onToolResult })
 
+  // --- The one in-flight stream -------------------------------------------
+  // Only `runTurnStream` assigns the controller (Stop's local abandon clears
+  // it). #172: one claim for "a stream is in flight", whichever kind opened
+  // it. The ref holds the owner's token and answers the guards synchronously,
+  // so a stream abandoned by Stop cannot, in its late `finally`, release a
+  // stream started after it; the state re-renders the composer.
   const abortControllerRef = useRef<AbortController | null>(null)
-  // #172: one flag for "a stream is in flight", whichever lifecycle opened it.
-  // The ref answers the guards synchronously; the state re-renders the composer.
-  // The ref holds the owning stream's token, so a stream abandoned by Stop
-  // cannot, in its late `finally`, release a stream started after it.
   const inFlightRef = useRef<symbol | null>(null)
-  const [isStreamInFlight, setIsStreamInFlight] = useState(false)
-  const claimStream = useCallback((): symbol | null => {
-    if (inFlightRef.current) return null
-    const token = Symbol('turn-stream')
-    inFlightRef.current = token
-    setIsStreamInFlight(true)
-    return token
-  }, [])
-  /** Release the claim — only the owner's token (or none, for an abandon) does. */
+  const [streamKind, setStreamKind] = useState<StreamKind | null>(null)
+  const isStreamInFlight = streamKind !== null
+  // A user send holds the composer shut; the other kinds leave it open for
+  // typing ahead (Enter is refused by the composer instead).
+  const sending = streamKind === 'send'
+
   const releaseStream = useCallback((token?: symbol) => {
     if (token && inFlightRef.current !== token) return
     inFlightRef.current = null
-    setIsStreamInFlight(false)
-  }, [])
-  // Monotonic batch counter so tool-call React keys stay unique across batches.
-  const toolBatchSeqRef = useRef(0)
-
-  // rAF-coalesced streaming content updates. SSE chunks can arrive faster
-  // than React can render them — in long multi-character chains that burst
-  // of per-chunk state updates has tripped React's update-depth limit. We
-  // buffer the latest accumulated content in a ref and flush at most once
-  // per animation frame, capping the render rate at the display refresh
-  // rate regardless of chunk cadence.
-  const streamingContentBufferRef = useRef<string>('')
-  const streamingContentRafRef = useRef<number | null>(null)
-  // Reasoning shares the same rAF-coalescing treatment as content.
-  const streamingReasoningBufferRef = useRef<string>('')
-  const streamingReasoningRafRef = useRef<number | null>(null)
-
-  const flushStreamingContent = useCallback(() => {
-    streamingContentRafRef.current = null
-    setStreamingContent(streamingContentBufferRef.current)
-  }, [])
-
-  const scheduleStreamingContent = useCallback((content: string) => {
-    streamingContentBufferRef.current = content
-    if (streamingContentRafRef.current === null) {
-      streamingContentRafRef.current = requestAnimationFrame(flushStreamingContent)
-    }
-  }, [flushStreamingContent])
-
-  const flushStreamingReasoning = useCallback(() => {
-    streamingReasoningRafRef.current = null
-    setStreamingReasoning(streamingReasoningBufferRef.current)
-  }, [])
-
-  // Reasoning arrives cumulatively, so we replace (not append) the buffer.
-  const scheduleStreamingReasoning = useCallback((reasoning: string) => {
-    streamingReasoningBufferRef.current = reasoning
-    if (streamingReasoningRafRef.current === null) {
-      streamingReasoningRafRef.current = requestAnimationFrame(flushStreamingReasoning)
-    }
-  }, [flushStreamingReasoning])
-
-  const resetStreamingContent = useCallback(() => {
-    if (streamingContentRafRef.current !== null) {
-      cancelAnimationFrame(streamingContentRafRef.current)
-      streamingContentRafRef.current = null
-    }
-    streamingContentBufferRef.current = ''
-    setStreamingContent('')
-    // Reasoning resets in lockstep with content so every turn-boundary cleanup
-    // (turnStart, done, errors, stop) clears the live thinking block too.
-    if (streamingReasoningRafRef.current !== null) {
-      cancelAnimationFrame(streamingReasoningRafRef.current)
-      streamingReasoningRafRef.current = null
-    }
-    streamingReasoningBufferRef.current = ''
-    setStreamingReasoning('')
+    setStreamKind(null)
   }, [])
 
   /** Insert a mid-turn surfaced message (deduped by id) and keep the view pinned. */
@@ -523,433 +324,6 @@ export function useSSEStreaming({
     } : m))
   }, [setMessages])
 
-  // Cancel any pending rAF on unmount to avoid setting state after teardown.
-  // (The tool-status auto-dismiss timer is cleaned up by its own hook.)
-  useEffect(() => {
-    return () => {
-      if (streamingContentRafRef.current !== null) {
-        cancelAnimationFrame(streamingContentRafRef.current)
-      }
-      if (streamingReasoningRafRef.current !== null) {
-        cancelAnimationFrame(streamingReasoningRafRef.current)
-      }
-    }
-  }, [])
-
-  // Focus input after response completes
-  const focusInput = useCallback(() => {
-    setTimeout(() => {
-      inputRef.current?.focus({ preventScroll: true })
-    }, 150)
-  }, [inputRef])
-
-  // Push a freshly-detected tool batch, tagged with the prose offset where it
-  // fired, and surface image-generation status. Shared by the send and continue
-  // streaming paths so both interleave tool calls into the live bubble.
-  const trackToolsDetected = useCallback((frame: ToolsDetectedFrame, offset: number) => {
-    const toolNames = frame.names
-    const toolArgs = frame.arguments
-    const seq = toolBatchSeqRef.current++
-    const calls: PendingToolCall[] = toolNames.map((name, idx) => ({
-      id: `tool-${seq}-${idx}`,
-      name,
-      status: 'pending' as const,
-      arguments: toolArgs[idx],
-    }))
-    setStreamingToolBatches(prev => [...prev, { offset, calls }])
-    if (toolNames.includes('generate_image')) {
-      publishToolExecutionStatus({
-        tool: 'generate_image',
-        status: 'pending',
-        message: `Generating image...`,
-      })
-    }
-  }, [publishToolExecutionStatus])
-
-  // Mark a tool result on the most recent batch (results stream immediately
-  // after their detection) and run per-tool side effects (navigation, image
-  // toasts, page callback).
-  const trackToolResult = useCallback((frame: ToolResultFrame) => {
-    const { index, name, success, error } = frame
-    // Tool results are free-form; the per-tool reads below know their shapes.
-    const result = frame.result as any
-
-    setStreamingToolBatches(prev => {
-      if (prev.length === 0) return prev
-      const lastIdx = prev.length - 1
-      const last = prev[lastIdx]
-      const calls = last.calls.map((tc, idx) =>
-        (index !== undefined && idx === index) || (index === undefined && tc.name === name)
-          ? { ...tc, status: success ? ('success' as const) : ('error' as const), result }
-          : tc
-      )
-      const next = prev.slice()
-      next[lastIdx] = { ...last, calls }
-      return next
-    })
-
-    // Handle help_navigate: navigate the current window to the target URL
-    if (name === 'help_navigate' && success && result?.navigationUrl) {
-      window.location.href = result.navigationUrl
-    }
-
-    if (name === 'generate_image') {
-      if (success) {
-        const imageCount = result?.images?.length || 1
-        publishToolExecutionStatus({
-          tool: name,
-          status: 'success',
-          message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
-        })
-        showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
-      } else {
-        const detail = resolveToolResultErrorText({ result, error })
-        publishToolExecutionStatus({
-          tool: name,
-          status: 'error',
-          message: detail || 'Failed to generate image',
-        })
-        showErrorToast(`Image generation failed: ${detail || 'Unknown error'}`)
-      }
-    }
-
-    // Notify the page about tool results (for Document Mode, etc.)
-    onToolResultCallback?.(name, success, result)
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [publishToolExecutionStatus])
-
-  /**
-   * Shared SSE stream reader. Processes lines from a ReadableStreamDefaultReader.
-   * Returns the accumulated full content string.
-   *
-   * `onDone` is called when data.done is received, allowing the caller to finalize.
-   */
-  const readSSEStream = useCallback(async (
-    reader: ReadableStreamDefaultReader<Uint8Array>,
-    opts: {
-      participantId: string | null
-      /** `offset` is the length of the response text streamed so far — where
-       *  this batch of tool calls was invoked in the prose. */
-      onToolsDetected?: (frame: ToolsDetectedFrame, offset: number) => void
-      onToolResult?: (frame: ToolResultFrame) => void
-      onDone: (fullContent: string, frame: DoneFrame) => void | Promise<void>
-      /**
-       * Called for each full message surfaced mid-turn — a Carina reference
-       * answer, a Host announcement (e.g. a turn-pass note), or a Pascal
-       * custom-tool outcome — so it lands in the flow immediately rather than
-       * waiting for the post-turn fetchChat().
-       */
-      onSurfacedMessage?: (message: Message) => void
-      /** Called when an answer-confirmation result resolves for a message */
-      onConfirmationResult?: (result: ConfirmationResultFrame) => void
-      /** Called for intermediate done events during a chain (not the final one) */
-      onIntermediateDone?: (fullContent: string, frame: DoneFrame) => void | Promise<void>
-      onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
-      onTurnComplete?: (event: { participantId: string; messageId: string; chainDepth: number }) => void | Promise<void>
-      onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number; paused: boolean; heldUserTurn: boolean }) => void | Promise<void>
-    }
-  ): Promise<string> => {
-    const decoder = new TextDecoder()
-    let fullContent = ''
-    let inChain = false
-    // Tracks whether the "streaming started" flags have been flipped for the
-    // current turn. The flags are idempotent after the first content chunk,
-    // so re-firing them on every chunk just pressures the reconciler — in
-    // long multi-character chains, that pressure has tipped React past its
-    // update-depth limit. Reset on turnStart so each chained turn transitions
-    // cleanly.
-    let hasStartedStreaming = false
-    // Whether the turn has been closed by a terminal event. `done` and
-    // `chainComplete` close it; a chained `turnStart` reopens it, because a
-    // connection lost mid-way through the next speaker's turn is just as
-    // truncated as one lost before the first.
-    let turnClosed = false
-    // Each concurrent seat's prose so far, kept here as well as in
-    // `concurrentStreams`: the seat's `done` needs the finished text now, and
-    // React need not run a state updater before the next line executes, so
-    // reading it back out of one left the reply bubble empty.
-    const seatText = new Map<string, string>()
-
-    /** The raised hand and the Storyteller board: the same whoever's seat sent them. */
-    const applyFloorFrame = (
-      frame: FrameOf<'handAsked' | 'handAnswered' | 'storytellerRound' | 'storytellerBid' | 'roundOpen'>,
-    ): void => {
-      switch (frame.kind) {
-        // The chip beside the composer says each step, so neither the asking
-        // nor a decline passes without a word.
-        case 'handAsked':
-          setHandStatus({ kind: 'asked', characterName: frame.characterName || 'The next speaker' })
-          return
-        case 'handAnswered':
-          setHandStatus({
-            kind: frame.yielded ? 'yielded' : 'declined',
-            characterName: frame.characterName || 'The speaker',
-          })
-          return
-        case 'storytellerRound':
-          onStorytellerEventRef.current?.({ kind: 'round', round: frame.round })
-          return
-        case 'storytellerBid':
-          onStorytellerEventRef.current?.({ kind: 'bid', roundId: frame.roundId, bid: frame.bid })
-          return
-        case 'roundOpen':
-          onStorytellerEventRef.current?.({ kind: 'open', roundId: frame.roundId })
-          return
-        default:
-          assertNever(frame)
-      }
-    }
-
-    /**
-     * Storyteller "all at once": a frame from one of several concurrent turns.
-     * Each seat gets its own bubble; the shared streaming slot is left alone.
-     */
-    const handleSeatFrame = (frame: StreamFrame, pid: string): void => {
-      switch (frame.kind) {
-        case 'handAsked':
-        case 'handAnswered':
-        case 'storytellerRound':
-        case 'storytellerBid':
-        case 'roundOpen':
-          applyFloorFrame(frame)
-          return
-        case 'turnStart':
-          if (!seatText.has(pid)) seatText.set(pid, '')
-          setWaitingForResponse(false)
-          setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
-            ? prev
-            : [...prev, { participantId: pid, content: '' }])
-          return
-        case 'content': {
-          if (!frame.text) return
-          const text = frame.text
-          seatText.set(pid, (seatText.get(pid) ?? '') + text)
-          setConcurrentStreams((prev) => prev.some((c) => c.participantId === pid)
-            ? prev.map((c) => c.participantId === pid ? { ...c, content: c.content + text } : c)
-            : [...prev, { participantId: pid, content: text }])
-          return
-        }
-        case 'done': {
-          const finished = seatText.get(pid) ?? ''
-          seatText.delete(pid)
-          setConcurrentStreams((prev) => prev.filter((c) => c.participantId !== pid))
-          if (frame.messageId && !doneLeavesNoReply(frame.outcome)) {
-            const messageId = frame.messageId
-            setMessages((prev) => prev.some((m) => m.id === messageId)
-              ? prev
-              : [...prev, assistantMessageFromDone(frame, finished, { participantId: pid })])
-          }
-          return
-        }
-        case 'posted':
-          surfaceMessage(postedAsMessage(frame))
-          return
-        case 'error':
-          showErrorToast(frame.message)
-          return
-        // A concurrent turn's status, thinking, tools and chain bookkeeping
-        // have no bubble of their own; the round's own frames carry the rest.
-        case 'reasoning':
-        case 'status':
-        case 'fileProcessing':
-        case 'toolsDetected':
-        case 'toolResult':
-        case 'turnComplete':
-        case 'chainComplete':
-        case 'pendingExternalTurn':
-        case 'confirmationResult':
-        case 'swipeDone':
-        case 'greenRoom':
-          return
-        default:
-          assertNever(frame)
-      }
-    }
-
-    const handleFrame = async (frame: StreamFrame): Promise<void> => {
-      switch (frame.kind) {
-        case 'handAsked':
-        case 'handAnswered':
-        case 'storytellerRound':
-        case 'storytellerBid':
-        case 'roundOpen':
-          applyFloorFrame(frame)
-          return
-
-        case 'status':
-          setResponseStatus(frame.status)
-          // A turn being rescued: `retrying` is the same provider having
-          // another go after an empty response, `failing-over` an understudy
-          // from the fallback chain. Either way the reply is not the one the
-          // user configured, so say so out loud.
-          if (frame.status.stage === 'retrying' || frame.status.stage === 'failing-over') {
-            showWarningToast(frame.status.message)
-          }
-          return
-
-        case 'content':
-          if (!frame.text) return
-          fullContent += frame.text
-          if (!hasStartedStreaming) {
-            setWaitingForResponse(false)
-            setStreaming(true)
-            hasStartedStreaming = true
-          }
-          scheduleStreamingContent(fullContent)
-          return
-
-        // Live reasoning ("thinking") — cumulative, so replace the buffer.
-        // DISPLAY ONLY; the StreamingMessage renders it as a leading block when
-        // the chat's thinking-visibility is on.
-        case 'reasoning':
-          scheduleStreamingReasoning(frame.text)
-          return
-
-        case 'error':
-          setResponseStatus(null)
-          throw new SalonSendError(frame.details ? `${frame.message}: ${frame.details}` : frame.message, {
-            userMessagePersisted: frame.userMessagePersisted,
-            pendingToolResultsPersisted: frame.pendingToolResultsPersisted,
-          })
-
-        // `fullContent` is the prose streamed so far — the offset at which
-        // this batch was invoked.
-        case 'toolsDetected':
-          opts.onToolsDetected?.(frame, fullContent.length)
-          return
-
-        case 'toolResult':
-          opts.onToolResult?.(frame)
-          return
-
-        // A Carina answer, a Host announcement (turn-pass note) or a Pascal
-        // outcome, inserted at once (deduped by id) rather than waiting for
-        // the post-turn fetchChat().
-        case 'posted':
-          opts.onSurfacedMessage?.(postedAsMessage(frame))
-          return
-
-        // Update the badge and, on a revision, swap in the corrected bubble
-        // text (a deliberate, visible transparency swap).
-        case 'confirmationResult':
-          opts.onConfirmationResult?.(frame)
-          return
-
-        case 'done': {
-          turnClosed = true
-          setResponseStatus(null)
-          // Attachments the provider plugin could not put on the wire (bug 94).
-          const attachmentWarning = buildFailedAttachmentWarning(frame.attachmentResults?.failed)
-          if (attachmentWarning) showWarningToast(attachmentWarning)
-          if (inChain && opts.onIntermediateDone) {
-            // Intermediate done during a chain — lighter cleanup, no state reset
-            await opts.onIntermediateDone(fullContent, frame)
-          } else {
-            await opts.onDone(fullContent, frame)
-          }
-          // The Courier's parked turn: the placeholder arrives with the refetch.
-          if (frame.pendingExternalTurn) await fetchChat()
-          return
-        }
-
-        // The Courier placed a placeholder for a manual / clipboard turn.
-        // Refetch so the bubble appears with the Markdown blob + paste
-        // textarea. The accompanying `done` closes the turn.
-        case 'pendingExternalTurn':
-          await fetchChat()
-          return
-
-        case 'turnStart':
-          // Only a chained turn (depth > 0) enters a chain. The server also
-          // sends a depth-0 turnStart before every first turn so the bubble
-          // shows the right responder; that one must leave the turn's `done`
-          // on the ordinary end-of-turn path (bug 242).
-          if (frame.chainDepth > 0) inChain = true
-          turnClosed = false
-          fullContent = ''
-          hasStartedStreaming = false
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(true)
-          opts.onTurnStart?.({
-            participantId: frame.participantId,
-            characterName: frame.characterName || 'Unknown',
-            chainDepth: frame.chainDepth,
-          })
-          return
-
-        case 'turnComplete':
-          await opts.onTurnComplete?.({
-            participantId: frame.participantId,
-            messageId: frame.messageId,
-            chainDepth: frame.chainDepth,
-          })
-          return
-
-        case 'chainComplete':
-          inChain = false
-          turnClosed = true
-          await opts.onChainComplete?.({
-            reason: frame.reason,
-            nextSpeakerId: frame.nextSpeakerId,
-            chainDepth: frame.chainDepth,
-            paused: frame.paused === true,
-            heldUserTurn: frame.heldUserTurn === true,
-          })
-          return
-
-        case 'greenRoom':
-          onGreenRoomRef.current?.(frame.greenRoom)
-          return
-
-        // Not frames a Salon send carries.
-        case 'fileProcessing':
-        case 'swipeDone':
-          return
-
-        default:
-          assertNever(frame)
-      }
-    }
-
-    const handleLine = async (line: string): Promise<void> => {
-      if (!line.startsWith('data: ')) return
-      const frame = parseFrame(line.slice(6))
-      if (!frame) return
-      // A frame is a concurrent seat's or the stream's own, and then exactly
-      // one kind — no order of tests decides what it means.
-      if (frame.seat) handleSeatFrame(frame, frame.seat.participantId)
-      else await handleFrame(frame)
-    }
-
-    // Lines are carried across reads: a frame split between two chunks used to
-    // be cut in half, fail to parse, and vanish — taking an error frame with it.
-    let buffer = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
-      buffer = split.rest
-      for (const line of split.lines) {
-        await handleLine(line)
-      }
-    }
-
-    // Whatever the decoder and the buffer still hold is the stream's last line.
-    const tail = buffer + decoder.decode()
-    for (const line of tail.split('\n')) {
-      await handleLine(line)
-    }
-
-    if (!turnClosed) {
-      setResponseStatus(null)
-      throw new StreamClosedEarlyError()
-    }
-
-    return fullContent
-  }, [scheduleStreamingContent, scheduleStreamingReasoning, resetStreamingContent, fetchChat, surfaceMessage, setMessages])
-
   // Handle common error extraction
   const extractErrorMessage = useCallback((err: unknown): string => {
     if (err instanceof Error) {
@@ -1035,6 +409,176 @@ export function useSSEStreaming({
     return restored
   }, [setMessages, setAttachedFiles, inputRef])
 
+  // Focus input after response completes
+  const focusInput = useCallback(() => {
+    setTimeout(() => {
+      inputRef.current?.focus({ preventScroll: true })
+    }, 150)
+  }, [inputRef])
+
+  /** The live bubble's display state, back to "nobody is speaking". */
+  const resetLiveTurn = useCallback(() => {
+    resetStreamingContent()
+    setStreaming(false)
+    setWaitingForResponse(false)
+  }, [resetStreamingContent])
+
+  /**
+   * The one `finally` every turn stream shares: the live bubble, the
+   * responder and the status line go; any hand still up has nobody left to
+   * ask; a stop has finished putting the reply away; the claim is released;
+   * then the kind's own clean-up runs.
+   */
+  const settleStream = useCallback(async (token: symbol, after?: () => void | Promise<void>) => {
+    resetLiveTurn()
+    setRespondingParticipantId(null)
+    setResponseStatus(null)
+    setHandStatus(settleHandAtStreamEnd)
+    stoppingRef.current = false
+    setStopping(false)
+    releaseStream(token)
+    await after?.()
+    focusInput()
+  }, [resetLiveTurn, setRespondingParticipantId, releaseStream, focusInput])
+
+  /**
+   * Run one turn stream. Refuses (returning `false`, with `refusal` as a toast
+   * when given) while another stream is in flight; otherwise claims the floor,
+   * creates the one abort controller, reads the stream with the shared frame
+   * handlers under the kind's own, and settles everything in one `finally`.
+   * Resolves `true` when the stream ran to its end.
+   */
+  const runTurnStream = useCallback(async ({
+    kind,
+    refusal,
+    participantId = null,
+    before,
+    request,
+    handlers,
+    onError,
+    after,
+  }: RunTurnStreamOptions): Promise<boolean> => {
+    if (inFlightRef.current) {
+      if (refusal) showInfoToast(refusal)
+      return false
+    }
+    const token = Symbol(kind)
+    inFlightRef.current = token
+    setStreamKind(kind)
+    if (before?.() === false) {
+      releaseStream(token)
+      return false
+    }
+
+    setWaitingForResponse(true)
+    setStreaming(false)
+    resetStreamingContent()
+    clearStreamingToolBatches()
+    const turn: TurnCursor = { participantId }
+    setRespondingParticipantId(participantId)
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    try {
+      const res = await request(controller.signal)
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      await readTurnStream(reader, {
+        // Where the reader writes.
+        setResponseStatus,
+        setWaitingForResponse,
+        setStreaming,
+        scheduleStreamingContent,
+        scheduleStreamingReasoning,
+        resetStreamingContent,
+        setHandStatus,
+        setConcurrentStreams,
+        setMessages,
+        surfaceMessage,
+        fetchChat,
+        onStorytellerEvent: (event) => onStorytellerEventRef.current?.(event),
+        onGreenRoom: (event) => onGreenRoomRef.current?.(event),
+        // What every kind shares.
+        onToolsDetected: trackToolsDetected,
+        onToolResult: trackToolResult,
+        onSurfacedMessage: surfaceMessage,
+        onConfirmationResult: applyConfirmationResult,
+        onTurnStart: (event) => {
+          turn.participantId = event.participantId
+          setRespondingParticipantId(event.participantId)
+          resetStreamingContent()
+          clearStreamingToolBatches()
+          setWaitingForResponse(true)
+          setStreaming(false)
+        },
+        onTurnComplete: async () => {
+          resetLiveTurn()
+          await fetchChat()
+        },
+        onChainComplete: async (event) => {
+          resetLiveTurn()
+          if (kind === 'storyteller') setConcurrentStreams([])
+          setRespondingParticipantId(null)
+          scrollOnStreamComplete()
+          await fetchChat()
+          if (kind !== 'open') {
+            announceChainPause(event)
+            notifyQueueChange()
+          }
+          focusInput()
+        },
+        // The kind's own, over the shared.
+        ...handlers(turn),
+      })
+      return true
+    } catch (err) {
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      if (!isAbort) {
+        if (onError) await onError(err)
+        else showErrorToast(extractErrorMessage(err))
+      }
+      return false
+    } finally {
+      if (abortControllerRef.current === controller) abortControllerRef.current = null
+      // Stop abandoned this stream and another has the floor since: its
+      // display state, its hand and its optimistic bubbles are not ours.
+      const superseded = inFlightRef.current !== null && inFlightRef.current !== token
+      if (!superseded) await settleStream(token, after)
+    }
+  }, [releaseStream, resetStreamingContent, clearStreamingToolBatches, setRespondingParticipantId, scheduleStreamingContent, scheduleStreamingReasoning, setMessages, surfaceMessage, fetchChat, trackToolsDetected, trackToolResult, applyConfirmationResult, resetLiveTurn, scrollOnStreamComplete, announceChainPause, focusInput, extractErrorMessage, settleStream])
+
+  /**
+   * The optimistic bubble for a non-send kind's `done`: nothing for a
+   * turn-pass or an empty reply, otherwise the reply under a placeholder id
+   * (`<prefix>-<now>`) the post-turn read replaces.
+   */
+  const pushReply = useCallback((turn: TurnCursor, fullContent: string, data: DoneFrame, idPrefix: string) => {
+    if (doneLeavesNoReply(data.outcome)) {
+      finishSkippedTurn()
+      return
+    }
+    if (!fullContent.trim()) return
+    setMessages(prev => [...prev, assistantMessageFromDone(data, fullContent, {
+      participantId: turn.participantId,
+      id: `${idPrefix}-${Date.now()}`,
+    })])
+  }, [finishSkippedTurn, setMessages])
+
+  /** A non-send kind's final `done`: the status line goes, then the reply. */
+  const settleFinalDone = useCallback((turn: TurnCursor, fullContent: string, data: DoneFrame, idPrefix: string) => {
+    setResponseStatus(null)
+    clearPendingToolExecutionStatus()
+    pushReply(turn, fullContent, data, idPrefix)
+  }, [clearPendingToolExecutionStatus, pushReply])
+
+  /** After a continue or storyteller run: pick up side-channel writes (e.g. whisper tools). */
+  const refreshAfterRun = useCallback(async () => {
+    scrollOnStreamComplete()
+    await fetchChat()
+    notifyQueueChange()
+  }, [scrollOnStreamComplete, fetchChat])
+
   /**
    * Main send message function. Creates the user message, sends request, and streams response.
    */
@@ -1061,18 +605,11 @@ export function useSSEStreaming({
     const establishedFact = !!opts?.establishedFact
     // Two refusals, deliberately told apart (bug 136). An empty composer is
     // the operator's own doing and wants no answer; a send declined because a
-    // turn is still in flight is a real request refused, and silence there is
-    // indistinguishable from a send that broke. The text stays in the composer
-    // either way.
+    // turn is still in flight — any kind of turn (#172) — is a real request
+    // refused, and silence there is indistinguishable from a send that broke.
+    // The text stays in the composer either way.
     if (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) return
-    const streamToken = claimStream()
-    if (!streamToken) {
-      showInfoToast('One moment — the room is still speaking. Your remark waits in the composer.')
-      return
-    }
 
-    // The operator has the floor now; the last hand's outcome is spent.
-    setHandStatus(null)
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
     const messageAttachments: MessageAttachment[] = attachedFiles.map((f) => ({
@@ -1082,25 +619,12 @@ export function useSSEStreaming({
       mimeType: f.mimeType,
     }))
     const toolResultsToSend = [...pendingToolResults]
-    setInput('')
-    clearDraft()
-    setAttachedFiles([])
-    setPendingToolResults([])
-    setSending(true)
-    setWaitingForResponse(true)
-    setStreaming(false)
-    resetStreamingContent()
-    setStreamingToolBatches([])
-    const firstCharParticipant = getFirstCharacterParticipant()
-    // Track the current responding participant across chained turns (mutable for closures)
-    let currentParticipantId = firstCharParticipant?.id || null
-    setRespondingParticipantId(currentParticipantId)
     // Build display content with file indicators
     const displayContent = messageAttachments.length > 0
       ? `${userMessage}${userMessage ? '\n' : ''}[Attached: ${messageAttachments.map(f => f.filename).join(', ')}]`
       : userMessage
 
-    // Add pending tool result messages to UI
+    // Pending tool result messages, shown at once
     const toolMessages: Message[] = toolResultsToSend.map((result, index) => ({
       id: `temp-tool-${Date.now()}-${index}`,
       role: 'TOOL',
@@ -1114,83 +638,81 @@ export function useSSEStreaming({
       }),
       createdAt: result.createdAt,
     }))
-
     const tempToolMessageIds = toolMessages.map((m) => m.id)
     const tempUserMessageId = `temp-user-${Date.now()}`
-    // Attribute the optimistic bubble to the seat the *server* will resolve this
-    // message onto — `findActiveUserParticipant`, which honours the impersonation
-    // overlay and falls back to the owner user seat when the active-typing id is
-    // not itself a user-driven seat. Using the bare `activeTypingParticipantId`
-    // here diverged from the persisted row and made the bubble flicker to the
-    // wrong author on refetch (Bug 45).
-    const optimisticAuthor = findActiveUserParticipant(
-      participantsAsBaseRef.current,
-      activeTypingParticipantIdRef.current,
-      impersonatingParticipantIdsRef.current,
-    )
-    const tempUserMessage: Message = {
-      id: tempUserMessageId,
-      role: 'USER',
-      content: displayContent,
-      createdAt: new Date().toISOString(),
-      attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
-      // Renders with the chosen character's name/avatar immediately (not the
-      // default user), matching what the server persists.
-      participantId: optimisticAuthor?.id ?? activeTypingParticipantIdRef.current ?? undefined,
-      // The ribbon shows at once, before the server's row replaces this one.
-      ...(establishedFact ? { isEstablishedFact: true } : {}),
-    }
-    setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
-    scrollOnUserMessage()
 
-    const requestPayload = {
-      content: userMessage || (attachedFiles.length > 0 ? 'Please look at the attached file(s).' : ''),
-      fileIds,
-      speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
-      ...(establishedFact ? { isEstablishedFact: true } : {}),
-      pendingToolResults: toolResultsToSend.length > 0 ? toolResultsToSend.map(r => ({
-        tool: r.tool,
-        success: r.success,
-        result: r.formattedResult,
-        prompt: r.requestPrompt,
-        arguments: r.arguments,
-        createdAt: r.createdAt,
-      })) : undefined,
-    }
-
-    try {
-      abortControllerRef.current = new AbortController()
-      const { signal } = abortControllerRef.current
-
-      const res = await fetch(`/api/v1/messages?chatId=${chatId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestPayload),
-        signal,
-      })
-
-      if (!res.ok) {
-        let errorMessage = 'Failed to send message'
-        try {
-          const errorData = await res.json()
-          errorMessage = errorData.error || errorData.message || errorMessage
-        } catch {
-          errorMessage = res.statusText || errorMessage
+    await runTurnStream({
+      kind: 'send',
+      refusal: STILL_SPEAKING_KEEP_TEXT,
+      participantId: getFirstCharacterParticipant()?.id || null,
+      before: () => {
+        // The operator has the floor now; the last hand's outcome is spent.
+        setHandStatus(null)
+        setInput('')
+        clearDraft()
+        setAttachedFiles([])
+        setPendingToolResults([])
+        // Attribute the optimistic bubble to the seat the *server* will resolve
+        // this message onto — `findActiveUserParticipant`, which honours the
+        // impersonation overlay and falls back to the owner user seat when the
+        // active-typing id is not itself a user-driven seat. Using the bare
+        // `activeTypingParticipantId` here diverged from the persisted row and
+        // made the bubble flicker to the wrong author on refetch (Bug 45).
+        const optimisticAuthor = findActiveUserParticipant(
+          participantsAsBaseRef.current,
+          activeTypingParticipantIdRef.current,
+          impersonatingParticipantIdsRef.current,
+        )
+        const tempUserMessage: Message = {
+          id: tempUserMessageId,
+          role: 'USER',
+          content: displayContent,
+          createdAt: new Date().toISOString(),
+          attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
+          // Renders with the chosen character's name/avatar immediately (not the
+          // default user), matching what the server persists.
+          participantId: optimisticAuthor?.id ?? activeTypingParticipantIdRef.current ?? undefined,
+          // The ribbon shows at once, before the server's row replaces this one.
+          ...(establishedFact ? { isEstablishedFact: true } : {}),
         }
-        // Refused before any stream opened: the orchestrator never ran, so
-        // nothing of this submission was written.
-        throw new SalonSendError(errorMessage, { userMessagePersisted: false, pendingToolResultsPersisted: false })
-      }
-
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      await readSSEStream(reader, {
-        participantId: firstCharParticipant?.id || null,
-        onToolsDetected: trackToolsDetected,
-        onToolResult: trackToolResult,
-        onSurfacedMessage: surfaceMessage,
-        onConfirmationResult: applyConfirmationResult,
+        setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
+        scrollOnUserMessage()
+      },
+      request: async (signal) => {
+        const res = await fetch(`/api/v1/messages?chatId=${chatId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: userMessage || (attachedFiles.length > 0 ? 'Please look at the attached file(s).' : ''),
+            fileIds,
+            speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+            ...(establishedFact ? { isEstablishedFact: true } : {}),
+            pendingToolResults: toolResultsToSend.length > 0 ? toolResultsToSend.map(r => ({
+              tool: r.tool,
+              success: r.success,
+              result: r.formattedResult,
+              prompt: r.requestPrompt,
+              arguments: r.arguments,
+              createdAt: r.createdAt,
+            })) : undefined,
+          }),
+          signal,
+        })
+        if (!res.ok) {
+          let errorMessage = 'Failed to send message'
+          try {
+            const errorData = await res.json()
+            errorMessage = errorData.error || errorData.message || errorMessage
+          } catch {
+            errorMessage = res.statusText || errorMessage
+          }
+          // Refused before any stream opened: the orchestrator never ran, so
+          // nothing of this submission was written.
+          throw new SalonSendError(errorMessage, { userMessagePersisted: false, pendingToolResultsPersisted: false })
+        }
+        return res
+      },
+      handlers: (turn) => ({
         onDone: async (fullContent, data) => {
           if (doneLeavesNoReply(data.outcome)) {
             finishSkippedTurn()
@@ -1199,10 +721,7 @@ export function useSSEStreaming({
 
           if (data.outcome === 'empty') {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
-            resetStreamingContent()
-            setStreaming(false)
-            setWaitingForResponse(false)
-            setSending(false)
+            resetLiveTurn()
             setRespondingParticipantId(null)
             return
           }
@@ -1213,22 +732,20 @@ export function useSSEStreaming({
           // via that refresh — pushing another optimistic copy here would
           // create a duplicate React key.
           if (data.pendingExternalTurn) {
-            resetStreamingContent()
-            setStreaming(false)
-            setWaitingForResponse(false)
+            resetLiveTurn()
             setRespondingParticipantId(null)
             scrollOnStreamComplete()
             await fetchChat()
             return
           }
 
-          const assistantMessage = assistantMessageFromDone(data, fullContent, { participantId: currentParticipantId })
+          const assistantMessage = assistantMessageFromDone(data, fullContent, { participantId: turn.participantId })
           setMessages((prev) => [...prev, assistantMessage])
           resetStreamingContent()
           // Live tool batches are spent — the refetched message carries the
           // persisted, interspersed copy. Clearing now also avoids a stale
           // flash on the next turn's bubble.
-          setStreamingToolBatches([])
+          clearStreamingToolBatches()
           setStreaming(false)
           setWaitingForResponse(false)
           setRespondingParticipantId(null)
@@ -1247,47 +764,13 @@ export function useSSEStreaming({
           }
           if (data.outcome === 'empty' || !fullContent) return
 
-          const assistantMessage = assistantMessageFromDone(data, fullContent, { participantId: currentParticipantId })
+          const assistantMessage = assistantMessageFromDone(data, fullContent, { participantId: turn.participantId })
           setMessages((prev) => [...prev, assistantMessage])
           resetStreamingContent()
           setStreaming(false)
         },
-        onTurnStart: (event) => {
-          currentParticipantId = event.participantId
-          setRespondingParticipantId(event.participantId)
-          resetStreamingContent()
-          setStreamingToolBatches([])
-          setWaitingForResponse(true)
-          setStreaming(false)
-        },
-        onTurnComplete: async (event) => {
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(false)
-          await fetchChat()
-        },
-        onChainComplete: async (event) => {
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(false)
-          setRespondingParticipantId(null)
-          scrollOnStreamComplete()
-          await fetchChat()
-          announceChainPause(event)
-          notifyQueueChange()
-          focusInput()
-        },
-      })
-    } catch (err) {
-      const isAbort = err instanceof Error && err.name === 'AbortError'
-
-      if (isAbort) {
-        resetStreamingContent()
-        setStreaming(false)
-        setWaitingForResponse(false)
-        setRespondingParticipantId(null)
-        setResponseStatus(null)
-      } else {
+      }),
+      onError: async (err) => {
         const errorMessage = extractErrorMessage(err)
         const displayMessage = errorMessage === 'Unknown error' || errorMessage === 'TypeError'
           ? 'Connection lost. Please try again.'
@@ -1295,10 +778,8 @@ export function useSSEStreaming({
 
         // The failure may have come before or after the server saved the
         // user's message. Re-fetch so a persisted row replaces the temp
-        // bubble; one that never landed is swept in `finally`.
-        resetStreamingContent()
-        setStreaming(false)
-        setWaitingForResponse(false)
+        // bubble; one that never landed is swept in `after`.
+        resetLiveTurn()
         setRespondingParticipantId(null)
         setResponseStatus(null)
         await fetchChat()
@@ -1322,31 +803,17 @@ export function useSSEStreaming({
           tempToolMessageIds,
         })
 
-        const toastMessage = displayMessage || 'Failed to send message'
         showErrorToast(
-          sendFailureToastText(toastMessage, restored),
+          sendFailureToastText(displayMessage || 'Failed to send message', restored),
           SEND_FAILURE_TOAST_MS,
         )
-      }
-    } finally {
-      setSending(false)
-      setWaitingForResponse(false)
-      abortControllerRef.current = null
-      setResponseStatus(null)
-      // The stream is over: any hand still up has nobody left to ask, and a
-      // stop has finished putting the reply away.
-      setHandStatus(settleHandAtStreamEnd)
-      stoppingRef.current = false
-      setStopping(false)
+      },
       // The turn is over, so every optimistic bubble has had its chance: the
       // reads above retire the ones the server persisted, and anything still
       // standing belongs to a send that never landed at all.
-      clearProvisionalMessages()
-      releaseStream(streamToken)
-      focusInput()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, claimStream, releaseStream, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, restoreUnpersistedSubmission, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+      after: clearProvisionalMessages,
+    })
+  }, [chatId, runTurnStream, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, extractErrorMessage, restoreUnpersistedSubmission, resetStreamingContent, resetLiveTurn, clearStreamingToolBatches, finishSkippedTurn, clearPendingToolExecutionStatus])
 
   /**
    * Open a chat that was cast but not yet opened: the server runs the opening
@@ -1356,87 +823,32 @@ export function useSSEStreaming({
    * closed stream.
    */
   const openChat = useCallback(async () => {
-    const streamToken = claimStream()
-    if (!streamToken) return
-    setWaitingForResponse(true)
-    setStreaming(false)
-    resetStreamingContent()
-    setStreamingToolBatches([])
-    let currentParticipantId: string | null = null
-    try {
-      abortControllerRef.current = new AbortController()
-      const res = await fetch(`/api/v1/chats/${chatId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          continueMode: true,
-          opening: true,
-          speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
-        }),
-        signal: abortControllerRef.current.signal,
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'The curtain would not rise')
-      }
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-      await readSSEStream(reader, {
-        participantId: '',
-        onToolsDetected: trackToolsDetected,
-        onToolResult: trackToolResult,
-        onSurfacedMessage: surfaceMessage,
-        onConfirmationResult: applyConfirmationResult,
-        onDone: (fullContent, data) => {
-          setResponseStatus(null)
-          clearPendingToolExecutionStatus()
-          if (doneLeavesNoReply(data.outcome)) {
-            finishSkippedTurn()
-            return
-          }
-          if (fullContent.trim() && currentParticipantId) {
-            setMessages(prev => [...prev, assistantMessageFromDone(data, fullContent, {
-              participantId: currentParticipantId as string,
-              id: `opening-${Date.now()}`,
-            })])
-          }
-        },
-        onTurnStart: (event) => {
-          currentParticipantId = event.participantId
-          setRespondingParticipantId(event.participantId)
-          resetStreamingContent()
-          setStreamingToolBatches([])
-          setWaitingForResponse(true)
-          setStreaming(false)
-        },
-        onChainComplete: async () => {
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(false)
-          setRespondingParticipantId(null)
-          scrollOnStreamComplete()
-          await fetchChat()
-          focusInput()
-        },
-      })
-    } catch (err) {
-      const isAbort = err instanceof Error && err.name === 'AbortError'
-      if (!isAbort) showErrorToast(extractErrorMessage(err))
-    } finally {
-      setStreaming(false)
-      setWaitingForResponse(false)
-      resetStreamingContent()
-      setRespondingParticipantId(null)
-      setResponseStatus(null)
-      abortControllerRef.current = null
-      setHandStatus(settleHandAtStreamEnd)
-      stoppingRef.current = false
-      setStopping(false)
-      releaseStream(streamToken)
-      await fetchChat()
-      focusInput()
-    }
-  }, [chatId, claimStream, releaseStream, setMessages, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, scrollOnStreamComplete, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+    await runTurnStream({
+      kind: 'open',
+      request: async (signal) => {
+        const res = await fetch(`/api/v1/chats/${chatId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            continueMode: true,
+            opening: true,
+            speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+          }),
+          signal,
+        })
+        if (!res.ok) throw new Error(await refusalMessage(res, 'The curtain would not rise'))
+        return res
+      },
+      handlers: (turn) => ({
+        // The opening's greeting is one turn; it has no chain bookkeeping.
+        onTurnComplete: undefined,
+        // A greeting with no responder named has no bubble to put it in.
+        onDone: (fullContent, data) =>
+          settleFinalDone(turn, turn.participantId ? fullContent : '', data, 'opening'),
+      }),
+      after: fetchChat,
+    })
+  }, [chatId, runTurnStream, settleFinalDone, fetchChat])
 
   /**
    * Read a narration-only stream — a join the operator is watching
@@ -1447,21 +859,7 @@ export function useSSEStreaming({
     try {
       const reader = res.body?.getReader()
       if (!reader) return
-      const decoder = new TextDecoder()
-      let buffer = ''
-      const handle = (line: string) => {
-        if (!line.startsWith('data: ')) return
-        const frame = parseFrame(line.slice(6))
-        if (frame?.kind === 'greenRoom') onGreenRoomRef.current?.(frame.greenRoom)
-      }
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const split = splitSseBuffer(buffer, decoder.decode(value, { stream: true }))
-        buffer = split.rest
-        split.lines.forEach(handle)
-      }
-      (buffer + decoder.decode()).split('\n').forEach(handle)
+      await readGreenRoomFrames(reader, (event) => onGreenRoomRef.current?.(event))
     } catch (err) {
       showErrorToast(`The arrival went quiet: ${getErrorMessage(err)}`)
     } finally {
@@ -1480,147 +878,46 @@ export function useSSEStreaming({
    * `isPaused` stands — so the room falls quiet again straight afterwards.
    */
   const triggerContinueMode = useCallback(async (participantId: string, nudge = false) => {
-    if (inFlightRef.current) {
-      showInfoToast('One moment — the room is still speaking.')
-      return
-    }
-
-    const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
-    if (!participant) {
-      showErrorToast('This participant is no longer available in the chat.')
-      return
-    }
-
-    if (!hasActiveCharacters) {
-      showErrorToast('No characters available. Add a character to continue the conversation.')
-      return
-    }
-
-    const streamToken = claimStream()
-    if (!streamToken) return
-    setHandStatus(null)
-
-    setWaitingForResponse(true)
-    setStreaming(false)
-    resetStreamingContent()
-    setStreamingToolBatches([])
-    // Track the current responding participant across chained turns (mutable for closures)
-    let currentParticipantId = participantId
-    setRespondingParticipantId(participantId)
-
-    try {
-      abortControllerRef.current = new AbortController()
-      const { signal } = abortControllerRef.current
-
-      const res = await fetch(`/api/v1/messages?chatId=${chatId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          continueMode: true,
-          respondingParticipantId: participantId,
-          speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
-          // Nudge (explicit summon) withholds the "nothing to add" skip option;
-          // the algorithm-picked Continue button leaves it undefined so skip is offered.
-          nudge: nudge || undefined,
-        }),
-        signal,
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to trigger response')
-      }
-
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      await readSSEStream(reader, {
-        participantId,
-        onToolsDetected: trackToolsDetected,
-        onToolResult: trackToolResult,
-        onSurfacedMessage: surfaceMessage,
-        onConfirmationResult: applyConfirmationResult,
-        onDone: (fullContent, data) => {
-          setResponseStatus(null)
-          clearPendingToolExecutionStatus()
-
-          if (doneLeavesNoReply(data.outcome)) {
-            finishSkippedTurn()
-            return
-          }
-
-          if (fullContent.trim()) {
-            const newMessage = assistantMessageFromDone(data, fullContent, {
-              participantId: currentParticipantId,
-              id: `continue-${Date.now()}`,
-            })
-            setMessages(prev => [...prev, newMessage])
-          }
-        },
-        onIntermediateDone: async (fullContent, data) => {
-          // Intermediate done during a chain — add temp message but don't reset state
-          if (doneLeavesNoReply(data.outcome)) {
-            finishSkippedTurn()
-            return
-          }
-          if (!fullContent.trim()) return
-
-          const newMessage = assistantMessageFromDone(data, fullContent, {
-            participantId: currentParticipantId,
-            id: `continue-chain-${Date.now()}`,
-          })
-          setMessages(prev => [...prev, newMessage])
-        },
-        onTurnStart: (event) => {
-          currentParticipantId = event.participantId
-          setRespondingParticipantId(event.participantId)
-          resetStreamingContent()
-          setStreamingToolBatches([])
-          setWaitingForResponse(true)
-          setStreaming(false)
-        },
-        onTurnComplete: async (event) => {
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(false)
-          await fetchChat()
-        },
-        onChainComplete: async (event) => {
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(false)
-          setRespondingParticipantId(null)
-          scrollOnStreamComplete()
-          await fetchChat()
-          announceChainPause(event)
-          notifyQueueChange()
-          focusInput()
-        },
-      })
-    } catch (err) {
-      const isAbort = err instanceof Error && err.name === 'AbortError'
-      if (!isAbort) {
-        const errorMessage = extractErrorMessage(err)
-        showErrorToast(errorMessage)
-      }
-    } finally {
-      setStreaming(false)
-      setWaitingForResponse(false)
-      resetStreamingContent()
-      setRespondingParticipantId(null)
-      setResponseStatus(null)
-      abortControllerRef.current = null
-      setHandStatus(settleHandAtStreamEnd)
-      stoppingRef.current = false
-      setStopping(false)
-      scrollOnStreamComplete()
-      releaseStream(streamToken)
-      // Re-fetch chat to pick up side-channel messages (e.g. whisper tool writes)
-      await fetchChat()
-      notifyQueueChange()
-      focusInput()
-    }
-  }, [chatId, claimStream, releaseStream, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+    await runTurnStream({
+      kind: 'continue',
+      refusal: STILL_SPEAKING,
+      participantId,
+      before: () => {
+        if (!participantsAsBase.some(p => p.id === participantId && p.isActive)) {
+          showErrorToast('This participant is no longer available in the chat.')
+          return false
+        }
+        if (!hasActiveCharacters) {
+          showErrorToast('No characters available. Add a character to continue the conversation.')
+          return false
+        }
+        setHandStatus(null)
+      },
+      request: async (signal) => {
+        const res = await fetch(`/api/v1/messages?chatId=${chatId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            continueMode: true,
+            respondingParticipantId: participantId,
+            speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+            // Nudge (explicit summon) withholds the "nothing to add" skip option;
+            // the algorithm-picked Continue button leaves it undefined so skip is offered.
+            nudge: nudge || undefined,
+          }),
+          signal,
+        })
+        if (!res.ok) throw new Error(await refusalMessage(res, 'Failed to trigger response'))
+        return res
+      },
+      handlers: (turn) => ({
+        onDone: (fullContent, data) => settleFinalDone(turn, fullContent, data, 'continue'),
+        // Intermediate done during a chain — add temp message but don't reset state
+        onIntermediateDone: (fullContent, data) => pushReply(turn, fullContent, data, 'continue-chain'),
+      }),
+      after: refreshAfterRun,
+    })
+  }, [chatId, runTurnStream, participantsAsBase, hasActiveCharacters, settleFinalDone, pushReply, refreshAfterRun])
 
   /**
    * Storyteller: run the operator's selection for an open round. The stream
@@ -1634,109 +931,32 @@ export function useSSEStreaming({
     order: StorytellerOrder,
     keepOrder = false,
   ): Promise<boolean> => {
-    const streamToken = claimStream()
-    if (!streamToken) {
-      showInfoToast('One moment — the room is still speaking.')
-      return false
-    }
-
-    setWaitingForResponse(true)
-    setStreaming(false)
-    resetStreamingContent()
-    setStreamingToolBatches([])
-    setConcurrentStreams([])
-    let currentParticipantId: string | null = null
-
-    const pushReply = (fullContent: string, data: DoneFrame) => {
-      if (doneLeavesNoReply(data.outcome)) {
-        finishSkippedTurn()
-        return
-      }
-      if (!fullContent.trim()) return
-      const reply = assistantMessageFromDone(data, fullContent, {
-        participantId: currentParticipantId,
-        id: `storyteller-${Date.now()}`,
-      })
-      setMessages(prev => [...prev, reply])
-    }
-
-    try {
-      abortControllerRef.current = new AbortController()
-      const { signal } = abortControllerRef.current
-      const res = await fetch(`/api/v1/chats/${chatId}?action=storyteller-run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roundId, participantIds, order, keepOrder }),
-        signal,
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'The storyteller could not run that selection')
-      }
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      await readSSEStream(reader, {
-        participantId: null,
-        onToolsDetected: trackToolsDetected,
-        onToolResult: trackToolResult,
-        onSurfacedMessage: surfaceMessage,
-        onConfirmationResult: applyConfirmationResult,
-        onDone: (fullContent, data) => {
-          setResponseStatus(null)
-          clearPendingToolExecutionStatus()
-          pushReply(fullContent, data)
-        },
-        onIntermediateDone: (fullContent, data) => pushReply(fullContent, data),
-        onTurnStart: (event) => {
-          currentParticipantId = event.participantId
-          setRespondingParticipantId(event.participantId)
-          resetStreamingContent()
-          setStreamingToolBatches([])
-          setWaitingForResponse(true)
-          setStreaming(false)
-        },
-        onTurnComplete: async () => {
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(false)
-          await fetchChat()
-        },
-        onChainComplete: async (event) => {
-          resetStreamingContent()
-          setStreaming(false)
-          setWaitingForResponse(false)
-          setConcurrentStreams([])
-          setRespondingParticipantId(null)
-          scrollOnStreamComplete()
-          await fetchChat()
-          announceChainPause(event)
-          focusInput()
-        },
-      })
-      return true
-    } catch (err) {
-      const isAbort = err instanceof Error && err.name === 'AbortError'
-      if (!isAbort) showErrorToast(extractErrorMessage(err))
-      return false
-    } finally {
-      setStreaming(false)
-      setWaitingForResponse(false)
-      resetStreamingContent()
-      setConcurrentStreams([])
-      setRespondingParticipantId(null)
-      setResponseStatus(null)
-      abortControllerRef.current = null
-      setHandStatus(settleHandAtStreamEnd)
-      stoppingRef.current = false
-      setStopping(false)
-      releaseStream(streamToken)
-      scrollOnStreamComplete()
-      await fetchChat()
-      notifyQueueChange()
-      focusInput()
-    }
-  }, [chatId, claimStream, releaseStream, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+    return runTurnStream({
+      kind: 'storyteller',
+      refusal: STILL_SPEAKING,
+      before: () => {
+        setConcurrentStreams([])
+      },
+      request: async (signal) => {
+        const res = await fetch(`/api/v1/chats/${chatId}?action=storyteller-run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roundId, participantIds, order, keepOrder }),
+          signal,
+        })
+        if (!res.ok) throw new Error(await refusalMessage(res, 'The storyteller could not run that selection'))
+        return res
+      },
+      handlers: (turn) => ({
+        onDone: (fullContent, data) => settleFinalDone(turn, fullContent, data, 'storyteller'),
+        onIntermediateDone: (fullContent, data) => pushReply(turn, fullContent, data, 'storyteller'),
+      }),
+      after: async () => {
+        setConcurrentStreams([])
+        await refreshAfterRun()
+      },
+    })
+  }, [chatId, runTurnStream, settleFinalDone, pushReply, refreshAfterRun])
 
   /**
    * Abandon the local stream outright — the old Stop, now only the fallback
@@ -1750,15 +970,14 @@ export function useSSEStreaming({
     }
     setStreaming(false)
     setWaitingForResponse(false)
-    setSending(false)
     setRespondingParticipantId(null)
-    setStreamingToolBatches([])
+    clearStreamingToolBatches()
     dismissToolExecutionStatus()
     resetStreamingContent()
     stoppingRef.current = false
     setStopping(false)
     releaseStream()
-  }, [setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus, releaseStream])
+  }, [setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus, clearStreamingToolBatches, releaseStream])
 
   /**
    * Hard stop. The server pauses a room with a rotation, abandons the provider
@@ -1850,7 +1069,6 @@ export function useSSEStreaming({
     toolExecutionStatus,
     dismissToolExecutionStatus,
     responseStatus,
-    abortControllerRef,
     sendMessage,
     triggerContinueMode,
     openChat,
