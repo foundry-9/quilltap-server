@@ -218,6 +218,21 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
     }
   }
 
+  // Jobs enqueued before setup (the seed stores' embeddings, among others)
+  // have been waiting for the pepper; the processor host defers forking the
+  // job child until it exists. Now it does, so start working the queue.
+  if (!requiresRestart) {
+    try {
+      const { ensureProcessorRunning } = await import('@/lib/background-jobs');
+      ensureProcessorRunning();
+      unlockLogger.debug('Background job processor woken after setup');
+    } catch (wakeErr) {
+      unlockLogger.warn('Could not wake the background job processor after setup', {
+        error: wakeErr instanceof Error ? wakeErr.message : String(wakeErr),
+      });
+    }
+  }
+
   // Return the pepper once for the user to save
   return successResponse({
     pepper: result.pepper,

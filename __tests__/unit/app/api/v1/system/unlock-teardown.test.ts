@@ -28,6 +28,7 @@ import { closeLLMLogsSQLiteClient } from '@/lib/database/backends/sqlite/llm-log
 import { convertDatabaseToEncrypted } from '@/lib/startup/db-encryption-converter';
 import { getDatabaseEncryptionState } from '@/lib/startup/db-encryption-state';
 import { setupDbKey, getDbKeyState, getHasUserPassphrase, lockDbKey } from '@/lib/startup/dbkey';
+import { ensureProcessorRunning } from '@/lib/background-jobs';
 
 jest.mock('@/lib/logger', () => {
   const makeLogger = (): Record<string, unknown> => ({
@@ -40,6 +41,9 @@ jest.mock('@/lib/logger', () => {
   return { logger: makeLogger() };
 });
 
+jest.mock('@/lib/background-jobs', () => ({
+  ensureProcessorRunning: jest.fn(),
+}));
 jest.mock('@/lib/database/backends/sqlite/client', () => ({
   closeSQLiteClient: jest.fn(),
 }));
@@ -145,6 +149,24 @@ describe('bug 64 — unlock route teardown wiring', () => {
       expect(res.status).toBe(200);
       expect(body.pepper).toBe('test-pepper-base64');
       expect(body.requiresRestart).toBe(true);
+    });
+
+    it('wakes the job processor once the database is reopened', async () => {
+      // Jobs enqueued before setup wait for the pepper; nothing else starts
+      // the job child on a first run until the next restart.
+      await POST(postRequest('setup', { passphrase: '' }));
+
+      expect(ensureProcessorRunning).toHaveBeenCalledTimes(1);
+      expect(jest.mocked(resumeDatabase).mock.invocationCallOrder[0])
+        .toBeLessThan(jest.mocked(ensureProcessorRunning).mock.invocationCallOrder[0]);
+    });
+
+    it('does not wake the job processor when a restart is required', async () => {
+      jest.mocked(resumeDatabase).mockRejectedValue(new Error('nope') as never);
+
+      await POST(postRequest('setup', { passphrase: '' }));
+
+      expect(ensureProcessorRunning).not.toHaveBeenCalled();
     });
   });
 

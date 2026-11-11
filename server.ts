@@ -46,8 +46,26 @@ async function main(): Promise<void> {
     load: () => Promise<(ws: WebSocket, req: IncomingMessage) => Promise<void>>,
   ): void => {
     const url = req.url ?? '';
+    // Nothing owns this socket until `wss.handleUpgrade` runs, and the handler
+    // module loads asynchronously first. A client that goes away in that window
+    // (a page reload, a closed tab) resets the socket, and the request then
+    // emits `error: aborted` (ECONNRESET). Unheard, that is an
+    // uncaughtException and it takes the whole server down. Listen from the
+    // first moment; `ws` attaches its own handlers once it takes the socket.
+    const onEarlyError = (err: Error): void => {
+      moduleLogger.debug(`${label} WS upgrade aborted before handshake`, {
+        url,
+        error: err.message,
+      });
+    };
+    req.on('error', onEarlyError);
+    socket.on('error', onEarlyError);
     load()
       .then((handle) => {
+        if (socket.destroyed) {
+          moduleLogger.debug(`${label} WS client left before handshake; skipping`, { url });
+          return;
+        }
         wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
           handle(ws, req).catch((err) => {
             moduleLogger.error(`${label} WS upgrade error`, { url }, err as Error);

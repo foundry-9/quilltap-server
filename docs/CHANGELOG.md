@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Fix: first-run and restart failures found dogfooding a fresh instance
+
+- Background jobs were dead on every brand-new instance until a restart. Startup enqueues jobs (the seed stores' embeddings) before first-run setup has produced the encryption pepper; the job child refuses to run without it, so it exited five times, used up the restart budget, and stayed down after setup succeeded. The processor host (`lib/background-jobs/host/processor-host.ts`) now defers forking the child until the pepper exists, without spending the crash budget, and `?action=setup` wakes it once the databases are reopened.
+- A browser reload or closed tab could crash the server. Node destroys an abandoned incoming request with `Error('aborted')` / `ECONNRESET`; when that escaped its request it reached the process-wide `uncaughtException` handler, which closed SQLite and exited. It is now logged as a warning and the server keeps running (`isClientDisconnectAbort`, `lib/database/backends/sqlite/client.ts`). `server.ts` also listens for errors on a WebSocket upgrade's socket from the start, instead of only after the handler module has loaded.
+- Tailwind no longer scans `docs/` (`@source not "../docs"` in `app/globals.css`). A developer doc that mentioned a class such as `text-[var(…)]` produced invalid CSS and failed the whole dev build, and every doc save recompiled the stylesheet and full-reloaded every open page, which made the unlock screen unusable while docs were being written.
+
 #### Docs: Release checklist 14 pass
 
 - README tour: the Atlas, character kind (roleplay / assistant), the one-page character editor and birthdays, line editing, fixed-in-time portraits, Turns mode, the Green Room opening, and the rebuilt Foundry settings page.

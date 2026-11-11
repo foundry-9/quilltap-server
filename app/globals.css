@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Developer prose is not markup. Tailwind's automatic source detection reads
+   every file in the repo, so a doc that merely mentions a class (say
+   `text-[var(…)]`) became invalid CSS and failed the whole build, and every
+   doc save recompiled this stylesheet and full-reloaded every open page. */
+@source not "../docs";
+
 @font-face {
   font-family: "Inter";
   src: url("/fonts/Inter-Regular.woff2") format("woff2");
