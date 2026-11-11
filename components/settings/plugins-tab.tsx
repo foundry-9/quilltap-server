@@ -91,7 +91,7 @@ function PluginToggle({
       disabled={isToggling}
       className={`
         relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
-        transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring
+        transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 qt-focus-ring
         focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
         ${enabled ? 'qt-bg-primary' : 'qt-toggle-off'}
       `}
@@ -101,7 +101,7 @@ function PluginToggle({
     >
       <span
         className={`
-          pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0
+          pointer-events-none inline-block h-5 w-5 transform rounded-full qt-bg-default shadow ring-0
           transition duration-200 ease-in-out
           ${enabled ? 'translate-x-5' : 'translate-x-0'}
         `}
@@ -421,7 +421,7 @@ export default function PluginsTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="qt-loading-state py-12">
         <div className="flex items-center gap-3">
           <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
           <p className="qt-text-secondary">Loading plugins...</p>
@@ -438,7 +438,7 @@ export default function PluginsTab() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
               <p className="qt-text-label">Total Plugins</p>
-              <p className="qt-heading-2 text-primary">{stats.total}</p>
+              <p className="qt-heading-2 qt-text-brand">{stats.total}</p>
             </div>
             <div>
               <p className="qt-text-label">Enabled</p>
@@ -471,8 +471,8 @@ export default function PluginsTab() {
             onClick={() => setActiveTab('installed')}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'installed'
-                ? 'text-foreground'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-text'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Installed
@@ -484,8 +484,8 @@ export default function PluginsTab() {
             onClick={() => setActiveTab('upgrades')}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'upgrades'
-                ? 'text-foreground'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-text'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Upgrades{availableUpgrades.length > 0 && ` (${availableUpgrades.length})`}
@@ -497,8 +497,8 @@ export default function PluginsTab() {
             onClick={() => setActiveTab('browse')}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'browse'
-                ? 'text-foreground'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-text'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Browse npm
@@ -525,7 +525,7 @@ export default function PluginsTab() {
           {plugins.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <Icon name="files" className="mx-auto h-12 w-12 qt-text-secondary/50" />
-              <h3 className="mt-4 text-lg text-primary">
+              <h3 className="mt-4 text-lg qt-text-brand">
                 No Plugins Found
               </h3>
               <p className="mt-2 qt-text-small">
@@ -652,7 +652,7 @@ export default function PluginsTab() {
           )}
 
           {upgradesLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="qt-loading-state py-12">
               <div className="flex items-center gap-3">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
                 <p className="qt-text-secondary">Checking for updates...</p>
@@ -661,7 +661,7 @@ export default function PluginsTab() {
           ) : availableUpgrades.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <Icon name="check-circle" className="mx-auto h-12 w-12 qt-text-success" />
-              <h3 className="mt-4 text-lg text-primary">
+              <h3 className="mt-4 text-lg qt-text-brand">
                 All Plugins Up to Date
               </h3>
               <p className="mt-2 qt-text-small">
@@ -717,7 +717,7 @@ export default function PluginsTab() {
                           href={upgrade.repository}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
+                          className="qt-text-secondary hover:qt-text inline-flex items-center gap-1"
                         >
                           Repository
                           <Icon name="external-link" className="w-3 h-3" />
@@ -728,7 +728,7 @@ export default function PluginsTab() {
                           href={upgrade.changelogUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
+                          className="qt-text-secondary hover:qt-text inline-flex items-center gap-1"
                         >
                           Changelog
                           <Icon name="external-link" className="w-3 h-3" />
@@ -738,7 +738,7 @@ export default function PluginsTab() {
                         href={upgrade.npmUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
+                        className="qt-text-secondary hover:qt-text inline-flex items-center gap-1"
                       >
                         npm
                         <Icon name="external-link" className="w-3 h-3" />
@@ -804,7 +804,7 @@ export default function PluginsTab() {
             {searchResults.length === 0 && !searching && (
               <div className="qt-card p-8 text-center">
                 <Icon name="search" className="mx-auto h-12 w-12 qt-text-secondary/50" />
-                <h3 className="mt-4 text-lg text-primary">
+                <h3 className="mt-4 text-lg qt-text-brand">
                   Search for Plugins
                 </h3>
                 <p className="mt-2 qt-text-small">

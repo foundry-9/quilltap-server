@@ -235,7 +235,7 @@ export default function GenerateImageDialog({
           {userCharacterParticipant?.character && (
             <button
               onClick={() => insertPlaceholder('me')}
-              className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 text-primary rounded border qt-border-primary/30 transition-colors"
+              className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 qt-text-brand rounded border qt-border-primary/30 transition-colors"
               disabled={isGenerating}
             >
               <div className="font-medium">{userCharacterParticipant.character.name}</div>
@@ -249,7 +249,7 @@ export default function GenerateImageDialog({
               <button
                 key={p.id}
                 onClick={() => insertPlaceholder(p.character!.name)}
-                className="w-full px-3 py-2 text-left text-sm bg-accent hover:bg-accent/80 text-accent-foreground rounded border border-accent transition-colors"
+                className="w-full px-3 py-2 text-left text-sm qt-bg-accent hover:qt-bg-accent/80 qt-text-on-accent rounded border border-accent transition-colors"
                 disabled={isGenerating}
               >
                 <div className="font-medium truncate">{p.character.name}</div>
@@ -262,7 +262,7 @@ export default function GenerateImageDialog({
           <div className="relative pt-4" ref={dropdownRef}>
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full px-3 py-2 text-sm text-foreground qt-bg-muted hover:qt-bg-muted/80 rounded border border-input transition-colors flex items-center justify-between"
+              className="w-full px-3 py-2 text-sm qt-text qt-bg-muted hover:qt-bg-muted/80 rounded border qt-border-input transition-colors flex items-center justify-between"
               disabled={isGenerating}
             >
               <span>Other Characters...</span>
@@ -290,12 +290,12 @@ export default function GenerateImageDialog({
                     >
                       <span className={`px-1.5 py-0.5 text-xs rounded ${
                         entity.type === 'character'
-                          ? 'bg-accent text-accent-foreground'
-                          : 'qt-bg-primary/20 text-primary'
+                          ? 'qt-bg-accent qt-text-on-accent'
+                          : 'qt-bg-primary/20 qt-text-brand'
                       }`}>
                         {entity.type === 'character' ? 'C' : 'P'}
                       </span>
-                      <span className="text-foreground">{entity.name}</span>
+                      <span className="qt-text">{entity.name}</span>
                     </button>
                   ))}
                   {filteredEntities.length === 0 && (
@@ -311,7 +311,7 @@ export default function GenerateImageDialog({
 
         {/* Right side - Prompt input */}
         <div className="flex-1">
-          <label htmlFor="image-prompt" className="block text-sm qt-text-primary mb-2">
+          <label htmlFor="image-prompt" className="qt-label mb-2">
             Image Prompt
           </label>
           <textarea

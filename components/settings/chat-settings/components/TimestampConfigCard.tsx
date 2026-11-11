@@ -161,7 +161,7 @@ export function TimestampConfigCard({
             value={currentConfig.intervalMinutes ?? 15}
             onChange={(e) => handleIntervalMinutesChange(e.target.value)}
             disabled={disabled}
-            className="w-32 px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-32 px-3 py-2 border qt-border-default rounded qt-bg-default qt-text-primary focus:outline-none focus:ring-2 qt-focus-ring"
           />
           <p className="qt-text-secondary mt-1 text-xs">
             The Host will announce the time at most once every {currentConfig.intervalMinutes ?? 15} minute{(currentConfig.intervalMinutes ?? 15) === 1 ? '' : 's'}. The first message in the conversation always gets an announcement.
@@ -214,7 +214,7 @@ export function TimestampConfigCard({
                 onChange={(e) => handleCustomFormatChange(e.target.value)}
                 placeholder="e.g., 'PPpp' or 'yyyy-MM-dd HH:mm:ss'"
                 disabled={isDisabled}
-                className="w-full px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="qt-input"
               />
               <p className="qt-text-secondary mt-1 text-xs">
                 Uses date-fns format tokens. See{' '}
@@ -222,7 +222,7 @@ export function TimestampConfigCard({
                   href="https://date-fns.org/docs/format"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary hover:underline"
+                  className="qt-text-brand hover:underline"
                 >
                   date-fns documentation
                 </a>{' '}
@@ -254,7 +254,7 @@ export function TimestampConfigCard({
                   }
                 })()}
                 disabled={isDisabled}
-                className="flex-1 px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 px-3 py-2 border qt-border-default rounded qt-bg-default qt-text-primary focus:outline-none focus:ring-2 qt-focus-ring"
               />
               <button
                 type="button"
@@ -373,7 +373,7 @@ export function TimestampConfigCard({
                   handleFictionalBaseTimestampChange(e.target.value)
                 }
                 disabled={isDisabled}
-                className="w-full px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="qt-input"
               />
               <p className="qt-text-secondary mt-1 text-xs">
                 The hour at which the tale begins, read as a clock in the

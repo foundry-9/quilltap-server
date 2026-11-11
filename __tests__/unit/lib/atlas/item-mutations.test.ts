@@ -29,7 +29,6 @@ import {
   deleteAtlasEntry,
   duplicateAtlasEntry,
   moveAtlasEntriesToFolder,
-  setAtlasEntryArchived,
   updateAtlasEntry,
 } from '@/lib/atlas/item-mutations'
 import { AtlasNameTakenError } from '@/lib/atlas/errors'
@@ -72,22 +71,22 @@ it('refuses a rename into a taken name, and a restore into one; an alias overlap
   const b = await createAtlasEntry(general, { name: 'Lighthouse', aliases: ['car'], metadata: {} } as never)
   await expect(updateAtlasEntry(general, b, { name: 'CONVERTIBLE' })).rejects.toBeInstanceOf(AtlasNameTakenError)
 
-  await setAtlasEntryArchived(general, a, true)
+  await updateAtlasEntry(general, a, { archived: true })
   const renamed = await updateAtlasEntry(general, b, { name: 'Convertible' })
   expect(renamed?.name).toBe('Convertible')
   const archivedA = (await general.findEntry(a.id))!
-  await expect(setAtlasEntryArchived(general, archivedA, false)).rejects.toBeInstanceOf(AtlasNameTakenError)
+  await expect(updateAtlasEntry(general, archivedA, { archived: false })).rejects.toBeInstanceOf(AtlasNameTakenError)
 })
 
 it('archives idempotently and restores', async () => {
   const a = await createAtlasEntry(general, { name: 'Lighthouse', aliases: [], metadata: {} } as never)
-  const first = await setAtlasEntryArchived(general, a, true)
-  expect(first.changed).toBe(true)
-  const again = await setAtlasEntryArchived(general, first.entry!, true)
-  expect(again.changed).toBe(false)
+  const first = (await updateAtlasEntry(general, a, { archived: true }))!
+  expect(first.archivedAt).not.toBeNull()
+  const again = (await updateAtlasEntry(general, first, { archived: true }))!
+  expect(again.archivedAt).toBe(first.archivedAt)
   expect((await general.readEntries(false)).map((e) => e.id)).toEqual([])
-  const back = await setAtlasEntryArchived(general, first.entry!, false)
-  expect(back.entry?.archivedAt).toBeNull()
+  const back = await updateAtlasEntry(general, first, { archived: false })
+  expect(back?.archivedAt).toBeNull()
 })
 
 it('duplicates beside the original as "(copy)" with no picture', async () => {

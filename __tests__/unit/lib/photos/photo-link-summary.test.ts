@@ -1,6 +1,5 @@
 import {
   getPhotoLinkSummaryBySha256,
-  getPhotoLinkSummaryByFileId,
 } from '@/lib/photos/photo-link-summary';
 import { buildKeptImageMarkdown } from '@/lib/photos/keep-image-markdown';
 
@@ -194,24 +193,5 @@ describe('getPhotoLinkSummaryBySha256', () => {
 
     const summary = await getPhotoLinkSummaryBySha256(SHA, repos as any);
     expect(summary).toEqual({ count: 0, linkers: [] });
-  });
-});
-
-describe('getPhotoLinkSummaryByFileId', () => {
-  it('returns the empty summary when the file id is unknown', async () => {
-    const repos = buildRepos();
-    repos.files.findById.mockResolvedValue(null);
-
-    const summary = await getPhotoLinkSummaryByFileId('missing', repos as any);
-    expect(summary).toEqual({ count: 0, linkers: [] });
-  });
-
-  it('looks up by sha256 when the file entry resolves', async () => {
-    const repos = buildRepos();
-    repos.files.findById.mockResolvedValue({ id: 'f1', sha256: SHA });
-    repos.docMountFiles.findBySha256.mockResolvedValue(null);
-
-    await getPhotoLinkSummaryByFileId('f1', repos as any);
-    expect(repos.docMountFiles.findBySha256).toHaveBeenCalledWith(SHA);
   });
 });

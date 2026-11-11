@@ -2,7 +2,6 @@
  * Chats API v1 - Document Mode Actions
  *
  * Handles document mode actions for Scriptorium Phase 3.5:
- * - active-document: Get the active document for a chat
  * - open-document: Open a document alongside the chat
  * - close-document: Close the document pane
  * - read-document: Read file content for the document editor
@@ -352,35 +351,6 @@ async function refreshDocumentMode(
   const current = (chat as { documentMode?: string } | null)?.documentMode;
   if (current !== 'split' && current !== 'focus') {
     await repos.chats.update(chatId, { documentMode: 'split' } as Record<string, unknown>);
-  }
-}
-
-/**
- * Get an active document for a chat (the earliest-opened). Retained for the
- * legacy single-pane route; the workspace uses `open-documents` instead.
- */
-export async function handleActiveDocument(
-  chatId: string,
-  { repos }: RequestContext
-): Promise<NextResponse> {
-  try {
-    const doc = await repos.chatDocuments.findActiveForChat(chatId);
-
-    return successResponse({
-      document: doc ? {
-        id: doc.id,
-        filePath: doc.filePath,
-        scope: doc.scope,
-        mountPoint: doc.mountPoint,
-        displayTitle: doc.displayTitle,
-      } : null,
-    });
-  } catch (error) {
-    logger.error('Failed to get active document', {
-      chatId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return serverError('Failed to get active document');
   }
 }
 

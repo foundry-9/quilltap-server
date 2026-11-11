@@ -99,7 +99,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess, initialProvider }: Api
     if (isOpen && initialProvider) {
       setField('provider', initialProvider)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- preselect only on the open transition; setField from useFormState is a fresh function every render
   }, [isOpen, initialProvider])
 
   const createKey = useAsyncOperation<ApiKeyResponse>()

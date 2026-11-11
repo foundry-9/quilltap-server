@@ -250,7 +250,7 @@ describe('ProfileModal api key (Bug 76)', () => {
         hook.form.setField('apiKeyId', 'key-anthropic')
         hook.form.setField('name', 'Hosted')
         hook.form.setField('modelName', 'claude-sonnet-4-5-20250929')
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- test harness seeds the form once on mount; hook is a fresh object every render
       }, [])
       return (
         <button type="button" onClick={() => hook.handleSubmit('profile-1')}>
@@ -282,7 +282,7 @@ describe('ProfileModal api key (Bug 76)', () => {
         hook.form.setField('apiKeyId', 'key-anthropic')
         hook.form.setField('name', 'Local')
         hook.form.setField('modelName', 'qwen3')
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- test harness seeds the form once on mount; hook is a fresh object every render
       }, [])
       return (
         <button type="button" onClick={() => hook.handleSubmit('profile-1')}>

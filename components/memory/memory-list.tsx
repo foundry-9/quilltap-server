@@ -215,7 +215,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         {memories.length > 0 && (
           <button
             onClick={() => setShowMaintenance(true)}
-            className="px-3 py-1.5 qt-bg-muted text-foreground text-sm rounded-lg qt-hover-accent"
+            className="px-3 py-1.5 qt-bg-muted qt-text text-sm rounded-lg qt-hover-accent"
             title="Fold repetitions, consolidate, and keep this character under the cap"
           >
             Maintenance
@@ -247,7 +247,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         </select>
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg qt-hover-accent"
+          className="px-3 py-2 text-sm border qt-border-input qt-bg-default qt-text rounded-lg qt-hover-accent"
           title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
         >
           {sortOrder === 'asc' ? '↑' : '↓'}

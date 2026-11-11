@@ -380,24 +380,6 @@ describe('SmartTypographyPlugin', () => {
     })
   })
 
-  describe('logging', () => {
-    it('logs once per substitution and never on an ordinary keystroke', () => {
-      const debug = console.debug as jest.Mock
-      const editor = mount()
-
-      seedParagraph(editor, 'Well.')
-      pressKey(editor, '.')
-      expect(debug).not.toHaveBeenCalled()
-
-      seedParagraph(editor, 'Well..')
-      pressKey(editor, '.')
-
-      expect(debug).toHaveBeenCalledTimes(1)
-      expect(debug.mock.calls[0][0]).toContain('[smart-typography]')
-      expect(debug.mock.calls[0][0]).toContain('ellipsis')
-    })
-  })
-
   /**
    * The registration-order contract with Layer 1.5.
    *

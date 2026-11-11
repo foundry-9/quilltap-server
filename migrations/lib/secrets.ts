@@ -7,7 +7,6 @@
 
 import {
   createCipheriv,
-  createDecipheriv,
   randomBytes,
   pbkdf2Sync,
   createHash,
@@ -53,7 +52,7 @@ function deriveKey(secret: string): Buffer {
  *
  * The key is cached for performance.
  */
-export function getEncryptionKey(): Buffer {
+function getEncryptionKey(): Buffer {
   // Return cached key if available
   if (cachedKey) {
     return cachedKey;
@@ -122,57 +121,5 @@ export function encryptSecrets(secrets: Record<string, string>): string {
       error: errorMsg,
     });
     throw new Error(`Failed to encrypt secrets: ${errorMsg}`);
-  }
-}
-
-/**
- * Decrypt a record of mount point secrets
- *
- * Takes the base64-encoded encrypted string, decrypts and JSON parses
- * to return the original secret record.
- */
-export function decryptSecrets(encrypted: string): Record<string, string> {
-  if (!encrypted || typeof encrypted !== 'string') {
-    throw new Error('Encrypted data must be a valid base64 string');
-  }
-
-  try {
-    const key = getEncryptionKey();
-
-    // Decode from base64
-    const combined = Buffer.from(encrypted, 'base64').toString('hex');
-
-    // Extract components: IV (32 hex chars) + authTag (32 hex chars) + ciphertext
-    const ivHex = combined.slice(0, 32);
-    const authTagHex = combined.slice(32, 64);
-    const ciphertextHex = combined.slice(64);
-
-    if (!ivHex || !authTagHex || !ciphertextHex) {
-      throw new Error('Invalid encrypted data structure');
-    }
-
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(authTagHex, 'hex');
-
-    const decipher = createDecipheriv(
-      ALGORITHM,
-      new Uint8Array(key),
-      new Uint8Array(iv)
-    );
-
-    decipher.setAuthTag(new Uint8Array(authTag));
-
-    let decrypted = decipher.update(ciphertextHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-
-    const secrets = JSON.parse(decrypted) as Record<string, string>;
-    return secrets;
-  } catch (error) {
-    const errorMsg =
-      error instanceof Error ? error.message : 'Unknown decryption error';
-    // Don't expose internal error details to caller
-    throw new Error(
-      'Failed to decrypt secrets. Invalid encryption key or corrupted data.'
-    );
   }
 }

@@ -163,7 +163,7 @@ export function HelpChatDialog() {
 
   useEffect(() => {
     if (pastChatsData?.chats) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- past-chats query data is copied into local state that the delete handler also filters
       setPastChats(pastChatsData.chats)
     }
   }, [pastChatsData])
@@ -171,7 +171,7 @@ export function HelpChatDialog() {
   // Load messages when chat changes
   useEffect(() => {
     if (currentChatId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- loads the selected help chat's messages into local state, which the send handler also appends to optimistically
       loadMessages(currentChatId)
     } else {
       setMessages([])

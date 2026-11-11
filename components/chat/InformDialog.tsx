@@ -195,7 +195,7 @@ export default function InformDialog({
         <div className="flex-1 overflow-y-auto p-4 flex flex-col">
           {/* Audience — Everyone by default; ticking a seat narrows it. */}
           <div className="mb-4">
-            <label className="block text-sm qt-text-primary mb-2" id="inform-audience-label">
+            <label className="qt-label mb-2" id="inform-audience-label">
               Who is told
             </label>
             {eligible.length === 0 ? (
@@ -267,7 +267,7 @@ export default function InformDialog({
 
           {/* The passage itself */}
           <div className="flex-1 flex flex-col min-h-0">
-            <label className="block text-sm qt-text-primary mb-2" id="inform-body-label">
+            <label className="qt-label mb-2" id="inform-body-label">
               What they are told
             </label>
             <MarkdownLexicalEditor

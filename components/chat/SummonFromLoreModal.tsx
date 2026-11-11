@@ -79,7 +79,7 @@ export default function SummonFromLoreModal({
       bodyClassName=""
     >
       <div className="flex items-center justify-between mb-4">
-        <ModalTitle className="qt-dialog-title text-foreground">Summon From Lore</ModalTitle>
+        <ModalTitle className="qt-dialog-title qt-text">Summon From Lore</ModalTitle>
         <button
           onClick={onClose}
           className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"

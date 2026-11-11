@@ -35,7 +35,7 @@ export function GalleryImage({
         onClick={() => {
           onImageClick(index)
         }}
-        className={`relative aspect-square w-full overflow-hidden rounded-lg qt-bg-muted hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-ring transition-all ${
+        className={`relative aspect-square w-full overflow-hidden rounded-lg qt-bg-muted hover:ring-2 hover:qt-ring-brand focus:outline-none focus:ring-2 qt-focus-ring transition-all ${
           isAvatar ? 'ring-2 ring-success' : ''
         }`}
       >

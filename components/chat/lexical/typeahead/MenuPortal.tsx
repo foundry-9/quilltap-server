@@ -157,7 +157,7 @@ export function MenuPortal({
   // menuRenderFn={…} />`), so the element already exists by the time this
   // component runs. Mirroring it into state would add a render pass for nothing,
   // and the null branch below keeps it honest if that contract ever changes.
-  // eslint-disable-next-line react-hooks/refs
+  // eslint-disable-next-line react-hooks/refs -- the typeahead plugin renders this only after its anchor element is mounted, so the ref is populated
   return anchorElementRef.current === null ? null : createPortal(menu, anchorElementRef.current)
 }
 

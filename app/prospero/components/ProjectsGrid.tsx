@@ -36,7 +36,7 @@ export function ProjectsGrid({ projects, onCreateClick, onDeleteClick, onOpenPro
         <p className="mb-4 text-lg qt-text-secondary">No projects yet</p>
         <button
           onClick={onCreateClick}
-          className="qt-text-primary hover:text-primary/80"
+          className="qt-text-primary hover:qt-text-brand/80"
         >
           Create your first project
         </button>

@@ -139,11 +139,6 @@ export function takeRaisedHand(): boolean {
   return true
 }
 
-/** Is any Salon stream open for this chat in this process? */
-export function hasActiveTurn(chatId: string): boolean {
-  return (state.byChat.get(chatId)?.size ?? 0) > 0
-}
-
 /**
  * Wait until every stream that opened for this chat BEFORE the calling one has
  * finished. A whisper uses this to queue behind a chain already running rather

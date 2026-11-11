@@ -114,8 +114,8 @@ export function ChatsSection({
   if (loading) {
     return (
       <div className="mt-8">
-        <h2 className="qt-heading-3 text-foreground mb-4">Chats</h2>
-        <div className="flex items-center justify-center py-12 qt-text-secondary">
+        <h2 className="qt-heading-3 qt-text mb-4">Chats</h2>
+        <div className="qt-loading-state py-12 qt-text-secondary">
           <p>Loading chats...</p>
         </div>
       </div>
@@ -126,7 +126,7 @@ export function ChatsSection({
     <div className="mt-8">
       {/* Section header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="qt-heading-3 text-foreground">
+        <h2 className="qt-heading-3 qt-text">
           Chats
           {total > 0 && (
             <span className="ml-2 text-base font-normal qt-text-secondary">({visibleChats.length})</span>
@@ -172,7 +172,7 @@ export function ChatsSection({
           {/* Load more indicator / trigger */}
           <div
             ref={loadMoreRef}
-            className="py-8 flex items-center justify-center"
+            className="qt-loading-state"
           >
             {loadingMore ? (
               <p className="qt-text-secondary">Loading more chats...</p>

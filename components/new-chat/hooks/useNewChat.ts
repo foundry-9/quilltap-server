@@ -56,6 +56,7 @@ import {
 } from '@/components/scenario/types'
 import { toAutonomousSettingsHint, type AutonomousSettingsHint } from '../autonomous-settings-hint'
 import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
+import { settingsCardHref } from '@/lib/settings/hrefs'
 
 export interface UseNewChatOptions {
   initialCharacterId?: string
@@ -411,7 +412,7 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
     ])
     return { general, project: projectTier, group }
     // The option objects are rebuilt each render from the three values below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the scenario query option objects are rebuilt each render from the listed values, which are the real inputs
   }, [queryClient, showArchivedScenarios, selectedProjectId, groupCharacterIdsKey])
 
   // --- The casting defaults ------------------------------------------------
@@ -615,7 +616,7 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
       const data = await createMutation.mutateAsync(body)
       if (autonomousEnabled) {
         showSuccessToast('Autonomous room created!')
-        navigate('/settings?section=autonomous-rooms')
+        navigate(settingsCardHref('autonomous-rooms'))
       } else {
         showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
         // In the workspace this opens the new chat as a tab in place; the

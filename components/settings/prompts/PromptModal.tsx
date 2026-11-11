@@ -94,7 +94,7 @@ export function PromptModal({
 
         {/* Content field */}
         <div>
-          <label className="block text-sm qt-text-primary mb-1">
+          <label className="qt-label mb-1">
             Content <span className="qt-text-destructive">*</span>
           </label>
           <p className="qt-text-xs mb-2">

@@ -55,7 +55,6 @@ const {
 
 const {
   handleRecentDocuments,
-  handleActiveDocument,
   handleOpenDocument,
   handleWriteDocument,
   handleResolveDocument,
@@ -163,44 +162,6 @@ describe('chats [id] document actions', () => {
     expect(body.documents[2].fromCurrentChat).toBe(false)
     // an other-chat row is never reported as the active doc for this chat
     expect(body.documents[2].isActive).toBe(false)
-  })
-
-  it('returns active document metadata when one exists', async () => {
-    const chatId = 'chat-1'
-    ctx.repos.chatDocuments.findActiveForChat.mockResolvedValueOnce({
-      id: 'doc-1',
-      chatId,
-      filePath: 'notes/outline.md',
-      scope: 'document_store',
-      mountPoint: 'Docs',
-      displayTitle: 'outline.md',
-      isActive: true,
-      createdAt: '2026-04-15T10:00:00.000Z',
-      updatedAt: '2026-04-15T10:00:00.000Z',
-    })
-
-    const response = await handleActiveDocument(chatId, ctx)
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body.document).toEqual({
-      id: 'doc-1',
-      filePath: 'notes/outline.md',
-      scope: 'document_store',
-      mountPoint: 'Docs',
-      displayTitle: 'outline.md',
-    })
-  })
-
-  it('returns null active document when no document is open', async () => {
-    const chatId = 'chat-1'
-    ctx.repos.chatDocuments.findActiveForChat.mockResolvedValueOnce(null)
-
-    const response = await handleActiveDocument(chatId, ctx)
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body.document).toBeNull()
   })
 
   it('stores blank documents under general scope when the chat has no project', async () => {

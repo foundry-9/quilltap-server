@@ -65,7 +65,7 @@ export function ImportFileStep({
             d="M12 16v-4m0-4v4m0 0l3.09-3.09m-6.18 0L12 12m0 0l-3.09-3.09m6.18 0L12 12"
           />
         </svg>
-        <p className="text-foreground font-medium">
+        <p className="qt-text font-medium">
           Drag and drop a .qtap file here
         </p>
         <p className="qt-text-secondary text-sm mt-1">
@@ -75,7 +75,7 @@ export function ImportFileStep({
 
       {selectedFile && (
         <div className="p-4 qt-bg-muted/50 rounded-lg">
-          <p className="font-medium text-foreground truncate">
+          <p className="font-medium qt-text truncate">
             {selectedFile.name}
           </p>
           <p className="qt-text-small qt-text-secondary mt-1">

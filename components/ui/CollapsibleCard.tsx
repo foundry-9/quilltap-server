@@ -36,6 +36,8 @@ interface CollapsibleCardProps {
   badge?: ReactNode
   /** Terms to mark (`<mark>`) in the title and description, case- and accent-insensitively. */
   highlight?: readonly string[]
+  /** Extra classes for the card's outer element (e.g. a grid span such as `col-span-full`). */
+  className?: string
   children: ReactNode
 }
 
@@ -125,6 +127,7 @@ export function CollapsibleCard({
   onOpenChange,
   badge,
   highlight,
+  className,
   children,
 }: CollapsibleCardProps) {
   const { isOpen: uncontrolledIsOpen, setOpen, toggle } = useOpenState(defaultOpen || forceOpen)
@@ -163,7 +166,7 @@ export function CollapsibleCard({
   }, [forceOpen, isControlled, controlledIsOpen, onOpenChange, setOpen])
 
   return (
-    <div className="qt-collapsible-card" id={sectionId} ref={cardRef}>
+    <div className={className ? `qt-collapsible-card ${className}` : 'qt-collapsible-card'} id={sectionId} ref={cardRef}>
       <button
         type="button"
         className="qt-collapsible-card-header"

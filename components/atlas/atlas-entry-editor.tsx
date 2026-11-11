@@ -281,7 +281,7 @@ export function AtlasEntryEditor({
           rootLabel="Atlas (top level)"
           placeholder="e.g., Vehicles/Motorcars"
           hint="Where it is filed for your browsing; it never changes who is told of it."
-          labelClassName="text-sm text-foreground block mb-1"
+          labelClassName="text-sm qt-text block mb-1"
           inputClassName="qt-input qt-input-sm w-full"
           selectClassName="qt-select qt-select-sm w-full"
         />

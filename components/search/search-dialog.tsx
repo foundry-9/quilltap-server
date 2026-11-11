@@ -139,7 +139,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
       const typesToSearch = (initialTypes && initialTypes.length > 0) ? initialTypes : selectedTypes
       performSearch(initialQuery, typesToSearch)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires the initial search once per opening; selectedTypes and performSearch omitted so later filter changes do not re-run it
   }, [isOpen, initialQuery, initialTypes, hasSearched])
 
   // Handle input change with debounce
@@ -251,7 +251,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Search chats, characters, messages, documents, tags, memories..."
-            className="w-full pl-10 pr-4 py-3 text-lg border-0 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none focus:ring-0"
+            className="w-full pl-10 pr-4 py-3 text-lg border-0 bg-transparent qt-text placeholder-muted-foreground focus:outline-none focus:ring-0"
           />
           {query && (
             <button
@@ -261,7 +261,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes,
                 setSubmitted(null)
                 inputRef.current?.focus()
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 qt-text-secondary hover:text-foreground"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 qt-text-secondary hover:qt-text"
               aria-label="Clear search"
             >
               <Icon name="close" className="w-5 h-5" />

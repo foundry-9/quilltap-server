@@ -38,7 +38,7 @@ export type { IconName };
 export interface IconProps {
   /** Canonical, theme-overridable icon name (see {@link IconName}). */
   name: IconName;
-  /** Tailwind sizing/colour classes, e.g. `"w-5 h-5 text-muted-foreground"`. */
+  /** Tailwind sizing/colour classes, e.g. `"w-5 h-5 qt-text-secondary"`. */
   className?: string;
   /**
    * Accessible label. When provided, the icon is exposed to assistive tech as

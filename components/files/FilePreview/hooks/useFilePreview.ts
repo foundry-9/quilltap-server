@@ -85,10 +85,10 @@ export function useFilePreview({
 
   const textContent = textData ?? null
 
-  // Handle size limit and SWR errors
+  // Handle size limit and query errors
   useEffect(() => {
     if (previewType !== 'text') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- textError is derived from previewType, the size limit and the query error, and must be reset when the file or preview type changes
       setTextError(null)
       return
     }

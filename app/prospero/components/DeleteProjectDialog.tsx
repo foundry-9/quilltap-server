@@ -26,7 +26,7 @@ export function DeleteProjectDialog({ open, onClose, onConfirm }: DeleteProjectD
       bodyClassName="p-6 overflow-y-auto"
      
     >
-      <ModalTitle className="mb-4 qt-heading-4 text-foreground">Delete Project</ModalTitle>
+      <ModalTitle className="mb-4 qt-heading-4 qt-text">Delete Project</ModalTitle>
       <p className="mb-4 qt-text-small">
         Are you sure you want to delete this project? Chats and files will be disassociated but not deleted.
       </p>

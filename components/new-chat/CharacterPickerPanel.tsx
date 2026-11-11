@@ -153,7 +153,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
             aria-label="Search characters"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border qt-border-default bg-background px-4 py-2 text-foreground placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded-lg border qt-border-default qt-bg-default px-4 py-2 qt-text placeholder:qt-text-secondary focus:outline-none focus:ring-2 qt-focus-ring"
           />
         </div>
         <div
@@ -226,7 +226,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
             {selectedCharacters.map((sc, index) => {
               const avatarSrc = getAvatarSrc(sc.character)
               return (
-                <div key={sc.character.id} className="rounded-lg border qt-border-default qt-bg-muted/30 p-4">
+                <div key={sc.character.id} className="border qt-border-default rounded-lg p-4 qt-bg-muted/30">
                   <div className="flex items-start gap-3">
                     {avatarSrc ? (
 
@@ -245,7 +245,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
                       <div className="flex items-center gap-2">
                         <span className="qt-text-primary">{sc.character.name}</span>
                         {index === 0 && (
-                          <span className="rounded qt-bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
+                          <span className="rounded qt-bg-primary/20 px-2 py-0.5 text-xs font-medium qt-text-brand">
                             Speaks First
                           </span>
                         )}
@@ -258,7 +258,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
                           value={sc.controlledBy === 'user' ? USER_CONTROLLED_PROFILE : sc.connectionProfileId}
                           onChange={(e) => handleProfileChange(sc.character.id, e.target.value)}
                           disabled={disabled}
-                          className="w-full rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          className="w-full rounded-lg border qt-border-default qt-bg-default px-3 py-1.5 text-sm qt-text focus:outline-none focus:ring-2 qt-focus-ring"
                         >
                           <option value="">Select profile...</option>
                           <option value={USER_CONTROLLED_PROFILE}>Play As (User)</option>
@@ -288,7 +288,7 @@ export function CharacterPickerPanel({ autoFocusSearch }: CharacterPickerPanelPr
                               handleSystemPromptChange(sc.character.id, e.target.value || null)
                             }
                             disabled={disabled}
-                            className="w-full rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            className="w-full rounded-lg border qt-border-default qt-bg-default px-3 py-1.5 text-sm qt-text focus:outline-none focus:ring-2 qt-focus-ring"
                           >
                             <option value="">Use Default</option>
                             {sc.character.systemPrompts.map((prompt) => (

@@ -1,8 +1,8 @@
 /**
  * Unit tests for lib/startup/db-encryption-state.ts
  *
- * Covers both the legacy boolean isDatabaseEncrypted(dbPath) wrapper and the
- * tri-state getDatabaseEncryptionState(dbPath) primary, including the retry
+ * Covers the tri-state getDatabaseEncryptionState(dbPath), read both as a
+ * plain "is it encrypted?" answer and as the full state, including the retry
  * loop for transient EAGAIN/EBUSY/EWOULDBLOCK reads.
  */
 
@@ -24,10 +24,11 @@ jest.mock('fs', () => ({
 }));
 
 // The functions under test - imported after the mock is registered.
-import {
-  isDatabaseEncrypted,
-  getDatabaseEncryptionState,
-} from '@/lib/startup/db-encryption-state';
+import { getDatabaseEncryptionState } from '@/lib/startup/db-encryption-state';
+
+/** The yes/no question most callers ask; `unknown` reads as "no". */
+const isDatabaseEncrypted = (dbPath: string): boolean =>
+  getDatabaseEncryptionState(dbPath) === 'encrypted';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,10 +61,10 @@ function makeFsError(code: string, message: string): NodeJS.ErrnoException {
 }
 
 // ---------------------------------------------------------------------------
-// Tests — boolean wrapper
+// Tests — encrypted or not
 // ---------------------------------------------------------------------------
 
-describe('isDatabaseEncrypted()', () => {
+describe('getDatabaseEncryptionState() as a yes/no answer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

@@ -63,7 +63,7 @@ export function GalleryControls({
             onZoomOut()
           }}
           disabled={thumbnailSizeIndex === 0}
-          className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
+          className="p-1 qt-text-secondary hover:qt-text disabled:opacity-50"
           title="Smaller thumbnails"
         >
           <Icon name="zoom-out" className="w-5 h-5" />
@@ -76,7 +76,7 @@ export function GalleryControls({
             onZoomIn()
           }}
           disabled={thumbnailSizeIndex === maxThumbnailIndex}
-          className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
+          className="p-1 qt-text-secondary hover:qt-text disabled:opacity-50"
           title="Larger thumbnails"
         >
           <Icon name="zoom-in" className="w-5 h-5" />

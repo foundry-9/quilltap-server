@@ -37,7 +37,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
       overlayClassName="z-[100]"
     >
       <div className="qt-dialog-body !px-0 !py-0 mb-6">
-        <ModalTitle className="text-sm font-normal text-foreground whitespace-pre-wrap break-words">
+        <ModalTitle className="text-sm font-normal qt-text whitespace-pre-wrap break-words">
           {message}
         </ModalTitle>
       </div>

@@ -21,6 +21,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { SectionCard } from '../components/SectionCard'
 import { TriStateSelect } from '../components/TriStateSelect'
 import { useCharacterPage } from '../CharacterPageContext'
+import { settingsGroupHref } from '@/lib/settings/hrefs'
 
 export function ChatDefaultsSection() {
   const {
@@ -88,7 +89,7 @@ export function ChatDefaultsSection() {
         {profiles.length === 0 && (
           <p className="text-sm qt-text-warning">
             No connection profiles yet.{' '}
-            <Link href="/settings?group=connections" className="underline hover:no-underline">
+            <Link href={settingsGroupHref('connections')} className="underline hover:no-underline">
               Create one in AI Providers
             </Link>
             .

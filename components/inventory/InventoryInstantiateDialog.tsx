@@ -101,7 +101,7 @@ export function InventoryInstantiateDialog({
       </p>
       {archetype ? (
         <>
-          <label className="text-sm text-foreground" htmlFor="inventory-instantiate-target">Into</label>
+          <label className="text-sm qt-text" htmlFor="inventory-instantiate-target">Into</label>
           <select id="inventory-instantiate-target" className="qt-select w-full mt-1" value={target} onChange={(e) => setTarget(e.target.value)}>
             <option value="" disabled>Choose an inventory</option>
             {catalogue.characters.length > 0 && (
@@ -150,7 +150,7 @@ export function InventoryInstantiateDialog({
               >
                 <InventoryPicture item={a} />
                 <span className="flex-1 min-w-0">
-                  <span className="block text-sm text-foreground truncate">{a.title || a.name}</span>
+                  <span className="block text-sm qt-text truncate">{a.title || a.name}</span>
                   {a.description && <span className="block qt-text-xs qt-text-secondary truncate">{a.description}</span>}
                 </span>
               </button>

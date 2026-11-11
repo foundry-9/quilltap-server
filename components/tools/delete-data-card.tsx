@@ -153,7 +153,7 @@ export function DeleteDataCard() {
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
           <div className="flex-1">
-            <h2 className="qt-heading-2 text-foreground mb-1">
+            <h2 className="qt-heading-2 qt-text mb-1">
               Delete All Data
             </h2>
             <p className="qt-text-small">
@@ -183,7 +183,7 @@ export function DeleteDataCard() {
               <span className="w-10 h-10 qt-bg-destructive/10 rounded-full flex items-center justify-center">
                 <Icon name="alert-triangle" className="w-5 h-5 qt-text-destructive" />
               </span>
-              <span className="text-foreground">
+              <span className="qt-text">
                 {step === 'complete' ? 'Deletion Complete' : 'Delete All Data'}
               </span>
             </span>
@@ -242,7 +242,7 @@ export function DeleteDataCard() {
         {step === 'preview' && (
           <>
             {loading ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="qt-loading-state">
                 <svg className="w-8 h-8 animate-spin qt-text-secondary" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -335,7 +335,7 @@ export function DeleteDataCard() {
                   )}
                   <div className="border-t qt-border-default pt-2 mt-2">
                     <div className="flex justify-between font-semibold">
-                      <span className="text-foreground">Total Items</span>
+                      <span className="qt-text">Total Items</span>
                       <span className="qt-text-destructive">{getTotalCount(preview)}</span>
                     </div>
                   </div>
@@ -347,7 +347,7 @@ export function DeleteDataCard() {
                         type="checkbox"
                         checked={keepArchives}
                         onChange={(e) => setKeepArchives(e.target.checked)}
-                        className="mt-0.5 w-4 h-4 rounded focus:ring-ring"
+                        className="mt-0.5 w-4 h-4 rounded qt-focus-ring"
                       />
                       <span className="text-sm qt-text-primary">
                         Leave the archived-character bundles on the shelf ({preview.archiveBundles}{' '}

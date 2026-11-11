@@ -153,6 +153,17 @@ function setCurrentState(state: DbKeyState): void {
   global.__quilltapDbKeyState = state;
 }
 
+/**
+ * Force the dbkey state from outside this module. Only the legacy pepper-vault
+ * migration needs it: it sets `'needs-vault-storage'` so `storeEnvPepperInDbKey`
+ * will write the `.dbkey` file, and `'resolved'` when that write fails but the
+ * pepper is already unlocked.
+ */
+export function overrideDbKeyState(state: DbKeyState): void {
+  log.debug('dbkey state overridden by the legacy pepper migration', { state });
+  setCurrentState(state);
+}
+
 // ============================================================================
 // Crypto Helpers (private)
 // ============================================================================

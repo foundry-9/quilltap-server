@@ -136,7 +136,7 @@ function BreadcrumbRow({
   conciergeBadge,
 }: RowProps) {
   const compact = density !== 'full'
-  const linkClass = 'inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0'
+  const linkClass = 'inline-flex items-center gap-1.5 qt-text-secondary hover:qt-text transition-colors flex-shrink-0'
   const tabIndex = measuring ? -1 : undefined
 
   const withTip = (name: string, hint: string, node: ReactNode) =>
@@ -158,7 +158,7 @@ function BreadcrumbRow({
   const titleLink = (
     <a
       href={`/salon/${chatId}`}
-      className="qt-text-primary truncate min-w-0 hover:text-foreground transition-colors"
+      className="qt-text-primary truncate min-w-0 hover:qt-text transition-colors"
       style={measuring ? { maxWidth: TITLE_MEASURE_MAX_PX, display: 'inline-block' } : undefined}
       tabIndex={tabIndex}
     >

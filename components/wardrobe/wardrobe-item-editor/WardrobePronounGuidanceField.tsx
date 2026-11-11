@@ -29,7 +29,7 @@ export function WardrobePronounGuidanceField({ value, onChange }: WardrobePronou
       <legend className="qt-label mb-1">Pronoun Guidance</legend>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {STANDARD_PRONOUNS.map(({ label, value: { subject } }) => (
-          <label key={subject} className="flex items-center gap-2 text-sm text-foreground">
+          <label key={subject} className="flex items-center gap-2 text-sm qt-text">
             <input
               type="checkbox"
               checked={value.includes(subject)}

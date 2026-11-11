@@ -24,7 +24,7 @@ export function ChatsTab({ projectId, chats, onRemoveChat }: ChatsTabProps) {
         <p className="text-sm mt-2">
           <Link
             href={`/salon/new?projectId=${projectId}`}
-            className="text-primary hover:underline"
+            className="qt-text-brand hover:underline"
           >
             Create a new chat
           </Link>{' '}
@@ -39,7 +39,7 @@ export function ChatsTab({ projectId, chats, onRemoveChat }: ChatsTabProps) {
       {chats.map((chat) => (
         <div key={chat.id} className="qt-entity-card flex items-center justify-between">
           <div>
-            <Link href={`/salon/${chat.id}`} className="font-medium hover:text-primary">
+            <Link href={`/salon/${chat.id}`} className="font-medium hover:qt-text-brand">
               {chat.title || 'Untitled Chat'}
             </Link>
             <p className="qt-text-small">

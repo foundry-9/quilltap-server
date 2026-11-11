@@ -28,6 +28,7 @@ import type {
   SavedScenarioTarget,
 } from '@/components/scenario-builder/ScenarioBuilderDialog'
 import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
+import { settingsGroupHref } from '@/lib/settings/hrefs'
 
 // Loaded on demand: the builder (and the Markdown renderer behind its thinking
 // block) stays out of this surface's bundle until the Host is asked.
@@ -434,7 +435,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
             disabled={creating || hasUserControlled}
           />
           <span>
-            <span className="font-medium text-foreground">Make this an autonomous room</span>
+            <span className="font-medium qt-text">Make this an autonomous room</span>
             <span className="block qt-text-xs qt-text-muted mt-1">
               Autonomous rooms run when scheduled or started manually. They have no human user, no
               composer, and pause for nobody.{' '}
@@ -461,7 +462,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
           <div className="rounded-lg border qt-border-warning/50 qt-bg-warning/10 p-3 qt-text-warning">
             <p className="qt-label">No connection profiles available</p>
             <p className="mt-1 qt-body-sm">
-              <Link href="/settings?group=connections" className="underline hover:no-underline">
+              <Link href={settingsGroupHref('connections')} className="underline hover:no-underline">
                 Add an AI provider
               </Link>{' '}
               to start a chat.
@@ -471,7 +472,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
 
         {showSingleCharacterControls && singleLlm && (
           <div>
-            <label htmlFor="new-chat-profile" className="mb-2 block text-sm qt-text-primary">
+            <label htmlFor="new-chat-profile" className="mb-2 qt-label">
               Connection Profile *
             </label>
             <select
@@ -494,7 +495,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
 
         {showSystemPromptDropdown && singleLlm && (
           <div>
-            <label htmlFor="new-chat-system-prompt" className="mb-2 block text-sm qt-text-primary">
+            <label htmlFor="new-chat-system-prompt" className="mb-2 qt-label">
               System Prompt
             </label>
             <select
@@ -517,7 +518,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
 
         {showSingleCharacterControls && singleLlm && (
           <div>
-            <label className="mb-2 block text-sm qt-text-primary">Subprompts</label>
+            <label className="mb-2 qt-label">Subprompts</label>
             <SubpromptPicker
               characterId={singleLlm.character.id}
               characterName={singleLlm.character.name}
@@ -530,7 +531,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
 
         {!isAutonomous && playAsOptions.length > 0 && (
           <div>
-            <label htmlFor="new-chat-partner" className="mb-2 block text-sm qt-text-primary">
+            <label htmlFor="new-chat-partner" className="mb-2 qt-label">
               Play As (Optional)
             </label>
             <select
@@ -552,7 +553,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
 
         {roleplayTemplates.length > 0 && (
           <div>
-            <label htmlFor="new-chat-roleplay-template" className="mb-2 block text-sm qt-text-primary">
+            <label htmlFor="new-chat-roleplay-template" className="mb-2 qt-label">
               Roleplay Template
             </label>
             <select
@@ -581,7 +582,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
         )}
 
         <div>
-          <label className="mb-2 block text-sm qt-text-primary">
+          <label className="mb-2 qt-label">
             Image Generation Profile (Optional)
           </label>
           {imageProfiles.length > 0 ? (
@@ -601,7 +602,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
         {/* The Concierge — settle the chat's state before the first word is
             spoken, so the opening greeting is generated under it. */}
         <div>
-          <label htmlFor="new-chat-concierge" className="mb-2 block text-sm qt-text-primary">
+          <label htmlFor="new-chat-concierge" className="mb-2 qt-label">
             <span className="flex items-center gap-1.5">
               The Concierge
               <Icon
@@ -632,7 +633,7 @@ export function NewChatForm({ showSingleCharacterControls = false }: NewChatForm
 
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <label htmlFor="new-chat-scenario-select" className="block text-sm qt-text-primary">
+            <label htmlFor="new-chat-scenario-select" className="qt-label">
               Starting Scenario (Optional)
             </label>
             <button

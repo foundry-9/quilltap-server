@@ -28,7 +28,7 @@ export function DebugThemeInfo({
   return (
     <section className="border-t qt-border-default pt-8">
       <details className="text-sm">
-        <summary className="cursor-pointer qt-text-secondary hover:text-foreground">
+        <summary className="cursor-pointer qt-text-secondary hover:qt-text">
           Debug: Current Theme State
         </summary>
         <div className="mt-2 p-3 qt-bg-muted rounded-lg font-mono qt-text-xs space-y-2">

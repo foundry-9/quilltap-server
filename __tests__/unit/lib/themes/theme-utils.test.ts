@@ -1,20 +1,17 @@
 import {
   themeTokensToCSS,
-  themeColorsToCSS,
-  themeTokensToStyleObject,
   mergeThemeTokens,
-  mergeWithDefaultTheme,
-  colorPalettesEqual,
-  themeTokensEqual,
-  getThemeDifferences,
   generateFontFaceRule,
   generateFontFacesCSS,
   generateIconOverrideRule,
   generateIconOverridesCSS,
   generateScopedThemeCSS,
 } from '@/lib/themes/utils'
-import { DEFAULT_THEME_TOKENS, getDefaultThemeTokens } from '@/lib/themes/default-tokens'
+import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 import type { ThemeTokens } from '@/lib/themes/types'
+
+/** A fresh copy of the defaults, safe to mutate. */
+const getDefaultThemeTokens = (): ThemeTokens => JSON.parse(JSON.stringify(DEFAULT_THEME_TOKENS))
 
 describe('theme utility helpers', () => {
   describe('CSS generation', () => {
@@ -75,26 +72,6 @@ describe('theme utility helpers', () => {
       expect(css).toContain('--theme-background')
     })
 
-    it('generates CSS variable snippets for specific color mode', () => {
-      const lightSnippet = themeColorsToCSS(DEFAULT_THEME_TOKENS, 'light')
-      expect(lightSnippet).toContain('--theme-background')
-      expect(lightSnippet).not.toContain(':root')
-      
-      const darkSnippet = themeColorsToCSS(DEFAULT_THEME_TOKENS, 'dark')
-      expect(darkSnippet).toContain('--theme-background')
-      expect(darkSnippet).not.toContain('.dark')
-    })
-
-    it('generates style objects for React components', () => {
-      const lightStyle = themeTokensToStyleObject(DEFAULT_THEME_TOKENS, 'light')
-      expect(lightStyle['--theme-primary']).toBe(DEFAULT_THEME_TOKENS.colors.light.primary)
-      expect(lightStyle['--theme-font-sans']).toBe(DEFAULT_THEME_TOKENS.typography?.fontSans)
-      expect(lightStyle['--theme-spacing-4']).toBe(DEFAULT_THEME_TOKENS.spacing?.spacing4)
-
-      const darkStyle = themeTokensToStyleObject(DEFAULT_THEME_TOKENS, 'dark')
-      expect(darkStyle['--theme-primary']).toBe(DEFAULT_THEME_TOKENS.colors.dark.primary)
-      expect(darkStyle['--theme-background']).toBe(DEFAULT_THEME_TOKENS.colors.dark.background)
-    })
   })
 
   describe('theme merging', () => {
@@ -134,12 +111,6 @@ describe('theme utility helpers', () => {
       expect(merged.colors.light.background).toBe(base.colors.light.background)
     })
 
-    it('merges with default theme', () => {
-      const withDefaults = mergeWithDefaultTheme({ colors: { dark: { background: '#111111' } } })
-      expect(withDefaults.colors.light.background).toBe(DEFAULT_THEME_TOKENS.colors.light.background)
-      expect(withDefaults.colors.dark.background).toBe('#111111')
-    })
-
     it('preserves all typography fields when partially overriding', () => {
       const base = getDefaultThemeTokens()
       const merged = mergeThemeTokens(base, {
@@ -168,127 +139,6 @@ describe('theme utility helpers', () => {
       expect(merged.effects?.transitionNormal).toBe('300ms')
       expect(merged.effects?.transitionFast).toBe(base.effects?.transitionFast)
       expect(merged.effects?.shadowSm).toBe(base.effects?.shadowSm)
-    })
-  })
-
-  describe('theme comparison', () => {
-    it('compares palettes and entire theme tokens', () => {
-      const base = getDefaultThemeTokens()
-      const modified = getDefaultThemeTokens()
-      modified.colors.light.primary = '#123456'
-
-      expect(colorPalettesEqual(base.colors.light, modified.colors.light)).toBe(false)
-      expect(themeTokensEqual(base, base)).toBe(true)
-      expect(themeTokensEqual(base, modified)).toBe(false)
-    })
-
-    it('detects equal palettes', () => {
-      const palette1 = { ...DEFAULT_THEME_TOKENS.colors.light }
-      const palette2 = { ...DEFAULT_THEME_TOKENS.colors.light }
-      expect(colorPalettesEqual(palette1, palette2)).toBe(true)
-    })
-
-    it('detects palette differences in any field', () => {
-      const base = { ...DEFAULT_THEME_TOKENS.colors.light }
-      const modified1 = { ...base, border: '#999999' }
-      const modified2 = { ...base, accent: '#FF00FF' }
-      
-      expect(colorPalettesEqual(base, modified1)).toBe(false)
-      expect(colorPalettesEqual(base, modified2)).toBe(false)
-    })
-
-    it('detects typography differences', () => {
-      const base = getDefaultThemeTokens()
-      const modified = getDefaultThemeTokens()
-      modified.typography!.fontSans = 'Different Font'
-      
-      expect(themeTokensEqual(base, modified)).toBe(false)
-    })
-
-    it('detects spacing differences', () => {
-      const base = getDefaultThemeTokens()
-      const modified = getDefaultThemeTokens()
-      modified.spacing!.radiusLg = '999px'
-      
-      expect(themeTokensEqual(base, modified)).toBe(false)
-    })
-
-    it('detects effects differences', () => {
-      const base = getDefaultThemeTokens()
-      const modified = getDefaultThemeTokens()
-      modified.effects!.shadowMd = '0 0 0 transparent'
-      
-      expect(themeTokensEqual(base, modified)).toBe(false)
-    })
-  })
-
-  describe('theme differences reporting', () => {
-    it('reports detailed differences between themes', () => {
-      const base = getDefaultThemeTokens()
-      const compare = mergeThemeTokens(base, {
-        colors: { light: { background: '#111111' } },
-        typography: { fontSans: 'Custom' },
-        spacing: { spacing2: '0.6rem' },
-        effects: { shadowSm: '0 0 1px #000' },
-      })
-
-      const diff = getThemeDifferences(base, compare)
-      expect(diff.lightColors).toEqual(expect.arrayContaining([
-        expect.objectContaining({ key: 'background', compare: '#111111' }),
-      ]))
-      expect(diff.typography).toEqual(expect.arrayContaining([
-        expect.objectContaining({ key: 'fontSans', compare: 'Custom' }),
-      ]))
-      expect(diff.spacing).toEqual(expect.arrayContaining([
-        expect.objectContaining({ key: 'spacing2', compare: '0.6rem' }),
-      ]))
-      expect(diff.effects).toEqual(expect.arrayContaining([
-        expect.objectContaining({ key: 'shadowSm', compare: '0 0 1px #000' }),
-      ]))
-    })
-
-    it('reports multiple light color differences', () => {
-      const base = getDefaultThemeTokens()
-      const compare = mergeThemeTokens(base, {
-        colors: { 
-          light: { 
-            primary: '#FF0000',
-            secondary: '#00FF00',
-            accent: '#0000FF',
-          } 
-        },
-      })
-
-      const diff = getThemeDifferences(base, compare)
-      expect(diff.lightColors.length).toBe(3)
-    })
-
-    it('reports dark color differences separately', () => {
-      const base = getDefaultThemeTokens()
-      const compare = mergeThemeTokens(base, {
-        colors: { 
-          dark: { 
-            background: '#000000',
-            foreground: '#FFFFFF',
-          } 
-        },
-      })
-
-      const diff = getThemeDifferences(base, compare)
-      expect(diff.darkColors.length).toBe(2)
-      expect(diff.lightColors.length).toBe(0)
-    })
-
-    it('returns empty arrays when themes are identical', () => {
-      const base = getDefaultThemeTokens()
-      const compare = getDefaultThemeTokens()
-
-      const diff = getThemeDifferences(base, compare)
-      expect(diff.lightColors).toEqual([])
-      expect(diff.darkColors).toEqual([])
-      expect(diff.typography).toEqual([])
-      expect(diff.spacing).toEqual([])
-      expect(diff.effects).toEqual([])
     })
   })
 

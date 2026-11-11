@@ -41,7 +41,7 @@ function PatternEntry({ pattern }: { pattern: BehavioralPattern }) {
   return (
     <div className="qt-card p-3 flex flex-col gap-1.5 overflow-hidden">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <span className="text-sm font-semibold text-foreground leading-snug">{pattern.pattern}</span>
+        <span className="text-sm font-semibold qt-text leading-snug">{pattern.pattern}</span>
         <FrequencyBadge frequency={pattern.frequency} />
       </div>
       <p className="text-xs italic qt-text-secondary leading-relaxed">{pattern.evidence}</p>
@@ -55,7 +55,7 @@ export function AnalysisSummary({ analysis, memoryCount, instructionsGiven = fal
       {/* Header card */}
       <div className="qt-card p-4">
         <div className="flex items-center gap-2 mb-2">
-          <Icon name="shield" className="w-4 h-4 text-primary flex-shrink-0" />
+          <Icon name="shield" className="w-4 h-4 qt-text-brand flex-shrink-0" />
           <h3 className="qt-section-title text-sm">Analysis Complete</h3>
           <span className="ml-auto flex flex-wrap justify-end gap-1.5">
             {memoryCount > 0 && (

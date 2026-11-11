@@ -22,7 +22,6 @@
 import {
   isComputedToolEffect,
   isWithinCeiling,
-  TOOL_EFFECT_RANK,
   UNDECLARED_TOOL_EFFECT,
   type ToolEffect,
   type ToolEffectLookups,
@@ -221,15 +220,6 @@ export function maxEffectOfTool(name: string, ctx: ToolEffectContext = {}): Tool
   const spec = toolEffectSpecOf(name);
   if (spec !== undefined) return isComputedToolEffect(spec) ? spec.maxEffect : spec;
   return ctx.pluginToolEffects?.get(name) ?? UNDECLARED_TOOL_EFFECT;
-}
-
-/** The highest of a set of effects (`none` for an empty set). */
-export function highestToolEffect(effects: Iterable<ToolEffect>): ToolEffect {
-  let highest: ToolEffect = 'none';
-  for (const effect of effects) {
-    if (TOOL_EFFECT_RANK[effect] > TOOL_EFFECT_RANK[highest]) highest = effect;
-  }
-  return highest;
 }
 
 /** The tool result's text when a call is refused for exceeding the turn's ceiling. */

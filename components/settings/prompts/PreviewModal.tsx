@@ -84,7 +84,7 @@ export function PreviewModal({
           </div>
         )}
         {template.isBuiltIn && (
-          <span className="inline-block px-2 py-0.5 text-xs font-medium qt-bg-primary/10 text-primary rounded mt-2">
+          <span className="inline-block px-2 py-0.5 text-xs font-medium qt-bg-primary/10 qt-text-brand rounded mt-2">
             Sample
           </span>
         )}

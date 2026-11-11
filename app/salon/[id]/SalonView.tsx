@@ -159,7 +159,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   const { total: chatGalleryTotal, invalidate: invalidateChatGallery } = useChatGallery(id)
 
   // --- Story background ---
-  // When the backdrop URL changes (active regeneration poll or passive SWR revalidation), refresh
+  // When the backdrop URL changes (active regeneration poll or a passive query refetch), refresh
   // the chat so any Lantern announcement posted alongside the new backdrop lands in the UI without
   // requiring the user to leave and return.
   const {
@@ -1218,8 +1218,8 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
               onClick={toggleInspector}
               className={`p-1.5 rounded transition-colors ${
                 inspectorOpen
-                  ? 'qt-bg-primary/15 text-primary'
-                  : 'qt-text-secondary hover:text-foreground'
+                  ? 'qt-bg-primary/15 qt-text-brand'
+                  : 'qt-text-secondary hover:qt-text'
               }`}
               title="LLM Inspector (Cmd+Shift+L)"
               aria-label="Toggle LLM Inspector"

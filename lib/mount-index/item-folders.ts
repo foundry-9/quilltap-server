@@ -116,8 +116,6 @@ export function defineItemFolderFamily(rules: ItemFolderRules, ext: string, erro
     normalizePath: (input: string | null | undefined): string => normalizeItemFolderPath(rules, input, pathError),
     /** A folder an existing item carries, in normal form or the root. */
     normalizeOrRoot: (input: string | null | undefined): string => normalizeItemFolderPathOrRoot(rules, input),
-    /** Normalise a folder *name* — one segment, as a rename takes it. */
-    normalizeName: (input: string | null | undefined): string => normalizeItemFolderName(rules, input, pathError),
     /** True when `path` is structurally safe to write under the root. */
     isSafe: (path: string): boolean => isSafeItemFolderPath(rules, path),
     /** Resolve an operator's requested folder against the folders a tier already has. */
@@ -127,8 +125,6 @@ export function defineItemFolderFamily(rules: ItemFolderRules, ext: string, erro
     isValid: (path: string): boolean => isValidItemFolderPath(rules, path),
     /** The folder a document lives in: `Root/A/B/x.ext` → `A/B`. */
     folderOf: (relativePath: string): string => folderOfItemPath(rules, relativePath),
-    /** The store path of a folder: `''` → `Root`, `A/B` → `Root/A/B`. */
-    storePath: (folder: string): string => itemFolderStorePath(rules, folder),
     /** True for a document path that can hold an item: an `ext` file under the root, outside reserved folders. */
     isDocumentPath: (relativePath: string): boolean => isItemDocumentPath(rules, relativePath, ext),
   };

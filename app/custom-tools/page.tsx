@@ -1,10 +1,10 @@
-import { CustomToolsView } from './CustomToolsView'
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
 /**
- * Pascal's Workbench — `/custom-tools`.
+ * Pascal's Workbench — `/custom-tools`, which redirects into the tabbed
+ * workspace's Workbench tab.
  *
- * Deep-linkable builder state rides the query string:
+ * Deep-linkable builder state rides the query string into the tab:
  *   `?mount=<mountPointId>&path=Tools/<file>` — open one definition to edit
  *   `?new=1&mount=<mountPointId>`            — create, destination preselected
  */
@@ -18,15 +18,5 @@ export default async function CustomToolsPage({
   const path = typeof params.path === 'string' ? params.path : undefined
   const isNew = params.new === '1'
 
-  redirectToWorkspaceTab('custom-tools', { mount, path, new: isNew ? '1' : undefined })
-
-  return (
-    <CustomToolsView
-      payload={
-        mount || path || isNew
-          ? { mountPointId: mount, path, create: isNew || undefined }
-          : undefined
-      }
-    />
-  )
+  return redirectToWorkspaceTab('custom-tools', { mount, path, new: isNew ? '1' : undefined })
 }

@@ -205,7 +205,7 @@ export default function StandaloneGenerateImageDialog({
     >
       {/* Image Profile Picker */}
       <div className="mb-4">
-        <label className="block text-sm qt-text-primary mb-2">
+        <label className="qt-label mb-2">
           Image Profile
         </label>
         <ImageProfilePicker
@@ -227,7 +227,7 @@ export default function StandaloneGenerateImageDialog({
           {userCharacterParticipant?.character && (
             <button
               onClick={() => insertPlaceholder('me')}
-              className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 text-primary rounded border qt-border-primary/30 transition-colors"
+              className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 qt-text-brand rounded border qt-border-primary/30 transition-colors"
               disabled={isGenerating}
             >
               <div className="font-medium">{userCharacterParticipant.character.name}</div>
@@ -241,7 +241,7 @@ export default function StandaloneGenerateImageDialog({
               <button
                 key={p.id}
                 onClick={() => insertPlaceholder(p.character!.name)}
-                className="w-full px-3 py-2 text-left text-sm bg-accent hover:bg-accent/80 text-accent-foreground rounded border border-accent transition-colors"
+                className="w-full px-3 py-2 text-left text-sm qt-bg-accent hover:qt-bg-accent/80 qt-text-on-accent rounded border border-accent transition-colors"
                 disabled={isGenerating}
               >
                 <div className="font-medium truncate">{p.character.name}</div>
@@ -265,7 +265,7 @@ export default function StandaloneGenerateImageDialog({
 
         {/* Right side - Prompt input */}
         <div className="flex-1">
-          <label htmlFor="standalone-image-prompt" className="block text-sm qt-text-primary mb-2">
+          <label htmlFor="standalone-image-prompt" className="qt-label mb-2">
             Image Prompt
           </label>
           <textarea

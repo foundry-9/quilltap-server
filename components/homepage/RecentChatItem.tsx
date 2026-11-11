@@ -69,7 +69,7 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
         <span className="qt-meta">
           {formatMessageTime(chatActivityAt(chat))}
         </span>
-        <span className="qt-meta text-primary">
+        <span className="qt-meta qt-text-brand">
           {chat._count.messages} msgs
           {chat.conciergeState && (
             <ConciergeMark

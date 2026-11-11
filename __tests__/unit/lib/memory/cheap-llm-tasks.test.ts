@@ -17,9 +17,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 
 // Import the module under test AFTER mocking
 import {
-  summarizeChat,
   titleChat,
-  updateContextSummary,
   describeAttachment,
   type MemoryDraft,
   type ChatMessage,
@@ -534,40 +532,6 @@ describe('Cheap LLM Tasks Service', () => {
     })
   })
 
-  describe('summarizeChat', () => {
-    it('should summarize a conversation', async () => {
-      const messages: ChatMessage[] = [
-        { role: 'user', content: 'Tell me about the weather' },
-        { role: 'assistant', content: 'It is sunny today with temperatures around 75°F' },
-        { role: 'user', content: 'Great, should I bring a jacket?' },
-        { role: 'assistant', content: 'A light jacket might be nice for the evening.' },
-      ]
-
-      const summary = 'The user asked about the weather. The assistant reported sunny conditions with 75°F temperatures and recommended bringing a light jacket for evening.'
-
-      mockSendMessage.mockResolvedValue({
-        content: summary,
-        usage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
-      })
-
-      const result = await summarizeChat(messages, testSelection, testUserId)
-
-      expect(result.success).toBe(true)
-      expect(result.result).toBe(summary)
-    })
-
-    it('should handle empty message list', async () => {
-      mockSendMessage.mockResolvedValue({
-        content: 'No conversation to summarize.',
-        usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
-      })
-
-      const result = await summarizeChat([], testSelection, testUserId)
-
-      expect(result.success).toBe(true)
-    })
-  })
-
   describe('titleChat', () => {
     it('should generate a title for a new chat', async () => {
       const messages: ChatMessage[] = [
@@ -642,28 +606,6 @@ describe('Cheap LLM Tasks Service', () => {
         }),
         'decrypted-api-key'
       )
-    })
-  })
-
-  describe('updateContextSummary', () => {
-    it('should update context summary with new messages', async () => {
-      const currentSummary = 'User and assistant discussed the weather.'
-      const newMessages: ChatMessage[] = [
-        { role: 'user', content: 'Now let us talk about dinner plans' },
-        { role: 'assistant', content: 'Sure! What cuisine are you in the mood for?' },
-      ]
-
-      const updatedSummary = 'User and assistant discussed the weather, then moved on to dinner planning, exploring cuisine preferences.'
-
-      mockSendMessage.mockResolvedValue({
-        content: updatedSummary,
-        usage: { promptTokens: 150, completionTokens: 50, totalTokens: 200 },
-      })
-
-      const result = await updateContextSummary(currentSummary, newMessages, testSelection, testUserId)
-
-      expect(result.success).toBe(true)
-      expect(result.result).toBe(updatedSummary)
     })
   })
 
@@ -749,8 +691,9 @@ describe('Cheap LLM Tasks Service', () => {
     it('should handle missing connection profile', async () => {
       mockFindById.mockResolvedValue(null)
 
-      const result = await summarizeChat(
+      const result = await titleChat(
         [{ role: 'user', content: 'Hello' }],
+        undefined,
         testSelection,
         testUserId
       )

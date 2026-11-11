@@ -36,8 +36,6 @@ export {
   startProcessor,
   stopProcessor,
   isProcessorRunning,
-  processNextJob,
-  processJobs,
   resetStuckJobs,
   ensureProcessorRunning,
   getProcessorStatus,

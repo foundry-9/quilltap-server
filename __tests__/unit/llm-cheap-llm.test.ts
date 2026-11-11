@@ -11,7 +11,6 @@ import {
   resolveUncensoredCheapLLMSelection,
   profileParams,
   DEFAULT_CHEAP_LLM_CONFIG,
-  RECOMMENDED_CHEAP_MODELS,
   type CheapLLMConfig,
   type CheapLLMSelection,
 } from '@/lib/llm/cheap-llm'
@@ -475,25 +474,6 @@ describe('Cheap LLM Provider Selection', () => {
 
     it('should enable fallbackToLocal by default', () => {
       expect(DEFAULT_CHEAP_LLM_CONFIG.fallbackToLocal).toBe(true)
-    })
-  })
-
-  describe('RECOMMENDED_CHEAP_MODELS', () => {
-    it('should have recommendations for all providers', () => {
-      const providers: Provider[] = [
-        'ANTHROPIC',
-        'OPENAI',
-        'GOOGLE',
-        'GROK',
-        'OPENROUTER',
-        'OLLAMA',
-        'OPENAI_COMPATIBLE',
-      ]
-
-      for (const provider of providers) {
-        expect(RECOMMENDED_CHEAP_MODELS[provider]).toBeDefined()
-        expect(RECOMMENDED_CHEAP_MODELS[provider].length).toBeGreaterThan(0)
-      }
     })
   })
 

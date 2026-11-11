@@ -59,7 +59,7 @@ export function ImageMetadata({
         {/* Section 1: Characters whose gallery contains this photo */}
         {!loadingEntities && galleryCharacters.length > 0 && (
           <div>
-            <h3 className="text-foreground font-semibold mb-3">In Photo Albums</h3>
+            <h3 className="qt-text font-semibold mb-3">In Photo Albums</h3>
             <div className="flex flex-col gap-2">
               {galleryCharacters.map((character) => {
                 const isLoading = savingToGalleryFor.has(character.id)
@@ -71,7 +71,7 @@ export function ImageMetadata({
                     key={character.id}
                     className="flex items-center gap-2 px-3 py-2 qt-bg-muted/50 rounded"
                   >
-                    <span className="flex-1 text-foreground font-medium text-sm">
+                    <span className="flex-1 qt-text font-medium text-sm">
                       {character.name}
                     </span>
                     {isAvatar ? (
@@ -114,7 +114,7 @@ export function ImageMetadata({
           <div>
             <label
               htmlFor="add-to-character-gallery"
-              className="block text-foreground font-semibold mb-2"
+              className="block qt-text font-semibold mb-2"
             >
               Save to photo album
             </label>

@@ -10,7 +10,7 @@ export function WelcomeSection({ displayName }: WelcomeSectionProps) {
   return (
     <div className="text-center py-6">
       <h1 className="qt-heading-1 mb-2">
-        Welcome back, <span className="text-primary">{displayName}</span>!
+        Welcome back, <span className="qt-text-brand">{displayName}</span>!
       </h1>
       <p className="qt-text-secondary">
         What would you like to do today?

@@ -7,7 +7,7 @@
  * default stays case-sensitive.
  */
 
-import { buildAtlasMatcher, findNamedEntries, firstAtlasMention, personTerms } from '@/lib/atlas/match'
+import { buildAtlasMatcher, findNamedEntries, personTerms } from '@/lib/atlas/match'
 import { buildNameMatcher, firstNameMatch } from '@/lib/chat/name-mentions'
 
 const entry = (id: string, name: string, aliases: string[] = []) => ({ id, name, aliases })
@@ -68,6 +68,5 @@ describe('findNamedEntries', () => {
   it('returns null for a matcher with no terms', () => {
     expect(buildAtlasMatcher([])).toBeNull()
     expect(findNamedEntries(['x'], null)).toEqual([])
-    expect(firstAtlasMention('the car', null)).toBeNull()
   })
 })

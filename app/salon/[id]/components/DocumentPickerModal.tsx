@@ -388,7 +388,7 @@ export default function DocumentPickerModal({
                   className="qt-checkbox mt-0.5"
                 />
                 <span>
-                  <span className="block text-sm font-medium qt-text-primary">Look everywhere</span>
+                  <span className="qt-label">Look everywhere</span>
                   <span className="block text-xs qt-text-secondary">Show every store, not just the ones reachable from this chat</span>
                 </span>
               </label>

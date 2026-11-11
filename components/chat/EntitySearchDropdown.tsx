@@ -29,7 +29,7 @@ export function EntitySearchDropdown({
     <div className="relative pt-4" ref={dropdownRef}>
       <button
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-        className="w-full px-3 py-2 text-sm text-foreground qt-bg-muted hover:qt-bg-muted/80 rounded border border-input transition-colors flex items-center justify-between"
+        className="w-full px-3 py-2 text-sm qt-text qt-bg-muted hover:qt-bg-muted/80 rounded border qt-border-input transition-colors flex items-center justify-between"
         disabled={disabled}
       >
         <span>Other Characters...</span>
@@ -57,12 +57,12 @@ export function EntitySearchDropdown({
               >
                 <span className={`px-1.5 py-0.5 text-xs rounded ${
                   entity.type === 'character'
-                    ? 'bg-accent text-accent-foreground'
-                    : 'qt-bg-primary/20 text-primary'
+                    ? 'qt-bg-accent qt-text-on-accent'
+                    : 'qt-bg-primary/20 qt-text-brand'
                 }`}>
                   {entity.type === 'character' ? 'C' : 'P'}
                 </span>
-                <span className="text-foreground">{entity.name}</span>
+                <span className="qt-text">{entity.name}</span>
               </button>
             ))}
             {filteredEntities.length === 0 && (

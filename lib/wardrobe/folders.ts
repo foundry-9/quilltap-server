@@ -81,9 +81,6 @@ export const normalizeWardrobeFolderPath = family.normalizePath;
 /** A folder an existing item carries, in normal form or the root. */
 export const normalizeWardrobeFolderPathOrRoot = family.normalizeOrRoot;
 
-/** Normalise a folder *name* — one segment, as a rename takes it. */
-export const normalizeWardrobeFolderName = family.normalizeName;
-
 /** True when `path` is structurally safe to write under `Wardrobe/`. */
 export const isSafeWardrobeFolderPath = family.isSafe;
 
@@ -95,6 +92,3 @@ export const isValidWardrobeFolderPath = family.isValid;
 
 /** The folder a `Wardrobe/` document lives in: `Wardrobe/A/B/x.md` → `A/B`. */
 export const folderOfWardrobePath = family.folderOf;
-
-/** The store path of a wardrobe folder: `''` → `Wardrobe`, `A/B` → `Wardrobe/A/B`. */
-export const wardrobeFolderStorePath = family.storePath;

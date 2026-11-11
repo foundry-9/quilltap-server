@@ -18,7 +18,7 @@ import { useProjectFileUpload } from '@/components/files/useProjectFileUpload'
 import { BaseModal } from '@/components/ui/BaseModal'
 import type { ProjectFile } from '../types'
 import type { FileInfo } from '@/components/files/types'
-import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { Icon } from '@/components/ui/icon'
 
 interface FilesCardProps {
@@ -79,91 +79,74 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
 
   return (
     <>
-      <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
-        {/* Header - always visible */}
-        <button
-          onClick={onToggle}
-          aria-expanded={expanded}
-          className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <Icon name="folder" className="w-5 h-5 qt-text-primary" />
-            <div className="text-left">
-              <h3 className="qt-heading-4 text-foreground">Files</h3>
-              <p className="qt-text-small qt-text-secondary">
-                {files.length} file{files.length !== 1 ? 's' : ''}
-              </p>
-            </div>
+      <CollapsibleCard
+        icon={<Icon name="folder" className="w-5 h-5 qt-text-primary" />}
+        title="Files"
+        description={`${files.length} file${files.length !== 1 ? 's' : ''}`}
+        isOpen={expanded}
+        onOpenChange={() => onToggle()}
+      >
+        {files.length === 0 ? (
+          <div className="p-4 text-center qt-text-secondary">
+            <p>No files in this project yet.</p>
+            <p className="qt-text-small mt-1">Files will appear here when added to project chats.</p>
           </div>
-          <ChevronIcon className="w-5 h-5 qt-text-secondary" expanded={expanded} />
-        </button>
-
-        {/* Content - expandable */}
-        {expanded && (
-          <div className="border-t qt-border-default">
-            {files.length === 0 ? (
-              <div className="p-4 text-center qt-text-secondary">
-                <p>No files in this project yet.</p>
-                <p className="qt-text-small mt-1">Files will appear here when added to project chats.</p>
-              </div>
-            ) : (
-              <div className="max-h-64 overflow-y-auto p-2 space-y-1">
-                {files.slice(0, 10).map((file) => (
-                  <button
-                    key={file.id}
-                    onClick={() => handleFileClick(file)}
-                    className="w-full flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted transition-colors text-left"
-                  >
-                    <FileThumbnail
-                      fileId={file.id}
-                      mimeType={file.mimeType}
-                      alt={file.originalFilename}
-                      size={40}
-                      className="rounded flex-shrink-0"
-                      mountPointId={file.mountPointId}
-                      relativePath={file.relativePath}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="qt-label text-foreground truncate">
-                        {file.originalFilename}
-                      </p>
-                      <p className="qt-text-xs qt-text-secondary">
-                        {formatBytes(file.size)} &bull; {file.category}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-                {files.length > 10 && (
-                  <p className="qt-text-xs qt-text-secondary text-center py-2">
-                    +{files.length - 10} more files
+        ) : (
+          <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+            {files.slice(0, 10).map((file) => (
+              <button
+                key={file.id}
+                onClick={() => handleFileClick(file)}
+                className="w-full flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted transition-colors text-left"
+              >
+                <FileThumbnail
+                  fileId={file.id}
+                  mimeType={file.mimeType}
+                  alt={file.originalFilename}
+                  size={40}
+                  className="rounded flex-shrink-0"
+                  mountPointId={file.mountPointId}
+                  relativePath={file.relativePath}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="qt-label qt-text truncate">
+                    {file.originalFilename}
                   </p>
-                )}
-              </div>
-            )}
-
-            {/* Action buttons */}
-            {projectId && (
-              <div className="p-2 border-t qt-border-default flex gap-2">
-                <button
-                  onClick={triggerFileSelect}
-                  disabled={uploading}
-                  className="flex-1 qt-button qt-button-secondary text-sm"
-                >
-                  {uploading
-                    ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...`
-                    : 'Upload Files'}
-                </button>
-                <button
-                  onClick={() => setShowBrowser(true)}
-                  className="flex-1 qt-button qt-button-secondary text-sm"
-                >
-                  Browse All Files
-                </button>
-              </div>
+                  <p className="qt-text-xs qt-text-secondary">
+                    {formatBytes(file.size)} &bull; {file.category}
+                  </p>
+                </div>
+              </button>
+            ))}
+            {files.length > 10 && (
+              <p className="qt-text-xs qt-text-secondary text-center py-2">
+                +{files.length - 10} more files
+              </p>
             )}
           </div>
         )}
-      </div>
+
+        {/* Action buttons */}
+        {projectId && (
+          <div className="p-2 border-t qt-border-default flex gap-2">
+            <button
+              onClick={triggerFileSelect}
+              disabled={uploading}
+              className="flex-1 qt-button qt-button-secondary text-sm"
+            >
+              {uploading
+                ? `Uploading ${uploadProgress?.current}/${uploadProgress?.total}...`
+                : 'Upload Files'}
+            </button>
+            <button
+              onClick={() => setShowBrowser(true)}
+              className="flex-1 qt-button qt-button-secondary text-sm"
+            >
+              Browse All Files
+            </button>
+          </div>
+        )}
+      </CollapsibleCard>
 
       {/* File Browser Modal. The card's own list is refreshed on close,
           since the browser re-reads only its own listing. */}

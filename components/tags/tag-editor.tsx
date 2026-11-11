@@ -193,7 +193,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm qt-text-primary">
+      <label className="qt-label">
         Tags
       </label>
 
@@ -218,7 +218,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               setTimeout(() => inputRef.current?.focus(), 0);
             }}
             disabled={loading}
-            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium qt-bg-muted text-foreground qt-hover-accent focus:outline-none disabled:opacity-50"
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium qt-bg-muted qt-text qt-hover-accent focus:outline-none disabled:opacity-50"
           >
             + Add Tag
           </button>
@@ -243,7 +243,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               type="button"
               onClick={cancelAddTag}
               disabled={loading}
-              className="inline-flex items-center justify-center w-5 h-5 qt-text-secondary hover:text-foreground focus:outline-none disabled:opacity-50"
+              className="inline-flex items-center justify-center w-5 h-5 qt-text-secondary hover:qt-text focus:outline-none disabled:opacity-50"
               aria-label="Cancel adding tag"
             >
               <Icon name="close" className="w-4 h-4" />
@@ -253,7 +253,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
             {showSuggestions && (filteredSuggestions.length > 0 || inputValue.trim()) && (
               <div
                 ref={suggestionsRef}
-                className="absolute z-10 top-full left-0 mt-1 qt-bg-card border border-input rounded-md qt-shadow-lg max-h-60 overflow-y-auto"
+                className="absolute z-10 top-full left-0 mt-1 qt-bg-card border qt-border-input rounded-md qt-shadow-lg max-h-60 overflow-y-auto"
               >
                 {filteredSuggestions.length > 0 ? (
                   <ul className="py-1">
@@ -263,7 +263,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
                           type="button"
                           onClick={() => addTag(tag.name)}
                           disabled={loading}
-                          className="w-full px-4 py-2 text-left qt-text-small qt-hover-accent text-foreground disabled:opacity-50 whitespace-nowrap"
+                          className="w-full px-4 py-2 text-left qt-text-small qt-hover-accent qt-text disabled:opacity-50 whitespace-nowrap"
                         >
                           {tag.name}
                         </button>
@@ -276,7 +276,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
                       type="button"
                       onClick={() => addTag(inputValue)}
                       disabled={loading}
-                      className="text-left qt-text-small text-primary hover:text-primary/80 disabled:opacity-50 whitespace-nowrap"
+                      className="text-left qt-text-small qt-text-brand hover:qt-text-brand/80 disabled:opacity-50 whitespace-nowrap"
                     >
                       Create &quot;{inputValue.trim()}&quot;
                     </button>

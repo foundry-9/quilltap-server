@@ -59,7 +59,7 @@ export function WardrobeImageSettings({
               className="qt-checkbox mt-1"
             />
             <div className="flex-1">
-              <div className="font-medium text-foreground">
+              <div className="font-medium qt-text">
                 Portraits from the Wardrobe Tools
               </div>
               <div className="qt-text-small mt-1">
@@ -72,7 +72,7 @@ export function WardrobeImageSettings({
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="wardrobe-image-profile" className="block font-medium text-foreground">
+          <label htmlFor="wardrobe-image-profile" className="block font-medium qt-text">
             Wardrobe Artist
           </label>
           <p className="qt-text-small">

@@ -78,7 +78,7 @@ export function InventoryItemRow({ item, manageable, actions, equip, selection, 
       )}
       <InventoryGlyph item={item} />
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-foreground truncate" title={label}>
+        <div className="text-sm qt-text truncate" title={label}>
           {label}
           {showName && <span className="qt-text-xs qt-text-secondary ml-1">({item.name})</span>}
         </div>

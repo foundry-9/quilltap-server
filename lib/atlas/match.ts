@@ -113,19 +113,6 @@ export function findNamedEntries<E extends MatchableAtlasEntry>(
   return out;
 }
 
-/** The first Atlas term in `text`, resolved, or null (the chips). */
-export function firstAtlasMention<E extends MatchableAtlasEntry>(
-  text: string,
-  matcher: AtlasMatcher<E> | null,
-): { entry: E; text: string; offset: number } | null {
-  if (!matcher || !text) return null;
-  matcher.regex.lastIndex = 0;
-  const m = matcher.regex.exec(text);
-  if (!m) return null;
-  const entry = matcher.byTerm.get(foldAtlasTerm(m[0]));
-  return entry ? { entry, text: m[0], offset: m.index } : null;
-}
-
 /** Every entry named anywhere in `text`, in order of first appearance. */
 export function allAtlasMentions<E extends MatchableAtlasEntry>(
   text: string,

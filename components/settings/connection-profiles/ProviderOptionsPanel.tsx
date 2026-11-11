@@ -255,7 +255,7 @@ function MultiEnumField({
   return (
     <div>
       <label className="block qt-text-label">{field.label}</label>
-      <div className="space-y-1 max-h-32 overflow-y-auto border qt-border-default rounded p-2 bg-background mt-1">
+      <div className="space-y-1 max-h-32 overflow-y-auto border qt-border-default rounded p-2 qt-bg-default mt-1">
         {choices.map((choice) => {
           const isSelected = selected.includes(choice.value)
           const isDisabled = !isSelected && selected.length >= max
@@ -281,7 +281,7 @@ function MultiEnumField({
                 }}
                 className="qt-checkbox"
               />
-              <span className="qt-text-xs text-foreground truncate">
+              <span className="qt-text-xs qt-text truncate">
                 {choice.label}
               </span>
             </label>

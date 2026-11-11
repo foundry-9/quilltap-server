@@ -253,7 +253,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
 
   if (isLoading && chats.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="qt-loading-state py-12">
         <div className="flex items-center gap-3 qt-text-secondary">
           <div className="h-5 w-5 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
           Loading conversations...
@@ -268,7 +268,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
         <p className="qt-text-destructive">{error}</p>
         <button
           onClick={() => void fetchChats()}
-          className="mt-4 text-primary hover:underline"
+          className="mt-4 qt-text-brand hover:underline"
         >
           Try again
         </button>
@@ -322,7 +322,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           {!searchQuery && (
             <Link
               href={`/aurora/${characterId}?action=chat`}
-              className="mt-4 inline-flex items-center gap-2 text-primary hover:underline"
+              className="mt-4 inline-flex items-center gap-2 qt-text-brand hover:underline"
             >
               Start your first conversation
             </Link>

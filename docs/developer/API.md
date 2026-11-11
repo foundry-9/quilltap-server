@@ -4104,7 +4104,6 @@ The chat-scoped Document Mode actions. All are `POST /api/v1/chats/[id]?action=<
 
 | Action | Body | Response |
 |---|---|---|
-| `active-document` | — | `{ document \| null }` — the earliest-opened open document (legacy single-pane) |
 | `open-documents` | — | `{ documents }` — every open document, oldest first; content is fetched per document with `read-document` |
 | `recent-documents` | — | `{ documents }` — this chat's documents first, then recent ones from other chats, deduped by file identity and capped; each adds `chatId`, `isActive`, `fromCurrentChat`, `updatedAt` |
 | `open-document` | `{ filePath?, title?, scope?, mountPoint?, targetFolder?, mode?: 'split'\|'focus' }` | `{ document, content, mtime, viewer?, librarianMessage }` — a store file that is not text (image, PDF, `.docx`, other binary) opens read-only: `content` is empty, `mtime` absent and `viewer` names it (see below); no `filePath` creates a blank document in `targetFolder`; a missing named file is a **404**; sets the chat's `documentMode` (default `split`) |
@@ -5186,35 +5185,6 @@ Batch pre-generate thumbnails for image files. Processes with bounded concurrenc
   "generated": 7,
   "cached": 2,
   "errors": 1
-}
-```
-
-#### `POST /api/v1/files?action=cleanup-stale`
-
-Scan for and optionally delete stale file records — database entries whose backing files no longer exist in storage. Defaults to dry-run mode for safety.
-
-**Request Body**:
-
-```json
-{
-  "dryRun": true
-}
-```
-
-- `dryRun` (optional) - If `true` (default), only report stale records without deleting. Set to `false` to delete stale DB records and clean up their cached thumbnails.
-
-**Response**: `200 OK`
-
-```json
-{
-  "total": 50,
-  "stale": 3,
-  "deleted": 0,
-  "dryRun": true,
-  "staleFiles": [
-    { "id": "file-uuid-1", "filename": "lost-image.png" },
-    { "id": "file-uuid-2", "filename": "missing-doc.pdf" }
-  ]
 }
 ```
 

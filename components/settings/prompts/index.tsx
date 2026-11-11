@@ -24,7 +24,7 @@ export default function PromptsTab() {
   // Fetch templates on mount only
   useEffect(() => {
     prompts.fetchTemplates()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount; prompts is a fresh object every render
   }, []) // Only fetch once on mount - fetchTemplates is stable
 
   const openCreateModal = useCallback(() => {

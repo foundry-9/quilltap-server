@@ -160,7 +160,7 @@ export function MemoryRecallCard() {
           className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
-          <div className="font-medium text-foreground">Follow the threads between memories</div>
+          <div className="font-medium qt-text">Follow the threads between memories</div>
           <div className="qt-text-small mt-1">
             When a memory surfaces, gather the handful of others it is bound to and let them
             compete for a place in the recollection too. This rescues the memory that is plainly
@@ -179,7 +179,7 @@ export function MemoryRecallCard() {
           className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
-          <div className="font-medium text-foreground">Consult past conversations every turn</div>
+          <div className="font-medium qt-text">Consult past conversations every turn</div>
           <div className="qt-text-small mt-1">
             Ordinarily the Book re-reads its shelf of past conversations only at the opening of a
             chat, whenever it takes down a fresh summary, and when somebody speaks of days gone by.

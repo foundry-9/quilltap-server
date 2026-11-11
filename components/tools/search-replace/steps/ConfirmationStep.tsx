@@ -38,7 +38,7 @@ export function ConfirmationStep({
       </div>
 
       {/* Summary */}
-      <div className="p-4 rounded-lg border qt-border-default bg-background">
+      <div className="border qt-border-default rounded-lg p-4 qt-bg-default">
         <div className="space-y-3">
           <div>
             <div className="text-sm qt-text-secondary">Find:</div>
@@ -79,7 +79,7 @@ export function ConfirmationStep({
             <div className="pt-2 border-t qt-border-default">
               <div className="flex justify-between font-medium">
                 <span className="qt-text-primary">Total changes:</span>
-                <span className="text-primary">
+                <span className="qt-text-brand">
                   {totalMatches}
                 </span>
               </div>

@@ -134,7 +134,7 @@ export function EmbeddedPhotoGallery({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="qt-loading-state py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 qt-border-primary"></div>
       </div>
     )

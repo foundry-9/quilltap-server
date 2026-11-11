@@ -17,7 +17,7 @@ export function ImportExportCard() {
           <Icon name="cloud-upload" className="h-8 w-8 qt-text-info" />
         </div>
         <div className="flex-1">
-          <h2 className="qt-heading-2 text-foreground mb-1">Import / Export</h2>
+          <h2 className="qt-heading-2 qt-text mb-1">Import / Export</h2>
           <p className="qt-text-small">
             Export individual entity types or import from Quilltap export files (.qtap)
           </p>

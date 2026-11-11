@@ -38,7 +38,6 @@ jest.mock('@/lib/projects/roster-access', () => ({
 const {
   dedupeTierTriple,
   flattenTierPool,
-  classifyMountTier,
   resolveTieredMountPool: resolveTieredMountPoolWith,
   resolveProjectMountPointIds,
   resolveProjectMountPointIdsForChat,
@@ -164,24 +163,6 @@ describe('tiered-mount-pool', () => {
 
     it('project scope yields only project stores (not group)', () => {
       expect(flattenTierPool(pool, { scope: 'project' })).toEqual(['p1', 'p2'])
-    })
-  })
-
-  describe('classifyMountTier', () => {
-    const pool = {
-      characterMountPointId: 'char',
-      participantMountPointIds: ['part1'],
-      groupMountPointIds: ['grp1'],
-      projectMountPointIds: ['p1'],
-      globalMountPointId: 'global',
-    }
-    it('classifies each tier (character > participant > group > project > global) and returns null for outsiders', () => {
-      expect(classifyMountTier('char', pool)).toBe('character')
-      expect(classifyMountTier('part1', pool)).toBe('participant')
-      expect(classifyMountTier('grp1', pool)).toBe('group')
-      expect(classifyMountTier('p1', pool)).toBe('project')
-      expect(classifyMountTier('global', pool)).toBe('global')
-      expect(classifyMountTier('nope', pool)).toBeNull()
     })
   })
 
@@ -391,9 +372,9 @@ describe('tiered-mount-pool', () => {
       expect(accessible).toEqual(expect.arrayContaining(['g1-official', 'g1-linked']))
       // Group mounts are the `group` tier — the writable seam treats this like the
       // character's own tier, unlike the read-only `participant` (peer) tier.
-      expect(classifyMountTier('g1-official', pool)).toBe('group')
-      expect(classifyMountTier('g1-linked', pool)).toBe('group')
-      expect(classifyMountTier('peer-vault', pool)).toBe('participant')
+      expect(pool.groupMountPointIds).toEqual(expect.arrayContaining(['g1-official', 'g1-linked']))
+      expect(pool.participantMountPointIds).toContain('peer-vault')
+      expect(pool.participantMountPointIds).not.toContain('g1-official')
     })
 
     it('a non-member co-participant: the same group stores never enter their accessible set', async () => {

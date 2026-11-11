@@ -46,13 +46,6 @@ export interface FallbackSearchResult {
 }
 
 /**
- * Combined result type
- */
-export type SearchPreparationResult =
-  | { usedEmbedding: true; embedding: EmbeddingResult }
-  | FallbackSearchResult
-
-/**
  * Error thrown when embedding fails
  */
 export class EmbeddingError extends Error {
@@ -412,28 +405,6 @@ export function extractSearchTerms(text: string): FallbackSearchResult {
 }
 
 /**
- * Prepare text for search - tries embedding first, falls back to text extraction
- */
-export async function prepareForSearch(
-  text: string,
-  userId: string,
-  profileId?: string,
-  opts: { priority?: EmbeddingPriority } = {}
-): Promise<SearchPreparationResult> {
-  try {
-    const embedding = await generateEmbeddingForUser(text, userId, profileId, opts)
-    return {
-      usedEmbedding: true,
-      embedding,
-    }
-  } catch (error) {
-    // Log the error but don't throw - fall back to text search
-    logger.warn('Embedding failed, falling back to text search', { context: 'embedding-service', error: error instanceof Error ? error.message : String(error) })
-    return extractSearchTerms(text)
-  }
-}
-
-/**
  * Normalise a vector in place to unit length (L2). If the vector is all zeros,
  * it is returned unchanged. Accepts either Float32Array or number[] input;
  * always returns Float32Array.
@@ -617,14 +588,6 @@ export function textSimilarity(
 export async function isEmbeddingAvailable(userId: string): Promise<boolean> {
   const profile = await getDefaultEmbeddingProfile(userId)
   return profile !== null
-}
-
-/**
- * Get all embedding profiles for a user
- */
-export async function getUserEmbeddingProfiles(userId: string): Promise<EmbeddingProfile[]> {
-  const repos = getRepositories()
-  return repos.embeddingProfiles.findByUserId(userId)
 }
 
 /**

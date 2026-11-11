@@ -93,7 +93,7 @@ export function ImageProfilePicker({
         value={value || ''}
         onChange={e => onChange?.(e.target.value || null)}
         disabled={disabled}
-        className="w-full px-3 py-2 border qt-border-default qt-bg-card text-foreground rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+        className="qt-select disabled:opacity-50"
       >
         <option value="">No image generation</option>
         {profiles.map(profile => {
@@ -128,7 +128,7 @@ export function ImageProfilePicker({
                 <div className="flex items-center gap-2">
                   <ProviderIcon provider={selected.provider} />
                   <div>
-                    <p className="font-medium text-sm text-foreground">{selected.name}</p>
+                    <p className="font-medium text-sm qt-text">{selected.name}</p>
                     <p className="text-xs qt-text-secondary">{selected.modelName}</p>
                   </div>
                 </div>

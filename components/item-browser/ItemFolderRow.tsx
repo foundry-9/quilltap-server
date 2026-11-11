@@ -147,7 +147,7 @@ export function ItemFolderRow({
       {renaming ? (
         renameInput('qt-input qt-input-sm flex-1')
       ) : (
-        <button type="button" className="flex-1 min-w-0 text-left text-sm text-foreground truncate" onClick={onOpen}>
+        <button type="button" className="flex-1 min-w-0 text-left text-sm qt-text truncate" onClick={onOpen}>
           {row.name}
         </button>
       )}

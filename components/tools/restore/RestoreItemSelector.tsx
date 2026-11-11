@@ -19,11 +19,11 @@ export function RestoreItemSelector({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm qt-text-primary mb-3">
+        <label className="qt-label mb-3">
           Select Backup File
         </label>
         <div
-          className="border-2 border-dashed qt-border-default rounded-lg p-6 text-center cursor-pointer hover:border-input transition-colors"
+          className="border-2 border-dashed qt-border-default rounded-lg p-6 text-center cursor-pointer hover:qt-border-input transition-colors"
           onClick={() => fileInputRef.current?.click()}
         >
           <Icon name="plus" className="w-12 h-12 mx-auto qt-text-secondary mb-2" />

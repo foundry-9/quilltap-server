@@ -22,7 +22,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
         <div className="w-12 h-12 rounded-full qt-bg-success/10 flex items-center justify-center mb-4">
           <Icon name="check" className="w-6 h-6 qt-text-success" />
         </div>
-        <h3 className="qt-heading-4 text-foreground">
+        <h3 className="qt-heading-4 qt-text">
           Import Complete
         </h3>
       </div>
@@ -33,7 +33,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
           if (value === 0) return null
           return (
             <div key={key} className="flex justify-between">
-              <span className="text-foreground capitalize">
+              <span className="qt-text capitalize">
                 {key.replace(/([A-Z])/g, ' $1').trim()}
               </span>
               <span className="font-medium qt-text-success">
@@ -46,7 +46,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
           if (value === 0) return null
           return (
             <div key={`skipped-${key}`} className="flex justify-between">
-              <span className="text-foreground capitalize">
+              <span className="qt-text capitalize">
                 {key.replace(/([A-Z])/g, ' $1').trim()} (skipped)
               </span>
               <span className="font-medium qt-text-secondary">

@@ -268,7 +268,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
         <button
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
-          className="flex items-center gap-2 qt-heading-3 text-foreground hover:text-foreground/80 transition-colors"
+          className="flex items-center gap-2 qt-heading-3 qt-text hover:qt-text/80 transition-colors"
         >
           <Icon name="chevron-right" className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           Browse Themes
@@ -334,13 +334,13 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               placeholder="Search themes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border qt-border-default qt-bg-card text-foreground placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border qt-border-default qt-bg-card qt-text placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
             />
           </div>
 
           {/* Loading state */}
           {isLoadingThemes && (
-            <div className="flex items-center justify-center py-12">
+            <div className="qt-loading-state py-12">
               <div className="qt-spinner" />
               <span className="ml-2 qt-text-small qt-text-secondary">
                 Loading registry themes...
@@ -442,7 +442,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
             {/* Add source form */}
             {showAddSource && (
-              <div className="mt-3 p-4 rounded-lg border qt-border-default qt-bg-card space-y-3">
+              <div className="mt-3 border qt-border-default rounded-lg p-4 qt-bg-card space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block qt-text-label mb-1" htmlFor={`${id}-source-name`}>
@@ -454,7 +454,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       placeholder="e.g. Community"
                       value={newSourceName}
                       onChange={(e) => setNewSourceName(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-md border qt-border-default bg-background text-foreground placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+                      className="w-full px-3 py-1.5 rounded-md border qt-border-default qt-bg-default qt-text placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
                     />
                   </div>
                   <div>
@@ -467,7 +467,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       placeholder="https://registry.example.com/themes"
                       value={newSourceUrl}
                       onChange={(e) => setNewSourceUrl(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-md border qt-border-default bg-background text-foreground placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+                      className="w-full px-3 py-1.5 rounded-md border qt-border-default qt-bg-default qt-text placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
                     />
                   </div>
                 </div>
@@ -481,7 +481,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                     placeholder="For signature verification"
                     value={newSourceKey}
                     onChange={(e) => setNewSourceKey(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-md border qt-border-default bg-background text-foreground placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
+                    className="w-full px-3 py-1.5 rounded-md border qt-border-default qt-bg-default qt-text placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
                   />
                 </div>
                 <div className="flex items-center gap-2 justify-end">
@@ -540,9 +540,9 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
     : null
 
   return (
-    <div className="relative flex flex-col p-4 rounded-lg border-2 qt-border-default qt-bg-card transition-all hover:border-input">
+    <div className="relative flex flex-col p-4 rounded-lg border-2 qt-border-default qt-bg-card transition-all hover:qt-border-input">
       {/* Theme name */}
-      <div className="font-semibold text-base text-foreground">{theme.name}</div>
+      <div className="font-semibold text-base qt-text">{theme.name}</div>
 
       {/* Author */}
       {theme.author && (

@@ -161,7 +161,7 @@ export function AvatarGenerationPane({
               onClick={() => setPreview(null)}
               aria-label="Discard preview"
               title="Discard preview"
-              className="absolute top-1 right-1 w-6 h-6 rounded-full qt-bg-default border qt-border-default flex items-center justify-center qt-text-secondary hover:text-foreground shadow-sm"
+              className="absolute top-1 right-1 w-6 h-6 rounded-full qt-bg-default border qt-border-default flex items-center justify-center qt-text-secondary hover:qt-text shadow-sm"
             >
               ×
             </button>

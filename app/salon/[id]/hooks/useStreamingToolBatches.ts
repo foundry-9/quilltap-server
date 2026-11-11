@@ -56,8 +56,11 @@ export function useStreamingToolBatches({
   // toasts, page callback).
   const trackToolResult = useCallback((frame: ToolResultFrame) => {
     const { index, name, success, error } = frame
-    // Tool results are free-form; the per-tool reads below know their shapes.
-    const result = frame.result as any
+    // Tool results are free-form (`unknown` on the frame); the per-tool reads
+    // below check each field they use.
+    const result = frame.result
+    const fields: { navigationUrl?: unknown; images?: unknown } =
+      typeof result === 'object' && result !== null ? result : {}
 
     setStreamingToolBatches(prev => {
       if (prev.length === 0) return prev
@@ -74,13 +77,13 @@ export function useStreamingToolBatches({
     })
 
     // Handle help_navigate: navigate the current window to the target URL
-    if (name === 'help_navigate' && success && result?.navigationUrl) {
-      window.location.href = result.navigationUrl
+    if (name === 'help_navigate' && success && typeof fields.navigationUrl === 'string' && fields.navigationUrl) {
+      window.location.href = fields.navigationUrl
     }
 
     if (name === 'generate_image') {
       if (success) {
-        const imageCount = result?.images?.length || 1
+        const imageCount = (Array.isArray(fields.images) && fields.images.length) || 1
         publishToolExecutionStatus({
           tool: name,
           status: 'success',

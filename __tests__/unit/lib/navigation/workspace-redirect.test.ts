@@ -2,10 +2,8 @@
  * Old-route → workspace redirect helper.
  *
  * Every legacy per-surface route calls this at the top of its server
- * component. Two things must hold: it is a true no-op when the workspace is
- * disabled (otherwise flipping the flag off would not restore the old routes),
- * and the `?open=` intent it builds must carry the deep-link params through
- * without inventing empty ones.
+ * component. The `?open=` intent it builds must carry the deep-link params
+ * through without inventing empty ones.
  */
 
 jest.mock('next/navigation', () => ({
@@ -15,16 +13,10 @@ jest.mock('next/navigation', () => ({
   }),
 }))
 
-jest.mock('@/lib/config/feature-flags', () => ({
-  isWorkspaceTabsEnabled: jest.fn(),
-}))
-
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 import { redirect } from 'next/navigation'
-import { isWorkspaceTabsEnabled } from '@/lib/config/feature-flags'
 
 const mockRedirect = redirect as unknown as jest.Mock
-const mockEnabled = isWorkspaceTabsEnabled as jest.Mock
 
 /** Run the helper and hand back the path it redirected to, if any. */
 function capture(open: string, params?: Record<string, string | undefined>): string | null {
@@ -38,18 +30,9 @@ function capture(open: string, params?: Record<string, string | undefined>): str
 
 beforeEach(() => {
   jest.clearAllMocks()
-  mockEnabled.mockReturnValue(true)
 })
 
 describe('redirectToWorkspaceTab', () => {
-  it('does nothing at all when the workspace is disabled', () => {
-    mockEnabled.mockReturnValue(false)
-
-    // Must return normally — a throw here would break every legacy route.
-    expect(() => redirectToWorkspaceTab('salon', { chatId: 'c1' })).not.toThrow()
-    expect(mockRedirect).not.toHaveBeenCalled()
-  })
-
   it('redirects with just the open intent when no params are given', () => {
     expect(capture('salon')).toBe('/workspace?open=salon')
   })
