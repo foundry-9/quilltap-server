@@ -45,6 +45,16 @@ export class UuidRemapper {
   }
 
   /**
+   * The new id already issued for an old one, or undefined. Unlike
+   * {@link remap} this never mints: a reference whose target was never
+   * issued an id (because the backup does not carry it) stays unresolved,
+   * and the id-field table's `onMissing` decides what becomes of it.
+   */
+  lookup(oldUuid: string): string | undefined {
+    return this.mapping.get(oldUuid);
+  }
+
+  /**
    * Remap an array of UUIDs.
    * Maps each UUID in the array using the remap() method.
    *

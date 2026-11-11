@@ -328,6 +328,10 @@ describe('remapBackupData — avatar timeline in a new-account restore', () => {
       providerModels: [],
       projects: [],
       llmLogs: [],
+      // The picture's vault link travels in the backup, so its id is issued.
+      docMountFileLinks: [{ id: IMAGE_ID, mountPointId: 'vault', fileId: 'f', relativePath: 'images/a.webp' }],
+      docMountPoints: [{ id: 'vault', name: 'Vault' }],
+      docMountFiles: [{ id: 'f' }],
       avatarTimeline: [BASELINE_ROW, GENERATED_ROW, STRANGER_ROW],
     } as unknown as BackupData;
   }

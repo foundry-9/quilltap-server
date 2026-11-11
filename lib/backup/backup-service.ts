@@ -7,6 +7,7 @@
  * by the `zip` binary to avoid OOM in memory-constrained VMs.
  */
 
+import { readOwnedCharacters, readOwnedProjects, readOwnedGroups, readAllLlmLogs, unreadableStoreWarning } from './owned-rows';
 import { loadBundleCursors, withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { execFile } from 'child_process';
 import fs from 'fs';
@@ -133,13 +134,13 @@ function* streamDocMountBlobsWithData(): Generator<{ meta: DocMountBlobMetadata;
 /**
  * Collects all user data from database repositories
  */
-async function collectUserData(userId: string): Promise<Omit<BackupData, 'manifest'>> {
+async function collectUserData(userId: string): Promise<{ data: Omit<BackupData, 'manifest'>; warnings: string[] }> {
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
   // Collect all entities in parallel
   const [
-    characters,
+    ownedCharacters,
     chatMetadatas,
     tags,
     connectionProfiles,
@@ -149,14 +150,17 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates,
     roleplayTemplates,
     providerModels,
-    projects,
-    groups,
+    ownedProjects,
+    ownedGroups,
     llmLogs,
     pluginConfigs,
     chatSettingsResult,
     folders,
   ] = await Promise.all([
-    repos.characters.findAll(),
+    // Raw rows laid under the hydrated ones: a character, project or group
+    // whose store cannot be read is still backed up, as its bare row, with
+    // its memories (#202).
+    readOwnedCharacters(userId),
     repos.chats.findAll(),
     repos.tags.findAll(),
     repos.connections.findAll(),
@@ -169,11 +173,11 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Get provider models
     globalRepos.providerModels.findAll(),
     // Get projects
-    repos.projects.findAll(),
-    // Get groups (hydrated from each group's official document store, like projects)
-    repos.groups.findAll(),
-    // Get LLM logs
-    repos.llmLogs.findAll(10000), // High limit to get all user logs
+    readOwnedProjects(userId),
+    // Groups (hydrated from each group's official document store, like projects)
+    readOwnedGroups(userId),
+    // Every LLM log, a page at a time — not the newest 10,000 (#202)
+    readAllLlmLogs(userId),
     // Get plugin configurations
     globalRepos.pluginConfigs.findByUserId(userId),
     // Get chat settings (returns single object or null)
@@ -181,6 +185,14 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Get folders
     globalRepos.folders.findByUserId(userId),
   ]);
+  const characters = ownedCharacters.rows;
+  const projects = ownedProjects.rows;
+  const groups = ownedGroups.rows;
+  const warnings = [
+    unreadableStoreWarning('character', ownedCharacters.unreadable),
+    unreadableStoreWarning('project', ownedProjects.unreadable),
+    unreadableStoreWarning('group', ownedGroups.unreadable),
+  ].filter((warning): warning is string => warning !== null);
   // Wardrobe items live in document stores (`Wardrobe/*.md`), which the backup
   // carries as documents; the legacy `wardrobeItems` array stays empty so old
   // restorers still read the format.
@@ -379,7 +391,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   // Wrap chatSettings in an array for backup (it's a single record per user)
   const chatSettings = chatSettingsResult ? [chatSettingsResult] : [];
 
-  return {
+  const data = {
     characters,
     chats,
     tags,
@@ -422,6 +434,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     avatarTimeline,
     logEntries,
   };
+  return { data, warnings };
 }
 
 /**
@@ -470,7 +483,7 @@ function countUserInstalledThemes(): number {
 function createManifest(
   userId: string,
   data: Omit<BackupData, 'manifest'>,
-  options?: { compact?: boolean }
+  options?: { compact?: boolean; warnings?: string[] }
 ): BackupManifest {
   const totalMessages = data.chats.reduce((sum, chat) => sum + chat.messages.length, 0);
 
@@ -481,6 +494,7 @@ function createManifest(
     userId,
     appVersion: APP_VERSION,
     ...(options?.compact && { compact: true }),
+    ...(options?.warnings && options.warnings.length > 0 && { warnings: options.warnings }),
     counts: {
       characters: data.characters.length,
       chats: data.chats.length,
@@ -649,9 +663,10 @@ export async function createBackup(
   }
 
   // Collect all user data
-  const collected = await collectUserData(userId);
+  const { data: collected, warnings: readWarnings } = await collectUserData(userId);
   const data = options?.compact ? compactBackupData(collected) : collected;
-  const manifest = createManifest(userId, data, options);
+  const manifest = createManifest(userId, data, { ...options, warnings: readWarnings });
+  for (const warning of readWarnings) moduleLogger.warn('Backup carries a row without its store', { userId, warning });
   if (options?.compact) {
     moduleLogger.debug('Compact backup — embeddings and derived tables omitted', {
       userId,

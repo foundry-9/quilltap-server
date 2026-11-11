@@ -9,13 +9,15 @@
  * message is reminted, and every reference *to* a message inside the chat
  * row or the message rows follows it through one old → new map:
  *
+ * The fields come from the id-field table (`lib/backup/id-fields.ts`), shared
+ * with backup restore:
+ *
  * - `message.swipeGroupId` — `swipe-<messageId>` (what regenerate-swipe
  *   writes) is rewritten; any other key (SillyTavern's `swipe-<index>`) is an
  *   opaque, per-chat grouping key and is kept.
- * - `chat.summaryAnchorMessageIds` — if any anchor names no message in the
- *   bundle, the running summary is cleared with its anchors and fold cursor,
- *   exactly as `?action=rebuild-summary` does, so the ordinary cadence
- *   refolds rather than trusting a summary with a partial anchor set.
+ * - `chat.summaryAnchorMessageIds` — an anchor naming no message in the
+ *   bundle is dropped from the array (decision §8.2 of the 4.13 import/restore
+ *   spec); the anchors that landed are kept.
  * - `chat.otherExtractionWatermarkMessageId` /
  *   `chat.episodeExtractionWatermarkMessageId` /
  *   `chat.turnExtractionWatermarkMessageId` (the bundle's carriage of the
@@ -35,14 +37,13 @@ import { randomUUID } from 'crypto';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 import type { IdMappingState } from './types';
 import { BUNDLE_CURSOR_FIELDS, type BundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
+import { remapEntity, type IdResolver, type IdTarget } from '@/lib/backup/id-fields';
 
-const SWIPE_PREFIX = 'swipe-';
+const MESSAGE_TARGETS: ReadonlySet<IdTarget> = new Set<IdTarget>(['message']);
 
 type MessageRefFields =
   | 'summaryAnchorMessageIds'
-  | 'courierCheckpoints'
-  | 'contextSummary'
-  | 'lastSummaryTurn';
+  | 'courierCheckpoints';
 
 /**
  * The chat-row fields that name messages, rewritten for the new ids — plus the
@@ -64,14 +65,6 @@ export interface RemintedChatMessages {
   idMap: Map<string, string>;
   /** Message references in the chat row that named no message in the bundle. */
   droppedRefs: number;
-  /** Whether the running summary was cleared because an anchor did not resolve. */
-  summaryCleared: boolean;
-}
-
-function remapSwipeGroupId(groupId: string, idMap: ReadonlyMap<string, string>): string {
-  if (!groupId.startsWith(SWIPE_PREFIX)) return groupId;
-  const mapped = idMap.get(groupId.slice(SWIPE_PREFIX.length));
-  return mapped ? `${SWIPE_PREFIX}${mapped}` : groupId;
 }
 
 /** A bundle may carry a JSON column as its serialized string; read either. */
@@ -106,36 +99,28 @@ export function remintChatMessageIds(
     return newId;
   });
 
+  // Every reference to a message follows it through the id-field table
+  // (`lib/backup/id-fields.ts`): `swipe-<id>` keys, summary anchors and the
+  // fold cursors. Only message targets are rewritten here.
+  const resolveMessage: IdResolver = (target, id) => (target === 'message' ? idMap.get(id) : undefined);
+  const messageTargets = { side: 'import' as const, targets: MESSAGE_TARGETS };
+
   const reminted = messages.map((message, index) => ({
-    ...message,
+    ...(remapEntity('message', message, resolveMessage, messageTargets).row as MessageEvent),
     id: newIds[index],
-    ...(message.swipeGroupId ? { swipeGroupId: remapSwipeGroupId(message.swipeGroupId, idMap) } : {}),
   }));
 
   const chatPatch: ChatMessageRefPatch = {};
-  let droppedRefs = 0;
-  let summaryCleared = false;
-
-  if (Array.isArray(chat.summaryAnchorMessageIds)) {
-    const anchors = chat.summaryAnchorMessageIds.map((id) => idMap.get(id));
-    const unresolved = anchors.filter((id) => !id).length;
-    if (unresolved > 0) {
-      droppedRefs += unresolved;
-      summaryCleared = true;
-      chatPatch.contextSummary = null;
-      chatPatch.summaryAnchorMessageIds = [];
-      chatPatch.lastSummaryTurn = 0;
-    } else {
-      chatPatch.summaryAnchorMessageIds = anchors as string[];
-    }
+  const remappedChat = remapEntity('chat', chat as Record<string, unknown>, resolveMessage, messageTargets);
+  let droppedRefs = remappedChat.unresolved.length;
+  // Decision §8.2: an anchor naming no message is dropped from the array; the
+  // summary keeps the anchors that did land.
+  if (Array.isArray(chat.summaryAnchorMessageIds) && remappedChat.row) {
+    chatPatch.summaryAnchorMessageIds = (remappedChat.row as typeof chat).summaryAnchorMessageIds;
   }
-
   for (const field of Object.values(BUNDLE_CURSOR_FIELDS)) {
-    const watermark = chat[field];
-    if (!watermark) continue;
-    const mapped = idMap.get(watermark) ?? null;
-    if (!mapped) droppedRefs++;
-    chatPatch[field] = mapped;
+    if (!chat[field]) continue;
+    chatPatch[field] = ((remappedChat.row as BundleCursorFields | null)?.[field] ?? null) as never;
   }
 
   if (chat.courierCheckpoints != null) {
@@ -155,7 +140,7 @@ export function remintChatMessageIds(
     chatPatch.courierCheckpoints = Object.keys(next).length > 0 ? next : null;
   }
 
-  return { messages: reminted, chatPatch, idMap, droppedRefs, summaryCleared };
+  return { messages: reminted, chatPatch, idMap, droppedRefs };
 }
 
 /**

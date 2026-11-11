@@ -305,6 +305,7 @@ describe('NDJSON export — memory embeddings', () => {
           embedding: { '0': 0.1, '1': 0.2, '2': 0.3 },
         },
       },
+      { kind: '__footer__', counts: { characters: 1, memories: 2 } },
     ];
 
     const result = await assembleExportFromStream(

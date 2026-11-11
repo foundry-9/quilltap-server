@@ -231,11 +231,9 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
     expect(copied[2].swipeGroupId).toBe(`swipe-${newA}`)
 
     // Chat-row message references follow. One anchor names a message the
-    // bundle does not carry, so the summary is cleared for a refold.
-    expect(copy.summaryAnchorMessageIds).toEqual([])
-    expect(copy.contextSummary).toBeNull()
-    expect(copy.lastSummaryTurn).toBe(0)
-    void newUser
+    // bundle does not carry: it is dropped, and the anchors that landed are
+    // kept (decision §8.2 of the 4.13 import/restore spec).
+    expect(copy.summaryAnchorMessageIds).toEqual([newUser, newA])
     // The fold passes' cursors follow their messages into memory_extraction_cursors.
     expect(copy).not.toHaveProperty('otherExtractionWatermarkMessageId')
     expect(copy).not.toHaveProperty('episodeExtractionWatermarkMessageId')

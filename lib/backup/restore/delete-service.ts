@@ -16,6 +16,7 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import type { FileEntry } from '@/lib/schemas/types';
+import { readOwnedCharacters, readOwnedProjects, readOwnedGroups } from '../owned-rows';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
 
@@ -152,9 +153,9 @@ export async function deleteUserData(
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, groups, llmLogs, chatSettings, folders] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, groups, chatSettings, folders] =
     await Promise.all([
-      repos.characters.findAll(),
+      readOwnedCharacters(userId).then((owned) => owned.rows),
       repos.chats.findAll(),
       repos.tags.findAll(),
       repos.files.findAll(),
@@ -163,9 +164,8 @@ export async function deleteUserData(
       repos.embeddingProfiles.findAll(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
-      repos.projects.findAll(),
-      repos.groups.findAll(),
-      repos.llmLogs.findAll(10000), // High limit to get all user logs
+      readOwnedProjects(userId).then((owned) => owned.rows),
+      readOwnedGroups(userId).then((owned) => owned.rows),
       globalRepos.chatSettings.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
     ]);
@@ -183,6 +183,9 @@ export async function deleteUserData(
   }
   await retireMemories(memoryIds, { reason: 'restore-replace' });
 
+  // Every LLM log of the user in one statement (#202).
+  const llmLogsDeleted = await globalRepos.llmLogs.deleteByUserId(userId);
+
   // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
@@ -198,7 +201,6 @@ export async function deleteUserData(
     // by clearFormat3Entities (group_character_members / group_doc_mount_links);
     // the official store mount points go with doc_mount_points there too.
     ...groups.map((g) => repos.groups.delete(g.id)),
-    ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
   ]);
@@ -252,7 +254,7 @@ export async function deleteUserData(
       roleplayTemplates: roleplayTemplates.length,
       projects: projects.length,
       groups: groups.length,
-      llmLogs: llmLogs.length,
+      llmLogs: llmLogsDeleted,
       chatSettings: chatSettings ? 1 : 0,
       folders: folders.length,
     },
@@ -308,7 +310,7 @@ export async function deleteAllUserData(
   // First, count everything before deletion
   const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
-      repos.characters.findAll(),
+      readOwnedCharacters(userId).then((owned) => owned.rows),
       repos.chats.findAll(),
       repos.tags.findAll(),
       repos.files.findAll(),
@@ -318,7 +320,7 @@ export async function deleteAllUserData(
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
-      repos.projects.findAll(),
+      readOwnedProjects(userId).then((owned) => owned.rows),
     ]);
 
   // Count memories
@@ -395,7 +397,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
 
   const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, apiKeys, promptTemplates, roleplayTemplates, projects] =
     await Promise.all([
-      repos.characters.findAll(),
+      readOwnedCharacters(userId).then((owned) => owned.rows),
       repos.chats.findAll(),
       repos.tags.findAll(),
       repos.files.findAll(),
@@ -405,7 +407,7 @@ export async function previewDeleteAllUserData(userId: string): Promise<DeleteSu
       repos.connections.getAllApiKeys(),
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
-      repos.projects.findAll(),
+      readOwnedProjects(userId).then((owned) => owned.rows),
     ]);
 
   // Count memories

@@ -12,6 +12,8 @@ import { UuidRemapper } from '../uuid-remapper';
 import { remapScenarioSource } from '@/lib/scenarios/source-remap';
 import { remapCharacterKeyedChatFields } from '@/lib/chat/character-keyed-fields';
 import { logger } from '@/lib/logger';
+import { remapEntity, type IdEntity, type IdResolver } from '../id-fields';
+import { isBuiltInRoleplayTemplateId } from '@/lib/roleplay-templates/built-in-ids';
 import {
   getConciergeState,
   withConciergeModeFromLegacy,
@@ -98,7 +100,8 @@ function remapBrahmaConsoleSetting(value: string, remapper: UuidRemapper): strin
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (parsed && typeof parsed.inlineConnectionProfileId === 'string') {
-      const remapped = remapper.remap(parsed.inlineConnectionProfileId);
+      // A profile the backup does not carry is cleared rather than minted.
+      const remapped = remapper.lookup(parsed.inlineConnectionProfileId) ?? null;
       moduleLogger.debug('Remapped inline Brahma connection profile in instance settings', {
         from: parsed.inlineConnectionProfileId,
         to: remapped,
@@ -330,44 +333,85 @@ export function planAtlasImagePointerFixes(original: BackupData, remapper: UuidR
 }
 
 /**
- * The chat columns that hold participant ids as a JSON-encoded string array
- * rather than a real array, so `remapArrayFields` cannot see them.
+ * Issue a new id for every row the backup carries — and for the rows that
+ * live inside others (a chat's participants and messages) — before anything
+ * is remapped. A reference resolves only to an id issued here; one naming a
+ * row the backup does not carry stays unresolved, and the id-field table's
+ * `onMissing` decides what becomes of it. Nothing is minted for a reference.
+ *
+ * Wardrobe items, Inventory objects and Atlas entries are not issued ids:
+ * their ids live in their own files and travel verbatim (see
+ * {@link buildWardrobeItemIdRemap} and {@link verbatimItemIds}).
  */
-const PARTICIPANT_ID_JSON_FIELDS = [
-  'turnQueue',
-  'spokenThisCycleParticipantIds',
-  'cycleOrderParticipantIds',
-] as const;
-
-/**
- * Remap a JSON-encoded array of ids. A value that is not a JSON string array
- * is returned untouched — the turn manager already reads a malformed value as
- * empty, so there is nothing to gain by rewriting it.
- */
-function remapJsonIdList(value: unknown, remapper: UuidRemapper): unknown {
-  if (typeof value !== 'string') return value;
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) return value;
-    return JSON.stringify(remapper.remapArray(parsed as string[]));
-  } catch {
-    return value;
+function issueBackupRowIds(data: BackupData, remapper: UuidRemapper): void {
+  const collections: Array<ReadonlyArray<{ id?: unknown }> | undefined> = [
+    data.tags, data.files, data.characters, data.connectionProfiles, data.imageProfiles,
+    data.embeddingProfiles, data.chats, data.memories, data.promptTemplates, data.roleplayTemplates,
+    data.projects, data.groups, data.llmLogs, data.pluginConfigs, data.chatSettings, data.folders,
+    data.wardrobeItems, data.characterPluginData, data.conversationAnnotations, data.chatDocuments,
+    data.chatInforms, data.conversationChunks, data.tfidfVocabularies, data.embeddingStatus,
+    data.docMountPoints, data.docMountFolders, data.docMountFiles, data.docMountFileLinks,
+    data.docMountChunks, data.docMountDocuments, data.docMountBlobs, data.projectDocMountLinks,
+    data.groupDocMountLinks, data.groupCharacterMembers, data.wardrobeWear, data.wardrobeHistory,
+    data.avatarTimeline, data.logEntries,
+  ];
+  for (const rows of collections) {
+    for (const row of rows ?? []) {
+      if (typeof row.id === 'string' && row.id) remapper.remap(row.id);
+    }
+  }
+  for (const chat of data.chats) {
+    for (const participant of chat.participants ?? []) if (participant.id) remapper.remap(participant.id);
+    for (const message of chat.messages ?? []) if (message.id) remapper.remap(message.id);
   }
 }
 
 /**
- * Remaps all UUIDs in the backup data for new-account mode
+ * The restore side's resolver: an id issued for a row in the backup, or a
+ * built-in roleplay template (the same id on every instance), else unknown.
+ */
+function restoreResolver(remapper: UuidRemapper): IdResolver {
+  return (target, id) =>
+    remapper.lookup(id) ?? (target === 'roleplayTemplate' && isBuiltInRoleplayTemplateId(id) ? id : undefined);
+}
+
+/**
+ * Remaps all UUIDs in the backup data for new-account mode.
+ *
+ * Every row gets a fresh id; every reference listed in the id-field table
+ * (`lib/backup/id-fields.ts`) follows it, or — naming a row the backup does
+ * not carry — is kept, cleared or drops its row as the table says. What the
+ * table marks bespoke for restore is rewritten here by its own rules.
  */
 export function remapBackupData(
   data: BackupData,
   targetUserId: string,
   remapper: UuidRemapper
 ): BackupData {
-  // Remap tags
-  const remappedTags = data.tags.map((tag) => ({
-    ...remapper.remapFields(tag, ['id']),
-    userId: targetUserId,
-  }));
+  issueBackupRowIds(data, remapper);
+  const resolve = restoreResolver(remapper);
+  const side = { side: 'restore' as const };
+
+  /** The row under its new id, with every table field remapped (or null to drop it). */
+  const remapRow = <T extends { id: string }>(entity: IdEntity, row: T): T | null =>
+    remapEntity(entity, { ...row, id: remapper.remap(row.id) }, resolve, side).row;
+  const remapRows = <T extends { id: string }>(entity: IdEntity, rows: readonly T[] | undefined): T[] => {
+    const out: T[] = [];
+    let dropped = 0;
+    for (const row of rows ?? []) {
+      const remapped = remapRow(entity, row);
+      if (remapped) out.push(remapped);
+      else dropped++;
+    }
+    if (dropped > 0) {
+      moduleLogger.info('Dropped backup rows whose required reference is not in the backup', { entity, dropped });
+    }
+    return out;
+  };
+  /** For collections restored by index beside their bytes: never drops a row. */
+  const remapRowsInPlace = <T extends { id: string }>(entity: IdEntity, rows: readonly T[] | undefined): T[] =>
+    (rows ?? []).map((row) => remapRow(entity, row) ?? { ...row, id: remapper.remap(row.id) });
+  const owned = <T>(rows: T[]): T[] => rows.map((row) => ({ ...row, userId: targetUserId }));
 
   // Wardrobe item ids are not remapper keys (see buildWardrobeItemIdRemap).
   // Built up front: a wardrobe picture's `files` row names its item in
@@ -375,152 +419,74 @@ export function remapBackupData(
   const wardrobeItemIdRemap = buildWardrobeItemIdRemap(data, remapper);
   // Inventory object and Atlas entry ids travel verbatim, so a picture naming one keeps it.
   const verbatimIds = verbatimItemIds(data);
+  // `linkedTo` / `tags` on a file are polymorphic (bespoke in the table).
   const remapLinkId = (id: string): string =>
-    verbatimIds.has(id) ? id : wardrobeItemIdRemap.get(id) ?? remapper.remap(id);
+    verbatimIds.has(id) ? id : wardrobeItemIdRemap.get(id) ?? remapper.lookup(id) ?? id;
 
-  // Remap files
-  // IMPORTANT: Chain remapFields → array remaps so array spread doesn't overwrite remapped scalar fields
-  const remappedFiles = data.files.map((file) => ({
-    ...remapper.remapFields(file, ['id', 'projectId']),
+  const remappedFiles = owned(remapRowsInPlace('file', data.files)).map((file) => ({
+    ...file,
     ...(Array.isArray(file.linkedTo) ? { linkedTo: file.linkedTo.map(remapLinkId) } : {}),
     ...(Array.isArray(file.tags) ? { tags: file.tags.map(remapLinkId) } : {}),
-    userId: targetUserId,
   }));
 
-  // Remap characters
   const remappedCharacters = data.characters.map((char) => {
-    const remapped = {
-      ...remapper.remapArrayFields(
-        // The vault pointer is remapped like any FK (bug 185): the remapper
-        // maps one original id to one new id everywhere, so the pointer names
-        // the id its vault's mount-point row is restored under, and the
-        // restore binds the character to that vault rather than minting one.
-        remapper.remapFields(char, ['id', 'characterDocumentMountPointId', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId', 'defaultImageProfileId']),
-        ['tags']
-      ),
-      userId: targetUserId,
-    };
-    // Handle partnerLinks array of objects (new format)
-    if (remapped.partnerLinks) {
-      remapped.partnerLinks = remapped.partnerLinks.map((link: { partnerId: string; isDefault: boolean }) => ({
-        ...link,
-        partnerId: remapper.remap(link.partnerId),
-      }));
-    }
-    // Handle personaLinks backwards compatibility (old backup format)
-    const legacy = remapped as Record<string, unknown>;
-    if (legacy.personaLinks && !remapped.partnerLinks) {
-      remapped.partnerLinks = (legacy.personaLinks as Array<{ personaId: string; isDefault: boolean }>).map((link) => ({
-        partnerId: remapper.remap(link.personaId),
+    const legacy = { ...char } as Record<string, unknown>;
+    // personaLinks backwards compatibility (old backup format).
+    if (legacy.personaLinks && !legacy.partnerLinks) {
+      legacy.partnerLinks = (legacy.personaLinks as Array<{ personaId: string; isDefault: boolean }>).map((link) => ({
+        partnerId: link.personaId,
         isDefault: link.isDefault,
       }));
-      delete legacy.personaLinks;
     }
-    // Handle avatarOverrides
-    if (remapped.avatarOverrides) {
-      remapped.avatarOverrides = remapped.avatarOverrides.map((override: { chatId: string; imageId: string }) => ({
-        chatId: remapper.remap(override.chatId),
-        imageId: remapper.remap(override.imageId),
-      }));
-    }
-    // Handle physicalDescription: backups may carry either the legacy plural
-    // array (`physicalDescriptions`) or the new singular field
-    // (`physicalDescription`). Collapse to the first record either way.
-    const legacyRecord = legacy as Record<string, unknown>;
-    if (Array.isArray(legacyRecord.physicalDescriptions)) {
-      const first = legacyRecord.physicalDescriptions[0] as PhysicalDescription | undefined;
-      remapped.physicalDescription = first
-        ? { ...first, id: remapper.remap(first.id) }
-        : null;
-      delete legacyRecord.physicalDescriptions;
-    } else if (remapped.physicalDescription) {
-      remapped.physicalDescription = {
-        ...remapped.physicalDescription,
-        id: remapper.remap(remapped.physicalDescription.id),
-      };
+    delete legacy.personaLinks;
+    // physicalDescription: backups may carry the legacy plural array or the
+    // singular field. Collapse to the first record either way; its own id is
+    // issued afresh.
+    if (Array.isArray(legacy.physicalDescriptions)) {
+      const first = legacy.physicalDescriptions[0] as PhysicalDescription | undefined;
+      legacy.physicalDescription = first ? { ...first, id: remapper.remap(first.id) } : null;
+      delete legacy.physicalDescriptions;
+    } else if (legacy.physicalDescription) {
+      const description = legacy.physicalDescription as PhysicalDescription;
+      legacy.physicalDescription = { ...description, id: remapper.remap(description.id) };
     }
     // Legacy `clothingRecords` — the table is gone; drop silently so old
     // backups still restore.
-    if (legacyRecord.clothingRecords) {
-      delete legacyRecord.clothingRecords;
-    }
-    return remapped as Character;
+    delete legacy.clothingRecords;
+    // The vault pointer follows its store like any reference (bug 185): the
+    // store's row is restored under the id issued for it, and the restore
+    // binds the character to that vault rather than minting one.
+    return { ...(remapRow('character', legacy as unknown as Character) as Character), userId: targetUserId };
   });
 
+  // `fallbackProfileId` names another row in the same table and resolves
+  // whatever order the profiles come in, since every id is issued up front.
+  const remappedConnectionProfiles = owned(remapRows('connectionProfile', data.connectionProfiles));
+  const remappedImageProfiles = owned(remapRows('imageProfile', data.imageProfiles));
+  const remappedEmbeddingProfiles = owned(remapRows('embeddingProfile', data.embeddingProfiles));
 
-  // Remap connection profiles.
-  //
-  // `fallbackProfileId` points at another row in this same table, so it has to
-  // be remapped alongside `id` or a restored profile's understudy would name a
-  // uuid that no longer exists. The remapper is lazy and consistent — the same
-  // old id always yields the same new one — so a profile naming an understudy
-  // that appears later in the array is remapped correctly either way.
-  const remappedConnectionProfiles = data.connectionProfiles.map((profile) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(profile, ['id', 'apiKeyId', 'fallbackProfileId']),
-      ['tags']
-    ),
-    userId: targetUserId,
-  })) as ConnectionProfile[];
-
-  // Remap image profiles
-  const remappedImageProfiles = data.imageProfiles.map((profile) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(profile, ['id', 'apiKeyId']),
-      ['tags']
-    ),
-    userId: targetUserId,
-  })) as ImageProfile[];
-
-  // Remap embedding profiles
-  const remappedEmbeddingProfiles = data.embeddingProfiles.map((profile) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(profile, ['id', 'apiKeyId']),
-      ['tags']
-    ),
-    userId: targetUserId,
-  })) as EmbeddingProfile[];
-
-  // Remap chats (complex due to participants and messages)
   const backupCharacterIds = new Set(data.characters.map((character) => character.id));
   const remappedChats = data.chats.map((chat) => {
     const remappedChat = {
-      ...remapper.remapArrayFields(
-        remapper.remapFields(chat, [
-          'id',
-          'activeTypingParticipantId',
-          'lastTurnParticipantId',
-          'projectId',
-          'storyBackgroundImageId',
-          'imageProfileId',
-          // Message-id reference: messages are remapped below, so the
-          // "other-subject", episode and turn extraction watermarks must
-          // follow their messages.
-          'otherExtractionWatermarkMessageId',
-          'episodeExtractionWatermarkMessageId',
-          'turnExtractionWatermarkMessageId',
-        ]),
-        ['tags', 'impersonatingParticipantIds']
-      ),
+      ...(remapRow('chat', chat as unknown as ChatWithMessages) as ChatWithMessages),
       userId: targetUserId,
     };
 
-    // The scenario source names a mount; mounts are remapped by the same
-    // remapper, so the pointer follows its store.
+    // The scenario source names a mount; a source whose store the backup does
+    // not carry is dropped whole (bespoke in the table).
     if (chat.scenarioSource) {
-      remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.remap(id));
+      remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.lookup(id) ?? null);
     }
 
     // Outfits, outfit avatars, Courier checkpoints, queued outfit notices and
     // the carried Inventory are keyed by character id (bug 252); one pass
-    // carries them all. An
-    // entry for a character the backup does not carry is dropped rather than
-    // given a minted id that names nobody.
+    // carries them all. An entry for a character the backup does not carry is
+    // dropped rather than given an id that names nobody.
     const keyed = remapCharacterKeyedChatFields(chat, {
-      characterId: (id) => (backupCharacterIds.has(id) ? remapper.remap(id) : null),
+      characterId: (id) => (backupCharacterIds.has(id) ? remapper.lookup(id) ?? null : null),
       wardrobeItemId: (id) => wardrobeItemIdRemap.get(id) ?? id,
-      fileId: (id) => remapper.remap(id),
-      messageId: (id) => remapper.remap(id),
+      fileId: (id) => remapper.lookup(id) ?? id,
+      messageId: (id) => remapper.lookup(id) ?? id,
     });
     Object.assign(remappedChat, keyed.patch);
     if (keyed.unreadable.length > 0) {
@@ -537,330 +503,123 @@ export function remapBackupData(
       });
     }
 
-    // Turn-manager state names participants inside JSON strings; left alone,
-    // the rotation and turn queue would name seats the restore has renamed.
-    for (const field of PARTICIPANT_ID_JSON_FIELDS) {
-      if (field in chat) {
-        (remappedChat as Record<string, unknown>)[field] = remapJsonIdList(
-          (chat as unknown as Record<string, unknown>)[field],
-          remapper,
-        );
-      }
-    }
-
-    // Remap participants
-    remappedChat.participants = chat.participants.map((participant: ChatParticipantBase) => ({
-      ...remapper.remapFields(participant, [
-        'id',
-        'characterId',
-        'connectionProfileId',
-        'imageProfileId',
-      ]),
-    })) as ChatParticipantBase[];
-
-    // Remap messages
-    remappedChat.messages = chat.messages.map((msg) => ({
-      ...remapper.remapArrayFields(
-        remapper.remapFields(msg, ['id', 'swipeGroupId', 'participantId']),
-        // `targetParticipantIds` is a whisper's audience: unremapped, a
-        // whisper would address seats that no longer exist.
-        ['attachments', 'targetParticipantIds']
-      ),
-    }));
-
-    return remappedChat as ChatWithMessages;
+    remappedChat.messages = chat.messages.map(
+      (message) => remapRow('message', message as typeof message & { id: string }) as typeof message
+    );
+    return remappedChat;
   });
 
-  // Remap memories
-  const remappedMemories = data.memories.map((memory) => ({
-    ...remapper.remapArrayFields(
-      // `supersededById` and `consolidatedFrom` are memory-id references (digest
-      // <-> cold members), remapped in lockstep with `id` exactly like
-      // `relatedMemoryIds`. Old backups lack them; remapFields/remapArrayFields
-      // skip absent or null values.
-      remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId', 'projectId', 'supersededById']),
-      ['tags', 'relatedMemoryIds', 'consolidatedFrom']
-    ),
-  })) as SerializedMemory[];
-
-  // Remap prompt templates
-  const remappedPromptTemplates = data.promptTemplates.map((template) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(template, ['id']),
-      ['tags']
-    ),
-    userId: targetUserId,
-  })) as PromptTemplate[];
-
-  // Remap roleplay templates
-  const remappedRoleplayTemplates = data.roleplayTemplates.map((template) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(template, ['id']),
-      ['tags']
-    ),
-    userId: targetUserId,
-  })) as RoleplayTemplate[];
+  const remappedMemories = remapRows('memory', data.memories as Array<SerializedMemory & { id: string }>) as SerializedMemory[];
+  const remappedPromptTemplates = owned(remapRows('promptTemplate', data.promptTemplates));
+  const remappedRoleplayTemplates = owned(remapRows('roleplayTemplate', data.roleplayTemplates));
 
   // Provider models are global and don't need remapping, just copy them
   const remappedProviderModels = data.providerModels;
 
-  // Remap projects
-  const remappedProjects = data.projects.map((project) => ({
-    ...remapper.remapArrayFields(
-      // officialMountPointId remapped in lockstep with the store's own row, so
-      // the restore can bind the project to its archived store (bug 185).
-      remapper.remapFields(project, ['id', 'officialMountPointId', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId', 'brahmaConnectionProfileId']),
-      ['characterRoster']
-    ),
-    userId: targetUserId,
-  })) as Project[];
+  // officialMountPointId follows the store's own row, so the restore can bind
+  // the project or group to its archived store (bug 185).
+  const remappedProjects = owned(remapRows('project', data.projects));
+  const remappedGroups = remapRows('group', data.groups);
 
-  // Remap groups. Like projects, officialMountPointId is remapped in lockstep
-  // with the store's own row so the restore binds the group to its archived
-  // store rather than minting a fresh one (bug 185); membership and links
-  // carry the group id forward.
-  const remappedGroups = (data.groups || []).map((group) => ({
-    ...remapper.remapFields(group, ['id', 'officialMountPointId']),
-  })) as Group[];
+  // LLM logs are history: a target that is gone is still history (keep).
+  const remappedLLMLogs = owned(remapRows('llmLog', data.llmLogs));
+  const remappedPluginConfigs = owned(remapRows('pluginConfig', data.pluginConfigs as Array<PluginConfig & { id: string }>));
 
-  // Remap LLM logs.
-  // `connectionProfileId` / `imageProfileId` must be in this list: connection
-  // and image profiles are themselves remapped above, so a log row left holding
-  // the source instance's profile id would name nothing on the receiving one —
-  // and The Almanack's per-profile attribution would read every restored row as
-  // a deleted profile. Both are nullable and `remapFields` only touches string
-  // fields, so pre-4.9 rows (which carry null) pass through untouched.
-  const remappedLLMLogs = data.llmLogs.map((log) => ({
-    ...remapper.remapFields(log, [
-      'id',
-      'messageId',
-      'chatId',
-      'characterId',
-      'connectionProfileId',
-      'imageProfileId',
-    ]),
-    userId: targetUserId,
-  })) as LLMLog[];
-
-  // Remap plugin configs
-  const remappedPluginConfigs = (data.pluginConfigs || []).map((config) => ({
-    ...remapper.remapFields(config, ['id']),
-    userId: targetUserId,
-  })) as PluginConfig[];
-
-  // Remap chat settings. A backup from before 4.10 carries the retired
-  // Concierge settings (dangerousContentSettings, the top-level vision
-  // fallback, the crafter under cheapLLMSettings) and no conciergeSettings;
-  // translate them here, exactly as add-concierge-settings-v1 does, before
-  // the repository's schema strips the old keys.
+  // Chat settings. A backup from before 4.10 carries the retired Concierge
+  // settings (dangerousContentSettings, the top-level vision fallback, the
+  // crafter under cheapLLMSettings) and no conciergeSettings; translate them
+  // here, exactly as add-concierge-settings-v1 does, before the repository's
+  // schema strips the old keys. Then the table remaps the profile pointers.
   const backupHasUnmoderatedChats = (data.chats || []).some(
     (chat) => getConciergeState(withConciergeModeFromLegacy(chat as Parameters<typeof withConciergeModeFromLegacy>[0])) === 'unmoderated',
   );
   const remappedChatSettings = (data.chatSettings || []).map((settings) => {
-    const remapped = {
-      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'defaultRoleplayTemplateId']),
-      userId: targetUserId,
-    };
     const concierge = withConciergeSettingsFromLegacy(
       settings as SettingsWithLegacyConcierge<ChatSettings>,
       backupHasUnmoderatedChats,
     ).conciergeSettings as ChatSettings['conciergeSettings'];
-    remapped.conciergeSettings = {
-      ...concierge,
-      ...(concierge.uncensoredTextProfileId ? { uncensoredTextProfileId: remapper.remap(concierge.uncensoredTextProfileId) } : {}),
-      ...(concierge.uncensoredImageProfileId ? { uncensoredImageProfileId: remapper.remap(concierge.uncensoredImageProfileId) } : {}),
-      ...(concierge.uncensoredVisionProfileId ? { uncensoredVisionProfileId: remapper.remap(concierge.uncensoredVisionProfileId) } : {}),
-      ...(concierge.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(concierge.imagePromptProfileId) } : {}),
+    return {
+      ...(remapRow('chatSettings', { ...settings, conciergeSettings: concierge }) as ChatSettings),
+      userId: targetUserId,
     };
-    // Remap nested cheapLLMSettings UUID fields
-    if (remapped.cheapLLMSettings) {
-      remapped.cheapLLMSettings = {
-        ...remapped.cheapLLMSettings,
-        ...(remapped.cheapLLMSettings.userDefinedProfileId ? { userDefinedProfileId: remapper.remap(remapped.cheapLLMSettings.userDefinedProfileId) } : {}),
-        ...(remapped.cheapLLMSettings.defaultCheapProfileId ? { defaultCheapProfileId: remapper.remap(remapped.cheapLLMSettings.defaultCheapProfileId) } : {}),
-        ...(remapped.cheapLLMSettings.outfitSelectionProfileId ? { outfitSelectionProfileId: remapper.remap(remapped.cheapLLMSettings.outfitSelectionProfileId) } : {}),
-      };
-    }
-    // Remap nested storyBackgroundsSettings UUID fields
-    if (remapped.storyBackgroundsSettings?.defaultImageProfileId) {
-      remapped.storyBackgroundsSettings = {
-        ...remapped.storyBackgroundsSettings,
-        defaultImageProfileId: remapper.remap(remapped.storyBackgroundsSettings.defaultImageProfileId),
-      };
-    }
-    if (remapped.wardrobeImageSettings?.imageProfileId) {
-      remapped.wardrobeImageSettings = {
-        ...remapped.wardrobeImageSettings,
-        imageProfileId: remapper.remap(remapped.wardrobeImageSettings.imageProfileId),
-      };
-    }
-    return remapped as ChatSettings;
   });
 
-  // Remap folders
-  const remappedFolders = (data.folders || []).map((folder) => ({
-    ...remapper.remapFields(folder, ['id', 'parentFolderId', 'projectId']),
-    userId: targetUserId,
-  })) as Folder[];
+  const remappedFolders = owned(remapRows('folder', data.folders));
 
-  // Remap wardrobe items. componentItemIds reference other wardrobe items, which
-  // share the same UUID space; remap them along with id/characterId so cross-refs
-  // stay consistent in new-account mode. Legacy outfit presets folded into
-  // composites at parse time pass through this same path.
+  // Legacy (pre-cutover) wardrobe rows are rows: remapped by id like any
+  // other, with `componentItemIds` following through the same item remap.
   const remappedWardrobeItems = (data.wardrobeItems || []).map((item) => ({
-    ...remapper.remapArrayFields(
-      // imageFileId names a `files` row, remapped with the files above.
-      remapper.remapFields(item, ['id', 'characterId', 'imageFileId']),
-      ['componentItemIds']
-    ),
+    ...item,
+    id: remapper.remap(item.id),
+    characterId: item.characterId ? remapper.lookup(item.characterId) ?? item.characterId : item.characterId,
+    imageFileId: item.imageFileId ? remapper.lookup(item.imageFileId) ?? item.imageFileId : item.imageFileId,
+    componentItemIds: (item.componentItemIds ?? []).map((id) => wardrobeItemIdRemap.get(id) ?? id),
   })) as WardrobeItem[];
 
-  // Chat documents reference chat IDs that have been remapped above.
-  const remappedChatDocuments = (data.chatDocuments || []).map((cd) => ({
-    ...remapper.remapFields(cd, ['id', 'chatId']),
-  })) as ChatDocument[];
-
-  // Inform rows reference the chat, one of its participants (`participantId`
-  // is a seat id, never a character id), the Host record message and — once
-  // consumed — the assistant message that carried them. All four were remapped
-  // with the chat above, so the remapper answers with the same new ids.
-  // `batchId` is not a row anywhere; it is remapped anyway so the whole batch
-  // moves together and no id from the source instance survives the restore.
-  // The nullable fields are left alone when null — remapFields only touches
-  // strings.
-  const remappedChatInforms = (data.chatInforms || []).map((inform) => ({
-    ...remapper.remapFields(inform, [
-      'id',
-      'chatId',
-      'batchId',
-      'participantId',
-      'recordMessageId',
-      'consumedByMessageId',
-    ]),
+  // Informs: `batchId` is a group key, not a row (exempt in the table); it is
+  // reissued consistently so the batch moves together and no key from the
+  // source instance survives.
+  const remappedChatInforms = remapRows('chatInform', data.chatInforms).map((inform) => ({
+    ...inform,
+    batchId: inform.batchId ? remapper.remap(inform.batchId) : inform.batchId,
   })) as ChatInform[];
 
-  // Conversation chunks reference chats and individual messages.
-  const remappedConversationChunks = (data.conversationChunks || []).map((chunk) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(chunk, ['id', 'chatId']),
-      ['messageIds']
-    ),
-  })) as SerializedConversationChunk[];
+  // Embedding status — `entityId` is polymorphic (memory / file / help doc /
+  // chunk); every row id was issued up front, so the table resolves it.
+  const remappedTfidfVocabularies = owned(remapRows('tfidfVocabulary', data.tfidfVocabularies));
+  const remappedEmbeddingStatus = owned(remapRows('embeddingStatus', data.embeddingStatus));
 
-  // Legacy vector entries (pre-Phase-B archives) — id is the memory id
-  // (already remapped through the memory pass), so the restore can still match
-  // each to its memory. characterId is also remapped.
+  // Legacy vector entries (pre-Phase-B archives) — id is the memory id, so the
+  // restore can still match each to its memory.
   const remappedVectorEntries = (data.vectorEntries || []).map((entry) => ({
-    ...remapper.remapFields(entry, ['id', 'characterId']),
+    ...entry,
+    id: remapper.lookup(entry.id) ?? entry.id,
+    characterId: entry.characterId ? remapper.lookup(entry.characterId) ?? entry.characterId : entry.characterId,
   })) as SerializedVectorEntry[];
 
-  // TF-IDF vocabularies. profileId is an embedding-profile id; userId moves
-  // to the target user.
-  const remappedTfidfVocabularies = (data.tfidfVocabularies || []).map((voc) => ({
-    ...remapper.remapFields(voc, ['id', 'profileId']),
-    userId: targetUserId,
-  })) as TfidfVocabulary[];
-
-  // Embedding status — entityId could be a memory/file/help_doc/etc. id, all
-  // of which are already in the mapping by the time embeddingStatus is touched.
-  const remappedEmbeddingStatus = (data.embeddingStatus || []).map((es) => ({
-    ...remapper.remapFields(es, ['id', 'entityId', 'profileId']),
-    userId: targetUserId,
-  })) as EmbeddingStatus[];
-
-  // Document store tables — remap every FK to keep the graph internally
-  // consistent. doc_mount_files row ids are shared by doc_mount_documents and
-  // doc_mount_blobs (fileId), so remapping a file id once means everything
-  // that points at it gets the same new id.
-  const remappedDocMountPoints = (data.docMountPoints || []).map((mp) => ({
-    ...remapper.remapFields(mp, ['id']),
-  })) as DocMountPoint[];
-  const remappedDocMountFolders = (data.docMountFolders || []).map((folder) => ({
-    ...remapper.remapFields(folder, ['id', 'mountPointId', 'parentId']),
-  })) as DocMountFolder[];
-  const remappedDocMountFiles = (data.docMountFiles || []).map((file) => ({
-    ...remapper.remapFields(file, ['id']),
-  })) as DocMountFile[];
-  const remappedDocMountFileLinks = (data.docMountFileLinks || []).map((link) => ({
-    ...remapper.remapFields(link, ['id', 'fileId', 'mountPointId', 'folderId']),
+  // Document store tables. `doc_mount_files` row ids are shared by documents
+  // and blobs (fileId), so every row pointing at a file follows it. A file
+  // link's `linkGroupId` is a hard-link group key, reissued consistently: left
+  // as it was, a new-account restore beside its source would join the source's
+  // link groups, and an edit to one copy would write through to the other.
+  const remappedDocMountFileLinks = remapRows('docMountFileLink', data.docMountFileLinks).map((link) => ({
+    ...link,
+    ...(link.linkGroupId ? { linkGroupId: remapper.remap(link.linkGroupId) } : {}),
   })) as DocMountFileLink[];
-  const remappedDocMountChunks = (data.docMountChunks || []).map((chunk) => ({
-    ...remapper.remapFields(chunk, ['id', 'linkId', 'mountPointId']),
-  })) as SerializedDocMountChunk[];
-  const remappedDocMountDocuments = (data.docMountDocuments || []).map((doc) => ({
-    ...remapper.remapFields(doc, ['id', 'fileId']),
-  })) as DocMountDocument[];
-  const remappedDocMountBlobs = (data.docMountBlobs || []).map((blob) => ({
-    ...remapper.remapFields(blob, ['id', 'fileId']),
-  })) as DocMountBlobMetadata[];
-  const remappedProjectDocMountLinks = (data.projectDocMountLinks || []).map((link) => ({
-    ...remapper.remapFields(link, ['id', 'projectId', 'mountPointId']),
-  })) as ProjectDocMountLink[];
-  // Group join tables — direct analogues. groupId/characterId resolve to the
-  // same new ids the group/character rows received (remap is consistent by
-  // original id, so order within this function doesn't matter).
-  const remappedGroupDocMountLinks = (data.groupDocMountLinks || []).map((link) => ({
-    ...remapper.remapFields(link, ['id', 'groupId', 'mountPointId']),
-  })) as GroupDocMountLink[];
-  const remappedGroupCharacterMembers = (data.groupCharacterMembers || []).map((member) => ({
-    ...remapper.remapFields(member, ['id', 'groupId', 'characterId']),
-  })) as GroupCharacterMember[];
 
-  // Wardrobe wear ledger. `id`, `wearerCharacterId` and `lastWornChatId` go
-  // through the remapper like any FK (a wearer or chat absent from the backup
-  // gets a fresh id that names nothing — the readers already label a missing
-  // wearer and "a chat since deleted"). `itemId` does not: see
-  // buildWardrobeItemIdRemap. An item id the backup carries no document for
-  // passes through unchanged.
-  const remappedWardrobeWear = (data.wardrobeWear || []).map((row) => ({
-    ...remapper.remapFields(row, ['id', 'wearerCharacterId', 'lastWornChatId']),
+  // Wardrobe wear ledger: `itemId` follows the wardrobe item remap; an item
+  // id the backup carries no document for passes through unchanged.
+  const remappedWardrobeWear = remapRows('wardrobeWear', data.wardrobeWear).map((row) => ({
+    ...row,
     itemId: wardrobeItemIdRemap.get(row.itemId) ?? row.itemId,
   })) as WardrobeWearStatsRow[];
 
-  // Outfit history. `id`, `chatId`, `characterId` and `actorCharacterId` go
-  // through the remapper; slot item ids follow the same item remap as the
-  // wear ledger (an id the backup carries no document for passes through and
-  // falls under the stale-item rule). Indices, cursor and dates are kept.
-  const remappedWardrobeHistory = (data.wardrobeHistory || []).map((row) => {
+  // Outfit history: slot item ids follow the same item remap as the wear
+  // ledger. Indices, cursor and dates are kept.
+  const remappedWardrobeHistory = remapRows('wardrobeHistory', data.wardrobeHistory).map((row) => {
     const slots = bySlot((slot) => (row.slots?.[slot] ?? []).map((id) => wardrobeItemIdRemap.get(id) ?? id));
-    return {
-      ...remapper.remapFields(row, ['id', 'chatId', 'characterId', 'actorCharacterId']),
-      slots,
-      slotsHash: hashEquippedSlots(slots),
-    };
+    return { ...row, slots, slotsHash: hashEquippedSlots(slots) };
   }) as ChatWardrobeHistoryRow[];
 
-  // Avatar timeline. `id`, `chatId` and `characterId` go through the remapper.
-  // `imageId` is the same kind of id as `chats.characterAvatars[].imageId`,
-  // which the chat remap above sends through `remapper.remap`, so the timeline
-  // and the chat's own override keep naming the same file. A null `imageId`
-  // ("the character's own avatar") stays null. A row for a character the
-  // backup does not carry is dropped, as the chat remap drops such entries.
-  const remappedAvatarTimeline = (data.avatarTimeline || []).flatMap((row) => {
-    if (!backupCharacterIds.has(row.characterId)) {
+  // Avatar timeline. A row for a character the backup does not carry is
+  // dropped, as the chat remap drops such entries (bespoke in the table).
+  const remappedAvatarTimeline = remapRows(
+    'avatarTimeline',
+    (data.avatarTimeline || []).filter((row) => {
+      if (backupCharacterIds.has(row.characterId)) return true;
       moduleLogger.debug('Dropped avatar timeline row for a character not in the backup', {
         chatId: row.chatId,
         characterId: row.characterId,
       });
-      return [];
-    }
-    return [{
-      ...remapper.remapFields(row, ['id', 'chatId', 'characterId']),
-      imageId: row.imageId ? remapper.remap(row.imageId) : null,
-    }];
-  }) as ChatAvatarTimelineRow[];
-
-  // The Log. Each line names the chat it was written from and the character
-  // who wrote it (nullable, which `remapFields` passes through).
-  const remappedLogEntries = (data.logEntries || []).map((entry) =>
-    remapper.remapFields(entry, ['id', 'chatId', 'characterId'])
-  ) as LogEntry[];
+      return false;
+    }).map((row) => ({ ...row, characterId: remapper.lookup(row.characterId) ?? row.characterId })),
+  ) as ChatAvatarTimelineRow[];
 
   // Instance settings — only the mount-point keys carry UUIDs we need to
   // remap. Everything else is opaque text (numbers, JSON config blobs).
   const remappedInstanceSettings = (data.instanceSettings || []).map((row) => {
     if (MOUNT_POINT_SETTING_KEYS.has(row.key) && row.value) {
-      return { key: row.key, value: remapper.remap(row.value) };
+      return { key: row.key, value: remapper.lookup(row.value) ?? row.value };
     }
     if (row.key === BRAHMA_CONSOLE_SETTING_KEY && row.value) {
       return { key: row.key, value: remapBrahmaConsoleSetting(row.value, remapper) };
@@ -872,51 +631,48 @@ export function remapBackupData(
     manifest: data.manifest,
     characters: remappedCharacters,
     chats: remappedChats,
-    tags: remappedTags as Tag[],
-    connectionProfiles: remappedConnectionProfiles,
-    imageProfiles: remappedImageProfiles,
-    embeddingProfiles: remappedEmbeddingProfiles,
+    tags: owned(remapRows('tag', data.tags)) as Tag[],
+    connectionProfiles: remappedConnectionProfiles as ConnectionProfile[],
+    imageProfiles: remappedImageProfiles as ImageProfile[],
+    embeddingProfiles: remappedEmbeddingProfiles as EmbeddingProfile[],
     memories: remappedMemories,
     files: remappedFiles as FileEntry[],
-    promptTemplates: remappedPromptTemplates,
-    roleplayTemplates: remappedRoleplayTemplates,
+    promptTemplates: remappedPromptTemplates as PromptTemplate[],
+    roleplayTemplates: remappedRoleplayTemplates as RoleplayTemplate[],
     providerModels: remappedProviderModels,
-    projects: remappedProjects,
-    groups: remappedGroups,
-    llmLogs: remappedLLMLogs,
-    pluginConfigs: remappedPluginConfigs,
+    projects: remappedProjects as Project[],
+    groups: remappedGroups as Group[],
+    llmLogs: remappedLLMLogs as LLMLog[],
+    pluginConfigs: remappedPluginConfigs as PluginConfig[],
     chatSettings: remappedChatSettings,
-    folders: remappedFolders,
+    folders: remappedFolders as Folder[],
     wardrobeItems: remappedWardrobeItems,
-    characterPluginData: (data.characterPluginData || []).map((cpd) => ({
-      ...remapper.remapFields(cpd, ['id', 'characterId']),
-    })) as CharacterPluginData[],
-    conversationAnnotations: (data.conversationAnnotations || []).map((annotation) => ({
-      ...remapper.remapFields(annotation, ['id', 'chatId', 'sourceMessageId']),
-    })) as ConversationAnnotation[],
-    chatDocuments: remappedChatDocuments,
+    characterPluginData: remapRows('characterPluginData', data.characterPluginData) as CharacterPluginData[],
+    conversationAnnotations: remapRows('conversationAnnotation', data.conversationAnnotations) as ConversationAnnotation[],
+    chatDocuments: remapRows('chatDocument', data.chatDocuments) as ChatDocument[],
     chatInforms: remappedChatInforms,
     instanceSettings: remappedInstanceSettings,
-    embeddingStatus: remappedEmbeddingStatus,
-    conversationChunks: remappedConversationChunks,
-    tfidfVocabularies: remappedTfidfVocabularies,
+    embeddingStatus: remappedEmbeddingStatus as EmbeddingStatus[],
+    conversationChunks: remapRows('conversationChunk', data.conversationChunks) as SerializedConversationChunk[],
+    tfidfVocabularies: remappedTfidfVocabularies as TfidfVocabulary[],
     vectorEntries: remappedVectorEntries,
-    docMountPoints: remappedDocMountPoints,
-    docMountFolders: remappedDocMountFolders,
-    docMountFiles: remappedDocMountFiles,
+    docMountPoints: remapRows('docMountPoint', data.docMountPoints) as DocMountPoint[],
+    docMountFolders: remapRows('docMountFolder', data.docMountFolders) as DocMountFolder[],
+    docMountFiles: remapRowsInPlace('docMountFile', data.docMountFiles) as DocMountFile[],
     docMountFileLinks: remappedDocMountFileLinks,
-    docMountChunks: remappedDocMountChunks,
-    docMountDocuments: remappedDocMountDocuments,
-    docMountBlobs: remappedDocMountBlobs,
-    projectDocMountLinks: remappedProjectDocMountLinks,
-    groupDocMountLinks: remappedGroupDocMountLinks,
-    groupCharacterMembers: remappedGroupCharacterMembers,
+    docMountChunks: remapRows('docMountChunk', data.docMountChunks) as SerializedDocMountChunk[],
+    docMountDocuments: remapRows('docMountDocument', data.docMountDocuments) as DocMountDocument[],
+    // Restored by index beside their bytes: never dropped (no drop-row field).
+    docMountBlobs: remapRowsInPlace('docMountBlob', data.docMountBlobs) as DocMountBlobMetadata[],
+    projectDocMountLinks: remapRows('projectDocMountLink', data.projectDocMountLinks) as ProjectDocMountLink[],
+    groupDocMountLinks: remapRows('groupDocMountLink', data.groupDocMountLinks) as GroupDocMountLink[],
+    groupCharacterMembers: remapRows('groupCharacterMember', data.groupCharacterMembers) as GroupCharacterMember[],
     // Text replacement rules: global config, no userId, no FKs to remapped
     // entities, and nothing references rule IDs — pass through unchanged.
     textReplacementRules: data.textReplacementRules || [],
     wardrobeWear: remappedWardrobeWear,
     wardrobeHistory: remappedWardrobeHistory,
     avatarTimeline: remappedAvatarTimeline,
-    logEntries: remappedLogEntries,
+    logEntries: remapRows('logEntry', data.logEntries) as LogEntry[],
   };
 }

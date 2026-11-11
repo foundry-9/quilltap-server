@@ -61,6 +61,8 @@ function emptyIdMaps(): IdMappingState {
     mountPoints: new Map(),
     docMountFileLinks: new Map(),
     messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
   } as unknown as IdMappingState
 }
 

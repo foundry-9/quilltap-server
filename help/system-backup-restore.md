@@ -238,6 +238,34 @@ archive be damaged — a store missing from it, or two of its entries laying
 claim to the same one — the latecomer is given a fresh store instead, and the
 restore summary says precisely who and why.
 
+The 4.13 season brought four more repairs to the restoring trade.
+
+- **Templates keep their names on the door.** Your own roleplay and prompt
+  templates used to come home under fresh identities, so every chat,
+  character and project that had been dressed in one woke to find it missing.
+  They now return under the very identity they left with. The built-in
+  templates — Standard, Quilltap RP and Novel — now wear the same identity on
+  every instance, so a chat written in one of them finds it wherever it lands.
+  A backup taken before this change cannot say which built-in a chat used;
+  such a chat falls back to the house default and may be re-dressed by hand.
+- **Nothing is invented for a missing guest.** Importing as new data once
+  minted a fresh identity for anything the backup merely *mentioned* — an
+  image profile, a chat, a message — that it did not carry. A reference to
+  something absent is now cleared or left as it was, and the summary
+  anchors, archived-character files, Brahma Console profile and the little
+  annotations inside messages that were previously left behind now follow
+  their owners home.
+- **A character with a stuck vault is no longer left out.** Should a
+  character's, project's or group's store prove unreadable when the backup is
+  made, the backup still carries its row and every memory it owns, and says
+  so in a note that the restore repeats in its warnings. Likewise "delete all
+  my data" and a Replace restore now clear such rows rather than leaving them
+  behind.
+- **Every Inspector log travels.** Backups and data deletion once stopped at
+  the newest ten thousand LLM logs; they now take the lot.
+- The restore summary's figures now count what was actually restored, not
+  what the archive offered.
+
 ## Restore Modes Explained
 
 **Replace Existing Data:**

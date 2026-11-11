@@ -12,6 +12,7 @@ import {
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { NOVEL_TEMPLATE } from '@/lib/chat/novel-template';
+import { builtInRoleplayTemplateId } from '@/lib/roleplay-templates/built-in-ids';
 import {
   encodeNarrationDelimiters,
   decodeNarrationDelimiters,
@@ -207,7 +208,9 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
           });
 
           if (!existing) {
-            const id = this.generateId();
+            // The same id on every instance, so a restored or imported chat
+            // that names a built-in finds it here (#190).
+            const id = builtInRoleplayTemplateId(template.name);
             const now = this.getCurrentTimestamp();
 
             const newTemplate: RoleplayTemplate = {

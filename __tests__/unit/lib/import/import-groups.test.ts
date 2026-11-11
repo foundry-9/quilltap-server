@@ -29,6 +29,8 @@ function makeGroup(overrides: Partial<Group> = {}): Group {
 
 function emptyIdMaps(): IdMappingState {
   return {
+    writtenChats: new Set(),
+    writtenRows: new Set(),
     tags: new Map(),
     characters: new Map(),
     chats: new Map(),
@@ -40,7 +42,7 @@ function emptyIdMaps(): IdMappingState {
     groups: new Map(),
     mountPoints: new Map(),
     docMountFileLinks: new Map(),
-  }
+  } as unknown as IdMappingState
 }
 
 function makeOptions(conflictStrategy: ImportOptions['conflictStrategy']): ImportOptions {
@@ -51,8 +53,9 @@ describe('importGroups', () => {
   const findById = jest.fn()
   const create = jest.fn()
   const del = jest.fn()
+  const update = jest.fn()
   // Only the `groups` repo is exercised by importGroups.
-  const repos = { groups: { findById, create, delete: del } } as never
+  const repos = { groups: { findById, create, delete: del, update } } as never
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -96,18 +99,22 @@ describe('importGroups', () => {
     expect(counts).toEqual({ imported: 1, skipped: 0 })
     expect(create).toHaveBeenCalledTimes(1)
     expect((create.mock.calls[0][0] as { name: string }).name).toBe('Adventurers (imported)')
-    // The remapped id is the freshly-generated one recorded before create().
     expect(del).not.toHaveBeenCalled()
-    expect(idMaps.groups.has('g-old')).toBe(true)
+    // The id map names the row that was created, never an id no row has (#195).
+    expect(idMaps.groups.get('g-old')).toBe('g-new')
   })
 
-  it('overwrite strategy: the existing group is deleted then recreated', async () => {
+  it('overwrite strategy: the existing group is updated in place and keeps its id (#188)', async () => {
     findById.mockResolvedValue(makeGroup())
     const idMaps = emptyIdMaps()
-    const counts = await importGroups('u1', [makeGroup()], makeOptions('overwrite'), idMaps, repos, [])
+    const counts = await importGroups('u1', [makeGroup({ description: 'Rewritten' })], makeOptions('overwrite'), idMaps, repos, [])
 
-    expect(del).toHaveBeenCalledWith('g-old')
-    expect(create).toHaveBeenCalledTimes(1)
+    expect(del).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+    expect(update).toHaveBeenCalledWith('g-old', expect.objectContaining({ description: 'Rewritten' }))
+    // The group's own store is kept.
+    expect(update.mock.calls[0][1]).not.toHaveProperty('officialMountPointId')
+    expect(idMaps.groups.get('g-old')).toBe('g-old')
     expect(counts).toEqual({ imported: 1, skipped: 0 })
   })
 

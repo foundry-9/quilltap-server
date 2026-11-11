@@ -80,6 +80,8 @@ function backup(): BackupData {
         },
       },
     ] as unknown as BackupData['chatSettings'],
+    docMountPoints: [{ id: 'store-old', name: 'Store' }] as unknown as BackupData['docMountPoints'],
+    docMountFiles: [{ id: 'docfile-1' }] as unknown as BackupData['docMountFiles'],
     docMountFileLinks: [
       { id: 'link-1', mountPointId: 'store-old', fileId: 'docfile-1', relativePath: 'Atlas/Places/The Lighthouse.md' },
     ] as unknown as BackupData['docMountFileLinks'],

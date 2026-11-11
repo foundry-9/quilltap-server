@@ -558,12 +558,15 @@ export function configureCreate<T extends { id?: string }>(
   mockFn: jest.Mock<(data: Partial<T>) => Promise<T>>,
   idGenerator: () => string = () => 'generated-id'
 ): void {
-  mockFn.mockImplementation(async (data: Partial<T>) => {
-    return {
-      ...data,
-      id: data.id || idGenerator(),
-    } as T;
-  });
+  // Honour `CreateOptions.id` the way the real repositories do.
+  (mockFn as unknown as jest.Mock<(data: Partial<T>, options?: { id?: string }) => Promise<T>>).mockImplementation(
+    async (data: Partial<T>, options?: { id?: string }) => {
+      return {
+        ...data,
+        id: options?.id || data.id || idGenerator(),
+      } as T;
+    }
+  );
 }
 
 // ============================================================================
