@@ -23,7 +23,7 @@ import { logger } from '@/lib/logger';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
 import { tableExists } from '@/lib/database/backends/sqlite/introspection';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
-import { gcOrphanedFileRow } from '@/lib/mount-index/orphan-store-reaper';
+import { clearMountLinks } from '@/lib/mount-index/orphan-store-reaper';
 
 /** Per-table row counts removed by {@link deleteStoreCascade}. */
 export interface StoreCascadeDeleteCounts {
@@ -70,45 +70,15 @@ export function deleteStoreCascade(mountPointId: string): StoreCascadeDeleteCoun
   const has = (name: string) => tableExists(db, name);
 
   const tx = db.transaction(() => {
-    // Snapshot the fileIds this store's links reference BEFORE deleting the
-    // links, so content rows can be GC'd against a live ref-count instead of a
-    // table an earlier step already emptied (the v4 dead-step bug).
-    const affectedFileIds = has('doc_mount_file_links')
-      ? (
-          db
-            .prepare(
-              `SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?`
-            )
-            .all(mountPointId) as { fileId: string }[]
-        ).map((r) => r.fileId)
-      : [];
-
-    // Embedding chunks (denormalised mountPointId; also FK to links).
-    if (has('doc_mount_chunks')) {
-      counts.chunks = db
-        .prepare(`DELETE FROM doc_mount_chunks WHERE mountPointId = ?`)
-        .run(mountPointId).changes;
-    }
-
-    // The location rows.
-    if (has('doc_mount_file_links')) {
-      counts.links = db
-        .prepare(`DELETE FROM doc_mount_file_links WHERE mountPointId = ?`)
-        .run(mountPointId).changes;
-    }
-
-    // Content rows whose last link just went away — the same collector the
-    // link repository's delete/write paths use (see `gcOrphanedFileRow` for
-    // why documents and blobs are deleted explicitly and table-guarded).
-    // `affectedFileIds` is empty when the links table is absent, so the
-    // ref-count query inside never runs against a missing table.
-    for (const fileId of affectedFileIds) {
-      const gc = gcOrphanedFileRow(db, fileId);
-      if (!gc) continue;
-      counts.documents += gc.documents;
-      counts.blobs += gc.blobs;
-      counts.files += gc.files;
-    }
+    // Chunks, links and the content rows no other store still links — the
+    // same collector the overwrite import and the database → filesystem
+    // conversion use (#191).
+    const cleared = clearMountLinks(db, mountPointId);
+    counts.chunks = cleared.chunks;
+    counts.links = cleared.links;
+    counts.files = cleared.files;
+    counts.documents = cleared.documents;
+    counts.blobs = cleared.blobs;
 
     // Folder hierarchy — keyed on mountPointId, no FK to anything above, so it
     // would otherwise leak (118 orphaned rows measured on the Friday copy).

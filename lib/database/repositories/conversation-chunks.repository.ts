@@ -19,6 +19,7 @@ import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
 import { embeddedTextHash } from '@/lib/embedding/embedded-text-hash';
 import { logger } from '@/lib/logger';
+import { sqlInList } from '../backends/sqlite/in-list';
 
 /**
  * Conversation Chunks Repository
@@ -85,18 +86,18 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
         if (chatIds.length === 0) {
           return new Map<string, { total: number; embedded: number }>();
         }
-        const placeholders = chatIds.map(() => '?').join(', ');
+        const list = sqlInList(chatIds);
         const sql = `
           SELECT chatId,
                  COUNT(*) AS total,
                  SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) AS embedded
           FROM conversation_chunks
-          WHERE chatId IN (${placeholders})
+          WHERE chatId IN ${list.sql}
           GROUP BY chatId
         `;
         const rows = await rawQuery<
           Array<{ chatId: string; total: number | bigint; embedded: number | bigint | null }>
-        >(sql, chatIds);
+        >(sql, list.params);
         return new Map(
           rows.map((r) => [
             r.chatId,

@@ -204,7 +204,7 @@ describe('reapOrphanedStoreChildren', () => {
 
     const swept = reapOrphanedStoreChildren(db);
 
-    expect(swept).toEqual({ links: 1, folders: 1, documents: 1 });
+    expect(swept).toEqual({ links: 1, folders: 1, documents: 1, chunks: 0 });
     // Orphans gone.
     expect(count('doc_mount_file_links', "WHERE id = 'lDead'")).toBe(0);
     expect(count('doc_mount_folders', "WHERE id = 'folDead'")).toBe(0);
@@ -217,6 +217,6 @@ describe('reapOrphanedStoreChildren', () => {
 
   it('is a no-op when there are no orphans', () => {
     db.exec(`INSERT INTO doc_mount_points (id, name) VALUES ('mp', 'Only');`);
-    expect(reapOrphanedStoreChildren(db)).toEqual({ links: 0, folders: 0, documents: 0 });
+    expect(reapOrphanedStoreChildren(db)).toEqual({ links: 0, folders: 0, documents: 0, chunks: 0 });
   });
 });

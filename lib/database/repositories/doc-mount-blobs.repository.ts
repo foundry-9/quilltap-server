@@ -24,6 +24,8 @@ import { logger } from '@/lib/logger';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { DocMountBlobMetadata, DocMountBlobMetadataSchema } from '@/lib/schemas/mount-index.types';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { clearMountLinks } from '@/lib/mount-index/orphan-store-reaper';
+import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 
 /**
  * Joined view: a blob row with the link metadata callers need to know where
@@ -648,36 +650,17 @@ export class DocMountBlobsRepository {
   }
 
   /**
-   * Bulk delete every link in a mount, GC'ing files (and their blobs) as
-   * each one's reference count hits zero. Mirrors the legacy semantic.
+   * Bulk delete every link in a mount with its chunks, GC'ing files (and
+   * their blobs) no other store links (`clearMountLinks`, #191). Returns the
+   * number of blob rows removed.
    */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     try {
       const db = this.db();
-      // Snapshot affected fileIds, then drop links + orphaned files.
-      const affected = db.prepare(
-        `SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?`
-      ).all(mountPointId) as { fileId: string }[];
-
-      let deletedBlobs = 0;
-      const tx = db.transaction(() => {
-        db.prepare(
-          `DELETE FROM doc_mount_file_links WHERE mountPointId = ?`
-        ).run(mountPointId);
-        if (affected.length > 0) {
-          const placeholders = affected.map(() => '?').join(',');
-          const orphaned = db.prepare(
-            `SELECT f.id FROM doc_mount_files f
-             WHERE f.id IN (${placeholders})
-               AND NOT EXISTS (SELECT 1 FROM doc_mount_file_links l WHERE l.fileId = f.id)`
-          ).all(...affected.map(a => a.fileId)) as { id: string }[];
-          for (const f of orphaned) {
-            db.prepare(`DELETE FROM doc_mount_files WHERE id = ?`).run(f.id);
-            deletedBlobs += 1;
-          }
-        }
-      });
-      tx();
+      // Chunks, links, and only the content no other store links (#191).
+      const cleared = db.transaction(() => clearMountLinks(db, mountPointId))();
+      invalidateMountPoint(mountPointId);
+      const deletedBlobs = cleared.blobs;
       return deletedBlobs;
     } catch (error) {
       logger.warn('Failed to delete blobs by mount point', {

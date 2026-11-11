@@ -13,6 +13,10 @@ import {
 } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
+import { isUniqueConstraintError } from '../sqlite-errors';
+import { createKeyedWriteChain } from './keyed-write-chain';
+
+const upsertChain = createKeyedWriteChain('embedding-status.upsert');
 
 /**
  * Embedding Status Repository
@@ -259,25 +263,60 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     userId: string,
     fields: { status: EmbeddingStatus['status']; error: string | null; embeddedAt?: string | null }
   ): Promise<EmbeddingStatus | null> {
-    const existing = await this.findByEntity(entityType, entityId, profileId);
-    if (existing) {
-      return this.update(existing.id, fields);
-    }
+    // One upsert per (entityType, entityId, profileId) at a time, a strict
+    // read (a failed read throws rather than reading as "no row"), and a lost
+    // race on the unique constraint resolved to the winning row (#207).
+    return upsertChain(`${entityType}|${entityId}|${profileId}`, async () => {
+      const existing = await this.findByEntityStrict(entityType, entityId, profileId);
+      if (existing) {
+        return this.update(existing.id, fields);
+      }
 
-    logger.debug(`Creating embedding status row on ${method} (no existing row)`, {
-      context: `EmbeddingStatusRepository.${method}`,
-      entityType,
-      entityId,
-      profileId,
+      logger.debug(`Creating embedding status row on ${method} (no existing row)`, {
+        context: `EmbeddingStatusRepository.${method}`,
+        entityType,
+        entityId,
+        profileId,
+      });
+      try {
+        return await this.create({
+          userId,
+          entityType,
+          entityId,
+          profileId,
+          embeddedAt: null,
+          ...fields,
+        });
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+        const winner = await this.findByEntityStrict(entityType, entityId, profileId);
+        if (!winner) throw error;
+        logger.debug('Reconciled concurrent embedding status create to the existing row', {
+          context: `EmbeddingStatusRepository.${method}`,
+          entityType,
+          entityId,
+          profileId,
+          statusId: winner.id,
+        });
+        return this.update(winner.id, fields);
+      }
     });
-    return this.create({
-      userId,
-      entityType,
-      entityId,
-      profileId,
-      embeddedAt: null,
-      ...fields,
-    });
+  }
+
+  /** {@link findByEntity} without the null fallback: a read failure throws. */
+  private async findByEntityStrict(
+    entityType: EmbeddableEntityType,
+    entityId: string,
+    profileId: string
+  ): Promise<EmbeddingStatus | null> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        return await collection.findOne({ entityType, entityId, profileId });
+      },
+      'Error finding embedding status by entity',
+      { entityType, entityId, profileId }
+    );
   }
 
   /**

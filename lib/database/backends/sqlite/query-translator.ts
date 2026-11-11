@@ -10,6 +10,7 @@ import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayContains
 import { textToBlob } from '@/lib/database/text-compression';
 import { escapeLikeLiteral } from '@/lib/database/repositories/like-escape';
 import { QueryTranslationError } from '@/lib/database/query-translation-error';
+import { sqlInList } from './in-list';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -255,8 +256,9 @@ function translateFieldFilter(
               const values = opValue.filter(v => !isNullish(v));
               const parts: string[] = [];
               if (values.length > 0) {
-                parts.push(`${columnExpr} IN (${values.map(() => '?').join(', ')})`);
-                params.push(...values.map(toSqliteParam));
+                const list = sqlInList(values.map(toSqliteParam));
+                parts.push(`${columnExpr} IN ${list.sql}`);
+                params.push(...list.params);
               }
               if (values.length < opValue.length) {
                 parts.push(nullTest(columnExpr, true));
@@ -279,10 +281,11 @@ function translateFieldFilter(
             if (values.length === 0) {
               clauses.push(nullTest(columnExpr, false));
             } else {
-              const notIn = `${columnExpr} NOT IN (${values.map(() => '?').join(', ')})`;
+              const list = sqlInList(values.map(toSqliteParam));
+              const notIn = `${columnExpr} NOT IN ${list.sql}`;
               // NOT IN is already UNKNOWN (dropped) for a NULL column.
               clauses.push(excludesNull ? notIn : `(${nullTest(columnExpr, true)} OR ${notIn})`);
-              params.push(...values.map(toSqliteParam));
+              params.push(...list.params);
             }
           }
           // Empty $nin is always true, no clause needed

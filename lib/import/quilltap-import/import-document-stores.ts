@@ -80,13 +80,12 @@ export async function importDocumentStores(
           continue;
         }
         if (options.conflictStrategy === 'overwrite') {
-          // Drop existing documents, blobs, files, chunks, AND folders before
-          // replacing. Folders were left standing pre-fix, so an identical
-          // re-import kept stale husks and logged UNIQUE warnings (Bug 11 fix 1).
-          await globalRepos.docMountDocuments.deleteByMountPointId(existing.id);
-          await globalRepos.docMountBlobs.deleteByMountPointId(existing.id);
-          await globalRepos.docMountChunks.deleteByMountPointId(existing.id);
-          await globalRepos.docMountFiles.deleteByMountPointId(existing.id);
+          // Drop the store's links, chunks and folders before replacing, and
+          // the content rows only this store linked — content another store
+          // still links is shared and must survive (#191). Folders were left
+          // standing pre-fix, so an identical re-import kept stale husks and
+          // logged UNIQUE warnings (Bug 11 fix 1).
+          await globalRepos.docMountFileLinks.deleteByMountPointId(existing.id);
           await globalRepos.docMountFolders.deleteByMountPointId(existing.id);
           // The archive's name, unless another store now holds it (the
           // namespace is shared; this store's own current name never counts

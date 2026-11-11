@@ -20,16 +20,12 @@ const globalRepos = {
     update: jest.fn(),
     create: jest.fn(),
   },
-  docMountDocuments: { deleteByMountPointId: jest.fn() },
   docMountBlobs: {
-    deleteByMountPointId: jest.fn(),
     create: jest.fn(),
     updateExtractedText: jest.fn(),
   },
-  docMountChunks: { deleteByMountPointId: jest.fn() },
-  docMountFiles: { deleteByMountPointId: jest.fn() },
   docMountFolders: { deleteByMountPointId: jest.fn(), create: jest.fn() },
-  docMountFileLinks: { linkDocumentContent: jest.fn(), bindLinkGroup: jest.fn() },
+  docMountFileLinks: { linkDocumentContent: jest.fn(), bindLinkGroup: jest.fn(), deleteByMountPointId: jest.fn() },
 };
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -83,9 +79,8 @@ beforeEach(() => {
     id: options?.id ?? 'freshly-minted-id',
     ...data,
   }));
-  for (const child of ['docMountDocuments', 'docMountBlobs', 'docMountChunks', 'docMountFiles', 'docMountFolders'] as const) {
-    (globalRepos as any)[child].deleteByMountPointId.mockResolvedValue(0);
-  }
+  globalRepos.docMountFolders.deleteByMountPointId.mockResolvedValue(0);
+  globalRepos.docMountFileLinks.deleteByMountPointId.mockResolvedValue({ linksDeleted: 0, filesGC: 0 });
   let folderSeq = 0;
   globalRepos.docMountFolders.create.mockImplementation(async (data: any, options?: { id?: string }) => ({
     id: options?.id ?? `fresh-folder-${++folderSeq}`,
@@ -131,9 +126,11 @@ it('overwrites the store matched by id — even after an in-app rename — and c
   // Matched by id → update the renamed store, not create a stranger.
   expect(globalRepos.docMountPoints.update).toHaveBeenCalledWith('store-X', expect.objectContaining({ name: 'Lore' }));
   expect(globalRepos.docMountPoints.create).not.toHaveBeenCalled();
-  // Folders are cleared on overwrite (fix 1) alongside documents/blobs/files/chunks.
+  // Folders are cleared on overwrite (fix 1) alongside the store's links,
+  // chunks and exclusive content — through the link repo's shared-content-safe
+  // clear, never a per-table delete (#191).
   expect(globalRepos.docMountFolders.deleteByMountPointId).toHaveBeenCalledWith('store-X');
-  expect(globalRepos.docMountDocuments.deleteByMountPointId).toHaveBeenCalledWith('store-X');
+  expect(globalRepos.docMountFileLinks.deleteByMountPointId).toHaveBeenCalledWith('store-X');
   expect(idMaps.mountPoints.get('store-X')).toBe('store-X');
 });
 

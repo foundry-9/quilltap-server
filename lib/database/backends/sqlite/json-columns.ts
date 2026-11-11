@@ -5,6 +5,7 @@
  * including serialization, querying, and array operations.
  */
 
+import { sqlInList } from './in-list';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -144,10 +145,10 @@ export function jsonArrayContainsAny(column: string, values: unknown[]): { sql: 
     return { sql: '0', params: [] };
   }
 
-  const placeholders = values.map(() => '?').join(', ');
+  const list = sqlInList(values);
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value IN (${placeholders}))`,
-    params: values,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value IN ${list.sql})`,
+    params: list.params,
   };
 }
 
@@ -222,10 +223,10 @@ export function jsonArrayObjectMatchAny(
   }
 
   const jsonPath = '$.' + nestedPath;
-  const placeholders = values.map(() => '?').join(', ');
+  const list = sqlInList(values);
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') IN (${placeholders}))`,
-    params: values,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') IN ${list.sql})`,
+    params: list.params,
   };
 }
 

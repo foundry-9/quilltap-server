@@ -18,6 +18,7 @@ import { getRawDatabase } from '../backends/sqlite/client';
 import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
+import { sqlInList } from '../backends/sqlite/in-list';
 
 /**
  * Input to {@link MemoriesRepository.create}. The tier fields are optional
@@ -170,11 +171,18 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Stream a character's memories in fixed-size batches, sorted by id for a
-   * stable page boundary. Housekeeping uses this so that a character with
-   * tens of thousands of memories can yield to the event loop between pages
-   * instead of doing one ~19k-row Zod-validated read in a single synchronous
-   * chunk.
+   * Stream a character's memories in fixed-size batches. Housekeeping uses
+   * this so that a character with tens of thousands of memories can yield to
+   * the event loop between pages instead of doing one ~19k-row Zod-validated
+   * read in a single synchronous chunk.
+   *
+   * Keyset paging (`id > lastId ORDER BY id LIMIT n`), never OFFSET (#204):
+   * - "done" is decided from the RAW page size, before validation, so one row
+   *   that fails Zod is skipped (with a warning) instead of ending the walk;
+   * - a read failure throws rather than looking like the end of the corpus —
+   *   maintenance must not report success over a truncated view;
+   * - a row inserted or retired mid-walk cannot shift the page boundary, so no
+   *   existing row is skipped or seen twice.
    */
   async *findByCharacterIdInBatches(
     characterId: string,
@@ -183,22 +191,37 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     if (batchSize <= 0) {
       throw new Error('batchSize must be positive');
     }
-    let skip = 0;
+    let lastId: string | null = null;
     while (true) {
-      const batch = await this.safeQuery(
-        async () =>
-          this.findByFilter(
-            { characterId },
-            { limit: batchSize, skip, sort: { id: 1 } },
-          ),
+      const filter = (lastId === null
+        ? { characterId }
+        : { characterId, id: { $gt: lastId } }) as TypedQueryFilter<Memory>;
+      const raw: unknown[] = await this.safeQuery(
+        async () => {
+          const collection = await this.getCollection();
+          return collection.find(filter, { limit: batchSize, sort: { id: 1 } });
+        },
         'Error loading memory batch',
-        { characterId, skip, batchSize },
-        [],
+        { characterId, afterId: lastId, batchSize },
       );
-      if (batch.length === 0) return;
-      yield batch;
-      if (batch.length < batchSize) return;
-      skip += batchSize;
+      if (raw.length === 0) return;
+      lastId = String((raw[raw.length - 1] as { id: unknown }).id);
+
+      const batch: Memory[] = [];
+      for (const row of raw) {
+        const validation = this.validateSafe(row);
+        if (validation.success && validation.data) {
+          batch.push(validation.data);
+        } else {
+          logger.warn('Skipping memory that fails validation during batch walk', {
+            characterId,
+            memoryId: (row as { id?: unknown }).id,
+          });
+        }
+      }
+      logger.debug('Loaded memory batch', { characterId, raw: raw.length, valid: batch.length });
+      if (batch.length > 0) yield batch;
+      if (raw.length < batchSize) return;
     }
   }
 
@@ -1938,14 +1961,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     return this.safeQuery(
       async () => {
         if (chatIds.length === 0) return new Map<string, number>();
-        const placeholders = chatIds.map(() => '?').join(', ');
+        const list = sqlInList(chatIds);
         const sql = `
           SELECT chatId, COUNT(*) AS count
           FROM memories
-          WHERE chatId IN (${placeholders})
+          WHERE chatId IN ${list.sql}
           GROUP BY chatId
         `;
-        const rows = await rawQuery<Array<{ chatId: string; count: number | bigint }>>(sql, chatIds);
+        const rows = await rawQuery<Array<{ chatId: string; count: number | bigint }>>(sql, list.params);
         return new Map(rows.map((r) => [r.chatId, Number(r.count)]));
       },
       'Error counting memories for chats',

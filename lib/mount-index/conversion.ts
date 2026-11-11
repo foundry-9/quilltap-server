@@ -334,13 +334,18 @@ export async function deconvertMountPointToFilesystem(
     if (seenFileIds.has(link.fileId)) continue;
     seenFileIds.add(link.fileId);
     if (link.source === 'database') {
-      await repos.docMountFiles.update(link.fileId, { source: 'filesystem' });
+      const sharers = await repos.docMountFileLinks.findByFileId(link.fileId);
+      if (sharers.every(l => l.mountPointId === mountPoint.id)) {
+        await repos.docMountFiles.update(link.fileId, { source: 'filesystem' });
+      }
     }
     await repos.docMountFileLinks.update(link.id, { lastModified: now });
   }
 
-  const documentsDeleted = await repos.docMountDocuments.deleteByMountPointId(mountPoint.id);
-  const blobsDeleted = await repos.docMountBlobs.deleteByMountPointId(mountPoint.id);
+  // This store's links and chunks go; its document/blob payloads go only where
+  // no other store still links the same content row (#191). The rescan that
+  // follows a conversion re-creates the links from disk.
+  const cleared = await repos.docMountFileLinks.deleteByMountPointId(mountPoint.id);
 
   logger.info('Completed database → filesystem conversion', {
     mountPointId: mountPoint.id,
@@ -348,8 +353,8 @@ export async function deconvertMountPointToFilesystem(
     filesWritten: result.filesWritten,
     blobsWritten: result.blobsWritten,
     bytesWritten: result.bytesWritten,
-    documentsDeleted,
-    blobsDeleted,
+    linksCleared: cleared.linksDeleted,
+    contentRowsCollected: cleared.filesGC,
     errors: result.errors.length,
   });
 

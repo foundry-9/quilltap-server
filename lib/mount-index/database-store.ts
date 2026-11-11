@@ -291,8 +291,8 @@ export async function deleteDatabaseDocument(
 ): Promise<boolean> {
   const repos = getRepositories();
   const rel = normaliseRelativePath(relativePath);
-  // Delete the link with GC. Chunks cascade off the link, and the document
-  // cascades off the file row if this was the last link.
+  // Delete the link with GC: `deleteWithGC` drops the link's chunks and, if
+  // this was the last link, the file row with its document (no FK cascade).
   const link = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, rel);
   if (!link) return false;
 

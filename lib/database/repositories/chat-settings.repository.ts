@@ -10,6 +10,10 @@ import { ChatSettings, ChatSettingsSchema } from '@/lib/schemas/types';
 import { DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
+import { isUniqueConstraintError } from '../sqlite-errors';
+import { createKeyedWriteChain } from './keyed-write-chain';
+
+const settingsChain = createKeyedWriteChain('chat-settings.updateForUser');
 
 /**
  * A fresh user's chat settings. Also the value a refused stored field is
@@ -168,32 +172,43 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    */
   async findByUserId(userId: string): Promise<ChatSettings | null> {
     return this.safeQuery(
-      async () => {
-        const collection = await this.getCollection();
-        const rows = await collection.find(
-          { userId } as TypedQueryFilter<ChatSettings>,
-          { sort: { updatedAt: -1 } }
-        );
-        if (rows.length > 1) {
-          logger.debug('Multiple chat settings rows for user; reading newest valid', {
-            userId,
-            rowCount: rows.length,
-          });
-        }
-        for (const row of rows) {
-          const parsed = this.schema.safeParse(row);
-          if (parsed.success) return parsed.data as ChatSettings;
-        }
-        for (const row of rows) {
-          const repaired = this.hydrateTolerantly(row);
-          if (repaired) return repaired;
-        }
-        return null;
-      },
+      () => this.readByUserId(userId),
       'Error finding chat settings by user ID',
       { userId },
       null
     );
+  }
+
+  /** {@link findByUserId} without the null fallback: a read failure throws. */
+  private async findByUserIdStrict(userId: string): Promise<ChatSettings | null> {
+    return this.safeQuery(
+      () => this.readByUserId(userId),
+      'Error finding chat settings by user ID',
+      { userId }
+    );
+  }
+
+  private async readByUserId(userId: string): Promise<ChatSettings | null> {
+    const collection = await this.getCollection();
+    const rows = await collection.find(
+      { userId } as TypedQueryFilter<ChatSettings>,
+      { sort: { updatedAt: -1 } }
+    );
+    if (rows.length > 1) {
+      logger.debug('Multiple chat settings rows for user; reading newest valid', {
+        userId,
+        rowCount: rows.length,
+      });
+    }
+    for (const row of rows) {
+      const parsed = this.schema.safeParse(row);
+      if (parsed.success) return parsed.data as ChatSettings;
+    }
+    for (const row of rows) {
+      const repaired = this.hydrateTolerantly(row);
+      if (repaired) return repaired;
+    }
+    return null;
   }
 
   /**
@@ -330,26 +345,36 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
    * @returns Promise<ChatSettings | null> The updated/created chat settings
    */
   async updateForUser(userId: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
-    return this.safeQuery(
+    // One settings write per user at a time, a strict read (a failed read
+    // throws rather than reading as "no settings" and inserting a second
+    // row), and a lost race on UNIQUE("userId") resolved to the winner (#207).
+    return settingsChain(userId, () => this.safeQuery(
       async () => {
-        // Check if settings exist
-        const existing = await this.findByUserId(userId);
+        const existing = await this.findByUserIdStrict(userId);
 
-        if (!existing) {
-          const defaultSettings: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> = {
-            ...defaultChatSettings(userId),
-            ...data,
-          };
-          return await this.create(defaultSettings);
+        if (existing) {
+          return await this.update(existing.id, data);
         }
 
-        // Update existing settings
-        const result = await this.update(existing.id, data);
-
-        return result;
+        const defaultSettings: Omit<ChatSettings, 'id' | 'createdAt' | 'updatedAt'> = {
+          ...defaultChatSettings(userId),
+          ...data,
+        };
+        try {
+          return await this.create(defaultSettings);
+        } catch (error) {
+          if (!isUniqueConstraintError(error)) throw error;
+          const winner = await this.findByUserIdStrict(userId);
+          if (!winner) throw error;
+          logger.debug('Reconciled concurrent chat settings create to the existing row', {
+            userId,
+            chatSettingsId: winner.id,
+          });
+          return await this.update(winner.id, data);
+        }
       },
       'Error updating chat settings for user',
       { userId }
-    );
+    ));
   }
 }

@@ -20,6 +20,8 @@ import { CreateOptions } from './base.repository';
 import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
 import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { clearMountLinks } from '@/lib/mount-index/orphan-store-reaper';
+import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 
 export class DocMountFilesRepository extends AbstractDedicatedDbRepository<DocMountFile> {
   constructor() {
@@ -117,39 +119,18 @@ export class DocMountFilesRepository extends AbstractDedicatedDbRepository<DocMo
   }
 
   /**
-   * Bulk delete every link for a mount point with GC of the underlying
-   * file rows. Returns the count of links deleted.
+   * Bulk delete every link for a mount point with its chunks, GC'ing content
+   * rows no other store links (`clearMountLinks`). Returns the count of links
+   * deleted.
    */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     return this.withRawDb(
       0,
       async (db) => {
-        // Snapshot fileIds for GC.
-        const affected = db.prepare(
-          `SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?`
-        ).all(mountPointId) as { fileId: string }[];
-
-        let linksDeleted = 0;
-        const tx = db.transaction(() => {
-          const res = db.prepare(
-            `DELETE FROM doc_mount_file_links WHERE mountPointId = ?`
-          ).run(mountPointId);
-          linksDeleted = res.changes;
-
-          if (affected.length > 0) {
-            const placeholders = affected.map(() => '?').join(',');
-            const orphaned = db.prepare(
-              `SELECT f.id FROM doc_mount_files f
-               WHERE f.id IN (${placeholders})
-                 AND NOT EXISTS (SELECT 1 FROM doc_mount_file_links l WHERE l.fileId = f.id)`
-            ).all(...affected.map(a => a.fileId)) as { id: string }[];
-            for (const f of orphaned) {
-              db.prepare(`DELETE FROM doc_mount_files WHERE id = ?`).run(f.id);
-            }
-          }
-        });
-        tx();
-        return linksDeleted;
+        // Chunks, links, and only the content no other store links (#191).
+        const cleared = db.transaction(() => clearMountLinks(db, mountPointId))();
+        invalidateMountPoint(mountPointId);
+        return cleared.links;
       },
       'Error deleting files by mount point ID',
       { mountPointId },
