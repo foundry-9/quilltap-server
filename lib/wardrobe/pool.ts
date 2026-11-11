@@ -29,7 +29,7 @@ import { rosterGatedProjectId } from '@/lib/projects/roster-access';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { matchWearableTitle } from '@/lib/wardrobe/wearable-ref';
-import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-store';
+import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-tiers';
 import {
   GENERAL_WARDROBE_ORIGIN,
   type WardrobeItemWithOrigin,

@@ -32,7 +32,7 @@ import { readInventoryRecords } from '@/lib/inventory/vault-readers';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { InventoryOrigin, InventoryRecord, ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { findRecordsAnywhere } from '@/lib/inventory/dependents';
-import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-store';
+import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-tiers';
 import { GENERAL_INVENTORY_ORIGIN, type InventoryLocation } from '@/lib/inventory/location';
 import { resolveItem, type InventoryRecordWithOrigin } from '@/lib/inventory/resolve';
 

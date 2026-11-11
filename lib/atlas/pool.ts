@@ -23,7 +23,7 @@ import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { castGroupMounts, groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { readAtlasRecords } from '@/lib/atlas/vault-readers';
-import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-store';
+import { readTiers, shadowLayers, type TierSpec, type UnreadMount } from '@/lib/mount-index/item-tiers';
 import { foldItemName } from '@/lib/mount-index/item-names';
 import { GENERAL_ATLAS_ORIGIN, type AtlasLocation } from '@/lib/atlas/location';
 import type { RepositoryContainer } from '@/lib/repositories/factory';

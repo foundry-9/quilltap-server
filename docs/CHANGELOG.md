@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Refactor: item-family kernel (phase 4: the folder store)
+
+- `createItemFolderStore` (`lib/mount-index/item-store.ts`) is the one writer of an item family's folder: create, batched update (with `remove` keys and `requireAll`), delete (with follow-on patches), the five folder operations, and an in-lock write `guard`, each serialised per folder and parsing the folder once. The Atlas and the Inventory `vault-writes.ts` are bindings of it with their serialiser and scan (the Inventory also passes its title-lint mark as `wrapWrite`); their exported names are unchanged. `locationWriter` and `cleanPatch` are the location write wrapper both locations used to copy.
+- `defineItemFolderErrors` and `defineItemFolderFamily` (`lib/mount-index/item-folders.ts`, client-safe) replace the three copies of the four folder-error subclasses and the folder-helper delegates; the Wardrobe, Inventory and Atlas `folders.ts` are bindings. The tier reader moved to `item-tiers.ts` (re-exported by the kernel) so a pool does not load the writer.
+- New kernel test (`__tests__/unit/lib/mount-index/item-store.test.ts`) binds the store with a toy serialiser. The Atlas chokepoint test holds that only the two `vault-writes.ts` bind the store and no family projects its folder directly.
+
 #### Refactor: item-family kernel (phase 3: one name fold)
 
 - `foldItemName` (`lib/mount-index/item-names.ts`, client-safe; re-exported by the kernel) is NFC + trim + locale-free lower case, and is the one fold for comparing item names and titles: the Atlas pool's shadowing key, its matcher terms, the vault scan's duplicate-name warning, the uniqueness rule and transfers; the Inventory's references, kin rule and title lint; the Wardrobe's title match and copy titles. The Atlas used `toLocaleLowerCase` in some sites and `toLowerCase` in others, so under a Turkish locale its uniqueness rule and its matcher could disagree; some sites also skipped the trim.

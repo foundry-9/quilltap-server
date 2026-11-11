@@ -20,7 +20,6 @@
  */
 
 import { logger } from '@/lib/logger';
-import { publishRealtime } from '@/lib/realtime/bus';
 import {
   createAtlasFolderInMount,
   createAtlasInMount,
@@ -37,6 +36,7 @@ import {
   type AtlasWriteGuard,
 } from '@/lib/atlas/vault-writes';
 import { resolveOwnerStore } from '@/lib/mount-index/reach';
+import { cleanPatch, locationWriter } from '@/lib/mount-index/item-store';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { ATLAS_FOLDER, type AtlasOrigin, type AtlasRecord, type AtlasScope } from '@/lib/schemas/atlas.types';
 import { resolveAtlasFolder, type AtlasFolder } from '@/lib/atlas/folders';
@@ -66,30 +66,9 @@ export interface AtlasLocation extends ItemFolderLocation {
   listFolders(): Promise<AtlasFolder[]>;
 }
 
-/** Identity and timestamps are the writer's, never a patch's. */
-function cleanPatch(patch: Partial<AtlasRecord>): Partial<AtlasRecord> {
-  const rest = { ...patch };
-  delete rest.id;
-  delete rest.createdAt;
-  delete rest.updatedAt;
-  return rest;
-}
-
 /** Build a location over a folder. A character's mount is re-resolved at write time for the tombstone check. */
 export function atlasLocationForMount(mount: AtlasMount, id: string | null, origin: AtlasOrigin): AtlasLocation {
-  const writableMount = async (): Promise<AtlasMount> => {
-    if (mount.scope !== 'character') return mount;
-    const current = await resolveAtlasMount(mount.characterId);
-    if (!current) throw new Error(`Character ${mount.characterId} has no linked vault`);
-    return current;
-  };
-
-  const write = async <T>(fn: (target: AtlasMount) => Promise<T>, landed: (result: T) => boolean = () => true): Promise<T> => {
-    const result = await fn(await writableMount());
-    if (landed(result)) publishRealtime('atlas');
-    return result;
-  };
-  const nonEmpty = (result: readonly unknown[]) => result.length > 0;
+  const { writableMount, write, nonEmpty } = locationWriter('atlas', mount, resolveAtlasMount);
 
   const updateMany: AtlasLocation['updateMany'] = (patches, opts) =>
     write((target) => updateAtlasManyInMount(target, patches.map((p) => ({ ...p, patch: cleanPatch(p.patch) })), opts), nonEmpty);
