@@ -62,7 +62,9 @@ export function tabActivationQueryKeys(tab: WorkspaceTab): QueryKeyPrefix[] {
         queryKeys.settings.chat,
       ]
     case 'aurora':
-      return [queryKeys.characters.all, queryKeys.groups.all, queryKeys.tags.all]
+      // A group's page lives in this tab: its record, members and linked
+      // stores sit under `groups`, and its store picker reads the store list.
+      return [queryKeys.characters.all, queryKeys.groups.all, queryKeys.tags.all, queryKeys.mountPoints.lists]
     case 'character': {
       const payload = tab.payload as CharacterTabPayload | undefined
       if (!payload?.characterId) return []
@@ -71,7 +73,10 @@ export function tabActivationQueryKeys(tab: WorkspaceTab): QueryKeyPrefix[] {
       return [...queryKeysForTopic('characters', payload.characterId)]
     }
     case 'prospero':
-      return [queryKeys.projects.all]
+      // A project's page lives in this tab: its record, chats, files and
+      // linked stores sit under `projects`, and its store picker reads the
+      // store list.
+      return [queryKeys.projects.all, queryKeys.mountPoints.lists]
     case 'scriptorium':
       return [queryKeys.mountPoints.all]
     case 'files':

@@ -9,19 +9,19 @@
  * @module app/aurora/groups/[id]/GroupDetailView
  */
 
-import { useId, useEffect, useState } from 'react'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { useId, useState } from 'react'
 import { GroupMembersCard } from '../components/GroupMembersCard'
 import { GroupLinkedStoresCard } from '../components/GroupLinkedStoresCard'
 import { GroupScenariosCard } from '../components/GroupScenariosCard'
+import { useGroupDetail } from '../hooks/useGroupDetail'
 import { useGroupMembers } from '../hooks/useGroupMembers'
-import { useGroupMountPoints } from '../hooks/useGroupMountPoints'
+import { useOwnerStoreLinks } from '@/lib/hooks/use-owner-store-links'
 import { Icon } from '@/components/ui/icon'
 import StateEditorModal from '@/components/state/StateEditorModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
 import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
-import type { Group } from '../../types'
+import type { DocumentStore } from '../../types'
 
 export interface GroupDetailViewProps {
   groupId: string
@@ -30,89 +30,22 @@ export interface GroupDetailViewProps {
 
 export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
   const fieldId = useId()
-  const [group, setGroup] = useState<Group | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '', instructions: '', color: '', icon: '' })
   const [membersExpanded, setMembersExpanded] = useState(false)
   const [storesExpanded, setStoresExpanded] = useState(false)
   const [scenariosExpanded, setScenariosExpanded] = useState(false)
   const [showStateModal, setShowStateModal] = useState(false)
 
-  const { members, allCharacters, fetchMembers, fetchAllCharacters, addMember, removeMember } = useGroupMembers(groupId)
-  const { linkedStores, allStores, fetchLinkedStores, fetchAllStores, linkStore, unlinkStore } = useGroupMountPoints(groupId)
-
-  // Fetch group and related data on mount
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        // Fetch group
-        const groupRes = await fetch(`/api/v1/groups/${groupId}`)
-        if (!groupRes.ok) throw new Error('Failed to fetch group')
-        const groupData = await groupRes.json()
-        const g = groupData.group || groupData
-        setGroup(g)
-        setFormData({
-          name: g.name || '',
-          description: g.description || '',
-          instructions: g.instructions || '',
-          color: g.color || '',
-          icon: g.icon || '',
-        })
-
-        // Fetch members and all characters
-        await Promise.all([
-          fetchMembers(),
-          fetchAllCharacters(),
-          fetchLinkedStores(),
-          fetchAllStores(),
-        ])
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('GroupDetailView: fetch error', { error: errorMsg })
-        setError(errorMsg)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [groupId, fetchMembers, fetchAllCharacters, fetchLinkedStores, fetchAllStores])
+  // Every read here is a query under the `groups` prefix (or the character
+  // and store lists), so the Aurora tab's activation refetch refreshes it and
+  // never touches an edited form (#170).
+  const { group, loading, error, formData, setFormData, saving, save } = useGroupDetail(groupId)
+  const { members, allCharacters, addMember, removeMember } = useGroupMembers(groupId)
+  const { linkedStores, allStores, linkStore, unlinkStore } = useOwnerStoreLinks<DocumentStore>('group', groupId)
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!group) return
-
-    try {
-      setSaving(true)
-      const res = await fetch(`/api/v1/groups/${groupId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description || null,
-          instructions: formData.instructions || null,
-          color: formData.color || null,
-          icon: formData.icon || null,
-        }),
-      })
-
-      if (!res.ok) throw new Error('Failed to save group')
-
-      const data = await res.json()
-      setGroup(data.group || data)
-      showSuccessToast('Group updated successfully!')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to save group'
-      console.error('GroupDetailView: save error', { error: errorMsg })
-      showErrorToast(errorMsg)
-    } finally {
-      setSaving(false)
-    }
+    await save()
   }
 
   if (loading) {
