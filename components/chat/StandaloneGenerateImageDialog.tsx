@@ -174,6 +174,7 @@ export default function StandaloneGenerateImageDialog({
             <ImageProfilePicker
               value={selectedProfileId}
               onChange={setSelectedProfileId}
+              preselectDefault
               disabled={isGenerating}
             />
           </div>

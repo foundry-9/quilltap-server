@@ -75,6 +75,15 @@ export default function ProfileSetupPage() {
       const { character } = await createRes.json();
       const userCharacterId = character.id;
 
+      // The account's display name is what the home page greets; without this
+      // a brand-new instance says "Welcome back, Local User". Non-critical:
+      // the character above is what matters, and the name can be fixed later.
+      await fetch('/api/v1/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      }).catch(() => undefined);
+
       // Set this user character as the default partner for all existing LLM-controlled characters
       const charsRes = await fetch('/api/v1/characters?controlledBy=llm');
       if (charsRes.ok) {

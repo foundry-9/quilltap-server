@@ -10,26 +10,21 @@ A good house runs on staff one seldom sees. These are the Chat Settings that gov
 
 ## Cheap LLM Configuration
 
-Configure a fallback LLM for lower-cost operations. Quilltap can use a cheaper model for certain operations, reserving your main profile for complex tasks.
+Background errands — chat titles, memory extraction, summaries, the scene tracker — need no grand model, and Quilltap would rather not pay for one. The **Cheap LLM Settings** card in the Connections group of Settings (`/settings?section=cheap-llm`) decides who runs them. Conversation itself always stays with the chat's own profile.
 
-**Setting Options:**
+**Strategy** — pick one, and it is honoured:
 
-- **Enable Cheap LLM** — Toggle this feature on/off
-- **Cheap LLM Profile** — Select which connection profile to use for cheaper operations
-- **Operations** — Controls which operations use the cheap profile:
-  - Summary generation
-  - Memory indexing
-  - Title generation for chats
-  - Other low-complexity tasks
+- **User Defined** — use the profile you choose in **Select Cheap LLM Profile**. Leave that box empty and Quilltap falls back on any profile you have marked **Cheap** (a local Ollama one first), and failing that on the cheapest model of your current provider.
+- **Provider Cheapest** — use the cheapest model of whichever provider the conversation is already using (a Haiku beside a Sonnet, a mini beside its grander sibling). Profiles marked **Cheap** do not override it.
+- **Local First** — use a local Ollama profile when there is one, and otherwise the cheapest model of the current provider.
 
-Image description is *not* among them, though it is thrifty by disposition: it never consults this setting, and instead prefers a profile marked **Cheap** when it has to choose a describer for itself. Name a profile in [Image Description Settings](#image-description-settings) and that choice governs, cheap or dear.
+A profile marked **Cheap** is therefore a candidate for **User Defined**, not a command to the whole establishment; under the other two strategies it waits politely in the hall.
 
-**How to configure:**
+**Global Default Cheap LLM (Optional Override)** — name a profile here and it is used for every errand, whatever the strategy says. Leave it at **Not set** to let the strategy decide.
 
-1. Click **Enable Cheap LLM**
-2. Choose a connection profile from the dropdown (must first be created under Settings → Connections → Providers → Connection Profiles)
-3. The selected profile is used for cost-saving operations
-4. Your main profile is used for actual chat interactions
+Image description is *not* among the errands, though it is thrifty by disposition: it never consults this setting, and instead prefers a profile marked **Cheap** when it has to choose a describer for itself. Name a profile in [Image Description Settings](#image-description-settings) and that choice governs, cheap or dear.
+
+The [Almanack](/settings?section=capabilities-report) reports the profile and model the errands will actually use, so you need not take the strategy's word for it.
 
 **Green Room Wardrobe Model**
 
@@ -314,10 +309,10 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 **Solution:**
 
-- Verify cheap LLM is enabled
-- Check that profile exists and is valid
-- Only certain operations use cheap profile
-- Chat messages always use main profile
+- Check the **Strategy** on the Cheap LLM Settings card: a profile marked **Cheap** is used only under **User Defined** (or when named as the Global Default)
+- Under **User Defined**, check that **Select Cheap LLM Profile** names a profile that still exists
+- **Global Default Cheap LLM** overrides every strategy — clear it if the wrong model keeps answering
+- Chat messages always use the chat's own profile
 
 ### Image descriptions missing, refused, or wrong
 

@@ -67,7 +67,11 @@ const PROJECT = '77777777-7777-4777-8777-777777777777'
 const SOURCE = '88888888-8888-4888-8888-888888888888'
 const NEW_CHAT = 'new-chat'
 
-function makeRepos(opts: { concierge?: Record<string, unknown>; project?: Record<string, unknown> | null } = {}) {
+function makeRepos(opts: {
+  concierge?: Record<string, unknown>
+  project?: Record<string, unknown> | null
+  defaultImageProfile?: Record<string, unknown> | null
+} = {}) {
   const created: Record<string, unknown>[] = []
   const characters: Record<string, Record<string, unknown>> = {
     [ALICE]: { id: ALICE, name: 'Alice', tags: ['t1'], canChooseOutfit: true, defaultImageProfileId: 'char-img' },
@@ -78,6 +82,10 @@ function makeRepos(opts: { concierge?: Record<string, unknown>; project?: Record
     connections: { findById: jest.fn(async (id: string) => (id === PROFILE ? { id } : null)) },
     roleplayTemplates: { findById: jest.fn(async (id: string) => ([TEMPLATE, PROJECT_TEMPLATE, USER_TEMPLATE].includes(id) ? { id } : null)) },
     projects: { findById: jest.fn(async (id: string) => (id === PROJECT ? opts.project ?? { id: PROJECT } : null)) },
+    imageProfiles: {
+      findDefault: jest.fn(async () =>
+        opts.defaultImageProfile === undefined ? { id: 'inst-img', apiKeyId: 'key-1' } : opts.defaultImageProfile),
+    },
     chatSettings: {
       findByUserId: jest.fn(async () => ({
         userId: USER,
@@ -138,6 +146,18 @@ describe('casting calls no model and leaves the chat to be opened', () => {
     expect((await cast({ imageProfileId: PROFILE })).row?.imageProfileId).toBe(PROFILE)
     expect((await cast({ projectId: PROJECT }, makeRepos({ project: { id: PROJECT, defaultImageProfileId: 'proj-img' } }))).row?.imageProfileId).toBe('proj-img')
     expect((await cast({})).row?.imageProfileId).toBe('char-img')
+  })
+
+  it('falls back to the instance default image profile when nothing nearer names one', async () => {
+    const bobOnly = { participants: [seat(BOB)] }
+    expect((await cast(bobOnly)).row?.imageProfileId).toBe('inst-img')
+    // A default that cannot draw (no API key) is passed over.
+    expect((await cast(bobOnly, makeRepos({ defaultImageProfile: { id: 'inst-img', apiKeyId: null } }))).row?.imageProfileId).toBeNull()
+    expect((await cast(bobOnly, makeRepos({ defaultImageProfile: null }))).row?.imageProfileId).toBeNull()
+  })
+
+  it('honours an explicit null as "No image generation" over every default', async () => {
+    expect((await cast({ imageProfileId: null })).row?.imageProfileId).toBeNull()
   })
 })
 

@@ -180,6 +180,7 @@ export function GenerateImageView() {
             <ImageProfilePicker
               value={selectedProfileId}
               onChange={setSelectedProfileId}
+              preselectDefault
             />
           </div>
 

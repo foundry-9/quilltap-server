@@ -4,6 +4,16 @@
 
 ### 4.13-dev
 
+#### Fix: setup wizard and first-run defaults
+
+- Setup wizard API keys: Validate tests a key before storing it. `?action=test-connection` on `/api/v1/connection-profiles` takes an unsaved `apiKey`. A rejected key is no longer saved, re-validating replaces the row the wizard stored instead of adding another, and in settings mode an untouched masked field tests the existing key instead of saving the literal `********` (`components/setup-wizard/key-validation.ts`).
+- Setup wizard "Manual" background model: saved as `cheapLLMSettings.userDefinedProfileId`. It was sent as `profileId`, which the schema dropped, leaving `USER_DEFINED` with no profile.
+- Cheap LLM strategy is honored. A profile flagged `isCheap` is now only a stand-in for User Defined with no profile chosen; it no longer overrides Provider Cheapest or Local First (`getCheapLLMProvider`). The Almanack reports the cheap LLM the ladder actually resolves instead of the first `isCheap` profile.
+- Profile setup saves the name to the account, so the home page greets the user by name instead of "Local User".
+- Default image profile: a new chat with no project or character image profile gets the instance's default image profile (one with an API key), and the Start Chat dialog shows it. An explicit "No image generation" is now sent as `imageProfileId: null` and honored; the create schema accepts null. The chat and standalone Generate Image dialogs preselect the default profile (`ImageProfilePicker` `preselectDefault`).
+- An empty character wardrobe is logged at debug instead of as an error ("wardrobe is unreadable") on every turn.
+- Help: rewrote Cheap LLM Configuration for the strategy card; updated the setup wizard, startup wizard, chats and Courier pages.
+
 #### Fix: first-run and restart failures found dogfooding a fresh instance
 
 - Background jobs were dead on every brand-new instance until a restart. Startup enqueues jobs (the seed stores' embeddings) before first-run setup has produced the encryption pepper; the job child refuses to run without it, so it exited five times, used up the restart budget, and stayed down after setup succeeded. The processor host (`lib/background-jobs/host/processor-host.ts`) now defers forking the child until the pepper exists, without spending the crash budget, and `?action=setup` wakes it once the databases are reopened.

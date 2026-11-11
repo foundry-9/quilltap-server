@@ -75,7 +75,13 @@ export const createChatSchema = z.object({
   groupScenarioGroupId: z.uuid().optional(),
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
-  imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
+  /**
+   * Chat-level image profile (shared by all participants). As with
+   * `roleplayTemplateId`, a present key wins outright — an explicit `null`
+   * means the operator chose "No image generation" — and an omitted key falls
+   * back to project > primary character > the instance's default profile.
+   */
+  imageProfileId: z.uuid().nullable().optional(),
   /**
    * Roleplay template for the new chat, chosen in the New Chat dialog. When the
    * key is present it wins outright — including an explicit `null`, which means

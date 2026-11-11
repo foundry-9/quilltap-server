@@ -71,10 +71,15 @@ export async function getOverlaidWardrobeItems(
   const mountPointId = character.characterDocumentMountPointId as string;
   const vault = await readCharacterVaultWardrobe(mountPointId, characterId);
   if (!vault) {
-    logger.error(
-      'getOverlaidWardrobeItems: character vault wardrobe is unreadable; returning empty list',
-      { characterId, mountPointId },
-    );
+    // Null means the Wardrobe folder holds no items and there is no legacy
+    // wardrobe.json — the ordinary state of a new character. A file that
+    // exists but cannot be read is already reported by the reader
+    // (`readVaultFile`) and a failed folder read throws, so this was an error
+    // logged on every turn for nothing.
+    logger.debug('getOverlaidWardrobeItems: character vault has no wardrobe items', {
+      characterId,
+      mountPointId,
+    });
     return [];
   }
 

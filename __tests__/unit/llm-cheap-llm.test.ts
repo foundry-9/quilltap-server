@@ -207,8 +207,14 @@ describe('Cheap LLM Provider Selection', () => {
       })
     })
 
-    describe('isCheap profile flag (priority 3)', () => {
-      it('should use any profile marked as isCheap=true', () => {
+    describe('isCheap profile flag (priority 3, User Defined only)', () => {
+      // User Defined with no profile chosen: a cheap-flagged profile stands in.
+      const userDefinedNoProfile: CheapLLMConfig = {
+        strategy: 'USER_DEFINED',
+        fallbackToLocal: true,
+      }
+
+      it('should use a profile marked as isCheap=true when User Defined has no profile', () => {
         const cheapOpenAIProfile = createMockProfile(
           'cheap-openai',
           'OPENAI',
@@ -219,7 +225,7 @@ describe('Cheap LLM Provider Selection', () => {
 
         const selection = getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          userDefinedNoProfile,
           [anthropicProfile, cheapOpenAIProfile]
         )
 
@@ -246,7 +252,7 @@ describe('Cheap LLM Provider Selection', () => {
 
         const selection = getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          userDefinedNoProfile,
           [anthropicProfile, cheapOpenAIProfile, cheapOllamaProfile]
         )
 
@@ -273,13 +279,76 @@ describe('Cheap LLM Provider Selection', () => {
 
         const selection = getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          userDefinedNoProfile,
           [anthropicProfile, cheapOpenAIProfile, cheapGoogleProfile]
         )
 
         // Should use the first cheap profile found
         expect(selection.provider).toBe('OPENAI')
         expect(selection.connectionProfileId).toBe('cheap-openai')
+      })
+    
+      it('is ignored by Provider Cheapest — the strategy wins', () => {
+        const cheapOllamaProfile = createMockProfile(
+          'cheap-ollama',
+          'OLLAMA',
+          'qwen3.5:9b',
+          'http://localhost:11434',
+          true
+        )
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          DEFAULT_CHEAP_LLM_CONFIG,
+          [anthropicProfile, cheapOllamaProfile]
+        )
+
+        expect(selection.provider).toBe('ANTHROPIC')
+        expect(selection.modelName).toBe(getCheapestModel('ANTHROPIC'))
+      })
+
+      it('does not let a non-local cheap profile overrule Local First', () => {
+        const cheapOpenAIProfile = createMockProfile(
+          'cheap-openai',
+          'OPENAI',
+          'gpt-4o-mini',
+          undefined,
+          true
+        )
+        const ollamaProfile = createMockProfile(
+          'ollama',
+          'OLLAMA',
+          'llama3.2:3b',
+          'http://localhost:11434'
+        )
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          { strategy: 'LOCAL_FIRST', fallbackToLocal: true },
+          [anthropicProfile, cheapOpenAIProfile, ollamaProfile]
+        )
+
+        expect(selection.provider).toBe('OLLAMA')
+        expect(selection.connectionProfileId).toBe('ollama')
+      })
+
+      it('still loses to a chosen User Defined profile', () => {
+        const cheapOllamaProfile = createMockProfile(
+          'cheap-ollama',
+          'OLLAMA',
+          'qwen3.5:9b',
+          'http://localhost:11434',
+          true
+        )
+        const chosen = createMockProfile('chosen', 'OPENAI', 'gpt-4o-mini')
+
+        const selection = getCheapLLMProvider(
+          anthropicProfile,
+          { strategy: 'USER_DEFINED', userDefinedProfileId: 'chosen', fallbackToLocal: true },
+          [anthropicProfile, cheapOllamaProfile, chosen]
+        )
+
+        expect(selection.connectionProfileId).toBe('chosen')
       })
     })
 
@@ -388,7 +457,7 @@ describe('Cheap LLM Provider Selection', () => {
 
         getCheapLLMProvider(
           anthropicProfile,
-          DEFAULT_CHEAP_LLM_CONFIG,
+          { strategy: 'USER_DEFINED', fallbackToLocal: true },
           [anthropicProfile, cheapOpenAIProfile],
           false,
           onNoCheapLLMCallback

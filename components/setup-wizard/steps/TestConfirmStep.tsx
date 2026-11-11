@@ -150,7 +150,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       // 5. Update chat settings with cheap LLM strategy
       await updateChatSettings({
         strategy: state.cheapConfig.strategy,
-        profileId: cheapProfileId,
+        userDefinedProfileId: cheapProfileId,
       })
 
       // 6. Dispatch created profile IDs

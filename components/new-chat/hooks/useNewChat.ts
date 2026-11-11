@@ -616,7 +616,9 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
     if (overrides.roleplayTemplateId !== undefined) body.roleplayTemplateId = overrides.roleplayTemplateId
     if (overrides.conciergeState !== undefined) body.conciergeState = overrides.conciergeState
     if (overrides.timestampConfig) body.timestampConfig = overrides.timestampConfig
-    if (overrides.imageProfileId) body.imageProfileId = overrides.imageProfileId
+    // null is the operator's "No image generation", which must reach the server
+    // or the default profile would be applied anyway.
+    if (overrides.imageProfileId !== undefined) body.imageProfileId = overrides.imageProfileId
     if (overrides.avatarGenerationEnabled !== undefined && !autonomousEnabled) {
       body.avatarGenerationEnabled = overrides.avatarGenerationEnabled
     }

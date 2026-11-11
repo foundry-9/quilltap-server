@@ -49,18 +49,37 @@ export async function createApiKey(
 }
 
 /**
+ * Update the key value of an API key this wizard stored earlier.
+ */
+export async function updateApiKeyValue(id: string, apiKey: string): Promise<void> {
+  const res = await fetch(`/api/v1/api-keys/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || 'Failed to update API key')
+  }
+}
+
+/**
  * Test a connection to validate an API key works with a provider.
  * Uses the test-connection action on connection-profiles.
+ *
+ * Pass `apiKey` to test a key that has not been stored yet, or `apiKeyId` to
+ * test a stored one.
  */
-export async function testConnection(
-  provider: string,
-  apiKeyId: string,
+export async function testConnection(params: {
+  provider: string
+  apiKey?: string
+  apiKeyId?: string
   baseUrl?: string
-): Promise<{ valid: boolean; error?: string }> {
+}): Promise<{ valid: boolean; error?: string }> {
   const res = await fetch('/api/v1/connection-profiles?action=test-connection', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, apiKeyId, baseUrl }),
+    body: JSON.stringify(params),
   })
   const data = await res.json()
   return { valid: data.valid === true, error: data.error }
@@ -237,7 +256,8 @@ export async function createImageProfile(params: {
  */
 export async function updateChatSettings(cheapLLMSettings: {
   strategy: string
-  profileId?: string
+  /** The connection profile a USER_DEFINED strategy uses. */
+  userDefinedProfileId?: string
 }): Promise<void> {
   const res = await fetch('/api/v1/settings/chat', {
     method: 'PUT',
@@ -314,7 +334,7 @@ export async function loadExistingConfig(): Promise<{
     modelName: string
     isDefault: boolean
   }>
-  chatSettings: { cheapLLMSettings?: { strategy?: string; profileId?: string } }
+  chatSettings: { cheapLLMSettings?: { strategy?: string; userDefinedProfileId?: string | null } }
 }> {
   const [keysRes, connRes, embRes, imgRes, settingsRes] = await Promise.all([
     fetch('/api/v1/api-keys'),

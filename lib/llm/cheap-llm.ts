@@ -199,12 +199,16 @@ export function getCheapestModel(provider: Provider): string {
 /**
  * Selects the appropriate cheap LLM provider based on configuration
  *
- * Selection priority (per CHEAP-LLM.md spec):
+ * Selection priority:
  * 1. Global defaultCheapProfileId if set
  * 2. USER_DEFINED strategy with userDefinedProfileId
- * 3. Any profile with isCheap flag set to true
+ * 3. USER_DEFINED with no usable profile chosen: any profile flagged isCheap
  * 4. LOCAL_FIRST or fallbackToLocal using Ollama
  * 5. Fall back to current profile's cheapest model variant
+ *
+ * The strategy the operator picked is honoured: a profile flagged isCheap is
+ * a User Defined candidate, never an override of Provider Cheapest or Local
+ * First (which it used to be, silently, whatever the settings card said).
  *
  * @param currentProfile - The current connection profile being used for chat
  * @param config - Cheap LLM configuration
@@ -243,8 +247,12 @@ export function getCheapLLMProvider(
     })
   }
 
-  // Priority 3: Use any profile marked as "cheap" (isCheap flag)
-  const cheapProfiles = availableProfiles.filter(p => p.isCheap === true)
+  // Priority 3: User Defined without a usable chosen profile — any profile
+  // marked "cheap" (isCheap flag) stands in. Only for USER_DEFINED: the other
+  // strategies say what they want, and the flag must not overrule them.
+  const cheapProfiles = config.strategy === 'USER_DEFINED'
+    ? availableProfiles.filter(p => p.isCheap === true)
+    : []
   if (cheapProfiles.length > 0) {
     // Prefer local (Ollama) cheap profiles for zero cost
     const localCheapProfile = cheapProfiles.find(p => p.provider === 'OLLAMA')

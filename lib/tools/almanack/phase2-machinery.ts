@@ -22,6 +22,7 @@ import { getAllThemes, getThemeStats } from '@/lib/themes/theme-registry';
 import { isIconName } from '@/components/ui/icons/icon-registry';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
+import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { getErrorMessage } from '@/lib/error-utils';
 import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
@@ -343,10 +344,23 @@ function designated(
   return { provider: profile.provider, model: profile.modelName, profileName: profile.name };
 }
 
-/** The profile designated as the cheap background worker. */
+/**
+ * The cheap background worker as the selection ladder actually resolves it
+ * from the Cheap LLM settings — not merely the first profile flagged isCheap,
+ * which the strategy may not use.
+ */
 export async function collectCheapLLMInfo(userId: string): Promise<DesignatedProfileInfo> {
-  const profiles = await getUserRepositories(userId).connections.findAll();
-  return designated(profiles.find(p => p.isCheap));
+  const repos = getRepositories();
+  const chatSettings = await repos.chatSettings.findByUserId(userId);
+  const resolved = await resolveCheapLLMSelectionForUser(repos, userId, chatSettings);
+  if (!resolved) return {};
+  const { selection, allProfiles } = resolved;
+  const profile = allProfiles.find(p => p.id === selection.connectionProfileId);
+  return {
+    provider: selection.provider,
+    model: selection.modelName,
+    ...(profile ? { profileName: profile.name } : {}),
+  };
 }
 
 /** The Concierge desk's image prompt crafter, if configured. */

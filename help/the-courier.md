@@ -24,7 +24,7 @@ It is, in short, for those occasions when you would rather not give Quilltap you
 3. At the top of the form, set **Transport** to **The Courier (manual / clipboard)**. The form will tighten its sleeves and present you with only the fields a Courier actually needs.
 4. Give the profile a **name** that reminds you which destination you intend to carry messages to ("Claude desktop courier", "ChatGPT o3 in the web parlour", "Friday's local Llama", etc.).
 5. In **Which LLM will you carry to?**, type whatever you like — it's purely informational. Quilltap doesn't validate or call it; the label appears on the placeholder bubble so future-you remembers which window to switch to.
-6. Tick **Set as default profile** if you want every new chat to lean on The Courier by default, or **Mark as cheap LLM** if you intend to use it for housekeeping tasks like memory extraction (be warned: every cheap LLM call will also pause for you to paste).
+6. Tick **Set as default profile** if you want every new chat to lean on The Courier by default, or **Mark as cheap LLM** and choose it under **User Defined** on the Cheap LLM Settings card if you intend to use it for housekeeping tasks like memory extraction (be warned: every cheap LLM call will also pause for you to paste).
 7. Save.
 
 Once saved, the Courier profile appears on its provider's card with the other connection profiles, wearing the Forge's badge, and in the full Connection Profiles list under *By kind*. Its settings — the transport, the destination label, and delta mode — are all in the connection-profile form; open the profile from either place to change them.

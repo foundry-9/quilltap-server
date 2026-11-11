@@ -32,7 +32,7 @@ Each provider card shows capability badges:
 
 ### Step 2: Present Your Credentials
 
-For each selected provider that requires an API key, you'll enter your key and the wizard will validate it against the provider's servers. A green checkmark confirms all is in order; a red notice means something's amiss — usually a miscopied key or insufficient credits.
+For each selected provider that requires an API key, you'll enter your key and the wizard will validate it against the provider's servers. A green checkmark confirms all is in order; a red notice means something's amiss — usually a miscopied key or insufficient credits. A key is put away in the vault only once the provider has accepted it, so a mistyped one leaves no trace, and validating again with a corrected key replaces the one the wizard saved rather than filing a second copy. When you revisit the wizard from Settings, a key you already have shows as asterisks; leave it be and **Re-validate** tests the stored key without touching it.
 
 Providers like Ollama, which run locally and don't require credentials, need only a base URL (typically `http://localhost:11434`).
 
@@ -41,7 +41,7 @@ Providers like Ollama, which run locally and don't require credentials, need onl
 With credentials verified, the wizard fetches available models from each provider and presents them for your selection:
 
 - **Primary Chat Model** — Your main conversationalist, the model that will power most interactions
-- **Cheap LLM Strategy** — For background tasks like memory extraction and title generation. "Auto" (recommended) lets Quilltap pick the most economical option; "Manual" lets you choose a specific model
+- **Cheap LLM Strategy** — For background tasks like memory extraction and title generation. "Auto" (recommended) uses the cheapest model of your primary chat provider; "Manual" lets you choose a specific provider and model, which the wizard saves as a profile and sets as your **User Defined** cheap LLM. See [Cheap LLM Configuration](chat-settings-ai-services.md#cheap-llm-configuration)
 
 ### Step 4: The Memory Engine (Optional)
 

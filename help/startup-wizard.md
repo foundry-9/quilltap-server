@@ -40,7 +40,7 @@ After completing the wizard, you can re-run it anytime from the **Setup Wizard**
    - **The Resident** — Curious and sociable, here to connect with characters
    - **The Author** — Imaginative and expressive, approaching characters as a storyteller
 
-   This creates a user-controlled character that represents you in conversations. Characters will greet you by name and know a bit about your style. You can change your name, avatar, and details anytime from Aurora.
+   This creates a user-controlled character that represents you in conversations, and the name you give is also the one the home page greets you by. Characters will greet you by name and know a bit about your style. You can change your name, avatar, and details anytime from Aurora.
 
 ### Understanding the Basics
 

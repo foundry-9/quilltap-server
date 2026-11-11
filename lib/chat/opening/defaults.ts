@@ -10,7 +10,8 @@
  *
  *   title             the server names the chat from its LLM cast
  *   timestampConfig   request > primary character > global
- *   imageProfileId    request > project > primary character
+ *   imageProfileId    request (an explicit null included) > project >
+ *                     primary character > the instance's default profile
  *   roleplayTemplate  request (an explicit null included) > project > user
  *   tools, avatars    project
  *   conciergeState    request > `newChatsStartAs` (on duty only)
@@ -120,8 +121,9 @@ export async function resolveCastingDefaults(input: ResolveCastingDefaultsInput)
   const timestampConfig =
     request?.timestampConfig ?? primary?.defaultTimestampConfig ?? chatSettings?.defaultTimestampConfig ?? null
 
-  const imageProfileId =
-    request?.imageProfileId ?? project?.defaultImageProfileId ?? primary?.defaultImageProfileId ?? null
+  const imageProfileId = request && request.imageProfileId !== undefined
+    ? request.imageProfileId
+    : project?.defaultImageProfileId ?? primary?.defaultImageProfileId ?? await instanceDefaultImageProfileId(repos, userId)
 
   const roleplayTemplateId = request && request.roleplayTemplateId !== undefined
     ? request.roleplayTemplateId
@@ -188,6 +190,24 @@ export async function resolveCastingDefaults(input: ResolveCastingDefaultsInput)
     outfitModes,
   })
   return defaults
+}
+
+/**
+ * The instance's default image profile, if it can actually draw (it has a key).
+ * The setup wizard marks the profile it creates as the default; without this a
+ * new chat showed "No image generation" beside a profile labelled [Default].
+ */
+async function instanceDefaultImageProfileId(
+  repos: RepositoryContainer,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const profile = await repos.imageProfiles.findDefault(userId)
+    return profile?.apiKeyId ? profile.id : null
+  } catch (error) {
+    logger.warn('[Casting] Could not read the default image profile', { userId, error: getErrorMessage(error) })
+    return null
+  }
 }
 
 /** The scenario a cast opens in by default: character > project > General > none. */

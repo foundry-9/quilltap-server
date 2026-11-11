@@ -273,7 +273,7 @@ See [Message Actions](chat-message-actions.md) for complete details on editing, 
 Each chat can have its own configuration:
 
 - **Roleplay Template** — Formatting and style settings (Chat drawer of the Chat Sidebar)
-- **Image Generation** — Which image provider to use (Chat drawer of the Chat Sidebar)
+- **Image Generation** — Which image provider to use (Chat drawer of the Chat Sidebar). A new chat takes the project's image profile, else the leading character's, else the profile marked **Default** in Settings; choose **No image generation** in the Start Chat dialog to begin without one
 - **Connection Profiles** — Which LLM to use per participant (on each participant card in the Participants drawer)
 - **System Prompt Overrides** — Custom context per participant (on each participant card in the Participants drawer)
 - **Subprompts** — Which of a character's smaller instructions are in play (beneath the system prompt on each participant card, and in the New Chat dialog — see [Character Subprompts](character-subprompts.md))

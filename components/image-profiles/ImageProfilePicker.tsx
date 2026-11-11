@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ProviderIcon } from './ProviderIcon'
 
 interface ApiKey {
@@ -26,6 +26,12 @@ interface ImageProfilePickerProps {
   characterId?: string
   userCharacterId?: string
   disabled?: boolean
+  /**
+   * When nothing is selected yet, select the instance's default profile once
+   * the list loads (a one-off image generator). Leave off where an empty
+   * value means something — "use the fallback chain" or "none".
+   */
+  preselectDefault?: boolean
 }
 
 export function ImageProfilePicker({
@@ -34,6 +40,7 @@ export function ImageProfilePicker({
   characterId,
   userCharacterId,
   disabled,
+  preselectDefault,
 }: ImageProfilePickerProps) {
   const [profiles, setProfiles] = useState<ImageProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +74,15 @@ export function ImageProfilePicker({
 
     fetchProfiles()
   }, [characterId, userCharacterId])
+
+  const preselected = useRef(false)
+  useEffect(() => {
+    if (!preselectDefault || preselected.current || loading || value) return
+    const fallback = profiles.find(p => p.isDefault && p.apiKey)
+    if (!fallback) return
+    preselected.current = true
+    onChange?.(fallback.id)
+  }, [preselectDefault, loading, value, profiles, onChange])
 
   if (loading) {
     return (

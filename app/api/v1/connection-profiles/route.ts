@@ -41,6 +41,12 @@ export const revalidate = 0;
 const testConnectionSchema = z.object({
   provider: ProviderEnum,
   apiKeyId: z.string().optional(),
+  /**
+   * A key that has not been stored yet. The setup wizard tests a key before
+   * saving it, so a mistyped key never becomes a row. Takes precedence over
+   * `apiKeyId`.
+   */
+  apiKey: z.string().trim().min(1).optional(),
   baseUrl: z.string().optional(),
 });
 
@@ -383,9 +389,13 @@ async function handleTestConnection(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
   const body = await req.json();
-  const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body);// Get API key if provided
+  const { provider, apiKeyId, apiKey: unsavedKey, baseUrl } = testConnectionSchema.parse(body);
+  // Use the unsaved key if one was sent, otherwise the stored key, if any
   let decryptedKey = '';
-  if (apiKeyId) {
+  if (unsavedKey) {
+    logger.debug('[Connection Profiles v1] Testing an unsaved API key', { provider });
+    decryptedKey = unsavedKey;
+  } else if (apiKeyId) {
     const apiKey = await repos.connections.findApiKeyById(apiKeyId);
 
     if (!apiKey) {
