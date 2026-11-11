@@ -470,6 +470,7 @@ import { addProfileToolResultVerbatimTurnsMigration } from './add-profile-tool-r
 import { addChatAvatarTimelineTableMigration } from './add-chat-avatar-timeline-table-v1';
 import { addChatOpeningStateMigration } from './add-chat-opening-state-v1';
 import { rekeyBuiltInRoleplayTemplatesMigration } from './rekey-built-in-roleplay-templates-v1';
+import { backfillDeadJobCompletedAtMigration } from './backfill-dead-job-completed-at-v1';
 
 /**
  * All available migrations.
@@ -971,6 +972,8 @@ export const migrations: Migration[] = [
   addChatOpeningStateMigration,
   // Built-in roleplay templates: fixed (UUIDv5) ids, every pointer re-keyed (#190)
   rekeyBuiltInRoleplayTemplatesMigration,
+  // Background jobs: completedAt on DEAD rows, so the reaper can retire them (#194)
+  backfillDeadJobCompletedAtMigration,
 ];
 
 export {
@@ -1440,5 +1443,6 @@ export {
   addChatAvatarTimelineTableMigration,
   addChatOpeningStateMigration,
   rekeyBuiltInRoleplayTemplatesMigration,
+  backfillDeadJobCompletedAtMigration,
 };
 

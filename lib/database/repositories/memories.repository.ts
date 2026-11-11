@@ -255,16 +255,16 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         // Build filter
         const filter: TypedQueryFilter<Memory> = { characterId };
         if (source) {
-          (filter as any).source = source;
+          filter.source = source;
         }
         if (minImportance !== undefined) {
-          (filter as any).reinforcedImportance = { $gte: minImportance };
+          filter.reinforcedImportance = { $gte: minImportance };
         }
         if (tier) {
-          (filter as any).tier = tier;
+          filter.tier = tier;
         }
         if (keystone) {
-          (filter as any).keystone = true;
+          filter.keystone = true;
         }
 
         // Get total count before pagination (but after filtering except search,
@@ -311,13 +311,10 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           });
           return [];
         }
-        // Escape special regex characters to treat query as literal text
-        const escapedQuery = this.escapeRegex(query);
-        const regex = new RegExp(escapedQuery, 'i'); // Case-insensitive regex search
-
+        // Literal substring, ASCII case-insensitive; `%` / `_` match themselves (#192).
         const memories = await this.findByFilter({
           characterId,
-          $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
+          $or: [{ content: { $contains: query } }, { summary: { $contains: query } }],
         });
         return memories;
       },
@@ -1937,14 +1934,12 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           });
           return 0;
         }
-        const regex = new RegExp(this.escapeRegex(searchText), 'i');
-
-        // Build the query filter - search in content, summary, and keywords
+        // Literal substring in content, summary and keywords (#192).
         const filter: TypedQueryFilter<Memory> = {
           $or: [
-            { content: { $regex: regex } },
-            { summary: { $regex: regex } },
-            { keywords: { $regex: regex } },
+            { content: { $contains: searchText } },
+            { summary: { $contains: searchText } },
+            { keywords: { $contains: searchText } },
           ],
         };
 
@@ -1983,14 +1978,12 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           });
           return [];
         }
-        const regex = new RegExp(this.escapeRegex(searchText), 'i');
-
-        // Build the query filter - search in content, summary, and keywords
+        // Literal substring in content, summary and keywords (#192).
         const filter: TypedQueryFilter<Memory> = {
           $or: [
-            { content: { $regex: regex } },
-            { summary: { $regex: regex } },
-            { keywords: { $regex: regex } },
+            { content: { $contains: searchText } },
+            { summary: { $contains: searchText } },
+            { keywords: { $contains: searchText } },
           ],
         };
 
@@ -2020,14 +2013,11 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   ): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        // Escape special regex characters to treat query as literal text
-        const escapedQuery = this.escapeRegex(query);
-        const regex = new RegExp(escapedQuery, 'i');
-
+        // Literal substring, ASCII case-insensitive (#192).
         const memories = await this.findByFilter({
           characterId,
           aboutCharacterId,
-          $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
+          $or: [{ content: { $contains: query } }, { summary: { $contains: query } }],
         });
         return memories;
       },

@@ -53,7 +53,8 @@ beforeEach(() => {
       findByUserId: jest.fn(async () => [{ id: 'char-a' }, { id: 'char-b' }, { id: 'char-gone', archivedAt: '2026-01-01' }]),
     },
     backgroundJobs: {
-      findByUserId: jest.fn(async (_userId: string, status: string) => jobs.filter((j) => j.status === status)),
+      findAbsorbers: jest.fn(async (type: string, statuses: string[]) =>
+        jobs.filter((j) => j.type === type && statuses.includes(j.status))),
       create: jest.fn(async (data: any) => {
         const job: Job = { id: `job-${nextId++}`, type: data.type, status: 'PENDING', payload: data.payload };
         jobs.push(job);
@@ -79,8 +80,8 @@ describe('one maintenance job per character (bug 221)', () => {
       ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-a', exemptPhases: [] }],
       ['MEMORY_MAINTENANCE', { reason: 'scheduled', characterId: 'char-b', exemptPhases: [] }],
     ]);
-    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledTimes(1);
-    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledWith('user-1', 'PENDING');
+    expect(repos.backgroundJobs.findAbsorbers).toHaveBeenCalledTimes(1);
+    expect(repos.backgroundJobs.findAbsorbers).toHaveBeenCalledWith('MEMORY_MAINTENANCE', ['PENDING'], { userId: 'user-1' });
   });
 
   it('a watermark run collides with the scheduled run for the same character', async () => {

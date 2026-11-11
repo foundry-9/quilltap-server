@@ -50,7 +50,7 @@ async function verifyHelpChat(
     return notFound('Help chat');
   }
 
-  if ((chat as any).chatType !== 'help') {
+  if (chat.chatType !== 'help') {
     return notFound('Help chat');
   }
 

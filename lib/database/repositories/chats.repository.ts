@@ -37,7 +37,12 @@ import { TypedQueryFilter, QueryFilter, DatabaseCollection } from '../interfaces
 import { getDatabaseAsync, getBackendType, ensureCollection } from '../manager';
 import type { EquippedSlots, EquippedOutfitState } from '@/lib/schemas/wardrobe.types';
 import { WARDROBE_SLOT_TYPES, normalizeEquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { ChatOpsContext } from './chats-ops-context';
+import type {
+  ChatOpsContext,
+  ChatMessageRow,
+  ChatMessagesCollectionDoc,
+  LegacyChatMessagesDoc,
+} from './chats-ops-context';
 import { ChatParticipantsOps } from './chats-participants.ops';
 import { ChatImpersonationOps } from './chats-impersonation.ops';
 import { ChatTokenTrackingOps } from './chats-tokens.ops';
@@ -149,14 +154,16 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   /**
    * Get the messages collection
    */
-  private async getMessagesCollection(): Promise<DatabaseCollection> {
+  private async getMessagesCollection<
+    TDoc extends ChatMessagesCollectionDoc = ChatMessageRow,
+  >(): Promise<DatabaseCollection<TDoc>> {
     return this.safeQuery(
       async () => {
         // Ensure collection is initialized with proper schema for JSON column detection
         await this.ensureMessagesCollectionInitialized();
 
         const db = await getDatabaseAsync();
-        return db.getCollection(this.messagesCollectionName);
+        return db.getCollection<TDoc>(this.messagesCollectionName);
       },
       'Failed to get chat messages collection',
       { messagesCollection: this.messagesCollectionName }
@@ -278,17 +285,17 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         // Legacy data compatibility: Create empty messages document for backward compat (not needed for SQLite - messages are individual rows)
         if (!this.isSQLiteBackend()) {
           try {
-            const messagesCollection = await this.getMessagesCollection();
+            const messagesCollection = await this.getMessagesCollection<LegacyChatMessagesDoc>();
             const now = this.getCurrentTimestamp();
 
-            const messagesDoc = {
+            const messagesDoc: LegacyChatMessagesDoc = {
               chatId: chat.id,
               messages: [],
               createdAt: now,
               updatedAt: now,
             };
 
-            await messagesCollection.insertOne(messagesDoc as any);
+            await messagesCollection.insertOne(messagesDoc);
           } catch (error) {
             logger.warn('Failed to create chat messages collection', {
               chatId: chat.id,
@@ -441,7 +448,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     promptTokens: number,
     completionTokens: number,
     estimatedCost: number | null,
-    priceSource?: string
+    priceSource?: ChatMetadata['priceSource']
   ): Promise<void> {
     return this.tokensOps.incrementTokenAggregates(chatId, promptTokens, completionTokens, estimatedCost, priceSource);
   }

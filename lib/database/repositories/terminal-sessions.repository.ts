@@ -30,7 +30,7 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
   // ============================================================================
 
   async create(
-    data: Omit<TerminalSession, 'id'>,
+    data: Omit<TerminalSession, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<TerminalSession> {
     return this.safeQuery(

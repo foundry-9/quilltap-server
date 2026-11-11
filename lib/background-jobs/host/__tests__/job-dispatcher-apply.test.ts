@@ -29,6 +29,8 @@ jest.mock('@/lib/database/backends/sqlite/client', () => ({ getRawDatabase: jest
 jest.mock('@/lib/database/backends/sqlite/mount-index-client', () => ({ getRawMountIndexDatabase: jest.fn() }));
 jest.mock('@/lib/database/backends/sqlite/llm-logs-client', () => ({ getRawLLMLogsDatabase: jest.fn() }));
 jest.mock('../processor-host', () => ({ sendToChild: jest.fn(() => true), notifyChild: jest.fn() }));
+jest.mock('@/lib/mount-index/normalize-blob-image', () => ({ normalizeLinkBlobImage: jest.fn() }));
+import { normalizeLinkBlobImage } from '@/lib/mount-index/normalize-blob-image';
 
 interface FakeDb {
   exec: jest.Mock;
@@ -60,7 +62,7 @@ function makeRepos() {
       create: rec('docMountFolders.create'),
       findByMountPointAndPath: jest.fn().mockResolvedValue(null),
     },
-    docMountFileLinks: { create: rec('docMountFileLinks.create') },
+    docMountFileLinks: { create: rec('docMountFileLinks.create'), linkBlobContent: rec('docMountFileLinks.linkBlobContent') },
     llmLogs: { cleanupOldLogs: rec('llmLogs.cleanupOldLogs') },
   };
   return { repos, calls };
@@ -106,6 +108,28 @@ describe('applyWritesUnsafe — partitioned applier', () => {
       'docMountChunks.updateEmbedding',
       'chats.update',
       'embeddingStatus.markAsEmbedded',
+    ]);
+  });
+
+  it('transcodes blob images before the transaction opens, and the replay does not transcode again', async () => {
+    let openedBeforeNormalize: boolean | null = null;
+    jest.mocked(normalizeLinkBlobImage).mockImplementation(async (input: any) => {
+      openedBeforeNormalize = mountDb._calls.includes('BEGIN IMMEDIATE');
+      return { ...input, storedMimeType: 'image/webp', relativePath: 'images/a.webp' };
+    });
+    const writes: ChildWritePayload[] = [
+      { method: 'docMountFileLinks.linkBlobContent', args: [{ relativePath: 'images/a.png', storedMimeType: 'image/png' }] },
+    ];
+
+    await applyWritesUnsafe('job-blob', writes, 'EMBEDDING_GENERATE');
+
+    expect(openedBeforeNormalize).toBe(false);
+    expect(mountDb._calls).toEqual(['BEGIN IMMEDIATE', 'COMMIT']);
+    expect(calls).toEqual([
+      {
+        method: 'docMountFileLinks.linkBlobContent',
+        args: [{ relativePath: 'images/a.webp', storedMimeType: 'image/webp', normalizeImages: false }],
+      },
     ]);
   });
 

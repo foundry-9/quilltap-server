@@ -61,7 +61,7 @@ async function handleList(_req: NextRequest, context: RequestContext) {
         updatedAt: chat.updatedAt,
         participants: enrichedParticipants,
         messageCount,
-        helpPageUrl: (chat as any).helpPageUrl || null,
+        helpPageUrl: chat.helpPageUrl || null,
       };
     })
   );

@@ -39,6 +39,7 @@ import {
 } from './write-partition';
 import fs from 'fs';
 import path from 'path';
+import { normalizeLinkBlobImage, type NormalizableBlobInput } from '@/lib/mount-index/normalize-blob-image';
 import type { ConciergeDangerDetails } from '@/lib/services/concierge-notifications/writer';
 
 const log = logger.child({ module: 'jobs:dispatcher' });
@@ -513,6 +514,51 @@ async function runClassifierSwitchChecks(writes: ChildWritePayload[], jobId: str
   }
 }
 
+/** The buffered write whose replay transcodes an image. */
+const LINK_BLOB_CONTENT = 'docMountFileLinks.linkBlobContent';
+
+/**
+ * Do a batch's real I/O before its transaction opens. A replayed
+ * `linkBlobContent` transcodes its image (sharp, off the event loop); awaited
+ * inside BEGIN … COMMIT, that would let any other parent-side write on the
+ * connection join the open transaction — and be rolled back with it if a
+ * later write in the batch threw, after its caller was told it succeeded.
+ * The normalised input is passed on with `normalizeImages: false`, so the
+ * replay does not transcode again.
+ */
+async function preNormalizeWrites(writes: ChildWritePayload[], jobId: string): Promise<ChildWritePayload[]> {
+  let normalized = 0;
+  const out: ChildWritePayload[] = [];
+  for (const w of writes) {
+    if (w.method !== LINK_BLOB_CONTENT) {
+      out.push(w);
+      continue;
+    }
+    const input = w.args[0] as NormalizableBlobInput;
+    const ready = await normalizeLinkBlobImage(input);
+    out.push({ ...w, args: [{ ...ready, normalizeImages: false }, ...w.args.slice(1)] });
+    normalized++;
+  }
+  if (normalized > 0) {
+    log.debug('Pre-normalised blob writes before the partition transaction', { jobId, normalized });
+  }
+  return out;
+}
+
+/**
+ * Development check that a transaction body never yielded to the event
+ * loop. Microtasks (the async repository methods over a synchronous driver)
+ * are fine; a macrotask turn means real I/O ran while the transaction was
+ * open, and other writers could have joined it.
+ */
+function watchForEventLoopYield(): () => boolean {
+  if (process.env.NODE_ENV === 'production' || typeof setImmediate !== 'function') return () => false;
+  let yielded = false;
+  // Left to fire on its own: setting a flag nobody reads is harmless.
+  setImmediate(() => { yielded = true; });
+  return () => yielded;
+}
+
 /**
  * Apply one partition's writes inside a single hand-driven transaction on the
  * given connection. Throws on any failure (after rolling the partition back and
@@ -543,7 +589,11 @@ async function applyPartition(
   const folderRemap = new Map<string, string>();
   const stagedRenames: Array<{ from: string; to: string }> = [];
 
+  // Real I/O first, so the transaction body is synchronous work only.
+  writes = await preNormalizeWrites(writes, jobId);
+
   db.exec('BEGIN IMMEDIATE');
+  const yielded = watchForEventLoopYield();
   try {
     for (const raw of writes) {
       if (raw.method === '__finalizeFile') {
@@ -567,6 +617,13 @@ async function applyPartition(
       if (result && typeof (result as { then?: unknown }).then === 'function') {
         await result;
       }
+    }
+    if (yielded()) {
+      log.error('Partition transaction yielded to the event loop: a replayed write did real I/O inside BEGIN … COMMIT', {
+        jobId,
+        partition,
+        methods: [...new Set(writes.map(w => w.method))],
+      });
     }
     db.exec('COMMIT');
   } catch (err) {

@@ -93,7 +93,7 @@ export const GET = createContextHandler(async (request: NextRequest) => {
     const liveSessions = ptyManager.list().filter((s) => s.chatId === chatId);
 
     // Get historical sessions from database (optional for v1; we'll just return live for now)
-    const repos = getRepositories() as any;
+    const repos = getRepositories();
     const allSessions = await repos.terminalSessions.findByChatId(chatId);
 
     terminalLogger.debug('[Terminals API] Sessions listed', {
