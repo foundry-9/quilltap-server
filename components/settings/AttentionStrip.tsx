@@ -26,6 +26,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { useApiKeysQuery } from '@/lib/hooks/use-profiles'
+import { usePluginsQuery } from '@/lib/hooks/use-plugins'
 import { getSettingsCard, settingsCardHref, type SettingsGroupId } from '@/lib/settings/registry'
 import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
 import { mergeConciergeSettings } from '@/components/settings/concierge-settings/merge'
@@ -128,10 +129,7 @@ export function useAttentionChips(): { chips: AttentionChip[]; ready: boolean } 
     queryFn: ({ signal }) =>
       apiFetch<{ stats: { failed: number } }>('/api/v1/system/tools?action=tasks-queue', { signal }),
   })
-  const plugins = useQuery({
-    queryKey: queryKeys.plugins.all,
-    queryFn: ({ signal }) => apiFetch<{ errors?: unknown[] }>('/api/v1/plugins', { signal }),
-  })
+  const plugins = usePluginsQuery()
 
   const ready =
     !loading &&

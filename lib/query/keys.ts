@@ -241,6 +241,8 @@ export const queryKeys = {
     conversationSummaryRegenerate: ['system', 'conversation-summary-regenerate'] as const,
     dataDir: ['system', 'data-dir'] as const,
     unlock: ['system', 'unlock'] as const,
+    /** Whether this install is user-managed or hosted (`/api/v1/system/deployment`). */
+    deployment: ['system', 'deployment'] as const,
   },
   tools: {
     all: ['tools'] as const,
@@ -351,6 +353,12 @@ export const queryKeys = {
   },
   plugins: {
     all: ['plugins'] as const,
+    /** Every loaded plugin with the registry's stats (`GET /api/v1/plugins`). */
+    list: () => ['plugins', 'list'] as const,
+    /** The site-installed plugins (`?filter=installed`). */
+    installed: () => ['plugins', 'installed'] as const,
+    /** Newer versions on npm (`?action=check-upgrades`). */
+    upgrades: () => ['plugins', 'upgrades'] as const,
     config: (pluginName: string) => ['plugins', pluginName, 'config'] as const,
   },
   photos: {

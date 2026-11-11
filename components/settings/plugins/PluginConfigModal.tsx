@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDraft } from '@/lib/hooks/use-draft'
 import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -45,6 +46,8 @@ interface PluginConfigModalProps {
  * Dynamically renders form fields based on the plugin's configSchema
  * and saves configuration to the database via API.
  */
+const EMPTY_CONFIG: Record<string, unknown> = {}
+
 export function PluginConfigModal({
   isOpen,
   onClose,
@@ -52,9 +55,9 @@ export function PluginConfigModal({
   pluginTitle,
   onSuccess,
 }: PluginConfigModalProps) {
+  const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [formData, setFormData] = useState<Record<string, unknown>>({})
 
   // Load current configuration via TanStack Query (gated by isOpen && pluginName)
   const { data, isLoading: loading, error: loadError } = useQuery({
@@ -64,6 +67,8 @@ export function PluginConfigModal({
   })
 
   const configSchema = data?.configSchema ?? []
+  // The form drafts the stored config; a refetch never overwrites an edit.
+  const [formData, setFormData] = useDraft<Record<string, unknown>>(data?.config ?? EMPTY_CONFIG)
 
   // Update error from TanStack Query
   useEffect(() => {
@@ -72,14 +77,6 @@ export function PluginConfigModal({
       setError((loadError as ApiFetchError | null)?.message || 'Failed to load configuration')
     }
   }, [loadError])
-
-  // Sync formData with loaded config when data changes
-  useEffect(() => {
-    if (data?.config) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream data changes (parent renders unconditionally)
-      setFormData(data.config)
-    }
-  }, [data?.config])
 
   // Handle form field changes
   const handleFieldChange = (key: string, value: unknown) => {
@@ -108,6 +105,13 @@ export function PluginConfigModal({
         throw new Error(data.error || 'Failed to save configuration')
       }
 
+      // Re-seed the cached config, so reopening within the stale time shows
+      // (and could re-save) what was saved, not the pre-save values.
+      queryClient.setQueryData<{ configSchema: ConfigField[]; config: Record<string, unknown> }>(
+        queryKeys.plugins.config(pluginName),
+        (prev) => prev && { ...prev, config: formData },
+      )
+      void queryClient.invalidateQueries({ queryKey: queryKeys.plugins.config(pluginName) })
       showSuccessToast('Configuration saved successfully')
       onSuccess?.()
       onClose()

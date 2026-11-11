@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Refactor: client server-state (phase 4: plugins; saved values re-seeded)
+
+- The Plugins tab reads the registry, the installed list, the deployment shape and the upgrade check as queries (`usePluginsQuery`, `lib/hooks/use-plugins.ts`; keys `plugins.list` / `installed` / `upgrades`, `system.deployment`) instead of eleven pieces of component state. Enable, disable, install, uninstall, upgrade and a config save invalidate `plugins.all`, which also refreshes the attention strip's plugin-error count.
+- The plugin config dialog's form is a `useDraft` over the cached config, and a save writes the saved config back into the cache. Reopening within the stale time showed, and could re-save, the pre-save values.
+- The memory recall card writes the saved settings into `memories.recallConfig`, for the same reason.
+
 #### Refactor: client server-state (phase 4: the character list)
 
 - New `useCharactersList(filters)` (`lib/hooks/use-characters-list.ts`): the one read of `GET /api/v1/characters`. Its filters (`controlledBy`, `archived`, `npc`) are the endpoint's query parameters and are folded into `queryKeys.characters.list(filters)`. Eleven inline `queryFn`s (New Chat, the Salon list, Add Character, Compose Mail, Generate Image, the mention typeahead, the spellcheck feed, Save Scenario, the container catalogue, the project roster card, the entity search), the persona reads (`useUserCharacterDisplayName`, the character page's user-character list), the Aurora roster, and four effect loaders (group members, the image detail modal, Insert Announcement, search-and-replace scope) now use it, so a character created or archived anywhere shows in all of them.
