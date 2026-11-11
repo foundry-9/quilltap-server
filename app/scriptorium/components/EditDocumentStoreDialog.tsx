@@ -6,10 +6,8 @@
  * Modal dialog for editing an existing document store.
  */
 
-import { useId, useRef, useState } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { createPortal } from 'react-dom'
+import { useId, useState } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { DirectoryPicker } from './DirectoryPicker'
 import type { DocumentStore, UpdateDocumentStoreData } from '../types'
 
@@ -39,11 +37,6 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
   const [storeType, setStoreType] = useState<'documents' | 'character'>(store?.storeType || 'documents')
   const [basePath, setBasePath] = useState(store?.basePath || '')
   const [enabled, setEnabled] = useState(store?.enabled ?? true)
-
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, !!store)
-  useEscapeKey(onClose, !!store)
 
   if (!store) return null
 
@@ -78,155 +71,152 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
     onSubmit(store.id, data)
   }
 
-  return createPortal(
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-lg p-6"
-      >
-        <h3 id={titleId} className="qt-dialog-title mb-4">Edit Document Store</h3>
-        <form onSubmit={handleSubmit}>
+  return (
+    <BaseModal
+      isOpen={!!store}
+      onClose={onClose}
+      headerless
+      className="p-6"
+      bodyClassName="overflow-y-auto"
+     
+      closeOnClickOutside={false}
+    >
+      <ModalTitle className="qt-dialog-title mb-4">Edit Document Store</ModalTitle>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor={`${fieldId}-f0`} className="qt-label mb-2 block">Name</label>
+          <input
+            id={`${fieldId}-f0`}
+            type="text"
+            name="name"
+            required
+            maxLength={200}
+            defaultValue={store.name}
+            className="qt-input"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor={`${fieldId}-f1`} className="qt-label mb-2 block">Contents</label>
+          <select
+            id={`${fieldId}-f1`}
+            name="storeType"
+            value={storeType}
+            onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
+            className="qt-input"
+          >
+            <option value="documents">Documents — general notes, references, research</option>
+            <option value="character">Character — character sheets and related material</option>
+          </select>
+        </div>
+
+        {!isDatabaseBacked && (
           <div className="mb-4">
-            <label htmlFor={`${fieldId}-f0`} className="qt-label mb-2 block">Name</label>
-            <input
-              id={`${fieldId}-f0`}
-              type="text"
-              name="name"
+            <label className="qt-label mb-2 block">Path</label>
+            <DirectoryPicker
+              value={basePath}
+              onChange={setBasePath}
               required
-              maxLength={200}
-              defaultValue={store.name}
-              className="qt-input"
+              placeholder="/path/to/documents"
             />
+            <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
           </div>
+        )}
 
-          <div className="mb-4">
-            <label htmlFor={`${fieldId}-f1`} className="qt-label mb-2 block">Contents</label>
-            <select
-              id={`${fieldId}-f1`}
-              name="storeType"
-              value={storeType}
-              onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
-              className="qt-input"
-            >
-              <option value="documents">Documents — general notes, references, research</option>
-              <option value="character">Character — character sheets and related material</option>
-            </select>
-          </div>
-
-          {!isDatabaseBacked && (
-            <div className="mb-4">
-              <label className="qt-label mb-2 block">Path</label>
-              <DirectoryPicker
-                value={basePath}
-                onChange={setBasePath}
-                required
-                placeholder="/path/to/documents"
-              />
-              <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
-            </div>
-          )}
-
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Type</label>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="mountType"
-                  value="filesystem"
-                  checked={mountType === 'filesystem'}
-                  onChange={() => setMountType('filesystem')}
-                  className="qt-radio"
-                />
-                <span className="qt-body">Filesystem</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="mountType"
-                  value="obsidian"
-                  checked={mountType === 'obsidian'}
-                  onChange={() => setMountType('obsidian')}
-                  className="qt-radio"
-                />
-                <span className="qt-body">Obsidian Vault</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="mountType"
-                  value="database"
-                  checked={mountType === 'database'}
-                  onChange={() => setMountType('database')}
-                  className="qt-radio"
-                />
-                <span className="qt-body">Database-backed</span>
-              </label>
-            </div>
-            {isDatabaseBacked && (
-              <p className="mt-2 text-xs qt-text-secondary italic">
-                Database-backed stores have no filesystem path or include/exclude patterns. Switching from a filesystem mount type will drop the current base path.
-              </p>
-            )}
-          </div>
-
-          <div className="mb-4">
+        <div className="mb-4">
+          <label className="qt-label mb-2 block">Type</label>
+          <div className="flex flex-col gap-2">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                className="qt-checkbox"
+                type="radio"
+                name="mountType"
+                value="filesystem"
+                checked={mountType === 'filesystem'}
+                onChange={() => setMountType('filesystem')}
+                className="qt-radio"
               />
-              <span className="qt-label">Enabled</span>
+              <span className="qt-body">Filesystem</span>
             </label>
-            <p className="mt-1 text-xs qt-text-secondary">Disabled stores won&apos;t be scanned or searched</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="mountType"
+                value="obsidian"
+                checked={mountType === 'obsidian'}
+                onChange={() => setMountType('obsidian')}
+                className="qt-radio"
+              />
+              <span className="qt-body">Obsidian Vault</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="mountType"
+                value="database"
+                checked={mountType === 'database'}
+                onChange={() => setMountType('database')}
+                className="qt-radio"
+              />
+              <span className="qt-body">Database-backed</span>
+            </label>
           </div>
-
-          {!isDatabaseBacked && (
-            <>
-              <div className="mb-4">
-                <label htmlFor={`${fieldId}-f2`} className="qt-label mb-2 block">Include Patterns</label>
-                <input
-                  id={`${fieldId}-f2`}
-                  type="text"
-                  name="includePatterns"
-                  defaultValue={store.includePatterns.join(', ')}
-                  className="qt-input"
-                />
-                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
-              </div>
-
-              <div className="mb-4">
-                <label htmlFor={`${fieldId}-f3`} className="qt-label mb-2 block">Exclude Patterns</label>
-                <input
-                  id={`${fieldId}-f3`}
-                  type="text"
-                  name="excludePatterns"
-                  defaultValue={store.excludePatterns.join(', ')}
-                  className="qt-input"
-                />
-                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
-              </div>
-            </>
+          {isDatabaseBacked && (
+            <p className="mt-2 text-xs qt-text-secondary italic">
+              Database-backed stores have no filesystem path or include/exclude patterns. Switching from a filesystem mount type will drop the current base path.
+            </p>
           )}
+        </div>
 
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="qt-button-secondary">
-              Cancel
-            </button>
-            <button type="submit" className="qt-button-primary">
-              Save Changes
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
+        <div className="mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="qt-checkbox"
+            />
+            <span className="qt-label">Enabled</span>
+          </label>
+          <p className="mt-1 text-xs qt-text-secondary">Disabled stores won&apos;t be scanned or searched</p>
+        </div>
+
+        {!isDatabaseBacked && (
+          <>
+            <div className="mb-4">
+              <label htmlFor={`${fieldId}-f2`} className="qt-label mb-2 block">Include Patterns</label>
+              <input
+                id={`${fieldId}-f2`}
+                type="text"
+                name="includePatterns"
+                defaultValue={store.includePatterns.join(', ')}
+                className="qt-input"
+              />
+              <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor={`${fieldId}-f3`} className="qt-label mb-2 block">Exclude Patterns</label>
+              <input
+                id={`${fieldId}-f3`}
+                type="text"
+                name="excludePatterns"
+                defaultValue={store.excludePatterns.join(', ')}
+                className="qt-input"
+              />
+              <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onClose} className="qt-button-secondary">
+            Cancel
+          </button>
+          <button type="submit" className="qt-button-primary">
+            Save Changes
+          </button>
+        </div>
+      </form>
+    </BaseModal>
   )
 }

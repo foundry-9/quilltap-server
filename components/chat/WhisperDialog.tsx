@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useCallback, useId, useRef } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useState, useCallback } from 'react'
+import { BaseModal } from '@/components/ui/BaseModal'
 
 interface WhisperDialogProps {
   /** Whether the dialog is open */
@@ -32,10 +31,6 @@ export function WhisperDialog({
 }: WhisperDialogProps) {
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-  useEscapeKey(onClose, isOpen)
 
   const handleSend = useCallback(async () => {
     if (!message.trim() || sending) return
@@ -90,44 +85,16 @@ export function WhisperDialog({
     }
   }, [handleSend])
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 qt-bg-overlay-caption"
-        onClick={onClose}
-      />
-      {/* Dialog */}
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog relative z-10 w-full max-w-md mx-4"
-      >
-        <div className="qt-dialog-header">
-          <h3 id={titleId} className="qt-dialog-title">Whisper to {targetName}</h3>
-        </div>
-        <div className="qt-dialog-body">
-          <p className="text-sm qt-text-muted mb-3">
-            This message will only be visible to you and {targetName}.
-          </p>
-          <textarea
-            aria-label={`Whisper to ${targetName}`}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`Write a private message to ${targetName}...`}
-            className="qt-input w-full min-h-[100px] resize-y"
-            autoFocus
-            disabled={sending}
-          />
-        </div>
-        <div className="qt-dialog-footer">
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Whisper to ${targetName}`}
+      maxWidth="md"
+      className="mx-4"
+      bodyClassName="qt-dialog-body"
+      footer={
+        <>
           <button
             onClick={onClose}
             className="qt-button qt-button-secondary"
@@ -142,8 +109,22 @@ export function WhisperDialog({
           >
             {sending ? 'Sending...' : 'Whisper'}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="text-sm qt-text-muted mb-3">
+        This message will only be visible to you and {targetName}.
+      </p>
+      <textarea
+        aria-label={`Whisper to ${targetName}`}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={`Write a private message to ${targetName}...`}
+        className="qt-input w-full min-h-[100px] resize-y"
+        autoFocus
+        disabled={sending}
+      />
+    </BaseModal>
   )
 }

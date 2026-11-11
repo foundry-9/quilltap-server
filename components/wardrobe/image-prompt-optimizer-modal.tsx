@@ -17,11 +17,8 @@
  * @module components/wardrobe/image-prompt-optimizer-modal
  */
 
-import { useCallback, useId, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useCallback, useId, useMemo, useState } from 'react'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { WARDROBE_IMAGE_PROMPT_MAX_LENGTH } from '@/lib/wardrobe/image-prompt-limit'
@@ -97,9 +94,6 @@ export function ImagePromptOptimizerModal({
   onApplied,
 }: ImagePromptOptimizerModalProps) {
   const id = useId()
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
   const [stage, setStage] = useState<Stage>('intro')
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -107,9 +101,6 @@ export function ImagePromptOptimizerModal({
   const [summary, setSummary] = useState<{ examined: number; failed: number; reader: string } | null>(null)
 
   const busy = stage === 'reviewing' || applying
-  useEscapeKey(() => {
-    if (!busy) onClose()
-  }, true)
 
   const handleReview = useCallback(async () => {
     setStage('reviewing')
@@ -173,220 +164,184 @@ export function ImagePromptOptimizerModal({
 
   const { whose, excluded } = describeScope(container, ownerName)
 
-  if (typeof document === 'undefined') return null
-  // Portalled to <body>: rendered in place, a `.qt-workspace` pane's stacking
-  // context (isolation: isolate) traps the z-index below the left rail and
-  // the sticky toolbar, which paint over the dialog's edges.
-  return createPortal(
-    <>
-      {/* Stacks above the wardrobe dialog, like the import-from-image modal. */}
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-[70]"
-        onClick={() => {
-          if (!busy) onClose()
-        }}
-        aria-label="Close dialog"
-        type="button"
-      />
-      <div
-        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
-        style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
-      >
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-hidden flex flex-col"
-        >
-          <div className="qt-dialog-header flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <h2 id={titleId} className="qt-dialog-title">Polish the Portrait Cues</h2>
-              <button
-                aria-label="Close"
-                type="button"
-                onClick={onClose}
-                disabled={busy}
-                className="qt-text-secondary hover:qt-text"
-              >
-                <Icon name="close" className="w-5 h-5" />
+  // Opens over the wardrobe dialog; the shell stacks it on top by DOM order.
+  return (
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      title="Polish the Portrait Cues"
+      showCloseButton
+      busy={busy}
+      maxWidth="wide"
+      className="overflow-hidden"
+      bodyClassName="qt-dialog-body space-y-4 flex-1 min-h-0 overflow-y-auto"
+      footerClassName="qt-dialog-footer flex-shrink-0"
+      footer={
+        <div className="flex flex-wrap justify-end gap-2">
+          {(stage === 'intro' || stage === 'reviewing') && (
+            <>
+              <button type="button" className="qt-button-secondary" onClick={onClose} disabled={busy}>
+                Cancel
               </button>
-            </div>
-          </div>
-
-          <div className="qt-dialog-body space-y-4 flex-1 min-h-0 overflow-y-auto">
-            {error && <div className="qt-alert-error rounded px-3 py-2 text-sm">{error}</div>}
-
-            {(stage === 'intro' || stage === 'reviewing') && (
-              <div className="space-y-3 text-sm qt-text">
-                <p>
-                  A brisk clerk of modest wages will go through {whose} wardrobe, garment by garment, and
-                  compare each portrait cue — the short phrase whispered to the portraitist and the Lantern —
-                  with the piece&apos;s description. Blank cues are filled in, contradictory ones set right, and
-                  every one kept to {WARDROBE_IMAGE_PROMPT_MAX_LENGTH} characters.
-                </p>
-                <p className="qt-text-secondary text-xs">
-                  {excluded}, nothing archived, and no multi-part outfits (an outfit is drawn from its
-                  pieces). Garments covering several slots are included. Nothing is changed until you say so.
-                </p>
-                {stage === 'reviewing' && (
-                  <div className="flex items-center gap-3 px-3 py-2 rounded qt-bg-muted" role="status">
-                    <svg className="w-5 h-5 animate-spin qt-text-primary" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-                      <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
-                    </svg>
-                    <span className="qt-text-secondary">Rummaging through the wardrobe, pencil behind one ear…</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(stage === 'decide' || stage === 'choose') && summary && (
-              <>
-                <div className="text-sm qt-text space-y-1">
-                  <p>
-                    {summary.examined === 0
-                      ? 'There was nothing in the wardrobe to examine.'
-                      : recommendations.length === 0
-                        ? `All ${summary.examined} garments passed inspection; not a cue out of place.`
-                        : `${summary.examined} garment${summary.examined === 1 ? '' : 's'} examined; ${recommendations.length} recommended for change.`}
-                  </p>
-                  <p className="text-xs qt-text-secondary">Reviewed by {summary.reader}</p>
-                  {summary.failed > 0 && (
-                    <p className="text-xs qt-text-warning">
-                      {summary.failed} garment{summary.failed === 1 ? '' : 's'} could not be read this time; run it again to try those.
-                    </p>
-                  )}
-                  {recommendations.length > 0 && stage !== 'choose' && (
-                    <p className="font-medium pt-2">
-                      Shall all {recommendations.length} be made, or would you rather choose?
-                    </p>
-                  )}
-                </div>
-
-                <ul className="space-y-3">
-                  {recommendations.map((rec) => {
-                    const fieldId = `${id}-cue-${rec.itemId}`
-                    const muted = stage === 'choose' && !rec.chosen
-                    return (
-                      <li
-                        key={rec.itemId}
-                        className={`border qt-border-default rounded-lg p-3 space-y-2 transition-opacity ${muted ? 'opacity-60' : ''}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          {stage === 'choose' && (
-                            <input
-                              type="checkbox"
-                              checked={rec.chosen}
-                              onChange={(e) => updateRec(rec.itemId, { chosen: e.target.checked })}
-                              aria-label={`Apply the new cue for ${rec.title}`}
-                              className="qt-checkbox mt-1"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-baseline gap-x-2">
-                              <span className="text-sm font-medium qt-text">{rec.title}</span>
-                              <span className="text-xs qt-text-secondary">{rec.types.join(', ')}</span>
-                              <span className="qt-badge text-xs">{KIND_LABEL[rec.kind]}</span>
-                            </div>
-                            {rec.reason && <p className="text-xs qt-text-secondary mt-0.5">{rec.reason}</p>}
-                          </div>
-                        </div>
-                        <div className={stage === 'choose' ? 'ml-7 space-y-2' : 'space-y-2'}>
-                          <p className="text-xs qt-text-secondary">
-                            <span className="font-medium">Was:</span>{' '}
-                            {rec.currentPrompt ? rec.currentPrompt : <em>(blank)</em>}
-                          </p>
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label htmlFor={fieldId} className="qt-label text-xs">
-                                New cue
-                              </label>
-                              <span className="text-xs qt-text-secondary">
-                                {rec.draft.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
-                              </span>
-                            </div>
-                            <input
-                              id={fieldId}
-                              type="text"
-                              value={rec.draft}
-                              maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
-                              disabled={applying}
-                              onChange={(e) => updateRec(rec.itemId, { draft: e.target.value })}
-                              className="qt-input text-sm w-full"
-                            />
-                          </div>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </>
-            )}
-          </div>
-
-          <div className="qt-dialog-footer flex-shrink-0">
-            <div className="flex flex-wrap justify-end gap-2">
-              {(stage === 'intro' || stage === 'reviewing') && (
-                <>
-                  <button type="button" className="qt-button-secondary" onClick={onClose} disabled={busy}>
-                    Cancel
-                  </button>
-                  <button type="button" className="qt-button-primary" onClick={handleReview} disabled={busy}>
-                    {stage === 'reviewing' ? 'Reviewing…' : 'Begin the review'}
-                  </button>
-                </>
-              )}
-              {stage === 'decide' && recommendations.length > 0 && (
-                <>
-                  <button type="button" className="qt-button-secondary" onClick={onClose} disabled={busy}>
-                    Leave them as they are
-                  </button>
-                  <button type="button" className="qt-button-secondary" onClick={() => setStage('choose')} disabled={busy}>
-                    Let me choose
-                  </button>
-                  <button type="button" className="qt-button-primary" onClick={() => void apply('all')} disabled={busy}>
-                    {applying ? 'Inking…' : `Make all ${recommendations.length}`}
-                  </button>
-                </>
-              )}
-              {stage === 'choose' && (
-                <>
-                  <button
-                    type="button"
-                    className="qt-button-ghost qt-button-sm mr-auto"
-                    onClick={() => {
-                      const allOn = chosenCount === recommendations.length
-                      setRecommendations((prev) => prev.map((rec) => ({ ...rec, chosen: !allOn })))
-                    }}
-                  >
-                    {chosenCount === recommendations.length ? 'Untick all' : 'Tick all'}
-                  </button>
-                  <button type="button" className="qt-button-secondary" onClick={() => setStage('decide')} disabled={busy}>
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    className="qt-button-primary"
-                    onClick={() => void apply('chosen')}
-                    disabled={chosenCount === 0 || busy}
-                  >
-                    {applying ? 'Inking…' : `Apply ${chosenCount} chosen`}
-                  </button>
-                </>
-              )}
-              {stage === 'decide' && recommendations.length === 0 && (
-                <button type="button" className="qt-button-primary" onClick={onClose}>
-                  Close
-                </button>
-              )}
-            </div>
-          </div>
+              <button type="button" className="qt-button-primary" onClick={handleReview} disabled={busy}>
+                {stage === 'reviewing' ? 'Reviewing…' : 'Begin the review'}
+              </button>
+            </>
+          )}
+          {stage === 'decide' && recommendations.length > 0 && (
+            <>
+              <button type="button" className="qt-button-secondary" onClick={onClose} disabled={busy}>
+                Leave them as they are
+              </button>
+              <button type="button" className="qt-button-secondary" onClick={() => setStage('choose')} disabled={busy}>
+                Let me choose
+              </button>
+              <button type="button" className="qt-button-primary" onClick={() => void apply('all')} disabled={busy}>
+                {applying ? 'Inking…' : `Make all ${recommendations.length}`}
+              </button>
+            </>
+          )}
+          {stage === 'choose' && (
+            <>
+              <button
+                type="button"
+                className="qt-button-ghost qt-button-sm mr-auto"
+                onClick={() => {
+                  const allOn = chosenCount === recommendations.length
+                  setRecommendations((prev) => prev.map((rec) => ({ ...rec, chosen: !allOn })))
+                }}
+              >
+                {chosenCount === recommendations.length ? 'Untick all' : 'Tick all'}
+              </button>
+              <button type="button" className="qt-button-secondary" onClick={() => setStage('decide')} disabled={busy}>
+                Back
+              </button>
+              <button
+                type="button"
+                className="qt-button-primary"
+                onClick={() => void apply('chosen')}
+                disabled={chosenCount === 0 || busy}
+              >
+                {applying ? 'Inking…' : `Apply ${chosenCount} chosen`}
+              </button>
+            </>
+          )}
+          {stage === 'decide' && recommendations.length === 0 && (
+            <button type="button" className="qt-button-primary" onClick={onClose}>
+              Close
+            </button>
+          )}
         </div>
-      </div>
-    </>,
-    document.body,
+      }
+    >
+      {error && <div className="qt-alert-error rounded px-3 py-2 text-sm">{error}</div>}
+
+      {(stage === 'intro' || stage === 'reviewing') && (
+        <div className="space-y-3 text-sm qt-text">
+          <p>
+            A brisk clerk of modest wages will go through {whose} wardrobe, garment by garment, and
+            compare each portrait cue — the short phrase whispered to the portraitist and the Lantern —
+            with the piece&apos;s description. Blank cues are filled in, contradictory ones set right, and
+            every one kept to {WARDROBE_IMAGE_PROMPT_MAX_LENGTH} characters.
+          </p>
+          <p className="qt-text-secondary text-xs">
+            {excluded}, nothing archived, and no multi-part outfits (an outfit is drawn from its
+            pieces). Garments covering several slots are included. Nothing is changed until you say so.
+          </p>
+          {stage === 'reviewing' && (
+            <div className="flex items-center gap-3 px-3 py-2 rounded qt-bg-muted" role="status">
+              <svg className="w-5 h-5 animate-spin qt-text-primary" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
+              </svg>
+              <span className="qt-text-secondary">Rummaging through the wardrobe, pencil behind one ear…</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(stage === 'decide' || stage === 'choose') && summary && (
+        <>
+          <div className="text-sm qt-text space-y-1">
+            <p>
+              {summary.examined === 0
+                ? 'There was nothing in the wardrobe to examine.'
+                : recommendations.length === 0
+                  ? `All ${summary.examined} garments passed inspection; not a cue out of place.`
+                  : `${summary.examined} garment${summary.examined === 1 ? '' : 's'} examined; ${recommendations.length} recommended for change.`}
+            </p>
+            <p className="text-xs qt-text-secondary">Reviewed by {summary.reader}</p>
+            {summary.failed > 0 && (
+              <p className="text-xs qt-text-warning">
+                {summary.failed} garment{summary.failed === 1 ? '' : 's'} could not be read this time; run it again to try those.
+              </p>
+            )}
+            {recommendations.length > 0 && stage !== 'choose' && (
+              <p className="font-medium pt-2">
+                Shall all {recommendations.length} be made, or would you rather choose?
+              </p>
+            )}
+          </div>
+
+          <ul className="space-y-3">
+            {recommendations.map((rec) => {
+              const fieldId = `${id}-cue-${rec.itemId}`
+              const muted = stage === 'choose' && !rec.chosen
+              return (
+                <li
+                  key={rec.itemId}
+                  className={`border qt-border-default rounded-lg p-3 space-y-2 transition-opacity ${muted ? 'opacity-60' : ''}`}
+                >
+                  <div className="flex items-start gap-3">
+                    {stage === 'choose' && (
+                      <input
+                        type="checkbox"
+                        checked={rec.chosen}
+                        onChange={(e) => updateRec(rec.itemId, { chosen: e.target.checked })}
+                        aria-label={`Apply the new cue for ${rec.title}`}
+                        className="qt-checkbox mt-1"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-sm font-medium qt-text">{rec.title}</span>
+                        <span className="text-xs qt-text-secondary">{rec.types.join(', ')}</span>
+                        <span className="qt-badge text-xs">{KIND_LABEL[rec.kind]}</span>
+                      </div>
+                      {rec.reason && <p className="text-xs qt-text-secondary mt-0.5">{rec.reason}</p>}
+                    </div>
+                  </div>
+                  <div className={stage === 'choose' ? 'ml-7 space-y-2' : 'space-y-2'}>
+                    <p className="text-xs qt-text-secondary">
+                      <span className="font-medium">Was:</span>{' '}
+                      {rec.currentPrompt ? rec.currentPrompt : <em>(blank)</em>}
+                    </p>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label htmlFor={fieldId} className="qt-label text-xs">
+                          New cue
+                        </label>
+                        <span className="text-xs qt-text-secondary">
+                          {rec.draft.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
+                        </span>
+                      </div>
+                      <input
+                        id={fieldId}
+                        type="text"
+                        value={rec.draft}
+                        maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
+                        disabled={applying}
+                        onChange={(e) => updateRec(rec.itemId, { draft: e.target.value })}
+                        className="qt-input text-sm w-full"
+                      />
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+    </BaseModal>
   )
 }

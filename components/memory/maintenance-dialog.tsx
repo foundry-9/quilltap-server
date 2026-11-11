@@ -1,11 +1,8 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -55,10 +52,6 @@ type Result = { kind: 'one'; report: MaintenanceReport } | { kind: 'many'; repor
 
 export function MaintenanceDialog({ characterId, characterName, onClose, onQueued }: MaintenanceDialogProps) {
   const queryClient = useQueryClient()
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-  useEscapeKey(onClose, true)
   const [target, setTarget] = useState<string>(characterId ?? '')
   const [phases, setPhases] = useState<Set<MaintenancePhase>>(() => new Set(PICKABLE_PHASES))
   const [capDraft, setCapDraft] = useState('')
@@ -131,126 +124,25 @@ export function MaintenanceDialog({ characterId, characterName, onClose, onQueue
     }
   }
 
-  if (typeof document === 'undefined') return null
-
-  return createPortal(
-    <div className="qt-dialog-overlay p-4 z-[100]">
-      <div
-        className="qt-dialog max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-      >
-        <div className="qt-dialog-header">
-          <div className="flex items-center justify-between">
-            <h2 id={titleId} className="qt-dialog-title">
-              Memory Maintenance{characterName ? ` — ${characterName}` : ''}
-            </h2>
-            <button type="button" onClick={onClose} className="qt-text-secondary hover:text-foreground" aria-label="Close">
-              <Icon name="close" className="w-6 h-6" />
-            </button>
-          </div>
-          <p className="qt-dialog-description">
-            Rehearse first, if you please: a dry run shows what each phase would do and writes not a word. The real run is
-            queued in the background and goes ahead whatever the switches on the settings card say.
-          </p>
-        </div>
-
-        <div className="qt-dialog-body border-b qt-border-default space-y-4">
-          {!characterId && (
-            <div className="space-y-1">
-              <label htmlFor="maintenance-target" className="block qt-text-label">
-                Character
-              </label>
-              <select
-                id="maintenance-target"
-                className="qt-select w-auto"
-                value={target}
-                disabled={running !== null}
-                onChange={(e) => {
-                  setTarget(e.target.value)
-                  setResult(null)
-                }}
-              >
-                <option value="">Choose a character&hellip;</option>
-                <option value={ALL}>Every character</option>
-                {characters.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({(c.demotable ?? c.memoryCount ?? 0).toLocaleString()} counted)
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <fieldset className="space-y-2">
-            <legend className="qt-text-label mb-1">Phases</legend>
-            {PICKABLE_PHASES.map((phase) => (
-              <label key={phase} className="flex items-start gap-3 qt-body">
-                <input
-                  type="checkbox"
-                  className="qt-checkbox mt-1"
-                  checked={phases.has(phase)}
-                  disabled={running !== null}
-                  onChange={() => togglePhase(phase)}
-                />
-                <span>
-                  <span>{PHASE_LABELS[phase]}</span>
-                  <span className="block qt-text-xs qt-text-muted">{PHASE_HINTS[phase]}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-
-          {phases.has('demote') && (
-            <div className="space-y-1">
-              <label htmlFor="maintenance-cap" className="block qt-text-label">
-                Cap for this run
-              </label>
-              <input
-                id="maintenance-cap"
-                type="number"
-                min={MEMORY_CAP_BOUNDS.min}
-                max={MEMORY_CAP_BOUNDS.max}
-                step={100}
-                placeholder="the configured cap"
-                value={capDraft}
-                disabled={running !== null}
-                onChange={(e) => {
-                  setCapDraft(e.target.value)
-                  setResult(null)
-                }}
-                className="qt-input w-40"
-              />
-              <p className="qt-text-xs qt-text-muted">
-                {capInvalid
-                  ? `Between ${MEMORY_CAP_BOUNDS.min.toLocaleString()} and ${MEMORY_CAP_BOUNDS.max.toLocaleString()}, if you please.`
-                  : 'Leave blank to use each character’s own cap (its override, else the global one).'}
-              </p>
-            </div>
-          )}
-
-          {dryRunBlocked && (
-            <p className="qt-text-xs qt-text-warning">
-              Consolidation calls a model, so it can be rehearsed for one character at a time.
-            </p>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          {error && <p className="qt-text-small qt-text-destructive mb-4">{error}</p>}
-          {running === 'dry' && <p className="qt-text-small qt-text-muted">Rehearsing&hellip;</p>}
-          {running === null && result?.kind === 'one' && <MaintenanceReportView report={result.report} />}
-          {running === null && result?.kind === 'many' && <MaintenanceReportsTable reports={result.reports} />}
-          {running === null && !result && !error && (
-            <p className="qt-text-small qt-text-muted">Choose the phases, then rehearse or send for the staff.</p>
-          )}
-        </div>
-
-        <div className="qt-dialog-footer flex justify-end gap-2">
+  return (
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      title={`Memory Maintenance${characterName ? ` — ${characterName}` : ''}`}
+      subtitle={
+        <>
+          Rehearse first, if you please: a dry run shows what each phase would do and writes not a word. The real run is
+          queued in the background and goes ahead whatever the switches on the settings card say.
+        </>
+      }
+      showCloseButton
+      maxWidth="3xl"
+      className="overflow-hidden"
+     
+      bodyClassName="flex-1 min-h-0 flex flex-col"
+      footerClassName="qt-dialog-footer flex justify-end gap-2"
+      footer={
+        <>
           <button type="button" onClick={onClose} className="qt-button qt-button-secondary">
             Close
           </button>
@@ -265,9 +157,99 @@ export function MaintenanceDialog({ characterId, characterName, onClose, onQueue
           <button type="button" className="qt-button qt-button-primary" disabled={!ready} onClick={() => void run(false)}>
             {running === 'real' ? 'Queuing…' : 'Run for real'}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="qt-dialog-body border-b qt-border-default space-y-4">
+        {!characterId && (
+          <div className="space-y-1">
+            <label htmlFor="maintenance-target" className="block qt-text-label">
+              Character
+            </label>
+            <select
+              id="maintenance-target"
+              className="qt-select w-auto"
+              value={target}
+              disabled={running !== null}
+              onChange={(e) => {
+                setTarget(e.target.value)
+                setResult(null)
+              }}
+            >
+              <option value="">Choose a character&hellip;</option>
+              <option value={ALL}>Every character</option>
+              {characters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({(c.demotable ?? c.memoryCount ?? 0).toLocaleString()} counted)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <fieldset className="space-y-2">
+          <legend className="qt-text-label mb-1">Phases</legend>
+          {PICKABLE_PHASES.map((phase) => (
+            <label key={phase} className="flex items-start gap-3 qt-body">
+              <input
+                type="checkbox"
+                className="qt-checkbox mt-1"
+                checked={phases.has(phase)}
+                disabled={running !== null}
+                onChange={() => togglePhase(phase)}
+              />
+              <span>
+                <span>{PHASE_LABELS[phase]}</span>
+                <span className="block qt-text-xs qt-text-muted">{PHASE_HINTS[phase]}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+
+        {phases.has('demote') && (
+          <div className="space-y-1">
+            <label htmlFor="maintenance-cap" className="block qt-text-label">
+              Cap for this run
+            </label>
+            <input
+              id="maintenance-cap"
+              type="number"
+              min={MEMORY_CAP_BOUNDS.min}
+              max={MEMORY_CAP_BOUNDS.max}
+              step={100}
+              placeholder="the configured cap"
+              value={capDraft}
+              disabled={running !== null}
+              onChange={(e) => {
+                setCapDraft(e.target.value)
+                setResult(null)
+              }}
+              className="qt-input w-40"
+            />
+            <p className="qt-text-xs qt-text-muted">
+              {capInvalid
+                ? `Between ${MEMORY_CAP_BOUNDS.min.toLocaleString()} and ${MEMORY_CAP_BOUNDS.max.toLocaleString()}, if you please.`
+                : 'Leave blank to use each character’s own cap (its override, else the global one).'}
+            </p>
+          </div>
+        )}
+
+        {dryRunBlocked && (
+          <p className="qt-text-xs qt-text-warning">
+            Consolidation calls a model, so it can be rehearsed for one character at a time.
+          </p>
+        )}
       </div>
-    </div>,
-    document.body,
+
+      <div className="flex-1 overflow-y-auto p-6">
+        {error && <p className="qt-text-small qt-text-destructive mb-4">{error}</p>}
+        {running === 'dry' && <p className="qt-text-small qt-text-muted">Rehearsing&hellip;</p>}
+        {running === null && result?.kind === 'one' && <MaintenanceReportView report={result.report} />}
+        {running === null && result?.kind === 'many' && <MaintenanceReportsTable reports={result.reports} />}
+        {running === null && !result && !error && (
+          <p className="qt-text-small qt-text-muted">Choose the phases, then rehearse or send for the staff.</p>
+        )}
+      </div>
+    </BaseModal>
   )
 }
