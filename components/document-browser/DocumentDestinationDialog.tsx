@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DestinationPickerDialog, type DestinationMode } from '@/components/item-browser/DestinationPickerDialog'
 import { queryKeys } from '@/lib/query/keys'
+import { useDocumentStoresQuery } from '@/lib/hooks/use-document-stores'
 import { apiFetch } from '@/lib/query/fetcher'
 import { deriveMountCapabilities } from '@/lib/mount-index/capabilities'
 import { canLinkBetween, capabilitiesOf, type BrowserStore } from '@/lib/folder-browser/document-actions'
@@ -27,12 +28,10 @@ interface StoreSummary extends BrowserStore {
 
 /** The stores a destination may be chosen from, with their capabilities derived. */
 export function useStoreCatalogue(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.mountPoints.list(),
-    queryFn: ({ signal }) => apiFetch<{ mountPoints: DocMountPoint[] }>('/api/v1/mount-points', { signal }),
+  return useDocumentStoresQuery<DocMountPoint, StoreSummary[]>({
     enabled,
-    select: (data): StoreSummary[] =>
-      data.mountPoints
+    select: (rows): StoreSummary[] =>
+      rows
         .map((mp) => ({
           id: mp.id,
           name: mp.name,

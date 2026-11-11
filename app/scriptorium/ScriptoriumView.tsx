@@ -6,7 +6,7 @@
  * Displays all document stores (mount points) with CRUD and scan actions.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useDocumentStores } from './hooks/useDocumentStores'
 import {
   DocumentStoresGrid,
@@ -64,14 +64,10 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
   } = useInTabDrilldown(initialStoreId)
   const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
-  useEffect(() => {
-    fetchStores()
-  }, [fetchStores])
-
-  // Navigating back to this tab refreshes the list in place (silent — no
-  // loading flip, which would unmount an in-place store detail).
+  // Navigating back to this tab refreshes the list in place (a cached list
+  // stays on screen, so an in-place store detail stays mounted).
   useOnTabActivated(() => {
-    void fetchStores({ silent: true })
+    void fetchStores()
   })
 
   const handleCreate = async (data: CreateDocumentStoreData) => {

@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Refactor: client server-state (phase 4: projects and document stores)
+
+- The Prospero project list and the Scriptorium store list read shared queries (`useProjectsQuery`, `lib/hooks/use-projects.ts`; `useDocumentStoresQuery`, `lib/hooks/use-document-stores.ts`) instead of component state, so the `projects` and `mountPoints` realtime topics now refresh them: a background scan, embedding pass or conversion shows without a tab switch. Creates and deletes invalidate the shared keys, so the New Chat dialog, the move-to-project and library pickers, Save Scenario, the container catalogue and the document destination dialog see them. The Scriptorium's optimistic scan and conversion states edit the cached list. New key prefix `queryKeys.projects.lists`.
+
 #### Refactor: client server-state (phase 4: profile, key and template lists)
 
 - The Settings "by kind" connection, embedding and image profile tabs read the shared list queries instead of private copies, and their writes (create, edit, delete, reorder, reset sort, auto-configure) invalidate the shared key. A profile created there now shows in every dropdown on the page and in the by-provider card at once; a deleted one disappears. The connection tab's `?t=` cache-buster and an unused function that fetched every chat to count messages are gone.

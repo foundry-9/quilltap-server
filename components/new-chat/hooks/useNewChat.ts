@@ -23,6 +23,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { withArchivedParam } from '@/components/scenarios/archived-query'
 import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { useConnectionProfilesQuery, useImageProfilesQuery, useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useRealtimeTopic } from '@/hooks/useRealtime'
@@ -311,10 +312,7 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
   })
   const profilesQuery = useConnectionProfilesQuery<ConnectionProfile>()
   const imageProfilesQuery = useImageProfilesQuery<ImageProfile>()
-  const projectsQuery = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) => apiFetch<{ projects: Project[] }>('/api/v1/projects', { signal }),
-  })
+  const projectsQuery = useProjectsQuery<Project>()
   const templatesQuery = useRoleplayTemplatesQuery<{ id: string; name: string; description?: string | null; isBuiltIn?: boolean }>()
   const { data: chatSettings } = useChatSettingsQuery()
 
@@ -323,7 +321,7 @@ export function useNewChat(options: UseNewChatOptions = {}): UseNewChatReturn {
   const imageProfiles = imageProfilesQuery.data ?? EMPTY_IMAGE_PROFILES
   const availableProjects = useMemo<ProjectListEntry[]>(
     () =>
-      (projectsQuery.data?.projects ?? EMPTY_PROJECTS).map((p) => ({ id: p.id, name: p.name, color: p.color ?? null })),
+      (projectsQuery.data ?? EMPTY_PROJECTS).map((p) => ({ id: p.id, name: p.name, color: p.color ?? null })),
     [projectsQuery.data],
   )
   const roleplayTemplates = useMemo<RoleplayTemplateOption[]>(

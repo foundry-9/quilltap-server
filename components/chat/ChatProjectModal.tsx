@@ -8,10 +8,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
 import { usePatchChat } from '@/lib/chat/use-patch-chat'
-import { queryKeys } from '@/lib/query/keys'
+import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { BaseModal } from '@/components/ui/BaseModal'
 
 interface Project {
@@ -49,12 +47,8 @@ export default function ChatProjectModal({
     setSelectedProjectId(initialProjectId ?? null)
   }, [initialProjectId])
 
-  const { data: projectsData, isLoading } = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) => apiFetch<{ projects: Project[] }>('/api/v1/projects', { signal }),
-    enabled: isOpen,
-  })
-  const projects = projectsData?.projects || []
+  const { data: projectsData, isLoading } = useProjectsQuery<Project>({ enabled: isOpen })
+  const projects = projectsData ?? []
 
   const handleProjectChange = async (projectId: string | null) => {
     // If same as current, just close
