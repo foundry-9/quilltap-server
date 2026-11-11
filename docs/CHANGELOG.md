@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Test: deterministic outfit-selection concurrency check
+
+- `applyOutfitSelections` "bounded by the slowest character" test no longer asserts a wall-clock bound (under 120 ms), which failed on a loaded CI runner with coverage on (231 ms). Each mocked selection now waits on a barrier that only opens once all four have started, so serial resolution fails and runner speed doesn't matter.
+
 #### Refactor: one substitute call in provider failover
 
 - Every failover stand-in (same-profile retry, the Concierge's uncensored understudy, each fallback-chain candidate) is called by `callSubstitute` (`lib/services/chat-message/provider-failover.service.ts`). It formats the turn's tools for the substitute's provider, re-applies the image transport budget and model params for it, streams it, and decides whether it answered.
