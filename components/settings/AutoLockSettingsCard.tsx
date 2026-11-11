@@ -1,17 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback, useId } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { logger } from '@/lib/logger'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { useChatSettingsMutation } from '@/hooks/useChatSettingsMutation'
+import { useDraft } from '@/lib/hooks/use-draft'
+import type { AutoLockSettings } from '@/components/settings/chat-settings/types'
 
-const log = logger.child({ component: 'AutoLockSettingsCard' })
-
-interface AutoLockConfig {
-  enabled: boolean
-  idleMinutes: number
-}
+const DEFAULT_AUTO_LOCK: AutoLockSettings = { enabled: false, idleMinutes: 15 }
 
 /**
  * AutoLockSettingsCard
@@ -21,102 +19,60 @@ interface AutoLockConfig {
  */
 export function AutoLockSettingsCard() {
   const id = useId()
-  const [hasPassphrase, setHasPassphrase] = useState<boolean | null>(null)
-  const [config, setConfig] = useState<AutoLockConfig>({ enabled: false, idleMinutes: 15 })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [saved, setSaved] = useState(false)
+  const queryClient = useQueryClient()
 
   const { data: unlockData } = useQuery({
     queryKey: queryKeys.system.unlock,
     queryFn: ({ signal }) => apiFetch<{ hasUserPassphrase: boolean }>('/api/v1/system/unlock', { signal }),
   })
-  const queryClient = useQueryClient()
-  const { data: settingsData } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<{ autoLockSettings?: AutoLockConfig }>('/api/v1/settings/chat', { signal }),
+  const hasPassphrase = unlockData ? unlockData.hasUserPassphrase ?? false : null
+
+  const { data: stored } = useChatSettingsQuery((settings) => settings.autoLockSettings)
+  const config = useMemo<AutoLockSettings>(
+    () => ({
+      enabled: stored?.enabled ?? DEFAULT_AUTO_LOCK.enabled,
+      idleMinutes: stored?.idleMinutes ?? DEFAULT_AUTO_LOCK.idleMinutes,
+    }),
+    [stored?.enabled, stored?.idleMinutes],
+  )
+  // The minutes field is typed into and saved on blur; a refetch while it is
+  // being edited leaves it alone.
+  const [minutesDraft, setMinutesDraft] = useDraft(String(config.idleMinutes))
+
+  const [saved, setSaved] = useState(false)
+  const { save, saving } = useChatSettingsMutation({
+    onSaved: () => {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+      // Notify the AutoLockProvider to re-read its settings.
+      window.dispatchEvent(new CustomEvent('quilltap-autolock-settings-changed'))
+    },
   })
 
   useEffect(() => {
-    if (unlockData) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
-      setHasPassphrase(unlockData.hasUserPassphrase ?? false)
-    }
-  }, [unlockData])
-
-  useEffect(() => {
-    if (settingsData?.autoLockSettings) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
-      setConfig({
-        enabled: settingsData.autoLockSettings.enabled ?? false,
-        idleMinutes: settingsData.autoLockSettings.idleMinutes ?? 15,
-      })
-    }
-  }, [settingsData])
-
-  useEffect(() => {
-    // Re-fetch when the passphrase changes (e.g., user sets or removes one)
+    // Setting or removing a passphrase changes whether this card applies.
     const handlePassphraseChanged = () => {
-      // SWR will automatically refetch on mount of this effect
+      void queryClient.invalidateQueries({ queryKey: queryKeys.system.unlock })
     }
     window.addEventListener('quilltap-passphrase-changed', handlePassphraseChanged)
     return () => window.removeEventListener('quilltap-passphrase-changed', handlePassphraseChanged)
-  }, [])
+  }, [queryClient])
 
-  const handleSave = async (newConfig: AutoLockConfig) => {
-    setSaving(true)
-    setError('')
-    setSaved(false)
-
-    try {
-
-      const res = await fetch('/api/v1/settings/chat', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          autoLockSettings: newConfig,
-        }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        log.warn('Failed to save auto-lock settings', { error: data.error })
-        setError(data.error || 'Failed to save auto-lock settings')
-        return
-      }
-
-      // Keep the shared settings row current, or a remount re-seeds the
-      // card from the pre-save copy.
-      queryClient.setQueryData(queryKeys.settings.chat, await res.json())
-      setConfig(newConfig)
-      setSaved(true)
-      log.info('Auto-lock settings saved successfully', { config: newConfig })
-      setTimeout(() => setSaved(false), 2000)
-
-      // Notify the AutoLockProvider to re-fetch settings
-      window.dispatchEvent(new CustomEvent('quilltap-autolock-settings-changed'))
-    } catch (err) {
-      log.error('Error saving auto-lock settings', err instanceof Error ? err : undefined)
-      setError('Failed to save auto-lock settings')
-    } finally {
-      setSaving(false)
-    }
+  const handleSave = (next: AutoLockSettings) => {
+    void save({ autoLockSettings: next }, { failure: 'Failed to save auto-lock settings' })
   }
 
   const handleToggle = (enabled: boolean) => {
     handleSave({ ...config, enabled })
   }
 
-  const handleMinutesChange = (value: string) => {
-    const minutes = parseInt(value, 10)
-    if (!isNaN(minutes) && minutes >= 1) {
-      setConfig(prev => ({ ...prev, idleMinutes: minutes }))
-    }
-  }
-
   const handleMinutesBlur = () => {
-    if (config.idleMinutes >= 1) {
-      handleSave(config)
+    const minutes = parseInt(minutesDraft, 10)
+    if (!isNaN(minutes) && minutes >= 1) {
+      if (minutes !== config.idleMinutes) handleSave({ ...config, idleMinutes: minutes })
+    } else {
+      // Not a usable number: put the stored value back rather than save it.
+      setMinutesDraft(String(config.idleMinutes))
     }
   }
 
@@ -160,8 +116,8 @@ export function AutoLockSettingsCard() {
             id={`${id}-minutes`}
             type="number"
             min={1}
-            value={config.idleMinutes}
-            onChange={(e) => handleMinutesChange(e.target.value)}
+            value={minutesDraft}
+            onChange={(e) => setMinutesDraft(e.target.value)}
             onBlur={handleMinutesBlur}
             onKeyDown={(e) => e.key === 'Enter' && handleMinutesBlur()}
             disabled={saving}
@@ -171,7 +127,6 @@ export function AutoLockSettingsCard() {
         </div>
       )}
 
-      {error && <p className="qt-alert qt-alert-error text-sm">{error}</p>}
       {saved && <p className="qt-text-xs qt-text-success">Settings saved</p>}
     </div>
   )

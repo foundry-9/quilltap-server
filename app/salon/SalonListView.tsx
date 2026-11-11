@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import { ChatCard } from '@/components/chat/ChatCard'
@@ -26,6 +28,7 @@ interface AutonomousRoomsListResponse {
 }
 
 export function SalonListView() {
+  const queryClient = useQueryClient()
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
@@ -47,16 +50,8 @@ export function SalonListView() {
         { signal }
       ),
   })
-  const { data: charactersData, isLoading: charactersLoading } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters', { signal }),
-  })
-  const { data: profilesData, isLoading: profilesLoading } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) =>
-      apiFetch<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles', { signal }),
-  })
+  const { data: charactersData, isLoading: charactersLoading } = useCharactersList<{ id: string; name: string; title?: string | null }>()
+  const { data: profilesData, isLoading: profilesLoading } = useConnectionProfilesQuery()
 
   // Whether the user actually owns any autonomous rooms — used to decide
   // whether to surface the "hidden" hint when the toggle is off. Cheap GET;
@@ -70,11 +65,11 @@ export function SalonListView() {
 
   const chats = useMemo(() => chatsData?.chats ?? [], [chatsData])
   const characters = useMemo(
-    () => (charactersData?.characters ?? []).map((c) => ({ id: c.id, name: c.name, title: c.title })),
+    () => (charactersData ?? []).map((c) => ({ id: c.id, name: c.name, title: c.title })),
     [charactersData]
   )
   const profiles = useMemo(
-    () => (profilesData?.profiles ?? []).map((p) => ({ id: p.id, name: p.name })),
+    () => (profilesData ?? []).map((p) => ({ id: p.id, name: p.name })),
     [profilesData]
   )
   const loading = chatsLoading || charactersLoading || profilesLoading
@@ -167,10 +162,12 @@ export function SalonListView() {
    * Handle import completion from the new wizard
    */
   const handleImportComplete = useCallback(async (chatId: string) => {
-    // Highlight the imported chat
+    // Re-read every chat list (it was missing until the next refetch), then
+    // highlight the imported chat.
+    await queryClient.invalidateQueries({ queryKey: queryKeys.chats.lists })
     setHighlightedChatId(chatId)
     setImportDialogOpen(false)
-  }, [])
+  }, [queryClient])
 
   if (loading) {
     return (

@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useId } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useState, useRef, useId } from 'react'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
@@ -50,14 +48,10 @@ export default function GenerateImageDialog({
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: charactersData } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters', { signal }),
-    enabled: isOpen,
-  })
+  const { data: charactersData } = useCharactersList<{ id: string; name: string }>(undefined, { enabled: isOpen })
 
-  const allEntities: EntityOption[] = charactersData?.characters
-    ? charactersData.characters
+  const allEntities: EntityOption[] = charactersData
+    ? charactersData
       .map((c) => ({
         id: c.id,
         name: c.name,

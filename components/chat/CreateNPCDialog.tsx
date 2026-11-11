@@ -13,9 +13,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useId } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -27,6 +27,8 @@ interface ConnectionProfile {
   provider: string
   modelName: string
 }
+
+const EMPTY_PROFILES: ConnectionProfile[] = []
 
 interface CreateNPCDialogProps {
   isOpen: boolean
@@ -41,32 +43,23 @@ export default function CreateNPCDialog({
   chatId,
   onNPCCreated,
 }: CreateNPCDialogProps) {
+  const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [physicalDescription, setPhysicalDescription] = useState('')
   const [scenario, setScenario] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
-  const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
+  // The operator's pick; until there is one, the first profile in the list.
+  const [pickedProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: profilesData, isLoading } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
-    enabled: isOpen,
-  })
-  const connectionProfiles = profilesData?.profiles || []
+  const { data: profilesData, isLoading } = useConnectionProfilesQuery<ConnectionProfile>({ enabled: isOpen })
+  const connectionProfiles = profilesData ?? EMPTY_PROFILES
 
-  // Auto-select first profile when data loads
-  useEffect(() => {
-    if (connectionProfiles.length > 0 && !selectedConnectionProfileId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream connectionProfiles changes (parent renders unconditionally)
-      setSelectedConnectionProfileId(connectionProfiles[0].id)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only initialize once; don't re-run when selectedConnectionProfileId is set
-  }, [connectionProfiles])
+  const selectedConnectionProfileId = pickedProfileId ?? connectionProfiles[0]?.id ?? null
 
   // Load connection profiles when dialog opens and focus name input
   useEffect(() => {
@@ -224,6 +217,8 @@ export default function CreateNPCDialog({
       }
 
       showSuccessToast(`NPC "${name}" created successfully`)
+      // Every character picker (Add Character, the Aurora list) shows the new NPC.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
 
       onNPCCreated(characterId)
       onClose()

@@ -211,7 +211,7 @@ Controls whether interactions with AI providers are logged and stored.
   - **Minimal** — Log only errors and usage stats
 
 - **Retention:**
-  - **Keep logs for** — How long logs are stored (7 days, 30 days, forever)
+  - **Keep logs for** — How many days logs are stored (0 for forever). The number is saved when you leave the field or press Enter; an emptied field keeps the previous value
   - **Auto-cleanup** — Automatically delete old logs
 
 **How to configure:**

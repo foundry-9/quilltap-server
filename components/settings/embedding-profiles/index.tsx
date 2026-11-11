@@ -22,8 +22,7 @@ export default function EmbeddingProfilesTab() {
     embeddingProviders,
     loading: initialLoading,
     error: loadError,
-    loadData,
-    fetchProfiles,
+    refreshProfiles,
     triggerAutoAssociate,
   } = useEmbeddingProfiles()
 
@@ -33,19 +32,13 @@ export default function EmbeddingProfilesTab() {
     openModal,
     closeModal: handleCloseModal,
     handleSuccess: handleModalSuccess,
-  } = useModalState<EmbeddingProfile>(() => fetchProfiles())
+  } = useModalState<EmbeddingProfile>(() => refreshProfiles())
 
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
     triggerAutoAssociate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Load initial data on mount only
-  useEffect(() => {
-    loadData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // loadData is stable
 
   const handleEdit = (profile: EmbeddingProfile) => openModal(profile)
   const handleOpenModal = () => openModal()
@@ -76,9 +69,7 @@ export default function EmbeddingProfilesTab() {
       {loadError && (
         <ErrorAlert
           message={loadError}
-          onRetry={() => {
-            window.location.reload()
-          }}
+          onRetry={() => void refreshProfiles()}
         />
       )}
 
@@ -86,7 +77,7 @@ export default function EmbeddingProfilesTab() {
       <ProfileList
         profiles={profiles}
         onEdit={handleEdit}
-        onProfilesChange={fetchProfiles}
+        onProfilesChange={refreshProfiles}
       />
 
       {/* Profile Modal - key ensures remount when switching profiles */}

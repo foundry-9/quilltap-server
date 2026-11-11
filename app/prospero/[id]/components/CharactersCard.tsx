@@ -15,11 +15,9 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
 import Avatar from '@/components/ui/Avatar'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import type { Project } from '../types'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
 import { Icon } from '@/components/ui/icon'
@@ -71,16 +69,12 @@ export function CharactersCard({
   }, [project.characterRoster, shouldHideByIds])
 
   // Every live (non-archived) character, fetched only while the picker is open.
-  const { data: charactersData, isLoading: charactersLoading } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: CharacterOption[] }>('/api/v1/characters', { signal }),
-    enabled: expanded && rosterEditable && pickerOpen,
-  })
+  const { data: charactersData, isLoading: charactersLoading } = useCharactersList<CharacterOption>(undefined, { enabled: expanded && rosterEditable && pickerOpen })
 
   const candidates = useMemo(() => {
     const onRoster = new Set(project.characterRoster.map(c => c.id))
     const term = search.trim().toLowerCase()
-    return (charactersData?.characters ?? [])
+    return (charactersData ?? [])
       .filter(c => !onRoster.has(c.id))
       .filter(c => !shouldHideByIds(c.tags || []))
       .filter(c => !term || c.name.toLowerCase().includes(term) || (c.title ?? '').toLowerCase().includes(term))

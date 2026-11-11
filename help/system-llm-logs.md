@@ -240,6 +240,7 @@ The card shows:
 - Configurable in Settings → Data & Maintenance → LLM Logging (default: 30 days)
 - Older logs are automatically cleaned up, and so are lines in [the Log](the-log.md) (the characters' shared book, kept in the same database), even when LLM logging is switched off
 - Set retention to 0 for indefinite storage
+- The number is put into effect when you leave the field or press Enter, not with every keystroke, so typing "60" over "30" does not briefly ask for six days. A field left empty, or holding something that is not a number, is quietly restored to its previous value rather than taken as 0 — a blank is not a request to keep everything forever. Values above 365 are trimmed to 365.
 
 **Log storage:**
 

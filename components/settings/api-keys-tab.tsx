@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useCallback, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { useApiKeysQuery } from '@/lib/hooks/use-profiles'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { useModalState } from '@/hooks/useModalState'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -16,21 +16,27 @@ import { useApiKeyActions } from './api-keys/hooks/useApiKeyActions'
 import { ExportKeysDialog } from './api-keys/ExportKeysDialog'
 import { ImportKeysDialog } from './api-keys/ImportKeysDialog'
 
+const EMPTY_KEYS: ApiKeyListItem[] = []
+
 export default function ApiKeysTab() {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
 
-  const { data, isLoading, error: loadError, refetch: mutateKeys } = useQuery({
-    queryKey: queryKeys.apiKeys.all,
-    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKeyListItem[]; count: number }>('/api/v1/api-keys', { signal }),
-  })
+  const queryClient = useQueryClient()
+  const { data, isLoading, error: loadError } = useApiKeysQuery<ApiKeyListItem>()
+  // A key written here refreshes every list that shows keys (the by-provider
+  // card, the profile modals' pickers, the attention strip).
+  const mutateKeys = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all }),
+    [queryClient],
+  )
   const {
     isOpen: isModalOpen,
     openModal: handleOpenModal,
     closeModal: handleCloseModal,
     handleSuccess: handleModalSuccess,
   } = useModalState(() => mutateKeys())
-  const apiKeys = data?.apiKeys ?? []
+  const apiKeys = data ?? EMPTY_KEYS
   const keyActions = useApiKeyActions(mutateKeys)
   const triggerAutoAssociate = useAutoAssociate()
 

@@ -4,6 +4,46 @@
 
 ### 4.13-dev
 
+#### Refactor: client server-state (phase 5: drafts and stale answers)
+
+- The chat's LLM tool settings dialog reset unsaved toggles on every chat refetch (an effect keyed on array identity). Its two lists are `useDraft`s over the chat's values, so a refetch with the same values keeps the toggles; Cancel discards them. Its tool list is a query (`queryKeys.tools.availability`).
+- Search as you type: the character memory list, a character's conversation list and the global search dialog put the term (and the dialog's type filter) in the query key, so a slow answer for an earlier term can no longer replace the current one. The memory and conversation lists keep the previous page on screen while the next loads; the search dialog pages with `useInfiniteQuery`. New keys `memories.list`, `characters.chats` / `chatLists`, `uiSearch`. The memory list had no guard at all; the dialog's guarded the term but not the filter.
+- LLM log retention saved on every keystroke: typing "60" over "30" saved 6 first, and emptying the field saved 0, which means unlimited. It now saves on blur or Enter, restores the saved value for an empty or non-numeric entry, and clamps to 0–365. Help updated.
+- Importing a chat from the Salon list now refreshes the list; it highlighted a chat that was not shown until the next refetch.
+- `GenerateImageView` derives its character options instead of copying them into state; the eslint-disable reasons in touched files no longer cite SWR.
+
+#### Refactor: client server-state (phase 4: plugins; saved values re-seeded)
+
+- The Plugins tab reads the registry, the installed list, the deployment shape and the upgrade check as queries (`usePluginsQuery`, `lib/hooks/use-plugins.ts`; keys `plugins.list` / `installed` / `upgrades`, `system.deployment`) instead of eleven pieces of component state. Enable, disable, install, uninstall, upgrade and a config save invalidate `plugins.all`, which also refreshes the attention strip's plugin-error count.
+- The plugin config dialog's form is a `useDraft` over the cached config, and a save writes the saved config back into the cache. Reopening within the stale time showed, and could re-save, the pre-save values.
+- The memory recall card writes the saved settings into `memories.recallConfig`, for the same reason.
+
+#### Refactor: client server-state (phase 4: the character list)
+
+- New `useCharactersList(filters)` (`lib/hooks/use-characters-list.ts`): the one read of `GET /api/v1/characters`. Its filters (`controlledBy`, `archived`, `npc`) are the endpoint's query parameters and are folded into `queryKeys.characters.list(filters)`. Eleven inline `queryFn`s (New Chat, the Salon list, Add Character, Compose Mail, Generate Image, the mention typeahead, the spellcheck feed, Save Scenario, the container catalogue, the project roster card, the entity search), the persona reads (`useUserCharacterDisplayName`, the character page's user-character list), the Aurora roster, and four effect loaders (group members, the image detail modal, Insert Announcement, search-and-replace scope) now use it, so a character created or archived anywhere shows in all of them.
+- The shared list hooks' `select` wrapper (`useEnvelopeSelect`) is stable while the caller's `select` is, so TanStack memoises its result (`useUserCharacterDisplayName` depends on a stable `Set`).
+
+#### Refactor: client server-state (phase 4: projects and document stores)
+
+- The Prospero project list and the Scriptorium store list read shared queries (`useProjectsQuery`, `lib/hooks/use-projects.ts`; `useDocumentStoresQuery`, `lib/hooks/use-document-stores.ts`) instead of component state, so the `projects` and `mountPoints` realtime topics now refresh them: a background scan, embedding pass or conversion shows without a tab switch. Creates and deletes invalidate the shared keys, so the New Chat dialog, the move-to-project and library pickers, Save Scenario, the container catalogue and the document destination dialog see them. The Scriptorium's optimistic scan and conversion states edit the cached list. New key prefix `queryKeys.projects.lists`.
+
+#### Refactor: client server-state (phase 4: profile, key and template lists)
+
+- The Settings "by kind" connection, embedding and image profile tabs read the shared list queries instead of private copies, and their writes (create, edit, delete, reorder, reset sort, auto-configure) invalidate the shared key. A profile created there now shows in every dropdown on the page and in the by-provider card at once; a deleted one disappears. The connection tab's `?t=` cache-buster and an unused function that fetched every chat to count messages are gone.
+- Every reader of `/api/v1/connection-profiles`, `/image-profiles`, `/embedding-profiles`, `/api-keys` and `/roleplay-templates` goes through `lib/hooks/use-profiles.ts`: the New Chat dialog, the Salon sidebar and list, Add Character, Create NPC, the participant controls, the wardrobe image panes, the project Model Behavior card, the API keys tab, the attention strip, the External Prompt and AI Wizard / AI Import flows, and the Select Profile, Insert Announcement and Impersonation Voice dialogs. `hooks/useConnectionProfiles` is a `select` over the shared list. `ImageProfilePicker` keeps its server-side sort and reads `queryKeys.imageProfiles.sorted(...)`, under the `image-profiles` prefix.
+- Create NPC: the new character now appears in the character pickers (it did not invalidate the character list). Its connection profile defaults to the first in the list without an effect.
+- The API keys tab invalidates the shared key list after a write, so the profile modals' key pickers see a new key.
+
+#### Refactor: client server-state (phases 1–3)
+
+- #170: project instructions typed before a tab switch, a roster change or a realtime hint were overwritten by the refetch, and Save then wrote the old text. New `useDraft(serverValue)` (`lib/hooks/use-draft.ts`) holds a form's draft and adopts a new server value only while the draft is clean, or when the server value already equals it. `useProjectDetail` reads the project through `queryKeys.projects.detail` and keeps two drafts: the header (name, description) and the instructions, each saving only its own fields. The instructions Save is disabled while nothing has changed. The unused `SettingsTab` component is gone.
+- #176: "Announce Generated Images" in the Salon sidebar sent `alertCharactersOfLanternImages` at the top level of the chat update, where it was stripped, so it never saved. It now goes under `chat`. `chatUpdateRequestSchema` is strict: an unknown top-level key is a 400.
+- New `usePatchChat(chatId)` (`lib/chat/use-patch-chat.ts`) over `putChatUpdate` / `patchChat` (`lib/chat/patch-chat.ts`, now typed from the route's schemas): toasts the server's error, runs `onSaved`, and invalidates the chat's detail, the chat lists and `chats.project(id)`. The sidebar's template, image profile, Lantern, clock and Concierge selects, `ChatRenameModal` and `ChatProjectModal` write through it; moving a chat to another project now refreshes an open wardrobe's project tier, which had `staleTime: Infinity` and was never invalidated.
+- New `useChatSettingsMutation()` / `putChatSettings` (`hooks/useChatSettingsMutation.ts`): the one writer of `PUT /api/v1/settings/chat`. It applies the patch to the cached row at once, writes the server row on success, and on failure rolls back, re-reads and toasts the server's sentence. Failed settings saves were console-only.
+- `useChatSettings` (831 lines) is a table of `set(key)` / `merge(key, defaults)` setters over the mutation (228 lines). Nested merges read the cached row at call time, so two quick changes to one object no longer lose each other.
+- The Auto-Lock card, the Core whisper card, the roleplay-template default picker, the Avatar Display provider and the setup wizard write through the mutation. The Avatar Display provider reads the style from the shared settings query, so `syncStyle` / `syncAvatarDisplayStyle` are gone. The Auto-Lock minutes field keeps its typed value across a refetch, and an unusable number restores the saved one instead of being saved. A passphrase change now refreshes the card (the listener was a no-op).
+- New list hooks in `lib/hooks/use-profiles.ts`: `useConnectionProfilesQuery`, `useImageProfilesQuery`, `useEmbeddingProfilesQuery`, `useApiKeysQuery`, `useRoleplayTemplatesQuery`, each the one `useQuery` for its endpoint with a caller-supplied `select`, plus `useInvalidateProfileLists`. The setup wizard invalidates the profile and key lists when it finishes.
+
 #### Refactor: one Salon stream lifecycle
 
 - #172: Enter in the composer during a Continue, nudge, opening or storyteller run started a second turn stream over the first. `useSSEStreaming` now holds one in-flight claim (`isStreamInFlight`) that every lifecycle takes and checks; a send refused by it shows the "still speaking" toast and leaves the text in the composer. The composer's Enter path and Send button ask the same question. A claim is released only by its own stream's `finally` (or by Stop's local abandon), so an abandoned stream cannot clear a newer one's.

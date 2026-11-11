@@ -4,6 +4,8 @@
  */
 
 import type { ProviderInfo } from './useProviderWizardState'
+import { putChatSettings, type ChatSettingsPatch } from '@/hooks/useChatSettingsMutation'
+import { apiErrorMessage } from '@/lib/query/fetcher'
 
 // ============================================================================
 // Provider Discovery
@@ -259,14 +261,12 @@ export async function updateChatSettings(cheapLLMSettings: {
   /** The connection profile a USER_DEFINED strategy uses. */
   userDefinedProfileId?: string
 }): Promise<void> {
-  const res = await fetch('/api/v1/settings/chat', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cheapLLMSettings }),
-  })
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw new Error(data.error || 'Failed to update chat settings')
+  // The one settings request (`putChatSettings`); the wizard runs before any
+  // settings view has cached the row, so there is no cache entry to update.
+  try {
+    await putChatSettings({ cheapLLMSettings } as ChatSettingsPatch)
+  } catch (err) {
+    throw new Error(apiErrorMessage(err, 'Failed to update chat settings'))
   }
 }
 

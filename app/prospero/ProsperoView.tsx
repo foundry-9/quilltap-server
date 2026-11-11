@@ -6,7 +6,7 @@
  * Displays all user projects with counts and actions.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
@@ -37,14 +37,10 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
     setSelectedId: setSelectedProjectId,
   } = useInTabDrilldown(initialProjectId)
 
-  useEffect(() => {
-    fetchProjects()
-  }, [fetchProjects])
-
-  // Navigating back to this tab refreshes the list in place (silent — no
-  // loading flip, which would unmount an in-place project detail).
+  // Navigating back to this tab refreshes the list in place (a cached list
+  // stays on screen, so an in-place project detail stays mounted).
   useOnTabActivated(() => {
-    void fetchProjects({ silent: true })
+    void fetchProjects()
   })
 
   const handleCreate = async (name: string, description: string | null) => {

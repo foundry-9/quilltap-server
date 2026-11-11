@@ -2614,6 +2614,8 @@ Get a chat with full message history. The read writes nothing: the housekeeping 
 
 Update chat metadata. `conciergeState` (`'moderated' | 'unmoderated' | 'locked'`) changes the chat's Concierge posture through `applyConciergeFlip`, which writes the state and provenance and posts the Concierge's announcement; it is a no-op when nothing would change, and silently re-attributes an Unmoderated chat to the operator when the operator confirms the Concierge's switch. The retired four-state values are a `400`.
 
+The body is `{ chat?, updateParticipant?, addParticipant?, removeParticipantId?, roleplayTemplateId?, imageProfileId?, conciergeState?, turnMode? }`, validated by the strict `chatUpdateRequestSchema`: any other top-level key is a `400`. Chat fields (`title`, `alertCharactersOfLanternImages`, `timelineMode`, the layout fields, …) go under `chat`; sent at the top level they used to be stripped silently (#176). The top-level `roleplayTemplateId` and `imageProfileId` check that the row exists (`404` otherwise). Client code writes through `patchChat` / `putChatUpdate` (`lib/chat/patch-chat.ts`), or `usePatchChat` in a component.
+
 #### `DELETE /api/v1/chats/[id]`
 
 Delete a chat (cascades to messages).

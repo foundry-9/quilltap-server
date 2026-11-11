@@ -106,10 +106,10 @@ export interface Project {
   updatedAt: string
 }
 
-export interface EditForm {
+/** The header's draft: the two fields its Edit form saves. */
+export interface HeaderDraft {
   name: string
   description: string
-  instructions: string
 }
 
 export type TabType = 'chats' | 'files' | 'characters' | 'settings'

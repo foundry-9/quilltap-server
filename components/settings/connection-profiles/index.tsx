@@ -20,12 +20,11 @@ export default function ConnectionProfilesTab() {
     apiKeys,
     providers,
     cheapDefaultProfileId,
-    fetchOp,
-    deleteOp,
-    fetchProfiles,
-    fetchApiKeys,
-    fetchProviders,
-    fetchChatSettings,
+    loading,
+    error,
+    deleting,
+    refreshProfiles,
+    refreshAfterSave,
     handleDelete,
     triggerAutoAssociate,
     reorderProfiles,
@@ -41,19 +40,9 @@ export default function ConnectionProfilesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Initialize data on mount - only run once
-  useEffect(() => {
-    fetchProfiles()
-    fetchApiKeys()
-    fetchProviders()
-    fetchChatSettings()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   const handleModalSuccess = useCallback(() => {
-    fetchProfiles()
-    fetchApiKeys()
-  }, [fetchProfiles, fetchApiKeys])
+    void refreshAfterSave()
+  }, [refreshAfterSave])
 
   // The modal, its form and its editing target (shared with the provider view)
   const { openNew, openEdit, modal } = useConnectionProfileModal({
@@ -83,25 +72,25 @@ export default function ConnectionProfilesTab() {
         showErrorToast(result.error || 'Auto-configure failed')
       } else {
         showSuccessToast('Profile auto-configured successfully')
-        fetchProfiles()
+        void refreshProfiles()
       }
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Auto-configure failed')
     } finally {
       setAutoConfiguringId(null)
     }
-  }, [fetchProfiles])
+  }, [refreshProfiles])
 
-  if (fetchOp.loading) {
+  if (loading) {
     return <LoadingState message="Loading connection profiles..." />
   }
 
   return (
     <div>
-      {fetchOp.error && (
+      {error && (
         <ErrorAlert
-          message={fetchOp.error}
-          onRetry={() => fetchProfiles()}
+          message={error}
+          onRetry={() => void refreshProfiles()}
           className="mb-4"
         />
       )}
@@ -122,7 +111,7 @@ export default function ConnectionProfilesTab() {
         providers={providers}
         showForm={false}
         deleteConfirming={deleteConfirming}
-        isDeleting={deleteOp.loading}
+        isDeleting={deleting}
         onEdit={openEdit}
         onDelete={handleDeleteClick}
         onDeleteConfirmChange={setDeleteConfirming}

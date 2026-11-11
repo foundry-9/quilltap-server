@@ -14,6 +14,8 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+import { useProjectsQuery } from '@/lib/hooks/use-projects'
 
 export interface CatalogueEntry {
   id: string
@@ -37,22 +39,16 @@ export interface ContainerCatalogue {
 const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name)
 
 export function useContainerCatalogue(): ContainerCatalogue {
-  const characters = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters?: CatalogueCharacter[] }>('/api/v1/characters', { signal }),
-  })
-  const projects = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) => apiFetch<{ projects?: CatalogueEntry[] }>('/api/v1/projects', { signal }),
-  })
+  const characters = useCharactersList<CatalogueCharacter>()
+  const projects = useProjectsQuery<CatalogueEntry>()
   const groups = useQuery({
     queryKey: queryKeys.groups.list(),
     queryFn: ({ signal }) => apiFetch<{ groups?: CatalogueEntry[] }>('/api/v1/groups', { signal }),
   })
   return {
-    characters: useMemo(() => [...(characters.data?.characters ?? [])].sort(byName), [characters.data]),
+    characters: useMemo(() => [...(characters.data ?? [])].sort(byName), [characters.data]),
     projects: useMemo(
-      () => (projects.data?.projects ?? []).map((p) => ({ id: p.id, name: p.name || 'Untitled project' })).sort(byName),
+      () => (projects.data ?? []).map((p) => ({ id: p.id, name: p.name || 'Untitled project' })).sort(byName),
       [projects.data],
     ),
     groups: useMemo(

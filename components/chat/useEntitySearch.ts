@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useState, useRef } from 'react'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 export interface EntityOption {
@@ -17,14 +15,10 @@ export function useEntitySearch(isOpen: boolean) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: charactersData } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters', { signal }),
-    enabled: isOpen,
-  })
+  const { data: charactersData } = useCharactersList<{ id: string; name: string }>(undefined, { enabled: isOpen })
 
-  const allEntities: EntityOption[] = charactersData?.characters
-    ? charactersData.characters
+  const allEntities: EntityOption[] = charactersData
+    ? charactersData
       .map((c) => ({
         id: c.id,
         name: c.name,

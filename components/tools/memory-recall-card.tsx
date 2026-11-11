@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { apiFetch } from '@/lib/query/fetcher'
@@ -49,6 +49,7 @@ const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
  * recall path; see lib/memory/recall-tags.ts.
  */
 export function MemoryRecallCard() {
+  const queryClient = useQueryClient()
   const id = useId()
   const [config, setConfig] = useState<RecallConfig>(DEFAULT_CONFIG)
   const [saving, setSaving] = useState(false)
@@ -89,6 +90,9 @@ export function MemoryRecallCard() {
         throw new Error(data.error || 'Failed to save recall settings')
       }
       const data = await response.json()
+      // Re-seed the cached read, so a remount within the stale time shows
+      // (and could re-save) the saved values rather than the pre-save ones.
+      queryClient.setQueryData(queryKeys.memories.recallConfig, data)
       setConfig({ ...DEFAULT_CONFIG, ...data.settings })
       showSuccessToast('Recall settings saved')
     } catch (err) {

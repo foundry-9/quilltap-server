@@ -7,7 +7,11 @@
  * Shows availability status for context-dependent tools.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useDraft } from '@/lib/hooks/use-draft'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ToolSettingsContent } from '@/components/tools/tool-settings'
@@ -24,6 +28,13 @@ interface ChatToolSettingsModalProps {
   onSuccess?: (newDisabledTools: string[], newDisabledToolGroups: string[]) => void
 }
 
+const EMPTY_TOOLS: AvailableTool[] = []
+
+/** A list as a stable, comparable value (order and duplicates do not matter). */
+function sortedUnique(values: Iterable<string>): string[] {
+  return Array.from(new Set(values)).sort()
+}
+
 export default function ChatToolSettingsModal({
   isOpen,
   onClose,
@@ -33,43 +44,30 @@ export default function ChatToolSettingsModal({
   profileToolsDisabled = false,
   onSuccess,
 }: Readonly<ChatToolSettingsModalProps>) {
-  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([])
-  const [localDisabledTools, setLocalDisabledTools] = useState<Set<string>>(new Set(disabledTools))
-  const [localDisabledGroups, setLocalDisabledGroups] = useState<Set<string>>(new Set(disabledToolGroups))
-  const [loading, setLoading] = useState(true)
+  const { data: availableTools = EMPTY_TOOLS, isLoading: loading, error: toolsError } = useQuery({
+    queryKey: queryKeys.tools.availability(chatId),
+    // chatId gives availability for the context-dependent tools.
+    queryFn: ({ signal }) =>
+      apiFetch<{ tools?: AvailableTool[] }>(`/api/v1/tools?chatId=${encodeURIComponent(chatId)}`, { signal }),
+    select: (data) => data.tools ?? EMPTY_TOOLS,
+    enabled: isOpen,
+  })
+  useEffect(() => {
+    if (toolsError) showErrorToast('Failed to load available tools')
+  }, [toolsError])
+
+  // Drafts of the chat's two lists. A chat refetch hands in new arrays with
+  // the same values; the draft adopts a server change only while the
+  // operator has not edited, so unsaved toggles survive it.
+  const serverTools = useMemo(() => sortedUnique(disabledTools), [disabledTools])
+  const serverGroups = useMemo(() => sortedUnique(disabledToolGroups), [disabledToolGroups])
+  const [draftTools, setDraftTools, toolsDraft] = useDraft(serverTools)
+  const [draftGroups, setDraftGroups, groupsDraft] = useDraft(serverGroups)
+  const localDisabledTools = useMemo(() => new Set(draftTools), [draftTools])
+  const localDisabledGroups = useMemo(() => new Set(draftGroups), [draftGroups])
+  const setLocalDisabledTools = useCallback((next: Set<string>) => setDraftTools(sortedUnique(next)), [setDraftTools])
+  const setLocalDisabledGroups = useCallback((next: Set<string>) => setDraftGroups(sortedUnique(next)), [setDraftGroups])
   const [saving, setSaving] = useState(false)
-
-  // Fetch available tools when modal opens
-  useEffect(() => {
-    if (!isOpen) return
-
-    const fetchTools = async () => {
-      setLoading(true)
-      try {
-        // Pass chatId to get availability info for context-dependent tools
-        const response = await fetch(`/api/v1/tools?chatId=${encodeURIComponent(chatId)}`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch tools')
-        }
-        const data = await response.json()
-        setAvailableTools(data.tools || [])
-      } catch (error) {
-        showErrorToast('Failed to load available tools')
-        console.error('Error fetching tools:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTools()
-  }, [isOpen, chatId])
-
-  // Reset local state when props change (modal always mounted)
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- form state must re-sync when parent updates (parent renders unconditionally)
-    setLocalDisabledTools(new Set(disabledTools))
-    setLocalDisabledGroups(new Set(disabledToolGroups))
-  }, [disabledTools, disabledToolGroups])
 
   // Save changes
   const handleSave = useCallback(async () => {
@@ -100,30 +98,19 @@ export default function ChatToolSettingsModal({
     }
   }, [chatId, localDisabledTools, localDisabledGroups, onSuccess, onClose])
 
-  // Check for changes
-  const hasChanges = useCallback(() => {
-    const originalToolSet = new Set(disabledTools)
-    const originalGroupSet = new Set(disabledToolGroups)
+  const hasChanges = () => toolsDraft.dirty || groupsDraft.dirty
 
-    // Check tool differences
-    if (originalToolSet.size !== localDisabledTools.size) return true
-    for (const tool of localDisabledTools) {
-      if (!originalToolSet.has(tool)) return true
-    }
-
-    // Check group differences
-    if (originalGroupSet.size !== localDisabledGroups.size) return true
-    for (const group of localDisabledGroups) {
-      if (!originalGroupSet.has(group)) return true
-    }
-
-    return false
-  }, [disabledTools, disabledToolGroups, localDisabledTools, localDisabledGroups])
+  // Dismissing discards the unsaved toggles (the modal stays mounted).
+  const handleDismiss = () => {
+    toolsDraft.reset()
+    groupsDraft.reset()
+    onClose()
+  }
 
   return (
     <BaseModal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleDismiss}
       title="LLM Tool Settings"
     >
       <div className="qt-dialog-body">
@@ -151,7 +138,7 @@ export default function ChatToolSettingsModal({
       <div className="qt-dialog-footer">
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleDismiss}
           className="qt-button-secondary"
           disabled={saving}
         >

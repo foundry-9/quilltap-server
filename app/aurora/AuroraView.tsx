@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
 import dynamic from 'next/dynamic'
@@ -119,17 +119,12 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     () => queryKeys.characters.list(showArchived ? { archived: 'include' } : undefined),
     [showArchived]
   )
-  const { data, isLoading: loading, error: loadError } = useQuery({
-    queryKey: charactersListKey,
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: Character[] }>(
-        showArchived ? '/api/v1/characters?archived=include' : '/api/v1/characters',
-        { signal }
-      ),
-  })
-  // Shim preserving SWR's `mutate` signature so the handlers below stay
-  // unchanged: with an updater it writes optimistically (revalidating unless
-  // `{ revalidate: false }`), with no args it revalidates.
+  const { data, isLoading: loading, error: loadError } = useCharactersList<Character>(
+    showArchived ? { archived: 'include' } : undefined,
+  )
+  // Cache writer for the handlers below: with an updater it edits the cached
+  // list (`charactersListKey` is the key `useCharactersList` reads) and
+  // revalidates unless `{ revalidate: false }`; with no args it revalidates.
   const mutateCharacters = useCallback(
     async (
       updater?: (prev: { characters: Character[] } | undefined) => { characters: Character[] } | undefined,
@@ -147,7 +142,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     },
     [queryClient, charactersListKey]
   )
-  const characters = useMemo(() => data?.characters ?? [], [data])
+  const characters = useMemo(() => data ?? [], [data])
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null
 
   const visibleCharacters = useMemo(

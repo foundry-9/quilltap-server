@@ -10,7 +10,8 @@
  *  - an empty draft cannot be sent or restated.
  */
 
-import { screen, fireEvent, render } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 import React from 'react'
 import ImpersonationVoiceDialog from '@/components/chat/ImpersonationVoiceDialog'
 
@@ -54,7 +55,7 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof Impersonati
     onCancel: jest.fn(),
     ...overrides,
   }
-  render(<ImpersonationVoiceDialog {...props} />)
+  renderWithQuery(<ImpersonationVoiceDialog {...props} />)
   return props
 }
 

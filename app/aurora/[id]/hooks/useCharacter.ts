@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useRealtimeTopic } from '@/hooks/useRealtime'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import type {
   Character,
@@ -77,23 +78,20 @@ export function useCharacterStats(characterId: string) {
   }
 }
 
-interface UserCharactersResponse {
-  characters?: Array<{ id: string; name: string; title?: string | null }>
+function toUserControlledCharacters(
+  rows: Array<{ id: string; name: string; title?: string | null }>,
+): UserControlledCharacter[] {
+  return rows.map((c) => ({ id: c.id, name: c.name, title: c.title ?? null }))
 }
 
 const EMPTY_USER_CHARACTERS: UserControlledCharacter[] = []
 
 export function useCharacterPageSupport() {
   const { profiles } = useConnectionProfiles()
-  const userCharacters = useQuery({
-    // The same key (and URL) `useUserCharacterDisplayName` reads, without its
-    // `select`, so the two share one fetch.
-    queryKey: queryKeys.characters.list({ controlledBy: 'user' }),
-    queryFn: ({ signal }) =>
-      apiFetch<UserCharactersResponse>('/api/v1/characters?controlledBy=user', { signal }),
-  })
-  const userControlledCharacters: UserControlledCharacter[] = userCharacters.data?.characters
-    ? userCharacters.data.characters.map((c) => ({ id: c.id, name: c.name, title: c.title ?? null }))
-    : EMPTY_USER_CHARACTERS
+  // The same list `useUserCharacterDisplayName` reads, so the two share one fetch.
+  const { data: userControlledCharacters = EMPTY_USER_CHARACTERS } = useCharactersList<
+    { id: string; name: string; title?: string | null },
+    UserControlledCharacter[]
+  >({ controlledBy: 'user' }, { select: toUserControlledCharacters })
   return { profiles, userControlledCharacters }
 }
