@@ -9,7 +9,7 @@
  * POST /api/v1/connection-profiles?action=reset-sort - Reset sort order to default
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { supportsImageGeneration } from '@/lib/llm/image-capable';
@@ -20,18 +20,17 @@ import { supportsMimeType as providerSupportsMimeType } from '@/lib/llm/attachme
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { badRequest, serverError, notFound, successResponse, created, conflict } from '@/lib/api/responses';
-import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill';
 import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
-import { parseMaxImagesPerRequest, parseToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils';
 import {
-  DEFAULT_MAX_IMAGES_PER_REQUEST,
-  DEFAULT_TOOL_RESULT_VERBATIM_TURNS,
-  MAX_IMAGES_PER_REQUEST_CEILING,
-  TOOL_RESULT_VERBATIM_TURNS_CEILING,
-} from '@/lib/schemas/profile.types';
+  ConnectionProfileCreateSchema,
+  applyCourierForcing,
+  checkConnectionProfileReferences,
+  withoutNullCounters,
+} from '@/lib/llm/connection-profile-input';
+import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -150,236 +149,108 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
 });
 
 /**
- * Create a new connection profile
+ * Create a new connection profile. The body is `ConnectionProfileCreateSchema`
+ * (a malformed one is the middleware's 400); the rules that need the database
+ * are `checkConnectionProfileReferences`, shared with the update.
  */
 async function handleCreate(req: NextRequest, context: RequestContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const {
-      name,
-      transport = 'api',
-      courierDeltaMode = true,
-      provider,
-      apiKeyId,
-      baseUrl,
-      modelName,
-      parameters = {},
-      isDefault = false,
-      isCheap = false,
-      isDangerousCompatible = false,
-      allowWebSearch = false,
-      useNativeWebSearch = false,
-      allowToolUse = true,
-      pseudoToolMode = 'auto',
-      modelClass = null,
-      maxContext = null,
-      supportsImageUpload,
-      multiCharacterPrefill,
-      fallbackProfileId = null,
-      allowTierFallback = false,
-      maxImagesPerRequest,
-      toolResultVerbatimTurns,
-    } = body;
+  const input = ConnectionProfileCreateSchema.parse(await req.json());
+  const isCourier = input.transport === 'courier';
 
-    if (transport !== 'api' && transport !== 'courier') {
-      return badRequest('Transport must be "api" or "courier"');
-    }
-    const isCourier = transport === 'courier';
-
-    if (multiCharacterPrefill !== undefined && typeof multiCharacterPrefill !== 'boolean') {
-      return badRequest('multiCharacterPrefill must be a boolean');
-    }
-
-    if (typeof allowTierFallback !== 'boolean') {
-      return badRequest('allowTierFallback must be a boolean');
-    }
-
-    let resolvedMaxImagesPerRequest = DEFAULT_MAX_IMAGES_PER_REQUEST;
-    if (maxImagesPerRequest !== undefined && maxImagesPerRequest !== null) {
-      const parsedMaxImages = parseMaxImagesPerRequest(maxImagesPerRequest);
-      if (parsedMaxImages === null) {
-        return badRequest(`maxImagesPerRequest must be a whole number from 1 to ${MAX_IMAGES_PER_REQUEST_CEILING}`);
-      }
-      resolvedMaxImagesPerRequest = parsedMaxImages;
-    }
-
-    let resolvedToolResultVerbatimTurns = DEFAULT_TOOL_RESULT_VERBATIM_TURNS;
-    if (toolResultVerbatimTurns !== undefined && toolResultVerbatimTurns !== null) {
-      const parsedVerbatimTurns = parseToolResultVerbatimTurns(toolResultVerbatimTurns);
-      if (parsedVerbatimTurns === null) {
-        return badRequest(`toolResultVerbatimTurns must be a whole number from 0 to ${TOOL_RESULT_VERBATIM_TURNS_CEILING}`);
-      }
-      resolvedToolResultVerbatimTurns = parsedVerbatimTurns;
-    }
-
-    // The fallback chain's named understudy. A brand-new profile has no id
-    // yet, so the self-reference rule can't bite here; what can is a target
-    // that isn't the user's, or one whose transport is Courier — a request a
-    // human carries by hand is no kind of automatic failover.
-    let resolvedFallbackProfileId: string | null = null;
-    if (fallbackProfileId !== null && fallbackProfileId !== '') {
-      if (typeof fallbackProfileId !== 'string') {
-        return badRequest('fallbackProfileId must be a profile id or null');
-      }
-      const fallbackTarget = await repos.connections.findById(fallbackProfileId);
-      if (!fallbackTarget || fallbackTarget.userId !== user.id) {
-        return badRequest('Fallback profile not found');
-      }
-      if (fallbackTarget.transport === 'courier') {
-        return badRequest(
-          'A Courier profile cannot be used as a fallback — its requests are carried by hand, so it cannot stand in automatically'
-        );
-      }
-      resolvedFallbackProfileId = fallbackProfileId;
-    }
-    // Clients that don't send the field get the resolved default — off for
-    // Anthropic (4.6+ rejects an assistant tail) and off for a profile that
-    // will run a thinking turn (bug 85), on everywhere else.
-    const resolvedMultiCharacterPrefill =
-      typeof multiCharacterPrefill === 'boolean'
-        ? multiCharacterPrefill
-        : defaultMultiCharacterPrefill(
-            provider,
-            profileRunsThinkingTurn(provider, modelName, parameters)
-          );
-
-    // Default supportsImageUpload from the historic per-provider capability map
-    // so clients that don't send the field keep their current behavior on providers
-    // that used to be hardcoded vision-capable.
-    const resolvedSupportsImageUpload =
-      typeof supportsImageUpload === 'boolean'
-        ? supportsImageUpload
-        : providerSupportsMimeType(provider, 'image/jpeg', baseUrl || undefined);
-
-    // Validation
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return badRequest('Name is required');
-    }
-
-    if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
-      return badRequest('Provider is required');
-    }
-
-    if (!modelName || typeof modelName !== 'string' || modelName.trim().length === 0) {
-      return badRequest('Model name is required');
-    }
-
-    // Connection-profile names must be unique per user (case-insensitive,
-    // trimmed) — the name is the load-bearing identifier in the participant
-    // picker. The DB also enforces this via a unique index; this check yields
-    // a friendly 409 before we hit the constraint.
-    const existingProfiles = await repos.connections.findByUserId(user.id);
-    const normalizedName = normalizeProfileName(name);
-    if (existingProfiles.some((p) => normalizeProfileName(p.name) === normalizedName)) {
-      logger.debug('Rejected duplicate connection-profile name on create', {
-        userId: user.id,
-        name: name.trim(),
-      });
-      return conflict(`A connection profile named "${name.trim()}" already exists`);
-    }
-
-    // Validate apiKeyId if provided. Courier profiles never carry an apiKey.
-    if (apiKeyId && !isCourier) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
-
-      if (!apiKey) {
-        return notFound('API key');
-      }
-
-      if (apiKey.provider !== provider) {
-        return badRequest('API key provider does not match profile provider');
-      }
-    }
-
-    // Validate modelClass if provided
-    if (modelClass !== null && modelClass !== undefined && modelClass !== '') {
-      if (!isValidModelClassName(modelClass)) {
-        return badRequest(`Invalid model class: ${modelClass}`);
-      }
-    }
-
-    // Validate maxContext if provided
-    if (maxContext !== null && maxContext !== undefined) {
-      const parsed = typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext;
-      if (!Number.isInteger(parsed) || parsed <= 0) {
-        return badRequest('maxContext must be a positive integer');
-      }
-    }
-
-    // Validate baseUrl for providers that need it. Courier never needs a base URL.
-    if (!isCourier && requiresBaseUrl(provider) && !baseUrl) {
-      return badRequest(`Base URL is required for ${provider}`);
-    }
-
-    // If setting as default, unset other defaults
-    if (isDefault) {
-      for (const existingProfile of existingProfiles) {
-        if (existingProfile.isDefault) {
-          await repos.connections.update(existingProfile.id, { isDefault: false });
-        }
-      }
-    }
-
-    // Auto-assign sortIndex to max existing + 1
-    const maxSortIndex = existingProfiles.reduce(
-      (max, p) => Math.max(max, p.sortIndex ?? 0),
-      -1
-    );
-
-    // Create profile. Courier profiles force tool/web-search/vision flags off
-    // regardless of what the client sent — the external LLM can't reach them.
-    const profile = await repos.connections.create({
-      userId: user.id,
-      name: name.trim(),
-      transport,
-      courierDeltaMode: isCourier ? courierDeltaMode !== false : true,
-      provider: provider,
-      apiKeyId: isCourier ? null : (apiKeyId || null),
-      baseUrl: isCourier ? null : (baseUrl || null),
-      modelName: modelName.trim(),
-      parameters: parameters,
-      isDefault,
-      isCheap,
-      isDangerousCompatible: isCourier ? false : isDangerousCompatible,
-      allowWebSearch: isCourier ? false : allowWebSearch,
-      useNativeWebSearch: isCourier ? false : useNativeWebSearch,
-      allowToolUse: isCourier ? false : allowToolUse,
-      pseudoToolMode: isCourier ? 'auto' : (
-        pseudoToolMode === 'native' || pseudoToolMode === 'simple-json' || pseudoToolMode === 'text-block'
-          ? pseudoToolMode
-          : 'auto'
-      ),
-      multiCharacterPrefill: resolvedMultiCharacterPrefill,
-      fallbackProfileId: resolvedFallbackProfileId,
-      allowTierFallback,
-      modelClass: modelClass || null,
-      maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
-      supportsImageUpload: isCourier ? false : resolvedSupportsImageUpload,
-      maxImagesPerRequest: resolvedMaxImagesPerRequest,
-      toolResultVerbatimTurns: resolvedToolResultVerbatimTurns,
-      tags: [],
-      sortIndex: maxSortIndex + 1,
-      totalTokens: 0,
-      totalPromptTokens: 0,
-      totalCompletionTokens: 0,
-      messageCount: 0,
-    });
-
-    // Enrich with API key info
-    const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
-
-    logger.info('[Connection Profiles v1] Profile created', {
-      profileId: profile.id,
-      provider: profile.provider,
-    });
-
-    return created({ profile: { ...profile, apiKey } });
-  } catch (error) {
-    logger.error('[Connection Profiles v1] Error creating profile', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create connection profile');
+  const refusal = await checkConnectionProfileReferences(input, context, {
+    provider: input.provider,
+    isCourier,
+  });
+  if (refusal) {
+    return refusal.status === 404 ? notFound('API key') : badRequest(refusal.message);
   }
+
+  // Validate baseUrl for providers that need it. Courier never needs a base URL.
+  if (!isCourier && requiresBaseUrl(input.provider) && !input.baseUrl) {
+    return badRequest(`Base URL is required for ${input.provider}`);
+  }
+
+  // Connection-profile names must be unique per user (case-insensitive,
+  // trimmed) — the name is the load-bearing identifier in the participant
+  // picker. The DB also enforces this via a unique index; this check yields
+  // a friendly 409 before we hit the constraint.
+  const existingProfiles = await repos.connections.findByUserId(user.id);
+  const normalizedName = normalizeProfileName(input.name);
+  if (existingProfiles.some((p) => normalizeProfileName(p.name) === normalizedName)) {
+    logger.debug('Rejected duplicate connection-profile name on create', { userId: user.id, name: input.name });
+    return conflict(`A connection profile named "${input.name}" already exists`);
+  }
+
+  // Clients that don't send the field get the resolved default — off for
+  // Anthropic (4.6+ rejects an assistant tail) and off for a profile that
+  // will run a thinking turn (bug 85), on everywhere else.
+  const multiCharacterPrefill =
+    typeof input.multiCharacterPrefill === 'boolean'
+      ? input.multiCharacterPrefill
+      : defaultMultiCharacterPrefill(
+          input.provider,
+          profileRunsThinkingTurn(input.provider, input.modelName, input.parameters)
+        );
+
+  // Default supportsImageUpload from the historic per-provider capability map
+  // so clients that don't send the field keep their current behavior on
+  // providers that used to be hardcoded vision-capable.
+  const supportsImageUpload =
+    typeof input.supportsImageUpload === 'boolean'
+      ? input.supportsImageUpload
+      : providerSupportsMimeType(input.provider, 'image/jpeg', input.baseUrl || undefined);
+
+  // If setting as default, unset other defaults
+  if (input.isDefault) {
+    for (const existingProfile of existingProfiles) {
+      if (existingProfile.isDefault) {
+        await repos.connections.update(existingProfile.id, { isDefault: false });
+      }
+    }
+  }
+
+  // Auto-assign sortIndex to max existing + 1; a sent one is not honoured.
+  const maxSortIndex = existingProfiles.reduce((max, p) => Math.max(max, p.sortIndex ?? 0), -1);
+  const { sortIndex: _ignoredSortIndex, ...fields } = withoutNullCounters(input);
+
+  // Courier profiles force tool/web-search/vision flags off regardless of
+  // what the client sent — the external LLM can't reach them.
+  const profile = await repos.connections.create({
+    ...applyCourierForcing(
+      {
+        ...fields,
+        apiKeyId: fields.apiKeyId ?? null,
+        baseUrl: fields.baseUrl ?? null,
+        fallbackProfileId: fields.fallbackProfileId ?? null,
+        modelClass: fields.modelClass ?? null,
+        maxContext: fields.maxContext ?? null,
+        multiCharacterPrefill,
+        supportsImageUpload,
+        maxImagesPerRequest: fields.maxImagesPerRequest ?? DEFAULT_MAX_IMAGES_PER_REQUEST,
+        toolResultVerbatimTurns: fields.toolResultVerbatimTurns ?? DEFAULT_TOOL_RESULT_VERBATIM_TURNS,
+      },
+      isCourier
+    ),
+    userId: user.id,
+    tags: [],
+    sortIndex: maxSortIndex + 1,
+    totalTokens: 0,
+    totalPromptTokens: 0,
+    totalCompletionTokens: 0,
+    messageCount: 0,
+  });
+
+  const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
+
+  logger.info('[Connection Profiles v1] Profile created', {
+    profileId: profile.id,
+    provider: profile.provider,
+    transport: profile.transport,
+  });
+
+  return created({ profile: { ...profile, apiKey } });
 }
 
 /**

@@ -13,6 +13,9 @@ import { createContextParamsHandler, enrichProfile } from '@/lib/api/middleware'
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { notFound, badRequest, serverError, messageResponse, successResponse, conflict } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { z } from 'zod';
+import { EmbeddingProfileUpdateSchema } from '@/lib/embedding/embedding-profile-input';
+import { apiKeyExists } from '@/lib/schemas/profile-input';
 import { invalidateAllEmbeddings } from '@/lib/embedding/embedding-service';
 import {
   enqueueEmbeddingRefit,
@@ -53,121 +56,33 @@ export const GET = createContextParamsHandler<{ id: string }>(
 export const PUT = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {
-
-      // Verify ownership
       const existingProfile = await repos.embeddingProfiles.findById(id);
-
       if (!existingProfile) {
         return notFound('Embedding profile');
       }
 
-      const body = await req.json();
-      const {
-        name,
-        provider,
-        apiKeyId,
-        baseUrl,
-        modelName,
-        dimensions,
-        truncateToDimensions,
-        normalizeL2,
-        isDefault,
-      } = body;
+      // A malformed body is the middleware's 400 (rethrown below).
+      const patch = EmbeddingProfileUpdateSchema.parse(await req.json());
+      const { provider, modelName, dimensions, truncateToDimensions, isDefault } = patch;
 
-      // Build update data
-      const updateData: Record<string, unknown> = {};
-
-      if (name !== undefined) {
-        if (typeof name !== 'string' || name.trim().length === 0) {
-          return badRequest('Name must be a non-empty string');
-        }
-
-        // Check for duplicate name (excluding current profile)
-        const duplicateProfile = await repos.embeddingProfiles.findByName(user.id, name.trim());
-
+      if (patch.name !== undefined) {
+        const duplicateProfile = await repos.embeddingProfiles.findByName(user.id, patch.name);
         if (duplicateProfile && duplicateProfile.id !== id) {
           return conflict('An embedding profile with this name already exists');
         }
-
-        updateData.name = name.trim();
       }
 
-      if (provider !== undefined) {
-        if (typeof provider !== 'string' || provider.trim().length === 0) {
-          return badRequest('Provider must be a non-empty string');
-        }
-        updateData.provider = provider;
+      if (!(await apiKeyExists(patch.apiKeyId, repos))) {
+        return notFound('API key');
       }
 
-      if (apiKeyId !== undefined) {
-        if (apiKeyId === null) {
-          updateData.apiKeyId = null;
-        } else {
-          const apiKey = await repos.connections.findApiKeyById(apiKeyId);
-          if (!apiKey) {
-            return notFound('API key');
-          }
-          updateData.apiKeyId = apiKeyId;
-        }
-      }
-
-      if (baseUrl !== undefined) {
-        updateData.baseUrl = baseUrl || null;
-      }
-
-      if (modelName !== undefined) {
-        if (typeof modelName !== 'string' || modelName.trim().length === 0) {
-          return badRequest('Model name must be a non-empty string');
-        }
-        updateData.modelName = modelName.trim();
-      }
-
-      if (dimensions !== undefined) {
-        if (dimensions === null) {
-          updateData.dimensions = null;
-        } else if (typeof dimensions !== 'number' || dimensions <= 0) {
-          return badRequest('Dimensions must be a positive number');
-        } else {
-          updateData.dimensions = dimensions;
-        }
-      }
-
-      if (truncateToDimensions !== undefined) {
-        if (truncateToDimensions === null) {
-          updateData.truncateToDimensions = null;
-        } else if (
-          typeof truncateToDimensions !== 'number' ||
-          !Number.isInteger(truncateToDimensions) ||
-          truncateToDimensions <= 0
-        ) {
-          return badRequest('truncateToDimensions must be a positive integer');
-        } else {
-          updateData.truncateToDimensions = truncateToDimensions;
-        }
-      }
-
-      if (normalizeL2 !== undefined) {
-        if (typeof normalizeL2 !== 'boolean') {
-          return badRequest('normalizeL2 must be a boolean');
-        }
-        updateData.normalizeL2 = normalizeL2;
-      }
-
-      if (isDefault !== undefined) {
-        if (typeof isDefault !== 'boolean') {
-          return badRequest('isDefault must be a boolean');
-        }
-
-        // If setting as default, unset other defaults
-        if (isDefault) {
-          await repos.embeddingProfiles.unsetAllDefaults(user.id);
-        }
-
-        updateData.isDefault = isDefault;
+      // If setting as default, unset other defaults
+      if (isDefault) {
+        await repos.embeddingProfiles.unsetAllDefaults(user.id);
       }
 
       // Update the profile
-      const updatedProfile = await repos.embeddingProfiles.update(id, updateData);
+      const updatedProfile = await repos.embeddingProfiles.update(id, patch);
 
       if (!updatedProfile) {
         return serverError('Failed to update profile');
@@ -185,7 +100,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
       // default and is now non-conforming wholesale) — not just provider/
       // model/dimension edits to an already-default profile.
       const providerChanged = provider !== undefined && provider !== existingProfile.provider;
-      const modelChanged = modelName !== undefined && modelName.trim() !== existingProfile.modelName;
+      const modelChanged = modelName !== undefined && modelName !== existingProfile.modelName;
       const dimensionsChanged =
         dimensions !== undefined && (dimensions ?? null) !== (existingProfile.dimensions ?? null);
       const becameDefault = isDefault === true && !existingProfile.isDefault;
@@ -255,6 +170,8 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         reembeddingTriggered: needsFullReindex || (truncateChanged && updatedProfile.isDefault),
       });
     } catch (error) {
+      // A validation failure is the middleware's 400, not a 500 (#166).
+      if (error instanceof z.ZodError) throw error;
       logger.error('[Embedding Profiles v1] Error updating profile', { profileId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to update embedding profile');
     }

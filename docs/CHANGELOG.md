@@ -4,7 +4,7 @@
 
 ### 4.13-dev
 
-#### Refactor: API inputs validated by schemas (phases 1–2)
+#### Refactor: API inputs validated by schemas (phases 1–3)
 
 - #165: SillyTavern character export (JSON and PNG) and chat JSONL export returned 500 for a name with characters above U+00FF and broke on a `"`. They, the theme export, the backup download and the two `system/tools` downloads now build `Content-Disposition` with `buildContentDisposition`. A grep-test forbids a hand-spelled `filename=` header.
 - #166: an invalid body to `POST`/`DELETE /api/v1/projects/[id]/mount-points`, `PATCH /api/v1/mount-points/[id]` or `?action=close-document` was a 500; the `ZodError` now reaches the middleware, which answers 400.
@@ -12,6 +12,10 @@
 - #168: `POST /api/v1/messages/[id]?action=swipe` with a malformed `swipeIndex` returns 400 instead of running a regeneration; `DELETE` validates `memoryAction` against the enum instead of casting it.
 - `PUT /api/v1/settings/chat` validates with `ChatSettingsPutSchema` (`patchSchemaOf(ChatSettingsSchema)`, strict, server-owned columns omitted). The 36-argument validator, the hand `ACCEPTED_KEYS` set and the 400-or-500 choice by `errorMessage.includes('Invalid')` are gone. Nested objects validate against their full sub-schema, so a `null` or malformed nested object is refused and unknown nested keys are dropped. `avatarDisplayStyle` must be `CIRCULAR` or `RECTANGULAR`; `contextCompressionSettings` is held to its schema's bounds.
 - `patchSchemaOf` also strips a `.default()` under an `.optional()` or `.nullable()`. `sidebarWidth: z.number().default(256).optional()` kept its default, so any chat-settings patch would have reset the sidebar width.
+- Connection profile create and update validate with `ConnectionProfileCreateSchema` / `ConnectionProfileUpdateSchema` (`lib/llm/connection-profile-input.ts`, derived from `ConnectionProfileSchema`, strict); the fallback and API-key rules are one `checkConnectionProfileReferences` and Courier forcing is one `applyCourierForcing`. Create now refuses a `null` or string `parameters`, a non-boolean flag, a string `courierDeltaMode` and an unknown `pseudoToolMode` (previously stored, coerced, or silently turned into `auto`). About 330 lines left the two routes.
+- Image and embedding profiles likewise (`lib/image-gen/image-profile-input.ts`, `lib/embedding/embedding-profile-input.ts`), on shared identity fields in `lib/schemas/profile-input.ts`. An image-profile update with an empty `apiKeyId` cleared it instead of answering 404; an embedding profile's `provider` is checked against its enum instead of cast. The embedding profile editor sends `null` for a cleared key, URL or dimension count; it sent `undefined`, which JSON drops, so an edit could never clear them.
+- `validationError` responses carry a `message` summarising the issues (`name: Name is required`); `fetchJson` and the image profile form show it instead of "Validation error" (`readErrorMessage`, `lib/fetch-helpers.ts`).
+- `jest.setup.ts` stubs `requiresBaseUrl` beside the other provider-validation questions.
 
 #### Refactor: the job queue's dedupe rule and the query translator's quiet failures
 

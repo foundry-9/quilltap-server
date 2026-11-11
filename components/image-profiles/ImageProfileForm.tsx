@@ -1,5 +1,6 @@
 'use client'
 
+import { readErrorMessage } from '@/lib/fetch-helpers'
 import { useState, useEffect, useCallback, useId } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ImageLoraSpec, ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types'
@@ -394,7 +395,7 @@ export function ImageProfileForm({
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Failed to save image profile')
+        throw new Error(readErrorMessage(data) || 'Failed to save image profile')
       }
 
       onSuccess?.()

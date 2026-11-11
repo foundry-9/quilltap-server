@@ -10,9 +10,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
+import { successResponse, created, notFound, badRequest, serverError, conflict } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import type { EmbeddingProfileProvider } from '@/lib/schemas/types';
+import { EmbeddingProfileCreateSchema } from '@/lib/embedding/embedding-profile-input';
+import { apiKeyExists } from '@/lib/schemas/profile-input';
 import {
   getEmbeddingProviders,
   getEmbeddingModels,
@@ -251,111 +252,51 @@ async function handleListModels(req: NextRequest, context: RequestContext) {
  * POST /api/v1/embedding-profiles - Create a new embedding profile
  */
 export const POST = createContextHandler(async (req, { user, repos }) => {
-  try {
-    const body = await req.json();
-    const {
-      name,
-      provider,
-      apiKeyId,
-      baseUrl,
-      modelName,
-      dimensions,
-      truncateToDimensions,
-      normalizeL2,
-      isDefault = false,
-    } = body;
+  // A malformed body is the middleware's 400.
+  const input = EmbeddingProfileCreateSchema.parse(await req.json());
 
-
-    // Validation
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return badRequest('Name is required');
-    }
-
-    if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
-      return badRequest('Provider is required');
-    }
-
-    if (!modelName || typeof modelName !== 'string' || modelName.trim().length === 0) {
-      return badRequest('Model name is required');
-    }
-
-    if (dimensions !== undefined && dimensions !== null && (typeof dimensions !== 'number' || dimensions <= 0)) {
-      return badRequest('Dimensions must be a positive number');
-    }
-
-    if (
-      truncateToDimensions !== undefined &&
-      truncateToDimensions !== null &&
-      (typeof truncateToDimensions !== 'number' || !Number.isInteger(truncateToDimensions) || truncateToDimensions <= 0)
-    ) {
-      return badRequest('truncateToDimensions must be a positive integer');
-    }
-
-    if (normalizeL2 !== undefined && typeof normalizeL2 !== 'boolean') {
-      return badRequest('normalizeL2 must be a boolean');
-    }
-
-    // Validate apiKeyId if provided
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
-      if (!apiKey) {
-        return notFound('API key');
-      }
-    }
-
-    // Check for duplicate name
-    const existingProfile = await repos.embeddingProfiles.findByName(user.id, name.trim());
-    if (existingProfile) {
-      return NextResponse.json(
-        { error: 'An embedding profile with this name already exists' },
-        { status: 409 }
-      );
-    }
-
-    // If setting as default, unset other defaults
-    if (isDefault) {
-      await repos.embeddingProfiles.unsetAllDefaults(user.id);
-    }
-
-    // Create profile
-    const profile = await repos.embeddingProfiles.create({
-      userId: user.id,
-      name: name.trim(),
-      provider: provider as EmbeddingProfileProvider,
-      apiKeyId: apiKeyId || null,
-      baseUrl: baseUrl || null,
-      modelName: modelName.trim(),
-      dimensions: dimensions || null,
-      truncateToDimensions: truncateToDimensions ?? null,
-      normalizeL2: normalizeL2 ?? true,
-      isDefault,
-      tags: [],
-    });
-
-    // Enrich with API key info
-    const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
-
-    logger.info('[Embedding Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
-
-    // If this is a default profile, trigger help doc embedding immediately
-    if (profile.isDefault) {
-      try {
-        const { enqueueEmbeddingReindexAll } = await import('@/lib/background-jobs/queue-service');
-        await enqueueEmbeddingReindexAll(user.id, { profileId: profile.id });
-        logger.info('[Embedding Profiles v1] Triggered initial embedding for new default profile', {
-          profileId: profile.id,
-        });
-      } catch (embeddingError) {
-        logger.warn('[Embedding Profiles v1] Failed to trigger initial embedding', {
-          profileId: profile.id,
-          error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
-        });
-      }
-    }
-
-    return created({ ...profile, apiKey });
-  } catch (error) {
-    logger.error('[Embedding Profiles v1] Error creating profile', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create embedding profile');
+  if (!(await apiKeyExists(input.apiKeyId, repos))) {
+    return notFound('API key');
   }
+
+  if (await repos.embeddingProfiles.findByName(user.id, input.name)) {
+    return conflict('An embedding profile with this name already exists');
+  }
+
+  // If setting as default, unset other defaults
+  if (input.isDefault) {
+    await repos.embeddingProfiles.unsetAllDefaults(user.id);
+  }
+
+  const profile = await repos.embeddingProfiles.create({
+    ...input,
+    userId: user.id,
+    apiKeyId: input.apiKeyId ?? null,
+    baseUrl: input.baseUrl ?? null,
+    dimensions: input.dimensions ?? null,
+    truncateToDimensions: input.truncateToDimensions ?? null,
+    tags: [],
+  });
+
+  const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
+
+  logger.info('[Embedding Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
+
+  // If this is a default profile, trigger help doc embedding immediately
+  if (profile.isDefault) {
+    try {
+      const { enqueueEmbeddingReindexAll } = await import('@/lib/background-jobs/queue-service');
+      await enqueueEmbeddingReindexAll(user.id, { profileId: profile.id });
+      logger.info('[Embedding Profiles v1] Triggered initial embedding for new default profile', {
+        profileId: profile.id,
+      });
+    } catch (embeddingError) {
+      logger.warn('[Embedding Profiles v1] Failed to trigger initial embedding', {
+        profileId: profile.id,
+        error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
+      });
+    }
+  }
+
+  return created({ ...profile, apiKey });
 });

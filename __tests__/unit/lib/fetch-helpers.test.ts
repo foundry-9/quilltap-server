@@ -3,7 +3,7 @@
  * Tests HTTP utilities for safe JSON fetching and parsing
  */
 
-import { safeJsonParse, fetchJson } from '@/lib/fetch-helpers';
+import { safeJsonParse, fetchJson, readErrorMessage } from '@/lib/fetch-helpers';
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -344,3 +344,25 @@ describe('fetchJson', () => {
     });
   });
 });
+
+describe('readErrorMessage', () => {
+  it('shows what a validation failure was about, not its category', () => {
+    expect(readErrorMessage({ error: 'Validation error', message: 'name: Name is required' })).toBe('name: Name is required')
+  })
+
+  it('falls back to error otherwise', () => {
+    expect(readErrorMessage({ error: 'Validation error' })).toBe('Validation error')
+    expect(readErrorMessage({ error: 'Not found', message: 'ignored' })).toBe('Not found')
+    expect(readErrorMessage(null)).toBeUndefined()
+  })
+
+  it('is what fetchJson reports', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ error: 'Validation error', message: 'modelName: Model name is required' }),
+    })
+    const result = await fetchJson('/x')
+    expect(result.error).toBe('modelName: Model name is required')
+  })
+})

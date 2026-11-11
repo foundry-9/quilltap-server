@@ -881,6 +881,8 @@ either provider keeps the prefill, which is the stronger anchor.
 
 `PUT` accepts the same field and rejects a non-boolean with `400`.
 
+**Validation.** The body is `ConnectionProfileCreateSchema` (`lib/llm/connection-profile-input.ts`), derived from `ConnectionProfileSchema` and **strict**: an unknown key, a wrong type (a `null` or string `parameters`, a string boolean), an unknown `pseudoToolMode` or `modelClass`, or a non-positive `maxContext` is a `400` from the middleware, with `message` naming the field. `name`, `provider` and `modelName` are trimmed and required. `''` clears `apiKeyId`, `baseUrl`, `fallbackProfileId` and `modelClass`; `maxContext` of `0` or `''` means none; numeric strings are accepted for the number fields. A sent `sortIndex` is validated and ignored (the server appends the profile). A `transport: 'courier'` profile has `apiKeyId`, `baseUrl`, tools, web search, image upload and `isDangerousCompatible` forced off and `pseudoToolMode` forced to `auto`. An `apiKeyId` that names no key is a `404`; a key for another provider, or a bad `fallbackProfileId`, is a `400` (`checkConnectionProfileReferences`, shared with `PUT`).
+
 #### `GET /api/v1/connection-profiles/[id]`
 
 Get a specific profile. Rejects an unrecognised `?action=` with `400` rather
@@ -899,7 +901,7 @@ entity's `get-tags` action shares so the shape cannot drift between them.
 
 #### `PUT /api/v1/connection-profiles/[id]`
 
-Update a profile.
+Update a profile. The body is `ConnectionProfileUpdateSchema` — `patchSchemaOf` the same input object, strict: any subset of the `POST` fields plus `sortIndex` (a non-negative integer). An absent key is left alone and `null` clears a nullable column; `null` for `maxImagesPerRequest` or `toolResultVerbatimTurns` means "not sent", since both always hold a number. The same reference rules as `POST` apply, plus "not its own fallback". Courier forcing applies whenever the transport after the write is `courier`.
 
 #### `DELETE /api/v1/connection-profiles/[id]`
 
@@ -992,7 +994,9 @@ List embedding profiles.
 
 Create an embedding profile.
 
-**Supported Providers**: `OPENAI`, `OLLAMA`, `OPENROUTER`
+**Supported Providers**: `OPENAI`, `OLLAMA`, `OPENROUTER`, `NANOGPT`, `BUILTIN` (`EmbeddingProfileProviderEnum`; any other value is a `400`).
+
+**Validation.** The body is `EmbeddingProfileCreateSchema` (`lib/embedding/embedding-profile-input.ts`), strict: `name`, `provider`, `modelName` (trimmed, required), `apiKeyId` and `baseUrl` (`''` or `null` clears), `dimensions` (positive or `null`), `truncateToDimensions` (positive integer or `null`), `normalizeL2` (default `true`), `isDefault`. `PUT` takes any subset (`patchSchemaOf`): an absent key is left alone, `null` clears.
 
 #### `GET /api/v1/embedding-profiles/[id]`
 
@@ -1061,7 +1065,7 @@ List image generation profiles.
 
 #### `POST /api/v1/image-profiles`
 
-Create an image profile.
+Create an image profile. The body is `ImageProfileCreateSchema` (`lib/image-gen/image-profile-input.ts`), strict: `name`, `provider`, `modelName` (trimmed, required), `apiKeyId` / `baseUrl` (`''` clears), `parameters` (an object; a malformed reserved `loras` list is a `400` with the issue under `parameters.loras`), `isDefault`, `isDangerousCompatible`. An unavailable provider is a `400`; an `apiKeyId` that names no key is a `404`.
 
 **Request Body**:
 
@@ -1322,7 +1326,7 @@ Get a specific image profile.
 
 #### `PUT /api/v1/image-profiles/[id]`
 
-Update an image profile.
+Update an image profile. Any subset of the `POST` fields (`ImageProfileUpdateSchema`, `patchSchemaOf` the create shape, strict): an absent key is left alone, `null` or `''` clears `apiKeyId` / `baseUrl`, and `parameters.loras` is validated as on create.
 
 #### `DELETE /api/v1/image-profiles/[id]`
 
