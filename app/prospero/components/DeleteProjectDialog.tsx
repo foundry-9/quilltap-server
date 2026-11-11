@@ -24,7 +24,7 @@ export function DeleteProjectDialog({ open, onClose, onConfirm }: DeleteProjectD
       maxWidth="md"
       className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
       bodyClassName="p-6 overflow-y-auto"
-      overlayClassName="p-4"
+     
     >
       <ModalTitle className="mb-4 qt-heading-4 text-foreground">Delete Project</ModalTitle>
       <p className="mb-4 qt-text-small">

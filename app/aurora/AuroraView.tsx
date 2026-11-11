@@ -630,7 +630,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
         maxWidth="md"
         className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
         bodyClassName="p-6 overflow-y-auto"
-        overlayClassName="character-import-dialog p-4"
+        overlayClassName="character-import-dialog"
       >
         <ModalTitle className="mb-4 qt-dialog-title text-foreground">
           Import from SillyTavern
@@ -677,7 +677,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
         maxWidth="md"
         className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
         bodyClassName="p-6 overflow-y-auto"
-        overlayClassName="character-import-dialog p-4"
+        overlayClassName="character-import-dialog"
       >
         <ModalTitle className="mb-3 qt-dialog-title text-foreground">
           Reset Built-in Characters
@@ -715,7 +715,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
         maxWidth="4xl"
         className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
         bodyClassName="p-6 overflow-y-auto"
-        overlayClassName="character-import-dialog p-4"
+        overlayClassName="character-import-dialog"
         closeOnClickOutside={false}
       >
         <div className="flex items-center justify-between mb-4">
@@ -756,7 +756,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
         maxWidth="md"
         className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
         bodyClassName="p-6 overflow-y-auto"
-        overlayClassName="p-4"
+       
         closeOnClickOutside={false}
       >
         <ModalTitle className="mb-4 qt-dialog-title text-foreground">

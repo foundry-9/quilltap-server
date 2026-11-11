@@ -60,7 +60,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
       headerless
       className="p-6"
       bodyClassName="overflow-y-auto"
-      overlayClassName="p-4"
+     
       closeOnClickOutside={false}
     >
       <ModalTitle className="qt-dialog-title mb-4">Add Document Store</ModalTitle>

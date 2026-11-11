@@ -26,7 +26,7 @@ export function DeleteDocumentStoreDialog({ open, onClose, onConfirm }: DeleteDo
       maxWidth="md"
       className="p-6"
       bodyClassName="overflow-y-auto"
-      overlayClassName="p-4"
+     
     >
       <ModalTitle className="qt-dialog-title mb-4">Delete Document Store</ModalTitle>
       <p className="mb-4 qt-text-small">

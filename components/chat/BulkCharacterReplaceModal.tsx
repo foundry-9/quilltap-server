@@ -8,11 +8,10 @@
  * (assistant/user/both). Associated memories are deleted.
  */
 
-import { useState, useRef, useEffect, useMemo, useId } from 'react'
+import { useState, useEffect, useMemo, useId } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
-import { useClickOutside } from '@/hooks/useClickOutside'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { Icon } from '@/components/ui/icon'
 
 interface ParticipantData {
@@ -66,7 +65,6 @@ export default function BulkCharacterReplaceModal({
   const [targetSelection, setTargetSelection] = useState<string>('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('both')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const modalRef = useRef<HTMLDivElement>(null)
 
   // Check if there are any messages with null participantId
   const hasUnassignedMessages = useMemo(() => {
@@ -86,20 +84,6 @@ export default function BulkCharacterReplaceModal({
       setRoleFilter('both')
     }
   }, [isOpen])
-
-  // Handle click outside to close
-  useClickOutside(
-    modalRef,
-    () => {
-      if (!isSubmitting) onClose()
-    },
-    {
-      enabled: isOpen,
-      onEscape: () => {
-        if (!isSubmitting) onClose()
-      },
-    }
-  )
 
   // Compute affected message count
   const affectedCount = useMemo(() => {
@@ -204,189 +188,178 @@ export default function BulkCharacterReplaceModal({
     return 'Character'
   }
 
-  const titleId = useId()
-  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
-
-  if (!isOpen) return null
+  const footer = (
+    <>
+      <button onClick={onClose} className="qt-button qt-button-secondary" disabled={isSubmitting}>
+        Cancel
+      </button>
+      <button
+        onClick={handleSubmit}
+        className="qt-button qt-button-primary"
+        disabled={
+          isSubmitting ||
+          !sourceSelection ||
+          !targetSelection ||
+          affectedCount === 0 ||
+          (participants.length < 2 && !hasUnassignedMessages)
+        }
+      >
+        {isSubmitting ? (
+          <span className="flex items-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            Re-attributing...
+          </span>
+        ) : (
+          'Re-attribute Messages'
+        )}
+      </button>
+    </>
+  )
 
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-lg"
-      >
-        {/* Header */}
-        <div className="qt-dialog-header flex items-center justify-between">
-          <h2 id={titleId} className="qt-dialog-title">Bulk Character Replace</h2>
-          <button
-            aria-label="Close"
-            onClick={onClose}
-            className="qt-button qt-button-ghost p-2"
-            disabled={isSubmitting}
-          >
-            <Icon name="close" className="w-6 h-6" />
-          </button>
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Bulk Character Replace"
+      maxWidth="lg"
+      busy={isSubmitting}
+      bodyClassName="qt-dialog-body flex-1 overflow-y-auto space-y-5"
+      footerClassName="qt-dialog-footer flex justify-end gap-2"
+      headerActions={
+        <button
+          aria-label="Close"
+          onClick={onClose}
+          className="qt-button qt-button-ghost p-2"
+          disabled={isSubmitting}
+        >
+          <Icon name="close" className="w-6 h-6" />
+        </button>
+      }
+      footer={footer}
+    >
+      {participants.length < 2 && !hasUnassignedMessages ? (
+        <div className="text-center py-8 qt-text-secondary">
+          This chat needs at least 2 participants to use bulk character replace.
         </div>
-
-        {/* Content */}
-        <div className="qt-dialog-body space-y-5">
-          {participants.length < 2 && !hasUnassignedMessages ? (
-            <div className="text-center py-8 qt-text-secondary">
-              This chat needs at least 2 participants to use bulk character replace.
-            </div>
-          ) : (
-            <>
-              {/* Source Participant */}
-              <div className="space-y-2">
-                <label htmlFor={`${id}-from`} className="block qt-label">Re-attribute from:</label>
-                <select
-                  id={`${id}-from`}
-                  value={sourceSelection}
-                  onChange={(e) => setSourceSelection(e.target.value)}
-                  disabled={isSubmitting}
-                  className="qt-select w-full"
-                >
-                  <option value="">Select participant...</option>
-                  {hasUnassignedMessages && (
-                    <option value={UNASSIGNED_USER}>Unassigned (You)</option>
-                  )}
-                  {participants.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {getParticipantName(p)} ({getControlLabel(p)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Target Participant */}
-              <div className="space-y-2">
-                <label htmlFor={`${id}-to`} className="block qt-label">Re-attribute to:</label>
-                <select
-                  id={`${id}-to`}
-                  value={targetSelection}
-                  onChange={(e) => setTargetSelection(e.target.value)}
-                  disabled={isSubmitting || !sourceSelection}
-                  className="qt-select w-full"
-                >
-                  <option value="">Select participant...</option>
-                  {availableTargets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {getParticipantName(p)} ({getControlLabel(p)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Role Filter */}
-              <div className="space-y-2">
-                <label className="block qt-label">Which messages?</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="roleFilter"
-                      value="ASSISTANT"
-                      checked={roleFilter === 'ASSISTANT'}
-                      onChange={() => setRoleFilter('ASSISTANT')}
-                      disabled={isSubmitting}
-                      className="qt-radio"
-                    />
-                    <span className="text-sm">AI responses only</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="roleFilter"
-                      value="USER"
-                      checked={roleFilter === 'USER'}
-                      onChange={() => setRoleFilter('USER')}
-                      disabled={isSubmitting}
-                      className="qt-radio"
-                    />
-                    <span className="text-sm">User messages only</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="roleFilter"
-                      value="both"
-                      checked={roleFilter === 'both'}
-                      onChange={() => setRoleFilter('both')}
-                      disabled={isSubmitting}
-                      className="qt-radio"
-                    />
-                    <span className="text-sm">All messages</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Affected Count & Warning */}
-              {sourceSelection && targetSelection && (
-                <div className="qt-alert qt-alert-warning">
-                  <div className="flex items-start gap-3">
-                    <Icon name="alert-triangle" className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium">
-                        {affectedCount} {affectedCount === 1 ? 'message' : 'messages'} will be
-                        re-attributed
-                      </p>
-                      <p className="mt-1 opacity-80">
-                        Memories extracted from these messages will be permanently deleted.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+      ) : (
+        <>
+          {/* Source Participant */}
+          <div className="space-y-2">
+            <label htmlFor={`${id}-from`} className="block qt-label">Re-attribute from:</label>
+            <select
+              id={`${id}-from`}
+              value={sourceSelection}
+              onChange={(e) => setSourceSelection(e.target.value)}
+              disabled={isSubmitting}
+              className="qt-select w-full"
+            >
+              <option value="">Select participant...</option>
+              {hasUnassignedMessages && (
+                <option value={UNASSIGNED_USER}>Unassigned (You)</option>
               )}
-            </>
-          )}
-        </div>
+              {participants.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {getParticipantName(p)} ({getControlLabel(p)})
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Footer */}
-        <div className="qt-dialog-footer flex justify-end gap-2">
-          <button onClick={onClose} className="qt-button qt-button-secondary" disabled={isSubmitting}>
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="qt-button qt-button-primary"
-            disabled={
-              isSubmitting ||
-              !sourceSelection ||
-              !targetSelection ||
-              affectedCount === 0 ||
-              (participants.length < 2 && !hasUnassignedMessages)
-            }
-          >
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Re-attributing...
-              </span>
-            ) : (
-              'Re-attribute Messages'
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
+          {/* Target Participant */}
+          <div className="space-y-2">
+            <label htmlFor={`${id}-to`} className="block qt-label">Re-attribute to:</label>
+            <select
+              id={`${id}-to`}
+              value={targetSelection}
+              onChange={(e) => setTargetSelection(e.target.value)}
+              disabled={isSubmitting || !sourceSelection}
+              className="qt-select w-full"
+            >
+              <option value="">Select participant...</option>
+              {availableTargets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {getParticipantName(p)} ({getControlLabel(p)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Role Filter */}
+          <div className="space-y-2">
+            <label className="block qt-label">Which messages?</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="roleFilter"
+                  value="ASSISTANT"
+                  checked={roleFilter === 'ASSISTANT'}
+                  onChange={() => setRoleFilter('ASSISTANT')}
+                  disabled={isSubmitting}
+                  className="qt-radio"
+                />
+                <span className="text-sm">AI responses only</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="roleFilter"
+                  value="USER"
+                  checked={roleFilter === 'USER'}
+                  onChange={() => setRoleFilter('USER')}
+                  disabled={isSubmitting}
+                  className="qt-radio"
+                />
+                <span className="text-sm">User messages only</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="roleFilter"
+                  value="both"
+                  checked={roleFilter === 'both'}
+                  onChange={() => setRoleFilter('both')}
+                  disabled={isSubmitting}
+                  className="qt-radio"
+                />
+                <span className="text-sm">All messages</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Affected Count & Warning */}
+          {sourceSelection && targetSelection && (
+            <div className="qt-alert qt-alert-warning">
+              <div className="flex items-start gap-3">
+                <Icon name="alert-triangle" className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium">
+                    {affectedCount} {affectedCount === 1 ? 'message' : 'messages'} will be
+                    re-attributed
+                  </p>
+                  <p className="mt-1 opacity-80">
+                    Memories extracted from these messages will be permanently deleted.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </BaseModal>
   )
 }

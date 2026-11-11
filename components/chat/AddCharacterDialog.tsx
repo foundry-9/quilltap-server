@@ -304,7 +304,7 @@ export default function AddCharacterDialog({
         title="Add Character to Chat"
         maxWidth="2xl"
         busy={isAdding}
-        overlayClassName="p-4"
+       
         headerActions={
           <button
             aria-label="Close"

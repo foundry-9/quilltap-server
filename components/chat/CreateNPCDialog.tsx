@@ -219,7 +219,7 @@ export default function CreateNPCDialog({
       title="Create Ad-hoc NPC"
       maxWidth="2xl"
       busy={isCreating}
-      overlayClassName="p-4"
+     
       headerActions={
         <button
           aria-label="Close"

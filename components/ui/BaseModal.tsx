@@ -249,8 +249,9 @@ export function BaseModal({
     </button>
   ) : null
 
+  // p-4 keeps a margin round the dialog on narrow screens.
   return createPortal(
-    <div className={`qt-dialog-overlay ${overlayClassName}`}>
+    <div className={`qt-dialog-overlay p-4 ${overlayClassName}`}>
       <div
         ref={modalRef}
         className={`qt-dialog ${maxWidthClasses[maxWidth]} max-h-[90vh] flex flex-col ${className}`}

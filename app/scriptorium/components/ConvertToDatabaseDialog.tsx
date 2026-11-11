@@ -28,7 +28,7 @@ export function ConvertToDatabaseDialog({ store, onClose, onConfirm }: ConvertTo
       headerless
       className="p-6"
       bodyClassName="overflow-y-auto"
-      overlayClassName="p-4"
+     
     >
       <ModalTitle className="qt-dialog-title mb-4">Convert &ldquo;{store.name}&rdquo; to Database-Backed Storage</ModalTitle>
 

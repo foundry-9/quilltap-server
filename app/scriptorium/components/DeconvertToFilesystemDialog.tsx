@@ -39,7 +39,7 @@ export function DeconvertToFilesystemDialog({ store, onClose, onConfirm }: Decon
       headerless
       className="p-6"
       bodyClassName="overflow-y-auto"
-      overlayClassName="p-4"
+     
       closeOnClickOutside={false}
     >
       <ModalTitle className="qt-dialog-title mb-4">Deconvert &ldquo;{store.name}&rdquo; to Filesystem Storage</ModalTitle>

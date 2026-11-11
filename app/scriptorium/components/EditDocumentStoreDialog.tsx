@@ -78,7 +78,7 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
       headerless
       className="p-6"
       bodyClassName="overflow-y-auto"
-      overlayClassName="p-4"
+     
       closeOnClickOutside={false}
     >
       <ModalTitle className="qt-dialog-title mb-4">Edit Document Store</ModalTitle>
