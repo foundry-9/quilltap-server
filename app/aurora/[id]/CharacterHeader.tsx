@@ -234,7 +234,7 @@ export function CharacterHeader(props: CharacterHeaderProps) {
             trigger={{
               ariaLabel: `Change ${character.name}'s avatar`,
               title: 'Change avatar',
-              className: `relative block h-full w-full overflow-hidden ${props.avatarStyle === 'CIRCULAR' ? 'rounded-full' : 'rounded-lg'} focus:outline-none focus:ring-2 focus:ring-ring`,
+              className: `relative block h-full w-full overflow-hidden ${props.avatarStyle === 'CIRCULAR' ? 'rounded-full' : 'rounded-lg'} focus:outline-none focus:ring-2 qt-focus-ring`,
               content: avatarSrc ? (
                 <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
               ) : (

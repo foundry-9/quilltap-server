@@ -50,7 +50,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
           className="qt-dialog p-6"
         >
         <div className="qt-dialog-body !px-0 !py-0 mb-6">
-          <p id={messageId} className="text-sm text-foreground whitespace-pre-wrap break-words">
+          <p id={messageId} className="text-sm qt-text whitespace-pre-wrap break-words">
             {message}
           </p>
         </div>

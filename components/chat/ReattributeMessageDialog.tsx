@@ -190,7 +190,7 @@ export default function ReattributeMessageDialog({
                       className={`
                         w-full p-3 rounded-lg border text-left transition-all
                         ${isSelected
-                          ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                          ? 'qt-border-primary qt-bg-primary/10 ring-2 qt-ring-brand'
                           : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
                         }
                         disabled:opacity-50 disabled:cursor-not-allowed
@@ -208,7 +208,7 @@ export default function ReattributeMessageDialog({
                         {/* Info */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground truncate">
+                            <span className="font-semibold qt-text truncate">
                               {name}
                             </span>
                             <span className="qt-text-xs px-1.5 py-0.5 rounded qt-bg-muted qt-text-secondary">
@@ -224,7 +224,7 @@ export default function ReattributeMessageDialog({
 
                         {/* Selected indicator */}
                         {isSelected && (
-                          <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
+                          <Icon name="check-circle" className="w-5 h-5 qt-text-brand flex-shrink-0" />
                         )}
                       </div>
                     </button>

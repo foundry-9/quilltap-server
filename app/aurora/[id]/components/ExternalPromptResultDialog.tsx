@@ -86,7 +86,7 @@ export function ExternalPromptResultDialog({
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 pr-2 -mr-2 rounded-lg border qt-border-default qt-bg-default p-4">
+        <div className="overflow-y-auto flex-1 pr-2 -mr-2 border qt-border-default rounded-lg p-4 qt-bg-default">
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {prompt}

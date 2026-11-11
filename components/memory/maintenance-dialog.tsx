@@ -149,7 +149,7 @@ export function MaintenanceDialog({ characterId, characterName, onClose, onQueue
             <h2 id={titleId} className="qt-dialog-title">
               Memory Maintenance{characterName ? ` — ${characterName}` : ''}
             </h2>
-            <button type="button" onClick={onClose} className="qt-text-secondary hover:text-foreground" aria-label="Close">
+            <button type="button" onClick={onClose} className="qt-text-secondary hover:qt-text" aria-label="Close">
               <Icon name="close" className="w-6 h-6" />
             </button>
           </div>

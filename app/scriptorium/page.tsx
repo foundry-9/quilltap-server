@@ -1,15 +1,9 @@
 /**
- * Document Stores Route (The Scriptorium)
- *
- * Thin wrapper around {@link ScriptoriumView}; the view body is extracted so it can also
- * render as a workspace tab. When the tabbed workspace is enabled, this route
- * redirects into it. See `docs/developer/features/complete/tabbed-workspace.md`.
+ * Scriptorium Route — redirects into the tabbed workspace's Scriptorium tab.
  */
 
-import { ScriptoriumView } from './ScriptoriumView'
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
 export default function DocumentStoresPage() {
-  redirectToWorkspaceTab('scriptorium')
-  return <ScriptoriumView />
+  return redirectToWorkspaceTab('scriptorium')
 }

@@ -26,7 +26,7 @@ import { DebugThemeInfo } from './components/DebugThemeInfo'
  */
 function LoadingSpinner() {
   return (
-    <div className="flex items-center justify-center py-8">
+    <div className="qt-loading-state">
       <div className="flex items-center gap-2 qt-text-secondary">
         <svg
           className="animate-spin h-5 w-5"

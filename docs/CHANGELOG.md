@@ -4,6 +4,25 @@
 
 ### 4.13-dev
 
+#### Refactor: dead code, legacy shims and raw token colours
+
+- Removed `migrations/lib/json-store/**` and `migrations/lib/file-manager.ts` (about 5,100 lines with no importer). `knip.json` no longer ignores `migrations/lib/**`, and its stale `tar`, `du` and `lib/chat/context/index.ts` entries are gone. Two dead helpers knip then found there (`decryptSecrets`, `createMigrationLogger`) are removed.
+- Removed about forty exports that only their own tests used (full list in `docs/developer/DEAD-CODE-REPORT.md`), including the API deprecation-redirect helpers, `summarizeChat` / `updateContextSummary`, the theme comparison utilities, and the whole `lib/terminal/clean-output.ts` and `lib/navigation/route-flags.ts` modules. Tests that used a removed export as a probe now go through the live path.
+- Removed `POST /api/v1/files?action=cleanup-stale` and `POST /api/v1/chats/[id]?action=active-document`, which had no callers. `mount-points/[id]?action=embed` stays: the CLI uses it.
+- Removed the `NEXT_PUBLIC_WORKSPACE_TABS` flag. The tabbed workspace is always on; the legacy routes always redirect into it (`redirectToWorkspaceTab` returns `never`), and the six page-only clients that rendered them without the workspace are gone.
+- Removed the no-op `SidebarProvider` and the deprecated `processNextJob` / `processJobs` shims.
+- #179: attaching the same file twice in a row in the Salon did nothing the second time. The file input is now reset after each pick; the orphaned `fileInputRef` in `useFileAttachments` is gone.
+- #180: a memory with importance 0 opened in the editor as 0.5 (`||` instead of `??`).
+- Client `console.debug` traces removed; the few that report a failure (diagram drawing, PNG font embedding, the Graphviz sketch fallback, two settings saves) are `console.warn`.
+- Every `eslint-disable` now states its reason; the ones that cited SWR describe what the code does now.
+- The scene-state tracker's model reply is validated by a Zod schema (`SceneStateLLMResultSchema`, lenient: optional fields, unknown keys kept); the handler's `as any` casts are gone. A reply that is not an object of that shape fails the task. The two `(global as any).__quilltapDbKeyState` writes go through a typed `overrideDbKeyState`; the Salon's tool-result handler reads its free-form result without `as any`.
+- Documented `SQLITE_FOREIGN_KEYS`, `SQLITE_SYNCHRONOUS`, `SQLITE_CACHE_SIZE`, `QUILLTAP_SKIP_CLOUD_MATERIALIZE`, `QUILLTAP_CLOUD_MATERIALIZE_STALL_MS`, `QTAP_OFFICIAL_REGISTRY_PUBLIC_KEY` (and its `QUILLTAP_` alias) and `ELECTRON_DEV` in `docs/DEPLOYMENT.md`.
+- Raw shadcn token colours replaced by `qt-*` utilities: `text-foreground` → `qt-text`, `text-primary` → `qt-text-brand`, `bg-background` → `qt-bg-default`, `border-input` → `qt-border-input`, `focus:ring-ring` / `focus:ring-primary` / `focus-visible:ring-ring` → `qt-focus-ring`, `ring-primary` → `qt-ring-brand`, plus `text-muted-foreground`, `bg-accent`, `text-accent-foreground`, `bg-popover`, `text-destructive` and `divide-border`. A swap was skipped wherever it could change which colour wins. New utilities: `qt-border-input`, `qt-divide-default`, `qt-focus-ring`, `qt-ring-brand`, `qt-text/80`, `qt-text-brand/70` and hover forms. `packages/theme-storybook` regenerated (1.0.113).
+- The setup wizard's step indicator, check mark and dividers used `var(--qt-color-primary)` / `var(--qt-border-color)`, which do not exist, so they drew no colour. They use `qt-bg-primary`, `qt-text-brand`, `qt-ring-brand`, `qt-border-default` and `qt-divide-default`.
+- Hand-styled settings checkboxes use `qt-checkbox`; 60 hand-spelled labels use `qt-label`; ten raw inputs and selects use `qt-input` / `qt-select`; 34 centred loading rows use the new `qt-loading-state`.
+- Twelve hand-spelled settings links use the `lib/settings/hrefs.ts` builders.
+- The thirteen expandable cards on the Prospero project page and the Aurora group page use `CollapsibleCard` (controlled) instead of a hand-copied header; eleven of them had no `aria-expanded`. `CollapsibleCard` takes an optional `className`. Headers now use the collapsible-card title, divider and chevron, and five bodies that had no padding get the card's body padding.
+
 #### Refactor: client server-state (phase 5: drafts and stale answers)
 
 - The chat's LLM tool settings dialog reset unsaved toggles on every chat refetch (an effect keyed on array identity). Its two lists are `useDraft`s over the chat's values, so a refetch with the same values keeps the toggles; Cancel discards them. Its tool list is a query (`queryKeys.tools.availability`).

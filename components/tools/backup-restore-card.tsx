@@ -14,14 +14,14 @@ export default function BackupRestoreCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="qt-heading-2 text-foreground mb-1">
+          <h2 className="qt-heading-2 qt-text mb-1">
             Backup & Restore
           </h2>
           <p className="qt-text-small">
             Download a complete backup or restore from a previous backup file
           </p>
         </div>
-        <div className="flex-shrink-0 text-primary">
+        <div className="flex-shrink-0 qt-text-brand">
           <Icon name="upload" className="w-8 h-8" />
         </div>
       </div>

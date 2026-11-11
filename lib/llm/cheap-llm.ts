@@ -23,10 +23,7 @@ import {
   getAverageCostPer1M,
 } from './pricing'
 import { getCheapModelConfig } from '@/lib/plugins/provider-registry'
-import {
-  LEGACY_CHEAPEST_MODEL_MAP,
-  LEGACY_RECOMMENDED_CHEAP_MODELS,
-} from './fallback-data'
+import { LEGACY_CHEAPEST_MODEL_MAP } from './fallback-data'
 
 /**
  * Strategy for selecting the cheap LLM provider
@@ -159,19 +156,6 @@ export function buildCheapLLMConfig(
     outfitSelectionProfileId: settings.outfitSelectionProfileId ?? undefined,
   }
 }
-
-/**
- * Mapping of providers to their cheapest models (legacy fallback)
- * @see getCheapModelConfig() from provider-registry for plugin-based resolution
- */
-
-/**
- * Models that are known to work well for cheap LLM tasks
- * Re-exported from fallback-data.ts for backward compatibility
- *
- * @deprecated Use getCheapModelConfig() from provider-registry instead
- */
-export const RECOMMENDED_CHEAP_MODELS = LEGACY_RECOMMENDED_CHEAP_MODELS
 
 /**
  * Default cheap LLM configuration

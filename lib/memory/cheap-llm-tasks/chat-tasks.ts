@@ -11,14 +11,6 @@ import { cleanTitle, parseTitleVerdict, type TitleVerdict } from './title-verdic
 import type { ChatMessage, CheapLLMTaskResult } from './types'
 
 /**
- * Chat summarization prompt template
- */
-const CHAT_SUMMARY_PROMPT = `You are a summarizer. Create a concise summary of the following conversation.
-Focus on key events, decisions, emotional moments, and important information shared.
-Keep the summary under 200 words. Write in third person, past tense.
-Respond with only the summary text, no additional formatting.`
-
-/**
  * Help chat title prompt template — practical, descriptive titles for support conversations
  */
 const HELP_CHAT_TITLE_PROMPT = `Generate a short, practical title for this help/support conversation.
@@ -119,54 +111,6 @@ Respond with a JSON object:
 }
 
 Keep suggested titles 3-8 words, under 60 characters, poetic and distinctive (or technically descriptive if the conversation is about technical work).`
-
-/**
- * Context summary update prompt template
- */
-const CONTEXT_SUMMARY_PROMPT = `You are updating a running summary of a conversation.
-Integrate the new messages into the existing summary, keeping it concise and under 300 words.
-Focus on maintaining continuity and capturing any new important information.
-Respond with only the updated summary text.`
-
-/**
- * Summarizes a chat conversation
- *
- * @param messages - The chat messages to summarize
- * @param selection - The cheap LLM provider selection
- * @param userId - The user ID for API key retrieval
- * @returns A summary of the conversation
- */
-export async function summarizeChat(
-  messages: ChatMessage[],
-  selection: CheapLLMSelection,
-  userId: string,
-  chatId?: string
-): Promise<CheapLLMTaskResult<string>> {
-  // Format messages for the prompt
-  const conversationText = messages
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-    .join('\n\n')
-
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: CHAT_SUMMARY_PROMPT,
-    },
-    {
-      role: 'user',
-      content: conversationText,
-    },
-  ]
-
-  return executeCheapLLMTask(
-    selection,
-    llmMessages,
-    userId,
-    (content: string): string => content.trim(),
-    'summarize-chat',
-    chatId
-  )
-}
 
 /**
  * Strips tool call artifacts from assistant message content so that title
@@ -557,51 +501,6 @@ export async function considerTitleUpdate(
     existingSummaryOrTitle,
     selection,
     userId,
-    chatId
-  )
-}
-
-/**
- * Updates a running context summary with new messages
- *
- * @param currentSummary - The existing context summary
- * @param newMessages - New messages to integrate
- * @param selection - The cheap LLM provider selection
- * @param userId - The user ID for API key retrieval
- * @returns Updated context summary
- */
-export async function updateContextSummary(
-  currentSummary: string,
-  newMessages: ChatMessage[],
-  selection: CheapLLMSelection,
-  userId: string,
-  chatId?: string
-): Promise<CheapLLMTaskResult<string>> {
-  const newMessagesText = newMessages
-    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-    .join('\n\n')
-
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: CONTEXT_SUMMARY_PROMPT,
-    },
-    {
-      role: 'user',
-      content: `Current summary:
-${currentSummary}
-
-New messages to integrate:
-${newMessagesText}`,
-    },
-  ]
-
-  return executeCheapLLMTask(
-    selection,
-    llmMessages,
-    userId,
-    (content: string): string => content.trim(),
-    'update-context-summary',
     chatId
   )
 }

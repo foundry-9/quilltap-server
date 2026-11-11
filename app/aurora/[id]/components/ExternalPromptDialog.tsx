@@ -127,14 +127,14 @@ export function ExternalPromptDialog({
         </h3>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="qt-loading-state">
             <div className="qt-spinner animate-spin h-6 w-6 rounded-full" />
           </div>
         ) : (
           <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-4">
             {/* Connection Profile */}
             <div>
-              <label htmlFor="ext-profile" className="mb-2 block text-sm qt-text-primary">
+              <label htmlFor="ext-profile" className="mb-2 qt-label">
                 LLM Connection Profile *
               </label>
               <select
@@ -154,7 +154,7 @@ export function ExternalPromptDialog({
 
             {/* System Prompt */}
             <div>
-              <label htmlFor="ext-system-prompt" className="mb-2 block text-sm qt-text-primary">
+              <label htmlFor="ext-system-prompt" className="mb-2 qt-label">
                 System Prompt *
               </label>
               <select
@@ -180,7 +180,7 @@ export function ExternalPromptDialog({
             {/* Scenario (optional) */}
             {scenarios && scenarios.length > 0 && (
               <div>
-                <label htmlFor="ext-scenario" className="mb-2 block text-sm qt-text-primary">
+                <label htmlFor="ext-scenario" className="mb-2 qt-label">
                   Scenario (Optional)
                 </label>
                 <select
@@ -201,7 +201,7 @@ export function ExternalPromptDialog({
 
             {/* Token Size Slider */}
             <div>
-              <label htmlFor="ext-max-tokens" className="mb-2 block text-sm qt-text-primary">
+              <label htmlFor="ext-max-tokens" className="mb-2 qt-label">
                 Maximum Output Size
               </label>
               <input

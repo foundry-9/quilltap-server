@@ -128,33 +128,6 @@ export interface ToolVocabulary {
   picksUp: string[];
 }
 
-/** True when a tool quotes nothing at all, and so has no vocabulary to show. */
-export function isEmptyVocabulary(vocabulary: ToolVocabulary): boolean {
-  return (
-    !vocabulary.value &&
-    !vocabulary.roll &&
-    !vocabulary.dice &&
-    !vocabulary.llm &&
-    vocabulary.params.length === 0 &&
-    vocabulary.metadata.length === 0 &&
-    vocabulary.state.length === 0 &&
-    vocabulary.stateWrites.length === 0 &&
-    vocabulary.metadataWrites.length === 0 &&
-    vocabulary.progress.length === 0 &&
-    vocabulary.progressWrites.length === 0 &&
-    !vocabulary.now &&
-    !vocabulary.character &&
-    vocabulary.wears.length === 0 &&
-    vocabulary.takesOff.length === 0 &&
-    vocabulary.clearsSlots.length === 0 &&
-    vocabulary.inventoryReads.length === 0 &&
-    vocabulary.inventoryAggregates.length === 0 &&
-    vocabulary.equips.length === 0 &&
-    vocabulary.unequips.length === 0 &&
-    vocabulary.picksUp.length === 0
-  );
-}
-
 /**
  * Collect everything a definition quotes. Pure and total: a definition that
  * quotes nothing yields `false`s and empty lists rather than absent keys, so a

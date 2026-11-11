@@ -195,7 +195,7 @@ export default function ComposeMailDialog({
         <div className="flex-1 overflow-y-auto p-4">
           {/* From */}
           <div className="mb-4">
-            <label htmlFor="mail-from" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="mail-from" className="qt-label mb-2">
               Signed by
             </label>
             {!hasSender ? (
@@ -231,7 +231,7 @@ export default function ComposeMailDialog({
 
           {/* To */}
           <div className="mb-4">
-            <label htmlFor="mail-to" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="mail-to" className="qt-label mb-2">
               Addressed to
             </label>
             {recipientsLoading ? (
@@ -259,7 +259,7 @@ export default function ComposeMailDialog({
 
           {/* In reply to */}
           <div className="mb-4">
-            <label htmlFor="mail-reply" className="block text-sm qt-text-primary mb-2">
+            <label htmlFor="mail-reply" className="qt-label mb-2">
               In reply to
             </label>
             <select
@@ -283,7 +283,7 @@ export default function ComposeMailDialog({
 
           {/* Letter body */}
           <div className="mb-2">
-            <label className="block text-sm qt-text-primary mb-2">The letter</label>
+            <label className="qt-label mb-2">The letter</label>
             <MarkdownLexicalEditor
               value={body}
               onChange={setBody}

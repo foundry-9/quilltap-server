@@ -25,8 +25,6 @@ import {
   ItemNotInLocationError,
   isSafeItemFolderPath,
   isValidItemFolderPath,
-  itemFolderStorePath,
-  normalizeItemFolderName,
   normalizeItemFolderPath,
   normalizeItemFolderPathOrRoot,
   resolveItemFolder,
@@ -115,11 +113,6 @@ export function normalizeWardrobeFolderPathOrRoot(input: string | null | undefin
   return normalizeItemFolderPathOrRoot(WARDROBE_FOLDER_RULES, input);
 }
 
-/** Normalise a folder *name* — one segment, as a rename takes it. */
-export function normalizeWardrobeFolderName(input: string | null | undefined): string {
-  return normalizeItemFolderName(WARDROBE_FOLDER_RULES, input, pathError);
-}
-
 /** True when `path` is structurally safe to write under `Wardrobe/`. */
 export function isSafeWardrobeFolderPath(path: string): boolean {
   return isSafeItemFolderPath(WARDROBE_FOLDER_RULES, path);
@@ -138,9 +131,4 @@ export function isValidWardrobeFolderPath(path: string): boolean {
 /** The folder a `Wardrobe/` document lives in: `Wardrobe/A/B/x.md` → `A/B`. */
 export function folderOfWardrobePath(relativePath: string): string {
   return folderOfItemPath(WARDROBE_FOLDER_RULES, relativePath);
-}
-
-/** The store path of a wardrobe folder: `''` → `Wardrobe`, `A/B` → `Wardrobe/A/B`. */
-export function wardrobeFolderStorePath(folder: string): string {
-  return itemFolderStorePath(WARDROBE_FOLDER_RULES, folder);
 }

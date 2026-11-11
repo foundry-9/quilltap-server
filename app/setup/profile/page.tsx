@@ -105,7 +105,7 @@ export default function ProfileSetupPage() {
       // Continue to provider setup wizard. Full page load, not router.push:
       // the character records just created must be visible to a freshly
       // initialized session provider rather than a stale client cache.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load wanted so a fresh session provider sees the characters just created, not a stale client cache
       window.location.href = '/setup/providers';
     } catch {
       setError('Something went wrong. Please try again.');

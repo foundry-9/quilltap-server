@@ -43,11 +43,11 @@ export function SectionHeader({
   return (
     <div className="flex items-center justify-between gap-4 mb-4">
       {level === 'h2' ? (
-        <h2 className="qt-text-section text-foreground flex-1">
+        <h2 className="qt-text-section qt-text flex-1">
           {titleText}
         </h2>
       ) : (
-        <h3 className="qt-text-section text-foreground flex-1">
+        <h3 className="qt-text-section qt-text flex-1">
           {titleText}
         </h3>
       )}

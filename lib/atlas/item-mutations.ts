@@ -161,27 +161,6 @@ export async function updateAtlasEntry(
   return updated;
 }
 
-/** Archive (or restore) an entry. Idempotent. */
-export async function setAtlasEntryArchived(
-  location: AtlasLocation,
-  current: AtlasRecord,
-  archived: boolean,
-): Promise<{ entry: AtlasRecord | null; changed: boolean }> {
-  const stamp = archivedPatch(current.archivedAt, archived, new Date().toISOString());
-  if (!stamp) return { entry: current, changed: false };
-  if (!archived) {
-    await assertNameFree(location, current.name, current.id, {
-      scope: location.scope,
-      mountPointId: location.mountPointId,
-      entryId: current.id,
-      op: 'restore',
-    });
-  }
-  const entry = await location.update(current.id, stamp);
-  logOp('Archive state changed', location, { entryId: current.id, archivedAt: stamp.archivedAt });
-  return { entry, changed: entry !== null };
-}
-
 // ============================================================================
 // Delete
 // ============================================================================

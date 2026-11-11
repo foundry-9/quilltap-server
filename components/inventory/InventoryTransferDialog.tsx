@@ -78,7 +78,7 @@ export function InventoryTransferDialog({ item, mode, from, catalogue, actions, 
           : 'The copy is a new object with its own identity, filed in the same folder at the destination.'}
         {item.parentId && ' An instance stays an instance of its archetype wherever it goes.'}
       </p>
-      <label className="text-sm text-foreground" htmlFor="inventory-transfer-target">Destination</label>
+      <label className="text-sm qt-text" htmlFor="inventory-transfer-target">Destination</label>
       <ContainerSelect
         id="inventory-transfer-target"
         className="qt-select w-full mt-1"

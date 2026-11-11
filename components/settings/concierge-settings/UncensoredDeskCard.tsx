@@ -7,6 +7,7 @@ import type {
   ConnectionProfile,
   ImageProfile,
 } from '@/components/settings/chat-settings/types'
+import { settingsCardHref } from '@/lib/settings/hrefs'
 
 export interface UncensoredDeskCardProps {
   settings: ConciergeSettings
@@ -106,9 +107,9 @@ export function UncensoredDeskCard({
           <p className="qt-text-small">
             No profile is marked uncensored-compatible yet, so the desk has no one to send for. Tick
             &ldquo;Uncensored-compatible&rdquo; on a{' '}
-            <Link href="/settings?section=connection-profiles" className="qt-link">connection profile</Link>{' '}
+            <Link href={settingsCardHref('connection-profiles')} className="qt-link">connection profile</Link>{' '}
             or an{' '}
-            <Link href="/settings?section=image-profiles" className="qt-link">image profile</Link>, both kept under
+            <Link href={settingsCardHref('image-profiles')} className="qt-link">image profile</Link>, both kept under
             Connections.
           </p>
         </div>

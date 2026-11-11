@@ -441,7 +441,7 @@ function SubgroupSection({
           className="flex items-center gap-2 flex-1 text-left"
         >
           <Icon name={isExpanded ? 'chevron-down' : 'chevron-right'} className="w-3 h-3 qt-text-secondary shrink-0" />
-          <span className="qt-label text-foreground/80">{subgroup.displayName}</span>
+          <span className="qt-label qt-text/80">{subgroup.displayName}</span>
           <span className="text-xs qt-text-secondary">({enabledCount}/{totalCount})</span>
         </button>
         <TriStateCheckbox
@@ -485,12 +485,12 @@ function TriStateCheckbox({ state, onChange, label }: Readonly<TriStateCheckboxP
         e.stopPropagation()
         onChange()
       }}
-      className="relative flex items-center justify-center w-5 h-5 rounded border border-input hover:qt-border-primary transition-colors"
+      className="relative flex items-center justify-center w-5 h-5 rounded border qt-border-input hover:qt-border-primary transition-colors"
       aria-label={label}
       aria-checked={state === 'checked' ? true : state === 'indeterminate' ? 'mixed' : false}
     >
       {state === 'checked' && (
-        <Icon name="check" className="w-3.5 h-3.5 text-primary" />
+        <Icon name="check" className="w-3.5 h-3.5 qt-text-brand" />
       )}
       {state === 'indeterminate' && (
         <div className="w-2.5 h-0.5 qt-bg-primary rounded-full" />
@@ -528,7 +528,7 @@ function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm text-foreground">{tool.name}</span>
+            <span className="font-medium text-sm qt-text">{tool.name}</span>
             <span className="text-xs qt-text-warning">(unavailable)</span>
           </div>
           <p className="text-xs qt-text-secondary mt-0.5 line-clamp-2">{tool.description}</p>
@@ -556,7 +556,7 @@ function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm text-foreground">{tool.name}</span>
+          <span className="font-medium text-sm qt-text">{tool.name}</span>
         </div>
         <p className="text-xs qt-text-secondary mt-0.5 line-clamp-2">{tool.description}</p>
       </div>

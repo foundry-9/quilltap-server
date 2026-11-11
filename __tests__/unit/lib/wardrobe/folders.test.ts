@@ -14,7 +14,6 @@ import {
   isSafeWardrobeFolderPath,
   isValidWardrobeFolderPath,
   joinFolder,
-  normalizeWardrobeFolderName,
   normalizeWardrobeFolderPath,
   normalizeWardrobeFolderPathOrRoot,
   parentFolder,
@@ -22,7 +21,6 @@ import {
   resolveWardrobeFolder,
   WARDROBE_FOLDER_MAX_DEPTH,
   WardrobeFolderPathError,
-  wardrobeFolderStorePath,
 } from '@/lib/wardrobe/folders';
 
 describe('normalizeWardrobeFolderPath', () => {
@@ -62,14 +60,6 @@ describe('normalizeWardrobeFolderPath', () => {
   });
 });
 
-describe('normalizeWardrobeFolderName', () => {
-  it('takes exactly one segment', () => {
-    expect(normalizeWardrobeFolderName(' Dress ')).toBe('Dress');
-    expect(() => normalizeWardrobeFolderName('A/B')).toThrow(WardrobeFolderPathError);
-    expect(() => normalizeWardrobeFolderName('   ')).toThrow(WardrobeFolderPathError);
-  });
-});
-
 describe('normalizeWardrobeFolderPathOrRoot', () => {
   it('falls back to the root for a path that cannot be normal', () => {
     expect(normalizeWardrobeFolderPathOrRoot('Formal/Evening')).toBe('Formal/Evening');
@@ -96,9 +86,7 @@ describe('path helpers', () => {
     expect(folderOfWardrobePath('Notes/Coat.md')).toBe('');
   });
 
-  it('builds store paths, parents, names and joins', () => {
-    expect(wardrobeFolderStorePath('')).toBe('Wardrobe');
-    expect(wardrobeFolderStorePath('Formal/Evening')).toBe('Wardrobe/Formal/Evening');
+  it('builds parents, names and joins', () => {
     expect(parentFolder('Formal/Evening')).toBe('Formal');
     expect(parentFolder('Formal')).toBe('');
     expect(parentFolder('')).toBe('');

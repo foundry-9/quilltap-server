@@ -69,7 +69,6 @@ export function GuardedTypeaheadMenuPlugin<TOption extends MenuOption>(
   useEffect(() => {
     if (openCount === 0 || editor.isComposing()) return
     if (triggerStillHolds(editor, triggerFn)) return
-    console.debug('[Typeahead] Closing a menu whose trigger vanished before it opened')
     void onClose?.()
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the check must read the editor after the open commits; remounting is the only close the plugin's stale callback cannot skip
     setGeneration((g) => g + 1)

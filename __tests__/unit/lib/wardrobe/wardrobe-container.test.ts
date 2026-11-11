@@ -15,7 +15,6 @@ import {
   GENERAL_CONTAINER,
   decodeWardrobeContainer,
   encodeWardrobeContainer,
-  sameWardrobeContainer,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
   wardrobeReachLabel,
@@ -56,29 +55,6 @@ describe('encode / decode', () => {
     expect(decodeWardrobeContainer('character:')).toBeNull()
     expect(decodeWardrobeContainer('project')).toBeNull()
     expect(decodeWardrobeContainer('group:')).toBeNull()
-  })
-})
-
-describe('sameWardrobeContainer', () => {
-  it('is true for the same place', () => {
-    expect(sameWardrobeContainer(CHAR, { scope: 'character', id: 'char-1' })).toBe(true)
-    expect(sameWardrobeContainer(GENERAL_CONTAINER, { scope: 'general', id: null })).toBe(true)
-  })
-
-  it('is false across scopes even when the ids match', () => {
-    expect(sameWardrobeContainer({ scope: 'project', id: 'x' }, { scope: 'group', id: 'x' })).toBe(
-      false
-    )
-  })
-
-  it('is false for a different id in the same scope', () => {
-    expect(sameWardrobeContainer(CHAR, { scope: 'character', id: 'char-2' })).toBe(false)
-  })
-
-  it('is false when either side is absent', () => {
-    expect(sameWardrobeContainer(null, CHAR)).toBe(false)
-    expect(sameWardrobeContainer(CHAR, undefined)).toBe(false)
-    expect(sameWardrobeContainer(null, null)).toBe(false)
   })
 })
 

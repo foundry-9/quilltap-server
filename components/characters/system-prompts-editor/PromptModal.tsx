@@ -100,7 +100,7 @@ export function PromptModal({
             onChange={(e) => onFormChange('isDefault', e.target.checked)}
             className="qt-checkbox"
           />
-          <label htmlFor="isDefault" className="text-sm text-foreground">
+          <label htmlFor="isDefault" className="text-sm qt-text">
             Set as default prompt
           </label>
         </div>

@@ -295,7 +295,7 @@ function ExpandableContent({ content }: { content: string }) {
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-primary hover:underline mt-1"
+          className="text-xs qt-text-brand hover:underline mt-1"
         >
           {expanded ? 'Show less' : `Show all ${content.length.toLocaleString()} chars`}
         </button>
@@ -329,7 +329,7 @@ function MessageContentBlock({ role, contentLength, hasAttachments, children }: 
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-primary hover:underline mt-1"
+          className="text-xs qt-text-brand hover:underline mt-1"
         >
           {expanded ? 'Show less' : `Show all ${contentLength.toLocaleString()} chars`}
         </button>

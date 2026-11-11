@@ -230,7 +230,7 @@ export default function RoleplayTemplatesTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="qt-loading-state">
         <div className="qt-text-secondary">Loading templates...</div>
       </div>
     )
@@ -290,7 +290,7 @@ export default function RoleplayTemplatesTab() {
         </p>
 
         {builtInTemplates.length === 0 ? (
-          <div className="qt-text-small border border-dashed qt-border-default rounded-lg p-4">
+          <div className="qt-text-small border qt-border-default rounded-lg p-4 border-dashed">
             No built-in templates available.
           </div>
         ) : (
@@ -327,7 +327,7 @@ export default function RoleplayTemplatesTab() {
         </div>
 
         {userTemplates.length === 0 ? (
-          <div className="qt-text-small border border-dashed qt-border-default rounded-lg p-4">
+          <div className="qt-text-small border qt-border-default rounded-lg p-4 border-dashed">
             No custom templates yet. Create one to define your own roleplay formatting style.
           </div>
         ) : (
@@ -899,7 +899,7 @@ export default function RoleplayTemplatesTab() {
                   )}
                 </div>
                 {previewTemplate.isBuiltIn && (
-                  <span className="px-2 py-0.5 qt-text-label-xs qt-bg-primary/10 text-primary rounded">
+                  <span className="px-2 py-0.5 qt-text-label-xs qt-bg-primary/10 qt-text-brand rounded">
                     Built-in
                   </span>
                 )}
@@ -932,7 +932,7 @@ export default function RoleplayTemplatesTab() {
 
               <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/30">
                 <h3 className="qt-text-small font-medium mb-2">LLM Prompt</h3>
-                <pre className="whitespace-pre-wrap text-sm text-foreground font-mono">
+                <pre className="whitespace-pre-wrap text-sm qt-text font-mono">
                   {previewTemplate.systemPrompt}
                 </pre>
               </div>

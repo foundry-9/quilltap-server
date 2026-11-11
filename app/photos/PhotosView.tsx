@@ -259,7 +259,7 @@ export function PhotosView() {
 
   return (
     <div
-      className="qt-page-container text-foreground"
+      className="qt-page-container qt-text"
       style={bgStyle}
     >
       <header className="flex flex-wrap items-end justify-between gap-6 border-b qt-border-default/60 pb-6">
@@ -437,7 +437,7 @@ function PhotoCard({ entry, onClick }: { entry: GalleryEntry; onClick: () => voi
       <button
         type="button"
         onClick={onClick}
-        className="group relative flex w-full flex-col overflow-hidden rounded-2xl border qt-border-default/60 qt-bg-card/90 text-left qt-shadow-sm transition-all hover:-translate-y-0.5 hover:qt-border-primary/60 hover:qt-shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group relative flex w-full flex-col overflow-hidden rounded-2xl border qt-border-default/60 qt-bg-card/90 text-left qt-shadow-sm transition-all hover:-translate-y-0.5 hover:qt-border-primary/60 hover:qt-shadow-md focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
         aria-label={primaryCaption}
       >
         <div className="relative aspect-square w-full overflow-hidden qt-bg-muted/40">
@@ -458,7 +458,7 @@ function PhotoCard({ entry, onClick }: { entry: GalleryEntry; onClick: () => voi
           )}
         </div>
         <div className="flex flex-1 flex-col gap-1.5 px-4 py-3">
-          <p className="line-clamp-2 text-sm font-medium text-foreground" title={primaryCaption}>
+          <p className="line-clamp-2 text-sm font-medium qt-text" title={primaryCaption}>
             {primaryCaption}
           </p>
           <p className="qt-text-muted truncate text-xs" title={linkerLabel}>
@@ -581,7 +581,7 @@ function PhotoDetailModal({
                     className="rounded-lg border qt-border-default/50 qt-bg-muted/40 px-3 py-2 text-sm"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="truncate font-medium text-foreground">
+                      <span className="truncate font-medium qt-text">
                         {linker.linkedBy ?? linker.mountPointName}
                       </span>
                       <span className="qt-badge qt-badge-muted whitespace-nowrap text-[10px] uppercase">

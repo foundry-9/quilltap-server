@@ -71,7 +71,7 @@ export function ColorModeSelector({
               border rounded-lg transition-colors
               ${isSelected
                 ? 'qt-border-primary qt-bg-primary qt-text-on-primary'
-                : 'qt-border-default qt-bg-card qt-hover-accent text-foreground'
+                : 'qt-border-default qt-bg-card qt-hover-accent qt-text'
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}

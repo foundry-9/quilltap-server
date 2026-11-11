@@ -314,7 +314,7 @@ export default function StateEditorModal({
       closeOnClickOutside={!isEditing}
     >
       {loading ? (
-        <div className="flex items-center justify-center py-8">
+        <div className="qt-loading-state">
           <svg
             className="animate-spin h-6 w-6"
             fill="none"

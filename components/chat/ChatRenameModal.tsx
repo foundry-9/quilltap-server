@@ -168,7 +168,7 @@ export default function ChatRenameModal({
             checked={useAutoRename}
             onChange={(e) => handleAutoRenameToggle(e.target.checked)}
             disabled={isLoading}
-            className="rounded border-input"
+            className="qt-checkbox"
           />
           <span className="qt-text-small">
             Use automatic naming

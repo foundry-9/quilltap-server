@@ -1,6 +1,6 @@
 # Refactor 4.13 — Dead code knip cannot see, legacy shims, and the last raw token colours
 
-**Status:** Proposed (2026-11-10), written against `HEAD` = 167d06503. Part of the [4.13 refactor set](refactor-4-13.md). Behaviour-neutral throughout; a good warm-up. Fixes #179 and #180 in passing (both are one-line fixes with no better home).
+**Status:** Done (2026-11-11). Proposed 2026-11-10, written against `HEAD` = 167d06503. Outcome in [§8](#8-outcome). Part of the [4.13 refactor set](refactor-4-13.md). Behaviour-neutral throughout; a good warm-up. Fixes #179 and #180 in passing (both are one-line fixes with no better home).
 
 Every "unused" claim below was checked by whole-word `rg` across tracked files, but not for symbols reached through string-built dynamic imports, registries or plugins. **Re-check each one immediately before deleting it** and leave anything with a live reference.
 
@@ -121,3 +121,17 @@ Twelve settings links are hand-spelled strings instead of `lib/settings/hrefs.ts
 1. `NEXT_PUBLIC_WORKSPACE_TABS`: remove the flag and the legacy per-surface branch, or keep it as a rollback path?
 2. `migrations/lib/json-store`: delete (proposed), or does anything outside this repo still run the Mongo-era migrations?
 3. The three caller-less API actions: remove, or keep for the CLI?
+
+## 8. Outcome
+
+Decisions (§7): 1 — the flag and the legacy per-surface branch are removed; 2 — `migrations/lib/json-store` is deleted; 3 — `files?action=cleanup-stale` and `chats/[id]?action=active-document` are removed, `mount-points/[id]?action=embed` is kept because the CLI calls it.
+
+What was removed, and what was re-checked and kept, is recorded in [DEAD-CODE-REPORT.md](../DEAD-CODE-REPORT.md) (2026-11-11). Departures from the text above:
+
+- **Kept:** `float32ToBlobRaw` (the fixture four suites use to write a legacy blob) and `HELP_SECTION_EMBEDDING_MAX_TOKENS` (the budget the help-size test enforces).
+- **Wider than listed:** `lib/terminal/clean-output.ts` had no production importer at all, so the module went, not just `cleanTerminalOutput`. Removing the workspace flag left six page-only clients (`CharacterPageClient`, `NewChatPageClient`, …) with no importer; they went too.
+- **Already gone:** the terminal `getRepositories() as any` sites and the help-chat `(chat as any).chatType` casts; the `useSSEStreaming.ts` cast had moved to `useStreamingToolBatches.ts` and was fixed there.
+- **Not added:** `qt-panel` already exists as a themed panel (own radius, background and border tokens), so the `border qt-border-default rounded-lg p-4` cluster was left alone rather than given a colliding class or a new background. `qt-option-card` and `qt-page-center` were not added. Instead of `qt-empty-state` (a column layout), loading rows use a new `qt-loading-state`.
+- **Found on the way:** the setup wizard's arbitrary colours named `--qt-color-primary` and `--qt-border-color`, which do not exist; they are now real utilities.
+- **CollapsibleCard:** all thirteen cards moved onto it in controlled mode (it gained an optional `className` for the two grid-spanning cards). Headers take the collapsible-card look, and the five cards whose bodies had no padding now get the card's body padding.
+- **Not done here:** the light/dark pass over each bundled theme (`/release-checklist-13-ui`) needs a browser and a human eye. The visible changes to check are themed checkboxes, `qt-label`, `qt-input` / `qt-select`, the collapsible cards and the setup wizard's step indicator.

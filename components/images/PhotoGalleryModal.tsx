@@ -356,7 +356,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
         <button
           type="button"
           onClick={() => setSelectedIndex(index)}
-          className="relative w-full h-full overflow-hidden rounded hover:ring-2 hover:ring-ring focus:ring-2 focus:ring-ring focus:outline-none transition-all"
+          className="relative w-full h-full overflow-hidden rounded hover:ring-2 hover:ring-ring focus:ring-2 qt-focus-ring focus:outline-none transition-all"
           title={entry.filename}
         >
           <img
@@ -431,7 +431,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
       <Container
         key={image.id}
         {...containerProps}
-        className="relative rounded overflow-hidden hover:ring-2 hover:ring-ring focus:ring-2 focus:ring-ring focus:outline-none transition-all"
+        className="relative rounded overflow-hidden hover:ring-2 hover:ring-ring focus:ring-2 qt-focus-ring focus:outline-none transition-all"
         style={{ width: thumbnailSize, height: thumbnailSize }}
       >
         {isMissing ? (
@@ -456,7 +456,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   const renderItems = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center py-12">
+        <div className="qt-loading-state py-12">
           <p className="qt-text-secondary">Loading images...</p>
         </div>
       )
@@ -464,7 +464,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
 
     if (itemCount === 0) {
       return (
-        <div className="flex items-center justify-center py-12">
+        <div className="qt-loading-state py-12">
           <p className="qt-text-secondary">{emptyStateText}</p>
         </div>
       )
@@ -494,12 +494,12 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="qt-dialog-header border-b qt-border-default">
-            <h2 id={titleId} className="qt-heading-4 text-foreground">{title}</h2>
+            <h2 id={titleId} className="qt-heading-4 qt-text">{title}</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleZoomOut}
                 disabled={thumbnailSizeIndex === 0}
-                className="p-2 qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 qt-text-secondary hover:qt-text disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Smaller thumbnails"
               >
                 <Icon name="zoom-out" className="w-5 h-5" />
@@ -507,14 +507,14 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
               <button
                 onClick={handleZoomIn}
                 disabled={thumbnailSizeIndex === THUMBNAIL_SIZES.length - 1}
-                className="p-2 qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 qt-text-secondary hover:qt-text disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Larger thumbnails"
               >
                 <Icon name="zoom-in" className="w-5 h-5" />
               </button>
               <button
                 onClick={onClose}
-                className="p-2 qt-text-secondary hover:text-foreground"
+                className="p-2 qt-text-secondary hover:qt-text"
                 title="Close"
               >
                 <Icon name="close" className="w-5 h-5" />

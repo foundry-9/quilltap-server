@@ -25,7 +25,6 @@ Defines all TypeScript interfaces and types used throughout the module:
 - `EmbeddingModel` - Model metadata
 - `EmbeddingProfile` - Profile configuration
 - `EmbeddingProfileFormData` - Form state shape
-- `PROVIDER_COLORS` - Provider styling constants
 
 ### useEmbeddingProfiles Hook
 A custom hook that manages embedding profile data fetching and state:

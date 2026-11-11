@@ -153,7 +153,7 @@ export function BaseModal({
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-4 right-4 qt-text-secondary hover:text-foreground transition-colors"
+              className="absolute top-4 right-4 qt-text-secondary hover:qt-text transition-colors"
               aria-label="Close"
             >
               <Icon name="close" className="w-5 h-5" />

@@ -126,7 +126,7 @@ export function ImportDialog({
               <button
                 onClick={handleClose}
                 disabled={state.importing}
-                className="qt-text-secondary hover:text-foreground disabled:opacity-50"
+                className="qt-text-secondary hover:qt-text disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <Icon name="close" className="w-6 h-6" />

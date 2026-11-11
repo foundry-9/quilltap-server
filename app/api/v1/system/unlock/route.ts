@@ -287,7 +287,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
     return badRequest('Passphrase is required to unlock');
   }
 
-  const { unlockDbKey, getDbKeyState, storeEnvPepperInDbKey } = await import('@/lib/startup/dbkey');
+  const { unlockDbKey, getDbKeyState, storeEnvPepperInDbKey, overrideDbKeyState } = await import('@/lib/startup/dbkey');
   const { startupState } = await import('@/lib/startup/startup-state');
 
   let success: boolean;
@@ -307,7 +307,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
       unlockLogger.info('Legacy pepper unlocked, migrating to .dbkey file');
       try {
         // Set dbkey state to allow storage, then write the .dbkey file
-        (global as any).__quilltapDbKeyState = 'needs-vault-storage';
+        overrideDbKeyState('needs-vault-storage');
         storeEnvPepperInDbKey(passphrase);
         unlockLogger.info('Legacy pepper migrated to .dbkey file successfully');
       } catch (migrationError) {
@@ -315,7 +315,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
         unlockLogger.warn('Failed to migrate legacy pepper to .dbkey file, continuing with unlocked pepper', {
           error: migrationError instanceof Error ? migrationError.message : String(migrationError),
         });
-        (global as any).__quilltapDbKeyState = 'resolved';
+        overrideDbKeyState('resolved');
       }
     }
   } else {

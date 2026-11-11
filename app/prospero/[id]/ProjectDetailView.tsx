@@ -132,7 +132,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading project...</p>
+        <p className="text-lg qt-text">Loading project...</p>
       </div>
     )
   }
@@ -152,7 +152,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
 
   return (
     <div
-      className="qt-page-container text-foreground"
+      className="qt-page-container qt-text"
       style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <ProjectDetailHeader

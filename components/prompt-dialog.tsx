@@ -60,7 +60,7 @@ export function PromptDialog({
           className="qt-dialog p-6 min-w-[20rem]"
         >
           <div className="qt-dialog-body !px-0 !py-0 mb-4">
-            <p id={messageId} className="text-sm text-foreground whitespace-pre-wrap break-words">
+            <p id={messageId} className="text-sm qt-text whitespace-pre-wrap break-words">
               {message}
             </p>
           </div>

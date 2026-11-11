@@ -14,7 +14,6 @@ import {
   resolveSettingsLink,
   resolveSettingsHref,
   searchSettingsCards,
-  topLevelCardsOf,
 } from '@/lib/settings/registry'
 import { CHILD_SUBSYSTEM_IDS, DEFAULT_SUBSYSTEM_DEFINITIONS } from '@/lib/foundry/subsystem-defaults'
 
@@ -57,7 +56,7 @@ describe('settings registry integrity', () => {
   it('puts every card in a group that exists, and every group has a card', () => {
     const groupIds = new Set(SETTINGS_GROUPS.map((g) => g.id))
     for (const card of SETTINGS_CARDS) expect(groupIds.has(card.group)).toBe(true)
-    for (const group of SETTINGS_GROUPS) expect(topLevelCardsOf(group.id).length).toBeGreaterThan(0)
+    for (const group of SETTINGS_GROUPS) expect(SETTINGS_CARDS.some((c) => c.group === group.id && !c.hostedBy)).toBe(true)
   })
 
   it('gives every card at least two keywords and a help document that exists', () => {

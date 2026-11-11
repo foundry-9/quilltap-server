@@ -109,6 +109,18 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | `SQLITE_PATH` | Path to SQLite database file | `/app/quilltap/data/quilltap.db` |
 | `SQLITE_WAL_MODE` | Enable Write-Ahead Logging | `true` |
 | `SQLITE_BUSY_TIMEOUT` | Max wait for database locks (ms) | `5000` |
+| `SQLITE_FOREIGN_KEYS` | Enforce foreign keys; `false` turns enforcement off (diagnostics only) | `true` |
+| `SQLITE_SYNCHRONOUS` | SQLite `synchronous` pragma (`OFF`, `NORMAL`, `FULL`, `EXTRA`) | SQLite's default for the journal mode |
+| `SQLITE_CACHE_SIZE` | SQLite `cache_size` pragma: positive is pages, negative is KiB (e.g. `-131072` for 128 MiB) | SQLite's default |
+
+### Cloud-synced data directories (macOS)
+
+At startup Quilltap downloads any iCloud Drive / File Provider placeholders in the data directory before opening the database, so an evicted file is never read as empty.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QUILLTAP_SKIP_CLOUD_MATERIALIZE` | Set to `1` to skip the placeholder download pass | (unset) |
+| `QUILLTAP_CLOUD_MATERIALIZE_STALL_MS` | How long a single download may make no progress before it is given up (ms, minimum 1000) | `30000` |
 
 ### Timezone
 
@@ -143,6 +155,18 @@ Use an IANA name, not an abbreviation — `America/Chicago`, not `CDT`. ICU can'
 | `LOG_LEVEL` | Logging level (`error`, `warn`, `info`, `debug`) | `info` |
 | `LOG_OUTPUT` | Where logs go (`console`, `file`, `both`) | `console` |
 | `NODE_ENV` | Environment | `production` |
+
+### Themes
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QTAP_OFFICIAL_REGISTRY_PUBLIC_KEY` | Ed25519 public key for the official theme registry; when set, a fresh install adds that registry as a trusted source. `QUILLTAP_OFFICIAL_REGISTRY_PUBLIC_KEY` is read as a fallback name | (empty: the official registry is not added as a source on first run) |
+
+### Development
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ELECTRON_DEV` | Any value marks the process as running under the Electron shell in development; recorded in the instance lock's environment type | (unset) |
 
 ### Plugins
 

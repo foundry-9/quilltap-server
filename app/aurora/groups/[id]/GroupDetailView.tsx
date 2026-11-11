@@ -118,7 +118,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading group...</p>
+        <p className="text-lg qt-text">Loading group...</p>
       </div>
     )
   }
@@ -128,7 +128,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <p className="text-lg qt-text-destructive mb-4">Error: {error || 'Group not found'}</p>
-          <button onClick={onBack} className="qt-text-primary hover:text-primary/80">
+          <button onClick={onBack} className="qt-text-primary hover:qt-text-brand/80">
             Back to groups
           </button>
         </div>
@@ -137,7 +137,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
   }
 
   return (
-    <div className="qt-page-container text-foreground">
+    <div className="qt-page-container qt-text">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button
@@ -154,7 +154,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
       <form onSubmit={handleSave} className="max-w-2xl space-y-6">
         {/* Name */}
         <div>
-          <label htmlFor={`${fieldId}-f0`} className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f0`} className="block text-sm font-medium qt-text mb-2">
             Group Name *
           </label>
           <input
@@ -162,14 +162,14 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
             type="text"
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm"
+            className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent qt-text text-sm"
             required
           />
         </div>
 
         {/* Description */}
         <div>
-          <label htmlFor={`${fieldId}-f1`} className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f1`} className="block text-sm font-medium qt-text mb-2">
             Description
           </label>
           <textarea
@@ -177,7 +177,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
             value={formData.description}
             onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
             rows={3}
-            className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm resize-none"
+            className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent qt-text text-sm resize-none"
             placeholder="Optional description of this group"
           />
         </div>
@@ -199,7 +199,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
 
         {/* Color */}
         <div>
-          <label htmlFor={`${fieldId}-f2`} className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f2`} className="block text-sm font-medium qt-text mb-2">
             Color
           </label>
           <div className="flex items-center gap-3">
@@ -216,14 +216,14 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
               value={formData.color}
               onChange={(e) => setFormData(prev => ({ ...prev, color: e.target.value }))}
               placeholder="#000000"
-              className="flex-1 px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm"
+              className="flex-1 px-4 py-2 rounded-lg border qt-border-default bg-transparent qt-text text-sm"
             />
           </div>
         </div>
 
         {/* Icon (emoji) */}
         <div>
-          <label htmlFor={`${fieldId}-f3`} className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={`${fieldId}-f3`} className="block text-sm font-medium qt-text mb-2">
             Icon (emoji)
           </label>
           <input
@@ -232,7 +232,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
             value={formData.icon}
             onChange={(e) => setFormData(prev => ({ ...prev, icon: e.target.value }))}
             maxLength={2}
-            className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm"
+            className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent qt-text text-sm"
             placeholder="e.g., 👥 or 🎭"
           />
         </div>

@@ -51,7 +51,7 @@ export function useApiKeyActions(onChanged: () => unknown): ApiKeyActions {
       setDeleteConfirmId(null)
       await onChanged()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deleteKey is a fresh object each render, but its execute is a stable useCallback
   }, [deleteConfirmId, onChanged]) // deleteKey.execute is stable
 
   const handleTest = useCallback(async (id: string) => {
@@ -83,7 +83,7 @@ export function useApiKeyActions(onChanged: () => unknown): ApiKeyActions {
     }
 
     setTestingKeyId(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- testKey is a fresh object each render, but its execute is a stable useCallback
   }, []) // testKey.execute is stable
 
   return {

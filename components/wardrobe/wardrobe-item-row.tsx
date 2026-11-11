@@ -187,7 +187,7 @@ export function WardrobeItemRow({
         {isComposite ? (
           <button
             type="button"
-            className="qt-text-secondary hover:text-foreground mt-0.5"
+            className="qt-text-secondary hover:qt-text mt-0.5"
             aria-label={expanded ? 'Collapse components' : 'Expand components'}
             onClick={() => setExpanded((v) => !v)}
           >
@@ -207,7 +207,7 @@ export function WardrobeItemRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span
-              className="text-sm text-foreground"
+              className="text-sm qt-text"
               style={{
                 display: '-webkit-box',
                 WebkitLineClamp: 2,

@@ -106,7 +106,7 @@ export function CharacterDeleteDialog({
           ) : (
             <>
               <p className="qt-text-small mb-4">
-                Are you sure you want to delete <strong className="text-foreground">{characterName}</strong>?
+                Are you sure you want to delete <strong className="qt-text">{characterName}</strong>?
               </p>
 
               {hasExclusiveData && (

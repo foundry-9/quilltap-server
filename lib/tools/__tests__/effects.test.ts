@@ -5,7 +5,6 @@
 import {
   effectOfToolCall,
   maxEffectOfTool,
-  highestToolEffect,
   describeCeilingRefusal,
   resolveToolPermit,
   offeredTools,
@@ -27,9 +26,7 @@ describe('effect resolution', () => {
     expect(maxEffectOfTool('doc_delete_file')).toBe('destroy')
   })
 
-  it('ranks and lowers ceilings', () => {
-    expect(highestToolEffect(['read', 'none', 'write'])).toBe('write')
-    expect(highestToolEffect([])).toBe('none')
+  it('lowers ceilings', () => {
     expect(lowerToolEffect(undefined, 'write')).toBe('write')
     expect(lowerToolEffect('read', 'write')).toBe('read')
     expect(isWithinCeiling('destroy', 'write')).toBe(false)

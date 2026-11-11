@@ -52,7 +52,7 @@ export function AIWizardModal({
     if (!isOpen) {
       wizard.reset()
     }
-  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps -- reset only on the close transition; wizard is a fresh object every render
 
   if (!isOpen) return null
 
@@ -81,7 +81,7 @@ export function AIWizardModal({
         <div className="qt-dialog-header flex justify-between items-center flex-shrink-0">
           <div>
             <h2 id={titleId} className="qt-dialog-title flex items-center gap-2">
-              <Icon name="wand" className="w-5 h-5 text-primary" />
+              <Icon name="wand" className="w-5 h-5 qt-text-brand" />
               AI Wizard
             </h2>
             <p className="text-sm qt-text-secondary mt-1">
@@ -109,7 +109,7 @@ export function AIWizardModal({
                     step < wizard.currentStep
                       ? 'qt-bg-primary qt-text-on-primary'
                       : step === wizard.currentStep
-                      ? 'qt-bg-primary qt-text-on-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
+                      ? 'qt-bg-primary qt-text-on-primary ring-2 qt-ring-brand ring-offset-2 ring-offset-background'
                       : 'qt-bg-muted qt-text-secondary'
                   }`}
                 >

@@ -21,7 +21,7 @@ jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 
 import { addCharacter, getFakeRepos, resetStore, state } from '@/__tests__/helpers/inventory-fake-store'
 import { resolveAtlasLocation, type AtlasLocation } from '@/lib/atlas/location'
-import { createAtlasEntry, setAtlasEntryArchived } from '@/lib/atlas/item-mutations'
+import { createAtlasEntry, updateAtlasEntry } from '@/lib/atlas/item-mutations'
 import { loadAtlasPool, loadCastAtlasView, shadowAtlasLayers } from '@/lib/atlas/pool'
 
 const repos = () => getFakeRepos() as never
@@ -51,7 +51,7 @@ it('shadows by canonical name, case-insensitively: character > project > general
 it('drops archived entries per tier before shadowing', async () => {
   await make(await at('project', 'project-1'), 'Convertible', 'project')
   const mine = await make(await at('character', 'c-a'), 'Convertible', 'agatha')
-  await setAtlasEntryArchived(await at('character', 'c-a'), mine, true)
+  await updateAtlasEntry(await at('character', 'c-a'), mine, { archived: true })
   const pool = await loadAtlasPool(repos(), { characterId: 'c-a', projectId: 'project-1' })
   expect(pool.entries.map((e) => e.knowledge)).toEqual(['project'])
 })

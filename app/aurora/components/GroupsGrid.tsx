@@ -36,7 +36,7 @@ export function GroupsGrid({ groups, onCreateClick, onDeleteClick, onOpenGroup }
         <p className="mb-4 text-lg qt-text-secondary">No groups yet</p>
         <button
           onClick={onCreateClick}
-          className="qt-text-primary hover:text-primary/80"
+          className="qt-text-primary hover:qt-text-brand/80"
         >
           Create your first group
         </button>

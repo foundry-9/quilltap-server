@@ -408,9 +408,9 @@ export function ProfileModal({
             name="isDefault"
             checked={form.formData.isDefault}
             onChange={form.handleChange}
-            className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+            className="qt-checkbox"
           />
-          <label htmlFor="isDefault" className="ml-2 block qt-text-label text-foreground">
+          <label htmlFor="isDefault" className="ml-2 block qt-text-label qt-text">
             Set as default embedding profile
           </label>
         </div>
@@ -450,7 +450,7 @@ export function ProfileModal({
         </div>
       }
     >
-      <p className="text-foreground">
+      <p className="qt-text">
         You&apos;ve switched the default embedding profile. All existing
         embeddings were created with a different model and need to be
         regenerated — this includes help documentation, character memories,

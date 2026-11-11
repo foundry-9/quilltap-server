@@ -68,19 +68,19 @@ export function ImportPreviewStep({
       <div className="p-4 qt-bg-muted/50 rounded-lg space-y-2">
         <div>
           <p className="qt-text-small qt-text-secondary">Export Type</p>
-          <p className="font-medium text-foreground">
+          <p className="font-medium qt-text">
             {preview.manifest.exportType}
           </p>
         </div>
         <div>
           <p className="qt-text-small qt-text-secondary">Created</p>
-          <p className="font-medium text-foreground">
+          <p className="font-medium qt-text">
             {formatDateTime(preview.manifest.createdAt)}
           </p>
         </div>
         <div>
           <p className="qt-text-small qt-text-secondary">App Version</p>
-          <p className="font-medium text-foreground">
+          <p className="font-medium qt-text">
             {preview.manifest.appVersion}
           </p>
         </div>
@@ -98,10 +98,10 @@ export function ImportPreviewStep({
           return (
             <div
               key={entityKey}
-              className="p-4 border qt-border-default rounded-lg space-y-2"
+              className="border qt-border-default rounded-lg p-4 space-y-2"
             >
               <div className="flex items-center justify-between">
-                <h4 className="font-medium text-foreground">
+                <h4 className="font-medium qt-text">
                   {ENTITY_TYPE_LABELS[displayType]}
                 </h4>
                 <span className="qt-text-small qt-text-secondary">
@@ -120,7 +120,7 @@ export function ImportPreviewStep({
                       onChange={() => onToggleSelection(entityKey, entity.id)}
                       className="w-4 h-4"
                     />
-                    <span className="text-foreground flex-1">
+                    <span className="qt-text flex-1">
                       {entity.name || entity.title}
                       {entity.detail && (
                         <span className="block qt-text-small qt-text-secondary">

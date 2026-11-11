@@ -176,7 +176,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
         </div>
         <div className="rounded-lg qt-bg-muted/50 px-2 py-1.5">
           <div className="text-xs qt-text-secondary mt-1">Scanned</div>
-          <div className="qt-text-label-xs text-foreground">{lastScanned}</div>
+          <div className="qt-text-label-xs qt-text">{lastScanned}</div>
         </div>
       </div>
 

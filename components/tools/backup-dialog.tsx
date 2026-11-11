@@ -105,7 +105,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
               <h2 id={titleId} className="qt-dialog-title">Create Backup</h2>
               <button
                 onClick={handleClose}
-                className="qt-text-secondary hover:text-foreground"
+                className="qt-text-secondary hover:qt-text"
                 aria-label="Close dialog"
               >
                 <Icon name="close" className="w-6 h-6" />

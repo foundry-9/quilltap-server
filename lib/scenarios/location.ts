@@ -417,19 +417,10 @@ async function resolve(
   return storeLocation(store.scope, store.owner.id, store.mountPointId, name, repos);
 }
 
-/** Which owner a mount belongs to, or null when it is none of the four kinds. */
-export async function classifyScenarioMount(
-  mountPointId: string,
-  repos: RepositoryContainer,
-  userId: string,
-): Promise<{ scope: ScenarioScope; id: string | null } | null> {
-  const owner = await classify(mountPointId, repos, userId);
-  return owner ? { scope: owner.scope, id: owner.id } : null;
-}
-
 /**
- * `classifyScenarioMount`, keeping the character row it read so a ref lookup
- * needn't read it again. A filter over the shared `classifyMount`: another
+ * Which owner a mount belongs to, or null when it is none of the four kinds,
+ * keeping the character row it read so a ref lookup needn't read it again.
+ * A filter over the shared `classifyMount`: another
  * user's or an archived character's vault holds no scenarios for this caller.
  */
 async function classify(

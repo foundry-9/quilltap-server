@@ -120,7 +120,7 @@ export function TaskFilters({
           type="checkbox"
           checked={autoRefresh}
           onChange={(e) => onAutoRefreshChange(e.target.checked)}
-          className="rounded qt-border-default text-primary focus:ring-ring"
+          className="rounded qt-border-default qt-text-brand qt-focus-ring"
         />
         Fallback polling (5s)
       </label>

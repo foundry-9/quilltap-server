@@ -54,7 +54,7 @@ export function ApplyConfirmation({
       {/* Summary header */}
       <div className="qt-card p-4 qt-bg-primary/5 qt-border-primary/20">
         <div className="flex items-center gap-2 mb-1">
-          <Icon name="check-circle" className="w-4 h-4 text-primary" />
+          <Icon name="check-circle" className="w-4 h-4 qt-text-brand" />
           <h3 className="qt-section-title text-sm">
             {changes.length} {changes.length === 1 ? 'Amendment' : 'Amendments'} Awaiting Commission
           </h3>

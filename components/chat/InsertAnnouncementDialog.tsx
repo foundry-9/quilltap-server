@@ -383,7 +383,7 @@ export default function InsertAnnouncementDialog({
         <div className="flex-1 overflow-y-auto p-4">
           {/* Mode selector */}
           <div className="mb-4">
-            <label className="block text-sm qt-text-primary mb-2">Sender</label>
+            <label className="qt-label mb-2">Sender</label>
             <div className="flex gap-2" role="tablist" aria-label="Announcement sender type">
               <button
                 type="button"
@@ -432,7 +432,7 @@ export default function InsertAnnouncementDialog({
           <div className="mb-4">
             {mode === 'staff' && (
               <div>
-                <label htmlFor="announce-staff" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="announce-staff" className="qt-label mb-2">
                   Staff member
                 </label>
                 <select
@@ -453,7 +453,7 @@ export default function InsertAnnouncementDialog({
 
             {mode === 'character' && (
               <div>
-                <label htmlFor="announce-character-search" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="announce-character-search" className="qt-label mb-2">
                   Off-scene character
                 </label>
                 <input
@@ -507,7 +507,7 @@ export default function InsertAnnouncementDialog({
                 {selectedCharacter && (
                   <div className="space-y-3">
                     <div>
-                      <label htmlFor="announce-profile" className="block text-sm qt-text-primary mb-2">
+                      <label htmlFor="announce-profile" className="qt-label mb-2">
                         How should they say it?
                       </label>
                       <select
@@ -534,7 +534,7 @@ export default function InsertAnnouncementDialog({
 
                     {showSystemPromptPicker && (
                       <div>
-                        <label htmlFor="announce-prompt" className="block text-sm qt-text-primary mb-2">
+                        <label htmlFor="announce-prompt" className="qt-label mb-2">
                           System prompt
                         </label>
                         <select
@@ -566,7 +566,7 @@ export default function InsertAnnouncementDialog({
 
             {mode === 'custom' && (
               <div>
-                <label htmlFor="announce-custom-name" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="announce-custom-name" className="qt-label mb-2">
                   Display name
                 </label>
                 <input
@@ -589,7 +589,7 @@ export default function InsertAnnouncementDialog({
           {/* Audience — public by default; naming anyone makes it a whisper. */}
           {audienceCandidates.length > 0 && mode !== 'fact' && (
             <div className="mb-4">
-              <label className="block text-sm qt-text-primary mb-2" id="announce-audience-label">
+              <label className="qt-label mb-2" id="announce-audience-label">
                 Who hears it
               </label>
               <div
@@ -662,7 +662,7 @@ export default function InsertAnnouncementDialog({
           {/* Seed editor */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm qt-text-primary">
+              <label className="qt-label">
                 {willRewrite
                   ? `What you want the character to ${isWhisper ? 'say privately' : 'announce'}`
                   : mode === 'fact'

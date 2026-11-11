@@ -96,7 +96,7 @@ export function PromptList({
                 <button
                   type="button"
                   onClick={() => onSetDefault(prompt.id)}
-                  className="qt-button-icon qt-button-ghost hover:text-primary"
+                  className="qt-button-icon qt-button-ghost hover:qt-text-brand"
                   title="Set as default"
                   disabled={saving}
                 >
@@ -114,7 +114,7 @@ export function PromptList({
                 </button>
                 {deleteConfirm === prompt.id && (
                   <div className="absolute right-0 top-full mt-1 p-3 qt-bg-card border qt-border-default rounded-lg qt-shadow-lg z-10 min-w-[180px]">
-                    <p className="text-sm text-foreground mb-2">Delete this prompt?</p>
+                    <p className="text-sm qt-text mb-2">Delete this prompt?</p>
                     <div className="flex gap-2">
                       <button
                         type="button"

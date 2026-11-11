@@ -81,7 +81,7 @@ function SortableHeader({
   return (
     <button
       onClick={handleClick}
-      className={`flex items-center gap-1 text-left font-medium hover:text-primary transition-colors ${className}`}
+      className={`flex items-center gap-1 text-left font-medium hover:qt-text-brand transition-colors ${className}`}
     >
       <span>{label}</span>
       <span
@@ -212,7 +212,7 @@ export default function FileBrowserList({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onFileClick(file)}
-                    className="text-left font-medium hover:text-primary transition-colors truncate max-w-xs block"
+                    className="text-left font-medium hover:qt-text-brand transition-colors truncate max-w-xs block"
                     title={file.originalFilename || file.filename}
                   >
                     {file.originalFilename || file.filename}

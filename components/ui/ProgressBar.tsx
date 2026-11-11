@@ -150,7 +150,7 @@ export function ProgressBar({
                   key={segment.key}
                   className={`text-[10px] ${
                     isActive
-                      ? 'text-primary font-medium'
+                      ? 'qt-text-brand font-medium'
                       : isDone
                         ? 'qt-text-success'
                         : 'qt-text-secondary'

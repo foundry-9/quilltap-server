@@ -142,7 +142,7 @@ export default function ImageProfilesTab() {
 
             // Build metadata array
             const metadata: SettingsCardMetadata[] = [
-              { label: 'Model', value: <span className="font-mono text-sm text-foreground">{profile.modelName}</span> },
+              { label: 'Model', value: <span className="font-mono text-sm qt-text">{profile.modelName}</span> },
             ]
             if (profile.apiKey) {
               metadata.push({ label: 'API Key', value: profile.apiKey.label })
@@ -179,7 +179,7 @@ export default function ImageProfilesTab() {
                       {Object.entries(profile.parameters).map(([key, value]) => (
                         <div key={key} className="qt-text-xs">
                           <span className="font-mono">{key}:</span>{' '}
-                          <span className="text-foreground">
+                          <span className="qt-text">
                             {typeof value === 'string' ? value : JSON.stringify(value)}
                           </span>
                         </div>

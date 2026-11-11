@@ -30,7 +30,7 @@ export function ItemTierRow({ label, scope, itemCount, onOpen, testId, countNoun
       data-testid={testId}
     >
       <Icon name="folder" className="w-4 h-4 qt-text-secondary" />
-      <span className="text-sm text-foreground flex-1 min-w-0 truncate">{label}</span>
+      <span className="text-sm qt-text flex-1 min-w-0 truncate">{label}</span>
       <span className="qt-badge qt-badge-wardrobe-shared">
         {scope === 'general' ? 'Shared' : scope === 'project' ? 'Project' : 'Group'}
       </span>

@@ -128,21 +128,3 @@ export function getDatabaseEncryptionState(dbPath: string): DatabaseEncryptionSt
 
   return encrypted ? 'encrypted' : 'plaintext';
 }
-
-/**
- * Check whether a database file is encrypted (SQLCipher) or plaintext.
- *
- * Boolean wrapper around {@link getDatabaseEncryptionState}. Maps `unknown`
- * to `false` to preserve the historical signature, but **callers that may
- * act destructively on the result** (e.g. running an in-place re-encryption
- * conversion) should call {@link getDatabaseEncryptionState} directly and
- * branch on `unknown` explicitly — otherwise a transient read error gets
- * silently treated as "plaintext, please re-encrypt."
- *
- * @param dbPath - Absolute path to the database file
- * @returns true if the file appears to be encrypted, false otherwise
- *          (including when the state is unknown — see warning above)
- */
-export function isDatabaseEncrypted(dbPath: string): boolean {
-  return getDatabaseEncryptionState(dbPath) === 'encrypted';
-}

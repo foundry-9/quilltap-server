@@ -437,7 +437,7 @@ export function ImportFromImageModal({
                 aria-label="Close"
                 type="button"
                 onClick={onClose}
-                className="qt-text-secondary hover:text-foreground"
+                className="qt-text-secondary hover:qt-text"
               >
                 <Icon name="close" className="w-5 h-5" />
               </button>
@@ -486,7 +486,7 @@ export function ImportFromImageModal({
                     className="border-2 border-dashed qt-border-default rounded-lg p-8 text-center cursor-pointer hover:qt-border-primary transition-colors"
                   >
                     <Icon name="image" className="w-12 h-12 mx-auto qt-text-secondary mb-3" />
-                    <p className="text-sm text-foreground mb-1">
+                    <p className="text-sm qt-text mb-1">
                       Drop an image here or click to browse
                     </p>
                     <p className="text-xs qt-text-secondary">
@@ -578,7 +578,7 @@ export function ImportFromImageModal({
                       className="w-20 h-20 object-cover rounded border qt-border-default flex-shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground">
+                      <p className="text-sm qt-text">
                         {proposedItems.length} item{proposedItems.length !== 1 ? 's' : ''} identified
                       </p>
                       {analyzedBy && (
@@ -612,7 +612,7 @@ export function ImportFromImageModal({
                     className="qt-checkbox mt-0.5"
                   />
                   <span className="flex-1 min-w-0">
-                    <span className="text-sm text-foreground block">
+                    <span className="text-sm qt-text block">
                       The photograph will be kept as each piece&apos;s first picture
                     </span>
                     <span className="text-xs qt-text-secondary block mt-0.5">
@@ -668,7 +668,7 @@ export function ImportFromImageModal({
                                     onChange={() => toggleItemType(index, type)}
                                     className="qt-checkbox"
                                   />
-                                  <span className="text-xs capitalize text-foreground">{type}</span>
+                                  <span className="text-xs capitalize qt-text">{type}</span>
                                 </label>
                               ))}
                             </div>
@@ -746,7 +746,7 @@ export function ImportFromImageModal({
                       className="qt-checkbox mt-1"
                     />
                     <span className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-foreground block">
+                      <span className="text-sm font-medium qt-text block">
                         Also create an outfit from these pieces
                       </span>
                       <span className="text-xs qt-text-secondary block mt-0.5">
@@ -809,7 +809,7 @@ export function ImportFromImageModal({
                           onChange={(e) => setOutfit(prev => ({ ...prev, replace: e.target.checked }))}
                           className="qt-checkbox mt-0.5"
                         />
-                        <span className="text-sm text-foreground">
+                        <span className="text-sm qt-text">
                           Replace everything in its slots when worn
                           <span className="block text-xs qt-text-secondary">
                             Off layers the pieces over whatever is already on.

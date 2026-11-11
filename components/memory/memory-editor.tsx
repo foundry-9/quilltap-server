@@ -50,7 +50,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     content: memory?.content || '',
     summary: memory?.summary || '',
     keywords: memory?.keywords?.join(', ') || '',
-    importance: memory?.importance || 0.5,
+    importance: memory?.importance ?? 0.5,
     keystone: memory?.keystone ?? false,
   })
 
@@ -133,7 +133,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
             <button
               aria-label="Close"
               onClick={onClose}
-              className="qt-text-secondary hover:text-foreground"
+              className="qt-text-secondary hover:qt-text"
             >
               <Icon name="close" className="w-6 h-6" />
             </button>

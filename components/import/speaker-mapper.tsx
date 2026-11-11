@@ -80,7 +80,7 @@ export function SpeakerMapper({
           <span className={`inline-flex items-center px-2 py-1 rounded qt-text-label-xs ${
             isUser
               ? 'qt-bg-success/10 qt-text-success'
-              : 'qt-bg-primary/10 text-primary'
+              : 'qt-bg-primary/10 qt-text-brand'
           }`}>
             {isUser ? 'User' : 'AI'}
           </span>
@@ -108,7 +108,7 @@ export function SpeakerMapper({
               className="mt-1"
             />
             <div className="flex-1">
-              <span className="text-sm text-foreground">
+              <span className="text-sm qt-text">
                 Map to existing character
               </span>
               {mapping.mappingType === 'existing_character' && (
@@ -169,7 +169,7 @@ export function SpeakerMapper({
               className="mt-1"
             />
             <div className="flex-1">
-              <span className="text-sm text-foreground">
+              <span className="text-sm qt-text">
                 Create new character named &ldquo;{speaker.name}&rdquo;
               </span>
               {mapping.mappingType === 'create_character' && !isUser && (
@@ -220,7 +220,7 @@ export function SpeakerMapper({
     <div className="space-y-6">
       {/* Default connection profile */}
       <div className="qt-bg-muted rounded-lg p-4">
-        <label htmlFor={`${id}-default-profile`} className="block text-sm qt-text-primary mb-2">
+        <label htmlFor={`${id}-default-profile`} className="qt-label mb-2">
           Default Connection Profile
         </label>
         <p className="qt-text-xs mb-2">

@@ -53,7 +53,7 @@ export function LoadingState({
       default:
         return (
           <div className="flex flex-col items-center gap-3">
-            <div className="qt-spinner text-primary" />
+            <div className="qt-spinner qt-text-brand" />
             {message && <p className="text-sm qt-text-secondary">{message}</p>}
           </div>
         )
@@ -61,7 +61,7 @@ export function LoadingState({
   }
 
   return (
-    <div className={`flex items-center justify-center py-8 ${className}`}>
+    <div className={`qt-loading-state ${className}`}>
       {getContent()}
     </div>
   )

@@ -154,7 +154,7 @@ export default function LLMInspectorPanel({
         className="flex-1 overflow-y-auto px-3 py-3"
       >
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="qt-loading-state py-12">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 qt-border-primary" />
           </div>
         ) : !loggingEnabled ? (

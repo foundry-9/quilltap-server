@@ -62,7 +62,7 @@ export function ArchiveCharacterDialog({
             it is merely put away, and rehydrating unpacks it all again.
           </p>
 
-          <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4 space-y-1.5">
+          <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50 space-y-1.5">
             <p className="qt-text-label">Packed into the bundle and cleared away:</p>
             <ul className="qt-text-small qt-text-secondary list-disc pl-5 space-y-0.5">
               <li>Their memories (the Commonplace Book falls silent)</li>
@@ -72,7 +72,7 @@ export function ArchiveCharacterDialog({
             </ul>
           </div>
 
-          <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4 space-y-1.5">
+          <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50 space-y-1.5">
             <p className="qt-text-label">Kept in place, exactly as it stands:</p>
             <ul className="qt-text-small qt-text-secondary list-disc pl-5 space-y-0.5">
               <li>Who they are — every character field, still readable on their page</li>

@@ -197,7 +197,7 @@ export function SelectLLMProfileDialog({
                     )}
                   </div>
                   {selectedProfileId === profile.id && (
-                    <Icon name="check" className="w-5 h-5 text-primary" />
+                    <Icon name="check" className="w-5 h-5 qt-text-brand" />
                   )}
                 </label>
               ))}

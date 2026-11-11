@@ -37,7 +37,6 @@ export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';
 export {
-  handleActiveDocument,
   handleOpenDocuments,
   handleRecentDocuments,
   handleAccessibleStores,

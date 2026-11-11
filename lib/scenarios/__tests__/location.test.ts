@@ -46,7 +46,6 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 import { stableUuidFromString } from '@/lib/utils/stable-uuid'
 import {
-  classifyScenarioMount,
   lookupScenarioRef,
   resolveScenarioLocation,
   ScenarioConflictError,
@@ -127,25 +126,6 @@ describe('resolveScenarioLocation', () => {
   })
 })
 
-describe('classifyScenarioMount', () => {
-  it.each([
-    [GENERAL_MOUNT, { scope: 'general', id: null }],
-    [PROJECT_MOUNT, { scope: 'project', id: 'proj-1' }],
-    [GROUP_MOUNT, { scope: 'group', id: 'group-1' }],
-    [VAULT, { scope: 'character', id: 'char-1' }],
-  ])('classifies %s', async (mountPointId, expected) => {
-    await expect(classifyScenarioMount(mountPointId, stores.repos, USER)).resolves.toEqual(expected)
-  })
-
-  it('classifies an archived character’s vault as nothing', async () => {
-    await expect(classifyScenarioMount(ARCHIVED_VAULT, stores.repos, USER)).resolves.toBeNull()
-  })
-
-  it('classifies a linked (non-official) store as nothing', async () => {
-    await expect(classifyScenarioMount(LINKED_STORE, stores.repos, USER)).resolves.toBeNull()
-  })
-})
-
 describe('lookupScenarioRef', () => {
   it('refuses a path outside Scenarios/ before reading any store', async () => {
     const lookup = await lookupScenarioRef({ mountPointId: PROJECT_MOUNT, path: 'Scenarios/../secrets.md' }, stores.repos, USER)
@@ -156,6 +136,11 @@ describe('lookupScenarioRef', () => {
 
   it('refuses a nested path', async () => {
     const lookup = await lookupScenarioRef({ mountPointId: PROJECT_MOUNT, path: 'Scenarios/deep/x.md' }, stores.repos, USER)
+    expect(lookup.status).toBe('refused')
+  })
+
+  it('refuses an archived character’s vault', async () => {
+    const lookup = await lookupScenarioRef({ mountPointId: ARCHIVED_VAULT, path: 'Scenarios/x.md' }, stores.repos, USER)
     expect(lookup.status).toBe('refused')
   })
 

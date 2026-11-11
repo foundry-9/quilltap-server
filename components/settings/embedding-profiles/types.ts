@@ -82,8 +82,3 @@ export const PROVIDER_BADGE_CLASSES: Record<string, string> = {
   NANOGPT: 'qt-badge-provider-nanogpt',
   BUILTIN: 'qt-badge-provider-builtin',
 }
-
-/**
- * @deprecated Use PROVIDER_BADGE_CLASSES instead
- */
-export const PROVIDER_COLORS = PROVIDER_BADGE_CLASSES

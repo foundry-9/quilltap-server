@@ -191,10 +191,6 @@ export function NewCharacterView() {
         ...(birthday && { birthday }),
         ...(kind !== DEFAULT_CHARACTER_KIND && { kind }),
       }
-      console.debug('[NewCharacter] creating', {
-        hasSystemPrompt: body.systemPrompts.length > 0,
-        hasScenario: Boolean(opening),
-      })
 
       const res = await fetch('/api/v1/characters', {
         method: 'POST',

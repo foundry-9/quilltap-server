@@ -1,13 +1,9 @@
 /**
- * Create Character Route — thin wrapper around {@link NewCharacterView}. When the
- * tabbed workspace is enabled, redirects into it; otherwise renders the view.
- * See `docs/developer/features/complete/tabbed-workspace.md`.
+ * New Character Route — redirects into the tabbed workspace's new-character tab.
  */
 
-import { NewCharacterView } from './NewCharacterView'
 import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
 export default function NewCharacterPage() {
-  redirectToWorkspaceTab('character-new')
-  return <NewCharacterView />
+  return redirectToWorkspaceTab('character-new')
 }

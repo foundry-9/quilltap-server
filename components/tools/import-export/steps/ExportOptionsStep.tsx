@@ -30,7 +30,7 @@ export function ExportOptionsStep({
       <p className="qt-text-small qt-text-secondary">
         Configure export options
       </p>
-      <label className="flex items-start gap-3 p-4 border qt-border-default rounded-lg cursor-pointer hover:qt-bg-muted/50">
+      <label className="flex items-start gap-3 border qt-border-default rounded-lg p-4 cursor-pointer hover:qt-bg-muted/50">
         <input
           type="checkbox"
           checked={includeMemories}
@@ -38,7 +38,7 @@ export function ExportOptionsStep({
           className="w-4 h-4 mt-1"
         />
         <div className="flex-1">
-          <p className="font-medium text-foreground">
+          <p className="font-medium qt-text">
             Include associated memories
           </p>
           {memoryCount > 0 && (
@@ -50,8 +50,8 @@ export function ExportOptionsStep({
       </label>
 
       {vaultPreview && vaultPreview.stores > 0 && (
-        <div className="p-4 border qt-border-default rounded-lg">
-          <p className="font-medium text-foreground">
+        <div className="border qt-border-default rounded-lg p-4">
+          <p className="font-medium qt-text">
             Every character travels with their vault
           </p>
           <p className="qt-text-small qt-text-secondary mt-1">

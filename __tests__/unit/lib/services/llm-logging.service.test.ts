@@ -8,11 +8,8 @@ jest.unmock('@/lib/services/llm-logging.service')
 import {
   isLoggingEnabled,
   logLLMCall,
-  messageHasLogs,
-  getLogsForUser,
   getTotalTokenUsage,
   cleanupOldLogs,
-  deleteAllLogsForUser,
 } from '../../../../lib/services/llm-logging.service'
 import { getRepositories } from '../../../../lib/repositories/factory'
 
@@ -208,43 +205,6 @@ describe('llm-logging.service', () => {
     })
   })
 
-  describe('messageHasLogs', () => {
-    it('returns true when logs exist', async () => {
-      mockRepos.llmLogs.countByMessageId.mockResolvedValue(2)
-
-      const result = await messageHasLogs('msg-1')
-
-      expect(result).toBe(true)
-    })
-
-    it('returns false on error', async () => {
-      mockRepos.llmLogs.countByMessageId.mockRejectedValue(new Error('boom'))
-
-      const result = await messageHasLogs('msg-1')
-
-      expect(result).toBe(false)
-    })
-  })
-
-  describe('getLogsForUser', () => {
-    it('returns logs when repository succeeds', async () => {
-      mockRepos.llmLogs.findByUserId.mockResolvedValue([{ id: 'log-1' }])
-
-      const result = await getLogsForUser('user-1', 10, 0)
-
-      expect(result).toEqual([{ id: 'log-1' }])
-      expect(mockRepos.llmLogs.findByUserId).toHaveBeenCalledWith('user-1', 10, 0)
-    })
-
-    it('returns empty array on error', async () => {
-      mockRepos.llmLogs.findByUserId.mockRejectedValue(new Error('boom'))
-
-      const result = await getLogsForUser('user-1', 10, 0)
-
-      expect(result).toEqual([])
-    })
-  })
-
   describe('getTotalTokenUsage', () => {
     it('returns usage summary from repository', async () => {
       mockRepos.llmLogs.getTotalTokenUsage.mockResolvedValue({
@@ -259,16 +219,13 @@ describe('llm-logging.service', () => {
     })
   })
 
-  describe('cleanupOldLogs and deleteAllLogsForUser', () => {
-    it('returns counts when successful', async () => {
+  describe('cleanupOldLogs', () => {
+    it('returns the count when successful', async () => {
       mockRepos.llmLogs.cleanupOldLogs.mockResolvedValue(4)
-      mockRepos.llmLogs.deleteByUserId.mockResolvedValue(12)
 
       const cleanupResult = await cleanupOldLogs('user-1', 30)
-      const deleteResult = await deleteAllLogsForUser('user-1')
 
       expect(cleanupResult).toBe(4)
-      expect(deleteResult).toBe(12)
     })
 
     it('returns 0 on cleanup error', async () => {

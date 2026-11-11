@@ -468,7 +468,7 @@ export default function FileBrowser({
         <div className="flex items-center gap-2 text-sm flex-wrap">
           <button
             onClick={() => setCurrentFolder('/')}
-            className="hover:text-primary transition-colors"
+            className="hover:qt-text-brand transition-colors"
           >
             Root
           </button>
@@ -481,7 +481,7 @@ export default function FileBrowser({
                     <span className="qt-text-secondary">/</span>
                     <button
                       onClick={() => setCurrentFolder(path)}
-                      className="hover:text-primary transition-colors"
+                      className="hover:qt-text-brand transition-colors"
                     >
                       {part}
                     </button>

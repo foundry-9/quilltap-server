@@ -94,7 +94,7 @@ export function SlideOverPanel({
             <button
               type="button"
               onClick={onClose}
-              className="qt-text-secondary hover:text-foreground transition-colors p-1"
+              className="qt-text-secondary hover:qt-text transition-colors p-1"
               aria-label="Close panel"
             >
               <Icon name="close" className="w-5 h-5" />

@@ -196,7 +196,6 @@ export function useCharacterAutosave(characterId: string): CharacterAutosave {
           const stored =
             queryClient.getQueryData<CharacterResponse>(queryKeys.characters.detail(characterId))?.character ?? null
           const { body, cachePatch } = buildCharacterPatch(drafts, stored)
-          console.debug('[CharacterPage] autosave', { characterId, fields: Object.keys(body), keepalive })
           try {
             await putCharacter(characterId, body, keepalive)
           } catch (err) {
@@ -218,7 +217,6 @@ export function useCharacterAutosave(characterId: string): CharacterAutosave {
       patchCache(patch)
       try {
         await engine.runImmediate(() => putCharacter(characterId, patch as Record<string, unknown>))
-        console.debug('[CharacterPage] saved', { characterId, fields: Object.keys(patch) })
         return true
       } catch (err) {
         if (previous) queryClient.setQueryData(detailKey, previous)

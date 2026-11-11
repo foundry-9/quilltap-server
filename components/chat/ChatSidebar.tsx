@@ -613,7 +613,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
       {turnSelectionResult?.debug && (
         <div className="qt-chat-sidebar-debug">
           <details>
-            <summary className="cursor-pointer hover:text-foreground">Turn Debug Info</summary>
+            <summary className="cursor-pointer hover:qt-text">Turn Debug Info</summary>
             <div className="mt-2 space-y-1">
               <div>Reason: {turnSelectionResult.reason}</div>
               <div>Cycle Complete: {turnSelectionResult.cycleComplete ? 'Yes' : 'No'}</div>

@@ -41,7 +41,7 @@ function InlineBrahmaProfileSetting() {
       showSuccessToast('Inline Brahma engine saved')
     },
     onError: (err) => {
-      console.debug('[BrahmaConsoleSettings] Inline profile save failed', { error: getErrorMessage(err) })
+      console.warn('[BrahmaConsoleSettings] Inline profile save failed', { error: getErrorMessage(err) })
       showErrorToast(getErrorMessage(err, 'Failed to save Brahma Console settings'))
     },
   })

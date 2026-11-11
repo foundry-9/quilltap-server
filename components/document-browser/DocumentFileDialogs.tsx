@@ -59,7 +59,7 @@ export function DocumentLinksDialog({ storeId, path, onClose, onReveal }: Docume
           {locations.map((loc) => (
             <li key={loc.linkId} className="qt-card py-2 px-3 flex items-center gap-2">
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-foreground truncate" title={loc.relativePath}>
+                <div className="text-sm qt-text truncate" title={loc.relativePath}>
                   {loc.relativePath}
                 </div>
                 <div className="qt-text-xs qt-text-secondary truncate">{loc.mountPointName}</div>

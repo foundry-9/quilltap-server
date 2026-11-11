@@ -129,7 +129,7 @@ function ProfileCardContent({
 
       {/* Usage stats */}
       {(profile.messageCount !== undefined || profile.totalTokens !== undefined) && (
-        <div className="text-sm text-primary mt-1 font-medium">
+        <div className="text-sm qt-text-brand mt-1 font-medium">
           {profile.messageCount !== undefined && (
             <span>{profile.messageCount} message{profile.messageCount === 1 ? '' : 's'}</span>
           )}

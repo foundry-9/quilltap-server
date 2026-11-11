@@ -147,7 +147,7 @@ function NewChatModalFrame({
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="qt-loading-state">
             <p className="qt-text-secondary">Loading...</p>
           </div>
         ) : (
