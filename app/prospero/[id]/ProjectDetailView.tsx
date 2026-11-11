@@ -40,12 +40,17 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     project,
     loading,
     error,
-    editForm,
-    setEditForm,
+    headerDraft,
+    setHeaderDraft,
+    instructionsDraft,
+    setInstructionsDraft,
+    instructionsDirty,
     isEditing,
-    setIsEditing,
+    startEditing,
+    cancelEditing,
     fetchProject,
-    handleSave,
+    handleSaveHeader,
+    handleSaveInstructions,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
     handleSaveAnswerConfirmationOverride,
@@ -103,7 +108,6 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
   useReportWorkspaceBackdrop(storyBackgroundUrl || prosperoBackgroundImage || null, false)
 
   useEffect(() => {
-    fetchProject()
     fetchChats()
     fetchFiles()
     fetchLinkedStores()
@@ -113,15 +117,12 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
       .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image profiles')))
       .then(data => setImageProfiles(data?.profiles || []))
       .catch(() => {/* non-critical, selector will just be empty */})
-  }, [projectId, fetchProject, fetchChats, fetchFiles, fetchLinkedStores, fetchAllStores])
+  }, [projectId, fetchChats, fetchFiles, fetchLinkedStores, fetchAllStores])
 
   // Navigating back to the containing workspace tab refreshes everything this
-  // page shows (fetchProject only flips `loading` on the very first load, so
-  // the page stays on screen during the refresh). While the header edit form
-  // is open, skip the project refetch — fetchProject resets editForm and would
-  // clobber in-progress typing.
+  // page shows. The project re-read never touches an edited draft (#170).
   useOnTabActivated(() => {
-    if (!isEditing) void fetchProject()
+    void fetchProject()
     void fetchChats()
     void fetchFiles()
     void fetchLinkedStores()
@@ -157,11 +158,11 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
       <ProjectDetailHeader
         project={project}
         isEditing={isEditing}
-        editForm={editForm}
-        onEditFormChange={setEditForm}
-        onEditClick={() => setIsEditing(true)}
-        onCancelEdit={() => setIsEditing(false)}
-        onSave={handleSave}
+        draft={headerDraft}
+        onDraftChange={setHeaderDraft}
+        onEditClick={startEditing}
+        onCancelEdit={cancelEditing}
+        onSave={handleSaveHeader}
         onBack={onBack}
       />
 
@@ -228,9 +229,10 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
             across the whole grid instead of flexing beside a compact card. */}
         <SettingsCard
           project={project}
-          editForm={editForm}
-          onEditFormChange={setEditForm}
-          onSave={handleSave}
+          instructions={instructionsDraft}
+          onInstructionsChange={setInstructionsDraft}
+          instructionsDirty={instructionsDirty}
+          onSave={handleSaveInstructions}
           expanded={cardState.settings}
           onToggle={() => toggleCard('settings')}
         />

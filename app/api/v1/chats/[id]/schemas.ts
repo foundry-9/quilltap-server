@@ -147,7 +147,12 @@ export const mergeConversationSchema = z.object({
   outfitSelections: z.array(OutfitSelectionSchema).optional(),
 });
 
-export const chatUpdateRequestSchema = z.object({
+/**
+ * The whole `PUT` body. Strict: a chat field sent at the top level instead of
+ * under `chat` is a 400, not a silent strip — that is how "Announce Generated
+ * Images" never saved (#176). Clients write through `lib/chat/patch-chat.ts`.
+ */
+export const chatUpdateRequestSchema = z.strictObject({
   chat: updateChatSchema.optional(),
   updateParticipant: updateParticipantSchema.optional(),
   addParticipant: addParticipantSchema.optional(),

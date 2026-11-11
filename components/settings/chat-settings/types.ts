@@ -83,6 +83,11 @@ export interface StoryBackgroundsSettings {
  */
 export type WardrobeImageSettings = WardrobeImageSettingsType
 
+export interface AutoLockSettings {
+  enabled: boolean
+  idleMinutes: number
+}
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -139,6 +144,10 @@ export interface ChatSettings {
   answerConfirmationSettings?: AnswerConfirmationSettings
   /** Smart typography — render-time curly quotes plus type-time dashes/ellipsis. */
   smartTypographySettings?: SmartTypographySettings
+  /** The roleplay template a new chat starts with */
+  defaultRoleplayTemplateId?: string | null
+  /** Lock the app after a stretch of idleness (requires a passphrase) */
+  autoLockSettings?: AutoLockSettings
   createdAt: string
   updatedAt: string
 }

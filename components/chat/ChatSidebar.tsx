@@ -15,7 +15,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
-import { patchChat } from '@/lib/chat/patch-chat'
+import { usePatchChat } from '@/lib/chat/use-patch-chat'
 import { queryKeys } from '@/lib/query/keys'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { ConciergeOffDutyHint } from './ConciergeOffDutyHint'
@@ -1037,17 +1037,12 @@ function ChatSection({
   sectionOpen,
 }: ChatSectionProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(roleplayTemplateId ?? null)
-  const [templateSaving, setTemplateSaving] = useState(false)
-  const [imageProfileSaving, setImageProfileSaving] = useState(false)
-  const [alertImagesSaving, setAlertImagesSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
-  const [conciergeSaving, setConciergeSaving] = useState(false)
   // Off duty globally, the per-chat state does nothing; the select is
   // disabled (not hidden) and points at the switch.
   const { data: conciergeOnDuty = true } = useChatSettingsQuery(
     (settings) => settings.conciergeSettings?.enabled !== false,
   )
-  const [timelineModeSaving, setTimelineModeSaving] = useState(false)
 
   // Sync from props when chat record changes upstream
   useEffect(() => {
@@ -1085,142 +1080,88 @@ function ChatSection({
   const imageProfiles = imageProfilesData?.profiles ?? []
   const apiKeys = apiKeysData?.apiKeys ?? []
 
+  // Every write to the chat row goes through the one mutation: it toasts a
+  // refusal, refreshes the cached reads, and runs `onChatUpdated` on success.
+  const { patch, update, isSaving } = usePatchChat(chatId, { onSaved: onChatUpdated })
+
   const handleRoleplayTemplateChange = async (templateId: string | null) => {
-    try {
-      setTemplateSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleplayTemplateId: templateId }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      setSelectedTemplateId(templateId)
-      showSuccessToast('Roleplay template updated')
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to update roleplay template')
-    } finally {
-      setTemplateSaving(false)
-    }
+    // Top-level form: the route checks the template exists.
+    const ok = await update(
+      { roleplayTemplateId: templateId },
+      { success: 'Roleplay template updated', failure: 'Failed to update roleplay template' },
+    )
+    if (ok) setSelectedTemplateId(templateId)
   }
 
   const handleImageProfileChange = async (profileId: string | null) => {
-    try {
-      setImageProfileSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageProfileId: profileId }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      showSuccessToast('Image profile updated')
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to update image profile')
-    } finally {
-      setImageProfileSaving(false)
-    }
+    // Top-level form: the route checks the profile exists.
+    await update(
+      { imageProfileId: profileId },
+      { success: 'Image profile updated', failure: 'Failed to update image profile' },
+    )
   }
 
   const handleAlertImagesChange = async (value: boolean | null) => {
-    try {
-      setAlertImagesSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alertCharactersOfLanternImages: value }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      showSuccessToast(
-        value === null
+    // Under `chat` — sent at the top level it was stripped and never saved (#176).
+    await patch(
+      { alertCharactersOfLanternImages: value },
+      {
+        success: value === null
           ? 'Lantern announcements will inherit from the project'
           : value
             ? 'Lantern images will be announced to characters'
-            : 'Lantern images will stay silent for this chat'
-      )
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to update Lantern image announcements')
-    } finally {
-      setAlertImagesSaving(false)
-    }
+            : 'Lantern images will stay silent for this chat',
+        failure: 'Failed to update Lantern image announcements',
+      },
+    )
   }
 
   // Which clock the chat's story keeps for episodic memory. Persisted as the
   // explicit enum value; NULL in the record reads as 'realtime'.
   const handleTimelineModeChange = async (value: 'realtime' | 'narrative') => {
-    try {
-      setTimelineModeSaving(true)
-      await patchChat(chatId, { timelineMode: value })
-      showSuccessToast(
-        value === 'narrative'
+    await patch(
+      { timelineMode: value },
+      {
+        success: value === 'narrative'
           ? 'The story now keeps its own hours'
-          : 'The story is back on the clock on the wall'
-      )
-      onChatUpdated?.()
-    } catch (error) {
-      showErrorToast(apiErrorMessage(error, "Failed to change the story's clock"))
-    } finally {
-      setTimelineModeSaving(false)
-    }
+          : 'The story is back on the clock on the wall',
+        failure: "Failed to change the story's clock",
+      },
+    )
   }
 
   const handleConciergeStateChange = async (next: ConciergeState) => {
-    try {
-      setConciergeSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conciergeState: next }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      showSuccessToast(
-        next === 'moderated'
+    await update(
+      { conciergeState: next },
+      {
+        success: next === 'moderated'
           ? 'The Concierge is on watch'
           : next === 'unmoderated'
             ? 'The uncensored door stands open'
-            : 'Locked to the usual desks'
-      )
-      onChatUpdated?.()
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to change the Concierge state')
-    } finally {
-      setConciergeSaving(false)
-    }
+            : 'Locked to the usual desks',
+        failure: 'Failed to change the Concierge state',
+      },
+    )
   }
 
+  const templateSaving = isSaving('roleplayTemplateId')
+  const imageProfileSaving = isSaving('imageProfileId')
+  const alertImagesSaving = isSaving('alertCharactersOfLanternImages')
+  const timelineModeSaving = isSaving('timelineMode')
+  const conciergeSaving = isSaving('conciergeState')
+
+  // A server-side toggle action, not a field write: it answers with the new state.
   const handleAvatarGenToggle = async () => {
     try {
       setAvatarGenSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}?action=toggle-avatar-generation`, {
-        method: 'POST',
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
-      const data = await res.json()
+      const data = await apiFetch<{ avatarGenerationEnabled: boolean }>(
+        `/api/v1/chats/${chatId}?action=toggle-avatar-generation`,
+        { method: 'POST' },
+      )
       showSuccessToast(data.avatarGenerationEnabled ? 'Avatar generation enabled' : 'Avatar generation disabled')
       onChatUpdated?.()
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || 'Failed to toggle avatar generation')
+      showErrorToast(apiErrorMessage(error, 'Failed to toggle avatar generation'))
     } finally {
       setAvatarGenSaving(false)
     }

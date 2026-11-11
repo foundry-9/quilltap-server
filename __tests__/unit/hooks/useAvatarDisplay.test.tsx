@@ -6,6 +6,8 @@ import { describe, it, expect, afterEach } from '@jest/globals'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { AvatarDisplayProvider } from '@/components/providers/avatar-display-provider'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { createTestQueryClient } from '../../helpers/renderWithQuery'
 
 function jsonResponse(data: any, ok = true, status = 200) {
   return Promise.resolve({
@@ -15,14 +17,18 @@ function jsonResponse(data: any, ok = true, status = 200) {
   } as Response)
 }
 
-// Wrapper component that provides the AvatarDisplayProvider context
+// The provider reads the shared settings query, so it needs a client.
+let client = createTestQueryClient()
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <AvatarDisplayProvider>{children}</AvatarDisplayProvider>
+  <QueryClientProvider client={client}>
+    <AvatarDisplayProvider>{children}</AvatarDisplayProvider>
+  </QueryClientProvider>
 )
 
 describe('useAvatarDisplay', () => {
   afterEach(() => {
     jest.restoreAllMocks()
+    client = createTestQueryClient()
   })
 
   it('loads avatar style from chat settings', async () => {
@@ -83,32 +89,22 @@ describe('useAvatarDisplay', () => {
         body: JSON.stringify({ avatarDisplayStyle: 'RECTANGULAR' }),
       })
     )
-    expect(result.current.style).toBe('RECTANGULAR')
+    await waitFor(() => expect(result.current.style).toBe('RECTANGULAR'))
   })
 
-  it('syncs avatar style locally without API call', async () => {
-    const fetchMock = jest.spyOn(global as any, 'fetch')
-    fetchMock.mockImplementation((url: string) => {
-      if (url === '/api/chat-settings') {
-        return jsonResponse({ avatarDisplayStyle: 'CIRCULAR' })
-      }
-      return jsonResponse({}, false, 404)
-    })
+  it('follows a change written to the shared settings row elsewhere', async () => {
+    jest.spyOn(global as any, 'fetch').mockImplementation(() =>
+      jsonResponse({ avatarDisplayStyle: 'CIRCULAR' })
+    )
 
     const { result } = renderHook(() => useAvatarDisplay(), { wrapper })
-
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.style).toBe('CIRCULAR')
 
-    const fetchCallCount = fetchMock.mock.calls.length
-
-    // Sync style locally - should NOT make an API call
+    // The settings card's write lands in the same cache entry.
     act(() => {
-      result.current.syncAvatarDisplayStyle('RECTANGULAR')
+      client.setQueryData(['settings', 'chat'], { avatarDisplayStyle: 'RECTANGULAR' })
     })
-
-    expect(result.current.style).toBe('RECTANGULAR')
-    // Verify no additional API calls were made
-    expect(fetchMock.mock.calls.length).toBe(fetchCallCount)
+    await waitFor(() => expect(result.current.style).toBe('RECTANGULAR'))
   })
 })

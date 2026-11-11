@@ -9,10 +9,9 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
-import { patchChat } from '@/lib/chat/patch-chat'
+import { apiFetch } from '@/lib/query/fetcher'
+import { usePatchChat } from '@/lib/chat/use-patch-chat'
 import { queryKeys } from '@/lib/query/keys'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
 interface Project {
@@ -41,7 +40,8 @@ export default function ChatProjectModal({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     initialProjectId ?? null
   )
-  const [saving, setSaving] = useState(false)
+  const { patch, isSaving } = usePatchChat(chatId)
+  const saving = isSaving('projectId')
 
   // Sync local state when upstream prop changes
   useEffect(() => {
@@ -63,35 +63,20 @@ export default function ChatProjectModal({
       return
     }
 
-    try {
-      setSaving(true)
-
-      await patchChat(chatId, { projectId })
-
+    const projectName = projectId ? projects.find(p => p.id === projectId)?.name : null
+    // usePatchChat refreshes the chat's cached project, so an open wardrobe
+    // drops the old project tier.
+    const ok = await patch(
+      { projectId },
+      {
+        success: projectId ? `Chat moved to "${projectName}"` : 'Chat removed from project',
+        failure: 'Failed to update project',
+      },
+    )
+    if (ok) {
       setSelectedProjectId(projectId)
-
-      const projectName = projectId
-        ? projects.find(p => p.id === projectId)?.name
-        : null
-
-      showSuccessToast(
-        projectId
-          ? `Chat moved to "${projectName}"`
-          : 'Chat removed from project'
-      )
-
       onSuccess?.()
       onClose()
-    } catch (error) {
-      const errorMessage = apiErrorMessage(error, 'Failed to update project')
-      console.error('[ChatProjectModal] Failed to update project', {
-        chatId,
-        projectId,
-        error: errorMessage,
-      })
-      showErrorToast(errorMessage || 'Failed to update project')
-    } finally {
-      setSaving(false)
     }
   }
 

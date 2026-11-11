@@ -1,13 +1,11 @@
 'use client'
 
-import { useCallback, useMemo, useState, useId } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useCallback, useMemo, useId } from 'react'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { useChatSettingsMutation } from '@/hooks/useChatSettingsMutation'
 import { SettingsCard } from '@/components/ui/SettingsCard'
 import {
   DEFAULT_CORE_WHISPER_SETTINGS,
-  type ChatSettings,
   type CoreWhisperSettings,
 } from '@/components/settings/chat-settings/types'
 
@@ -24,13 +22,8 @@ const BUDGET_OPTIONS = [
 
 export function CoreWhisperSection() {
   const id = useId()
-  const queryClient = useQueryClient()
-  const { data: settings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<ChatSettings>('/api/v1/settings/chat', { signal }),
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { data: settings } = useChatSettingsQuery()
+  const { save, saving } = useChatSettingsMutation()
 
   const current: CoreWhisperSettings = useMemo(
     () => ({
@@ -43,29 +36,9 @@ export function CoreWhisperSection() {
   const applyPatch = useCallback(
     async (patch: Partial<CoreWhisperSettings>) => {
       if (!settings) return
-      setSaving(true)
-      setError(null)
-      try {
-        const nextCoreWhisper: CoreWhisperSettings = { ...current, ...patch }
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ coreWhisper: nextCoreWhisper }),
-        })
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error || 'Failed to update Core whisper settings')
-        }
-        const updated = await res.json()
-        // Optimistic, no-revalidate write (was SWR `mutate(updated, false)`).
-        queryClient.setQueryData(queryKeys.settings.chat, updated)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setSaving(false)
-      }
+      await save({ coreWhisper: { ...current, ...patch } }, { failure: 'Failed to update Core whisper settings' })
     },
-    [settings, current, queryClient],
+    [settings, current, save],
   )
 
   return (
@@ -193,11 +166,6 @@ export function CoreWhisperSection() {
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-lg border qt-border-default p-3 qt-text-small text-destructive">
-            {error}
-          </div>
-        )}
       </div>
     </SettingsCard>
   )

@@ -208,6 +208,8 @@ export const queryKeys = {
   },
   projects: {
     all: ['projects'] as const,
+    /** Prefix of every `list(...)` key — invalidate after a project write. */
+    lists: ['projects', 'list'] as const,
     list: (filters?: Filters) => ['projects', 'list', filters ?? {}] as const,
     detail: (id: string) => ['projects', 'detail', id] as const,
     files: (projectId: string) => ['projects', projectId, 'files'] as const,

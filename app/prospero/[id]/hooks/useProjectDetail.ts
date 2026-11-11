@@ -3,25 +3,43 @@
 /**
  * useProjectDetail Hook
  *
- * Manages project data and update operations.
+ * The project record from the query cache, the page's two text drafts, and
+ * the writes. The header (name, description) and the instructions editor are
+ * separate drafts and each saves only its own fields; a refetch — a tab
+ * switch back, a roster change, a realtime `projects` hint — never overwrites
+ * a draft the user has edited (#170, `useDraft`).
  *
  * @module app/prospero/[id]/hooks/useProjectDetail
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import type { Project, EditForm, BackgroundDisplayMode } from '../types'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useDraft, type SetDraft } from '@/lib/hooks/use-draft'
+import type { Project, HeaderDraft, BackgroundDisplayMode } from '../types'
+
+type ProjectPatch = Partial<Omit<Project, 'id' | 'characterRoster' | 'createdAt' | 'updatedAt'>>
 
 interface UseProjectDetailReturn {
   project: Project | null
   loading: boolean
   error: string | null
-  editForm: EditForm
-  setEditForm: React.Dispatch<React.SetStateAction<EditForm>>
+  /** Header draft (name, description) — saved by `handleSaveHeader`. */
+  headerDraft: HeaderDraft
+  setHeaderDraft: SetDraft<HeaderDraft>
+  /** Instructions draft — saved by `handleSaveInstructions`. */
+  instructionsDraft: string
+  setInstructionsDraft: SetDraft<string>
+  instructionsDirty: boolean
   isEditing: boolean
-  setIsEditing: React.Dispatch<React.SetStateAction<boolean>>
+  startEditing: () => void
+  cancelEditing: () => void
+  /** Re-read the project. Drafts with edits are kept. */
   fetchProject: () => Promise<void>
-  handleSave: () => Promise<void>
+  handleSaveHeader: () => Promise<void>
+  handleSaveInstructions: () => Promise<void>
   handleToggleAllowAnyCharacter: () => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleSaveAnswerConfirmationOverride: (value: 'ON' | 'OFF' | null) => Promise<void>
@@ -35,310 +53,212 @@ interface UseProjectDetailReturn {
   handleRemoveCharacter: (characterId: string) => Promise<void>
 }
 
+/** Pick one of three toast lines for a tri-state (inherit / on / off) setting. */
+function triState<T>(value: T | null, inherit: string, on: string, off: string, isOn: (v: T) => boolean): string {
+  if (value === null) return inherit
+  return isOn(value) ? on : off
+}
+
 export function useProjectDetail(projectId: string): UseProjectDetailReturn {
-  const [project, setProject] = useState<Project | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const detailKey = queryKeys.projects.detail(projectId)
+
+  const query = useQuery({
+    queryKey: detailKey,
+    queryFn: ({ signal }) => apiFetch<{ project: Project }>(`/api/v1/projects/${projectId}`, { signal }),
+    select: (data) => data.project,
+  })
+  const project = query.data ?? null
+
+  const serverHeader = useMemo<HeaderDraft>(
+    () => ({ name: project?.name ?? '', description: project?.description ?? '' }),
+    [project?.name, project?.description],
+  )
+  const [headerDraft, setHeaderDraft, header] = useDraft(serverHeader)
+  const [instructionsDraft, setInstructionsDraft, instructions] = useDraft(project?.instructions ?? '')
   const [isEditing, setIsEditing] = useState(false)
-  const [editForm, setEditForm] = useState<EditForm>({ name: '', description: '', instructions: '' })
 
-  const fetchProject = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`)
-      if (!res.ok) throw new Error('Project not found')
-      const data = await res.json()
-      setProject(data.project)
-      setEditForm({
-        name: data.project.name,
-        description: data.project.description || '',
-        instructions: data.project.instructions || '',
-      })
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to load project'
-      console.error('useProjectDetail: fetch error', errorMsg)
-      setError(errorMsg)
-    } finally {
-      setLoading(false)
-    }
-  }, [projectId])
-
-  const handleSave = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
+  const putMutation = useMutation({
+    mutationFn: (patch: ProjectPatch) =>
+      apiFetch<{ project: Project }>(`/api/v1/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editForm.name,
-          description: editForm.description || null,
-          instructions: editForm.instructions || null,
-        }),
-      })
+        body: JSON.stringify(patch),
+      }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(detailKey, data)
+      // Names, colours and counts appear in every project list.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists })
+    },
+  })
+  const { mutateAsync: putProject } = putMutation
 
-      if (!res.ok) throw new Error('Failed to update project')
-      const data = await res.json()
-      setProject(data.project)
-      setIsEditing(false)
-      showSuccessToast('Project updated!')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update project'
-      console.error('useProjectDetail: save error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId, editForm])
+  /** Save `patch`; toast the outcome. Resolves true on success. */
+  const save = useCallback(
+    async (patch: ProjectPatch, success: string | ((p: Project) => string), failure: string): Promise<boolean> => {
+      try {
+        const data = await putProject(patch)
+        showSuccessToast(typeof success === 'function' ? success(data.project) : success)
+        return true
+      } catch (err) {
+        const message = apiErrorMessage(err, failure)
+        console.error('useProjectDetail: save error', { projectId, fields: Object.keys(patch), message })
+        showErrorToast(message)
+        return false
+      }
+    },
+    [putProject, projectId],
+  )
+
+  const fetchProject = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: detailKey })
+  }, [queryClient, detailKey])
+
+  const startEditing = useCallback(() => setIsEditing(true), [])
+  const cancelEditing = useCallback(() => {
+    header.reset()
+    setIsEditing(false)
+  }, [header])
+
+  const handleSaveHeader = useCallback(async () => {
+    const ok = await save(
+      { name: headerDraft.name, description: headerDraft.description || null },
+      'Project updated!',
+      'Failed to update project',
+    )
+    if (ok) setIsEditing(false)
+  }, [save, headerDraft])
+
+  const handleSaveInstructions = useCallback(async () => {
+    await save({ instructions: instructionsDraft || null }, 'Project instructions saved', 'Failed to save the instructions')
+  }, [save, instructionsDraft])
 
   const handleToggleAllowAnyCharacter = useCallback(async () => {
     if (!project) return
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ allowAnyCharacter: !project.allowAnyCharacter }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update project')
-      const data = await res.json()
-      setProject(data.project)
-      showSuccessToast(data.project.allowAnyCharacter
+    await save(
+      { allowAnyCharacter: !project.allowAnyCharacter },
+      (p) => p.allowAnyCharacter
         ? 'Every character may now use the project files and wardrobe'
-        : 'Only roster characters may use the project files and wardrobe')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update setting'
-      console.error('useProjectDetail: toggle error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [project, projectId])
+        : 'Only roster characters may use the project files and wardrobe',
+      'Failed to update setting',
+    )
+  }, [project, save])
 
   const handleSaveAgentMode = useCallback(async (enabled: boolean | null) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultAgentModeEnabled: enabled }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update agent mode setting')
-      const data = await res.json()
-      setProject(data.project)
-      const message = enabled === null
-        ? 'Agent mode set to inherit from global/character'
-        : enabled
-          ? 'Agent mode enabled by default for project'
-          : 'Agent mode disabled by default for project'
-      showSuccessToast(message)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update agent mode'
-      console.error('useProjectDetail: save agent mode error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    await save(
+      { defaultAgentModeEnabled: enabled },
+      triState(enabled, 'Agent mode set to inherit from global/character',
+        'Agent mode enabled by default for project', 'Agent mode disabled by default for project', Boolean),
+      'Failed to update agent mode',
+    )
+  }, [save])
 
   const handleSaveAnswerConfirmationOverride = useCallback(async (value: 'ON' | 'OFF' | null) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answerConfirmationOverride: value }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update answer confirmation setting')
-      const data = await res.json()
-      setProject(data.project)
-      const message = value === null
-        ? 'Answer confirmation set to inherit from global'
-        : value === 'ON'
-          ? 'Answer confirmation enabled by default for project'
-          : 'Answer confirmation disabled by default for project'
-      showSuccessToast(message)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update answer confirmation'
-      console.error('useProjectDetail: save answer confirmation error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    await save(
+      { answerConfirmationOverride: value },
+      triState(value, 'Answer confirmation set to inherit from global',
+        'Answer confirmation enabled by default for project', 'Answer confirmation disabled by default for project',
+        (v) => v === 'ON'),
+      'Failed to update answer confirmation',
+    )
+  }, [save])
 
   const handleSaveBrahmaConnectionProfile = useCallback(async (profileId: string | null) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brahmaConnectionProfileId: profileId }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update the inline Brahma engine')
-      const data = await res.json()
-      setProject(data.project)
-      showSuccessToast(profileId
-        ? 'Inline Brahma engine set for project'
-        : 'Inline Brahma engine set to inherit from global')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update the inline Brahma engine'
-      console.error('useProjectDetail: save inline Brahma profile error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    await save(
+      { brahmaConnectionProfileId: profileId },
+      profileId ? 'Inline Brahma engine set for project' : 'Inline Brahma engine set to inherit from global',
+      'Failed to update the inline Brahma engine',
+    )
+  }, [save])
 
   const handleSaveAvatarGeneration = useCallback(async (enabled: boolean | null) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultAvatarGenerationEnabled: enabled }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update avatar generation setting')
-      const data = await res.json()
-      setProject(data.project)
-      const message = enabled === null
-        ? 'Avatar generation set to inherit from global'
-        : enabled
-          ? 'Avatar generation enabled by default for project'
-          : 'Avatar generation disabled by default for project'
-      showSuccessToast(message)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update avatar generation'
-      console.error('useProjectDetail: save avatar generation error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    await save(
+      { defaultAvatarGenerationEnabled: enabled },
+      triState(enabled, 'Avatar generation set to inherit from global',
+        'Avatar generation enabled by default for project', 'Avatar generation disabled by default for project', Boolean),
+      'Failed to update avatar generation',
+    )
+  }, [save])
 
   const handleSaveDefaultImageProfile = useCallback(async (profileId: string | null) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultImageProfileId: profileId }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update default image profile')
-      const data = await res.json()
-      setProject(data.project)
-      showSuccessToast(profileId
-        ? 'Default image profile set for project'
-        : 'Image profile set to inherit from global')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update image profile'
-      console.error('useProjectDetail: save default image profile error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    await save(
+      { defaultImageProfileId: profileId },
+      profileId ? 'Default image profile set for project' : 'Image profile set to inherit from global',
+      'Failed to update image profile',
+    )
+  }, [save])
 
   const handleSaveDefaultRoleplayTemplate = useCallback(async (templateId: string | null) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultRoleplayTemplateId: templateId }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update default roleplay template')
-      const data = await res.json()
-      setProject(data.project)
-      showSuccessToast(templateId
-        ? 'Default roleplay template set for project'
-        : 'Roleplay template set to inherit from global')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update roleplay template'
-      console.error('useProjectDetail: save default roleplay template error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    await save(
+      { defaultRoleplayTemplateId: templateId },
+      templateId ? 'Default roleplay template set for project' : 'Roleplay template set to inherit from global',
+      'Failed to update roleplay template',
+    )
+  }, [save])
 
   const handleSaveAlertCharactersOfLanternImages = useCallback(async (enabled: boolean | null) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultAlertCharactersOfLanternImages: enabled }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update Lantern image announcement setting')
-      const data = await res.json()
-      setProject(data.project)
-      const message = enabled === null
-        ? 'Lantern image announcements set to inherit from global'
-        : enabled
-          ? 'Lantern image announcements enabled by default for project'
-          : 'Lantern image announcements disabled by default for project'
-      showSuccessToast(message)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update Lantern image announcement setting'
-      console.error('useProjectDetail: save alertCharactersOfLanternImages error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    await save(
+      { defaultAlertCharactersOfLanternImages: enabled },
+      triState(enabled, 'Lantern image announcements set to inherit from global',
+        'Lantern image announcements enabled by default for project',
+        'Lantern image announcements disabled by default for project', Boolean),
+      'Failed to update Lantern image announcement setting',
+    )
+  }, [save])
 
   const handleSaveBackgroundDisplayMode = useCallback(async (mode: BackgroundDisplayMode) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ backgroundDisplayMode: mode }),
-      })
+    const modeLabels: Record<BackgroundDisplayMode, string> = {
+      theme: 'theme background',
+      latest_chat: 'latest chat background',
+    }
+    await save({ backgroundDisplayMode: mode }, `Background set to ${modeLabels[mode]}`, 'Failed to update background mode')
+  }, [save])
 
-      if (!res.ok) throw new Error('Failed to update background display mode')
-      const data = await res.json()
-      setProject(data.project)
-      const modeLabels: Record<BackgroundDisplayMode, string> = {
-        theme: 'theme background',
-        latest_chat: 'latest chat background',
+  const rosterAction = useCallback(
+    async (action: 'add-character' | 'remove-character', characterId: string, success: string, failure: string) => {
+      try {
+        await apiFetch(`/api/v1/projects/${projectId}?action=${action}`, {
+          method: action === 'add-character' ? 'POST' : 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId }),
+        })
+        await fetchProject()
+        showSuccessToast(success)
+      } catch (err) {
+        const message = apiErrorMessage(err, failure)
+        console.error('useProjectDetail: roster error', { projectId, action, message })
+        showErrorToast(message)
       }
-      showSuccessToast(`Background set to ${modeLabels[mode]}`)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to update background mode'
-      console.error('useProjectDetail: save background mode error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+    },
+    [projectId, fetchProject],
+  )
 
-  const handleAddCharacter = useCallback(async (characterId: string) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}?action=add-character`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(data?.error || 'Failed to add character')
-      }
-      await fetchProject()
-      showSuccessToast('Character added to the roster')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to add character'
-      console.error('useProjectDetail: add character error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId, fetchProject])
-
-  const handleRemoveCharacter = useCallback(async (characterId: string) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}?action=remove-character`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId }),
-      })
-
-      if (!res.ok) throw new Error('Failed to remove character')
-      await fetchProject()
-      showSuccessToast('Character removed from the roster')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to remove character'
-      console.error('useProjectDetail: remove character error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId, fetchProject])
+  const handleAddCharacter = useCallback(
+    (characterId: string) =>
+      rosterAction('add-character', characterId, 'Character added to the roster', 'Failed to add character'),
+    [rosterAction],
+  )
+  const handleRemoveCharacter = useCallback(
+    (characterId: string) =>
+      rosterAction('remove-character', characterId, 'Character removed from the roster', 'Failed to remove character'),
+    [rosterAction],
+  )
 
   return {
     project,
-    loading,
-    error,
-    editForm,
-    setEditForm,
+    loading: query.isPending,
+    error: query.error ? apiErrorMessage(query.error, 'Failed to load project') : null,
+    headerDraft,
+    setHeaderDraft,
+    instructionsDraft,
+    setInstructionsDraft,
+    instructionsDirty: instructions.dirty,
     isEditing,
-    setIsEditing,
+    startEditing,
+    cancelEditing,
     fetchProject,
-    handleSave,
+    handleSaveHeader,
+    handleSaveInstructions,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
     handleSaveAnswerConfirmationOverride,

@@ -2,6 +2,9 @@
 
 import { useState, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
+import { useInvalidateProfileLists } from '@/lib/hooks/use-profiles'
 import type { WizardState, WizardAction, TestStatus } from '../useProviderWizardState'
 import {
   testMessage,
@@ -41,6 +44,8 @@ function TestStatusIndicator({ status, error }: { status?: TestStatus; error?: s
 export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
   const [testError, setTestError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const queryClient = useQueryClient()
+  const invalidateProfileLists = useInvalidateProfileLists()
 
   const chatProvider = state.availableProviders.find((p) => p.id === state.chatConfig.provider)
   const cheapProvider =
@@ -163,6 +168,10 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
         },
       })
 
+      // Every picker and settings view now has new rows to show.
+      void invalidateProfileLists('apiKeys', 'connectionProfiles', 'embeddingProfiles', 'imageProfiles')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.chat })
+
       dispatch({ type: 'SET_SAVING', saving: false })
       setSaveSuccess(true)
     } catch (err) {
@@ -172,7 +181,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
       })
       dispatch({ type: 'SET_SAVING', saving: false })
     }
-  }, [state, chatProvider, embeddingProvider, imageProvider, dispatch])
+  }, [state, chatProvider, embeddingProvider, imageProvider, dispatch, invalidateProfileLists, queryClient])
 
   // ------------------------------------------------------------------
   // Render
