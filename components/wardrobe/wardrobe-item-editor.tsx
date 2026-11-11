@@ -1,10 +1,8 @@
 'use client'
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
@@ -191,11 +189,6 @@ export function WardrobeItemEditor({
   }
 
   const titleInputRef = useRef<HTMLInputElement>(null)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-
-  useEscapeKey(onClose, !showKeepResetPrompt)
   useEffect(() => {
     if (autoFocusTitle) titleInputRef.current?.focus()
   }, [autoFocusTitle])
@@ -467,350 +460,313 @@ export function WardrobeItemEditor({
     )
   }, [candidates, candidatesLoading, componentItemIds])
 
-  if (typeof document === 'undefined') return null
-  // Portalled to <body>: rendered in place, a `.qt-workspace` pane's stacking
-  // context (isolation: isolate) traps the z-index below the left rail and
-  // the sticky toolbar, which paint over the dialog's edges.
-  return createPortal(
+  // Opens over the wardrobe dialog when summoned from one; the shell stacks
+  // it on top by DOM order.
+  return (
     <>
-      {/* Overlay — z values sit above the qt-dialog-overlay (z-[60]) so this
-          editor always stacks on top when summoned from another dialog. */}
-      <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-[70]"
-        onClick={onClose}
-        aria-label="Close dialog"
-        type="button"
-      />
-
-      {/* Dialog */}
-      <div
-        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
-        style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
+      <BaseModal
+        isOpen
+        onClose={onClose}
+        title={isEditing ? 'Edit Wardrobe Item' : 'New Wardrobe Item'}
+        showCloseButton
+        maxWidth="wide"
+        bodyClassName="qt-dialog-body space-y-4 flex-1 overflow-y-auto"
+        footerClassName="qt-dialog-footer flex-shrink-0"
+        footer={
+          <FormActions
+            onCancel={onClose}
+            onSubmit={handleSave}
+            submitLabel={isEditing ? 'Update' : 'Create'}
+            cancelLabel="Cancel"
+            isLoading={saving}
+            isDisabled={isSaveDisabled}
+          />
+        }
       >
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col"
-        >
-          <div className="qt-dialog-header sticky top-0 flex-shrink-0 qt-bg-default border-b qt-border-default">
-            <div className="flex items-center justify-between">
-              <h2 id={titleId} className="qt-dialog-title">
-                {isEditing ? 'Edit Wardrobe Item' : 'New Wardrobe Item'}
-              </h2>
-              <button
-                aria-label="Close"
-                type="button"
-                onClick={onClose}
-                className="qt-text-secondary hover:text-foreground"
-              >
-                <Icon name="close" className="w-5 h-5" />
-              </button>
-            </div>
+        {/* Pinned destination — creating inside a shared container always
+            saves into that container; no scope to choose. */}
+        {!isEditing && sharedContainer && (
+          <div>
+            <span className="qt-label mb-1 block">Add to</span>
+            <p className="text-sm text-foreground">
+              {containerLabel ??
+                (sharedContainer.scope === 'general'
+                  ? 'Quilltap General'
+                  : sharedContainer.scope === 'project'
+                    ? 'This project'
+                    : 'This group')}
+            </p>
+            <p className="qt-text-xs qt-text-secondary mt-1">
+              {sharedContainer.scope === 'general'
+                ? 'Every character, in every chat, can wear it.'
+                : sharedContainer.scope === 'project'
+                  ? "Every character in this project's chats can wear it."
+                  : 'Every character in this group can wear it.'}
+            </p>
           </div>
+        )}
 
-          <div className="qt-dialog-body space-y-4 flex-1">
-            {/* Pinned destination — creating inside a shared container always
-                saves into that container; no scope to choose. */}
-            {!isEditing && sharedContainer && (
-              <div>
-                <span className="qt-label mb-1 block">Add to</span>
-                <p className="text-sm text-foreground">
-                  {containerLabel ??
-                    (sharedContainer.scope === 'general'
-                      ? 'Quilltap General'
-                      : sharedContainer.scope === 'project'
-                        ? 'This project'
-                        : 'This group')}
-                </p>
-                <p className="qt-text-xs qt-text-secondary mt-1">
-                  {sharedContainer.scope === 'general'
-                    ? 'Every character, in every chat, can wear it.'
-                    : sharedContainer.scope === 'project'
-                      ? "Every character in this project's chats can wear it."
-                      : 'Every character in this group can wear it.'}
-                </p>
-              </div>
-            )}
-
-            {/* Destination scope — only when creating. Editing keeps an item in
-                its existing tier. */}
-            {!isEditing && !sharedContainer && (
-              <div>
-                <span className="qt-label mb-2 block">Add to</span>
-                <div
-                  role="radiogroup"
-                  aria-label="Where to save this item"
-                  className="inline-flex flex-wrap gap-1 qt-bg-muted/50 rounded-lg p-1"
-                >
-                  {([
-                    { scope: 'character' as const, label: 'This character' },
-                    { scope: 'global' as const, label: 'Shared — everywhere' },
-                    ...(projectId
-                      ? [{ scope: 'project' as const, label: 'Shared — this project' }]
-                      : []),
-                  ]).map(({ scope, label }) => (
-                    <button
-                      key={scope}
-                      type="button"
-                      role="radio"
-                      aria-checked={createScope === scope}
-                      onClick={() => setCreateScope(scope)}
-                      className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                        createScope === scope
-                          ? 'qt-bg-default text-foreground shadow-sm'
-                          : 'qt-text-secondary hover:text-foreground'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <p className="qt-text-xs qt-text-secondary mt-1">
-                  {createScope === 'character'
-                    ? 'Only this character can wear it.'
-                    : createScope === 'project'
-                      ? "Every character in this project's chats can wear it."
-                      : 'Every character, in every chat, can wear it.'}
-                </p>
-              </div>
-            )}
-
-            {/* Mode toggle — Single garment vs. Outfit bundle */}
+        {/* Destination scope — only when creating. Editing keeps an item in
+            its existing tier. */}
+        {!isEditing && !sharedContainer && (
+          <div>
+            <span className="qt-label mb-2 block">Add to</span>
             <div
-              role="tablist"
-              aria-label="Wardrobe item kind"
-              className="inline-flex gap-1 qt-bg-muted/50 rounded-lg p-1"
+              role="radiogroup"
+              aria-label="Where to save this item"
+              className="inline-flex flex-wrap gap-1 qt-bg-muted/50 rounded-lg p-1"
             >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={editorMode === 'single'}
-                onClick={() => handleModeChange('single')}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  editorMode === 'single'
-                    ? 'qt-bg-default text-foreground shadow-sm'
-                    : 'qt-text-secondary hover:text-foreground'
-                }`}
-              >
-                Single garment
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={editorMode === 'bundle'}
-                onClick={() => handleModeChange('bundle')}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  editorMode === 'bundle'
-                    ? 'qt-bg-default text-foreground shadow-sm'
-                    : 'qt-text-secondary hover:text-foreground'
-                }`}
-              >
-                Outfit bundle
-              </button>
+              {([
+                { scope: 'character' as const, label: 'This character' },
+                { scope: 'global' as const, label: 'Shared — everywhere' },
+                ...(projectId
+                  ? [{ scope: 'project' as const, label: 'Shared — this project' }]
+                  : []),
+              ]).map(({ scope, label }) => (
+                <button
+                  key={scope}
+                  type="button"
+                  role="radio"
+                  aria-checked={createScope === scope}
+                  onClick={() => setCreateScope(scope)}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    createScope === scope
+                      ? 'qt-bg-default text-foreground shadow-sm'
+                      : 'qt-text-secondary hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-
-            {/* Shared item notice */}
-            {isShared && isEditing && (
-              <div className="rounded border qt-border-warning/50 qt-bg-warning/10 px-3 py-2 qt-text-small qt-text-warning">
-                Changes to shared items affect all characters
-              </div>
-            )}
-
-            {/* Title */}
-            <div>
-              <label htmlFor="wardrobe-title" className="qt-label mb-1">
-                Title *
-              </label>
-              <input
-                ref={titleInputRef}
-                type="text"
-                id="wardrobe-title"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                onBlur={() => setTouched((t) => ({ ...t, title: true }))}
-                required
-                placeholder={
-                  isBundle
-                    ? 'e.g., Working Outfit, Sunday Best'
-                    : 'e.g., Charcoal Sweater'
-                }
-                className="qt-input"
-              />
-              {showTitleError && (
-                <p className="mt-1 text-xs qt-text-destructive">Enter a title</p>
-              )}
-            </div>
-
-            {/* Folder — the operator's filing, in both modes. */}
-            <WardrobeFolderField container={folderContainer} value={folder} onChange={setFolder} />
-
-            {/* Picture — directly under Title, the most visible thing in the
-                form. Inert in create mode: a fresh item has no id yet. */}
-            <WardrobeItemImageSection
-              item={item ?? null}
-              container={itemHomeContainer}
-              onImageChanged={onImageChanged}
-            />
-
-            {/* Single mode: Types checkboxes */}
-            {!isBundle && (
-              <div>
-                <span className="qt-label mb-2 block">Type(s) *</span>
-                <SlotCheckboxGroup
-                  value={selectedTypes}
-                  onToggle={handleTypeToggle}
-                  onBlur={() => setTouched((t) => ({ ...t, types: true }))}
-                />
-                {showTypesError && (
-                  <p className="mt-1 text-xs qt-text-destructive">
-                    Select at least one type
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Bundle mode: Components section */}
-            {isBundle && (
-              <WardrobeComponentPicker
-                effectiveTypes={effectiveTypes}
-                selectedComponents={selectedComponents}
-                componentSearch={componentSearch}
-                candidatesLoading={candidatesLoading}
-                candidates={candidates}
-                eligibleCandidates={eligibleCandidates}
-                groupedCandidates={groupedCandidates}
-                expandedGroups={expandedGroups}
-                componentItemIds={componentItemIds}
-                replace={replace}
-                computedTypes={computedTypes}
-                showComponentsError={showComponentsError}
-                onComponentSearchChange={setComponentSearch}
-                onComponentsBlur={() => setTouched((t) => ({ ...t, components: true }))}
-                onToggleComponent={toggleComponent}
-                onToggleGroup={toggleGroup}
-                onToggleType={handleTypeToggle}
-                onReplaceChange={setReplace}
-              />
-            )}
-
-            {/* Default-outfit toggle. Whether an item is shared is governed by
-                the "Add to" selector at the top (create) or the item's existing
-                tier (edit) — there is no separate "shared" checkbox. */}
-            <div>
-              <label className="inline-flex items-start gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="isDefault"
-                  checked={formData.isDefault}
-                  onChange={handleChange}
-                  className="qt-checkbox mt-0.5"
-                />
-                <span className="text-sm text-foreground">{defaultOutfitLabel}</span>
-              </label>
-            </div>
-
-            {/* Appropriateness */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="wardrobe-appropriateness" className="qt-label">
-                  Appropriateness
-                </label>
-                <span className={`text-xs ${charCountClass(formData.appropriateness.length, 200)}`}>
-                  {formData.appropriateness.length}/200
-                </span>
-              </div>
-              <input
-                type="text"
-                id="wardrobe-appropriateness"
-                name="appropriateness"
-                value={formData.appropriateness}
-                onChange={handleChange}
-                maxLength={200}
-                placeholder="e.g., formal, casual, intimate, combat"
-                className="qt-input"
-              />
-              <p className="mt-1 text-xs qt-text-small">
-                When is this appropriate to wear? e.g., formal, casual, intimate, combat.
-              </p>
-            </div>
-
-            {/* Pronoun guidance — who the piece is offered to. */}
-            <WardrobePronounGuidanceField value={pronounGuidance} onChange={setPronounGuidance} />
-
-            {/* Portrait cue — plain-text phrase handed to the image-makers. */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="wardrobe-image-prompt" className="qt-label">
-                  Portrait Cue
-                </label>
-                <span className={`text-xs ${charCountClass(formData.imagePrompt.length, WARDROBE_IMAGE_PROMPT_MAX_LENGTH)}`}>
-                  {formData.imagePrompt.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
-                </span>
-              </div>
-              <input
-                type="text"
-                id="wardrobe-image-prompt"
-                name="imagePrompt"
-                value={formData.imagePrompt}
-                onChange={handleChange}
-                maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
-                placeholder="e.g., intricate burnished-gold circular rank glyph on the shoulder"
-                className="qt-input"
-              />
-              <p className="mt-1 text-xs qt-text-small">
-                A short, literal phrase whispered to the portraitist and the Lantern when a likeness
-                is drawn --- used <em>in place of</em> the title above, should the bare name fail to
-                conjure the right picture. Keep it terse and visual; the flowery Description below is
-                for human eyes and never reaches the easel. Leave it empty to let the title speak.
-              </p>
-            </div>
-
-            {/* Description (Markdown) */}
-            <div>
-              <label htmlFor="wardrobe-description" className="block text-sm qt-text-primary mb-1">
-                Description
-              </label>
-              <p className="text-xs qt-text-secondary mb-2">
-                Describe the item in detail.
-              </p>
-              <MarkdownLexicalEditor
-                value={formData.description}
-                onChange={handleMarkdownDescriptionChange}
-                namespace="WardrobeItem.description"
-                ariaLabel="Wardrobe item description"
-                minHeight="10rem"
-              />
-            </div>
-
-            {/* Wear ledger — read-only, edit mode only (a new item has none). */}
-            {item && editItemUrl && (
-              <WardrobeWearHistorySection
-                itemId={item.id}
-                itemUrl={editItemUrl}
-                createdAt={item.createdAt}
-                isComposite={isComposite(item)}
-              />
-            )}
+            <p className="qt-text-xs qt-text-secondary mt-1">
+              {createScope === 'character'
+                ? 'Only this character can wear it.'
+                : createScope === 'project'
+                  ? "Every character in this project's chats can wear it."
+                  : 'Every character, in every chat, can wear it.'}
+            </p>
           </div>
+        )}
 
-          {/* Footer */}
-          <div className="qt-dialog-footer flex-shrink-0">
-            <FormActions
-              onCancel={onClose}
-              onSubmit={handleSave}
-              submitLabel={isEditing ? 'Update' : 'Create'}
-              cancelLabel="Cancel"
-              isLoading={saving}
-              isDisabled={isSaveDisabled}
-            />
-          </div>
+        {/* Mode toggle — Single garment vs. Outfit bundle */}
+        <div
+          role="tablist"
+          aria-label="Wardrobe item kind"
+          className="inline-flex gap-1 qt-bg-muted/50 rounded-lg p-1"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={editorMode === 'single'}
+            onClick={() => handleModeChange('single')}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              editorMode === 'single'
+                ? 'qt-bg-default text-foreground shadow-sm'
+                : 'qt-text-secondary hover:text-foreground'
+            }`}
+          >
+            Single garment
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={editorMode === 'bundle'}
+            onClick={() => handleModeChange('bundle')}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              editorMode === 'bundle'
+                ? 'qt-bg-default text-foreground shadow-sm'
+                : 'qt-text-secondary hover:text-foreground'
+            }`}
+          >
+            Outfit bundle
+          </button>
         </div>
-      </div>
+
+        {/* Shared item notice */}
+        {isShared && isEditing && (
+          <div className="rounded border qt-border-warning/50 qt-bg-warning/10 px-3 py-2 qt-text-small qt-text-warning">
+            Changes to shared items affect all characters
+          </div>
+        )}
+
+        {/* Title */}
+        <div>
+          <label htmlFor="wardrobe-title" className="qt-label mb-1">
+            Title *
+          </label>
+          <input
+            ref={titleInputRef}
+            type="text"
+            id="wardrobe-title"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            onBlur={() => setTouched((t) => ({ ...t, title: true }))}
+            required
+            placeholder={
+              isBundle
+                ? 'e.g., Working Outfit, Sunday Best'
+                : 'e.g., Charcoal Sweater'
+            }
+            className="qt-input"
+          />
+          {showTitleError && (
+            <p className="mt-1 text-xs qt-text-destructive">Enter a title</p>
+          )}
+        </div>
+
+        {/* Folder — the operator's filing, in both modes. */}
+        <WardrobeFolderField container={folderContainer} value={folder} onChange={setFolder} />
+
+        {/* Picture — directly under Title, the most visible thing in the
+            form. Inert in create mode: a fresh item has no id yet. */}
+        <WardrobeItemImageSection
+          item={item ?? null}
+          container={itemHomeContainer}
+          onImageChanged={onImageChanged}
+        />
+
+        {/* Single mode: Types checkboxes */}
+        {!isBundle && (
+          <div>
+            <span className="qt-label mb-2 block">Type(s) *</span>
+            <SlotCheckboxGroup
+              value={selectedTypes}
+              onToggle={handleTypeToggle}
+              onBlur={() => setTouched((t) => ({ ...t, types: true }))}
+            />
+            {showTypesError && (
+              <p className="mt-1 text-xs qt-text-destructive">
+                Select at least one type
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Bundle mode: Components section */}
+        {isBundle && (
+          <WardrobeComponentPicker
+            effectiveTypes={effectiveTypes}
+            selectedComponents={selectedComponents}
+            componentSearch={componentSearch}
+            candidatesLoading={candidatesLoading}
+            candidates={candidates}
+            eligibleCandidates={eligibleCandidates}
+            groupedCandidates={groupedCandidates}
+            expandedGroups={expandedGroups}
+            componentItemIds={componentItemIds}
+            replace={replace}
+            computedTypes={computedTypes}
+            showComponentsError={showComponentsError}
+            onComponentSearchChange={setComponentSearch}
+            onComponentsBlur={() => setTouched((t) => ({ ...t, components: true }))}
+            onToggleComponent={toggleComponent}
+            onToggleGroup={toggleGroup}
+            onToggleType={handleTypeToggle}
+            onReplaceChange={setReplace}
+          />
+        )}
+
+        {/* Default-outfit toggle. Whether an item is shared is governed by
+            the "Add to" selector at the top (create) or the item's existing
+            tier (edit) — there is no separate "shared" checkbox. */}
+        <div>
+          <label className="inline-flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="isDefault"
+              checked={formData.isDefault}
+              onChange={handleChange}
+              className="qt-checkbox mt-0.5"
+            />
+            <span className="text-sm text-foreground">{defaultOutfitLabel}</span>
+          </label>
+        </div>
+
+        {/* Appropriateness */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor="wardrobe-appropriateness" className="qt-label">
+              Appropriateness
+            </label>
+            <span className={`text-xs ${charCountClass(formData.appropriateness.length, 200)}`}>
+              {formData.appropriateness.length}/200
+            </span>
+          </div>
+          <input
+            type="text"
+            id="wardrobe-appropriateness"
+            name="appropriateness"
+            value={formData.appropriateness}
+            onChange={handleChange}
+            maxLength={200}
+            placeholder="e.g., formal, casual, intimate, combat"
+            className="qt-input"
+          />
+          <p className="mt-1 text-xs qt-text-small">
+            When is this appropriate to wear? e.g., formal, casual, intimate, combat.
+          </p>
+        </div>
+
+        {/* Pronoun guidance — who the piece is offered to. */}
+        <WardrobePronounGuidanceField value={pronounGuidance} onChange={setPronounGuidance} />
+
+        {/* Portrait cue — plain-text phrase handed to the image-makers. */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor="wardrobe-image-prompt" className="qt-label">
+              Portrait Cue
+            </label>
+            <span className={`text-xs ${charCountClass(formData.imagePrompt.length, WARDROBE_IMAGE_PROMPT_MAX_LENGTH)}`}>
+              {formData.imagePrompt.length}/{WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
+            </span>
+          </div>
+          <input
+            type="text"
+            id="wardrobe-image-prompt"
+            name="imagePrompt"
+            value={formData.imagePrompt}
+            onChange={handleChange}
+            maxLength={WARDROBE_IMAGE_PROMPT_MAX_LENGTH}
+            placeholder="e.g., intricate burnished-gold circular rank glyph on the shoulder"
+            className="qt-input"
+          />
+          <p className="mt-1 text-xs qt-text-small">
+            A short, literal phrase whispered to the portraitist and the Lantern when a likeness
+            is drawn --- used <em>in place of</em> the title above, should the bare name fail to
+            conjure the right picture. Keep it terse and visual; the flowery Description below is
+            for human eyes and never reaches the easel. Leave it empty to let the title speak.
+          </p>
+        </div>
+
+        {/* Description (Markdown) */}
+        <div>
+          <label htmlFor="wardrobe-description" className="block text-sm qt-text-primary mb-1">
+            Description
+          </label>
+          <p className="text-xs qt-text-secondary mb-2">
+            Describe the item in detail.
+          </p>
+          <MarkdownLexicalEditor
+            value={formData.description}
+            onChange={handleMarkdownDescriptionChange}
+            namespace="WardrobeItem.description"
+            ariaLabel="Wardrobe item description"
+            minHeight="10rem"
+          />
+        </div>
+
+        {/* Wear ledger — read-only, edit mode only (a new item has none). */}
+        {item && editItemUrl && (
+          <WardrobeWearHistorySection
+            itemId={item.id}
+            itemUrl={editItemUrl}
+            createdAt={item.createdAt}
+            isComposite={isComposite(item)}
+          />
+        )}
+      </BaseModal>
 
       {/* Bundle → Single confirmation prompt */}
       {showKeepResetPrompt && (
@@ -821,7 +777,6 @@ export function WardrobeItemEditor({
           onKeepTypes={handleConfirmKeepTypes}
         />
       )}
-    </>,
-    document.body,
+    </>
   )
 }

@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useCallback, useMemo, useId, useRef } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useState, useCallback, useMemo } from 'react'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 
 /**
@@ -41,14 +40,6 @@ interface MemoryCreationDialogProps {
  */
 export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProps) {
   const [creating, setCreating] = useState(false)
-  const queuedTitleId = useId()
-  const analyzeTitleId = useId()
-  const queuedDialogRef = useRef<HTMLDivElement>(null)
-  const analyzeDialogRef = useRef<HTMLDivElement>(null)
-  const alreadyQueued = !!chat.memoryJobCount && chat.memoryJobCount > 0
-  const handleQueuedFocusKeyDown = useDialogFocus(queuedDialogRef, alreadyQueued)
-  const handleAnalyzeFocusKeyDown = useDialogFocus(analyzeDialogRef, !alreadyQueued)
-  useEscapeKey(onClose, alreadyQueued || !creating)
 
   // Get the first character for analysis
   const firstCharacter = useMemo(() => {
@@ -125,85 +116,44 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
   // If memories were already queued during import, show status
   if (chat.memoryJobCount && chat.memoryJobCount > 0) {
     return (
-      <div className="qt-dialog-overlay !z-[60] p-4">
-        <div
-          className="qt-dialog max-w-md"
-          ref={queuedDialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={queuedTitleId}
-          tabIndex={-1}
-          onKeyDown={handleQueuedFocusKeyDown}
-        >
-          <div className="qt-dialog-header">
-            <h3 id={queuedTitleId} className="qt-dialog-title">
-              Memory Analysis Queued
-            </h3>
-          </div>
-
-          <div className="qt-dialog-body">
-            <p className="qt-text-small">
-              {chat.memoryJobCount} message{chat.memoryJobCount === 1 ? '' : 's'} queued for memory analysis.
-              Memories will be created in the background as each message is processed.
-            </p>
-            <p className="qt-text-xs mt-2">
-              You can check the status in the background jobs section.
-            </p>
-          </div>
-
-          <div className="qt-dialog-footer">
-            <button
-              type="button"
-              onClick={onClose}
-              className="qt-button qt-button-primary"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      </div>
+      <BaseModal
+        isOpen
+        onClose={onClose}
+        title="Memory Analysis Queued"
+        maxWidth="md"
+        bodyClassName="qt-dialog-body"
+        footer={
+          <button
+            type="button"
+            onClick={onClose}
+            className="qt-button qt-button-primary"
+          >
+            Done
+          </button>
+        }
+      >
+        <p className="qt-text-small">
+          {chat.memoryJobCount} message{chat.memoryJobCount === 1 ? '' : 's'} queued for memory analysis.
+          Memories will be created in the background as each message is processed.
+        </p>
+        <p className="qt-text-xs mt-2">
+          You can check the status in the background jobs section.
+        </p>
+      </BaseModal>
     )
   }
 
   return (
-    <div className="qt-dialog-overlay !z-[60] p-4">
-      <div
-        className="qt-dialog max-w-lg"
-        ref={analyzeDialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={analyzeTitleId}
-        tabIndex={-1}
-        onKeyDown={handleAnalyzeFocusKeyDown}
-      >
-        <div className="qt-dialog-header">
-          <h3 id={analyzeTitleId} className="qt-dialog-title">
-            Analyze Messages for Memories
-          </h3>
-          <p className="qt-dialog-description">
-            Queue message analysis to extract meaningful memories from this conversation.
-          </p>
-        </div>
-
-        <div className="qt-dialog-body">
-          <div className="qt-bg-muted/50 rounded-lg p-4">
-            <p className="qt-text-small">
-              This will analyze each message exchange using AI to extract meaningful memories,
-              just like live chats. The analysis runs in the background.
-            </p>
-            {firstCharacter ? (
-              <p className="qt-text-small mt-2">
-                <strong>{messagePairCount}</strong> message pair{messagePairCount === 1 ? '' : 's'} will be analyzed for <strong>{firstCharacter.name}</strong>.
-              </p>
-            ) : (
-              <p className="qt-text-small qt-text-destructive mt-2">
-                No character with a connection profile found. Cannot analyze messages.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="qt-dialog-footer">
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      title="Analyze Messages for Memories"
+      subtitle="Queue message analysis to extract meaningful memories from this conversation."
+      busy={creating}
+      maxWidth="lg"
+      bodyClassName="qt-dialog-body"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
@@ -227,8 +177,24 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
               `Analyze ${messagePairCount} Message${messagePairCount === 1 ? '' : 's'}`
             )}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="qt-bg-muted/50 rounded-lg p-4">
+        <p className="qt-text-small">
+          This will analyze each message exchange using AI to extract meaningful memories,
+          just like live chats. The analysis runs in the background.
+        </p>
+        {firstCharacter ? (
+          <p className="qt-text-small mt-2">
+            <strong>{messagePairCount}</strong> message pair{messagePairCount === 1 ? '' : 's'} will be analyzed for <strong>{firstCharacter.name}</strong>.
+          </p>
+        ) : (
+          <p className="qt-text-small qt-text-destructive mt-2">
+            No character with a connection profile found. Cannot analyze messages.
+          </p>
+        )}
       </div>
-    </div>
+    </BaseModal>
   )
 }

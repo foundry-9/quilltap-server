@@ -21,8 +21,7 @@ import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
-import { useClickOutside } from '@/hooks/useClickOutside'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal } from '@/components/ui/BaseModal'
 import CreateNPCDialog from './CreateNPCDialog'
 import SummonFromLoreModal from './SummonFromLoreModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
@@ -89,7 +88,6 @@ export default function AddCharacterDialog({
   const [isCreateNPCOpen, setIsCreateNPCOpen] = useState(false)
   const [isSummonOpen, setIsSummonOpen] = useState(false)
   const [outfitSelection, setOutfitSelection] = useState<OutfitSelection | null>(null)
-  const modalRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // NOTE: Debug logging during render causes React errors because DevConsoleProvider
@@ -118,6 +116,7 @@ export default function AddCharacterDialog({
       setJoinScenario('')
       setSearchTerm('')
       setIsCreateNPCOpen(false)
+      setIsSummonOpen(false)
       setOutfitSelection(null)
     }
   }, [isOpen, isLoading])
@@ -171,12 +170,6 @@ export default function AddCharacterDialog({
   const selectedCharacter = useMemo(() => {
     return characters.find(c => c.id === selectedCharacterId)
   }, [characters, selectedCharacterId])
-
-  // Handle click outside to close (disabled when NPC dialog is open)
-  useClickOutside(modalRef, () => { if (!isAdding) onClose() }, {
-    enabled: isOpen && !isCreateNPCOpen,
-    onEscape: () => { if (!isAdding && !isCreateNPCOpen) onClose() },
-  })
 
   const handleAddCharacter = async () => {
     if (!selectedCharacterId || !selectedConnectionProfileId) {
@@ -298,27 +291,21 @@ export default function AddCharacterDialog({
     setIsSummonOpen(false)
   }
 
-  const titleId = useId()
-  const handleFocusKeyDown = useDialogFocus(modalRef, isOpen)
-
   if (!isOpen) return null
 
+  // The two child dialogs (Create NPC, Summon from Lore) are BaseModals opened
+  // after this one, so they sit on top of it: while either is open, a click
+  // inside it or an Escape belongs to it, never to Add Character (#171).
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-2xl max-h-[90vh] flex flex-col"
-      >
-        {/* Header */}
-        <div className="qt-dialog-header flex items-center justify-between">
-          <h2 id={titleId} className="qt-dialog-title">
-            Add Character to Chat
-          </h2>
+    <>
+      <BaseModal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Add Character to Chat"
+        maxWidth="2xl"
+        busy={isAdding}
+       
+        headerActions={
           <button
             aria-label="Close"
             onClick={onClose}
@@ -327,335 +314,333 @@ export default function AddCharacterDialog({
           >
             <Icon name="close" className="w-6 h-6" />
           </button>
-        </div>
+        }
+        footerClassName="qt-dialog-footer flex items-center justify-end gap-3"
+        footer={
+          <>
+            <button
+              onClick={onClose}
+              className="qt-button qt-button-secondary"
+              disabled={isAdding}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddCharacter}
+              disabled={isAdding || !selectedCharacterId || !selectedConnectionProfileId}
+              className="qt-button qt-button-primary"
+            >
+              {isAdding ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Icon name="plus" className="w-4 h-4" />
+                  Add Character
+                </>
+              )}
+            </button>
+          </>
+        }
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Character Selection */}
+            <div>
+              <label className="block text-sm qt-text-primary mb-2">
+                Select Character
+              </label>
 
-        {/* Content */}
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Character Selection */}
-              <div>
-                <label className="block text-sm qt-text-primary mb-2">
-                  Select Character
-                </label>
+              {/* Search input */}
+              <input
+                aria-label="Search characters"
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search characters..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="qt-input mb-3"
+                disabled={isAdding}
+              />
 
-                {/* Search input */}
-                <input
-                  aria-label="Search characters"
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search characters..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="qt-input mb-3"
-                  disabled={isAdding}
-                />
+              {/* Character grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
+                {regularCharacters.length === 0 && npcCharacters.length === 0 ? (
+                  <div className="col-span-full text-center py-8 qt-text-secondary">
+                    {searchTerm ? 'No matching characters found' : 'All your characters are already in this chat'}
+                  </div>
+                ) : (
+                  <>
+                    {/* Regular Characters */}
+                    {regularCharacters.map((character) => {
+                      const isSelected = selectedCharacterId === character.id
 
-                {/* Character grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
-                  {regularCharacters.length === 0 && npcCharacters.length === 0 ? (
-                    <div className="col-span-full text-center py-8 qt-text-secondary">
-                      {searchTerm ? 'No matching characters found' : 'All your characters are already in this chat'}
-                    </div>
-                  ) : (
-                    <>
-                      {/* Regular Characters */}
-                      {regularCharacters.map((character) => {
-                        const isSelected = selectedCharacterId === character.id
+                      return (
+                        <button
+                          key={character.id}
+                          onClick={() => setSelectedCharacterId(character.id)}
+                          disabled={isAdding}
+                          className={`
+                            p-3 rounded-lg border text-left transition-all
+                            ${isSelected
+                              ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                              : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
+                            }
+                            disabled:opacity-50 disabled:cursor-not-allowed
+                          `}
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Avatar */}
+                            <Avatar
+                              name={character.name}
+                              src={character}
+                              size="md"
+                              styleOverride="RECTANGULAR"
+                            />
 
-                        return (
-                          <button
-                            key={character.id}
-                            onClick={() => setSelectedCharacterId(character.id)}
-                            disabled={isAdding}
-                            className={`
-                              p-3 rounded-lg border text-left transition-all
-                              ${isSelected
-                                ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
-                                : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
-                              }
-                              disabled:opacity-50 disabled:cursor-not-allowed
-                            `}
-                          >
-                            <div className="flex items-center gap-3">
-                              {/* Avatar */}
-                              <Avatar
-                                name={character.name}
-                                src={character}
-                                size="md"
-                                styleOverride="RECTANGULAR"
-                              />
-
-                              {/* Info */}
-                              <div className="min-w-0 flex-1">
-                                <div className="font-semibold text-foreground truncate">
-                                  {character.name}
-                                </div>
-                                {character.title && (
-                                  <div className="qt-text-xs italic truncate">
-                                    {character.title}
-                                  </div>
-                                )}
+                            {/* Info */}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-foreground truncate">
+                                {character.name}
                               </div>
-
-                              {/* Selected indicator */}
-                              {isSelected && (
-                                <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
+                              {character.title && (
+                                <div className="qt-text-xs italic truncate">
+                                  {character.title}
+                                </div>
                               )}
                             </div>
-                          </button>
-                        )
-                      })}
 
-                      {/* NPCs Section */}
-                      {npcCharacters.length > 0 && (
-                        <>
-                          {/* Divider */}
-                          <div className="col-span-full flex items-center gap-2 my-2">
-                            <div className="flex-1 border-t qt-border-default"></div>
-                            <span className="qt-text-xs qt-text-secondary font-medium">NPCs</span>
-                            <div className="flex-1 border-t qt-border-default"></div>
+                            {/* Selected indicator */}
+                            {isSelected && (
+                              <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
+                            )}
                           </div>
+                        </button>
+                      )
+                    })}
 
-                          {/* NPC Characters */}
-                          {npcCharacters.map((character) => {
-                            const isSelected = selectedCharacterId === character.id
+                    {/* NPCs Section */}
+                    {npcCharacters.length > 0 && (
+                      <>
+                        {/* Divider */}
+                        <div className="col-span-full flex items-center gap-2 my-2">
+                          <div className="flex-1 border-t qt-border-default"></div>
+                          <span className="qt-text-xs qt-text-secondary font-medium">NPCs</span>
+                          <div className="flex-1 border-t qt-border-default"></div>
+                        </div>
 
-                            return (
-                              <button
-                                key={character.id}
-                                onClick={() => setSelectedCharacterId(character.id)}
-                                disabled={isAdding}
-                                className={`
-                                  p-3 rounded-lg border text-left transition-all
-                                  ${isSelected
-                                    ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
-                                    : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
-                                  }
-                                  disabled:opacity-50 disabled:cursor-not-allowed
-                                `}
-                              >
-                                <div className="flex items-center gap-3">
-                                  {/* Avatar */}
-                                  <Avatar
-                                    name={character.name}
-                                    src={character}
-                                    size="md"
-                                    styleOverride="RECTANGULAR"
-                                  />
+                        {/* NPC Characters */}
+                        {npcCharacters.map((character) => {
+                          const isSelected = selectedCharacterId === character.id
 
-                                  {/* Info */}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-semibold text-foreground truncate">
-                                      {character.name}
-                                    </div>
-                                    {character.title && (
-                                      <div className="qt-text-xs italic truncate">
-                                        {character.title}
-                                      </div>
-                                    )}
+                          return (
+                            <button
+                              key={character.id}
+                              onClick={() => setSelectedCharacterId(character.id)}
+                              disabled={isAdding}
+                              className={`
+                                p-3 rounded-lg border text-left transition-all
+                                ${isSelected
+                                  ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                                  : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
+                                }
+                                disabled:opacity-50 disabled:cursor-not-allowed
+                              `}
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* Avatar */}
+                                <Avatar
+                                  name={character.name}
+                                  src={character}
+                                  size="md"
+                                  styleOverride="RECTANGULAR"
+                                />
+
+                                {/* Info */}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold text-foreground truncate">
+                                    {character.name}
                                   </div>
-
-                                  {/* Selected indicator */}
-                                  {isSelected && (
-                                    <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
+                                  {character.title && (
+                                    <div className="qt-text-xs italic truncate">
+                                      {character.title}
+                                    </div>
                                   )}
                                 </div>
-                              </button>
-                            )
-                          })}
-                        </>
-                      )}
 
-                      {/* Create New NPC Button */}
-                      <button
-                        onClick={() => setIsCreateNPCOpen(true)}
-                        disabled={isAdding}
-                        className="p-3 rounded-lg border border-dashed qt-border-default hover:qt-border-primary/50 hover:qt-bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* User Plus Icon */}
-                          <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
-                            <Icon name="user-plus" className="w-6 h-6" />
+                                {/* Selected indicator */}
+                                {isSelected && (
+                                  <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </>
+                    )}
+
+                    {/* Create New NPC Button */}
+                    <button
+                      onClick={() => setIsCreateNPCOpen(true)}
+                      disabled={isAdding}
+                      className="p-3 rounded-lg border border-dashed qt-border-default hover:qt-border-primary/50 hover:qt-bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* User Plus Icon */}
+                        <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
+                          <Icon name="user-plus" className="w-6 h-6" />
+                        </div>
+
+                        {/* Text */}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-primary truncate">
+                            Create New NPC
                           </div>
-
-                          {/* Text */}
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-primary truncate">
-                              Create New NPC
-                            </div>
-                            <div className="qt-text-xs qt-text-secondary truncate">
-                              Add an ad-hoc character
-                            </div>
+                          <div className="qt-text-xs qt-text-secondary truncate">
+                            Add an ad-hoc character
                           </div>
                         </div>
-                      </button>
+                      </div>
+                    </button>
 
-                      {/* Summon from Lore Button */}
-                      <button
-                        onClick={() => setIsSummonOpen(true)}
-                        disabled={isAdding}
-                        className="p-3 rounded-lg border border-dashed qt-border-default hover:qt-border-primary/50 hover:qt-bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Sparkles Icon */}
-                          <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
-                            <Icon name="sparkles" className="w-6 h-6" />
+                    {/* Summon from Lore Button */}
+                    <button
+                      onClick={() => setIsSummonOpen(true)}
+                      disabled={isAdding}
+                      className="p-3 rounded-lg border border-dashed qt-border-default hover:qt-border-primary/50 hover:qt-bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Sparkles Icon */}
+                        <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
+                          <Icon name="sparkles" className="w-6 h-6" />
+                        </div>
+
+                        {/* Text */}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-primary truncate">
+                            Summon from Lore
                           </div>
-
-                          {/* Text */}
-                          <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-primary truncate">
-                              Summon from Lore
-                            </div>
-                            <div className="qt-text-xs qt-text-secondary truncate">
-                              Conjure a soul from your worldbuilding notes
-                            </div>
+                          <div className="qt-text-xs qt-text-secondary truncate">
+                            Conjure a soul from your worldbuilding notes
                           </div>
                         </div>
-                      </button>
-                    </>
-                  )}
+                      </div>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Connection Profile Selection */}
+            {selectedCharacterId && (
+              <div>
+                <label htmlFor={`${id}-profile`} className="block text-sm qt-text-primary mb-2">
+                  Controlled By
+                </label>
+                <select
+                  id={`${id}-profile`}
+                  value={selectedConnectionProfileId || ''}
+                  onChange={(e) => setSelectedConnectionProfileId(e.target.value || null)}
+                  className="qt-select"
+                  disabled={isAdding}
+                >
+                  <option value="">Select who controls this character...</option>
+                  <option value={USER_IMPERSONATION_VALUE}>
+                    User (you will type for this character)
+                  </option>
+                  <optgroup label="LLM Backends">
+                    {connectionProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name} ({profile.provider}: {profile.modelName})
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                {selectedConnectionProfileId && selectedConnectionProfileId !== USER_IMPERSONATION_VALUE && (() => {
+                  const selectedProfile = connectionProfiles.find(p => p.id === selectedConnectionProfileId)
+                  return selectedProfile?.provider ? (
+                    <div className="mt-1">
+                      <ProviderModelBadge provider={selectedProfile.provider} modelName={selectedProfile.modelName} size="sm" />
+                    </div>
+                  ) : null
+                })()}
+                {connectionProfiles.length === 0 && (
+                  <p className="text-sm qt-text-warning mt-1">
+                    No connection profiles available. Create one in Settings to use LLM control.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* History Access Option */}
+            {selectedCharacterId && (
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="hasHistoryAccess"
+                  checked={hasHistoryAccess}
+                  onChange={(e) => setHasHistoryAccess(e.target.checked)}
+                  disabled={isAdding}
+                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <div>
+                  <label htmlFor="hasHistoryAccess" className="text-sm qt-text-primary cursor-pointer">
+                    Include chat history in context
+                  </label>
+                  <p className="qt-text-xs mt-0.5">
+                    If checked, this character will see messages from before they joined. If unchecked, they will only see messages from their join point onward.
+                  </p>
                 </div>
               </div>
-
-              {/* Connection Profile Selection */}
-              {selectedCharacterId && (
-                <div>
-                  <label htmlFor={`${id}-profile`} className="block text-sm qt-text-primary mb-2">
-                    Controlled By
-                  </label>
-                  <select
-                    id={`${id}-profile`}
-                    value={selectedConnectionProfileId || ''}
-                    onChange={(e) => setSelectedConnectionProfileId(e.target.value || null)}
-                    className="qt-select"
-                    disabled={isAdding}
-                  >
-                    <option value="">Select who controls this character...</option>
-                    <option value={USER_IMPERSONATION_VALUE}>
-                      User (you will type for this character)
-                    </option>
-                    <optgroup label="LLM Backends">
-                      {connectionProfiles.map((profile) => (
-                        <option key={profile.id} value={profile.id}>
-                          {profile.name} ({profile.provider}: {profile.modelName})
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                  {selectedConnectionProfileId && selectedConnectionProfileId !== USER_IMPERSONATION_VALUE && (() => {
-                    const selectedProfile = connectionProfiles.find(p => p.id === selectedConnectionProfileId)
-                    return selectedProfile?.provider ? (
-                      <div className="mt-1">
-                        <ProviderModelBadge provider={selectedProfile.provider} modelName={selectedProfile.modelName} size="sm" />
-                      </div>
-                    ) : null
-                  })()}
-                  {connectionProfiles.length === 0 && (
-                    <p className="text-sm qt-text-warning mt-1">
-                      No connection profiles available. Create one in Settings to use LLM control.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* History Access Option */}
-              {selectedCharacterId && (
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    id="hasHistoryAccess"
-                    checked={hasHistoryAccess}
-                    onChange={(e) => setHasHistoryAccess(e.target.checked)}
-                    disabled={isAdding}
-                    className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                  />
-                  <div>
-                    <label htmlFor="hasHistoryAccess" className="text-sm qt-text-primary cursor-pointer">
-                      Include chat history in context
-                    </label>
-                    <p className="qt-text-xs mt-0.5">
-                      If checked, this character will see messages from before they joined. If unchecked, they will only see messages from their join point onward.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Join Scenario */}
-              {selectedCharacterId && (
-                <div>
-                  <label htmlFor="joinScenario" className="block text-sm qt-text-primary mb-2">
-                    How did they join? <span className="qt-text-secondary font-normal">(optional)</span>
-                  </label>
-                  <p className="qt-text-xs mb-2">
-                    Included in the character&rsquo;s context to explain how they joined the conversation.
-                  </p>
-                  <MarkdownLexicalEditor
-                    value={joinScenario}
-                    onChange={setJoinScenario}
-                    disabled={isAdding}
-                    remountKey={selectedCharacterId}
-                    namespace="AddCharacterDialog.joinScenario"
-                    ariaLabel="Join scenario"
-                    minHeight="6rem"
-                  />
-                </div>
-              )}
-
-              {/* Starting Outfit */}
-              {selectedCharacterId && outfitCharacters.length > 0 && (
-                <OutfitSelector
-                  key={selectedCharacterId}
-                  characters={outfitCharacters}
-                  onSelectionsChange={handleOutfitSelectionsChange}
-                  disabled={isAdding}
-                  chatId={chatId}
-                  defaultModes={arrivalDefaults ?? null}
-                />
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="qt-dialog-footer flex items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="qt-button qt-button-secondary"
-            disabled={isAdding}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleAddCharacter}
-            disabled={isAdding || !selectedCharacterId || !selectedConnectionProfileId}
-            className="qt-button qt-button-primary"
-          >
-            {isAdding ? (
-              <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Adding...
-              </>
-            ) : (
-              <>
-                <Icon name="plus" className="w-4 h-4" />
-                Add Character
-              </>
             )}
-          </button>
-        </div>
-      </div>
+
+            {/* Join Scenario */}
+            {selectedCharacterId && (
+              <div>
+                <label htmlFor="joinScenario" className="block text-sm qt-text-primary mb-2">
+                  How did they join? <span className="qt-text-secondary font-normal">(optional)</span>
+                </label>
+                <p className="qt-text-xs mb-2">
+                  Included in the character&rsquo;s context to explain how they joined the conversation.
+                </p>
+                <MarkdownLexicalEditor
+                  value={joinScenario}
+                  onChange={setJoinScenario}
+                  disabled={isAdding}
+                  remountKey={selectedCharacterId}
+                  namespace="AddCharacterDialog.joinScenario"
+                  ariaLabel="Join scenario"
+                  minHeight="6rem"
+                />
+              </div>
+            )}
+
+            {/* Starting Outfit */}
+            {selectedCharacterId && outfitCharacters.length > 0 && (
+              <OutfitSelector
+                key={selectedCharacterId}
+                characters={outfitCharacters}
+                onSelectionsChange={handleOutfitSelectionsChange}
+                disabled={isAdding}
+                chatId={chatId}
+                defaultModes={arrivalDefaults ?? null}
+              />
+            )}
+          </div>
+        )}
+      </BaseModal>
 
       {/* Create NPC Dialog */}
       <CreateNPCDialog
@@ -671,6 +656,6 @@ export default function AddCharacterDialog({
         onClose={() => setIsSummonOpen(false)}
         onSummoned={handleSummoned}
       />
-    </div>
+    </>
   )
 }
