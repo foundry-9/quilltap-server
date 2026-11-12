@@ -276,6 +276,7 @@ export function VirtualizedMessageList({
                 >
                   <AnnouncementGroup
                     members={item.members}
+                    chatId={chatId}
                     onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                     participantNames={participantNames}
                     announcerNames={announcerNames}

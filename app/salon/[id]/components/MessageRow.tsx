@@ -322,6 +322,7 @@ function MessageRowInner({
       <div key={message.id} className={messageRowClasses.join(' ')}>
         <AnnouncementChip
           message={message}
+          chatId={chatId}
           onToggleExpanded={onToggleSystemMessageExpanded}
           participantNames={participantNames}
           announcerNames={announcerNames}

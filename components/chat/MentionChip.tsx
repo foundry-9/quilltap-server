@@ -72,7 +72,11 @@ function atlasTierLabel(origin: AtlasOrigin): string {
   }
 }
 
-function AtlasCardView({ card }: { card: AtlasCard }) {
+/**
+ * An Atlas entry's card: the popup of a thing's chip, and of an entry in the
+ * chat sidebar's "Things named" card. `hint` is the footer's action line.
+ */
+export function AtlasCardView({ card, hint = 'click to pin' }: { card: AtlasCard; hint?: string }) {
   return (
     <div className="qt-tooltip-body">
       <div className="qt-tooltip-title">{card.name}</div>
@@ -101,7 +105,7 @@ function AtlasCardView({ card }: { card: AtlasCard }) {
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{card.knowledge}</ReactMarkdown>
         </div>
       )}
-      <div className="qt-tooltip-hint">From the Atlas · {atlasTierLabel(card.origin)} · click to pin</div>
+      <div className="qt-tooltip-hint">From the Atlas · {atlasTierLabel(card.origin)} · {hint}</div>
     </div>
   )
 }

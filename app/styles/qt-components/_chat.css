@@ -481,6 +481,23 @@
     outline-offset: 2px;
   }
 
+  /* A collapsed announcement that holds the first mention of a thing or an
+     absent character: the bar, then its name chips beside it, since the body
+     (where the chips would otherwise be) is hidden. */
+  .qt-chat-announcement-chip-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .qt-chat-announcement-chip-wrap .qt-mention-chip {
+    font-size: 0.8125rem;
+  }
+
   /* Inside a chip the kind must not greedily fill the row (that is what made the
      full-width bar stretch); cap it so long kinds don't dominate a packed row. */
   .qt-chat-announcement-chip .qt-chat-system-bar-kind {
@@ -3080,6 +3097,72 @@
      header/body divider doesn't sit further in than the content. */
   .qt-chat-sidebar .qt-collapsible-card-divider {
     @apply mx-2;
+  }
+
+  /* The "Things named" card: the Atlas entries the chat names, each a
+     button that goes to its first mention. */
+  .qt-chat-things-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .qt-chat-things-anchor {
+    display: block;
+  }
+
+  .qt-chat-things-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.25rem 0.375rem;
+    border-radius: 0.375rem;
+    text-align: left;
+    color: var(--color-foreground);
+    background: transparent;
+  }
+
+  .qt-chat-things-item:hover,
+  .qt-chat-things-item:focus-visible {
+    background: var(--color-muted);
+    outline: none;
+  }
+
+  .qt-chat-things-item:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+
+  .qt-chat-things-thumb {
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.25rem;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-chat-things-thumb-empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-chat-things-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .qt-chat-things-name {
+    @apply text-sm truncate;
+  }
+
+  .qt-chat-things-term {
+    @apply text-xs truncate;
+    color: var(--color-muted-foreground);
   }
 
   .qt-chat-sidebar-add {

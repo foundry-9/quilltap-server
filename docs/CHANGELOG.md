@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Atlas chips are easier to find
+
+- A collapsed announcement now shows the name chips whose first mention is inside it, next to its bar, labeled with the name on each card. This covers the Host's scenario row, which starts collapsed and is where an Atlas entry is usually first named, so its chip was hidden. Absent-character chips get the same treatment. The bar renders exactly as before when it has no chips (`AnnouncementChip`, which now takes `chatId`).
+- New **Things named** card in the chat sidebar (`components/chat/ChatThingsNamed.tsx`), shown only when the chat names at least one Atlas entry. It lists every entry at its first mention, in message order, with its picture and the term used when that differs from the name. Hover shows the entry's card. Click calls `requestMessageReveal`, which scrolls to the message and expands a collapsed announcement; an overlay sidebar closes.
+- `useChatAtlasMentions(chatId)` (`hooks/useAtlasMentions.ts`) returns the whole list from the existing `?action=atlas-mentions` query; `useAtlasMentions` is now built on it. `AtlasCardView` is exported from `MentionChip.tsx` with a `hint` prop for its footer.
+
 #### Fix: Wardrobe files that share an id
 
 - Archiving or editing a garment that had a second `Wardrobe/` file with the same frontmatter `id` (a copy made in the Scriptorium) now works. The reader returned both files as items, so a write patched one copy, re-projected both, and the other copy stayed visible. `readCharacterVaultWardrobe` now picks one file per id with `chooseIdWinners`, as the Inventory and Atlas readers already did: the file at the item's own name wins, the newest of several; the rest are logged with a warning and returned as `duplicatePaths`. `projectVaultWardrobe` leaves those files on disk and claims their names (new `duplicatePaths` option; when it is omitted, the projection reads the folder itself). The item file name is now one helper, `wardrobeItemFileName` / `wardrobeItemOwnPath` (`lib/wardrobe/vault-parsers.ts`).

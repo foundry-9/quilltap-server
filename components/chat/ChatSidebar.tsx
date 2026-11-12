@@ -23,6 +23,8 @@ import { ParticipantCard, type ParticipantData } from './ParticipantCard'
 import { useChatActions } from '@/components/providers/chat-context'
 import { CopyChatIdButton } from './CopyChatIdButton'
 import { ChatScenarioControl } from './ChatScenarioControl'
+import { ChatThingsNamed } from './ChatThingsNamed'
+import { useChatAtlasMentions } from '@/hooks/useAtlasMentions'
 import { shouldDismissSidebarOverlay } from './sidebar-overlay-dismiss'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
@@ -60,7 +62,7 @@ const WIDTH_KEY_STEP = 16
  */
 const NARROW_PANE_WIDTH = 640
 
-type SectionId = 'participants' | 'chat' | 'visibility' | 'organize' | 'edit' | null
+type SectionId = 'participants' | 'things' | 'chat' | 'visibility' | 'organize' | 'edit' | null
 
 interface RoleplayTemplate {
   id: string
@@ -281,6 +283,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
+  // Atlas entries the chat names (shared with the transcript's thing chips).
+  const atlasMentions = useChatAtlasMentions(props.chatId)
 
   // Resizable width (px), persisted to localStorage. Applies to the expanded
   // panel only; the collapsed strip keeps its own fixed width.
@@ -521,6 +525,20 @@ export function ChatSidebar(props: ChatSidebarProps) {
             activeCharacterCount={activeCharacterCount}
           />
         </CollapsibleCard>
+
+        {atlasMentions.length > 0 && (
+          <CollapsibleCard
+            title="Things named"
+            description={`${atlasMentions.length} from the Atlas`}
+            {...openController('things')}
+          >
+            <ChatThingsNamed
+              chatId={props.chatId}
+              mentions={atlasMentions}
+              onRevealed={isOverlay ? () => setNarrowOpen(false) : undefined}
+            />
+          </CollapsibleCard>
+        )}
 
         <CollapsibleCard
           title="Chat"
