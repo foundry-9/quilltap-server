@@ -25,7 +25,7 @@
  * row: one whose image was later deleted stays, and the resolver
  * (`lib/chat/salon-avatar.ts`) falls back.
  *
- * Design of record: docs/developer/features/salon-avatar-timeline.md
+ * Design of record: docs/developer/features/complete/salon-avatar-timeline.md
  */
 
 import { randomUUID } from 'node:crypto';

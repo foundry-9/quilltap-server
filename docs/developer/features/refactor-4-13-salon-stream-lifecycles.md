@@ -85,7 +85,7 @@ The stream hook's return bag shapes most of SalonView, so this comes second.
 | `useMessageReveal` | search and reveal, `:1508-1653` | about 145 lines |
 | effects sorted by owner | the block of 13 effects at `:982-1350` | moves into the hooks that own each concern |
 
-Sidebar props: `components/providers/chat-context.tsx` exists but `ChatProvider` is never mounted, so `useChatContext()` always returns its empty fallback (see the [dead-code list](refactor-4-13-dead-code-and-leftovers.md)). Either mount it in SalonView carrying a `ChatActions` value for the 13 pass-through props, or delete the provider and the hook. Decision 2 below.
+Sidebar props: `components/providers/chat-context.tsx` exists but `ChatProvider` is never mounted, so `useChatContext()` always returns its empty fallback (see the [dead-code list](complete/refactor-4-13-dead-code-and-leftovers.md)). Either mount it in SalonView carrying a `ChatActions` value for the 13 pass-through props, or delete the provider and the hook. Decision 2 below.
 
 ## 6. Phases
 

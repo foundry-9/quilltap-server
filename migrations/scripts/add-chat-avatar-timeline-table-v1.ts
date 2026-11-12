@@ -5,7 +5,7 @@
  * chat has bound, so each Salon bubble shows the character as they looked when
  * they spoke. No rows are seeded — chats that predate the table keep showing
  * what they show now, and start a timeline the next time an avatar is bound.
- * See docs/developer/features/salon-avatar-timeline.md.
+ * See docs/developer/features/complete/salon-avatar-timeline.md.
  *
  * The DDL is shared with the repository tests through
  * `lib/database/backends/sqlite/chat-avatar-timeline-ddl.ts`.

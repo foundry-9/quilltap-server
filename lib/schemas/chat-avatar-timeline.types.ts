@@ -9,7 +9,7 @@
  * Rows live in the `chat_avatar_timeline` table and are written at runtime
  * only by `ChatAvatarTimelineRepository.record`.
  *
- * Design of record: docs/developer/features/salon-avatar-timeline.md
+ * Design of record: docs/developer/features/complete/salon-avatar-timeline.md
  *
  * @module schemas/chat-avatar-timeline.types
  */

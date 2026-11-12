@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Bugs **1–269** live in the frozen catalogue at
-        [docs/developer/bugs.md](https://github.com/foundry-9/quilltap-server/blob/main/docs/developer/bugs.md).
+        Bugs **1–269** are in the old catalogue, kept in git history at
+        [docs/developer/bugs.md](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs.md).
         New bugs are filed here. Purely-taste items (a colour you'd prefer, a default you'd change)
         are not bugs. Title the issue with a short description of the *problem*.
   - type: dropdown

@@ -662,7 +662,7 @@ Create is the base's `create()`: write the row, `provisionOfficialStore()` (the 
 
 ## 11. Casting and the Opening
 
-How a chat comes to be: a quick, model-free **cast**, then an **opening** run on whatever first needs the chat opened. Design of record: `docs/developer/features/refactor-green-room-and-opening.md`.
+How a chat comes to be: a quick, model-free **cast**, then an **opening** run on whatever first needs the chat opened. Design of record: `docs/developer/features/complete/refactor-green-room-and-opening.md`.
 
 ```mermaid
 flowchart TD

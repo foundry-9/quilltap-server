@@ -22,7 +22,7 @@
  *
  * Server-only. Parent-process only: it writes.
  *
- * Design of record: docs/developer/features/refactor-green-room-and-opening.md (D1, D6, D10)
+ * Design of record: docs/developer/features/complete/refactor-green-room-and-opening.md (D1, D6, D10)
  *
  * @module chat/opening/run
  */

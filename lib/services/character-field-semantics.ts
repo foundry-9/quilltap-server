@@ -131,7 +131,7 @@ The same holds for probation behaviour: keeping a tally of {{user}}'s slips; reo
  * (kind `roleplay`) to react when the story turns. Without it, generators
  * wrote temperament as an invariant ("Hostility makes you calmer. Never play
  * yourself tense") and whole casts met an armed intruder with paperwork
- * (docs/developer/features/character-kind-and-roleplay-defaults.md §1).
+ * (docs/developer/features/complete/character-kind-and-roleplay-defaults.md §1).
  * Chosen by `generatorDirectionFor`; never pasted beside it by hand.
  */
 export const STAKES_AND_REACTION_DIRECTION = `The prompt must also direct how the character REACTS when the story turns, in terms fitted to this character rather than as a generic checklist:

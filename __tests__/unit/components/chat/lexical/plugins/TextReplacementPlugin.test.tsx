@@ -3,7 +3,7 @@
  *
  * The plugin had NO tests at all, which is why the two code-context guards it
  * was missing went unnoticed — see
- * `docs/developer/bugs/fixed/bug-63-text-replacement-in-code.md`. This suite
+ * `https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-63-text-replacement-in-code.md`. This suite
  * pins the guards together with the bail conditions that were always intended,
  * so the pair of typing aids cannot drift apart again.
  */

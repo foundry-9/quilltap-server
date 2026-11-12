@@ -6,7 +6,7 @@
  * frame and the full-page fallback — so no surface threads the form's props
  * by hand.
  *
- * Design of record: docs/developer/features/refactor-green-room-and-opening.md (D9)
+ * Design of record: docs/developer/features/complete/refactor-green-room-and-opening.md (D9)
  *
  * @module components/new-chat/NewChatFormContext
  */

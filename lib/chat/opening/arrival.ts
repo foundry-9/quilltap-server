@@ -27,7 +27,7 @@
  *
  * Server-only.
  *
- * Design of record: docs/developer/features/refactor-green-room-and-opening.md (D4)
+ * Design of record: docs/developer/features/complete/refactor-green-room-and-opening.md (D4)
  *
  * @module chat/opening/arrival
  */

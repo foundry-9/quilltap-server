@@ -1,5 +1,5 @@
 /**
- * The opening's fences (docs/developer/features/refactor-green-room-and-opening.md §7).
+ * The opening's fences (docs/developer/features/complete/refactor-green-room-and-opening.md §7).
  *
  * (a) A seat arrives through `seatArrival` (`lib/chat/opening/arrival.ts`), the
  *     only caller of the outfit and inventory appliers — three hand-kept

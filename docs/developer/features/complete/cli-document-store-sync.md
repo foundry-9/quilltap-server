@@ -6,8 +6,8 @@ settled every open question on the day
 the plan was approved; the answers are recorded in
 [Decisions taken](#decisions-taken-2026-09-21) at the end and are folded into
 the text. Two defects found while planning were filed as
-[bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) and
-[bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) and fixed
+[bug 155](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-155-byte-write-blanks-caption.md) and
+[bug 156](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) and fixed
 in phase 1, because the sync's store-side applier depends on both. Where the
 shipped code departs from the plan, see
 [Implementation notes (as landed)](#implementation-notes-as-landed) at the end.
@@ -313,13 +313,13 @@ SQL of its own.
   `writeDatabaseDocument` runs (`reindexSingleFile`, `reindexLinkGroupSiblings`),
   then `emitDocumentWritten`. Factoring that block out of
   `writeDatabaseDocument` into a shared helper is part of the
-  [bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) fix, which
+  [bug 156](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) fix, which
   lands first; the sync calls the helper rather than copying the block.
 - `create store` / `modify store` for binaries → `linkBlobContent` with the
   bytes verbatim, `storedMimeType = originalMimeType = mimeForExtension`,
   and **no** `description` / `extractedText` / `extractionStatus` in the
   input — which is safe only once
-  [bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) has taught the
+  [bug 155](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-155-byte-write-blanks-caption.md) has taught the
   update branch that an omitted field means "keep what is there". Until that
   fix lands the sync must not be merged. No `transcodeToWebP`. The reader
   side is indifferent: the blob route serves `storedMimeType` as-is, and the
@@ -496,8 +496,8 @@ artefacts the store never contains.
 
 ## Phases
 
-1. Fix [bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) and
-   [bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) — the
+1. Fix [bug 155](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-155-byte-write-blanks-caption.md) and
+   [bug 156](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) — the
    omitted-means-keep update branch, `chunkCount = 0` on repoint, the shared
    post-write re-chunk helper, the docstring. Then the repository additions
    (`lastModified`/`createdAt` inputs, `setLinkTimestamps`). Tests. This
@@ -533,9 +533,9 @@ already reflected in the sections above; this list is the record.
    documented in the help and in the document-store help pages, not only
    here.
 8. **The two pre-existing defects are filed** as
-   [bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) (a byte write
+   [bug 155](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-155-byte-write-blanks-caption.md) (a byte write
    over a described binary blanks the caption) and
-   [bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) (an
+   [bug 156](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) (an
    overwrite leaves stale chunks and the rescan docstring promises a check
    the code does not make). Both are fixed in phase 1, ahead of the sync.
 

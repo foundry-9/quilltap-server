@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.13.0--dev.112-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.13.0--dev.113-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -106,6 +106,8 @@ docker run -d \
 Open [http://localhost:3000](http://localhost:3000) and the setup wizard will guide you through first-time configuration.
 
 > **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so chat timestamps, scheduled rooms, daily budgets, and "yesterday" in a character's memory all land on your calendar day rather than UTC's.
+
+> **Who can reach it:** Quilltap has no login, so it answers only on your own machine by default — `npx quilltap` and the desktop app listen on `127.0.0.1`. In Docker, the published port is the door: `-p 127.0.0.1:3000:3000` keeps it to the host, while plain `-p 3000:3000` opens it to your network. To admit other machines on a network you trust, use `quilltap --host 0.0.0.0` (or `QUILLTAP_HOST`), and list any host name other than an IP or `localhost` in `QUILLTAP_ALLOWED_HOSTS`. Details: [help/network-access.md](help/network-access.md).
 
 ### The Quick Route: npx
 

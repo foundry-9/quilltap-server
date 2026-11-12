@@ -21,7 +21,7 @@
  *
  * Server-only.
  *
- * Design of record: docs/developer/features/refactor-green-room-and-opening.md (D5)
+ * Design of record: docs/developer/features/complete/refactor-green-room-and-opening.md (D5)
  *
  * @module chat/opening/defaults
  */

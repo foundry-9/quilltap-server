@@ -11,7 +11,7 @@
  * overrides alone: an absent key means "use the default", which is exactly
  * what the form showed.
  *
- * Design of record: docs/developer/features/refactor-green-room-and-opening.md (D8)
+ * Design of record: docs/developer/features/complete/refactor-green-room-and-opening.md (D8)
  *
  * @module components/new-chat/hooks/useNewChat
  */

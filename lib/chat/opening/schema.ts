@@ -6,7 +6,7 @@
  * each default once (`resolveCastingDefaults`), so an absent key always means
  * "use the default".
  *
- * Design of record: docs/developer/features/refactor-green-room-and-opening.md
+ * Design of record: docs/developer/features/complete/refactor-green-room-and-opening.md
  *
  * @module chat/opening/schema
  */

@@ -22,7 +22,7 @@
  *
  * Client-safe: no server imports.
  *
- * Design of record: docs/developer/features/character-kind-and-roleplay-defaults.md
+ * Design of record: docs/developer/features/complete/character-kind-and-roleplay-defaults.md
  */
 
 export const CHARACTER_KINDS = ['roleplay', 'assistant'] as const

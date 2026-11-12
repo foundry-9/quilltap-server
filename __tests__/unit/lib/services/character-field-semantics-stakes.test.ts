@@ -1,6 +1,6 @@
 /**
  * The kind-specific generator directions
- * (docs/developer/features/character-kind-and-roleplay-defaults.md §5.5).
+ * (docs/developer/features/complete/character-kind-and-roleplay-defaults.md §5.5).
  *
  * A roleplay character's generated prompt says how they react when the story
  * turns, and must never encode a temperament as an absolute; an assistant's

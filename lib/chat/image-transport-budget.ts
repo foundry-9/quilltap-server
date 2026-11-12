@@ -45,7 +45,7 @@
  * time in `lib/chat-files-v2.ts` (`shrinkImageForLlmTransport`). Nothing here
  * touches a stored file.
  *
- * Design of record: docs/developer/features/refactor-4-12-image-transport-budget.md
+ * Design of record: docs/developer/features/complete/refactor-4-12-image-transport-budget.md
  *
  * @module chat/image-transport-budget
  */

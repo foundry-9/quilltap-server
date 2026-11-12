@@ -14,7 +14,7 @@
  * `narrator-frames.ts` (server-only), so the Salon can import the event
  * vocabulary from here without dragging the stream encoder along.
  *
- * Design of record: docs/developer/features/refactor-green-room-and-opening.md (D7)
+ * Design of record: docs/developer/features/complete/refactor-green-room-and-opening.md (D7)
  *
  * @module chat/opening/narrator
  */

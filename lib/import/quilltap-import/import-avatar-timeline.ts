@@ -17,7 +17,7 @@
  *
  * The judgement is {@link remapAvatarTimelineRows} (pure, unit-tested).
  *
- * Design of record: docs/developer/features/salon-avatar-timeline.md
+ * Design of record: docs/developer/features/complete/salon-avatar-timeline.md
  *
  * @module import/quilltap-import/import-avatar-timeline
  */

@@ -55,7 +55,7 @@ now true in this story and in you, as of this moment — what has happened, what
 you feel or what you have resolved. Where any of it conflicts with an older memory, your records,
 or your usual temperament, this is the current truth:"*. It still vouches and nothing more: no
 "do not mention this", no instruction about what to do. Approved by the operator as decision D2 of
-[character-kind-and-roleplay-defaults.md](../character-kind-and-roleplay-defaults.md) §5.7.
+[character-kind-and-roleplay-defaults.md](character-kind-and-roleplay-defaults.md) §5.7.
 
 ## Vocabulary
 

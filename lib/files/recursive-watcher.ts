@@ -19,7 +19,7 @@
  * and sends each difference down the same debounced path as a native event.
  * Polling holds no descriptors between walks.
  *
- * Design of record: docs/developer/features/refactor-4-12-native-watcher-core.md
+ * Design of record: docs/developer/features/complete/refactor-4-12-native-watcher-core.md
  *
  * @module files/recursive-watcher
  */

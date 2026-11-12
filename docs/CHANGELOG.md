@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Docs: release checklist 14, finished specs moved, bug catalogue removed
+
+- Removed the frozen in-repo bug catalogue (`docs/developer/bugs.md` and `docs/developer/bugs/`, bugs 1–269). It is in git history at `dd200c695`; links that pointed into it now point there on GitHub. CLAUDE.md, DEVELOPMENT.md and the Bug issue form say so. New bugs stay GitHub issues. Also removed `docs/developer/bugfix-sessions/`, the finished plan for working down bugs 8–43.
+- Moved 15 finished specs to `docs/developer/features/complete/` (the 4.12 document-core, image-transport, watcher and tier-walk specs; seven 4.13 refactor specs; character kind; Green Room and opening; Salon avatar timeline; the better-sqlite3 v13 shell notes) and updated every link to them. Dropped a stale top-level duplicate of the search-window spec. The 4.12 and 4.13 refactor indexes and the roadmap show what is done.
+- CLAUDE.md: rules for API input validation, the Salon's single `runTurnStream`, `enqueueDeduped` and the query translator. API.md: `POST /api/v1/embedding-profiles?action=test`. README and DEVELOPMENT.md: the server listens on `127.0.0.1` by default and checks the request origin.
+
 #### Docs: 4.13.0 release notes brought up to date
 
 - Release notes now cover the work after the first draft: a fifth intro theme (hardening, import/restore, audit fixes) and a new "Locks and Ledgers" section (network defaults, import/restore fidelity, first-run fixes). Also added: Atlas chips beside collapsed announcements and the Concepts Named card, live Anthropic model list, a refactor summary, plugin-types 2.11.0, and theme-storybook 1.0.115.

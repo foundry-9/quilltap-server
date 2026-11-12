@@ -88,7 +88,7 @@ Number inputs that save on change (`LLMLoggingSettings`) save on blur or after a
 
 - Wrap with `renderWithQuery` / `createQueryWrapper`; `fetch` stays mocked through `jest-fetch-mock`.
 - For each entity hook: creating or deleting through one view updates a second view mounted on the same client.
-- `@tanstack/query/exhaustive-deps` is on; do not add disables. Nineteen existing `eslint-disable` comments still cite "SWR" as their reason (see the [dead-code list](refactor-4-13-dead-code-and-leftovers.md)); correct or remove the ones in files you touch.
+- `@tanstack/query/exhaustive-deps` is on; do not add disables. Nineteen existing `eslint-disable` comments still cite "SWR" as their reason (see the [dead-code list](complete/refactor-4-13-dead-code-and-leftovers.md)); correct or remove the ones in files you touch.
 - Expected size: 650–900 lines removed (350–450 from `useChatSettings`, 300–450 from the legacy hooks); medium risk, spread thin.
 - CHANGELOG cites `#170`, `#176` and any issue filed from §4.2. Help docs only if a setting's save behaviour visibly changes (the retention field).
 

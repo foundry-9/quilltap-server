@@ -5,7 +5,7 @@
 where the build departs from the text below.
 **Scope:** quilltap-server (Salon back end and client), `@quilltap/plugin-types`, `qtap-plugin-mcp`
 **Prerequisite:** bug 258 (an operator whisper runs single-turn and queues behind an open stream),
-[fixed 2026-10-22](../../bugs/fixed/bug-258-whisper-starts-chain.md)
+[fixed 2026-10-22](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-258-whisper-starts-chain.md)
 
 ## Summary
 

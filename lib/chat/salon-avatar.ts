@@ -23,7 +23,7 @@
  *   4. no segments for the character (a chat that predates the timeline and
  *      has not bound an avatar since): the current avatar, as before.
  *
- * Design of record: docs/developer/features/salon-avatar-timeline.md
+ * Design of record: docs/developer/features/complete/salon-avatar-timeline.md
  *
  * @module chat/salon-avatar
  */

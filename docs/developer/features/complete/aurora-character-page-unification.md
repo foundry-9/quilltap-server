@@ -3,7 +3,7 @@
 **Status:** Implemented (2026-11-06, 4.13-dev). Phases 0–5 done; see §9 for what was built and where it differs.
 **Scope:** quilltap-server. The per-character page in Aurora (`/aurora/[id]/view` and `/aurora/[id]/edit`, workspace tab kinds `character-view` and `character-edit`), its header, its tabs, and its save model. The New Character form is touched only where it can reuse the new section components.
 **Non-scope:** the Aurora list and group pages; the Wardrobe and Inventory dialogs themselves; the AI Wizard and Character Optimizer internals (only how the page hands off to them); the character API (every write the new page needs already exists — see §6.3).
-**Related:** [tabbed-workspace.md](tabbed-workspace.md) (tab kinds, keep-alive, `tab-refetch.ts` roster), [character-progressions.md](character-progressions.md), [character-subprompts.md](character-subprompts.md), [character-kind-and-roleplay-defaults.md](../character-kind-and-roleplay-defaults.md), [character-archive-spec.md](character-archive-spec.md), [prompt-person-consistency.md](prompt-person-consistency.md) (field hints), bug 154 (default-prompt star vs column).
+**Related:** [tabbed-workspace.md](tabbed-workspace.md) (tab kinds, keep-alive, `tab-refetch.ts` roster), [character-progressions.md](character-progressions.md), [character-subprompts.md](character-subprompts.md), [character-kind-and-roleplay-defaults.md](character-kind-and-roleplay-defaults.md), [character-archive-spec.md](character-archive-spec.md), [prompt-person-consistency.md](prompt-person-consistency.md) (field hints), bug 154 (default-prompt star vs column).
 
 ---
 

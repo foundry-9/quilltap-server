@@ -1041,6 +1041,12 @@ Slice and renormalize stored vectors to match the profile's `truncateToDimension
 
 **Response:** `{ "message": "…", "jobId": "uuid", "targetDimensions": 512 }`
 
+#### `POST /api/v1/embedding-profiles?action=test`
+
+Embed one short text with the settings of a profile that has not been saved (the setup wizard's **Test All**). Nothing is stored. Body (`EmbeddingProfileTestSchema`): `provider`, `modelName`, optional `apiKeyId`, `baseUrl`, `dimensions`. A `BUILTIN` profile reports success without a call; an unknown `apiKeyId` is a `404`. A provider failure is still a `200`.
+
+**Response:** `{ "success": true, "dimensions": 1536 }` or `{ "success": false, "error": "…" }`
+
 #### `GET /api/v1/embedding-profiles?action=list-providers`
 
 List the providers that support embeddings.

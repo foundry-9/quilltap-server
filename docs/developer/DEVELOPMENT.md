@@ -176,6 +176,8 @@ npm run dev
 
 The application will be available at [http://localhost:3000](http://localhost:3000)
 
+The server binds `127.0.0.1` unless `QUILLTAP_HOST` / `--host` says otherwise (Docker sets `HOSTNAME=0.0.0.0` inside the container). Every API request and WebSocket upgrade passes one origin gate (`checkRequestOrigin`, `lib/api/request-origin.ts`): an unknown `Host` is refused, so testing from another device or a custom host name means adding it to `QUILLTAP_ALLOWED_HOSTS` (or `BASE_URL`). There are no CORS headers. See [help/network-access.md](../../help/network-access.md).
+
 ### Running with Docker
 
 ```bash
@@ -555,9 +557,9 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 
 Bugs are [GitHub issues](https://github.com/foundry-9/quilltap-server/issues/new?template=bug.yml) filed
 with the Bug form (`.github/ISSUE_TEMPLATE/bug.yml`) and cited as `#N` in commits, code comments and
-the changelog. A fix says `Fixes #N` in its commit message. The in-repo catalogue
-([bugs.md](bugs.md), `bugs/`) is frozen at Bug 269 and takes no new entries; "bug N" always means
-one of those.
+the changelog. A fix says `Fixes #N` in its commit message. Bugs 1–269 predate the move to GitHub: the old in-repo catalogue was removed in 4.13 and survives
+in git history ([bugs.md at dd200c695](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs.md)). "Bug N" (no `#`) always means one of
+those; never mint a new one.
 
 ## Additional Documentation
 

@@ -23,7 +23,7 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 ## 2026-11-11 — Refactor 4.13: dead code knip cannot see, legacy shims
 
-Carried out [refactor-4-13-dead-code-and-leftovers.md](features/refactor-4-13-dead-code-and-leftovers.md). knip's two blind spots were the target: it treats test files as entry points (so an export used only by its own test looks alive), and `knip.json` ignored `migrations/lib/**`. Every symbol below was re-checked with a whole-word `git grep` over tracked files immediately before it was removed.
+Carried out [refactor-4-13-dead-code-and-leftovers.md](features/complete/refactor-4-13-dead-code-and-leftovers.md). knip's two blind spots were the target: it treats test files as entry points (so an export used only by its own test looks alive), and `knip.json` ignored `migrations/lib/**`. Every symbol below was re-checked with a whole-word `git grep` over tracked files immediately before it was removed.
 
 knip afterwards: **0 unused files, 0 unused or unlisted dependencies**; 477 unused exports, 290 unused exported types, 1 enum member, 87 duplicate exports (compact reporter, knip 6.45.1, `tsconfig.build.json`). These figures are not comparable with the 2026-11-10 ones, which used a different reporter and config.
 

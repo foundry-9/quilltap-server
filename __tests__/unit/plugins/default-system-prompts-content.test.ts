@@ -10,7 +10,7 @@
  * and hold" line was deleted to make room — the safeguards are a
  * counterweight, not a cut.
  *
- * And the roleplay defaults (docs/developer/features/character-kind-and-roleplay-defaults.md
+ * And the roleplay defaults (docs/developer/features/complete/character-kind-and-roleplay-defaults.md
  * §5.4): MODERN_ROLEPLAY replaced MODERN_GENERAL, every prompt but the
  * assistant one tells the character to match the stakes, and no shipped
  * prompt tells a character to keep a dangerous scene calm.

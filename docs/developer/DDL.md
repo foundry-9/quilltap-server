@@ -635,7 +635,7 @@ Salon bubble is drawn with the avatar in force when it was written
 - Exported in `.qtap` bundles as `avatar_timeline` records and included in backups
   (`data/avatar-timeline.json`).
 - DDL single source: `lib/database/backends/sqlite/chat-avatar-timeline-ddl.ts`.
-  Design of record: `docs/developer/features/salon-avatar-timeline.md`.
+  Design of record: `docs/developer/features/complete/salon-avatar-timeline.md`.
 
 ### outfit_presets — REMOVED in 4.5
 
