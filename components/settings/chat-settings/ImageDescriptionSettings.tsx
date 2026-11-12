@@ -42,7 +42,7 @@ export function ImageDescriptionSettings({
             Primary image description profile
           </label>
           <p className="qt-text-xs mb-2">
-            Select a vision-capable profile (like gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash) to describe images.
+            Select a vision-capable profile (like gpt-4o-mini, a Claude Haiku model, or gemini-2.0-flash) to describe images.
             If not set, the system will automatically use any available vision-capable profile.
           </p>
           <select

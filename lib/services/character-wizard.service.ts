@@ -6,6 +6,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { REASONING_HEADROOM_TOKENS, withReasoningHeadroom } from '@/lib/llm/reasoning-headroom';
 import { profileParams } from '@/lib/llm/cheap-llm';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
@@ -425,11 +426,11 @@ type LLMProvider = ReturnType<typeof createLLMProvider> extends Promise<infer T>
  * ("No response from model"). Each field's length is set by its prompt; the
  * per-field numbers are the answer's room and this is the thinking's.
  */
-export const WIZARD_REASONING_HEADROOM = 4000;
+export const WIZARD_REASONING_HEADROOM = REASONING_HEADROOM_TOKENS;
 
 /** The `max_tokens` to send for a Wizard call whose answer needs `answerTokens`. */
 export function wizardCompletionBudget(answerTokens: number): number {
-  return answerTokens + WIZARD_REASONING_HEADROOM;
+  return withReasoningHeadroom(answerTokens);
 }
 
 /**

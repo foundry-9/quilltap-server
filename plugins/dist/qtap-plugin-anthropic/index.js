@@ -55118,23 +55118,45 @@ var AnthropicProvider = class _AnthropicProvider {
     this.supportsWebSearch = false;
   }
   static {
-    // Models that reject fixed-budget thinking (`thinking.type: "enabled"` with
-    // `budget_tokens` returns 400) and take adaptive thinking instead: Claude
-    // Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, Fable and Mythos.
-    // Matched by prefix since these are stable aliases (no dated snapshots).
-    // Older models (Haiku 4.5, Sonnet 4.5, ...) still need `budget_tokens`.
-    this.BUDGET_THINKING_REJECTED_MODELS = [
-      /^claude-sonnet-5(-|$)/,
-      /^claude-opus-5(-|$)/,
-      /^claude-opus-4-7(-|$)/,
-      /^claude-opus-4-8(-|$)/,
-      /^claude-fable-5(-|$)/,
-      /^claude-mythos-5(-|$)/,
-      /^claude-mythos-preview(-|$)/
-    ];
+    /**
+     * Which thinking request a model takes when the profile asks for thinking:
+     * fixed-budget `enabled` where the model still accepts it, else `adaptive`.
+     * Read from the live Models API (`capabilities.thinking.types`), never from
+     * the model ID — Anthropic has no version-independent names, and a list of
+     * patterns misses every model released after it was written. Cached per
+     * model for the life of the process; a failed lookup is not cached.
+     */
+    this.thinkingTypesCache = /* @__PURE__ */ new Map();
   }
-  modelRejectsBudgetThinking(model) {
-    return _AnthropicProvider.BUDGET_THINKING_REJECTED_MODELS.some((re2) => re2.test(model));
+  thinkingTypesFor(client, model) {
+    const cache = _AnthropicProvider.thinkingTypesCache;
+    const cached = cache.get(model);
+    if (cached) return cached;
+    const lookup = client.models.retrieve(model).then((info) => info.capabilities?.thinking?.types ?? null).catch((error) => {
+      cache.delete(model);
+      logger.warn("Could not read thinking capabilities for model", {
+        context: "AnthropicProvider.thinkingTypesFor",
+        model,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    });
+    cache.set(model, lookup);
+    return lookup;
+  }
+  /**
+   * The `thinking` field for a request that wants thinking. Budget thinking
+   * only where the model reports it accepts `enabled`; adaptive otherwise,
+   * including when capabilities could not be read (every current model takes
+   * adaptive). Adaptive models default `display` to "omitted", so ask for
+   * "summarized" to keep reasoningContent capture working.
+   */
+  async thinkingRequestFor(client, model, budget) {
+    const types = await this.thinkingTypesFor(client, model);
+    if (types?.enabled?.supported) {
+      return { type: "enabled", budget_tokens: budget };
+    }
+    return { type: "adaptive", display: "summarized" };
   }
   /**
    * Helper to build cache_control object with optional TTL
@@ -55462,7 +55484,6 @@ var AnthropicProvider = class _AnthropicProvider {
     const rawThinkingBudget = profileParams?.thinkingBudget;
     const thinkingBudget = typeof rawThinkingBudget === "number" && rawThinkingBudget >= 1024 ? rawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
     const thinkingEnabled = thinkingBudget > 0;
-    const budgetThinkingRejected = this.modelRejectsBudgetThinking(params.model);
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -55482,7 +55503,7 @@ var AnthropicProvider = class _AnthropicProvider {
       max_tokens: effectiveMaxTokens
     };
     if (thinkingEnabled) {
-      requestParams.thinking = budgetThinkingRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: thinkingBudget };
+      requestParams.thinking = await this.thinkingRequestFor(client, params.model, thinkingBudget);
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
@@ -55570,7 +55591,6 @@ var AnthropicProvider = class _AnthropicProvider {
     const streamRawThinkingBudget = profileParams?.thinkingBudget;
     const streamThinkingBudget = typeof streamRawThinkingBudget === "number" && streamRawThinkingBudget >= 1024 ? streamRawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
     const streamThinkingEnabled = streamThinkingBudget > 0;
-    const streamBudgetThinkingRejected = this.modelRejectsBudgetThinking(params.model);
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -55591,7 +55611,7 @@ var AnthropicProvider = class _AnthropicProvider {
       stream: true
     };
     if (streamThinkingEnabled) {
-      requestParams.thinking = streamBudgetThinkingRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: streamThinkingBudget };
+      requestParams.thinking = await this.thinkingRequestFor(client, params.model, streamThinkingBudget);
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
@@ -55783,50 +55803,49 @@ var AnthropicProvider = class _AnthropicProvider {
         apiKey,
         defaultHeaders: clientHeaders()
       });
-      await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1,
-        messages: [{ role: "user", content: "test" }]
-      });
+      await client.models.list({ limit: 1 });
       return true;
     } catch (error) {
       logger.error("Anthropic API key validation failed", { context: "AnthropicProvider.validateApiKey" }, error instanceof Error ? error : void 0);
       return false;
     }
   }
+  /**
+   * The models this key can use, from the live Models API (active and
+   * deprecated; retired ones are left out by the API). No built-in list:
+   * every Anthropic model ID is a pinned snapshot, so any list written here
+   * would name retired models in time. Throws when the API cannot be read.
+   */
   async getAvailableModels(apiKey) {
-    try {
-      const client = new Anthropic({
-        apiKey,
-        defaultHeaders: clientHeaders()
-      });
-      const response = await client.models.list();
-      const models = [];
-      for await (const model of response) {
-        models.push(model.id);
-      }
-      return models;
-    } catch (error) {
-      logger.error(
-        "Failed to fetch Anthropic models from API, using fallback list",
-        { context: "AnthropicProvider.getAvailableModels" },
-        error instanceof Error ? error : void 0
-      );
-      const fallbackModels = [
-        "claude-opus-4-6",
-        "claude-sonnet-4-6",
-        "claude-opus-4-5-20251101",
-        "claude-sonnet-4-5-20250929",
-        "claude-haiku-4-5-20251001",
-        "claude-opus-4-1-20250805",
-        "claude-sonnet-4-20250514",
-        "claude-opus-4-20250514",
-        "claude-3-7-sonnet-20250219",
-        "claude-3-5-haiku-20241022",
-        "claude-3-haiku-20240307"
-      ];
-      return fallbackModels;
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: clientHeaders()
+    });
+    const models = [];
+    for await (const model of client.models.list({ limit: 100 })) {
+      models.push(model.id);
     }
+    logger.debug("Fetched Anthropic models", { context: "AnthropicProvider.getAvailableModels", count: models.length });
+    return models;
+  }
+  /**
+   * The model for background work: the newest active model in the Haiku
+   * line. The Models API lists newest first and names each model's `line`,
+   * so no version is written here. Null when the key sees no Haiku.
+   */
+  async resolveCheapModel(apiKey) {
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: clientHeaders()
+    });
+    for await (const model of client.models.list({ limit: 100, lifecycle: ["active"] })) {
+      if (model.line === "haiku") {
+        logger.debug("Resolved cheap model", { context: "AnthropicProvider.resolveCheapModel", model: model.id });
+        return model.id;
+      }
+    }
+    logger.warn("No active Haiku model is listed for this key", { context: "AnthropicProvider.resolveCheapModel" });
+    return null;
   }
 };
 
@@ -56195,8 +56214,7 @@ var messageFormat = {
   supportedRoles: []
 };
 var cheapModels = {
-  defaultModel: "claude-haiku-4-5-20251001",
-  recommendedModels: ["claude-haiku-4-5-20251001", "claude-3-haiku-20240307"]
+  resolveDefaultModel: (apiKey) => new AnthropicProvider().resolveCheapModel(apiKey)
 };
 var optionsSchema = {
   groups: [
@@ -56289,8 +56307,7 @@ var plugin = {
     return new AnthropicProvider();
   },
   /**
-   * Get list of available models from Anthropic
-   * Anthropic doesn't provide a models endpoint, so we return known models
+   * Get list of available models from Anthropic's live Models API
    */
   getAvailableModels: async (apiKey, baseUrl) => {
     try {
@@ -56314,86 +56331,6 @@ var plugin = {
       logger2.error("Error validating Anthropic API key", { context: "plugin.validateApiKey" }, error instanceof Error ? error : void 0);
       return false;
     }
-  },
-  /**
-   * Get static model information
-   * Returns cached information about Claude models without needing API calls
-   */
-  getModelInfo: () => {
-    return [
-      {
-        id: "claude-opus-4-6",
-        name: "Claude Opus 4.6",
-        contextWindow: 2e5,
-        maxOutputTokens: 16e3,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-sonnet-4-6",
-        name: "Claude Sonnet 4.6",
-        contextWindow: 2e5,
-        maxOutputTokens: 16e3,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-sonnet-4-5-20250929",
-        name: "Claude Sonnet 4.5",
-        contextWindow: 2e5,
-        maxOutputTokens: 16e3,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-haiku-4-5-20251001",
-        name: "Claude Haiku 4.5",
-        contextWindow: 2e5,
-        maxOutputTokens: 16e3,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-opus-4-1-20250805",
-        name: "Claude Opus 4.1",
-        contextWindow: 2e5,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-sonnet-4-20250514",
-        name: "Claude Sonnet 4",
-        contextWindow: 2e5,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-opus-4-20250514",
-        name: "Claude Opus 4",
-        contextWindow: 2e5,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-3-opus-20240229",
-        name: "Claude 3 Opus",
-        contextWindow: 2e5,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true
-      },
-      {
-        id: "claude-3-haiku-20240307",
-        name: "Claude 3 Haiku",
-        contextWindow: 2e5,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true
-      }
-    ];
   },
   /**
    * Render the Anthropic icon

@@ -23,6 +23,7 @@ import {
   getAverageCostPer1M,
 } from './pricing'
 import { getCheapModelConfig } from '@/lib/plugins/provider-registry'
+import { getResolvedCheapModel } from './cheap-model-resolver'
 import { LEGACY_CHEAPEST_MODEL_MAP } from './fallback-data'
 
 /**
@@ -166,18 +167,28 @@ export const DEFAULT_CHEAP_LLM_CONFIG: CheapLLMConfig = {
 }
 
 /**
- * Gets the cheapest model for a given provider
- * First checks the plugin registry, falls back to hardcoded map.
+ * Gets the cheapest model for a given provider.
+ *
+ * Order: the model the provider named at run time (`resolveDefaultModel`,
+ * cached by `cheap-model-resolver`, needs the profile for its key), then the
+ * plugin's static `defaultModel`, then the legacy map. Null when none of them
+ * knows one — a provider that resolves at run time and has not answered yet.
  */
-export function getCheapestModel(provider: Provider): string {
-  // First try the plugin registry
+export function getCheapestModel(
+  provider: Provider,
+  profile?: Pick<ConnectionProfile, 'provider' | 'apiKeyId' | 'baseUrl' | 'userId'>,
+): string | null {
+  if (profile) {
+    const resolved = getResolvedCheapModel(profile)
+    if (resolved) return resolved
+  }
+
   const registryConfig = getCheapModelConfig(provider)
   if (registryConfig?.defaultModel) {
     return registryConfig.defaultModel
   }
 
-  // Fall back to hardcoded map
-  return LEGACY_CHEAPEST_MODEL_MAP[provider]
+  return LEGACY_CHEAPEST_MODEL_MAP[provider] ?? null
 }
 
 /**
@@ -276,7 +287,19 @@ export function getCheapLLMProvider(
   }
 
   // Map current provider to its cheapest variant (fallback)
-  const cheapModel = getCheapestModel(currentProfile.provider)
+  const cheapModel = getCheapestModel(currentProfile.provider, currentProfile)
+
+  // A provider that names its cheap model at run time may not have answered
+  // yet (first background call of the process). The profile's own model is
+  // certainly available, so use it this once; the lookup is under way.
+  if (!cheapModel) {
+    logger.debug('[CheapLLM] Cheap model not known yet; using the profile\'s own model', {
+      context: 'getCheapLLMProvider',
+      provider: currentProfile.provider,
+      currentProfileModel: currentProfile.modelName,
+    })
+    return selectionFromProfile(currentProfile)
+  }
 
   const logContext = {
     context: 'getCheapLLMProvider',

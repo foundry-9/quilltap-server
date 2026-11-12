@@ -31,8 +31,10 @@ import { Provider } from '@/lib/schemas/types'
  *
  * @deprecated Use getCheapModelConfig() from provider-registry instead
  */
-export const LEGACY_CHEAPEST_MODEL_MAP: Record<Provider, string> = {
-  ANTHROPIC: 'claude-haiku-4-5-20251001',
+// No ANTHROPIC entry: its plugin names the newest Haiku at run time
+// (`cheapModels.resolveDefaultModel`), and every Anthropic ID is a pinned
+// snapshot that eventually retires.
+export const LEGACY_CHEAPEST_MODEL_MAP: Partial<Record<Provider, string>> = {
   OPENAI: 'gpt-4o-mini',
   GOOGLE: 'gemini-2.0-flash',
   GROK: 'grok-2-mini',

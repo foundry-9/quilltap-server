@@ -4,6 +4,17 @@
 
 ### 4.13-dev
 
+#### Anthropic: no hard-coded model IDs
+
+Anthropic has no version-free model alias; every ID, short ones included, is a pinned snapshot that eventually retires. The Anthropic plugin (1.0.69) now takes everything from the live Models API:
+
+- The model picker lists what the key can use; the eleven-model fallback list (most retired) and the static model table are gone.
+- The cheap "Provider Cheapest" model is the newest active model in the `haiku` line (now Haiku 5.5), via the new `cheapModels.resolveDefaultModel` hook in `@quilltap/plugin-types` 2.11.0 (`defaultModel` / `recommendedModels` are now optional). The host caches the answer per provider and key for 12 hours (`lib/llm/cheap-model-resolver.ts`); until the first answer arrives, a background call uses the chat profile's own model.
+- Fixed-budget vs adaptive thinking is read from each model's `capabilities.thinking.types.enabled`, not ID patterns. The pattern list missed Haiku 5.5, which rejects `budget_tokens`.
+- API key check lists one model instead of calling Haiku 4.5.
+- Background calls with small token caps (auto-configure cleanup, Concierge classifier, AI Import pronouns, cheap-LLM tasks) get 4,000 tokens of reasoning headroom (`withReasoningHeadroom`, shared with the Character Wizard), since thinking-by-default models count reasoning against `max_tokens`.
+- Removed the Anthropic entry from the legacy cheap-model map and the retired suggestions in the profile editor; help text no longer names specific Claude versions.
+
 #### Fresh-instance dogfood: smaller fixes
 
 - Setup wizard **Test All** tested only the chat model and then said "All tests passed". It now also tests the embedding model through new `POST /api/v1/embedding-profiles?action=test`, which embeds one short text with an unsaved profile's settings and stores nothing; Built-in (TF-IDF) passes without a call. Each tested row shows its own result, the note names what was tested ("Chat and embeddings work"), and the Images row says it is not tested because a test would generate and bill an image. New `testEmbedding` in `components/setup-wizard/wizard-api.ts`. The test status icons now carry text alternatives ("Test passed" / "Test failed").

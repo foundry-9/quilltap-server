@@ -453,10 +453,22 @@ export interface MessageFormatSupport {
  * Used for memory extraction, summarization, titling, etc.
  */
 export interface CheapModelConfig {
-  /** The default cheap model for this provider */
-  defaultModel: string;
-  /** List of recommended cheap models */
-  recommendedModels: string[];
+  /**
+   * The default cheap model for this provider (optional). Omit it when the
+   * provider has no model name that stays valid across releases and declares
+   * {@link CheapModelConfig.resolveDefaultModel} instead.
+   */
+  defaultModel?: string;
+  /** List of recommended cheap models (optional) */
+  recommendedModels?: string[];
+  /**
+   * Ask the provider which model to use for background work (optional) — for
+   * example the newest model in its low-cost family, read from the provider's
+   * live model list. The host calls it with the profile's key, caches the
+   * answer, and prefers it over `defaultModel`. Return null when it cannot
+   * say; throwing is treated the same way.
+   */
+  resolveDefaultModel?: (apiKey: string, baseUrl?: string) => Promise<string | null>;
 }
 
 /**

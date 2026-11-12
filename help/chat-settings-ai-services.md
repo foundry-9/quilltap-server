@@ -15,7 +15,7 @@ Background errands — chat titles, memory extraction, summaries, the scene trac
 **Strategy** — pick one, and it is honoured:
 
 - **User Defined** — use the profile you choose in **Select Cheap LLM Profile**. Leave that box empty and Quilltap falls back on any profile you have marked **Cheap** (a local Ollama one first), and failing that on the cheapest model of your current provider.
-- **Provider Cheapest** — use the cheapest model of whichever provider the conversation is already using (a Haiku beside a Sonnet, a mini beside its grander sibling). Profiles marked **Cheap** do not override it.
+- **Provider Cheapest** — use the cheapest model of whichever provider the conversation is already using (a Haiku beside a Sonnet, a mini beside its grander sibling). Profiles marked **Cheap** do not override it. For Anthropic, whose models each carry a fixed name and are retired in their turn, Quilltap asks Anthropic which Haiku is newest rather than trusting a name written down last season, and remembers the answer for half a day; the very first errand after a restart, made before the reply arrives, is run on the conversation's own model.
 - **Local First** — use a local Ollama profile when there is one, and otherwise the cheapest model of the current provider.
 
 A profile marked **Cheap** is therefore a candidate for **User Defined**, not a command to the whole establishment; under the other two strategies it waits politely in the hall.
@@ -74,7 +74,7 @@ These settings govern which model is called upon to do the describing.
 **How to configure:**
 
 1. Tick **Supports image attachments (vision input)** on at least one connection profile whose model can actually read pictures — otherwise the dropdown will be empty.
-2. Select that profile as your **primary**. Small, quick, inexpensive models do this job admirably: `gpt-4o-mini`, `claude-haiku-4-5`, `gemini-2.0-flash`. Reasoning models are a poor fit — slow, dear, and inclined to spend their whole allowance thinking rather than answering.
+2. Select that profile as your **primary**. Small, quick, inexpensive models do this job admirably: `gpt-4o-mini`, a Claude Haiku, `gemini-2.0-flash`. Reasoning models are a poor fit — slow, dear, and inclined to spend their whole allowance thinking rather than answering.
 3. Optionally name an **Uncensored vision profile** on the Concierge's desk (the Moderation group of Settings), if your chats venture where a well-mannered describer will decline to follow.
 
 **What happens:**
@@ -323,7 +323,7 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 - If the description reads like a polite refusal, name an **Uncensored vision profile** on the Concierge's desk (the Moderation group of Settings) (`/settings?section=uncensored-desk`) — without one, a refusal is final
 - If descriptions appear for uploads but a Quilltap-generated image seems described oddly, remember that generated images are described by the prompt that painted them rather than by any describer
 - If nothing appears and no error does either, check the LLM logs for an **IMAGE_DESCRIPTION** entry: a minute-long call that ends in a timeout means the describing model is too slow for inline duty
-- Reasoning models (`o1`, `o3`, `gpt-5`, and kin) make poor describers — they spend their tokens thinking. Prefer `gpt-4o-mini`, `claude-haiku-4-5`, or `gemini-2.0-flash`
+- Reasoning models (`o1`, `o3`, `gpt-5`, and kin) make poor describers — they spend their tokens thinking. Prefer `gpt-4o-mini`, a Claude Haiku, or `gemini-2.0-flash`
 
 ## In-Chat Navigation
 

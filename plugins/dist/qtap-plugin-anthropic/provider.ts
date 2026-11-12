@@ -6,6 +6,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import type { ThinkingTypes } from '@anthropic-ai/sdk/resources/models'
 import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
 import { buildSdkClientOptions, createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
 
@@ -94,23 +95,48 @@ export class AnthropicProvider implements TextProvider {
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
   readonly supportsWebSearch = false
 
-  // Models that reject fixed-budget thinking (`thinking.type: "enabled"` with
-  // `budget_tokens` returns 400) and take adaptive thinking instead: Claude
-  // Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, Fable and Mythos.
-  // Matched by prefix since these are stable aliases (no dated snapshots).
-  // Older models (Haiku 4.5, Sonnet 4.5, ...) still need `budget_tokens`.
-  private static readonly BUDGET_THINKING_REJECTED_MODELS = [
-    /^claude-sonnet-5(-|$)/,
-    /^claude-opus-5(-|$)/,
-    /^claude-opus-4-7(-|$)/,
-    /^claude-opus-4-8(-|$)/,
-    /^claude-fable-5(-|$)/,
-    /^claude-mythos-5(-|$)/,
-    /^claude-mythos-preview(-|$)/,
-  ]
+  /**
+   * Which thinking request a model takes when the profile asks for thinking:
+   * fixed-budget `enabled` where the model still accepts it, else `adaptive`.
+   * Read from the live Models API (`capabilities.thinking.types`), never from
+   * the model ID — Anthropic has no version-independent names, and a list of
+   * patterns misses every model released after it was written. Cached per
+   * model for the life of the process; a failed lookup is not cached.
+   */
+  private static readonly thinkingTypesCache = new Map<string, Promise<ThinkingTypes | null>>()
 
-  private modelRejectsBudgetThinking(model: string): boolean {
-    return AnthropicProvider.BUDGET_THINKING_REJECTED_MODELS.some(re => re.test(model))
+  private thinkingTypesFor(client: Anthropic, model: string): Promise<ThinkingTypes | null> {
+    const cache = AnthropicProvider.thinkingTypesCache
+    const cached = cache.get(model)
+    if (cached) return cached
+    const lookup = client.models.retrieve(model)
+      .then(info => info.capabilities?.thinking?.types ?? null)
+      .catch(error => {
+        cache.delete(model)
+        logger.warn('Could not read thinking capabilities for model', {
+          context: 'AnthropicProvider.thinkingTypesFor',
+          model,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return null
+      })
+    cache.set(model, lookup)
+    return lookup
+  }
+
+  /**
+   * The `thinking` field for a request that wants thinking. Budget thinking
+   * only where the model reports it accepts `enabled`; adaptive otherwise,
+   * including when capabilities could not be read (every current model takes
+   * adaptive). Adaptive models default `display` to "omitted", so ask for
+   * "summarized" to keep reasoningContent capture working.
+   */
+  private async thinkingRequestFor(client: Anthropic, model: string, budget: number): Promise<Record<string, unknown>> {
+    const types = await this.thinkingTypesFor(client, model)
+    if (types?.enabled?.supported) {
+      return { type: 'enabled', budget_tokens: budget }
+    }
+    return { type: 'adaptive', display: 'summarized' }
   }
 
   /**
@@ -521,8 +547,6 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const thinkingEnabled = thinkingBudget > 0
 
-    const budgetThinkingRejected = this.modelRejectsBudgetThinking(params.model)
-
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
@@ -552,16 +576,9 @@ export class AnthropicProvider implements TextProvider {
       max_tokens: effectiveMaxTokens,
     }
 
-    // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
-    // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
-    // 400s on those models; they require adaptive thinking instead, which has
-    // no token budget to set. These models also default thinking.display to
-    // "omitted" (empty thinking text) — request "summarized" explicitly so
-    // Quilltap's reasoningContent capture keeps working.
+    // Enable thinking if requested, in the form this model accepts
     if (thinkingEnabled) {
-      requestParams.thinking = budgetThinkingRejected
-        ? { type: 'adaptive', display: 'summarized' }
-        : { type: 'enabled', budget_tokens: thinkingBudget }
+      requestParams.thinking = await this.thinkingRequestFor(client, params.model, thinkingBudget)
     }
 
     // Handle system messages with optional cache control.
@@ -704,8 +721,6 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const streamThinkingEnabled = streamThinkingBudget > 0
 
-    const streamBudgetThinkingRejected = this.modelRejectsBudgetThinking(params.model)
-
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
@@ -736,16 +751,9 @@ export class AnthropicProvider implements TextProvider {
       stream: true,
     }
 
-    // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
-    // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
-    // 400s on those models; they require adaptive thinking instead, which has
-    // no token budget to set. These models also default thinking.display to
-    // "omitted" (empty thinking text) — request "summarized" explicitly so
-    // Quilltap's reasoningContent capture keeps working.
+    // Enable thinking if requested, in the form this model accepts
     if (streamThinkingEnabled) {
-      requestParams.thinking = streamBudgetThinkingRejected
-        ? { type: 'adaptive', display: 'summarized' }
-        : { type: 'enabled', budget_tokens: streamThinkingBudget }
+      requestParams.thinking = await this.thinkingRequestFor(client, params.model, streamThinkingBudget)
     }
 
     // Handle system messages with optional cache control. Mirrors the
@@ -1004,18 +1012,13 @@ export class AnthropicProvider implements TextProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-
       const client = new Anthropic({
         apiKey,
         defaultHeaders: clientHeaders(),
       })
-      // Anthropic doesn't have a direct validation endpoint, so we make a minimal request
-      await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'test' }],
-      })
-
+      // Listing one model proves the key without naming a model that may
+      // retire, and costs nothing
+      await client.models.list({ limit: 1 })
       return true
     } catch (error) {
       logger.error('Anthropic API key validation failed', { context: 'AnthropicProvider.validateApiKey' }, error instanceof Error ? error : undefined)
@@ -1023,44 +1026,43 @@ export class AnthropicProvider implements TextProvider {
     }
   }
 
+  /**
+   * The models this key can use, from the live Models API (active and
+   * deprecated; retired ones are left out by the API). No built-in list:
+   * every Anthropic model ID is a pinned snapshot, so any list written here
+   * would name retired models in time. Throws when the API cannot be read.
+   */
   async getAvailableModels(apiKey: string): Promise<string[]> {
-
-    try {
-      const client = new Anthropic({
-        apiKey,
-        defaultHeaders: clientHeaders(),
-      })
-      const response = await client.models.list()
-
-      // Extract model IDs from the response
-      const models: string[] = []
-      for await (const model of response) {
-        models.push(model.id)
-      }
-
-      return models
-    } catch (error) {
-      logger.error('Failed to fetch Anthropic models from API, using fallback list',
-        { context: 'AnthropicProvider.getAvailableModels' },
-        error instanceof Error ? error : undefined
-      )
-      // Fallback to known models if API fails
-      const fallbackModels = [
-        'claude-opus-4-6',
-        'claude-sonnet-4-6',
-        'claude-opus-4-5-20251101',
-        'claude-sonnet-4-5-20250929',
-        'claude-haiku-4-5-20251001',
-        'claude-opus-4-1-20250805',
-        'claude-sonnet-4-20250514',
-        'claude-opus-4-20250514',
-        'claude-3-7-sonnet-20250219',
-        'claude-3-5-haiku-20241022',
-        'claude-3-haiku-20240307',
-      ]
-
-      return fallbackModels
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: clientHeaders(),
+    })
+    const models: string[] = []
+    for await (const model of client.models.list({ limit: 100 })) {
+      models.push(model.id)
     }
+    logger.debug('Fetched Anthropic models', { context: 'AnthropicProvider.getAvailableModels', count: models.length })
+    return models
+  }
+
+  /**
+   * The model for background work: the newest active model in the Haiku
+   * line. The Models API lists newest first and names each model's `line`,
+   * so no version is written here. Null when the key sees no Haiku.
+   */
+  async resolveCheapModel(apiKey: string): Promise<string | null> {
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: clientHeaders(),
+    })
+    for await (const model of client.models.list({ limit: 100, lifecycle: ['active'] })) {
+      if (model.line === 'haiku') {
+        logger.debug('Resolved cheap model', { context: 'AnthropicProvider.resolveCheapModel', model: model.id })
+        return model.id
+      }
+    }
+    logger.warn('No active Haiku model is listed for this key', { context: 'AnthropicProvider.resolveCheapModel' })
+    return null
   }
 
 }

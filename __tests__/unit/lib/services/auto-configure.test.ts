@@ -16,6 +16,7 @@ import { executeWebSearchTool, formatWebSearchResults, isWebSearchConfigured } f
 import { createLLMProvider } from '@/lib/llm'
 import { parseLLMJson } from '@/lib/llm/llm-json'
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
+import { REASONING_HEADROOM_TOKENS } from '@/lib/llm/reasoning-headroom'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 
@@ -348,7 +349,7 @@ describe('autoConfigureProfile', () => {
 
     expect(mockGetCheapLLMProvider).toHaveBeenCalled()
     expect(cheapSendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ temperature: 0.1, maxTokens: 500 }),
+      expect.objectContaining({ temperature: 0.1, maxTokens: 500 + REASONING_HEADROOM_TOKENS }),
       'sk-test-key'
     )
     expect(result.maxContext).toBe(200000)

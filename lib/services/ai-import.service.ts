@@ -10,6 +10,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { withReasoningHeadroom } from '@/lib/llm/reasoning-headroom';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { parseLLMJson } from '@/lib/llm/llm-json';
 import { DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
@@ -1046,7 +1047,7 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           PROPERTIES_EXTRACTION_PROMPT,
-          { temperature: 0.3, maxTokens: 300, ...llmOpts }
+          { temperature: 0.3, maxTokens: withReasoningHeadroom(300), ...llmOpts }
         );
         const props = parseGeneratedProperties(raw);
         stepResults.pronouns = props.pronouns ?? undefined;

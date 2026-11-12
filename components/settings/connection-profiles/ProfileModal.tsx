@@ -206,7 +206,9 @@ export function ProfileModal({
   const getModelSuggestions = (provider: string): string[] => {
     const models: Record<string, string[]> = {
       OPENAI: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4-turbo'],
-      ANTHROPIC: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-1-20250805'],
+      // Anthropic: none — every ID is a pinned snapshot that retires; the live
+      // list (fetched with the key) is the only trustworthy source
+      ANTHROPIC: [],
       GOOGLE: ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-1.0-pro', 'gemini-pro-vision'],
       GROK: ['grok-beta', 'grok-2', 'grok-vision-beta'],
       OLLAMA: ['llama2', 'neural-chat', 'mistral'],

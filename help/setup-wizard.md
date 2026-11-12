@@ -41,7 +41,7 @@ Providers like Ollama, which run locally and don't require credentials, need onl
 With credentials verified, the wizard fetches available models from each provider and presents them for your selection:
 
 - **Primary Chat Model** — Your main conversationalist, the model that will power most interactions
-- **Cheap LLM Strategy** — For background tasks like memory extraction and title generation. "Auto" (recommended) uses the cheapest model of your primary chat provider; "Manual" lets you choose a specific provider and model, which the wizard saves as a profile and sets as your **User Defined** cheap LLM. See [Cheap LLM Configuration](chat-settings-ai-services.md#cheap-llm-configuration)
+- **Cheap LLM Strategy** — For background tasks like memory extraction and title generation. "Auto" (recommended) uses the cheapest model of your primary chat provider — for Anthropic, whichever Haiku Anthropic reports as newest, looked up rather than remembered; "Manual" lets you choose a specific provider and model, which the wizard saves as a profile and sets as your **User Defined** cheap LLM. See [Cheap LLM Configuration](chat-settings-ai-services.md#cheap-llm-configuration)
 
 A provider with a long roster of models offers a search box rather than a plain list. Type to narrow it, or press the Down arrow to step into the list; the arrows move between models, Enter chooses one, and Escape closes the list and returns you to the search box. A screen reader announces it as a list of choices, labelled with the provider's name.
 

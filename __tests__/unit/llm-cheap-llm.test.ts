@@ -16,6 +16,13 @@ import {
 } from '@/lib/llm/cheap-llm'
 import type { ConnectionProfile, Provider } from '@/lib/schemas/types'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { getResolvedCheapModel } from '@/lib/llm/cheap-model-resolver'
+
+// Anthropic names its cheap model at run time; stand in for the cached answer
+jest.mock('@/lib/llm/cheap-model-resolver', () => ({
+  getResolvedCheapModel: jest.fn((profile: { provider: string }) =>
+    profile.provider === 'ANTHROPIC' ? 'claude-haiku-resolved' : null),
+}))
 
 // Helper to create a mock connection profile
 function createMockProfile(
@@ -44,9 +51,13 @@ function createMockProfile(
 
 describe('Cheap LLM Provider Selection', () => {
   describe('getCheapestModel', () => {
-    it('should return the cheapest model for Anthropic', () => {
-      const model = getCheapestModel('ANTHROPIC')
-      expect(model).toBe('claude-haiku-4-5-20251001')
+    it('should return the run-time resolved model for Anthropic', () => {
+      const profile = createMockProfile('p', 'ANTHROPIC', 'claude-sonnet-5-5')
+      expect(getCheapestModel('ANTHROPIC', profile)).toBe('claude-haiku-resolved')
+    })
+
+    it('should return null for Anthropic when nothing is resolved and no profile is given', () => {
+      expect(getCheapestModel('ANTHROPIC')).toBeNull()
     })
 
     it('should return the cheapest model for OpenAI', () => {
@@ -146,7 +157,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
       })
     })
 
@@ -155,7 +166,7 @@ describe('Cheap LLM Provider Selection', () => {
         const selection = getCheapLLMProvider(anthropicProfile)
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
         expect(selection.connectionProfileId).toBe('anthropic-profile')
         expect(selection.isLocal).toBe(false)
       })
@@ -202,7 +213,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
       })
     })
 
@@ -303,7 +314,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe(getCheapestModel('ANTHROPIC'))
+        expect(selection.modelName).toBe('claude-haiku-resolved')
       })
 
       it('does not let a non-local cheap profile overrule Local First', () => {
@@ -382,7 +393,7 @@ describe('Cheap LLM Provider Selection', () => {
         )
 
         expect(selection.provider).toBe('ANTHROPIC')
-        expect(selection.modelName).toBe('claude-haiku-4-5-20251001')
+        expect(selection.modelName).toBe('claude-haiku-resolved')
       })
     })
 
@@ -658,5 +669,16 @@ describe('profileParams', () => {
     const params = { temperature: 0.7 }
     profileParams({ provider: 'OLLAMA', parameters: params, maxContext: 40960 })
     expect(params).toEqual({ temperature: 0.7 })
+  })
+
+  describe('cheap model not resolved yet', () => {
+    it('uses the profile\'s own model under Provider Cheapest', () => {
+      ;(getResolvedCheapModel as jest.Mock).mockReturnValueOnce(null)
+      const profile = createMockProfile('p', 'ANTHROPIC', 'claude-sonnet-5-5')
+      const selection = getCheapLLMProvider(profile, DEFAULT_CHEAP_LLM_CONFIG, [profile])
+      expect(selection.provider).toBe('ANTHROPIC')
+      expect(selection.modelName).toBe('claude-sonnet-5-5')
+      expect(selection.connectionProfileId).toBe('p')
+    })
   })
 })

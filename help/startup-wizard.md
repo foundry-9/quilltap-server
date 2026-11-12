@@ -299,7 +299,7 @@ A connection profile tells Quilltap which AI to use and how to use it. This is w
    - **Recommendations:**
      - OpenRouter: `anthropic/claude-3.5-sonnet` or `openai/gpt-4o`
      - OpenAI: `gpt-4o` or `gpt-4o-mini` (cheaper)
-     - Anthropic: `claude-3-5-sonnet-20241022` or `claude-3-5-haiku-20241022` (cheaper)
+     - Anthropic: a Sonnet for the conversation, or a Haiku when thrift matters (the dropdown lists only the models your key can presently reach)
      - Ollama: `llama3.2` or `mistral`
 
    **Base URL (for custom servers):**
@@ -392,7 +392,7 @@ These don't need your most powerful (expensive) model. Setting up a "cheap LLM" 
    - Go to: **Settings** (`/settings?group=connections`)
    - Create a new profile with a cheaper model:
      - OpenAI: `gpt-4o-mini` is much cheaper than `gpt-4o`
-     - Anthropic: `claude-3-5-haiku` is cheaper than `claude-3-5-sonnet`
+     - Anthropic: a Haiku is cheaper than a Sonnet
      - OpenRouter: Look for models with lower per-token costs
    - Name it something like "Cheap - GPT-4o-mini"
 

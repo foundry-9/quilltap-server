@@ -3,6 +3,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm'
+import { withReasoningHeadroom } from '@/lib/llm/reasoning-headroom'
 import type { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { selectionFromProfile, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -332,7 +333,8 @@ async function sendToProvider(
   )
 
   const profileKey = `${selection.provider}:${selection.modelName}`
-  const effectiveMaxTokens = Math.max(maxTokens ?? 2048, 2048)
+  // Headroom so a model that thinks by default still has room to answer
+  const effectiveMaxTokens = withReasoningHeadroom(Math.max(maxTokens ?? 2048, 2048))
 
   // `durationMs` is the wall-clock of the provider call this row describes.
   // This shared path covers MEMORY_EXTRACTION, TITLE_GENERATION, SUMMARIZATION,
