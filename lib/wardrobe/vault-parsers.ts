@@ -15,10 +15,14 @@ import {
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
-import { folderOfWardrobePath, WARDROBE_FOLDER_RULES } from '@/lib/wardrobe/folders';
+import { folderOfWardrobePath, joinFolder, WARDROBE_FOLDER_RULES } from '@/lib/wardrobe/folders';
 import { normalizePronounGuidance } from '@/lib/wardrobe/pronoun-guidance';
 import { isItemDocumentPath } from '@/lib/mount-index/item-folders';
-import { isWardrobeInstructionsFileName } from '@/lib/mount-index/character-vault';
+import {
+  CHARACTER_WARDROBE_FOLDER,
+  isWardrobeInstructionsFileName,
+  sanitizeFileName,
+} from '@/lib/mount-index/character-vault';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import { isUuidShaped, resolveFileItemId } from '@/lib/utils/stable-uuid';
 import { parseJsonVaultFile } from '@/lib/characters/vault/parsers';
@@ -35,6 +39,27 @@ export { CHARACTER_WARDROBE_JSON_PATH } from '@/lib/characters/vault/layout';
 // layout the vault is on.
 export interface CharacterVaultWardrobe {
   items: WardrobeItem[];
+  /**
+   * Files that parse as items but lose to another file claiming the same id
+   * (a copy made in the Scriptorium, say — `chooseIdWinners`). They are not in
+   * `items`, and a projection must leave them on disk rather than sweep them.
+   * Absent (the legacy JSON reader) means none.
+   */
+  duplicatePaths?: Set<string>;
+}
+
+/**
+ * Where an item is written, relative to `Wardrobe/`: its folder, then its
+ * sanitised title. The projection writes here (before any `-1` collision
+ * suffix), and the reader's duplicate-id rule asks which file sits at it.
+ */
+export function wardrobeItemFileName(item: Pick<WardrobeItem, 'title' | 'folder'>): string {
+  return joinFolder(item.folder ?? '', `${sanitizeFileName(item.title)}.md`);
+}
+
+/** {@link wardrobeItemFileName} as a store path (`Wardrobe/…`). */
+export function wardrobeItemOwnPath(item: Pick<WardrobeItem, 'title' | 'folder'>): string {
+  return `${CHARACTER_WARDROBE_FOLDER}/${wardrobeItemFileName(item)}`;
 }
 
 // The legacy JSON shape we still parse on migration. New vaults never write

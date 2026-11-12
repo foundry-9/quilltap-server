@@ -19,14 +19,13 @@ import {
 import {
   buildWardrobeItemFile,
   buildSlugByItemIdMap,
-  sanitizeFileName,
 } from '@/lib/mount-index/character-vault';
 
 import { CHARACTER_WARDROBE_FOLDER, WARDROBE_INSTRUCTIONS_FILENAME } from '@/lib/mount-index/character-vault';
 import { CHARACTER_WARDROBE_JSON_PATH } from '@/lib/characters/vault/layout';
-import { joinFolder, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
+import { WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
 import { hasLinkedVault } from '@/lib/characters/vault/parsers';
-import { isWardrobeItemDocument } from '@/lib/wardrobe/vault-parsers';
+import { isWardrobeItemDocument, wardrobeItemFileName } from '@/lib/wardrobe/vault-parsers';
 import { readCharacterVaultWardrobe } from '@/lib/wardrobe/vault-readers';
 import { projectArrayIntoVaultFolder } from '@/lib/mount-index/vault-projection';
 
@@ -94,6 +93,16 @@ export async function getOverlaidWardrobeItems(
   return items;
 }
 
+/** Options for {@link projectVaultWardrobe}. */
+export interface ProjectVaultWardrobeOptions {
+  /**
+   * The duplicate-id files from the read the caller just made
+   * (`CharacterVaultWardrobe.duplicatePaths`). Omitted, the folder is read
+   * again to find them, so no caller can sweep an operator's copy by accident.
+   */
+  duplicatePaths?: ReadonlySet<string>;
+}
+
 /**
  * Project an authoritative wardrobe-item list into the vault's `Wardrobe/`
  * folder — each item at `Wardrobe/<folder>/<title>.md` — deleting any stale legacy `wardrobe.json` so the new format is the
@@ -110,8 +119,24 @@ export async function projectVaultWardrobe(
   mountPointId: string,
   characterId: string,
   items: readonly WardrobeItem[],
+  opts: ProjectVaultWardrobeOptions = {},
 ): Promise<void> {
   const slugByItemId = buildSlugByItemIdMap(items);
+  // Files that lose an id to another file are the operator's (a Scriptorium
+  // copy): never swept, and their names are claimed so nothing is written
+  // over them. A caller that just read the folder passes them; otherwise read.
+  const duplicatePaths =
+    opts.duplicatePaths
+    ?? (await readCharacterVaultWardrobe(mountPointId, characterId))?.duplicatePaths
+    ?? new Set<string>();
+  if (duplicatePaths.size > 0) {
+    logger.debug('Wardrobe projection leaving duplicate-id files alone', {
+      characterId,
+      mountPointId,
+      paths: Array.from(duplicatePaths),
+      context: 'wardrobe',
+    });
+  }
 
   await projectArrayIntoVaultFolder(
     mountPointId,
@@ -121,21 +146,25 @@ export async function projectVaultWardrobe(
       // The folder is the path: an item filed in `Formal/Evening` is written
       // to `Wardrobe/Formal/Evening/<title>.md`, and a moved item is written
       // at its new path while the sweep removes the old one.
-      fileName: joinFolder(item.folder ?? '', `${sanitizeFileName(item.title)}.md`),
+      fileName: wardrobeItemFileName(item),
       content: buildWardrobeItemFile(item, slugByItemId),
     }),
     characterId,
     {
       // The dressing-instructions file is not a garment: the sweep must never
       // delete it, and an item titled "Instructions" must land on a suffix.
-      preserveFileNames: [WARDROBE_INSTRUCTIONS_FILENAME],
+      preserveFileNames: [
+        WARDROBE_INSTRUCTIONS_FILENAME,
+        ...Array.from(duplicatePaths, (path) => path.slice(path.lastIndexOf('/') + 1)),
+      ],
       // Subfolders are the operator's filing; `images/` holds item pictures
       // and is never swept.
       recursive: { excludeSubfolders: WARDROBE_RESERVED_FOLDER_SEGMENTS },
       // Only item files are the wardrobe's to sweep: a note, or a file that
       // doesn't parse as an item, kept under `Wardrobe/` (at any depth) is
       // left exactly where the operator put it.
-      ownsFile: isWardrobeItemDocument,
+      // A duplicate-id file is skipped by the reader and kept here.
+      ownsFile: (doc) => isWardrobeItemDocument(doc) && !duplicatePaths.has(doc.relativePath),
     },
   );
 

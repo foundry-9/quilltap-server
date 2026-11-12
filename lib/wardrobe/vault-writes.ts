@@ -5,7 +5,9 @@
  * vault, Quilltap General, a project store or a group store. Each mutation
  * reads the folder's current items, applies the change in memory, and
  * re-projects the whole folder via `projectVaultWardrobe` (which dedupes
- * filenames, renames on title change, and sweeps removed files). The
+ * filenames, renames on title change, and sweeps removed files). A file that
+ * loses its id to another file (a Scriptorium copy) is not an item and is
+ * carried through to the projection to be left alone. The
  * `wardrobe_items` DB table is gone; nothing here writes a row.
  *
  * Writes to a given mount are serialized through a per-mount promise chain so
@@ -90,12 +92,32 @@ export function mountWardrobeLocation(
  * stay as UUIDs (see `resolveAndCheckComponentItems`).
  */
 export async function readMountItems(mount: WardrobeMount): Promise<WardrobeItem[]> {
+  return (await scanMountItems(mount)).items;
+}
+
+/** One read of the folder: its items plus the duplicate-id files a projection must keep. */
+interface WardrobeMountScan {
+  items: WardrobeItem[];
+  duplicatePaths: Set<string>;
+}
+
+async function scanMountItems(mount: WardrobeMount): Promise<WardrobeMountScan> {
   const vault = await readCharacterVaultWardrobe(
     mount.mountPointId,
     mount.characterId ?? undefined,
   );
-  if (!vault) return [];
-  return vault.items.map((item) => ({ ...item, characterId: mount.characterId }));
+  if (!vault) return { items: [], duplicatePaths: new Set() };
+  return {
+    items: vault.items.map((item) => ({ ...item, characterId: mount.characterId })),
+    duplicatePaths: vault.duplicatePaths ?? new Set(),
+  };
+}
+
+/** Re-project the folder with the duplicate-id files from the scan it was read in. */
+function projectScanned(mount: WardrobeMount, scan: WardrobeMountScan, items: readonly WardrobeItem[]): Promise<void> {
+  return projectVaultWardrobe(mount.mountPointId, mount.characterId ?? mount.mountPointId, items, {
+    duplicatePaths: scan.duplicatePaths,
+  });
 }
 
 /**
@@ -178,13 +200,11 @@ function safeFolder(folder: string | null | undefined): string {
 /** Create an item in the folder. */
 export async function createInMount(mount: WardrobeMount, item: WardrobeItem): Promise<WardrobeItem> {
   return runSerialized(mount.mountPointId, async () => {
-    const current = await readMountItems(mount);
+    const scan = await scanMountItems(mount);
+    const current = scan.items;
     assertNoCycles(item, await buildCyclePeers(mount, current));
     const stored: WardrobeItem = { ...item, folder: safeFolder(item.folder), characterId: mount.characterId };
-    await projectVaultWardrobe(mount.mountPointId, mount.characterId ?? mount.mountPointId, [
-      ...current,
-      stored,
-    ]);
+    await projectScanned(mount, scan, [...current, stored]);
     logger.debug('Wardrobe item created in folder', {
       mountPointId: mount.mountPointId,
       scope: mount.scope,
@@ -242,7 +262,8 @@ async function updateManyUnserialized(
   patches: readonly WardrobeItemPatch[],
   opts: UpdateManyOptions = {},
 ): Promise<WardrobeItem[]> {
-  const current = await readMountItems(mount);
+  const scan = await scanMountItems(mount);
+  const current = scan.items;
   const indexById = new Map(current.map((item, idx) => [item.id, idx]));
   if (opts.requireAll) {
     const missing = patches.map((p) => p.id).filter((id) => !indexById.has(id));
@@ -277,7 +298,7 @@ async function updateManyUnserialized(
   }
   if (updatedIds.length === 0) return [];
 
-  await projectVaultWardrobe(mount.mountPointId, mount.characterId ?? mount.mountPointId, next);
+  await projectScanned(mount, scan, next);
   logger.debug('Wardrobe items updated in folder', {
     mountPointId: mount.mountPointId,
     scope: mount.scope,
@@ -364,10 +385,11 @@ export function deleteFolderInMount(
 /** Delete an item from the folder; false when the id isn't there. */
 export async function deleteInMount(mount: WardrobeMount, id: string): Promise<boolean> {
   return runSerialized(mount.mountPointId, async () => {
-    const current = await readMountItems(mount);
+    const scan = await scanMountItems(mount);
+    const current = scan.items;
     const next = current.filter((i) => i.id !== id);
     if (next.length === current.length) return false;
-    await projectVaultWardrobe(mount.mountPointId, mount.characterId ?? mount.mountPointId, next);
+    await projectScanned(mount, scan, next);
     logger.debug('Wardrobe item deleted from folder', {
       mountPointId: mount.mountPointId,
       scope: mount.scope,

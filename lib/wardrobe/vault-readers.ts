@@ -9,12 +9,14 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { slugifyWardrobeTitle, CHARACTER_WARDROBE_FOLDER } from '@/lib/mount-index/character-vault';
 import { readVaultFile } from '@/lib/characters/vault/readers';
+import { chooseIdWinners } from '@/lib/mount-index/item-rules';
 import {
   CHARACTER_WARDROBE_JSON_PATH,
   isWardrobeItemDocumentPath,
   parseLegacyWardrobeJson,
   parseWardrobeItemFile,
   resolveAndCheckComponentItems,
+  wardrobeItemOwnPath,
   type CharacterVaultWardrobe,
 } from './vault-parsers';
 
@@ -74,11 +76,36 @@ export async function readCharacterVaultWardrobe(
   }
 
   if (itemDocs.length > 0) {
-    const items = itemDocs
-      .slice()
-      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-      .map((doc) => parseWardrobeItemFile(doc, charId))
-      .filter((item): item is WardrobeItem => item !== null);
+    const parsed: Array<{ path: string; record: WardrobeItem }> = [];
+    for (const doc of itemDocs.slice().sort((a, b) => a.relativePath.localeCompare(b.relativePath))) {
+      const record = parseWardrobeItemFile(doc, charId);
+      if (record) parsed.push({ path: doc.relativePath, record });
+    }
+
+    // Two files may claim one id (a copy made in the Scriptorium). Both used
+    // to come back as items, so a write patched one copy, re-projected both,
+    // and the unpatched twin kept showing — an archive that "didn't work".
+    // The Inventory's rule applies: the file at the item's own name wins (the
+    // newest of several), else the first by path; the rest are skipped here
+    // and left on disk by the projection.
+    const winnerPath = chooseIdWinners(parsed, wardrobeItemOwnPath);
+    const items: WardrobeItem[] = [];
+    const duplicatePaths = new Set<string>();
+    for (const { path, record } of parsed) {
+      if (winnerPath.get(record.id) === path) {
+        items.push(record);
+        continue;
+      }
+      logger.warn('Two Wardrobe files claim one id; this one is skipped and left alone', {
+        characterId: charId,
+        mountPointId,
+        relativePath: path,
+        keptPath: winnerPath.get(record.id),
+        itemId: record.id,
+        context: 'wardrobe',
+      });
+      duplicatePaths.add(path);
+    }
 
     const itemById = new Map<string, WardrobeItem>();
     const itemBySlug = new Map<string, WardrobeItem>();
@@ -108,7 +135,14 @@ export async function readCharacterVaultWardrobe(
     // reader never calls back into the repository.
     resolveAndCheckComponentItems(items, itemBySlug, itemById, charId, mountPointId);
 
-    return { items };
+    logger.debug('Wardrobe folder read', {
+      characterId: charId,
+      mountPointId,
+      itemCount: items.length,
+      duplicateCount: duplicatePaths.size,
+      context: 'wardrobe',
+    });
+    return { items, duplicatePaths };
   }
 
   // Folder empty (or missing) — fall through to legacy wardrobe.json so

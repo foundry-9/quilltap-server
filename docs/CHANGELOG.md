@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Fix: Wardrobe files that share an id
+
+- Archiving or editing a garment that had a second `Wardrobe/` file with the same frontmatter `id` (a copy made in the Scriptorium) now works. The reader returned both files as items, so a write patched one copy, re-projected both, and the other copy stayed visible. `readCharacterVaultWardrobe` now picks one file per id with `chooseIdWinners`, as the Inventory and Atlas readers already did: the file at the item's own name wins, the newest of several; the rest are logged with a warning and returned as `duplicatePaths`. `projectVaultWardrobe` leaves those files on disk and claims their names (new `duplicatePaths` option; when it is omitted, the projection reads the folder itself). The item file name is now one helper, `wardrobeItemFileName` / `wardrobeItemOwnPath` (`lib/wardrobe/vault-parsers.ts`).
+
 #### Fix: startup file reconciliation ignores mount-blob rows
 
 - Startup file reconciliation no longer treats `files` rows with a `mount-blob:` storage key as missing from disk. Their bytes live in the mount-index database, never under `files/`. Before, an unlinked mount-blob row with no character reference would be deleted at boot, and one whose sha256 matched a disk file would be re-pointed at that file; every linked one logged a "Preserving referenced DB record despite missing file on disk" line (about 3,600 per boot on a large instance). They are now left out of the sha256 cross-match and the stale-record delete, and the summary log counts them as `mountBlobRecords`. The pure key helpers (`isMountBlobStorageKey`, `parseMountBlobStorageKey`, `buildMountBlobStorageKey`) moved to the dependency-free `lib/file-storage/mount-blob-key.ts`; `project-store-bridge.ts` re-exports them.
