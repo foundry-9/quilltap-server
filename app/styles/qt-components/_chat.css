@@ -1774,7 +1774,7 @@
      past its card, whose overflow:hidden then clips the last buttons
      (WCAG 1.4.4 / 1.4.10). */
   .qt-formatting-toolbar {
-    @apply flex flex-wrap items-center justify-center gap-2;
+    @apply flex flex-wrap items-center justify-center gap-1;
     padding: 0.375rem 0.5rem;
     background: color-mix(in srgb, var(--color-muted) 50%, transparent);
     border-radius: var(--radius-md);
@@ -1782,10 +1782,21 @@
   }
 
   /**
-   * Section groups buttons together
+   * Section groups buttons together in the markup only. It lays out as
+   * `display: contents` so every button wraps in the toolbar's one flow: a
+   * section that wrapped on its own took the full row and pushed whatever
+   * followed it onto a third line.
    */
   .qt-formatting-toolbar-section {
-    @apply flex flex-wrap items-center gap-1;
+    display: contents;
+  }
+
+  /**
+   * A toolbar button that anchors a popover (the emoji / symbol pickers)
+   * needs a real positioned box, so it is not flattened like a section.
+   */
+  .qt-formatting-toolbar-anchor {
+    @apply relative inline-flex items-center;
   }
 
   /**
@@ -1795,6 +1806,12 @@
     @apply h-5 mx-1;
     width: 1px;
     background: var(--color-border);
+  }
+
+  /* A divider at the start or end of a wrapped row separates nothing;
+     FormattingToolbar marks it and it keeps its space but goes unseen. */
+  .qt-formatting-toolbar-divider[data-wrapped] {
+    visibility: hidden;
   }
 
   /**

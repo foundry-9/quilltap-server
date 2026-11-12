@@ -22,9 +22,10 @@
  * during live verification.
  *
  * `FormattingToolbar` here renders with no roleplay template, so its top-level
- * children are: [markdown section] [divider] [☺] [Ω] [divider] [source section].
+ * children are: [markdown section] [divider] [☺] [Ω] [source section].
  *
- *   Markdown section (`.qt-formatting-toolbar-section`, gap-1 = 4px) — 14
+ *   Markdown section (`.qt-formatting-toolbar-section`, `display: contents`,
+ *   so its buttons share the toolbar's gap-1 = 4px) — 14
  *   buttons: B, I, H1–H6, "• …", "1. …", ", ⇤, ⇥, CODE. `.qt-formatting-button`
  *   is min-width 1.75rem (28px) with 0.375rem padding each side (12px), so each
  *   is max(28, 12 + label width) at text-xs (12px):
@@ -33,20 +34,22 @@
  *       "1. …"            ≈ 12 + 25                            =  37px
  *       ⇤, ⇥              (1.05rem glyph ≈ 17) 2 × (12 + 17)   =  58px
  *       CODE              (monospace 12px, 4 × 7.2 ≈ 29)       =  41px
- *       13 inner gaps × 4px                                    =  52px
- *                                                 section total = 472px
- *   2 dividers (`.qt-formatting-toolbar-divider`: 1px + mx-1)   =  18px
+ *                                                 buttons total = 420px
+ *   1 divider (`.qt-formatting-toolbar-divider`: 1px + mx-1)    =   9px
  *   ☺ and Ω (`.qt-formatting-button-emoji`, 12 + 17 each)      =  58px
  *   Source toggle button (icon w-4 + 12 padding → min-width 28) =  28px
- *   5 top-level gaps × 8px (`.qt-formatting-toolbar` gap-2)     =  40px
+ *   17 gaps between the 18 flex items × 4px (gap-1)             =  68px
  *   `.qt-formatting-toolbar` padding 0.5rem each side           =  16px
  *   `.qt-doc-toolbar` padding px-4                              =  32px
  *   Editor frame border (1px each side)                         =   2px
  *   Dialog body `p-4`                                           =  32px
  *   Scrollbar gutter on the scrolling body (macOS classic)      =  16px
  *   `.qt-floating-dialog` border (1px each side, border-box)    =   2px
- *                                                         TOTAL ≈ 716px
+ *                                                         TOTAL ≈ 683px
  *
+ * (The figure was 716 before 4.14 flattened the toolbar's sections and dropped
+ * the divider before the source toggle; `minWidth` was left at 720, which
+ * still holds the row with room to spare.)
  * Rounded up to 720 for `minWidth` — glyph advances above are nominal, and a
  * theme may swap in a wider heading or monospace face — and opened at 780 so
  * the toolbar still has slack at the default size. The spec's guess of "around

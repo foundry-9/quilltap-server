@@ -6812,7 +6812,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: calc(var(--spacing, 0.25rem) * 2);
+    gap: var(--spacing, 0.25rem);
     padding: 0.375rem 0.5rem;
     background: var(--color-muted);
     @supports (color: color-mix(in lab, red, red)) {
@@ -6822,13 +6822,22 @@
     margin-bottom: 0.5rem;
   }
   /**
-   * Section groups buttons together
+   * Section groups buttons together in the markup only. It lays out as
+   * `display: contents` so every button wraps in the toolbar's one flow: a
+   * section that wrapped on its own took the full row and pushed whatever
+   * followed it onto a third line.
    */
   .qt-formatting-toolbar-section {
-    display: flex;
-    flex-wrap: wrap;
+    display: contents;
+  }
+  /**
+   * A toolbar button that anchors a popover (the emoji / symbol pickers)
+   * needs a real positioned box, so it is not flattened like a section.
+   */
+  .qt-formatting-toolbar-anchor {
+    position: relative;
+    display: inline-flex;
     align-items: center;
-    gap: var(--spacing, 0.25rem);
   }
   /**
    * Vertical divider between sections
@@ -6838,6 +6847,11 @@
     height: calc(var(--spacing, 0.25rem) * 5);
     width: 1px;
     background: var(--color-border);
+  }
+  /* A divider at the start or end of a wrapped row separates nothing;
+     FormattingToolbar marks it and it keeps its space but goes unseen. */
+  .qt-formatting-toolbar-divider[data-wrapped] {
+    visibility: hidden;
   }
   /**
    * Base formatting button style

@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Formatting toolbar wraps to fewer rows
+
+- In a narrow editor the formatting toolbar wrapped to three rows: the Markdown buttons wrapped as one block that took the full width, which pushed the pickers and the source toggle onto a third row. Toolbar sections now use `display: contents`, so all the buttons wrap together (two rows at about 400px). The emoji and symbol buttons have their own positioned wrapper (`qt-formatting-toolbar-anchor`), so their popovers still anchor correctly. Dividers between groups stay; one that lands at the start or end of a wrapped row is hidden (`data-wrapped`, `visibility: hidden`, so hiding it never reflows the toolbar). The divider before the source toggle is gone; it sits beside the pickers. theme-storybook 1.0.116.
+
 #### Docs: release checklist 14, finished specs moved, bug catalogue removed
 
 - Removed the frozen in-repo bug catalogue (`docs/developer/bugs.md` and `docs/developer/bugs/`, bugs 1–269). It is in git history at `dd200c695`; links that pointed into it now point there on GitHub. CLAUDE.md, DEVELOPMENT.md and the Bug issue form say so. New bugs stay GitHub issues. Also removed `docs/developer/bugfix-sessions/`, the finished plan for working down bugs 8–43.
