@@ -21,7 +21,7 @@ To admit other machines on a network you trust:
 quilltap --host 0.0.0.0
 ```
 
-or set `QUILLTAP_HOST=0.0.0.0` in the environment. Visit by IP address (`http://192.168.1.20:3000`) and you will be shown in at once.
+or set `QUILLTAP_HOST=0.0.0.0` in the environment. In the desktop app (quilltap-shell 4.2.6 or later), tick **Open to the network** at the foot of the splash screen before pressing **Start**; leave it unticked and the house keeps to itself. Visit by IP address (`http://192.168.1.20:3000`) and you will be shown in at once.
 
 ## Calling by Name
 

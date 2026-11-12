@@ -4,6 +4,14 @@
 
 ### 4.13-dev
 
+#### Docs: 4.13.0 release notes brought up to date
+
+- Release notes now cover the work after the first draft: a fifth intro theme (hardening, import/restore, audit fixes) and a new "Locks and Ledgers" section (network defaults, import/restore fidelity, first-run fixes). Also added: Atlas chips beside collapsed announcements and the Concepts Named card, live Anthropic model list, a refactor summary, plugin-types 2.11.0, and theme-storybook 1.0.115.
+- Repairs lists all 60 issues closed in the cycle (#146–#225), grouped by area, and credits #198.
+- Upgrading adds the localhost-only default (with quilltap-shell 4.2.6 and its "Open to the network" checkbox), six migrations instead of three, restore no longer installing plugins, secret plugin settings left out of backups, imported filesystem stores arriving disabled, the cheap-LLM strategy change, pre-4.13 backups and built-in template ids, empty sample characters, stricter API input, and larger backups.
+- `pubDate` set to 2026-11-12.
+- `help/network-access.md` mentions the desktop app's "Open to the network" checkbox.
+
 #### Anthropic: no hard-coded model IDs
 
 Anthropic has no version-free model alias; every ID, short ones included, is a pinned snapshot that eventually retires. The Anthropic plugin (1.0.69) now takes everything from the live Models API:
