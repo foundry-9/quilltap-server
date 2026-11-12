@@ -92,6 +92,7 @@ export function ImageProviderStep({ state, dispatch }: StepProps) {
               key={provider.id}
               type="button"
               onClick={() => handleProviderSelect(provider.id)}
+              aria-pressed={selectedProvider === provider.id}
               className={`w-full text-left p-3 rounded-lg transition-colors ${
                 selectedProvider === provider.id
                   ? 'qt-option-selected'

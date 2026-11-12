@@ -259,9 +259,13 @@ export function getCheapLLMProvider(
     // we should still fall through to the cheapest provider
   }
 
-  // Priority 5: No dedicated cheap LLM available - warn and use current profile
-  // Toast warning that no cheap LLM is configured
-  if (onNoCheapLLM) {
+  // Priority 5: the provider's cheapest model, on the current profile.
+  // Under PROVIDER_CHEAPEST (the default, and the setup wizard's "Auto") this
+  // is the chosen path, not a fallback: no toast, and a debug line rather than
+  // a warning on every background call. Any other strategy that reaches here
+  // fell through, which is worth the toast and the warning.
+  const chosenPath = config.strategy === 'PROVIDER_CHEAPEST'
+  if (onNoCheapLLM && !chosenPath) {
     onNoCheapLLM()
   }
 
@@ -274,12 +278,18 @@ export function getCheapLLMProvider(
   // Map current provider to its cheapest variant (fallback)
   const cheapModel = getCheapestModel(currentProfile.provider)
 
-  logger.warn('[CheapLLM] Using FALLBACK to cheapest model for current provider', {
+  const logContext = {
     context: 'getCheapLLMProvider',
+    strategy: config.strategy,
     provider: currentProfile.provider,
     cheapModel,
     currentProfileModel: currentProfile.modelName,
-  })
+  }
+  if (chosenPath) {
+    logger.debug('[CheapLLM] Using the provider\'s cheapest model', logContext)
+  } else {
+    logger.warn('[CheapLLM] Using FALLBACK to cheapest model for current provider', logContext)
+  }
 
   // The current profile, but on its provider's cheapest model.
   return { ...selectionFromProfile(currentProfile), modelName: cheapModel }

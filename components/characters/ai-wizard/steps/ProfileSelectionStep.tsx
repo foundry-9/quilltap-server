@@ -133,7 +133,7 @@ export function ProfileSelectionStep({
           Tip
         </h4>
         <p className="text-sm qt-text-secondary">
-          For best results, choose a capable model like GPT-4, Claude Opus, or Gemini Pro.
+          For best results, choose your most capable model, such as the top tier from OpenAI, Anthropic, or Google.
           Cost-efficient models may produce simpler results.
         </p>
       </div>

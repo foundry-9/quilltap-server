@@ -45,6 +45,7 @@ The form is three cards, laid out in the same shape as the character's own page.
 **Pronouns** (optional)
 
 - Choose a preset or **Custom**. When set, they are included in system prompts so the LLM uses them correctly
+- The third pronoun is the one that comes before a noun ("her lamp", "their lamp"), not the one that stands alone ("hers", "theirs"). Should the AI Wizard or Summon From Lore hand back "hers" or "theirs" for a plain she/her or they/them character, Quilltap quietly corrects it to the preset rather than filing the character under Custom
 
 **Birthday** (optional)
 

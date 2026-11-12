@@ -204,7 +204,7 @@ Keep most replies roughly the size of the line they answer, and most should not 
  * data, not prose. The freeform metadata fact sheet is user-authored only and
  * is deliberately NOT part of this bucket for any generation system.
  */
-export const PROPERTIES_SEMANTICS = `- PROPERTIES — small structured facts stored as data, not prose: PRONOUNS (subject/object/possessive, e.g. she/her/hers) and ALIASES (nicknames and alternate names others actually call the character — distinct from TITLE, which is the user's private framing). Only record pronouns and aliases the source material or established memories actually support; never invent placeholders. Note: pronouns also anchor image generation, so they must match the physical description.`;
+export const PROPERTIES_SEMANTICS = `- PROPERTIES — small structured facts stored as data, not prose: PRONOUNS (subject/object/possessive determiner, e.g. she/her/her) and ALIASES (nicknames and alternate names others actually call the character — distinct from TITLE, which is the user's private framing). Only record pronouns and aliases the source material or established memories actually support; never invent placeholders. Note: pronouns also anchor image generation, so they must match the physical description.`;
 
 /**
  * The physical-description bucket: the person with nothing removable —

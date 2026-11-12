@@ -298,6 +298,35 @@ export async function testMessage(params: {
   }
 }
 
+/**
+ * Embed one short text with an unsaved embedding profile's settings, so Test
+ * All can check the embedding step. Nothing is stored.
+ */
+export async function testEmbedding(params: {
+  provider: string
+  apiKeyId?: string
+  baseUrl?: string
+  modelName: string
+  dimensions?: number
+}): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch('/api/v1/embedding-profiles?action=test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: params.provider,
+      apiKeyId: params.apiKeyId,
+      baseUrl: params.baseUrl,
+      modelName: params.modelName,
+      ...(params.dimensions ? { dimensions: params.dimensions } : {}),
+    }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    return { success: false, error: data.error || 'Embedding test failed' }
+  }
+  return { success: data.success === true, error: data.error }
+}
+
 // ============================================================================
 // Load Existing Config (for settings re-entry mode)
 // ============================================================================

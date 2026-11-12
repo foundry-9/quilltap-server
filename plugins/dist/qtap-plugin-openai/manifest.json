@@ -2,8 +2,8 @@
   "$schema": "../../../public/schemas/plugin-manifest.schema.json",
   "name": "qtap-plugin-openai",
   "title": "OpenAI Provider",
-  "description": "Provides OpenAI GPT models and DALL-E image generation for Quilltap",
-  "version": "1.0.71",
+  "description": "Provides OpenAI GPT models, embeddings and GPT Image generation for Quilltap",
+  "version": "1.0.72",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -39,7 +39,7 @@
   "providerConfig": {
     "providerName": "OPENAI",
     "displayName": "OpenAI",
-    "description": "OpenAI GPT models including GPT-4o and DALL-E image generation",
+    "description": "OpenAI GPT models, embeddings and GPT Image generation",
     "abbreviation": "OAI",
     "colors": {
       "bg": "bg-green-100",

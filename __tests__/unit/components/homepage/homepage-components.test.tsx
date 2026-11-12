@@ -209,6 +209,12 @@ describe('WelcomeSection', () => {
     expect(screen.getByText('John')).toBeInTheDocument()
   })
 
+  it('greets a first visit without the "back"', () => {
+    render(<WelcomeSection displayName="John" firstVisit />)
+    expect(screen.getByText(/Welcome to Quilltap/)).toBeInTheDocument()
+    expect(screen.queryByText(/Welcome back/)).not.toBeInTheDocument()
+  })
+
   it('renders question text', () => {
     render(<WelcomeSection displayName="John" />)
     expect(screen.getByText('What would you like to do today?')).toBeInTheDocument()

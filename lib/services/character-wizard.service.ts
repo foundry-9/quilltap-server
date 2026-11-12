@@ -262,11 +262,12 @@ Determine this character's PROPERTIES from the context provided.
 
 Respond with ONLY valid JSON, no markdown fences:
 {
-  "pronouns": { "subject": "she", "object": "her", "possessive": "hers" },
+  "pronouns": { "subject": "she", "object": "her", "possessive": "her" },
   "aliases": ["Nickname", "Alternate name"]
 }
 
 Rules:
+- "possessive" is the form that comes before a noun ("her book", "their book"), never the one that stands alone ("hers", "theirs").
 - If the context does not clearly indicate the character's pronouns, set "pronouns" to JSON null. Never invent placeholders like "unknown", "n/a", or empty strings.
 - "aliases" lists only nicknames or alternate names the context actually supports — names other people call the character. Do NOT include the character's primary name, and do NOT include their title/epithet (that is a separate private field). Use an empty array when there are none.`;
 

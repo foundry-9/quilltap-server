@@ -443,6 +443,21 @@ describe('Cheap LLM Provider Selection', () => {
         expect(onNoCheapLLMCallback).toHaveBeenCalled()
       })
 
+      it('should not call onNoCheapLLM when PROVIDER_CHEAPEST picks the provider\'s cheapest model (the chosen path)', () => {
+        const onNoCheapLLMCallback = jest.fn()
+
+        const result = getCheapLLMProvider(
+          anthropicProfile,
+          { strategy: 'PROVIDER_CHEAPEST', fallbackToLocal: false },
+          [anthropicProfile],
+          false,
+          onNoCheapLLMCallback
+        )
+
+        expect(result.provider).toBe(anthropicProfile.provider)
+        expect(onNoCheapLLMCallback).not.toHaveBeenCalled()
+      })
+
       it('should not call onNoCheapLLM when a cheap LLM is available', () => {
         const onNoCheapLLMCallback = jest.fn()
 

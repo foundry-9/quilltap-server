@@ -36,5 +36,18 @@ export const EmbeddingProfileCreateSchema = EmbeddingProfileInputObject.strict()
 /** PUT body: any subset, nothing defaulted. */
 export const EmbeddingProfileUpdateSchema = patchSchemaOf(EmbeddingProfileInputObject).strict();
 
+/**
+ * POST `?action=test` body: the fields that decide whether an embedding call
+ * can succeed, for a profile not yet saved (the setup wizard's Test All).
+ */
+export const EmbeddingProfileTestSchema = EmbeddingProfileInputObject.pick({
+  provider: true,
+  modelName: true,
+  apiKeyId: true,
+  baseUrl: true,
+  dimensions: true,
+}).strict();
+
 export type EmbeddingProfileCreateInput = z.infer<typeof EmbeddingProfileCreateSchema>;
 export type EmbeddingProfileUpdateInput = z.infer<typeof EmbeddingProfileUpdateSchema>;
+export type EmbeddingProfileTestInput = z.infer<typeof EmbeddingProfileTestSchema>;

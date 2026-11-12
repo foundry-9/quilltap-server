@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { Icon } from '@/components/ui/icon'
 
@@ -37,6 +37,8 @@ interface ModelSelectorProps {
   readonly showFetchedCount?: boolean
   /** id for the select/search input, so a caller's <label htmlFor> names it */
   readonly id?: string
+  /** Accessible name when no <label htmlFor> names the field (default: the placeholder) */
+  readonly label?: string
 }
 
 export function ModelSelector({
@@ -49,14 +51,18 @@ export function ModelSelector({
   required = false,
   showFetchedCount = false,
   id,
+  label,
 }: ModelSelectorProps) {
   const [searchInput, setSearchInput] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const listId = useId()
 
-  // Without a caller's label, the placeholder is the field's accessible name
-  const ariaLabel = id ? undefined : placeholder
+  // Without a caller's <label htmlFor>, an explicit label or else the
+  // placeholder is the field's accessible name
+  const ariaLabel = id ? undefined : (label ?? placeholder)
 
   const sortedModels = [...models].sort((a, b) => a.localeCompare(b))
 
@@ -126,7 +132,33 @@ export function ModelSelector({
     if (e.key === 'Escape') {
       setIsOpen(false)
       setSearchInput('')
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setIsOpen(true)
+      // Move into the list; the options are buttons, so Tab and Enter work there
+      requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>('[role="option"]')?.focus())
     }
+  }
+
+  // Up/Down between options; Up from the first returns to the search box
+  const handleOptionKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Escape') {
+      // Close the list and hand focus back, without letting a dialog around
+      // the selector take the Escape as "close me"
+      e.preventDefault()
+      e.stopPropagation()
+      setIsOpen(false)
+      setSearchInput('')
+      searchInputRef.current?.focus()
+      return
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const options = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])
+    const index = options.indexOf(e.currentTarget)
+    const next = e.key === 'ArrowDown' ? options[index + 1] : options[index - 1]
+    if (next) next.focus()
+    else if (e.key === 'ArrowUp') searchInputRef.current?.focus()
   }
 
   // Helper to get model suffix for dropdown options
@@ -219,6 +251,10 @@ export function ModelSelector({
           id={id}
           aria-label={ariaLabel}
           type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls={listId}
+          aria-autocomplete="list"
           value={isOpen ? searchInput : value}
           onChange={handleSearchChange}
           onFocus={() => setIsOpen(true)}
@@ -246,11 +282,14 @@ export function ModelSelector({
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1 qt-bg-card border qt-border-default rounded-lg qt-shadow-lg z-10 max-h-64 overflow-y-auto">
           {filteredModels.length > 0 ? (
-            <ul className="py-1">
+            <ul className="py-1" role="listbox" id={listId} ref={listRef} aria-label={ariaLabel ?? placeholder}>
               {filteredModels.map(model => (
-                <li key={model}>
+                <li key={model} role="none">
                   <button
                     type="button"
+                    role="option"
+                    aria-selected={value === model}
+                    onKeyDown={handleOptionKeyDown}
                     onClick={() => handleSelect(model)}
                     className={`w-full text-left px-3 py-2 qt-hover-accent transition-colors ${
                       value === model

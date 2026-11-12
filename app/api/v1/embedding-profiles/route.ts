@@ -3,6 +3,7 @@
  *
  * GET /api/v1/embedding-profiles - List all embedding profiles for current user
  * POST /api/v1/embedding-profiles - Create a new embedding profile
+ * POST /api/v1/embedding-profiles?action=test - Embed one short text with an unsaved profile's settings
  * GET /api/v1/embedding-profiles?action=list-models - List available embedding models
  * GET /api/v1/embedding-profiles?action=fetch-models&provider=OLLAMA&baseUrl=... - Fetch installed models from provider
  */
@@ -12,7 +13,7 @@ import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags 
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { successResponse, created, notFound, badRequest, serverError, conflict } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { EmbeddingProfileCreateSchema } from '@/lib/embedding/embedding-profile-input';
+import { EmbeddingProfileCreateSchema, EmbeddingProfileTestSchema } from '@/lib/embedding/embedding-profile-input';
 import { apiKeyExists } from '@/lib/schemas/profile-input';
 import {
   getEmbeddingProviders,
@@ -21,6 +22,7 @@ import {
 } from '@/lib/plugins/provider-validation';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { isLocalEmbeddingProvider } from '@quilltap/plugin-types';
+import type { EmbeddingProfile } from '@/lib/schemas/profile.types';
 
 /**
  * GET /api/v1/embedding-profiles
@@ -301,7 +303,63 @@ async function handleCreateEmbeddingProfile(req: NextRequest, { user, repos }: R
   return created({ ...profile, apiKey });
 }
 
+/**
+ * POST /api/v1/embedding-profiles?action=test - Embed one short text with the
+ * settings of a profile that has not been saved, so the setup wizard's Test
+ * All can say the embedding step works rather than assume it. Nothing is
+ * stored. A Built-in (TF-IDF) profile has no provider to call and is fitted
+ * later from the instance's own text, so it reports success without a call.
+ */
+async function handleTestEmbedding(req: NextRequest, { user, repos }: RequestContext) {
+  const input = EmbeddingProfileTestSchema.parse(await req.json());
+
+  if (input.provider === 'BUILTIN') {
+    return successResponse({ success: true, message: 'Built-in embeddings need no connection.' });
+  }
+
+  if (!(await apiKeyExists(input.apiKeyId, repos))) {
+    return notFound('API key');
+  }
+
+  const now = new Date().toISOString();
+  const transientProfile = {
+    id: '00000000-0000-4000-8000-000000000000',
+    userId: user.id,
+    name: 'Connection test',
+    provider: input.provider,
+    apiKeyId: input.apiKeyId ?? null,
+    baseUrl: input.baseUrl ?? null,
+    modelName: input.modelName,
+    dimensions: input.dimensions ?? null,
+    truncateToDimensions: null,
+    normalizeL2: true,
+    isDefault: false,
+    tags: [],
+    createdAt: now,
+    updatedAt: now,
+  } as EmbeddingProfile;
+
+  try {
+    const { generateEmbedding } = await import('@/lib/embedding/embedding-service');
+    const result = await generateEmbedding('Quilltap embedding connection test', transientProfile, user.id);
+    logger.debug('[Embedding Profiles v1] Test embedding succeeded', {
+      provider: input.provider,
+      modelName: input.modelName,
+      dimensions: result.dimensions,
+    });
+    return successResponse({ success: true, dimensions: result.dimensions });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn('[Embedding Profiles v1] Test embedding failed', {
+      provider: input.provider,
+      modelName: input.modelName,
+      error: message,
+    });
+    return successResponse({ success: false, error: message });
+  }
+}
+
 // An unknown ?action= is a 400 from the dispatcher, never a create (#219).
 export const POST = createContextHandler((req: NextRequest, ctx: RequestContext) =>
-  dispatchAction(req, {}, () => handleCreateEmbeddingProfile(req, ctx))
+  dispatchAction(req, { test: () => handleTestEmbedding(req, ctx) }, () => handleCreateEmbeddingProfile(req, ctx))
 );

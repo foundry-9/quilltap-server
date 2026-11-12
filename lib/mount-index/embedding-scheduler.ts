@@ -11,6 +11,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
+import { isEmbeddingProfileReady } from '@/lib/embedding/profile-readiness';
 
 const logger = createServiceLogger('MountIndex:EmbeddingScheduler');
 
@@ -79,6 +80,16 @@ export async function enqueueEmbeddingJobsForMountPoint(mountPointId: string): P
 
   if (!defaultProfile) {
     logger.warn('No default embedding profile configured, skipping mount chunk embedding', {
+      mountPointId,
+      unembeddedCount: unembeddedChunks.length,
+    });
+    return 0;
+  }
+
+  // An unfitted Built-in profile would fail every job; its first fit enqueues
+  // a full reindex, which covers these chunks.
+  if (!(await isEmbeddingProfileReady(defaultProfile, repos))) {
+    logger.debug('Mount chunks wait for the Built-in vocabulary to be fitted', {
       mountPointId,
       unembeddedCount: unembeddedChunks.length,
     });

@@ -118,6 +118,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
               key={provider.id}
               type="button"
               onClick={() => handleToggle(provider.id)}
+              aria-pressed={isSelected}
               className={`w-full p-4 text-left rounded-lg transition-all ${
                 isSelected
                   ? 'qt-option-selected'

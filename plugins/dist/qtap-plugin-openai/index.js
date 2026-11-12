@@ -26236,7 +26236,7 @@ var logger5 = createPluginLogger("qtap-plugin-openai");
 var metadata = {
   providerName: "OPENAI",
   displayName: "OpenAI",
-  description: "OpenAI GPT models including GPT-4o and DALL-E image generation",
+  description: "OpenAI GPT models, embeddings and GPT Image generation",
   colors: {
     bg: "bg-green-100",
     text: "text-green-800",

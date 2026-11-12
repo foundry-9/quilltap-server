@@ -168,7 +168,8 @@ export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps)
                   models={models}
                   value={isSelected ? state.chatConfig.model : ''}
                   onChange={(model) => handleChatModelChange(provider.id, model)}
-                  placeholder={`Select a ${provider.displayName} model`}
+                  placeholder="Select or search a model"
+                  label={`${provider.displayName} chat model`}
                   disabled={models.length === 0}
                 />
               )}
@@ -269,6 +270,7 @@ export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps)
                     value={state.cheapConfig.model || ''}
                     onChange={handleCheapModelChange}
                     placeholder="Select a background model"
+                    label="Background (cheap) model"
                     disabled={cheapModels.length === 0}
                   />
                 )}

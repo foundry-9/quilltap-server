@@ -101,6 +101,7 @@ function makeRepos(helpDocs = {}, docMountChunks = {}, embeddingStatus = {}, hel
       updateEmbedding: jest.fn().mockResolvedValue(undefined),
       ...docMountChunks,
     },
+    embeddingProfiles: { findById: jest.fn().mockResolvedValue(null) },
     embeddingStatus: {
       markAsEmbedded: jest.fn().mockResolvedValue(undefined),
       markAsFailed: jest.fn().mockResolvedValue(undefined),

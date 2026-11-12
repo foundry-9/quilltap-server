@@ -103,6 +103,7 @@ beforeEach(() => {
       findById: jest.fn().mockResolvedValue(tokyoMemory),
       updateForCharacter: jest.fn().mockResolvedValue(tokyoMemory),
     },
+    embeddingProfiles: { findById: jest.fn().mockResolvedValue(null) },
     embeddingStatus: {
       markAsEmbedded: jest.fn().mockResolvedValue(undefined),
       markAsFailed: jest.fn().mockResolvedValue(undefined),
