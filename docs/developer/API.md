@@ -2842,9 +2842,9 @@ Where the chat's scene came from. Query key `queryKeys.chats.scenarioSource(chat
 
 #### `GET /api/v1/chats/[id]?action=absent-mentions`
 
-Absent workspace characters named in the chat, for the Salon's name chips (`lib/chat/absent-mentions.ts`). Query key `queryKeys.chats.absentMentions(chatId)`, refreshed by the `chats` realtime topic.
+Absent workspace characters named in the chat, for the Salon's name chips and the chat sidebar's Concepts Named card (`lib/chat/absent-mentions.ts`). Query key `queryKeys.chats.absentMentions(chatId)`, refreshed by the `chats` realtime topic.
 
-**Response**: `{ mentions: [{ messageId, characterId, text, card: { name, aliases, pronouns, body } }] }` — one entry per absent character: the first spoken message (no Staff messages) that names them, the name or alias exactly as written there (case-sensitive, letter-bounded), and their card. `card` is `offSceneCardFields`, the same particulars the model gets in the referent ledger; `pronouns` is `subject/object/possessive` or null; `body` is identity, else description, with `{{char}}` / `{{user}}` bound.
+**Response**: `{ mentions: [{ messageId, characterId, text, card: { name, aliases, pronouns, body }, avatarUrl }] }` — one entry per absent character: the first spoken message (no Staff messages) that names them, the name or alias exactly as written there (case-sensitive, letter-bounded), and their card. `card` is `offSceneCardFields`, the same particulars the model gets in the referent ledger; `pronouns` is `subject/object/possessive` or null; `body` is identity, else description, with `{{char}}` / `{{user}}` bound. `avatarUrl` is the character's current portrait (`defaultImageId` through `resolveCharacterAvatar`) or null, for the sidebar; it is not part of the card.
 - "Absent" is `presenceOf`: not seated (removed seats count as absent), and not the operator's unseated persona where the operator speaks without a seat.
 
 #### `POST /api/v1/chats/[id]?action=bulk-reattribute`

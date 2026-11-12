@@ -23,8 +23,9 @@ import { ParticipantCard, type ParticipantData } from './ParticipantCard'
 import { useChatActions } from '@/components/providers/chat-context'
 import { CopyChatIdButton } from './CopyChatIdButton'
 import { ChatScenarioControl } from './ChatScenarioControl'
-import { ChatThingsNamed } from './ChatThingsNamed'
+import { ChatConceptsNamed } from './ChatConceptsNamed'
 import { useChatAtlasMentions } from '@/hooks/useAtlasMentions'
+import { useChatAbsentMentions } from '@/hooks/useAbsentMentions'
 import { shouldDismissSidebarOverlay } from './sidebar-overlay-dismiss'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
@@ -62,7 +63,7 @@ const WIDTH_KEY_STEP = 16
  */
 const NARROW_PANE_WIDTH = 640
 
-type SectionId = 'participants' | 'things' | 'chat' | 'visibility' | 'organize' | 'edit' | null
+type SectionId = 'participants' | 'concepts' | 'chat' | 'visibility' | 'organize' | 'edit' | null
 
 interface RoleplayTemplate {
   id: string
@@ -283,8 +284,13 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
-  // Atlas entries the chat names (shared with the transcript's thing chips).
+  // Absent characters and Atlas entries the chat names (the transcript's chips' own reads).
+  const absentMentions = useChatAbsentMentions(props.chatId)
   const atlasMentions = useChatAtlasMentions(props.chatId)
+  const conceptsDescription = [
+    absentMentions.length > 0 ? `${absentMentions.length} character${absentMentions.length !== 1 ? 's' : ''} not here` : null,
+    atlasMentions.length > 0 ? `${atlasMentions.length} from the Atlas` : null,
+  ].filter(Boolean).join(' · ')
 
   // Resizable width (px), persisted to localStorage. Applies to the expanded
   // panel only; the collapsed strip keeps its own fixed width.
@@ -526,15 +532,16 @@ export function ChatSidebar(props: ChatSidebarProps) {
           />
         </CollapsibleCard>
 
-        {atlasMentions.length > 0 && (
+        {(absentMentions.length > 0 || atlasMentions.length > 0) && (
           <CollapsibleCard
-            title="Things named"
-            description={`${atlasMentions.length} from the Atlas`}
-            {...openController('things')}
+            title="Concepts Named"
+            description={conceptsDescription}
+            {...openController('concepts')}
           >
-            <ChatThingsNamed
+            <ChatConceptsNamed
               chatId={props.chatId}
-              mentions={atlasMentions}
+              people={absentMentions}
+              things={atlasMentions}
               onRevealed={isOverlay ? () => setNarrowOpen(false) : undefined}
             />
           </CollapsibleCard>

@@ -23,6 +23,8 @@ Click the chip to pin the card open, so a long identity can be scrolled and read
 
 Only the first mention in the whole chat is marked. The name may turn up fifty times thereafter; the chip stays where the acquaintance began. A name inside code, a link or emphasis is passed over in favour of the next plain mention in that message.
 
+Should you lose the thread, the **Concepts Named** drawer of the [Chat Sidebar](chat-participants.md) lists everyone the conversation has named who is not in it — portrait, name, and the word they went by — and a click there carries you back to the line where each was first mentioned.
+
 ## What the Characters Are Told
 
 The chip is for *you*. The characters never see it — nor did they ever read a card in the conversation, for a card wedged between a remark and the reply that leaned on it had a habit of making a "she" lose track of whom it meant.

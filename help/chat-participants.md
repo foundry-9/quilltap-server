@@ -6,14 +6,14 @@ url: /salon/:id
 
 > **[Open this page in Quilltap](/salon)**
 
-The Chat Sidebar is your right-hand control room for any conversation in The Salon — a single tasteful cabinet of drawers from which the entire chat may be conducted, tuned, and tidied. Where once there were three separate apparatus (a Participants Sidebar, a Tools palette popover, and a Chat Settings modal) you now have one cabinet with five drawers: **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content** — and a sixth, **Things named**, which appears only once the conversation has mentioned something from [the Atlas](atlas.md).
+The Chat Sidebar is your right-hand control room for any conversation in The Salon — a single tasteful cabinet of drawers from which the entire chat may be conducted, tuned, and tidied. Where once there were three separate apparatus (a Participants Sidebar, a Tools palette popover, and a Chat Settings modal) you now have one cabinet with five drawers: **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content** — and a sixth, **Concepts Named**, which appears only once the conversation has mentioned a character who is not in it, or something from [the Atlas](atlas.md).
 
 ## What the Chat Sidebar Holds
 
 Each drawer attends to a different aspect of running the conversation:
 
 - **Participants** — the cast of characters, who's speaking, who's queued, and every dial for tuning their behaviour. (This page treats that drawer in considerable detail; the rest are sketched briefly below with cross-references.)
-- **Things named** — only present once the chat has named something from [the Atlas](atlas.md). Every entry mentioned so far, in the order it first came up, with its picture; rest the pointer on one for its card, click it to be taken to its first mention.
+- **Concepts Named** — only present once the chat has named a character who is not in it, or something from [the Atlas](atlas.md). Everyone and everything mentioned so far, in the order first named, with a portrait or picture; rest the pointer on one for its card, click it to be taken to its first mention.
 - **Chat** — the per-chat dials. Agent Mode, Roleplay Template, Project assignment, Image Provider, Lantern announcements, automatic avatar generation, and the gateways to the Tools and Run Tool modals. Regenerate Background lives here too, when story backgrounds are switched on.
 - **Visibility** — only present in multi-character chats. Two toggles: **All Whispers** (show or hide private asides) and **Shared Vaults** (whether characters may read one another's vaults).
 - **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and the Gallery, which is always present and holds every picture in the conversation.
@@ -487,9 +487,9 @@ conversation waiting for a reply you must paste in by hand. **Resume** is the wa
 
 Opening any of these closes whichever drawer is presently open. None of them is open by default.
 
-### Things named
+### Concepts Named
 
-Present only when the conversation has named at least one entry from [the Atlas](atlas.md); the drawer's header line counts them ("2 from the Atlas"). Inside, every such entry in the order it was first mentioned — its picture (or the Atlas's compass, if it has none), its name, and, when the transcript called it something else, the word it went by ("as “ship”"). Rest the pointer on an entry, or tab to it, to read its card. Click it and the transcript is scrolled to the message where it was first named, with a brief glow to mark the spot; if that is the Host's folded scenario card, the card is unfolded for you. On a narrow window, where the sidebar lies over the conversation, the sidebar steps aside as you go.
+Present only when the conversation has named at least one [character who is not in it](salon-host-introductions.md), or one entry from [the Atlas](atlas.md) — the very people and things that wear a chip in the transcript. The drawer's header line counts them ("1 character not here · 2 from the Atlas"). Inside are two short lists, **Characters not here** and **From the Atlas**, each in the order first mentioned and each shown only when it has someone or something in it. Every row carries a portrait or picture (or a plain silhouette, or the Atlas's compass, when there is none), the name, and, when the transcript called it something else, the word it went by ("as “Grandma”", "as “ship”"). Rest the pointer on a row, or tab to it, to read the same card its chip would show. Click it and the transcript is scrolled to the message where it was first named, with a brief glow to mark the spot; if that is the Host's folded scenario card, the card is unfolded for you. On a narrow window, where the sidebar lies over the conversation, the sidebar steps aside as you go.
 
 ### Chat
 

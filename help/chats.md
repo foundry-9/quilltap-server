@@ -174,7 +174,7 @@ When a gathering grows too large for the header's mantelpiece, the project and t
 
 ### Chat Sidebar
 
-On the right, the **Chat Sidebar** is the single cabinet from which every per-chat dial and action is reached — a five-drawer affair holding **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content**, with a sixth, **Things named**, that appears once the chat has mentioned anything from [the Atlas](atlas.md):
+On the right, the **Chat Sidebar** is the single cabinet from which every per-chat dial and action is reached — a five-drawer affair holding **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content**, with a sixth, **Concepts Named**, that appears once the chat has mentioned a character who isn't in it or anything from [the Atlas](atlas.md):
 
 - **Character Avatars** — Visual indicator of who's in the chat
 - **Turn Information** — Whose turn it is to speak

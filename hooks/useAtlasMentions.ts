@@ -6,7 +6,7 @@
  *
  * One read per chat (`?action=atlas-mentions`), shared through TanStack Query
  * by every message row, every collapsed announcement and the chat sidebar's
- * "Things named" card. A row asks only for the mentions that first appear in
+ * "Concepts Named" card. A row asks only for the mentions that first appear in
  * it; the sidebar takes the whole list. Realtime rides the `chats` topic (a
  * new message) and the `atlas` topic (an edited entry), so the interval is
  * only the offline fallback.

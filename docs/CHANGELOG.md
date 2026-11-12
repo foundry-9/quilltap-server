@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Concepts Named drawer: absent characters too
+
+- The chat sidebar's "Things named" card is now **Concepts Named** (`ChatConceptsNamed`, renamed from `ChatThingsNamed`). It lists absent characters the chat names ("Characters not here") as well as Atlas entries ("From the Atlas"), each group in first-mention order and shown only when non-empty. Header reads e.g. "1 character not here · 2 from the Atlas". Clicking a character also reveals its first mention.
+- `?action=absent-mentions` returns `avatarUrl` on each mention (the character's `defaultImageId` resolved by `resolveCharacterAvatar`, or null), for the drawer's portrait. It is added in the route, not by `findAbsentMentions`, and is not part of the card the model sees. New `useChatAbsentMentions(chatId)`; `useAbsentMentions` builds on it. `AbsentCharacterCardView` is exported from `MentionChip.tsx` with a `hint` prop.
+- Help: corrected `help/atlas.md`, which said absent characters also get chips beside a collapsed Host row. They don't, because Host rows are not scanned for character names.
+
 #### Atlas chips are easier to find
 
 - A collapsed announcement now shows the name chips whose first mention is inside it, next to its bar, labeled with the name on each card. This covers the Host's scenario row, which starts collapsed and is where an Atlas entry is usually first named, so its chip was hidden. Absent-character chips get the same treatment. The bar renders exactly as before when it has no chips (`AnnouncementChip`, which now takes `chatId`).

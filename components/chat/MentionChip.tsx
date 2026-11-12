@@ -74,7 +74,7 @@ function atlasTierLabel(origin: AtlasOrigin): string {
 
 /**
  * An Atlas entry's card: the popup of a thing's chip, and of an entry in the
- * chat sidebar's "Things named" card. `hint` is the footer's action line.
+ * chat sidebar's "Concepts Named" card. `hint` is the footer's action line.
  */
 export function AtlasCardView({ card, hint = 'click to pin' }: { card: AtlasCard; hint?: string }) {
   return (
@@ -110,7 +110,12 @@ export function AtlasCardView({ card, hint = 'click to pin' }: { card: AtlasCard
   )
 }
 
-function MentionCard({ card }: { card: AbsentMentionChip['card'] }) {
+/**
+ * An absent character's card: the popup of a person's chip, and of a
+ * character in the chat sidebar's "Concepts Named" card. `hint` is the
+ * footer's action line.
+ */
+export function AbsentCharacterCardView({ card, hint = 'click to pin' }: { card: AbsentMentionChip['card']; hint?: string }) {
   return (
     <div className="qt-tooltip-body">
       <div className="qt-tooltip-title">{card.name}</div>
@@ -138,7 +143,7 @@ function MentionCard({ card }: { card: AbsentMentionChip['card'] }) {
           <div className="qt-tooltip-quote">{card.body}</div>
         </div>
       )}
-      <div className="qt-tooltip-hint">Not in this conversation · click to pin</div>
+      <div className="qt-tooltip-hint">Not in this conversation · {hint}</div>
     </div>
   )
 }
@@ -172,7 +177,7 @@ export function MentionChip({
   }
   const person = mention as AbsentMentionChip
   return (
-    <Tooltip content={<MentionCard card={person.card} />} interactive pinnable delay={250}>
+    <Tooltip content={<AbsentCharacterCardView card={person.card} />} interactive pinnable delay={250}>
       <span
         className="qt-mention-chip"
         tabIndex={0}
