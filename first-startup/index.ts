@@ -63,6 +63,13 @@ export function getSeedCharacters(): SeedCharacterData[] {
   const context = 'first-startup';
   const charactersDir = path.join(process.cwd(), 'first-startup', 'characters');
 
+  // Optional: the shipped sample characters come from first-startup/imports
+  // (.qtap bundles), so an absent JSON directory is the normal case, not an error.
+  if (!fs.existsSync(charactersDir)) {
+    logger.debug('No seed characters directory; seeding from .qtap imports only', { context, charactersDir });
+    return [];
+  }
+
   try {
     const files = fs.readdirSync(charactersDir)
       .filter(f => f.endsWith('.json'))

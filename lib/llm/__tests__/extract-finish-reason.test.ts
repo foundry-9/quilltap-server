@@ -1,4 +1,4 @@
-import { extractFinishReason } from '../extract-finish-reason';
+import { extractFinishReason, isTruncatedFinishReason } from '../extract-finish-reason';
 
 describe('extractFinishReason', () => {
   it('reads OpenAI Chat Completions / Z.AI / OpenRouter shape', () => {
@@ -37,5 +37,21 @@ describe('extractFinishReason', () => {
     expect(extractFinishReason({ choices: [{}] })).toBeNull();
     expect(extractFinishReason({ candidates: [] })).toBeNull();
     expect(extractFinishReason('stop')).toBeNull();
+  });
+});
+
+describe('isTruncatedFinishReason', () => {
+  it('matches every provider spelling of "hit the token ceiling"', () => {
+    expect(isTruncatedFinishReason('max_tokens')).toBe(true);
+    expect(isTruncatedFinishReason('MAX_TOKENS')).toBe(true);
+    expect(isTruncatedFinishReason('length')).toBe(true);
+    expect(isTruncatedFinishReason('model_length')).toBe(true);
+  });
+
+  it('does not match a natural stop or a missing reason', () => {
+    expect(isTruncatedFinishReason('end_turn')).toBe(false);
+    expect(isTruncatedFinishReason('stop')).toBe(false);
+    expect(isTruncatedFinishReason(null)).toBe(false);
+    expect(isTruncatedFinishReason(undefined)).toBe(false);
   });
 });

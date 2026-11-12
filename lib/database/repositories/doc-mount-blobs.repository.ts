@@ -60,6 +60,9 @@ export interface UpdateExtractedTextInput {
 
 const TABLE = 'doc_mount_blobs';
 
+/** Columns the link repository's raw insert and every reader depend on. */
+const REQUIRED_COLUMNS = ['id', 'fileId', 'sha256', 'sizeBytes', 'storedMimeType', 'data', 'createdAt', 'updatedAt'];
+
 export interface UpsertBlobInput {
   fileId: string;
   /** Advisory only — upsertByFileId recomputes sha256 from `data`. */
@@ -148,6 +151,28 @@ export class DocMountBlobsRepository {
     }
 
     return db;
+  }
+
+  /**
+   * Boot-time structural check (bug 176), run by `verifyStructuralTables`.
+   * Creating the table here matters as much as checking it: the link
+   * repository writes `doc_mount_blobs` with raw SQL, so on a brand-new
+   * instance nothing had created it before first-startup seeding linked the
+   * sample characters' avatars, and every one failed with "no such table".
+   * Returns the problem, or null. Never throws.
+   */
+  async verifyStructure(): Promise<string | null> {
+    try {
+      const db = this.db();
+      const columns = new Set(
+        (db.prepare(`PRAGMA table_info("${TABLE}")`).all() as Array<{ name: string }>).map(c => c.name),
+      );
+      const missing = REQUIRED_COLUMNS.filter(c => !columns.has(c));
+      logger.debug('Verified doc-mount blob table structure', { table: TABLE, ok: missing.length === 0 });
+      return missing.length === 0 ? null : `${TABLE} in mount-index database is missing columns: ${missing.join(', ')}`;
+    } catch (error) {
+      return `${TABLE} in mount-index database: ${error instanceof Error ? error.message : String(error)}`;
+    }
   }
 
   async findById(id: string): Promise<DocMountBlobMetadata | null> {

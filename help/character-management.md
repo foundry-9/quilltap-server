@@ -40,6 +40,8 @@ What this action does:
 - Re-imports the built-in first-run Lorian and Riya dossiers
 - Reuses prior character IDs when those records existed, keeping linked references steady
 
+Should Lorian and Riya have arrived at your establishment as mere silhouettes — a letter where a portrait ought to be, an empty personality, no system prompt, no wardrobe to speak of — they were the casualties of a first-run mishap now mended. A press of **Reset Built-in Characters** sends for the genuine articles, portraits and all. The hollow pair may have left behind two retired stores in the Scriptorium, named in the manner of *Lorian Version … Store* and *Riya Version … Store*; they hold nothing of consequence and may be dismissed at your leisure.
+
 ## Help Tools
 
 Certain characters may be granted the privilege of peering behind the curtain — reading your Quilltap settings and searching the documentation on your behalf, rather like a well-informed butler who knows where everything is kept.

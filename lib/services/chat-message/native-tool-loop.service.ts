@@ -50,7 +50,7 @@ import {
 import { detectToolCallsInResponse, processToolCalls } from './tool-execution.service'
 import { buildAssistantToolCallMessage, buildToolResultMessages } from './tool-call-threading'
 import { buildForceFinalMessage, generateIterationSummary, type ResolvedAgentMode } from './agent-mode-resolver.service'
-import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { extractFinishReason, isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character } from '@/lib/schemas/types'
@@ -86,17 +86,6 @@ export interface RunNativeToolLoopOptions {
 
 const GHOST_WRAP_REJECTION_MESSAGE =
   "Rejected: submit_final_response was called on the first iteration without any accompanying task work or conversational prose this turn. The previous turn already concluded — do not re-wrap completed work. Respond to the user's current message directly, in character, as natural prose. You may use memory or other tools first if helpful, but only call submit_final_response after completing fresh agentic work that warrants a structured summary."
-
-/**
- * Provider finish-reason strings that mean "the output was cut off because it
- * hit the token ceiling." Compared case-insensitively so Google's `MAX_TOKENS`,
- * Anthropic's `max_tokens`, and OpenAI/OpenAI-compatible `length` all match.
- */
-function isTruncatedFinishReason(reason: string | null): boolean {
-  if (!reason) return false
-  const r = reason.toLowerCase()
-  return r === 'max_tokens' || r === 'length' || r === 'model_length'
-}
 
 /**
  * The tool result returned for a tool call that was cut off mid-arguments by

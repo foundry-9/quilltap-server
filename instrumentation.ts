@@ -483,24 +483,6 @@ export async function register() {
       }
 
       // ================================================================
-      // PHASE 1.25: Seed Initial Data (first startup only)
-      // ================================================================
-      // Seeds default character(s) when database is empty
-      startupState.setPhase('seeding');
-      startupProgress.setCurrent('subsystem:seeding');
-
-      try {
-        const { seedInitialData } = await import('./lib/startup/seed-initial-data');
-        await seedInitialData();
-      } catch (seedError) {
-        // Seeding failure should not block startup
-        logger.warn('Error during initial data seeding, continuing startup', {
-          context: 'instrumentation.register',
-          error: seedError instanceof Error ? seedError.message : String(seedError),
-        });
-      }
-
-      // ================================================================
       // PHASE 1.5: Auto-upgrade npm-installed plugins
       // ================================================================
       startupState.setPhase('plugin-updates');
@@ -594,6 +576,27 @@ export async function register() {
         logger.warn('Structural table check could not run, continuing startup', {
           context: 'instrumentation.register',
           error: verifyError instanceof Error ? verifyError.message : String(verifyError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.15: Seed Initial Data (first startup only)
+      // ================================================================
+      // Seeds default character(s) when database is empty. Runs after file
+      // storage and the structural-table check (3.1), which creates every
+      // mount-index table: seeding before them left the sample characters as
+      // bare rows whose vault writes failed (no doc_mount_files yet).
+      startupState.setPhase('seeding');
+      startupProgress.setCurrent('subsystem:seeding');
+
+      try {
+        const { seedInitialData } = await import('./lib/startup/seed-initial-data');
+        await seedInitialData();
+      } catch (seedError) {
+        // Seeding failure should not block startup
+        logger.warn('Error during initial data seeding, continuing startup', {
+          context: 'instrumentation.register',
+          error: seedError instanceof Error ? seedError.message : String(seedError),
         });
       }
 

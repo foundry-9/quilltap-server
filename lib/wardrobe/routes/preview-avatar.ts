@@ -215,7 +215,7 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
 
     return NextResponse.json({
       fileId: file.id,
-      url: `/api/v1/files/${file.id}?action=download`,
+      url: `/api/v1/files/${file.id}`,
       mimeType: written.storedMimeType,
       prompt,
       rerouted: failover.rerouted,

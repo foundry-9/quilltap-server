@@ -216,6 +216,7 @@ If you want AI to generate content:
    - AI generates selected content
    - Review generated text
    - Accept or edit
+   - A field marked with a red cross was not written. The wizard would sooner confess a blank than hand you half an identity trailing off mid-sentence, so a reply the model could not finish is reported as a failure rather than saved. Run the wizard again for just that field; the newer reasoning models are now given room to think *and* to answer, so this is a rare sight.
 9. Click **Create Character**
 10. Character created with generated content — a generated system prompt is saved as their **Default** prompt
 

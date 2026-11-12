@@ -180,7 +180,29 @@ export abstract class AbstractStoreBackedRepository<
         const row = await this._create(entityData as Omit<TRow, 'id' | 'createdAt' | 'updatedAt'>, options);
         const entity = this.store.toEntity ? this.store.toEntity(entityData, row) : (row as TEntity);
 
-        const mountPointId = await this.provisionOfficialStore(entity);
+        // A row whose store never got its content is a hollow entity that
+        // every later check counts as present (first-startup seeding saw two
+        // and never ran again). Take the row back out before rethrowing; an
+        // already-minted store is left for reconcileStoreNames to retire.
+        let mountPointId: string;
+        try {
+          mountPointId = await this.provisionOfficialStore(entity);
+        } catch (provisionError) {
+          logger.warn(`${label} store provisioning failed; removing the row just written`, {
+            [this.store.idLogKey]: row.id,
+            name: row.name,
+            error: provisionError instanceof Error ? provisionError.message : String(provisionError),
+          });
+          try {
+            await this._delete(row.id);
+          } catch (rollbackError) {
+            logger.error(`Could not remove ${lower} row after failed store provisioning`, {
+              [this.store.idLogKey]: row.id,
+              error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+            });
+          }
+          throw provisionError;
+        }
         await this.afterCreate(entity);
 
         logger.info(`${label} created`, {

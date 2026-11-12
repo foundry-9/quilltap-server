@@ -17,6 +17,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
 import { parseLLMJson } from '@/lib/llm/llm-json';
+import { isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason';
 import {
   describeGeneratedProperties,
   parseGeneratedProperties,
@@ -415,6 +416,43 @@ ${existingFields.join('\n')}
 type LLMProvider = ReturnType<typeof createLLMProvider> extends Promise<infer T> ? T : never;
 
 /**
+ * Room added to every Wizard call's completion budget for the model's own
+ * reasoning. Current reasoning models think by default when a request names
+ * no thinking setting (Claude Sonnet 5.5, Opus 5.5, Haiku 5.5) and the thinking
+ * counts against `max_tokens`, so a 500-token field budget could be spent
+ * before the answer began: fields came back cut off mid-sentence or empty
+ * ("No response from model"). Each field's length is set by its prompt; the
+ * per-field numbers are the answer's room and this is the thinking's.
+ */
+export const WIZARD_REASONING_HEADROOM = 4000;
+
+/** The `max_tokens` to send for a Wizard call whose answer needs `answerTokens`. */
+export function wizardCompletionBudget(answerTokens: number): number {
+  return answerTokens + WIZARD_REASONING_HEADROOM;
+}
+
+/**
+ * The Wizard's answer, or a throw that says why there is none. A reply cut off
+ * by the token ceiling is a failure, not a field: storing half an identity as
+ * if it were whole is worse than reporting the field as not generated.
+ */
+export function requireCompleteWizardAnswer(
+  response: { content?: string | null; finishReason?: string | null } | null | undefined,
+  what: string,
+): string {
+  const finishReason = response?.finishReason ?? null;
+  if (isTruncatedFinishReason(finishReason)) {
+    throw new Error(`The model ran out of room before finishing the ${what} (finish reason: ${finishReason})`);
+  }
+  if (!response?.content) {
+    throw new Error(
+      finishReason ? `No response from model (finish reason: ${finishReason})` : 'No response from model',
+    );
+  }
+  return response.content;
+}
+
+/**
  * Generate a single field using the LLM
  */
 export async function generateField(
@@ -436,11 +474,12 @@ export async function generateField(
 
   const startTime = Date.now();
 
+  const budget = wizardCompletionBudget(maxTokens);
   const response = await provider.sendMessage(
     {
       model: modelName,
       messages,
-      maxTokens,
+      maxTokens: budget,
       temperature: 0.8,
       profileParameters,
     },
@@ -449,9 +488,16 @@ export async function generateField(
 
   const durationMs = Date.now() - startTime;
 
-  if (!response?.content) {
-    throw new Error('No response from model');
-  }
+  logger.debug('[CharacterWizard] Field call returned', {
+    modelName,
+    answerTokens: maxTokens,
+    budget,
+    finishReason: response?.finishReason ?? null,
+    completionTokens: response?.usage?.completionTokens,
+    contentLength: response?.content?.length ?? 0,
+  });
+
+  const content = requireCompleteWizardAnswer(response, 'field');
 
   // Log the wizard LLM call if userId is available (fire and forget)
   if (userId && profileProvider) {
@@ -467,11 +513,12 @@ export async function generateField(
           { role: 'user', content: fieldPrompt },
         ],
         temperature: 0.8,
-        maxTokens,
+        maxTokens: budget,
       },
       response: {
-        content: response.content,
+        content,
         error: undefined,
+        finishReason: response.finishReason ?? null,
       },
       usage: response.usage,
       durationMs,
@@ -482,7 +529,7 @@ export async function generateField(
     });
   }
 
-  return response.content.trim();
+  return content.trim();
 }
 
 const MAX_VISION_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -553,7 +600,7 @@ async function runGenerateImageDescription(
     {
       model: visionProfile.modelName,
       messages,
-      maxTokens: 1000,
+      maxTokens: wizardCompletionBudget(1000),
       temperature: 0.7,
       profileParameters: profileParams(visionProfile),
     },
@@ -562,9 +609,7 @@ async function runGenerateImageDescription(
 
   const durationMs = Date.now() - startTime;
 
-  if (!response?.content) {
-    throw new Error('No response from vision model');
-  }
+  const description = requireCompleteWizardAnswer(response, 'image description');
   // Log the vision LLM call if userId is available (fire and forget)
   if (userId) {
     logLLMCall({
@@ -583,11 +628,12 @@ async function runGenerateImageDescription(
           },
         ],
         temperature: 0.7,
-        maxTokens: 1000,
+        maxTokens: wizardCompletionBudget(1000),
       },
       response: {
-        content: response.content,
+        content: description,
         error: undefined,
+        finishReason: response.finishReason ?? null,
       },
       usage: response.usage,
       durationMs,
@@ -598,7 +644,7 @@ async function runGenerateImageDescription(
     });
   }
 
-  return response.content.trim();
+  return description.trim();
 }
 
 /**
