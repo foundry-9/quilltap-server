@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Fix: startup file reconciliation ignores mount-blob rows
+
+- Startup file reconciliation no longer treats `files` rows with a `mount-blob:` storage key as missing from disk. Their bytes live in the mount-index database, never under `files/`. Before, an unlinked mount-blob row with no character reference would be deleted at boot, and one whose sha256 matched a disk file would be re-pointed at that file; every linked one logged a "Preserving referenced DB record despite missing file on disk" line (about 3,600 per boot on a large instance). They are now left out of the sha256 cross-match and the stale-record delete, and the summary log counts them as `mountBlobRecords`. The pure key helpers (`isMountBlobStorageKey`, `parseMountBlobStorageKey`, `buildMountBlobStorageKey`) moved to the dependency-free `lib/file-storage/mount-blob-key.ts`; `project-store-bridge.ts` re-exports them.
+
 #### Fixes: failover, API input, imports, documents, item renames and lone-character memory (#217–#225)
 
 - #217: a failover substitute gets the multi-character anchor its own profile calls for. `callShapeFor` (`provider-failover.service.ts`) re-anchors the primary's message array with `reanchorMultiCharacterTurn` and `profileUsesNamePrefill(substitute)`, so an Anthropic 4.6+ understudy is no longer sent the primary's trailing assistant `[Name]` prefill (which it rejected with a 400). The anchor code moved to `lib/chat/multi-character-anchor.ts`; `context-builder.service.ts` re-exports `applyMultiCharacterTurnAnchor` and `GROUP_SCENE_DISCIPLINE`.

@@ -716,4 +716,45 @@ describe('reconcileFilesystem', () => {
       expect(mockFilesRepo.delete).not.toHaveBeenCalledWith('null-key')
     })
   })
+
+  // =========================================================================
+  // Mount-blob rows live in the mount-index DB, never under files/
+  // =========================================================================
+
+  describe('mount-blob records', () => {
+    it('does not delete an unlinked mount-blob record absent from disk', async () => {
+      const blobRow = makeDbRecord({
+        id: 'blob-file-1',
+        storageKey: 'mount-blob:mp-1:blob-1',
+        linkedTo: [],
+      })
+
+      mockFilesRepo.findByUserId.mockResolvedValue([blobRow])
+      mockScanDirectory.mockResolvedValue([])
+
+      await reconcileFilesystem()
+
+      expect(mockFilesRepo.delete).not.toHaveBeenCalled()
+      expect(mockFilesRepo.update).not.toHaveBeenCalled()
+    })
+
+    it('does not re-point a mount-blob record at a disk file sharing its sha256', async () => {
+      const blobRow = makeDbRecord({
+        id: 'blob-file-2',
+        storageKey: 'mount-blob:mp-1:blob-2',
+        sha256: 'shared-sha',
+      })
+
+      mockFilesRepo.findByUserId.mockResolvedValue([blobRow])
+      mockScanDirectory.mockResolvedValue([makeScannedFile('project-1/copy.png')])
+      mockComputeSha256.mockResolvedValue('shared-sha')
+
+      await reconcileFilesystem()
+
+      // The disk file is an orphan of its own; the blob row is untouched.
+      expect(mockFilesRepo.update).not.toHaveBeenCalledWith('blob-file-2', expect.anything())
+      expect(mockFilesRepo.create).toHaveBeenCalledTimes(1)
+      expect(mockFilesRepo.delete).not.toHaveBeenCalled()
+    })
+  })
 })
