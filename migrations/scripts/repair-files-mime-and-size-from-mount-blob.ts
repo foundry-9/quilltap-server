@@ -41,7 +41,17 @@
  * has been removed (orphaned storage key) are logged and left alone — they
  * are a separate cleanup problem.
  *
- * Migration ID: repair-files-mime-and-size-from-mount-blob-v1
+ * ## v2
+ *
+ * `recompress-oversized-mount-blobs-v1` (4.10) re-encoded PNG/JPEG blobs to
+ * WebP and realigned `files.sha256`, but left `files.mimeType` and
+ * `files.size` describing the old bytes — reopening exactly the drift v1
+ * repaired (on the reference instance, 67 rows still claiming PNG/JPEG and
+ * ~75 MB for WebP that measures a fraction of that). The recompress migration
+ * now writes all three; v2 is the same pass, run after it, for instances that
+ * already crossed 4.10.
+ *
+ * Migration IDs: repair-files-mime-and-size-from-mount-blob-v1, -v2
  */
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
@@ -57,7 +67,6 @@ import {
 } from '../lib/database-utils';
 import { getMountIndexDatabasePath } from '../../lib/paths';
 
-const MIGRATION_ID = 'repair-files-mime-and-size-from-mount-blob-v1';
 const STORAGE_KEY_PREFIX = 'mount-blob:';
 const BATCH_SIZE = 500;
 
@@ -102,179 +111,209 @@ interface BlobRow {
   sizeBytes: number;
 }
 
-export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
-  id: MIGRATION_ID,
+interface RepairMigrationSpec {
+  id: string;
+  description: string;
+  introducedInVersion: string;
+  dependsOn: string[];
+}
+
+/**
+ * Build one run of the reconcile pass. v1 and v2 differ only in identity and
+ * ordering, so they share this body rather than copying it.
+ */
+function createRepairFilesMimeAndSizeMigration(spec: RepairMigrationSpec): Migration {
+  const MIGRATION_ID = spec.id;
+  return {
+    id: MIGRATION_ID,
+    description: spec.description,
+    introducedInVersion: spec.introducedInVersion,
+    dependsOn: spec.dependsOn,
+
+    async shouldRun(): Promise<boolean> {
+      if (!isSQLiteBackend()) return false;
+      if (!sqliteTableExists('files')) return false;
+      if (!fs.existsSync(getMountIndexDatabasePath())) return false;
+
+      const db = getSQLiteDatabase();
+      const row = db.prepare(
+        `SELECT COUNT(*) AS n
+           FROM "files"
+          WHERE storageKey LIKE 'mount-blob:%'`,
+      ).get() as { n: number };
+      return row.n > 0;
+    },
+
+    async run(): Promise<MigrationResult> {
+      const startTime = Date.now();
+      let mountDb: DatabaseType | null = null;
+      let scanned = 0;
+      let updated = 0;
+      let orphaned = 0;
+      let malformedKey = 0;
+
+      try {
+        mountDb = openMountIndexDb();
+        if (!mountDb) {
+          return {
+            id: MIGRATION_ID,
+            success: true,
+            itemsAffected: 0,
+            message: 'No mount-index database present; nothing to reconcile',
+            durationMs: Date.now() - startTime,
+            timestamp: new Date().toISOString(),
+          };
+        }
+
+        const mainDb = getSQLiteDatabase();
+
+        const total = (mainDb.prepare(
+          `SELECT COUNT(*) AS n FROM "files" WHERE storageKey LIKE 'mount-blob:%'`,
+        ).get() as { n: number }).n;
+
+        if (total === 0) {
+          return {
+            id: MIGRATION_ID,
+            success: true,
+            itemsAffected: 0,
+            message: 'No mount-blob FileEntries to reconcile',
+            durationMs: Date.now() - startTime,
+            timestamp: new Date().toISOString(),
+          };
+        }
+
+        const selectBatch = mainDb.prepare(
+          `SELECT id, mimeType, size, storageKey
+             FROM "files"
+            WHERE storageKey LIKE 'mount-blob:%'
+              AND id > ?
+            ORDER BY id
+            LIMIT ?`,
+        );
+
+        const findBlob = mountDb.prepare(
+          `SELECT storedMimeType, sizeBytes FROM "doc_mount_blobs" WHERE id = ?`,
+        );
+
+        const updateFile = mainDb.prepare(
+          `UPDATE "files" SET mimeType = ?, size = ?, updatedAt = ? WHERE id = ?`,
+        );
+
+        let lastId = '';
+        while (true) {
+          const batch = selectBatch.all(lastId, BATCH_SIZE) as FileRow[];
+          if (batch.length === 0) break;
+
+          // Read every blob's metadata up-front (no writes), then apply
+          // updates inside a single batch transaction. Keeping the read /
+          // write phases separate lets us tolerate orphaned blob references
+          // without aborting the whole batch.
+          const updates: Array<{ id: string; mimeType: string; size: number }> = [];
+          for (const row of batch) {
+            scanned++;
+            const blobId = parseBlobId(row.storageKey);
+            if (!blobId) {
+              malformedKey++;
+              logger.warn('Malformed mount-blob storage key; skipping', {
+                context: `migration.${MIGRATION_ID}`,
+                fileId: row.id,
+                storageKey: row.storageKey,
+              });
+              continue;
+            }
+            const blob = findBlob.get(blobId) as BlobRow | undefined;
+            if (!blob) {
+              orphaned++;
+              logger.warn('Mount blob missing for FileEntry; mime/size left untouched', {
+                context: `migration.${MIGRATION_ID}`,
+                fileId: row.id,
+                blobId,
+              });
+              continue;
+            }
+            if (blob.storedMimeType === row.mimeType && blob.sizeBytes === row.size) {
+              continue;
+            }
+            updates.push({
+              id: row.id,
+              mimeType: blob.storedMimeType,
+              size: blob.sizeBytes,
+            });
+          }
+
+          if (updates.length > 0) {
+            const now = new Date().toISOString();
+            const tx = mainDb.transaction((rows: typeof updates) => {
+              for (const u of rows) {
+                updateFile.run(u.mimeType, u.size, now, u.id);
+                updated++;
+              }
+            });
+            tx(updates);
+          }
+
+          reportProgress(scanned, total, 'files');
+          lastId = batch[batch.length - 1].id;
+        }
+
+        const message = `Scanned ${scanned} mount-blob FileEntries; reconciled ${updated}; ${orphaned} orphaned (no matching blob), ${malformedKey} malformed storage keys`;
+        logger.info(message, {
+          context: `migration.${MIGRATION_ID}`,
+          scanned,
+          updated,
+          orphaned,
+          malformedKey,
+        });
+
+        return {
+          id: MIGRATION_ID,
+          success: true,
+          itemsAffected: updated,
+          message,
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error('Repair-files-mime-and-size-from-mount-blob migration aborted', {
+          context: `migration.${MIGRATION_ID}`,
+          error: errorMessage,
+          scanned,
+          updated,
+        });
+        return {
+          id: MIGRATION_ID,
+          success: false,
+          itemsAffected: updated,
+          message: 'Repair-files-mime-and-size-from-mount-blob migration aborted',
+          error: errorMessage,
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      } finally {
+        if (mountDb) {
+          try { mountDb.close(); } catch { /* ignore */ }
+        }
+      }
+    },
+  };
+}
+
+export const repairFilesMimeAndSizeFromMountBlobMigration = createRepairFilesMimeAndSizeMigration({
+  id: 'repair-files-mime-and-size-from-mount-blob-v1',
   description:
     'Reconcile files.mimeType and files.size with the mount blob they point at; the storage bridges transcode bitmaps to WebP and the FileEntry must reflect what is on disk',
   introducedInVersion: '4.6.0',
+  dependsOn: ['relink-files-to-mount-blobs-v1'],
+});
+
+export const repairFilesMimeAndSizeFromMountBlobV2Migration = createRepairFilesMimeAndSizeMigration({
+  id: 'repair-files-mime-and-size-from-mount-blob-v2',
+  description:
+    'Reconcile files.mimeType and files.size again after the 4.10 blob re-encode, which changed the bytes and left both describing the old ones',
+  introducedInVersion: '4.13.0',
   dependsOn: [
-    'relink-files-to-mount-blobs-v1',
+    'repair-files-mime-and-size-from-mount-blob-v1',
+    'recompress-oversized-mount-blobs-v1',
   ],
-
-  async shouldRun(): Promise<boolean> {
-    if (!isSQLiteBackend()) return false;
-    if (!sqliteTableExists('files')) return false;
-    if (!fs.existsSync(getMountIndexDatabasePath())) return false;
-
-    const db = getSQLiteDatabase();
-    const row = db.prepare(
-      `SELECT COUNT(*) AS n
-         FROM "files"
-        WHERE storageKey LIKE 'mount-blob:%'`,
-    ).get() as { n: number };
-    return row.n > 0;
-  },
-
-  async run(): Promise<MigrationResult> {
-    const startTime = Date.now();
-    let mountDb: DatabaseType | null = null;
-    let scanned = 0;
-    let updated = 0;
-    let orphaned = 0;
-    let malformedKey = 0;
-
-    try {
-      mountDb = openMountIndexDb();
-      if (!mountDb) {
-        return {
-          id: MIGRATION_ID,
-          success: true,
-          itemsAffected: 0,
-          message: 'No mount-index database present; nothing to reconcile',
-          durationMs: Date.now() - startTime,
-          timestamp: new Date().toISOString(),
-        };
-      }
-
-      const mainDb = getSQLiteDatabase();
-
-      const total = (mainDb.prepare(
-        `SELECT COUNT(*) AS n FROM "files" WHERE storageKey LIKE 'mount-blob:%'`,
-      ).get() as { n: number }).n;
-
-      if (total === 0) {
-        return {
-          id: MIGRATION_ID,
-          success: true,
-          itemsAffected: 0,
-          message: 'No mount-blob FileEntries to reconcile',
-          durationMs: Date.now() - startTime,
-          timestamp: new Date().toISOString(),
-        };
-      }
-
-      const selectBatch = mainDb.prepare(
-        `SELECT id, mimeType, size, storageKey
-           FROM "files"
-          WHERE storageKey LIKE 'mount-blob:%'
-            AND id > ?
-          ORDER BY id
-          LIMIT ?`,
-      );
-
-      const findBlob = mountDb.prepare(
-        `SELECT storedMimeType, sizeBytes FROM "doc_mount_blobs" WHERE id = ?`,
-      );
-
-      const updateFile = mainDb.prepare(
-        `UPDATE "files" SET mimeType = ?, size = ?, updatedAt = ? WHERE id = ?`,
-      );
-
-      let lastId = '';
-      while (true) {
-        const batch = selectBatch.all(lastId, BATCH_SIZE) as FileRow[];
-        if (batch.length === 0) break;
-
-        // Read every blob's metadata up-front (no writes), then apply
-        // updates inside a single batch transaction. Keeping the read /
-        // write phases separate lets us tolerate orphaned blob references
-        // without aborting the whole batch.
-        const updates: Array<{ id: string; mimeType: string; size: number }> = [];
-        for (const row of batch) {
-          scanned++;
-          const blobId = parseBlobId(row.storageKey);
-          if (!blobId) {
-            malformedKey++;
-            logger.warn('Malformed mount-blob storage key; skipping', {
-              context: `migration.${MIGRATION_ID}`,
-              fileId: row.id,
-              storageKey: row.storageKey,
-            });
-            continue;
-          }
-          const blob = findBlob.get(blobId) as BlobRow | undefined;
-          if (!blob) {
-            orphaned++;
-            logger.warn('Mount blob missing for FileEntry; mime/size left untouched', {
-              context: `migration.${MIGRATION_ID}`,
-              fileId: row.id,
-              blobId,
-            });
-            continue;
-          }
-          if (blob.storedMimeType === row.mimeType && blob.sizeBytes === row.size) {
-            continue;
-          }
-          updates.push({
-            id: row.id,
-            mimeType: blob.storedMimeType,
-            size: blob.sizeBytes,
-          });
-        }
-
-        if (updates.length > 0) {
-          const now = new Date().toISOString();
-          const tx = mainDb.transaction((rows: typeof updates) => {
-            for (const u of rows) {
-              updateFile.run(u.mimeType, u.size, now, u.id);
-              updated++;
-            }
-          });
-          tx(updates);
-        }
-
-        reportProgress(scanned, total, 'files');
-        lastId = batch[batch.length - 1].id;
-      }
-
-      const message = `Scanned ${scanned} mount-blob FileEntries; reconciled ${updated}; ${orphaned} orphaned (no matching blob), ${malformedKey} malformed storage keys`;
-      logger.info(message, {
-        context: `migration.${MIGRATION_ID}`,
-        scanned,
-        updated,
-        orphaned,
-        malformedKey,
-      });
-
-      return {
-        id: MIGRATION_ID,
-        success: true,
-        itemsAffected: updated,
-        message,
-        durationMs: Date.now() - startTime,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error('Repair-files-mime-and-size-from-mount-blob migration aborted', {
-        context: `migration.${MIGRATION_ID}`,
-        error: errorMessage,
-        scanned,
-        updated,
-      });
-      return {
-        id: MIGRATION_ID,
-        success: false,
-        itemsAffected: updated,
-        message: 'Repair-files-mime-and-size-from-mount-blob migration aborted',
-        error: errorMessage,
-        durationMs: Date.now() - startTime,
-        timestamp: new Date().toISOString(),
-      };
-    } finally {
-      if (mountDb) {
-        try { mountDb.close(); } catch { /* ignore */ }
-      }
-    }
-  },
-};
+});

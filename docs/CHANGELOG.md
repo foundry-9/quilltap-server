@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Files: stale image types and sizes after the 4.10 re-encode
+
+- `recompress-oversized-mount-blobs-v1` re-encoded bitmap blobs to WebP and updated `files.sha256`, but not `files.mimeType` or `files.size`. Those rows kept claiming PNG or JPEG at the pre-encode size (67 rows on the reference instance), which is the mismatch that once made Anthropic reject attachments as the wrong media type. The migration now updates all three columns. New migration `repair-files-mime-and-size-from-mount-blob-v2` re-runs the v1 reconcile after it for instances that already ran it; v1 and v2 share one body.
+
 #### Docs: 4.13.0 release notes cover the Writing Assistant
 
 - New "Brahma's Writing Desk" section (Writing Assistant, Console attachments); mentions in the description and intro; formatting toolbar wrap under Smaller Courtesies; theme-storybook 1.0.117 and the `qt-console-*` classes; seven migrations; Console writing mode and context listed in what backups carry.

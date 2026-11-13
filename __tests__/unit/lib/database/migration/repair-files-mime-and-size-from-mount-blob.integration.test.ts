@@ -448,3 +448,48 @@ describe('repair-files-mime-and-size-from-mount-blob-v1 migration', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// v2 — the same pass, re-run after the 4.10 blob re-encode
+// ---------------------------------------------------------------------------
+
+describe('repair-files-mime-and-size-from-mount-blob-v2 migration', () => {
+  type MigrationModule = typeof import('@/migrations/scripts/repair-files-mime-and-size-from-mount-blob');
+  let migration: MigrationModule;
+
+  beforeEach(async () => {
+    migration = await import(
+      '../../../../../migrations/scripts/repair-files-mime-and-size-from-mount-blob'
+    ) as MigrationModule;
+  });
+
+  it('is a distinct migration ordered after v1 and the blob re-encode', () => {
+    const v2 = migration.repairFilesMimeAndSizeFromMountBlobV2Migration;
+    expect(v2.id).toBe('repair-files-mime-and-size-from-mount-blob-v2');
+    expect(v2.id).not.toBe(migration.repairFilesMimeAndSizeFromMountBlobMigration.id);
+    expect(v2.dependsOn).toEqual([
+      'repair-files-mime-and-size-from-mount-blob-v1',
+      'recompress-oversized-mount-blobs-v1',
+    ]);
+  });
+
+  it('relabels a PNG row whose blob the re-encode turned into WebP, keeping the realigned sha256', async () => {
+    // The shape 4.10 left behind: sha256 already realigned to the WebP bytes,
+    // mimeType and size still describing the PNG.
+    const fileId = randomUUID();
+    const blobId = randomUUID();
+    const webpSha = 'w'.repeat(64);
+
+    insertFile(mainDb!, { id: fileId, sha256: webpSha, mimeType: 'image/png', size: 2_323_148, storageKey: storageKeyFor(blobId) });
+    insertBlob(mountDb!, { id: blobId, storedMimeType: 'image/webp', sizeBytes: 287_112 });
+
+    const result = await migration.repairFilesMimeAndSizeFromMountBlobV2Migration.run();
+
+    expect(result.success).toBe(true);
+    expect(result.itemsAffected).toBe(1);
+    const file = getFile(mainDb!, fileId)!;
+    expect(file.mimeType).toBe('image/webp');
+    expect(file.size).toBe(287_112);
+    expect(file.sha256).toBe(webpSha);
+  });
+});

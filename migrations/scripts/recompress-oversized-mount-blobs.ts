@@ -41,8 +41,13 @@
  * and all three are updated in one transaction per blob:
  *   - `doc_mount_blobs`   — `data`, `sha256`, `sizeBytes`, `storedMimeType`
  *   - `doc_mount_files`   — `sha256`, `fileSizeBytes`
- *   - `files` (MAIN db)   — `sha256`, joined on the OLD hash (bug 117's
- *                           invariant: `files.sha256 == doc_mount_files.sha256`)
+ *   - `files` (MAIN db)   — `sha256`, `mimeType`, `size`, joined on the OLD
+ *                           hash (bug 117's invariant: `files.sha256 ==
+ *                           doc_mount_files.sha256`). The first release of this
+ *                           migration wrote only `sha256` and left the row
+ *                           claiming PNG/JPEG at the old size;
+ *                           `repair-files-mime-and-size-from-mount-blob-v2`
+ *                           mends instances that ran it.
  *
  * A hard-link group shares one `fileId` and therefore one blob row, so every
  * sibling link picks up the smaller image from a single re-encode — which is
@@ -172,10 +177,10 @@ async function recompressOne(
   if (mainDb) {
     try {
       const res = mainDb
-        .prepare('UPDATE files SET sha256 = ? WHERE sha256 = ?')
-        .run(out.sha256, row.sha256);
+        .prepare('UPDATE files SET sha256 = ?, mimeType = ?, size = ? WHERE sha256 = ?')
+        .run(out.sha256, out.storedMimeType, out.sizeBytes, row.sha256);
       if (res.changes > 0) {
-        logger.debug('Realigned files.sha256 after blob re-encode', {
+        logger.debug('Realigned files sha256/mimeType/size after blob re-encode', {
           context: 'migrations.recompress-oversized-mount-blobs',
           blobId: row.id,
           filesRowsUpdated: res.changes,
@@ -183,7 +188,7 @@ async function recompressOne(
       }
     } catch (error) {
       // A missing/odd `files` table must not abort the size reclamation.
-      logger.warn('Could not realign files.sha256 — continuing', {
+      logger.warn('Could not realign files row — continuing', {
         context: 'migrations.recompress-oversized-mount-blobs',
         blobId: row.id,
         error: error instanceof Error ? error.message : String(error),

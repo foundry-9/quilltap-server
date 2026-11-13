@@ -166,6 +166,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'backfill-dead-job-completed-at-v1': 'Dating the death certificates of errands long abandoned',
   'symmetrize-memory-links-v1': 'Seeing that every cross-reference in the Commonplace Book points both ways…',
   'add-console-writing-assistant-fields-v1': 'Fitting the Console with a writing desk and a shelf for its references…',
+  'repair-files-mime-and-size-from-mount-blob-v2': "Correcting the labels on pictures that were re-framed in lighter WebP but still claim to be PNGs…",
   'seed-chat-wardrobe-history-v1': 'Noting down what everyone has on at the moment',
   'add-chat-wardrobe-history-tool-name-v1': 'Ruling a column for the contraption that did the dressing',
   'add-chat-equipped-inventory-v1': "Fitting each chat with a croupier's ledger of what everyone is carrying",

@@ -293,7 +293,10 @@ import { repairDanglingRelatedMemoryEdgesV1Migration } from './repair-dangling-r
 // Add pseudoToolMode column to connection_profiles (selects native/simple-json/text-block pseudo-tool surface)
 import { addPseudoToolModeFieldMigration } from './add-pseudo-tool-mode-field';
 // Reconcile files.mimeType/size with the mount blob (bridges transcode bitmaps to WebP; the FileEntry must reflect what is on disk)
-import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mime-and-size-from-mount-blob';
+import {
+  repairFilesMimeAndSizeFromMountBlobMigration,
+  repairFilesMimeAndSizeFromMountBlobV2Migration,
+} from './repair-files-mime-and-size-from-mount-blob';
 // Recompute doc_mount_blobs.sha256 from stored bytes; upload paths recorded input-bytes hash instead of stored-bytes hash
 import { repairMountBlobSha256FromBytesMigration } from './repair-mount-blob-sha256-from-bytes';
 // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
@@ -981,6 +984,8 @@ export const migrations: Migration[] = [
   symmetrizeMemoryLinksMigration,
   // Brahma Console Writing Assistant: chats.consoleMode / consoleContext
   addConsoleWritingAssistantFieldsMigration,
+  // Files: mimeType / size realigned after the 4.10 blob re-encode left them stale
+  repairFilesMimeAndSizeFromMountBlobV2Migration,
 ];
 
 export {
@@ -1453,5 +1458,6 @@ export {
   backfillDeadJobCompletedAtMigration,
   symmetrizeMemoryLinksMigration,
   addConsoleWritingAssistantFieldsMigration,
+  repairFilesMimeAndSizeFromMountBlobV2Migration,
 };
 

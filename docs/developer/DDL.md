@@ -1451,7 +1451,7 @@ CREATE INDEX "idx_files_userId" ON "files" ("userId");
 
 **Invariant (enforced at write time):** `sha256`, `mimeType` and `size` all describe the bytes **actually stored**, never the bytes handed to the writer. The Scriptorium storage bridges transcode bitmap uploads to WebP (`transcodeToWebP`, via `storeMountFile`), so a writer that records its input describes a file that exists nowhere. All three are therefore taken from the bridge's return value; `lib/chat-files-v2.ts` additionally runs the bridge's own transcode before hashing, so the one hash serves both upload dedup and the join to `doc_mount_files.sha256` — the join that carries an image's description into the search index and lets `describe_image` / `attach_image` resolve a mount link back to its FileEntry.
 
-`mimeType`/`size` were brought into line by `repair-files-mime-and-size-from-mount-blob-v1`, which deliberately left `sha256` alone on the grounds that it was load-bearing for dedup; that carve-out was bug 117, and `realign-file-entry-sha256-v1` closes it by reading each row's hash back out of the mount blob its `storageKey` names.
+`mimeType`/`size` were brought into line by `repair-files-mime-and-size-from-mount-blob-v1`, which deliberately left `sha256` alone on the grounds that it was load-bearing for dedup; that carve-out was bug 117, and `realign-file-entry-sha256-v1` closes it by reading each row's hash back out of the mount blob its `storageKey` names. `recompress-oversized-mount-blobs-v1` (4.10) originally rewrote only `sha256` after re-encoding a blob, which left rows claiming PNG/JPEG at the old size; it now writes all three, and `repair-files-mime-and-size-from-mount-blob-v2` mends instances that ran the first version.
 
 `generationKey` is the avatar configuration cache key: one image per character per configuration, looked up before the avatar job spends a Concierge classification call or an image call. It hashes the generation prompt (itself already the canonical serialization of the character's appearance, resolved outfit and art direction, since `buildCharacterAvatarPrompt` is pure) together with the provider-side shape the prompt does not carry — provider, image profile id and the full `buildImageGenParams` output. `lib/image-gen/avatar-cache.ts` is the only thing that derives or looks up a key; a call site that computes its own is a second format, and the two drift. Binding is last-write-wins, which is what makes the regenerate button a reroll for that configuration. Rows predating the cache carry a lower-fidelity `v: 0` key over `(generationModel, generationPrompt)` alone, assigned by `collapse-duplicate-avatar-rolls-v1`; the `v` discriminator inside the hashed payload keeps the two formats from ever colliding. Null on every file that is not a cached avatar. Design of record: [avatar-configuration-cache](features/complete/avatar-configuration-cache.md).
 
@@ -2325,7 +2325,8 @@ where bytes must round-trip exactly.
 
 `sha256` is always recomputed from the stored bytes, so it describes what is
 actually in `data`. The `recompress-oversized-mount-blobs-v1` migration
-re-encoded rows written before the chokepoint existed; it deliberately leaves
+re-encoded rows written before the chokepoint existed (moving the matching
+`files` row's `sha256`, `mimeType` and `size` with it); it deliberately leaves
 `relativePath` alone (a `.png` may hold WebP bytes), because stored Markdown
 references the path and the serving routes take `Content-Type` from
 `storedMimeType`.
