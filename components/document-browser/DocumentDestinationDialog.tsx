@@ -10,7 +10,7 @@
  * @module components/document-browser/DocumentDestinationDialog
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DestinationPickerDialog, type DestinationMode } from '@/components/item-browser/DestinationPickerDialog'
 import { queryKeys } from '@/lib/query/keys'
@@ -52,7 +52,8 @@ export interface DocumentDestination {
 export interface DocumentDestinationDialogProps {
   isOpen: boolean
   mode: DestinationMode
-  source: BrowserStore
+  /** The store the items come from; absent for a save of something new. */
+  source?: BrowserStore
   /** What is sent, for the title (`"notes.md"`, `3 files`, `folder "Drafts"`). */
   subject: string
   /** The folder the items share in the source store (disabled for a move there), or null. */
@@ -60,12 +61,23 @@ export interface DocumentDestinationDialogProps {
   working: boolean
   onClose: () => void
   onSubmit: (destination: DocumentDestination) => void | Promise<void>
+  /** Extra fields under the folder list (a save's filename). */
+  children?: ReactNode
+  /** Hold the submit until the extra fields are ready. */
+  submitBlocked?: boolean
+  /** The explanatory line, in place of the mode's own. */
+  note?: string
+  /** A store to start on when nothing is chosen yet. */
+  initialStoreId?: string
+  /** Extra overlay classes (a raised layer when opened over a floating surface). */
+  overlayClassName?: string
 }
 
 const NOTES: Record<DestinationMode, string> = {
   move: 'Choose a store and a folder. A file of the same name already there stops the move.',
   copy: 'Choose a store and a folder. The copy is independent of the original.',
   link: 'A hard link is the same file in two places: an edit through either reaches both.',
+  save: 'Choose a store, a folder and a name.',
 }
 
 export function DocumentDestinationDialog({
@@ -77,6 +89,11 @@ export function DocumentDestinationDialog({
   working,
   onClose,
   onSubmit,
+  children,
+  submitBlocked,
+  note,
+  initialStoreId,
+  overlayClassName,
 }: DocumentDestinationDialogProps) {
   const queryClient = useQueryClient()
   const stores = useStoreCatalogue(isOpen)
@@ -86,11 +103,12 @@ export function DocumentDestinationDialog({
   const eligible = useMemo(
     () =>
       (stores.data ?? []).filter((s) =>
-        mode === 'link' ? canLinkBetween(source, s) : s.enabled !== false && capabilitiesOf(s).canMoveIn,
+        mode === 'link' ? (source ? canLinkBetween(source, s) : false) : s.enabled !== false && capabilitiesOf(s).canMoveIn,
       ),
     [stores.data, mode, source],
   )
-  const destId = chosen && eligible.some((s) => s.id === chosen) ? chosen : (eligible.find((s) => s.id === source.id)?.id ?? eligible[0]?.id ?? '')
+  const startId = source?.id ?? initialStoreId
+  const destId = chosen && eligible.some((s) => s.id === chosen) ? chosen : (eligible.find((s) => s.id === startId)?.id ?? eligible[0]?.id ?? '')
 
   const listing = useQuery({
     queryKey: queryKeys.mountPoints.files(destId),
@@ -133,7 +151,7 @@ export function DocumentDestinationDialog({
         {eligible.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
-            {s.id === source.id ? ' (this store)' : ''}
+            {source && s.id === source.id ? ' (this store)' : ''}
           </option>
         ))}
       </select>
@@ -152,11 +170,15 @@ export function DocumentDestinationDialog({
       rootLabel="Top of the store"
       onCreateFolder={createFolder}
       creating={creating}
-      currentFolder={destId === source.id ? currentFolder : null}
+      currentFolder={source && destId === source.id ? currentFolder : null}
       working={working}
-      note={NOTES[mode]}
+      note={note ?? NOTES[mode]}
+      submitBlocked={submitBlocked}
+      overlayClassName={overlayClassName}
       onClose={onClose}
       onSubmit={(folder) => (destId ? onSubmit({ mountPointId: destId, folder }) : undefined)}
-    />
+    >
+      {children}
+    </DestinationPickerDialog>
   )
 }

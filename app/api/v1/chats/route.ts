@@ -2,6 +2,8 @@
  * Chats API v1 - Collection Endpoint
  *
  * GET  /api/v1/chats                          - List the operator's chats
+ *      ?includeAutonomous=true                 - also every autonomous room
+ *      ?q=<text>                               - only chats whose title contains the text (case-insensitive)
  * GET  /api/v1/chats?action=casting-defaults  - The defaults a prospective cast would get
  * POST /api/v1/chats                          - Cast a chat (it opens when the Salon opens it)
  * POST /api/v1/chats?action=import            - Import a SillyTavern chat
@@ -54,6 +56,8 @@ async function handleList(req: NextRequest, context: RequestContext) {
     const excludeTagIdsParam = searchParams.get('excludeTagIds');
     const limitParam = searchParams.get('limit');
     const includeAutonomous = searchParams.get('includeAutonomous') === 'true';
+    // Title search (the Brahma Console's conversation picker, among others).
+    const titleQuery = (searchParams.get('q') ?? '').trim().toLocaleLowerCase();
     const excludeTagIds = excludeTagIdsParam ? excludeTagIdsParam.split(',').filter(Boolean) : [];
     const limit = limitParam ? readPagination(req, { defaultLimit: 50, maxLimit: 1000 }).limit : undefined;
     const allChatMetadata = await repos.chats.findByUserId(user.id);
@@ -69,7 +73,10 @@ async function handleList(req: NextRequest, context: RequestContext) {
         return false;
       }
       return false;
-    });
+    }).filter((c: any) => !titleQuery || String(c.title ?? '').toLocaleLowerCase().includes(titleQuery));
+    if (titleQuery) {
+      logger.debug('[Chats v1] Title search', { q: titleQuery, matches: chatMetadata.length });
+    }
     const enrichedChats = await enrichChatsForList(chatMetadata, repos);
     // A chat cast but not yet opened says so, so the list can show it.
     const unopened = await repos.chats.findUnopenedChatStates();

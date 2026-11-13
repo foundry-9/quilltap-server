@@ -761,6 +761,8 @@ CREATE TABLE "chats" (
   "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma'
   "helpPageUrl" TEXT DEFAULT NULL,
   "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- Brahma Console (chatType='brahma') active model; NULL on other chats
+  "consoleMode" TEXT DEFAULT NULL,                  -- Brahma Console: 'writing' = Writing Assistant conversation (set at creation, never changed); NULL = ordinary Console
+  "consoleContext" TEXT DEFAULT NULL,               -- Brahma Console Writing Assistant: JSON array of ConsoleContextRef ({kind:'chat'|'project'|'store', id} | {kind:'general'}); NULL/[] = none
   "scenarioText" TEXT DEFAULT NULL,
   "scenarioSource" TEXT DEFAULT NULL,                -- JSON { mountPointId, path, bodySha256 }: the scenario file the preset under scenarioText was read from, and its body hash at pick time. NULL = custom scene or pre-source chat. Written only beside scenarioText by resolveScenarioSelection's two callers. Added by add-chat-scenario-source-v1
   "scenarioNotes" TEXT DEFAULT NULL,                 -- free-text notes layered beneath the preset in scenarioText. Added by add-chat-scenario-source-v1

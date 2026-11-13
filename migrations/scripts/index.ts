@@ -472,6 +472,8 @@ import { addChatOpeningStateMigration } from './add-chat-opening-state-v1';
 import { rekeyBuiltInRoleplayTemplatesMigration } from './rekey-built-in-roleplay-templates-v1';
 import { backfillDeadJobCompletedAtMigration } from './backfill-dead-job-completed-at-v1';
 import { symmetrizeMemoryLinksMigration } from './symmetrize-memory-links-v1';
+// Brahma Console Writing Assistant: consoleMode + consoleContext on chats
+import { addConsoleWritingAssistantFieldsMigration } from './add-console-writing-assistant-fields';
 
 /**
  * All available migrations.
@@ -977,6 +979,8 @@ export const migrations: Migration[] = [
   backfillDeadJobCompletedAtMigration,
   // Memory: one-way links left by the pre-4.13 consolidation writes made two-way (A9)
   symmetrizeMemoryLinksMigration,
+  // Brahma Console Writing Assistant: chats.consoleMode / consoleContext
+  addConsoleWritingAssistantFieldsMigration,
 ];
 
 export {
@@ -1448,5 +1452,6 @@ export {
   rekeyBuiltInRoleplayTemplatesMigration,
   backfillDeadJobCompletedAtMigration,
   symmetrizeMemoryLinksMigration,
+  addConsoleWritingAssistantFieldsMigration,
 };
 

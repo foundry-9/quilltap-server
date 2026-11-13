@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.13.0--dev.114-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.13.0--dev.115-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -172,7 +172,7 @@ Quilltap's subsystems are personified as the Staff of an Estate, and they speak 
 
 **The Lantern** makes pictures. Scene-aware background images for chats, per-conversation character portraits, wardrobe pictures, LoRA adapters on providers that take them, and `describe_image` so characters can look at pictures as well as make them.
 
-**The Librarian** announces document operations with a diff of what changed; **Carina** answers inline `@Name?` questions; **Ariel** opens a live terminal in a Salon chat; **Suparṇā** delivers mail between characters' vaults; **Brahma** is a character-less console for plain model chat and read-only SQL; **Saquel Ytzama** keeps the keys; and **the Foundry** is the settings page, filed in ten groups by what each setting does, with search and a lens for each member of the staff. And a character can be configured **transparent**, able to inspect her own vault, memory, assembled prompt, and the Staff's announcements — or **opaque**, trusting you without being able to verify you. It's your call, per character.
+**The Librarian** announces document operations with a diff of what changed; **Carina** answers inline `@Name?` questions; **Ariel** opens a live terminal in a Salon chat; **Suparṇā** delivers mail between characters' vaults; **Brahma** is a character-less console for plain model chat, read-only SQL and a Writing Assistant that hands back finished pieces, with files and pictures attached; **Saquel Ytzama** keeps the keys; and **the Foundry** is the settings page, filed in ten groups by what each setting does, with search and a lens for each member of the staff. And a character can be configured **transparent**, able to inspect her own vault, memory, assembled prompt, and the Staff's announcements — or **opaque**, trusting you without being able to verify you. It's your call, per character.
 
 ### Providers
 

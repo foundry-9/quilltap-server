@@ -925,6 +925,27 @@ export const ScenarioRefSchema = z.object({
 
 export type ScenarioRef = z.infer<typeof ScenarioRefSchema>;
 
+/**
+ * Brahma Console Writing Assistant: one source the operator has named for a
+ * piece (`chats.consoleContext`, an ordered array). A conversation (`chat`),
+ * a project, a document store (`store`, a `doc_mount_points.id`) or Quilltap
+ * General. Character vaults derived from a conversation's cast are never
+ * stored — they are worked out each turn by `resolveConsoleContext`.
+ */
+export const ConsoleContextRefSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('chat'), id: UUIDSchema }).strict(),
+  z.object({ kind: z.literal('project'), id: UUIDSchema }).strict(),
+  z.object({ kind: z.literal('store'), id: UUIDSchema }).strict(),
+  z.object({ kind: z.literal('general') }).strict(),
+]);
+
+export type ConsoleContextRef = z.infer<typeof ConsoleContextRefSchema>;
+
+/** A Brahma Console chat's mode, fixed at creation. NULL is the ordinary Console. */
+export const ConsoleModeEnum = z.enum(['writing']);
+
+export type ConsoleMode = z.infer<typeof ConsoleModeEnum>;
+
 export const ChatMetadataSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -1175,6 +1196,17 @@ export const ChatMetadataSchema = z.object({
    * type.
    */
   consoleConnectionProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * For Brahma Console chats: `'writing'` for a Writing Assistant
+   * conversation, NULL for the ordinary Console. Written only at creation.
+   */
+  consoleMode: ConsoleModeEnum.nullable().optional(),
+  /**
+   * For Writing Assistant conversations: the sources the operator has named
+   * (`ConsoleContextRef[]`, ordered). Replaced whole by `?action=set-context`.
+   * NULL or empty means none.
+   */
+  consoleContext: z.array(ConsoleContextRefSchema).nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static
@@ -1575,6 +1607,17 @@ export const ChatMetadataBaseSchema = z.object({
    * type.
    */
   consoleConnectionProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * For Brahma Console chats: `'writing'` for a Writing Assistant
+   * conversation, NULL for the ordinary Console. Written only at creation.
+   */
+  consoleMode: ConsoleModeEnum.nullable().optional(),
+  /**
+   * For Writing Assistant conversations: the sources the operator has named
+   * (`ConsoleContextRef[]`, ordered). Replaced whole by `?action=set-context`.
+   * NULL or empty means none.
+   */
+  consoleContext: z.array(ConsoleContextRefSchema).nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static

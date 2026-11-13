@@ -228,6 +228,12 @@ export const StreamFrameSchema = z.discriminatedUnion('kind', [
     /** Full reasoning text — DISPLAY ONLY, for the optimistic push. */
     reasoningContent: z.string().nullable().optional(),
     reasoningSegments: z.array(ReasoningSegmentSchema).nullable().optional(),
+    /**
+     * The saved message's `systemKind`, when it has one. The Brahma Console's
+     * Writing Assistant settles its streamed text as an output card
+     * (`'writing-output'`) or a notice (absent) from this, before the reload.
+     */
+    systemKind: z.string().nullable().optional(),
     ...seat,
   }),
   /** A chained turn finished (sent by the chain, after its `done`). */

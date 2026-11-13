@@ -10,6 +10,7 @@
 
 import { UuidRemapper } from '../uuid-remapper';
 import { remapScenarioSource } from '@/lib/scenarios/source-remap';
+import { remapConsoleContext } from '@/lib/brahma-console/context-remap';
 import { remapCharacterKeyedChatFields } from '@/lib/chat/character-keyed-fields';
 import { logger } from '@/lib/logger';
 import { remapEntity, type IdEntity, type IdResolver } from '../id-fields';
@@ -476,6 +477,12 @@ export function remapBackupData(
     // not carry is dropped whole (bespoke in the table).
     if (chat.scenarioSource) {
       remappedChat.scenarioSource = remapScenarioSource(chat.scenarioSource, (id) => remapper.lookup(id) ?? null);
+    }
+
+    // A Writing Assistant context names chats, projects and stores by kind; an
+    // entry whose target the backup does not carry is dropped (bespoke).
+    if (chat.consoleContext) {
+      remappedChat.consoleContext = remapConsoleContext(chat.consoleContext, (_kind, id) => remapper.lookup(id) ?? null);
     }
 
     // Outfits, outfit avatars, Courier checkpoints, queued outfit notices and

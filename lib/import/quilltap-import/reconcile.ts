@@ -27,6 +27,7 @@ import {
 } from '@/lib/backup/id-fields';
 import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
 import { remapScenarioSource } from '@/lib/scenarios/source-remap';
+import { remapConsoleContext } from '@/lib/brahma-console/context-remap';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { IdMappingState } from './types';
 import { remapImportedMessageId } from './message-id-remap';
@@ -473,6 +474,43 @@ export async function reconcileRelationships(
             chatId: newId,
             fromMountPointId: source.mountPointId,
             toMountPointId: remapped?.mountPointId ?? null,
+          });
+        }
+      }
+
+      // A Writing Assistant context names chats, projects and stores by kind.
+      // Each id goes to the imported copy, else stays when this instance has
+      // the row already; an entry whose target is nowhere is dropped.
+      if (Array.isArray(chat.consoleContext) && chat.consoleContext.length > 0) {
+        const present = new Map<string, boolean>();
+        for (const ref of chat.consoleContext) {
+          if (ref.kind === 'general') continue;
+          const mapped =
+            ref.kind === 'chat' ? idMaps.chats.get(ref.id)
+            : ref.kind === 'project' ? idMaps.projects.get(ref.id)
+            : idMaps.mountPoints.get(ref.id);
+          if (mapped) continue;
+          const exists =
+            ref.kind === 'chat' ? !!(await getRepositories().chats.findById(ref.id))
+            : ref.kind === 'project' ? !!(await getRepositories().projects.findByIdRaw(ref.id))
+            : !!(await getRepositories().docMountPoints.findById(ref.id));
+          present.set(`${ref.kind}:${ref.id}`, exists);
+        }
+        const remappedContext = remapConsoleContext(chat.consoleContext, (kind, id) => {
+          const mapped =
+            kind === 'chat' ? idMaps.chats.get(id)
+            : kind === 'project' ? idMaps.projects.get(id)
+            : idMaps.mountPoints.get(id);
+          if (mapped) return mapped;
+          return present.get(`${kind}:${id}`) ? id : null;
+        }) ?? [];
+        if (JSON.stringify(remappedContext) !== JSON.stringify(chat.consoleContext)) {
+          updates.consoleContext = remappedContext;
+          hasUpdates = true;
+          moduleLogger.debug('Remapped Writing Assistant context', {
+            chatId: newId,
+            before: chat.consoleContext.length,
+            after: remappedContext.length,
           });
         }
       }

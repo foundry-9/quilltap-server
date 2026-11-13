@@ -189,6 +189,88 @@ export async function findAttachedFiles(
 }
 
 /**
+ * One turn's loaded attachments made ready for a request: images tagged as
+ * this turn's uploads and passed on whole (`applyImageTransportBudget` decides
+ * capability, count and bytes for them once, on the final array, for whichever
+ * profile is called); everything else decided here — text inlined into the
+ * user's own message, a natively supported type kept, a failed fallback
+ * dropped rather than tripping the provider's rejection.
+ *
+ * The Salon's `loadAndProcessFiles` and the Brahma Console both call it.
+ */
+export async function prepareTurnAttachments(
+  fileAttachments: Awaited<ReturnType<typeof loadChatFilesForLLM>>,
+  args: {
+    connectionProfile: ConnectionProfile
+    repos: ReturnType<typeof getRepositories>
+    userId: string
+    chatId: string
+    /** The file's metadata, for the fallback (defaults to the attachment itself). */
+    metadataFor?: (fileAttachment: Awaited<ReturnType<typeof loadChatFilesForLLM>>[number], index: number) => AttachedFile | undefined
+    /** Epoch ms the images are tagged with (default now). */
+    uploadedAt?: number
+    /** This turn's uploads (default) or an earlier turn's, carried again. */
+    origin?: 'upload' | 'rehydrated'
+  },
+): Promise<{
+  attachmentsToSend: Awaited<ReturnType<typeof loadChatFilesForLLM>>
+  fallbackResults: FallbackResult[]
+  messageContentPrefix: string
+}> {
+  const fallbackResults: FallbackResult[] = []
+  let messageContentPrefix = ''
+  const uploadedAt = args.uploadedAt ?? Date.now()
+  const attachmentsToSend: typeof fileAttachments = []
+
+  for (let i = 0; i < fileAttachments.length; i++) {
+    const fileAttachment = fileAttachments[i]
+
+    if (isImageFile(fileAttachment.mimeType)) {
+      attachmentsToSend.push(
+        tagForTransport(fileAttachment, { origin: args.origin ?? 'upload', createdAt: uploadedAt, describable: true }),
+      )
+      continue
+    }
+
+    const fileMetadata: AttachedFile = args.metadataFor?.(fileAttachment, i) ?? {
+      id: fileAttachment.id,
+      filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
+      filename: fileAttachment.filename,
+      mimeType: fileAttachment.mimeType,
+      size: fileAttachment.size,
+    }
+
+    const fallbackResult = await processFileAttachmentFallback(
+      fileMetadata,
+      fileAttachment,
+      args.connectionProfile,
+      args.repos,
+      args.userId,
+      { chatId: args.chatId }
+    )
+
+    fallbackResults.push(fallbackResult)
+
+    // Add fallback content to message prefix
+    const fallbackPrefix = formatFallbackAsMessagePrefix(fallbackResult)
+    if (fallbackPrefix) {
+      messageContentPrefix += fallbackPrefix
+    }
+
+    // Keep the attachment only when the provider natively supports it
+    // (processFileAttachmentFallback returns type 'unsupported' with no error
+    // in that case). A text result replaces the attachment with prefix text;
+    // 'unsupported' with an error means fallback was attempted and failed —
+    // sending the raw bytes anyway would just trip the provider's rejection.
+    if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
+      attachmentsToSend.push(fileAttachment)
+    }
+  }
+
+  return { attachmentsToSend, fallbackResults, messageContentPrefix }
+}
+
+/**
  * Load and process attached files for a message
  */
 export async function loadAndProcessFiles(
@@ -216,55 +298,16 @@ export async function loadAndProcessFiles(
     { provider: connectionProfile.provider }
   )
 
-  // Process file attachment fallbacks if provider doesn't support them.
-  //
-  // Images are not decided here: they are tagged as this turn's uploads and
-  // passed on whole, and `applyImageTransportBudget` decides capability, count
-  // and bytes for them once, on the final array, for whichever profile is
-  // called. Everything else (text inlining, unsupported types) is decided here,
-  // because its text belongs in the user's own message.
-  const fallbackResults: FallbackResult[] = []
-  let messageContentPrefix = ''
-  const uploadedAt = Date.now()
-  const attachmentsToSend: typeof fileAttachments = []
-
-  for (let i = 0; i < fileAttachments.length; i++) {
-    const fileAttachment = fileAttachments[i]
-    const fileMetadata = attachedFiles.find(f => f.id === fileAttachment.id) ?? attachedFiles[i]
-
-    if (isImageFile(fileAttachment.mimeType)) {
-      attachmentsToSend.push(
-        tagForTransport(fileAttachment, { origin: 'upload', createdAt: uploadedAt, describable: true }),
-      )
-      continue
-    }
-
-    const fallbackResult = await processFileAttachmentFallback(
-      fileMetadata,
-      fileAttachment,
+  const { attachmentsToSend, fallbackResults, messageContentPrefix } = await prepareTurnAttachments(
+    fileAttachments,
+    {
       connectionProfile,
       repos,
       userId,
-      { chatId }
-    )
-
-    fallbackResults.push(fallbackResult)
-
-    // Add fallback content to message prefix
-    const fallbackPrefix = formatFallbackAsMessagePrefix(fallbackResult)
-    if (fallbackPrefix) {
-      messageContentPrefix += fallbackPrefix
-    }
-
-    // Keep the attachment only when the provider natively supports it
-    // (processFileAttachmentFallback returns type 'unsupported' with no error
-    // in that case). A text result replaces the attachment with prefix text;
-    // 'unsupported' with an error means fallback was attempted and failed —
-    // sending the raw bytes anyway would just trip the provider's rejection.
-    if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
-      attachmentsToSend.push(fileAttachment)
-    }
-  }
+      chatId,
+      metadataFor: (fileAttachment, i) => attachedFiles.find(f => f.id === fileAttachment.id) ?? attachedFiles[i],
+    },
+  )
 
   return {
     attachedFiles,

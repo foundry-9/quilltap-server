@@ -165,6 +165,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'rekey-built-in-roleplay-templates-v1': 'Engraving the house styles with names that travel well',
   'backfill-dead-job-completed-at-v1': 'Dating the death certificates of errands long abandoned',
   'symmetrize-memory-links-v1': 'Seeing that every cross-reference in the Commonplace Book points both ways…',
+  'add-console-writing-assistant-fields-v1': 'Fitting the Console with a writing desk and a shelf for its references…',
   'seed-chat-wardrobe-history-v1': 'Noting down what everyone has on at the moment',
   'add-chat-wardrobe-history-tool-name-v1': 'Ruling a column for the contraption that did the dressing',
   'add-chat-equipped-inventory-v1': "Fitting each chat with a croupier's ledger of what everyone is carrying",

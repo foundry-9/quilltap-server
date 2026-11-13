@@ -758,6 +758,22 @@
           "type": ["string", "null"],
           "description": "Brahma Console (chatType='brahma') active connection profile (model). NULL on every other chat type."
         },
+        "consoleMode": {
+          "enum": ["writing", null],
+          "description": "Brahma Console (chatType='brahma') mode, fixed at creation: 'writing' = Writing Assistant conversation; NULL = the ordinary Console."
+        },
+        "consoleContext": {
+          "type": ["array", "null"],
+          "description": "Brahma Console Writing Assistant sources, in order. Each entry is {kind:'chat'|'project'|'store', id} (store = a document store id) or {kind:'general'}. Remapped by kind on import; an entry whose target is missing is dropped.",
+          "items": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": { "enum": ["chat", "project", "store", "general"] },
+              "id": { "type": "string", "format": "uuid" }
+            }
+          }
+        },
 
         "budgetMaxTurns": {
           "type": ["integer", "null"],

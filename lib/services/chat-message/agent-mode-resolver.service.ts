@@ -22,6 +22,17 @@ import { characterKindPolicy, type AgentModeFlavor } from '@/lib/characters/kind
 const logger = createServiceLogger('AgentModeResolverService')
 
 /**
+ * What the agent-mode instructions are for: a character's kind-derived flavor,
+ * or `'writing'` — the Brahma Console's Writing Assistant, whose final answer
+ * is the finished piece and nothing else.
+ */
+export type AgentInstructionKind = AgentModeFlavor | 'writing'
+
+/** The Writing Assistant's "finish now" instruction (forced final turn and stuck-loop nudge). */
+export const WRITING_FINISH_NOW =
+  'Stop researching and do not call any more tools except submit_final_response. Call the submit_final_response tool NOW with the finished piece and nothing else: no preamble, no notes, no account of what you read.'
+
+/**
  * Resolved agent mode state
  */
 export interface ResolvedAgentMode {
@@ -113,7 +124,16 @@ export function resolveAgentModeSetting(
  * @param flavor What Agent Mode means for this caller
  * @returns System prompt text to inject
  */
-export function buildAgentModeInstructions(maxTurns: number, flavor: AgentModeFlavor): string {
+export function buildAgentModeInstructions(maxTurns: number, flavor: AgentInstructionKind): string {
+  if (flavor === 'writing') {
+    return `
+## Agent Mode Instructions
+
+You may use tools iteratively to research the piece before you write it: search, read and query as much as the request calls for. You have up to **${maxTurns} tool iterations**; when you reach the limit you will be asked to finish at once.
+
+When the piece is ready, call the \`submit_final_response\` tool with the finished piece and nothing else in its \`response\` parameter — no preamble, no notes, no account of your research. If you do not call it, your last message without tool calls is taken as the piece, so it too must be the finished piece and nothing else. Do NOT call other tools after \`submit_final_response\`.
+`.trim()
+  }
   if (flavor === 'in-character') {
     return `
 ## Acting in the scene
@@ -164,7 +184,10 @@ When you do submit, your final response should be polished and ready for the use
  * @param flavor What Agent Mode means for this caller
  * @returns Message to force the final response
  */
-export function buildForceFinalMessage(flavor: AgentModeFlavor): string {
+export function buildForceFinalMessage(flavor: AgentInstructionKind): string {
+  if (flavor === 'writing') {
+    return WRITING_FINISH_NOW
+  }
   if (flavor === 'in-character') {
     return `You have used every tool step you have this turn. Do not call any more tools. Write your turn now, in character and in prose, from what you have found and done.`
   }

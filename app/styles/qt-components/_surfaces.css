@@ -526,6 +526,296 @@
     @apply text-xs font-medium text-muted-foreground mb-2;
   }
 
+  /* ======================================================================
+   * Brahma Console — Writing Assistant and attachments
+   * Theme hooks: --qt-console-output-bg, --qt-console-output-border,
+   * --qt-console-chip-bg, --qt-console-chip-border (each with a fallback).
+   * ==================================================================== */
+
+  /* The Writing Assistant switch (launcher) and badge (conversation). */
+  .qt-console-writing-switch,
+  .qt-console-writing-badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-console-writing-switch {
+    @apply cursor-pointer transition-colors;
+    background: transparent;
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-console-writing-switch:hover {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+
+  .qt-console-writing-switch:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+  }
+
+  .qt-console-writing-switch-on {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  }
+
+  .qt-console-writing-switch-track {
+    @apply relative inline-block rounded-full;
+    width: 1.75rem;
+    height: 1rem;
+    background: var(--color-muted);
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-console-writing-switch-track > span {
+    @apply absolute rounded-full transition-transform;
+    top: 1px;
+    left: 1px;
+    width: 0.75rem;
+    height: 0.75rem;
+    background: var(--color-muted-foreground);
+  }
+
+  .qt-console-writing-switch-on .qt-console-writing-switch-track {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  .qt-console-writing-switch-on .qt-console-writing-switch-track > span {
+    transform: translateX(0.75rem);
+    background: var(--color-primary-foreground);
+  }
+
+  .qt-console-writing-badge {
+    color: var(--color-primary);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  }
+
+  /* A narrow header keeps the icon and drops the words (still read aloud). */
+  @media (max-width: 640px) {
+    .qt-console-writing-switch-label {
+      @apply sr-only;
+    }
+  }
+
+  /* The context bar beneath the header. */
+  .qt-console-context-bar {
+    @apply flex flex-col gap-2 px-3 py-2;
+    border-bottom: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+  }
+
+  .qt-console-context-chip {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs;
+    max-width: 18rem;
+    background: var(--qt-console-chip-bg, var(--color-muted));
+    color: var(--color-foreground);
+    border: 1px solid var(--qt-console-chip-border, var(--color-border));
+  }
+
+  .qt-console-context-chip-missing {
+    color: var(--color-muted-foreground);
+    border-style: dashed;
+  }
+
+  .qt-console-context-chip-derived {
+    @apply py-0;
+    font-size: 0.6875rem;
+    background: transparent;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-console-context-chip-remove {
+    @apply inline-flex items-center justify-center rounded-full p-0.5 cursor-pointer;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-console-context-chip-remove:hover:not(:disabled) {
+    color: var(--color-destructive);
+  }
+
+  .qt-console-context-chip-remove:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+
+  .qt-console-context-chip-remove:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* An output card: the finished piece in its own frame. */
+  .qt-console-output {
+    @apply flex flex-col gap-2 rounded-lg p-3;
+    background: var(--qt-console-output-bg, var(--color-card));
+    color: var(--color-card-foreground);
+    border: 1px solid var(--qt-console-output-border, color-mix(in srgb, var(--color-primary) 35%, var(--color-border)));
+  }
+
+  .qt-console-output-draft {
+    border-style: dashed;
+  }
+
+  .qt-console-output-toolbar {
+    @apply flex items-center gap-1 pb-2;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .qt-console-output-view {
+    @apply inline-flex rounded overflow-hidden text-xs;
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-console-output-view > button {
+    @apply px-2 py-0.5 cursor-pointer;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-console-output-view > button:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+
+  .qt-console-output-view > button.qt-console-output-view-on {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+  }
+
+  .qt-console-output-body {
+    @apply min-w-0 text-sm;
+  }
+
+  .qt-console-output-source {
+    @apply m-0 text-xs whitespace-pre-wrap break-words font-mono;
+  }
+
+  .qt-console-output-saved {
+    @apply pt-1;
+  }
+
+  /* Working notes: prose a model wrote beside its tool calls. */
+  .qt-console-notes {
+    @apply text-xs pl-3;
+    color: var(--color-muted-foreground);
+    border-left: 2px solid var(--color-border);
+  }
+
+  /* A final message that is not an output (budget salvage, error). */
+  .qt-console-notice {
+    @apply text-sm rounded px-3 py-2;
+    color: var(--color-foreground);
+    background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+  }
+
+  /* Attachments: the composer row and a sent message's row. */
+  .qt-console-composer {
+    @apply flex flex-col;
+  }
+
+  .qt-console-composer-dragover {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: -4px;
+  }
+
+  .qt-console-composer-attach {
+    @apply inline-flex items-center justify-center rounded-md px-2 py-2 h-[38px] cursor-pointer;
+    color: var(--color-muted-foreground);
+    border: 1px solid var(--color-border);
+    background: transparent;
+  }
+
+  .qt-console-composer-attach:hover:not(:disabled) {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+
+  .qt-console-composer-attach:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+
+  .qt-console-composer-attach:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .qt-console-attachment-row {
+    @apply flex flex-wrap gap-1.5 px-3 pt-2;
+    border-top: 1px solid var(--qt-dialog-border);
+    background: var(--qt-dialog-bg);
+  }
+
+  .qt-console-attachment-row-sent {
+    @apply px-0 pt-1 justify-end;
+    border-top: 0;
+    background: transparent;
+  }
+
+  .qt-console-attachment-chip {
+    @apply inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs;
+    max-width: 16rem;
+    background: var(--qt-console-chip-bg, var(--color-muted));
+    color: var(--color-foreground);
+    border: 1px solid var(--qt-console-chip-border, var(--color-border));
+  }
+
+  .qt-console-attachment-chip a {
+    color: var(--color-primary);
+    text-decoration: underline;
+  }
+
+  .qt-console-attachment-chip-error {
+    border-color: var(--color-destructive);
+  }
+
+  .qt-console-attachment-chip-missing {
+    color: var(--color-muted-foreground);
+    border-style: dashed;
+  }
+
+  .qt-console-attachment-thumb {
+    @apply rounded object-cover shrink-0;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .qt-console-attachment-remove {
+    @apply inline-flex items-center justify-center rounded-full p-0.5 cursor-pointer;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-console-attachment-remove:hover {
+    color: var(--color-destructive);
+  }
+
+  .qt-console-attachment-remove:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+
+  .qt-console-attachment-image {
+    @apply block rounded overflow-hidden cursor-zoom-in;
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-console-attachment-image:focus-visible {
+    outline: 2px solid var(--color-ring);
+  }
+
+  .qt-console-attachment-image img {
+    @apply block object-cover;
+    width: 6rem;
+    height: 6rem;
+  }
+
+  /*
+   * A modal opened from the Console (context dialog, save, delete confirm).
+   * The floating Console rides above every modal, so its own modals must sit
+   * above it. Defined after `.qt-dialog-overlay`, so it wins.
+   */
+  .qt-console-modal-layer {
+    z-index: calc(var(--qt-floating-layer-z) + 10);
+  }
+
   /**
    * Help chat error banner
    */

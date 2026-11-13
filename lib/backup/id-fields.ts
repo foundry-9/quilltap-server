@@ -125,6 +125,7 @@ export interface IdField {
 const IMPORT_AVATAR = 'reconcile.ts: through the imported document-store link map, else a local file, else cleared';
 const IMPORT_VAULT = 'reconcile.ts: the bundle vault replaces the scaffold (rememberBundleVault)';
 const SCENARIO_SOURCE = 'remapScenarioSource: a source whose store is gone is dropped whole';
+const CONSOLE_CONTEXT = 'remapConsoleContext: polymorphic by kind (chat / project / store); an entry whose target is missing is dropped';
 const IMPORT_MEMORY = 'importMemories: pre-minted memory ids and local-character fallback (bug 240)';
 const IMPORT_INFORM = 'remapChatInform: verified against the seats and messages that landed';
 const WARDROBE_ITEMS = 'wardrobe item ids live in vault frontmatter (buildWardrobeItemIdRemap / buildImportedWardrobeItemIdMap)';
@@ -174,6 +175,7 @@ export const ID_FIELDS: readonly IdField[] = [
   // Decision §8.2: an image profile that is not here is cleared.
   { entity: 'chat', path: 'imageProfileId', target: 'imageProfile', onMissing: 'null' },
   { entity: 'chat', path: 'consoleConnectionProfileId', target: 'connectionProfile', onMissing: 'null' },
+  { entity: 'chat', path: 'consoleContext[].id', target: 'any', onMissing: 'null', bespoke: { import: CONSOLE_CONTEXT, restore: CONSOLE_CONTEXT } },
   { entity: 'chat', path: 'roleplayTemplateId', target: 'roleplayTemplate', onMissing: 'null' },
 
   // ── message ───────────────────────────────────────────────────────────

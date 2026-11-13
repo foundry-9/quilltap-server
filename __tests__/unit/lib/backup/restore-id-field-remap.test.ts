@@ -35,6 +35,8 @@ const MOUNT = u(13)
 const DOC_FILE = u(14)
 const LINK = u(15)
 const LINK_GROUP = u(16)
+const PROJECT = u(17)
+const MISSING_STORE = u(18)
 const STANDARD = builtInRoleplayTemplateId('Standard')
 
 function backup(): BackupData {
@@ -49,6 +51,13 @@ function backup(): BackupData {
       roleplayTemplateId: STANDARD,
       imageProfileId: MISSING_PROFILE,
       consoleConnectionProfileId: PROFILE,
+      consoleContext: [
+        { kind: 'chat', id: CHAT },
+        { kind: 'project', id: PROJECT },
+        { kind: 'store', id: MOUNT },
+        { kind: 'store', id: MISSING_STORE },
+        { kind: 'general' },
+      ],
       summaryAnchorMessageIds: [MSG_1, MISSING_MESSAGE],
       participants: [{ id: SEAT, characterId: CHARACTER, connectionProfileId: PROFILE, imageProfileId: IMAGE_PROFILE, roleplayTemplateId: TEMPLATE }],
       messages: [
@@ -71,7 +80,7 @@ function backup(): BackupData {
     promptTemplates: [],
     roleplayTemplates: [{ id: TEMPLATE, name: 'Mine', tags: [] }],
     providerModels: [],
-    projects: [],
+    projects: [{ id: PROJECT, name: 'Ashfall', tags: [] }],
     llmLogs: [],
     docMountPoints: [{ id: MOUNT, name: 'Store' }],
     docMountFiles: [{ id: DOC_FILE }],
@@ -109,6 +118,16 @@ describe('restore remaps through the id-field table', () => {
     expect(second.pendingExternalAttachments[0].fileId).toBe(map[FILE])
     // Decision §8.2: `swipe-<id>` follows its message.
     expect(second.swipeGroupId).toBe(`swipe-${map[MSG_1]}`)
+  })
+
+  it('remaps a Writing Assistant context by kind and drops a missing target', () => {
+    expect(chat.consoleContext).toEqual([
+      { kind: 'chat', id: map[CHAT] },
+      { kind: 'project', id: map[PROJECT] },
+      { kind: 'store', id: map[MOUNT] },
+      { kind: 'general' },
+    ])
+    expect(map[MISSING_STORE]).toBeUndefined()
   })
 
   it('mints nothing for a reference the backup does not carry', () => {

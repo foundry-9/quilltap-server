@@ -357,9 +357,22 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
               participantCharacterIds = Array.from(
                 new Set(chat.participants.map(p => p.characterId))
               );
+              // A Brahma Console conversation takes its attachments with it —
+              // only those still directly under `Brahma/` in Quilltap General.
+              // Read before the messages go. Bulk callers (restore, import)
+              // pass `syncVaults: false` and manage stores wholesale.
+              if (chat.chatType === 'brahma') {
+                const { deleteConsoleAttachmentsForChat } = await import('@/lib/brahma-console/attachments');
+                const { getRepositories } = await import('@/lib/repositories/factory');
+                await deleteConsoleAttachmentsForChat(getRepositories(), id);
+              }
             }
-          } catch {
+          } catch (error) {
             // best-effort — proceed with the delete regardless
+            logger.warn('Pre-delete sweep failed; deleting the chat anyway', {
+              chatId: id,
+              error: error instanceof Error ? error.message : String(error),
+            });
           }
         }
 

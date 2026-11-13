@@ -2498,6 +2498,10 @@ List all chats for authenticated user.
 
 **Query Parameters**:
 - `tagId` - Filter by tag
+- `excludeTagIds` - Comma-separated tag ids to leave out
+- `includeAutonomous=true` - Include every autonomous room (otherwise only household / open ones)
+- `q` - Only chats whose title contains this text (case-insensitive); used by the Brahma Console's context dialog
+- `limit` - Most rows to return
 
 **Response**: `200 OK`
 
@@ -3883,35 +3887,57 @@ List the letters in a player-character's `Mail/` folder. A read never provisions
 
 A character-less, memory-free generic-LLM surface (`chatType: 'brahma'`). It forms no memories and is never moderated by the Concierge. Reachable from a Salon as the `@Brahma` Carina answerer; see `lib/services/brahma-console/`.
 
+A conversation may be a **Writing Assistant** conversation (`consoleMode: 'writing'`, fixed at creation): read-only tools under `effectCeiling: 'read'`, a manifest of the operator's named sources (`consoleContext`, see `lib/brahma-console/writing-context.ts`) in the prompt, and each successful answer saved with `systemKind: 'writing-output'`. Attachments (both modes) are documents at `Brahma/<name>` in Quilltap General; the mount-file link id is the attachment id (`lib/brahma-console/attachments.ts`).
+
+`ConsoleContextRef` is `{ kind: 'chat' | 'project' | 'store', id }` (a `store` id is a `doc_mount_points.id`; a `chat` must be a Salon or autonomous conversation) or `{ kind: 'general' }`.
+
 #### `GET /api/v1/brahma-console`
 
-List the user's Brahma Console chats (most-recent first).
+List the user's Brahma Console chats (most-recent first). Each row: `id`, `title`, `createdAt`, `updatedAt`, `lastMessageAt`, `messageCount`, `consoleConnectionProfileId`, `consoleMode`, `attachmentCount`.
 
 #### `POST /api/v1/brahma-console`
 
-Create a new Brahma Console chat. Body: `{ connectionProfileId? }` (defaults to the user's default profile). Requires at least one connection profile to exist.
+Create a new Brahma Console chat. Body (strict): `{ connectionProfileId?, mode?: 'writing', context?: ConsoleContextRef[] }`. `connectionProfileId` defaults to the user's default profile; `context` only with `mode: 'writing'` (else 400). Each ref must exist and belong to the user (else 400). Requires at least one connection profile to exist.
 
 **Response**: `201 Created` with the new chat.
 
+#### `POST /api/v1/brahma-console?action=upload`
+
+Store one attachment. FormData `file` (the Salon's size limit, no type restriction). Not bound to a chat. Stored flat at `Brahma/<free name>` in Quilltap General through `storeMountFile` (images transcoded as everywhere; the stored name follows the stored bytes).
+
+**Response**: `201 Created` with `{ id, filename, mimeType, size, path, isImage }` (`id` = the mount-file link id).
+
+#### `POST /api/v1/brahma-console?action=discard-upload`
+
+Body `{ fileId }`. Removes an upload dropped from the composer before sending — only while it is still directly under `Brahma/` in General. **Response**: `{ outcome: 'deleted' | 'kept-moved' | 'missing' }`.
+
 #### `GET /api/v1/brahma-console/[id]`
 
-Get chat details.
+Get chat details: `id`, `title`, `chatType`, `consoleConnectionProfileId`, `consoleMode`, `contextRefs` (the stored refs, or null outside Writing Assistant), `context` (`ResolvedConsoleContext`: conversations with cast, derived character vaults, projects with store names, stores, General, missing refs; null outside Writing Assistant), `messageCount`, timestamps.
 
 #### `PATCH /api/v1/brahma-console/[id]`
 
 Rename the chat. With `?action=set-model`, switch the model and continue the same chat. (There is no `update-context` action — the console is not page-aware.)
 
+#### `PATCH /api/v1/brahma-console/[id]?action=set-context`
+
+Body `{ context: ConsoleContextRef[] }` — whole-list replace, applied from the next turn. 400 on a chat that is not in Writing Assistant mode, or a ref that does not resolve. **Response**: `{ contextRefs, context }` (resolved).
+
+#### `POST /api/v1/brahma-console/[id]?action=save-output`
+
+Body `{ messageId, mountPointId, folderPath, filename, onConflict?: 'fail' | 'overwrite' }`. Saves a `systemKind: 'writing-output'` message of this chat to a document store as a `.md` file. The server reads the content from the stored message. The path is resolved inside the store (a folder path that leaves it is a 400); writes go through `lib/documents/core/`. An existing file with `onConflict` absent or `'fail'` is a `409`. **Response**: `{ saved, mountPointId, storeName, path, address }` (`address` = `qtap://<Store Name>/<path>`).
+
 #### `DELETE /api/v1/brahma-console/[id]`
 
-Delete the chat.
+Delete the chat, with its attachments still directly under `Brahma/` in General (a moved file is kept). **Response**: `{ message, attachmentsDeleted, attachmentsKept }`.
 
 #### `POST /api/v1/brahma-console/[id]/messages`
 
-Send a message; returns an SSE stream. Body: `{ content }`.
+Send a message; returns an SSE stream (legacy frame shape; the `done` frame carries `systemKind`). Body: `{ content, fileIds? }`. Each `fileId` must be a Console attachment (a link under `Brahma/` in General), else 400. `content` may be empty when `fileIds` is non-empty.
 
 #### `GET /api/v1/brahma-console/[id]/messages`
 
-Load the chat's messages.
+Load the chat's messages. Each message's `attachments` is resolved to `{ id, filename, mimeType, isImage, path, mountPointId, missing }`.
 
 ---
 

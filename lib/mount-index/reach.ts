@@ -61,6 +61,9 @@ import { getRepositories, type RepositoryContainer } from '@/lib/repositories/fa
 
 export type { GroupMounts, MountTier, TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 
+/** A project's stores, official first then every linked store (the project tier). */
+export { resolveProjectMountPointIds };
+
 const errMsg = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /** The four owners a store can belong to. */

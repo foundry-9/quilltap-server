@@ -1,7 +1,7 @@
 ---
 title: Brahma Console
 url: /
-tags: [help, chat, console, llm, model, tools, brahma]
+tags: [help, chat, console, llm, model, tools, brahma, writing assistant, attachments]
 ---
 
 # The Brahma Console
@@ -45,10 +45,52 @@ Switching the engine **continues the same conversation**. The transcript carries
 The Console is a capable, concise, neutral assistant. Beyond plain conversation, it carries a deliberately small kit of tools:
 
 - **Search** — It can search across your past conversations and every one of your document stores, including the knowledge folders within them.
-- **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well.
+- **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well (except in a Writing Assistant conversation, where it reads only).
 - **The clerk's shortcuts** — Four ready-made enquiries that answer the commonest questions in a single stroke each. See *The clerk's shortcuts*, below.
 - **The ledgers themselves** — It can put **read-only questions** straight to the databases that keep your establishment running. See *Consulting the ledgers*, below.
-- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly.
+- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly. (The `curl` plugin counts as a *writing* tool — it can send as well as fetch — so a Writing Assistant conversation, which reads only, does without it.)
+
+## Sending papers along with the question
+
+Some questions are best asked with the evidence on the desk. The Console's composer — in an ordinary conversation and a Writing Assistant one alike — accepts **attachments**: press the **paperclip** beside the message box to choose files, **paste** an image or file straight from the clipboard, or simply **drag and drop** it onto the composer. Each arrives as a small chip above the message box — a thumbnail for a picture, a name for anything else — and shows *Uploading…* until it has been safely filed; the send button waits politely until every chip is ready. Change your mind, and the little cross on a chip withdraws it at once. A message may consist of attachments alone, with no words at all.
+
+The files go wherever the Salon's would: images, text, PDFs and the rest, by the same rules. A picture reaches an engine that can see; an engine without the gift of sight receives a careful description of it instead — and should you switch to such an engine halfway through, the earlier pictures simply arrive described from then on. A text file is read in full. The engine is also told where each file now lives, so it may open the original with its document tools if it wants a second look.
+
+**Where they are kept.** Every attachment is filed flat in a folder named **Brahma** at the top of **Quilltap General**, under its own name (a second `notes.md` becomes `notes-2.md`; a pasted picture with no name is stamped with the date and hour, as `pasted-20261112-143005.png`). In the transcript, a picture shows as a thumbnail that opens full-screen; any other file as a chip that opens the stored copy; and a file since removed as a chip struck through.
+
+**They leave with the conversation.** Deleting a Console conversation deletes its attachments too, and the Console asks first, naming how many files will go. A file you have since **moved out** of the Brahma folder is yours to keep: it stays exactly where you put it. Because the Brahma folder sits in Quilltap General, its contents are indexed like any General document — and so may turn up in a character's search. A file you would rather keep from the household belongs somewhere else.
+
+## The Writing Assistant
+
+Sometimes one does not want a conversation at all, but a *piece*: the response text for a custom tool, a line a particular character would say, a tidy write-up of a terminal session. For that, the Console keeps a writing desk.
+
+### Opening a writing conversation
+
+On the roster of past conversations, the title bar carries a switch marked **Writing Assistant**, beside the model picker. It is **off** every time the roster appears. Flip it on before asking your first question, and the conversation that opens is a Writing Assistant conversation — **for good**. Inside it the switch gives way to a small **Writing Assistant** badge; the mode is settled when a conversation opens and cannot be changed afterwards. (Start a fresh conversation for ordinary chatter.) On the roster, writing conversations wear a small **pen** mark.
+
+### Naming the sources
+
+While the Writing Assistant is on, a **context bar** sits beneath the title bar. Press **Add to context** to name the sources the piece should draw upon:
+
+- **Conversations** — any Salon or autonomous conversation, found by searching its title; each shows its cast and when it last stirred. Name a conversation and the **character vaults** of everyone in it join the sources automatically (shown as smaller chips beneath it; an archived character is named, but brings no vault).
+- **Projects** — every store linked to the project.
+- **Document stores** — any store in the Scriptorium.
+- **Quilltap General** — a single checkbox.
+
+Each source is a chip with a cross to remove it. The list may be changed at any time, even mid-conversation; a change applies from the next answer. A source that has since vanished shows struck through, and may be removed. An empty context is perfectly allowable — the Writing Assistant will write from its own resources.
+
+The sources are a list, not a reading assignment: the engine is told what you have named and consults what the request calls for, searching and reading as it sees fit, and may look further afield when they fall short. It may search, read and consult the ledgers freely — but in this mode it **cannot write** to any store, and it still has no access to your characters' memories.
+
+### What comes back
+
+Every answer is **the piece itself**, in Markdown: no greeting, no preamble, no account of where it looked, no offers of further help, no questions — where your request leaves something open, it chooses and writes. Each answer is drawn as an **output card** in its own frame. Ask for a change and you receive the **whole piece again**, revised, as a fresh card; the earlier cards stay as they were. The engine's thinking may still be shown, and any remarks it makes to itself along the way appear small and muted as **working notes**. Should it run out of turns before finishing, you receive a plain notice rather than a half-made piece.
+
+Each output card carries four controls:
+
+- **Copy** — the Markdown, exactly as stored, onto your clipboard.
+- **Download** — a `.md` file named after the conversation (a second output becomes `-2.md`, a third `-3.md`).
+- **Save to store** — choose a document store, a folder and a name, and the piece is filed there as a Markdown document. Should a file of that name already sit there, you are offered the choice to overwrite it or pick another name.
+- **Rendered / Source** — see the piece as it will read, or as the exact Markdown that will be copied and saved.
 
 ## Watching the engine think
 

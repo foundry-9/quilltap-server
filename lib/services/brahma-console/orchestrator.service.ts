@@ -25,8 +25,9 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
+import type { ChatMetadata, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
+import type { ToolEffect } from '@/lib/tools/effect-types'
 import type { BrahmaConsoleSendOptions } from './types'
 import {
   buildTools,
@@ -62,6 +63,8 @@ import {
   buildAgentModeInstructions,
   buildForceFinalMessage,
   extractSubmitFinalResponseFromText,
+  WRITING_FINISH_NOW,
+  type AgentInstructionKind,
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 import { triggerContextSummaryCheck } from '@/lib/services/chat-message/memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
@@ -70,6 +73,10 @@ import { buildBrahmaSystemPrompt } from '@/lib/brahma-console/system-prompt-buil
 import { legacyFrameEncoder } from '@/lib/chat/stream-frames'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveToolResultVerbatimTurns } from '@/lib/llm/connection-profile-utils'
+import { applyImageTransportBudget } from '@/lib/chat/image-transport-budget'
+import { resolveConsoleContext, renderConsoleContextManifest } from '@/lib/brahma-console/writing-context'
+import { normalizeWritingOutput, WRITING_OUTPUT_KIND } from '@/lib/brahma-console/writing-output'
+import { loadConsoleTurnAttachments, composeAttachmentContent } from './turn-attachments'
 
 const logger = createServiceLogger('BrahmaConsoleOrchestrator')
 
@@ -95,6 +102,47 @@ export function normalizeToolCallSignature(
       ),
     })),
   )
+}
+
+/**
+ * Everything that differs between the ordinary Console and a Writing
+ * Assistant conversation, decided once at the top of a turn so the agent loop
+ * itself never tests the mode.
+ */
+export interface ConsoleTurnPlan {
+  /** Writing Assistant: the final answer is the piece, marked as an output. */
+  writing: boolean
+  /** The doc_* family offered: everything, or the read tools only. */
+  docToolsMode: 'full' | 'read'
+  /**
+   * The executor's effect ceiling. `'read'` in Writing Assistant mode — the
+   * offer above is advice; this is the guarantee (`resolveToolPermit`).
+   */
+  effectCeiling: ToolEffect | undefined
+  /** Which agent-mode instructions and forced-final wording the model hears. */
+  agentKind: AgentInstructionKind
+  /** The stuck-loop nudge's instruction. */
+  stuckNudge: string
+}
+
+/** Build the turn plan for a Brahma chat from its stored mode. */
+export function buildConsoleTurnPlan(chat: Pick<ChatMetadata, 'consoleMode'>): ConsoleTurnPlan {
+  if (chat.consoleMode === 'writing') {
+    return {
+      writing: true,
+      docToolsMode: 'read',
+      effectCeiling: 'read',
+      agentKind: 'writing',
+      stuckNudge: `You have already gathered this data (a repeated call or repeated identical results). ${WRITING_FINISH_NOW}`,
+    }
+  }
+  return {
+    writing: false,
+    docToolsMode: 'full',
+    effectCeiling: undefined,
+    agentKind: 'research',
+    stuckNudge: 'You have already gathered this data (a repeated call or repeated identical results). You already have what you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received.',
+  }
 }
 
 /**
@@ -140,7 +188,7 @@ export async function handleBrahmaConsoleMessage(
           id: crypto.randomUUID(),
           role: 'USER',
           content: options.content,
-          attachments: [],
+          attachments: options.fileIds ?? [],
           createdAt: new Date().toISOString(),
         }
         await repos.chats.addMessage(chatId, userMessage)
@@ -155,7 +203,7 @@ export async function handleBrahmaConsoleMessage(
           throw new Error('No connection profile available. Add a connection profile first.')
         }
 
-        await processBrahmaResponse(repos, chatId, userId, connectionProfile, controller, encoder)
+        await processBrahmaResponse(repos, chat, userId, connectionProfile, controller, encoder, userMessage.id)
 
         // Fire async background tasks — context-summary check (for auto-titling
         // of the past-chats list) and cost tracking. NEVER memory extraction:
@@ -187,12 +235,22 @@ export async function handleBrahmaConsoleMessage(
  */
 async function processBrahmaResponse(
   repos: ReturnType<typeof getRepositories>,
-  chatId: string,
+  chat: ChatMetadata,
   userId: string,
   connectionProfile: ConnectionProfile,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  currentMessageId: string,
 ): Promise<void> {
+  const chatId = chat.id
+  const plan = buildConsoleTurnPlan(chat)
+  logger.debug('Brahma Console turn plan', {
+    chatId,
+    writing: plan.writing,
+    docToolsMode: plan.docToolsMode,
+    effectCeiling: plan.effectCeiling ?? null,
+  })
+
   // Resolve the API key (providers that require one, and those that merely
   // accept one — see Bug 81)
   const keyResolution = await resolveConnectionProfileApiKey(repos, connectionProfile)
@@ -212,11 +270,15 @@ async function processBrahmaResponse(
     canDressThemselves: false,
     canCreateOutfits: false,
     canManageInventory: false, // no inventory_* tools here
-    docToolsMode: 'full',
+    docToolsMode: plan.docToolsMode,
     askCarinaEnabled: false,
     includeWorkspaceTools: false, // stripped for the console
     excludeMemorySearch: true, // no memory source
     sqlAccess: true, // the console gets read-only run_sql
+    // Writing Assistant: drop what the read ceiling would refuse anyway, so
+    // the model is not offered tools it cannot use. The executor's check on
+    // the tool context below is the guarantee.
+    ...(plan.effectCeiling ? { effectCeiling: plan.effectCeiling } : {}),
   })
 
   // Determine tool mode (native vs pseudo-tool). As with help-chat, anything
@@ -263,17 +325,25 @@ async function processBrahmaResponse(
   // (Settings → Chat → Brahma Console); the stuck-loop guard below still stops
   // a repeating loop well before this cap.
   const maxAgentTurns = await resolveBrahmaMaxAgentTurns()
-  const agentInstructions = buildAgentModeInstructions(maxAgentTurns, 'research')
+  const agentInstructions = buildAgentModeInstructions(maxAgentTurns, plan.agentKind)
   toolInstructions = toolInstructions
     ? `${toolInstructions}\n\n${agentInstructions}`
     : agentInstructions
 
   // Build the neutral, character-less system prompt. The console always enables
   // the read-only run_sql tool, so the SQL-access section is always appended.
+  // Writing Assistant: the manifest of the operator's named sources, rebuilt
+  // each turn from the stored refs (stable unless the context is edited, so
+  // the prompt-cache prefix survives). Empty is absent.
+  const contextManifest = plan.writing
+    ? renderConsoleContextManifest(await resolveConsoleContext(repos, userId, chat.consoleContext))
+    : ''
   const systemPrompt = buildBrahmaSystemPrompt({
     profile: connectionProfile,
     toolInstructions,
     includeSqlAccess: true,
+    writingAssistant: plan.writing,
+    contextManifest,
   })
 
   // Load conversation history (full transcript, no compression) and thread it
@@ -290,7 +360,18 @@ async function processBrahmaResponse(
     resolveToolResultVerbatimTurns(connectionProfile),
   )
 
-  const conversationMessages: ThreadedMessage[] = [
+  // Attachments on the operator's messages, through the Salon's own loaders:
+  // this turn's images as uploads, earlier turns' as re-hydrated.
+  const attachmentPayloads = await loadConsoleTurnAttachments({
+    messages,
+    currentMessageId,
+    connectionProfile,
+    repos,
+    userId,
+    chatId,
+  })
+
+  let conversationMessages: Array<ThreadedMessage & { attachments?: unknown[] }> = [
     { role: 'system', content: systemPrompt },
     // Drop the empty assistant turns the console persists for each tool
     // iteration (kept for the tool-card UI) — they carry no text and the tool
@@ -298,8 +379,29 @@ async function processBrahmaResponse(
     // USER/ASSISTANT roles to the provider wire form.
     ...history
       .filter((m) => !(m.role === 'ASSISTANT' && !m.content?.trim()))
-      .map((m) => ({ role: m.role.toLowerCase(), content: m.content })),
+      .map((m) => {
+        const payload = m.role === 'USER' && m.id ? attachmentPayloads.get(m.id) : undefined
+        if (!payload) return { role: m.role.toLowerCase(), content: m.content }
+        return {
+          role: 'user',
+          content: composeAttachmentContent(m.content, payload),
+          ...(payload.attachments.length > 0 ? { attachments: payload.attachments } : {}),
+        }
+      }),
   ]
+
+  // One transport budget for every image on the request — capability, the
+  // profile's image cap and the byte budget; an image the model cannot see is
+  // described or omitted there. The profile is read per turn, so switching to
+  // a model without vision just works.
+  if (attachmentPayloads.size > 0) {
+    conversationMessages = (await applyImageTransportBudget(conversationMessages, connectionProfile, {
+      repos,
+      userId,
+      logContext: { chatId, surface: 'brahma-console' },
+      describeOptions: { chatId },
+    })).messages
+  }
 
   // Effective tools: native tools only when supported and not in text-block mode
   const effectiveTools = (!useTextBlockTools && modelSupportsNativeTools) ? tools : []
@@ -339,7 +441,7 @@ async function processBrahmaResponse(
     agentTurnCount++
 
     if (agentTurnCount === maxAgentTurns) {
-      conversationMessages.push({ role: 'user', content: buildForceFinalMessage('research') })
+      conversationMessages.push({ role: 'user', content: buildForceFinalMessage(plan.agentKind) })
     }
 
     let currentResponse = ''
@@ -462,7 +564,7 @@ async function processBrahmaResponse(
         conversationMessages.push({ role: 'assistant', content: currentResponse })
         conversationMessages.push({
           role: 'user',
-          content: `You have already gathered this data (a repeated call or repeated identical results). You already have what you need — do NOT call any more tools. Please call the submit_final_response tool NOW with your answer based on the data you already received.${toolDataReminder}`,
+          content: `${plan.stuckNudge}${toolDataReminder}`,
         })
         continue
       }
@@ -512,6 +614,8 @@ async function processBrahmaResponse(
         userId,
         operatorSurface: true,
         toolOffer,
+        // Writing Assistant: read-only, enforced by the executor.
+        ...(plan.effectCeiling ? { effectCeiling: plan.effectCeiling } : {}),
         pluginToolEffects,
         ...newWardrobeTurnContainers(),
       }
@@ -570,17 +674,30 @@ async function processBrahmaResponse(
   // exactly like a crash. Synthesise a short explanatory answer (folding in the
   // last tool result we captured) so a run that did work always finalises with
   // something and always signals completion below.
+  // In Writing Assistant mode the salvage is a notice, never the piece: no raw
+  // tool-result digest dressed up as an output, and no output marker below.
+  let salvaged = false
   if (!fullResponse.trim()) {
-    const digest = lastToolResultText
+    salvaged = true
+    const digest = lastToolResultText && !plan.writing
       ? `\n\nHere is what I gathered before I stopped:\n\n${lastToolResultText}`
       : ''
-    fullResponse = `I reached my ${maxAgentTurns}-turn budget before I could compose a final answer.${digest}`
+    fullResponse = plan.writing
+      ? `I reached my ${maxAgentTurns}-turn budget before I could finish the piece. Ask again, perhaps more narrowly, or raise the Console's turn budget.`
+      : `I reached my ${maxAgentTurns}-turn budget before I could compose a final answer.${digest}`
     logger.warn('Brahma Console exhausted its turn budget without a final response', {
       chatId,
       maxAgentTurns,
       hadToolData: !!lastToolResultText,
     })
     safeEnqueue(controller, encodeContentChunk(encoder, fullResponse))
+  }
+
+  // Writing Assistant: a successful run's final message is the output — marked,
+  // and lightly normalised (trim; unwrap a whole-text markdown fence).
+  const isWritingOutput = plan.writing && !salvaged
+  if (isWritingOutput) {
+    fullResponse = normalizeWritingOutput(fullResponse)
   }
 
   // Save the final assistant message
@@ -600,9 +717,16 @@ async function processBrahmaResponse(
       // never re-fed to a model. Earlier turns' reasoning rides on their own
       // (tool-call) assistant messages, interleaved with the SQL cards.
       reasoningContent: unsavedReasoning.trim() || null,
+      ...(isWritingOutput ? { systemKind: WRITING_OUTPUT_KIND } : {}),
       createdAt: new Date().toISOString(),
     }
     await repos.chats.addMessage(chatId, assistantMessage)
+    logger.debug('Brahma Console saved final message', {
+      chatId,
+      writingOutput: isWritingOutput,
+      salvaged,
+      chars: fullResponse.length,
+    })
 
     const costResult = await estimateMessageCost(
       connectionProfile.provider,
@@ -621,6 +745,7 @@ async function processBrahmaResponse(
       provider: connectionProfile.provider,
       modelName: connectionProfile.modelName,
       reasoningContent: runReasoning.trim() || null,
+      systemKind: isWritingOutput ? WRITING_OUTPUT_KIND : null,
     }))
 
     await trackMessageTokenUsage(
