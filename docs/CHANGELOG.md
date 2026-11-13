@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Docs: 4.13.0 release notes cover the Writing Assistant
+
+- New "Brahma's Writing Desk" section (Writing Assistant, Console attachments); mentions in the description and intro; formatting toolbar wrap under Smaller Courtesies; theme-storybook 1.0.117 and the `qt-console-*` classes; seven migrations; Console writing mode and context listed in what backups carry.
+
 #### Brahma Console: Writing Assistant mode and attachments
 
 - New Writing Assistant mode for Console conversations. A switch on the launcher (off by default, not remembered) opens a conversation in the mode; it is fixed for that conversation and shown as a badge. New nullable `chats.consoleMode` (`'writing'`) and `chats.consoleContext` (JSON array of `ConsoleContextRef`: `chat` / `project` / `store` / `general`); migration `add-console-writing-assistant-fields-v1`. Both columns are in the export schema; `consoleContext[].id` is a bespoke entry in `ID_FIELDS`, remapped by kind on import and restore (`remapConsoleContext`), with entries whose target is missing dropped.
