@@ -101,6 +101,7 @@ function makeRepos(helpDocs = {}, docMountChunks = {}, embeddingStatus = {}, hel
       updateEmbedding: jest.fn().mockResolvedValue(undefined),
       ...docMountChunks,
     },
+    embeddingProfiles: { findById: jest.fn().mockResolvedValue(null) },
     embeddingStatus: {
       markAsEmbedded: jest.fn().mockResolvedValue(undefined),
       markAsFailed: jest.fn().mockResolvedValue(undefined),
@@ -294,7 +295,7 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
       'profile-1',
       { priority: 'background' }
     )
-    expect(repos.docMountChunks.updateEmbedding).toHaveBeenCalledWith('chunk-1', fakeEmbedding)
+    expect(repos.docMountChunks.updateEmbedding).toHaveBeenCalledWith('chunk-1', fakeEmbedding, { expectedTextHash: expect.any(String) })
     expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalledWith(
       'MOUNT_CHUNK',
       'chunk-1',

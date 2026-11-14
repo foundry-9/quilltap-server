@@ -19,6 +19,7 @@ import {
   type WardrobeItem,
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types'
+import { foldStorePath } from '@/lib/mount-index/store-path-fold'
 
 /** Editable fields of a wardrobe item, as a form holds them (strings, never null). */
 export interface WardrobeItemDraft {
@@ -112,7 +113,7 @@ export function draftToPayload(draft: WardrobeItemDraft): WardrobeItemPayload {
  * stored only if an unchanged folder is never re-sent for resolving.
  */
 export function payloadForEdit(payload: WardrobeItemPayload, originalFolder: string): WardrobeItemPayload {
-  if ((payload.folder ?? '').toLowerCase() !== originalFolder.toLowerCase()) return payload
+  if (foldStorePath(payload.folder ?? '') !== foldStorePath(originalFolder)) return payload
   const rest = { ...payload }
   delete rest.folder
   return rest

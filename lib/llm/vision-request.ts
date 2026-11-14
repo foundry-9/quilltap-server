@@ -182,6 +182,41 @@ export interface ResolveVisionProfileOptions {
 }
 
 /**
+ * Every profile that can receive an image (`profileCanReceiveAttachment`: the
+ * model reads it *and* the plugin sends it, bug 91), in repository order. The
+ * one list behind both the auto-pick below and any picker that lets the
+ * operator choose a vision profile by hand.
+ */
+export async function listVisionProfiles(
+  repos: Pick<VisionRepos, 'connections'>,
+  userId: string
+): Promise<ConnectionProfile[]> {
+  return (await repos.connections.findByUserId(userId)).filter(p =>
+    profileCanReceiveAttachment(p, 'image/jpeg')
+  )
+}
+
+/**
+ * A profile the operator picked by hand for one vision request, if it is theirs
+ * and can receive an image; null otherwise (unknown id, someone else's, or one
+ * whose model or plugin cannot take a picture).
+ */
+export async function resolveChosenVisionProfile(
+  repos: Pick<VisionRepos, 'connections'>,
+  userId: string,
+  profileId: string
+): Promise<ConnectionProfile | null> {
+  const chosen = (await listVisionProfiles(repos, userId)).find(p => p.id === profileId) ?? null
+  moduleLogger.debug('[Vision] Resolving a hand-picked vision profile', {
+    profileId,
+    found: chosen !== null,
+    provider: chosen?.provider,
+    model: chosen?.modelName,
+  })
+  return chosen
+}
+
+/**
  * The vision profile for a request: the operator's configured Image
  * Description profile (Chat settings) first, else any profile that can
  * receive an image (`profileCanReceiveAttachment`), by the stated preference.
@@ -212,9 +247,7 @@ export async function resolveVisionProfile(
     }
   }
 
-  const visionProfiles = (await repos.connections.findByUserId(userId)).filter(p =>
-    profileCanReceiveAttachment(p, 'image/jpeg')
-  )
+  const visionProfiles = await listVisionProfiles(repos, userId)
   if (visionProfiles.length === 0) {
     moduleLogger.debug('[Vision] No profile can receive images', { userId })
     return null

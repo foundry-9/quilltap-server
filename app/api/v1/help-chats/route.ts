@@ -61,7 +61,7 @@ async function handleList(_req: NextRequest, context: RequestContext) {
         updatedAt: chat.updatedAt,
         participants: enrichedParticipants,
         messageCount,
-        helpPageUrl: (chat as any).helpPageUrl || null,
+        helpPageUrl: chat.helpPageUrl || null,
       };
     })
   );
@@ -169,17 +169,6 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     userId: user.id,
     participants,
     title: `Help: ${firstChar.name}`,
-    contextSummary: null,
-    tags: [],
-    roleplayTemplateId: null,
-    timestampConfig: null,
-    messageCount: 0,
-    lastMessageAt: null,
-    lastRenameCheckInterchange: 0,
-    projectId: null,
-    disabledTools: [],
-    disabledToolGroups: [],
-    imageProfileId: null,
     chatType: 'help',
     helpPageUrl: validatedData.pageUrl,
   });

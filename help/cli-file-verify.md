@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=system
+url: /settings?group=data-maintenance
 ---
 
 # The Command Line and the Cloud's Reluctant Tenants
@@ -78,4 +78,4 @@ This command is a mitigation, not a cure. A live database kept in iCloud Drive (
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system")`
+`help_navigate(url: "/settings?group=data-maintenance")`

@@ -24,6 +24,8 @@ import { logger } from '@/lib/logger';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { DocMountBlobMetadata, DocMountBlobMetadataSchema } from '@/lib/schemas/mount-index.types';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { clearMountLinks } from '@/lib/mount-index/orphan-store-reaper';
+import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 
 /**
  * Joined view: a blob row with the link metadata callers need to know where
@@ -57,6 +59,9 @@ export interface UpdateExtractedTextInput {
 }
 
 const TABLE = 'doc_mount_blobs';
+
+/** Columns the link repository's raw insert and every reader depend on. */
+const REQUIRED_COLUMNS = ['id', 'fileId', 'sha256', 'sizeBytes', 'storedMimeType', 'data', 'createdAt', 'updatedAt'];
 
 export interface UpsertBlobInput {
   fileId: string;
@@ -146,6 +151,28 @@ export class DocMountBlobsRepository {
     }
 
     return db;
+  }
+
+  /**
+   * Boot-time structural check (bug 176), run by `verifyStructuralTables`.
+   * Creating the table here matters as much as checking it: the link
+   * repository writes `doc_mount_blobs` with raw SQL, so on a brand-new
+   * instance nothing had created it before first-startup seeding linked the
+   * sample characters' avatars, and every one failed with "no such table".
+   * Returns the problem, or null. Never throws.
+   */
+  async verifyStructure(): Promise<string | null> {
+    try {
+      const db = this.db();
+      const columns = new Set(
+        (db.prepare(`PRAGMA table_info("${TABLE}")`).all() as Array<{ name: string }>).map(c => c.name),
+      );
+      const missing = REQUIRED_COLUMNS.filter(c => !columns.has(c));
+      logger.debug('Verified doc-mount blob table structure', { table: TABLE, ok: missing.length === 0 });
+      return missing.length === 0 ? null : `${TABLE} in mount-index database is missing columns: ${missing.join(', ')}`;
+    } catch (error) {
+      return `${TABLE} in mount-index database: ${error instanceof Error ? error.message : String(error)}`;
+    }
   }
 
   async findById(id: string): Promise<DocMountBlobMetadata | null> {
@@ -648,36 +675,17 @@ export class DocMountBlobsRepository {
   }
 
   /**
-   * Bulk delete every link in a mount, GC'ing files (and their blobs) as
-   * each one's reference count hits zero. Mirrors the legacy semantic.
+   * Bulk delete every link in a mount with its chunks, GC'ing files (and
+   * their blobs) no other store links (`clearMountLinks`, #191). Returns the
+   * number of blob rows removed.
    */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
     try {
       const db = this.db();
-      // Snapshot affected fileIds, then drop links + orphaned files.
-      const affected = db.prepare(
-        `SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?`
-      ).all(mountPointId) as { fileId: string }[];
-
-      let deletedBlobs = 0;
-      const tx = db.transaction(() => {
-        db.prepare(
-          `DELETE FROM doc_mount_file_links WHERE mountPointId = ?`
-        ).run(mountPointId);
-        if (affected.length > 0) {
-          const placeholders = affected.map(() => '?').join(',');
-          const orphaned = db.prepare(
-            `SELECT f.id FROM doc_mount_files f
-             WHERE f.id IN (${placeholders})
-               AND NOT EXISTS (SELECT 1 FROM doc_mount_file_links l WHERE l.fileId = f.id)`
-          ).all(...affected.map(a => a.fileId)) as { id: string }[];
-          for (const f of orphaned) {
-            db.prepare(`DELETE FROM doc_mount_files WHERE id = ?`).run(f.id);
-            deletedBlobs += 1;
-          }
-        }
-      });
-      tx();
+      // Chunks, links, and only the content no other store links (#191).
+      const cleared = db.transaction(() => clearMountLinks(db, mountPointId))();
+      invalidateMountPoint(mountPointId);
+      const deletedBlobs = cleared.blobs;
       return deletedBlobs;
     } catch (error) {
       logger.warn('Failed to delete blobs by mount point', {

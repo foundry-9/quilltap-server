@@ -55,6 +55,8 @@ export type RetireReason =
   | 'message-cascade'
   /** A line re-attributed to another speaker drops what was extracted for the old one. */
   | 'message-reattribution'
+  /** A line edited by hand drops what was extracted from its old text, to be extracted again. */
+  | 'message-edit'
   /** A swipe re-roll discards the memories of the line it replaces. */
   | 'swipe-regenerate'
   /** A character (and with it every memory it holds) deleted. */

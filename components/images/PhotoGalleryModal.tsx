@@ -13,18 +13,16 @@
  * `useChatGallery`, which is the same query the sidebar's `Gallery (N)` reads —
  * so the count and the grid are one answer and cannot disagree.
  *
- * The modal renders through a portal to `document.body`. Inside the tabbed
- * workspace `.qt-workspace` is an isolated stacking context, and a
- * `fixed inset-0` child of it is trapped under the toolbar.
+ * The grid is a `BaseModal` (which portals to `document.body`); the detail
+ * lightboxes it opens are portaled later, so they paint above it.
  */
 
-import { useState, useEffect, useCallback, useMemo, useId, useRef } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { downloadGalleryEntry } from '@/lib/download-utils'
 import { useChatGallery } from '@/app/salon/[id]/hooks/useChatGallery'
 import type { ChatGalleryEntry, ChatGallerySource } from '@/lib/photos/chat-gallery'
@@ -118,9 +116,6 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen && selectedIndex === -1 && !saveTargetId)
 
   const onImageDeleted = mode === 'chat' ? props.onImageDeleted : undefined
 
@@ -218,12 +213,16 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     }
   }, [isOpen])
 
-  // Keyboard navigation (Escape only when no image is selected)
+  // Body-scroll lock while the grid is up. Escape is the shell's (below).
   useImageNavigation({
     isOpen,
     onClose,
-    handleEscape: selectedIndex === -1 && !saveTargetId,
+    handleEscape: false,
   })
+
+  // A detail lightbox (`FullScreenImageViewer` does not take focus) or the
+  // save dialog is up: Escape belongs to it, not to the grid underneath.
+  const childOpen = selectedIndex !== -1 || saveTargetId !== null
 
   const handleZoomIn = () => {
     if (thumbnailSizeIndex < THUMBNAIL_SIZES.length - 1) {
@@ -356,7 +355,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
         <button
           type="button"
           onClick={() => setSelectedIndex(index)}
-          className="relative w-full h-full overflow-hidden rounded hover:ring-2 hover:ring-ring focus:ring-2 focus:ring-ring focus:outline-none transition-all"
+          className="relative w-full h-full overflow-hidden rounded hover:ring-2 hover:ring-ring focus:ring-2 qt-focus-ring focus:outline-none transition-all"
           title={entry.filename}
         >
           <img
@@ -431,7 +430,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
       <Container
         key={image.id}
         {...containerProps}
-        className="relative rounded overflow-hidden hover:ring-2 hover:ring-ring focus:ring-2 focus:ring-ring focus:outline-none transition-all"
+        className="relative rounded overflow-hidden hover:ring-2 hover:ring-ring focus:ring-2 qt-focus-ring focus:outline-none transition-all"
         style={{ width: thumbnailSize, height: thumbnailSize }}
       >
         {isMissing ? (
@@ -456,7 +455,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   const renderItems = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center py-12">
+        <div className="qt-loading-state py-12">
           <p className="qt-text-secondary">Loading images...</p>
         </div>
       )
@@ -464,7 +463,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
 
     if (itemCount === 0) {
       return (
-        <div className="flex items-center justify-center py-12">
+        <div className="qt-loading-state py-12">
           <p className="qt-text-secondary">{emptyStateText}</p>
         </div>
       )
@@ -479,54 +478,53 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     )
   }
 
-  const modal = (
+  return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay backdrop-blur-sm p-4" onClick={onClose}>
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          onKeyDown={handleFocusKeyDown}
-          className="qt-dialog flex flex-col max-h-[90vh] max-w-[90vw]"
-          style={{ minWidth: '300px' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="qt-dialog-header border-b qt-border-default">
-            <h2 id={titleId} className="qt-heading-4 text-foreground">{title}</h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleZoomOut}
-                disabled={thumbnailSizeIndex === 0}
-                className="p-2 qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Smaller thumbnails"
-              >
-                <Icon name="zoom-out" className="w-5 h-5" />
-              </button>
-              <button
-                onClick={handleZoomIn}
-                disabled={thumbnailSizeIndex === THUMBNAIL_SIZES.length - 1}
-                className="p-2 qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Larger thumbnails"
-              >
-                <Icon name="zoom-in" className="w-5 h-5" />
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 qt-text-secondary hover:text-foreground"
-                title="Close"
-              >
-                <Icon name="close" className="w-5 h-5" />
-              </button>
-            </div>
+      <BaseModal
+        isOpen={isOpen}
+        onClose={onClose}
+        headerless
+        maxWidth="full"
+        className="!max-w-[90vw] min-w-[300px]"
+        bodyClassName="flex flex-col flex-1 min-h-0"
+        closeOnEscape={!childOpen}
+      >
+        <div className="qt-dialog-header border-b qt-border-default">
+          <ModalTitle className="qt-heading-4 qt-text">{title}</ModalTitle>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleZoomOut}
+              disabled={thumbnailSizeIndex === 0}
+              className="p-2 qt-text-secondary hover:qt-text disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Smaller thumbnails"
+              aria-label="Smaller thumbnails"
+            >
+              <Icon name="zoom-out" className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleZoomIn}
+              disabled={thumbnailSizeIndex === THUMBNAIL_SIZES.length - 1}
+              className="p-2 qt-text-secondary hover:qt-text disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Larger thumbnails"
+              aria-label="Larger thumbnails"
+            >
+              <Icon name="zoom-in" className="w-5 h-5" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 qt-text-secondary hover:qt-text"
+              title="Close"
+              aria-label="Close"
+            >
+              <Icon name="close" className="w-5 h-5" />
+            </button>
           </div>
-
-          {renderFilterChips()}
-
-          <div className="flex-1 overflow-y-auto p-4">{renderItems()}</div>
         </div>
-      </div>
+
+        {renderFilterChips()}
+
+        <div className="flex-1 overflow-y-auto p-4">{renderItems()}</div>
+      </BaseModal>
 
       {selectedEntry && (
         <ChatGalleryImageViewModal
@@ -580,9 +578,4 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
       )}
     </>
   )
-
-  // Portal to the body: inside the tabbed workspace `.qt-workspace` is an
-  // isolated stacking context, and a `fixed inset-0` child of it renders
-  // *under* the toolbar rather than over the page.
-  return typeof document === 'undefined' ? modal : createPortal(modal, document.body)
 }

@@ -35,7 +35,7 @@ export function parseGeneratedProperties(raw: string): GeneratedProperties {
 }
 
 /**
- * One-line progress snippet: `she/her/hers; aliases: Em, The Botanist`.
+ * One-line progress snippet: `she/her/her; aliases: Em, The Botanist`.
  * `missingPronounsLabel` stands in for the pronoun triple when none was
  * derivable — each runner has its own wording for that.
  */

@@ -13,6 +13,19 @@
  */
 
 import { useState, useCallback } from 'react'
+import type { ConsoleContextRef } from '@/lib/schemas/chat.types'
+
+/**
+ * A source chosen on the launcher before the conversation exists: the ref the
+ * server will store, and the label and detail the dialog already knew (so the
+ * chip needs no read of its own).
+ */
+export interface PendingContextItem {
+  ref: ConsoleContextRef
+  label: string
+  /** Secondary line, e.g. a conversation's cast. */
+  detail?: string
+}
 
 export interface BrahmaConsoleSession {
   /** Currently active console chat ID (null = the launcher / past-chats view) */
@@ -29,6 +42,17 @@ export interface BrahmaConsoleSession {
    * engine the next new conversation will start with.
    */
   setModel: (connectionProfileId: string) => Promise<void>
+  /**
+   * The launcher's Writing Assistant switch. Off every time the launcher is
+   * shown; sent with the first message, then the conversation keeps it.
+   */
+  pendingWriting: boolean
+  setPendingWriting: (on: boolean) => void
+  /** The launcher's context, sent with the first message of a Writing Assistant conversation. */
+  pendingContext: PendingContextItem[]
+  setPendingContext: (items: PendingContextItem[]) => void
+  /** Clear the launcher's mode and context (back to the launcher, or after a create). */
+  clearPending: () => void
 }
 
 /**
@@ -43,6 +67,12 @@ export function useBrahmaConsoleSession(storageKey: string): BrahmaConsoleSessio
     }
   })
   const [activeConnectionProfileId, setActiveConnectionProfileId] = useState<string | null>(null)
+  const [pendingWriting, setPendingWriting] = useState(false)
+  const [pendingContext, setPendingContext] = useState<PendingContextItem[]>([])
+  const clearPending = useCallback(() => {
+    setPendingWriting(false)
+    setPendingContext([])
+  }, [])
 
   const setCurrentChatId = useCallback((id: string | null) => {
     setCurrentChatIdState(id)
@@ -73,5 +103,10 @@ export function useBrahmaConsoleSession(storageKey: string): BrahmaConsoleSessio
     activeConnectionProfileId,
     setActiveConnectionProfileId,
     setModel,
+    pendingWriting,
+    setPendingWriting,
+    pendingContext,
+    setPendingContext,
+    clearPending,
   }
 }

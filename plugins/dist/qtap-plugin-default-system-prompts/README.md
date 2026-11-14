@@ -1,7 +1,7 @@
 # Sample Prompts — Provider Guide
 
 > **Last updated:** March 2026
-> **Purpose:** Stock system prompts for Quilltap's companion and romantic partner modes, tailored per provider.
+> **Purpose:** Stock system prompts for Quilltap's roleplay, assistant, companion and romantic partner modes, tailored per provider.
 
 ---
 
@@ -29,13 +29,25 @@ These are **system prompts** (sent in the `system` role) unless otherwise noted.
 
 ---
 
+## MODERN prompts and the roleplay default (1.1.32)
+
+Four MODERN files serve any large-context model:
+
+- **`MODERN_ROLEPLAY.md`** — the default for a roleplay character: a person inside a story, with stakes. Relationship-neutral. Adds "Reacting to what happens" (match the stakes; temperament is where a character starts, not a vow; danger is felt, not managed), "In a scene with others" (one voice, not the moderator; the cast need not agree), and the **Flattening** and **The mediator** failure modes. Replaces `MODERN_GENERAL.md`, retired in 1.1.32; the server prunes the stale built-in row.
+- **`MODERN_ASSISTANT.md`** — for a character whose job is to do work for `{{user}}`: accuracy over flourish, never invent a fact, show the working, formatting allowed when it serves the work, still in the character's voice. Pairs with the character's kind set to Assistant.
+- **`MODERN_PLATONIC.md`** and **`MODERN_ROMANTIC.md`** — relationship variants.
+
+Every prompt except `MODERN_ASSISTANT.md` tells the character to **match the stakes**: an ordinary day stays ordinary, real danger gets fear, anger or action, and a usual temperament is not a vow. In the family files it is a short "When the story turns" passage in the family's native structure (`WHEN THE STORY TURNS:` for Claude, a `<WHEN_THE_STORY_TURNS>` tag for Gemini, `### WHEN THE STORY TURNS ###` for DeepSeek, `## When the story turns` elsewhere) placed just before "Whose story it is", and a single `## Do` bullet in the two Ollama files. The same passage (1.1.33) forbids filling a gap by deciding where `{{user}}` is or what they did off-screen — wonder, call, or go and look instead — after an evaluation caught characters inventing the operator persona's errand and planning around it; `MODERN_ROLEPLAY.md` states it under "Whose story it is" and names **The invented absence** as a failure mode. DeepSeek's style governor is now "match the stakes": it still reins in purple prose and metaphor, but no longer tells the character to keep the story itself small. Design of record: `docs/developer/features/character-kind-and-roleplay-defaults.md`.
+
+---
+
 ## Shared block: "Whose story it is" (1.1.25)
 
-Every prompt, including the three MODERN files (`MODERN_GENERAL.md`, `MODERN_PLATONIC.md`, `MODERN_ROMANTIC.md`), carries a shared block against "the committee" — characters governing `{{user}}`'s persona with votes, sign-offs and standing conditions in long multi-character roleplay. It is written in each family's native structure (`WHOSE STORY IT IS:` inside Claude's `<instructions>`, a `<WHOSE_STORY>` tag for Gemini, `### WHOSE STORY IT IS ###` for DeepSeek, `## Whose story it is` elsewhere) and states five universal rules: what `{{user}}` narrates is what happened (in whatever out-of-character marking the conversation uses — no file hard-codes `((…))`); check the conversation, not notes, before correcting `{{user}}`; don't invent setting facts to win a point; an arrangement binding `{{user}}` exists only if `{{user}}` agreed in plain words, and temporary measures end when they said they would; disagree like a person, not a committee. Each file's failure-mode list also gains a committee bullet, and each existing "disagree and hold the position" line gets a counterweight clause rather than a deletion.
+Every prompt, including the MODERN files, carries a shared block against "the committee" — characters governing `{{user}}`'s persona with votes, sign-offs and standing conditions in long multi-character roleplay. It is written in each family's native structure (`WHOSE STORY IT IS:` inside Claude's `<instructions>`, a `<WHOSE_STORY>` tag for Gemini, `### WHOSE STORY IT IS ###` for DeepSeek, `## Whose story it is` elsewhere) and states five universal rules: what `{{user}}` narrates is what happened (in whatever out-of-character marking the conversation uses — no file hard-codes `((…))`); check the conversation, not notes, before correcting `{{user}}`; don't invent setting facts to win a point; an arrangement binding `{{user}}` exists only if `{{user}}` agreed in plain words, and temporary measures end when they said they would; disagree like a person, not a committee. Each file's failure-mode list also gains a committee bullet, and each existing "disagree and hold the position" line gets a counterweight clause rather than a deletion.
 
-The **trust disposition** (trust in `{{user}}`'s judgment and firsthand perceptions as a starting point; back them first in a crisis, ask afterward) is in every file **except `MODERN_GENERAL.md`**, which stays relationship-neutral. The full romantic files (all but `OLLAMA_ROMANTIC.md`) add that `{{user}}`'s call carries when the household is split. The two **Ollama** files carry a compact version merged into their `## Do` / `## Don't` lists, with the disposition as a single `## Do` bullet.
+The **trust disposition** (trust in `{{user}}`'s judgment and firsthand perceptions as a starting point; back them first in a crisis, ask afterward) is in every file **except `MODERN_ROLEPLAY.md` and `MODERN_ASSISTANT.md`**, which stay relationship-neutral. The full romantic files (all but `OLLAMA_ROMANTIC.md`) add that `{{user}}`'s call carries when the household is split. The two **Ollama** files carry a compact version merged into their `## Do` / `## Don't` lists, with the disposition as a single `## Do` bullet.
 
-`__tests__/unit/plugins/default-system-prompts-content.test.ts` reads every shipped `prompts/*.md` and asserts the narration, plain-words consent and committee language, the disposition everywhere but MODERN_GENERAL, no `((`, the correct project spelling, and that the existing disagree lines survive. Update it alongside any prompt edit that touches these phrases. Design of record: `docs/developer/features/prompt-trust-and-anti-committee.md`.
+`__tests__/unit/plugins/default-system-prompts-content.test.ts` reads every shipped `prompts/*.md` and asserts the narration, plain-words consent and committee language, the disposition everywhere but the two neutral files, no `((`, the correct project spelling, that the existing disagree lines survive, the stakes rule everywhere but the assistant file, and that the retired governor phrases never return. Update it alongside any prompt edit that touches these phrases. Design of record: `docs/developer/features/prompt-trust-and-anti-committee.md`.
 
 ---
 

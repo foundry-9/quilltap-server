@@ -7,7 +7,7 @@
 import { convert as htmlToText } from 'html-to-text';
 import { getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import type { CurlToolInput, CurlToolConfig, CurlToolOutput } from './types';
-import { parseUrlPatterns, validateUrl } from './url-validator';
+import { parseUrlPatterns, validateUrlResolved } from './url-validator';
 
 /**
  * Default configuration values
@@ -23,6 +23,43 @@ const DEFAULTS: CurlToolConfig = {
  * Maximum allowed timeout (enforced regardless of config)
  */
 const MAX_TIMEOUT = 60;
+
+/**
+ * Redirect hops followed per request; every hop is re-validated.
+ */
+const MAX_REDIRECT_HOPS = 5;
+
+/**
+ * Hard ceiling on bytes read from a response, independent of configuration.
+ */
+const MAX_READ_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Read a response body as text, stopping at a byte ceiling.
+ */
+async function readBodyCapped(response: Response, ceiling: number): Promise<{ text: string; exceeded: boolean }> {
+  if (!response.body) {
+    return { text: '', exceeded: false };
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let exceeded = false;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > ceiling) {
+      chunks.push(value.slice(0, value.length - (total - ceiling)));
+      exceeded = true;
+      await reader.cancel();
+      break;
+    }
+    chunks.push(value);
+  }
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(Buffer.concat(chunks));
+  return { text, exceeded };
+}
 
 
 /**
@@ -118,7 +155,7 @@ export async function executeCurlRequest(
   const allowedPatterns = parseUrlPatterns(effectiveConfig.allowedUrlPatterns);
 
   // Validate URL
-  const urlValidation = validateUrl(input.url, allowedPatterns);
+  const urlValidation = await validateUrlResolved(input.url, allowedPatterns);
   if (!urlValidation.valid) {
     return {
       success: false,
@@ -153,12 +190,13 @@ export async function executeCurlRequest(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    // Build fetch options
+    // Build fetch options. Redirects are always handled here so that each
+    // hop is validated before it is requested.
     const fetchOptions: RequestInit = {
       method,
       headers,
       signal: controller.signal,
-      redirect: followRedirects ? 'follow' : 'manual',
+      redirect: 'manual',
     };
 
     // Add body for methods that support it
@@ -177,11 +215,50 @@ export async function executeCurlRequest(
     }
 
     // Execute request
-    const response = await fetch(input.url, fetchOptions);
+    let currentUrl = input.url;
+    let response = await fetch(currentUrl, fetchOptions);
+
+    if (followRedirects) {
+      for (let hop = 0; response.status >= 300 && response.status < 400 && response.headers.get('location'); hop++) {
+        if (hop >= MAX_REDIRECT_HOPS) {
+          clearTimeout(timeoutId);
+          await response.body?.cancel();
+          return {
+            success: false,
+            error: `Too many redirects (limit ${MAX_REDIRECT_HOPS})`,
+            timing: { totalMs: Date.now() - startTime },
+          };
+        }
+        const nextUrl = new URL(response.headers.get('location') as string, currentUrl).toString();
+        await response.body?.cancel();
+        const hopValidation = await validateUrlResolved(nextUrl, allowedPatterns);
+        if (!hopValidation.valid) {
+          clearTimeout(timeoutId);
+          return {
+            success: false,
+            error: `Redirect blocked: ${hopValidation.error}`,
+            timing: { totalMs: Date.now() - startTime },
+          };
+        }
+        const sameOrigin = new URL(nextUrl).origin === new URL(currentUrl).origin;
+        if (!sameOrigin) {
+          headers.delete('Authorization');
+          headers.delete('Cookie');
+        }
+        if (response.status === 303 || ((response.status === 301 || response.status === 302) && fetchOptions.method === 'POST')) {
+          fetchOptions.method = 'GET';
+          delete fetchOptions.body;
+          headers.delete('Content-Type');
+        }
+        currentUrl = nextUrl;
+        response = await fetch(currentUrl, fetchOptions);
+      }
+    }
     clearTimeout(timeoutId);
 
-    // Read response body
-    let bodyText = await response.text();
+    // Read response body (bounded)
+    const bodyRead = await readBodyCapped(response, MAX_READ_BYTES);
+    let bodyText = bodyRead.text;
 
     // Convert HTML to text if render option is enabled
     if (input.render) {
@@ -199,10 +276,12 @@ export async function executeCurlRequest(
       }
     }
 
-    const { body, truncated, originalSize } = truncateBody(
+    const truncation = truncateBody(
       bodyText,
       effectiveConfig.maxResponseSize
     );
+    const { body, originalSize } = truncation;
+    const truncated = truncation.truncated || bodyRead.exceeded;
 
     // Build output
     const output: CurlToolOutput = {
@@ -220,8 +299,8 @@ export async function executeCurlRequest(
     }
 
     // Track redirects
-    if (response.redirected && response.url !== input.url) {
-      output.finalUrl = response.url;
+    if (currentUrl !== input.url) {
+      output.finalUrl = currentUrl;
     }
 
     return output;

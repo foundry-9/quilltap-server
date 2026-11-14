@@ -243,12 +243,12 @@ export function CapabilitiesReportCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="qt-heading-2 text-foreground mb-1">{ALMANACK_TITLE}</h2>
+          <h2 className="qt-heading-2 qt-text mb-1">{ALMANACK_TITLE}</h2>
           <p className="qt-text-small">
             A compendium of the establishment — every cog, ledger and shelf, catalogued
           </p>
         </div>
-        <div className="flex-shrink-0 text-primary">
+        <div className="flex-shrink-0 qt-text-brand">
           <Icon name="file" className="w-8 h-8" />
         </div>
       </div>
@@ -288,7 +288,7 @@ export function CapabilitiesReportCard() {
 
       {/* Previous reports */}
       <div>
-        <h3 className="qt-heading-4 text-foreground mb-3">Previous Editions</h3>
+        <h3 className="qt-heading-4 qt-text mb-3">Previous Editions</h3>
 
         {isLoading && !generating ? (
           <div className="text-center py-6 qt-text-secondary">

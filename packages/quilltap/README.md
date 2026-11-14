@@ -37,6 +37,7 @@ quilltap [options]
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
+  --host <address>        Address to bind (default: 127.0.0.1)
   -d, --data-dir <path>   Data directory (default: platform-specific)
   -o, --open              Open browser after server starts
   -v, --version           Show version number
@@ -55,6 +56,10 @@ quilltap --port 8080
 
 # Use a custom data directory
 quilltap --data-dir /mnt/data/quilltap
+
+# Listen on every interface (Quilltap has no login: trusted networks only;
+# reach it by IP address, or list host names in QUILLTAP_ALLOWED_HOSTS)
+quilltap --host 0.0.0.0
 
 # Start and open browser automatically
 quilltap --open
@@ -96,13 +101,18 @@ Register a data directory once and point the CLI at it by name, instead of repea
 ```bash
 quilltap instances add Friday ~/iCloud/Quilltap/Friday   # Register (prompts for the passphrase if encrypted)
 quilltap instances list                                  # Registered instances (* marks the default)
+quilltap instances show Friday                           # One instance (passphrase status only, never the value)
+quilltap instances path                                  # Print the path to instances.json
+quilltap instances set-passphrase Friday                 # Change or clear the stored passphrase (prompts hidden)
 quilltap instances default Friday                        # Make it the fall-through for flag-free runs
 quilltap instances rename Friday Weekday                 # Rename, preserving the stored passphrase
-quilltap instances remove Friday                         # Unregister
+quilltap instances remove Friday                         # Unregister (aliases: rm, delete)
 quilltap instances restore-key Friday                    # Rebuild a lost or passphrase-locked .dbkey
 quilltap instances default --clear                       # Revert to the OS platform default
 quilltap instances list --json                           # The registry as JSON, for scripts
 ```
+
+`instances set-passphrase` changes only the passphrase the *registry* remembers for an instance, not the one its `.dbkey` is wrapped with. It first offers to clear the stored passphrase; otherwise it prompts twice, hidden, and checks the new one against the instance's `.dbkey` before saving — a passphrase that does not unlock it, or a `.dbkey` that needs none, is refused. With no `.dbkey` on disk yet, it saves without the check. To change the passphrase the database itself is locked with, use the server's Change Passphrase card.
 
 If an instance's `quilltap.dbkey` goes missing — or its passphrase does — `instances restore-key` rebuilds it. The file only *wraps* the pepper; the pepper itself is the database key, so an operator who kept the one printed at first-run setup can get back in. The pepper is read from `ENCRYPTION_MASTER_PEPPER` or prompted for hidden, never passed as a flag, and it is proved against the encrypted databases on disk before anything is written. Run it with the server down — the command refuses while the instance lock is held. Flags: `--passphrase <pass>` / `--no-passphrase` (the new wrapping), `-d, --data-dir <path>`, `--force` (proceed when there is no encrypted database to prove against — a fresh or still-plaintext instance), `-y, --yes`. An existing key file is backed up to `quilltap.dbkey.bak-<timestamp>` first, and a registered instance's stored passphrase is updated to match.
 

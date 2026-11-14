@@ -17,7 +17,9 @@ import {
 import { AbstractBaseRepository } from './base.repository';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
+import { embeddedTextHash } from '@/lib/embedding/embedded-text-hash';
 import { logger } from '@/lib/logger';
+import { sqlInList } from '../backends/sqlite/in-list';
 
 /**
  * Conversation Chunks Repository
@@ -84,18 +86,18 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
         if (chatIds.length === 0) {
           return new Map<string, { total: number; embedded: number }>();
         }
-        const placeholders = chatIds.map(() => '?').join(', ');
+        const list = sqlInList(chatIds);
         const sql = `
           SELECT chatId,
                  COUNT(*) AS total,
                  SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) AS embedded
           FROM conversation_chunks
-          WHERE chatId IN (${placeholders})
+          WHERE chatId IN ${list.sql}
           GROUP BY chatId
         `;
         const rows = await rawQuery<
           Array<{ chatId: string; total: number | bigint; embedded: number | bigint | null }>
-        >(sql, chatIds);
+        >(sql, list.params);
         return new Map(
           rows.map((r) => [
             r.chatId,
@@ -254,13 +256,33 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
   }
 
   /**
-   * Update just the embedding field on a chunk
-   * @param id The chunk ID
-   * @param embedding The new embedding vector
+   * Update the embedding vector for a chunk.
+   *
+   * With `expectedTextHash` (an embedding job's write), the vector lands only
+   * if the chunk's current text still hashes to what was embedded; a chunk
+   * rewritten or deleted since the job read it is left alone, and the job
+   * that the rewrite enqueued embeds the new text. Without it the write is
+   * unconditional and a missing chunk throws.
+   *
+   * @returns whether the vector was written
    */
-  async updateEmbedding(id: string, embedding: Float32Array): Promise<void> {
-    await this.safeQuery(
+  async updateEmbedding(
+    id: string,
+    embedding: Float32Array,
+    options: { expectedTextHash?: string } = {}
+  ): Promise<boolean> {
+    return this.safeQuery(
       async () => {
+        if (options.expectedTextHash !== undefined) {
+          const current = await this.findById(id);
+          if (!current || embeddedTextHash(current.content) !== options.expectedTextHash) {
+            logger.debug('Skipped a stale embedding write: the chunk changed since it was embedded', {
+              id,
+              reason: current ? 'text-changed' : 'chunk-gone',
+            });
+            return false;
+          }
+        }
         const updated = await this._update(id, {
           embedding,
         } as Partial<ConversationChunk>);
@@ -268,6 +290,7 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
         if (!updated) {
           throw new Error(`Chunk not found for embedding update: ${id}`);
         }
+        return true;
       },
       'Error updating chunk embedding',
       { id }

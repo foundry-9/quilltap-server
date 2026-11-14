@@ -5,8 +5,7 @@
     "scripts/*.ts",
     "migrations/*.ts",
     "jest.integration.config.ts",
-    "lib/database/index.ts",
-    "lib/chat/context/index.ts"
+    "lib/database/index.ts"
   ],
   "project": [
     "**/*.{ts,tsx}",
@@ -15,7 +14,6 @@
   ],
   "ignore": [
     "packages/**",
-    "migrations/lib/**",
     "lib/background-jobs/child/child-entry.ts",
     "__tests__/helpers/lexicalPluginHarness.tsx",
     "**/*.d.ts"
@@ -25,11 +23,9 @@
     "ts-node",
     "esbuild",
     "better-sqlite3-multiple-ciphers",
-    "@anthropic-ai/sdk",
-    "tar"
+    "@anthropic-ai/sdk"
   ],
   "ignoreBinaries": [
-    "tasklist",
-    "du"
+    "tasklist"
   ]
 }

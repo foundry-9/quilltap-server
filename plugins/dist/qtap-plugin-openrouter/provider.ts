@@ -4,13 +4,18 @@
  * Provides chat completion functionality using OpenRouter's API
  * Supports 100+ models including GPT-4, Claude, Gemini, Llama and more
  *
- * Streaming (every turn shape) and image sends speak Chat Completions over a
- * direct fetch; the SDK is used only for its generated OpenAPI surface
- * (`chat.send` for text-only non-streaming sends, `models.list`).
+ * Every text send and stream speaks Chat Completions over a direct fetch,
+ * built by one body builder; the SDK is used only for `models.list` and the
+ * key check.
+ *
+ * Prompt caching: the per-character cache key goes out as `session_id` (sticky
+ * provider routing from the first request, not only after a hit), as
+ * `prompt_cache_key` (OpenAI-routed sharding) and as `user`. Claude needs
+ * asking: with the profile's Prompt Caching switch on, explicit breakpoints
+ * go on the stable parts of the prompt (cache-breakpoints.ts).
  */
 
 import { OpenRouter } from '@openrouter/sdk';
-import type { ChatResult } from '@openrouter/sdk/models';
 import type {
   TextProvider,
   LLMMessage,
@@ -18,6 +23,7 @@ import type {
   LLMResponse,
   StreamChunk,
 } from './types';
+import { applyClaudeCacheBreakpoints } from './cache-breakpoints';
 import { buildRequestAbortSignal, createPluginLogger, getQuilltapUserAgent, resolveRequestTimeoutMs } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
@@ -48,6 +54,10 @@ function describeChatCompletionsBody(body: Record<string, any>): Record<string, 
     plugins: body.plugins,
     responseFormat: body.response_format?.type,
     hasUser: typeof body.user === 'string',
+    hasSessionId: typeof body.session_id === 'string',
+    cacheBreakpoints: Array.isArray(body.messages)
+      ? body.messages.filter((m: any) => Array.isArray(m.content) && m.content.some((p: any) => p?.cache_control)).length
+      : 0,
     reasoning: body.reasoning,
   };
 }
@@ -100,6 +110,53 @@ interface OpenRouterProfileParams {
   maxTokens?: number;
   topP?: number;
   reasoningEffort?: string;
+  /** Opt-in Claude prompt caching (top-level `cache_control`). */
+  enablePromptCaching?: boolean;
+  cacheTTL?: '5m' | '1h';
+}
+
+/**
+ * Claude on OpenRouter caches only when asked. Matches `anthropic/…` and the
+ * `~anthropic/…-latest` router aliases.
+ */
+export function isAnthropicRoutedModel(model: string | undefined): boolean {
+  return typeof model === 'string' && /^~?anthropic\//.test(model);
+}
+
+type OpenRouterCacheUsage = {
+  cacheReadInputTokens?: number;
+  cachedTokens?: number;
+  cacheCreationInputTokens?: number;
+};
+
+/**
+ * The one reader of an OpenRouter Chat Completions `usage` object (send and
+ * stream report the same snake_case shape). Cache reads are
+ * `prompt_tokens_details.cached_tokens`, writes `cache_write_tokens` (only
+ * models with explicit caching and write pricing). Reads are excluded from
+ * prompt/total so cached input is not charged against budgets or cost;
+ * cacheUsage still reports them for display.
+ */
+export function readOpenRouterUsage(raw: any): {
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+  cacheUsage?: OpenRouterCacheUsage;
+} {
+  const read = Number(raw?.prompt_tokens_details?.cached_tokens) || 0;
+  const written = Number(raw?.prompt_tokens_details?.cache_write_tokens) || 0;
+  const cacheUsage: OpenRouterCacheUsage | undefined = read > 0 || written > 0
+    ? {
+        ...(read > 0 ? { cacheReadInputTokens: read, cachedTokens: read } : {}),
+        ...(written > 0 ? { cacheCreationInputTokens: written } : {}),
+      }
+    : undefined;
+  return {
+    usage: {
+      promptTokens: Math.max(0, (raw?.prompt_tokens ?? 0) - read),
+      completionTokens: raw?.completion_tokens ?? 0,
+      totalTokens: Math.max(0, (raw?.total_tokens ?? 0) - read),
+    },
+    ...(cacheUsage ? { cacheUsage } : {}),
+  };
 }
 
 /**
@@ -191,154 +248,31 @@ export class OpenRouterProvider implements TextProvider {
     return { sent, failed };
   }
 
-  private hasImageAttachments(params: LLMParams): boolean {
-    return params.messages.some((m) =>
-      (m.attachments ?? []).some(
-        (a) => SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType) && (a.data || a.url)
-      )
-    );
-  }
-
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const attachmentResults = this.collectAttachmentResults(params);
 
-    // Vision (image attachment) sends can't go through the SDK's non-streaming
-    // request path: @openrouter/sdk's chat.send() rejects OpenAI content-parts
-    // (image_url) messages at client-side input validation, so the image never
-    // reaches the model. Route those around the SDK through a direct Chat
-    // Completions fetch — the same escape hatch streamMessage() already uses for
-    // image/tool requests. No-image sends keep the SDK path unchanged.
-    if (this.hasImageAttachments(params)) {
-      return this.sendViaChatCompletions(params, apiKey, attachmentResults);
-    }
+    // Every send speaks Chat Completions over the one body builder. The SDK's
+    // chat.send() rejects image content-parts at client-side validation (bug
+    // 31) and validates the request against its own schema, so wire fields it
+    // does not model (`session_id`, top-level `cache_control`) cannot ride it
+    // — which left text-only sends without sticky cache routing and with their
+    // cache hits misread from the camelCase usage shape.
+    return this.sendViaChatCompletions(params, apiKey, attachmentResults);
+  }
 
-    const client = new OpenRouter({
-      apiKey,
-      httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      appTitle: getQuilltapUserAgent(),
-      // Non-streaming, so bounding the whole request is right. Without this the
-      // SDK default would let a silent endpoint hold a turn open indefinitely.
-      timeoutMs: resolveRequestTimeoutMs(params),
-    });
+  /** The messages that reach the wire: orphan tool messages (no toolCallId) are dropped. */
+  private sendableMessages(params: LLMParams): LLMMessage[] {
+    return params.messages.filter(m => !(m.role === 'tool' && !m.toolCallId));
+  }
 
-    // Same messages array the fetch paths send (OpenAI Chat Completions shape).
-    const messages = this.buildChatCompletionsMessages(params) as any;
-
-    const requestParams: any = {
-      model: params.model,
-      messages,
-      temperature: params.temperature ?? 0.7,
-      maxTokens: params.maxTokens ?? 4096,
-      topP: params.topP ?? 1,
-      stop: params.stop,
-      stream: false,
-    };
-
-    // Forward Quilltap's per-character cache identifier as `user`. OpenAI-
-    // routed downstreams use it as a sticky-routing hint; other downstreams
-    // (Anthropic, etc.) ignore it.
-    if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
-      requestParams.user = params.cacheKey;
-    }
-
-    // Add tools if provided
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      // Explicitly enable tool use with "auto" - let the model decide when to use tools
-      requestParams.toolChoice = 'auto';
-    }
-
-    // Add web search plugin if enabled
-    if (params.webSearchEnabled) {
-      requestParams.plugins = [{ id: 'web', maxResults: 5 }];
-    }
-
-    // Add structured output format if specified
-    if (params.responseFormat) {
-      if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
-        requestParams.responseFormat = {
-          type: 'json_schema',
-          jsonSchema: {
-            name: params.responseFormat.jsonSchema.name,
-            strict: params.responseFormat.jsonSchema.strict ?? true,
-            schema: params.responseFormat.jsonSchema.schema,
-          },
-        };
-      } else if (params.responseFormat.type !== 'text') {
-        requestParams.responseFormat = { type: params.responseFormat.type };
-      }
-    }
-
-    // Handle OpenRouter-specific profile parameters
-    const profileParams = params.profileParameters as OpenRouterProfileParams | undefined;
-
-    // Add model fallbacks if configured
-    if (profileParams?.fallbackModels?.length) {
-      requestParams.models = [params.model, ...profileParams.fallbackModels];
-      requestParams.route = 'fallback';
-      delete requestParams.model; // Can't have both model and models
-    }
-
-    // Add provider preferences if configured
-    const providerPrefs = resolveProviderPrefs(profileParams);
-    if (providerPrefs) {
-      requestParams.provider = {};
-      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
-      if (providerPrefs.allowFallbacks !== undefined) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
-      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
-      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
-      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
-      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
-    }
-
-    // Enable reasoning output for models that support it in the non-streaming path.
-    const sendReasoningEffort = profileParams?.reasoningEffort;
-    if (typeof sendReasoningEffort === 'string' && sendReasoningEffort.length > 0) {
-      requestParams.reasoning = { effort: sendReasoningEffort, exclude: false };
-    } else {
-      requestParams.reasoning = { exclude: false };
-    }
-
-    // Non-streaming send: @openrouter/sdk 0.13 types chat.send() as a
-    // ChatResult | EventStream union, so narrow to ChatResult here (a
-    // request without st:true always resolves to a ChatResult at runtime).
-    const response = (await client.chat.send({
-      chatRequest: requestParams,
-    })) as ChatResult;
-
-    const choice = response.choices[0];
-    const content = choice.message.content;
-    const contentStr = typeof content === 'string' ? content : '';
-
-    // Extract reasoning from the message if available
-    const sendReasoningContent = (choice.message as any)?.reasoning;
-
-    // Extract cache usage if available
-    const usageAny = response.usage as any;
-    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount
-      ? {
-          cachedTokens: usageAny.cachedTokens,
-          cacheDiscount: usageAny.cacheDiscount,
-          cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
-          cacheReadInputTokens: usageAny.cacheReadInputTokens,
-        }
-      : undefined;
-    return {
-      content: contentStr,
-      finishReason: choice.finishReason || 'stop',
-      usage: {
-        // Exclude cache-read tokens from prompt/total so cached input is not
-        // charged against budgets or cost; cacheUsage still reports them for
-        // display. (OpenRouter normalizes cached tokens into promptTokens.)
-        promptTokens: Math.max(0, (response.usage?.promptTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0)),
-        completionTokens: response.usage?.completionTokens ?? 0,
-        totalTokens: Math.max(0, (response.usage?.totalTokens ?? 0) - (cacheUsage?.cacheReadInputTokens ?? cacheUsage?.cachedTokens ?? 0)),
-      },
-      raw: response,
-      attachmentResults,
-      cacheUsage,
-      ...(sendReasoningContent && typeof sendReasoningContent === 'string' ? { reasoningContent: sendReasoningContent } : {}),
-    };
+  /**
+   * Indexes, in the built `messages` array, of the messages the host flagged
+   * with `cacheControl` (the summary head).
+   */
+  private hostCacheMarks(params: LLMParams): Set<number> {
+    const marks = new Set<number>();
+    this.sendableMessages(params).forEach((m, i) => { if (m.cacheControl?.type === 'ephemeral') marks.add(i); });
+    return marks;
   }
 
   /**
@@ -348,9 +282,7 @@ export class OpenRouterProvider implements TextProvider {
    * (no toolCallId) are dropped.
    */
   private buildChatCompletionsMessages(params: LLMParams): Array<Record<string, unknown>> {
-    return params.messages
-      .filter(m => !(m.role === 'tool' && !m.toolCallId))
-      .map((m) => {
+    return this.sendableMessages(params).map((m) => {
         if (m.role === 'tool' && m.toolCallId) {
           return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
         }
@@ -387,10 +319,17 @@ export class OpenRouterProvider implements TextProvider {
       stop: params.stop,
     };
 
-    // Forward Quilltap's per-character cache identifier as `user`. OpenAI-
-    // routed downstreams use it as a sticky-routing hint; others ignore it.
+    // Quilltap's per-character cache identifier. `session_id` (≤256 chars)
+    // makes OpenRouter's provider stickiness start on the first successful
+    // request instead of waiting for a cache hit, and keys it per character
+    // rather than by a hash of the opening messages. `prompt_cache_key` is
+    // OpenAI's own sharding hint (and OpenRouter's sticky fallback); `user`
+    // is kept for routes that read only that. Stickiness is skipped when the
+    // profile pins `provider.order` — OpenRouter's rule, not ours.
     if (typeof params.cacheKey === 'string' && params.cacheKey.length > 0) {
       body.user = params.cacheKey;
+      body.prompt_cache_key = params.cacheKey;
+      if (params.cacheKey.length <= 256) body.session_id = params.cacheKey;
     }
 
     // Tools in OpenAI function shape (a no-op on tools already in that shape).
@@ -427,6 +366,25 @@ export class OpenRouterProvider implements TextProvider {
     }
 
     const profileParams = params.profileParameters as OpenRouterProfileParams | undefined;
+
+    // Claude caches only when asked, and only at explicit breakpoints placed
+    // where the prompt is stable (cache-breakpoints.ts) — never OpenRouter's
+    // automatic mode, whose one breakpoint lands on the turn-variable newest
+    // line. Writes cost 1.25x input (2x for the hour), so it stays opt-in,
+    // like the direct Anthropic plugin.
+    if (profileParams?.enablePromptCaching === true && isAnthropicRoutedModel(params.model)) {
+      const placed = applyClaudeCacheBreakpoints(
+        body.messages,
+        this.hostCacheMarks(params),
+        profileParams.cacheTTL,
+      );
+      logger.debug('Placed Claude prompt-cache breakpoints', {
+        context: 'OpenRouterProvider.buildChatCompletionsBody',
+        model: params.model,
+        ttl: profileParams.cacheTTL ?? '5m',
+        breakpoints: placed,
+      });
+    }
 
     // Model fallbacks: `models` replaces `model` (can't send both).
     if (profileParams?.fallbackModels?.length) {
@@ -518,22 +476,19 @@ export class OpenRouterProvider implements TextProvider {
     const finishReason = choice?.finish_reason || 'stop';
     const reasoningContent = choice?.message?.reasoning;
 
-    // Exclude cache-read tokens from prompt/total so cached input is not charged
-    // against budgets or cost; cacheUsage still reports them for display.
-    const cachedTokens = data.usage?.prompt_tokens_details?.cached_tokens;
-    const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
-      ? { cacheReadInputTokens: cachedTokens, cachedTokens }
-      : undefined;
-    const cacheRead = cachedTokens ?? 0;
+    const { usage, cacheUsage } = readOpenRouterUsage(data.usage);
+    logger.debug('OpenRouter Chat Completions send finished', {
+      context: 'OpenRouterProvider.sendViaChatCompletions',
+      finishReason,
+      usage,
+      cacheUsage,
+      cost: data.usage?.cost,
+    });
 
     return {
       content: contentStr,
       finishReason,
-      usage: {
-        promptTokens: Math.max(0, (data.usage?.prompt_tokens ?? 0) - cacheRead),
-        completionTokens: data.usage?.completion_tokens ?? 0,
-        totalTokens: Math.max(0, (data.usage?.total_tokens ?? 0) - cacheRead),
-      },
+      usage,
       raw: data,
       attachmentResults,
       ...(cacheUsage ? { cacheUsage } : {}),
@@ -611,7 +566,8 @@ export class OpenRouterProvider implements TextProvider {
       const decoder = new TextDecoder();
       let buffer = '';
       let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
-      let cacheUsage: { cacheReadInputTokens: number; cachedTokens: number } | undefined;
+      let cacheUsage: OpenRouterCacheUsage | undefined;
+      let rawProviderUsage: Record<string, unknown> | null = null;
       const toolCalls: any[] = [];
       let fetchReasoning = '';
       let refusalText = '';
@@ -688,21 +644,13 @@ export class OpenRouterProvider implements TextProvider {
             }
           }
 
-          // Usage rides on the final chunk, unconditionally. Exclude cache-read
-          // tokens from prompt/total so cached input is not charged against
-          // budgets or cost; cacheUsage still reports them for display.
+          // Usage rides on the final chunk, unconditionally.
           if (chunk.usage) {
             if (typeof chunk.usage.cost === 'number') reportedCost = chunk.usage.cost;
-            const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens;
-            cacheUsage = cachedTokens !== undefined && cachedTokens > 0
-              ? { cacheReadInputTokens: cachedTokens, cachedTokens }
-              : undefined;
-            const cacheRead = cachedTokens ?? 0;
-            usage = {
-              promptTokens: Math.max(0, (chunk.usage.prompt_tokens ?? 0) - cacheRead),
-              completionTokens: chunk.usage.completion_tokens ?? 0,
-              totalTokens: Math.max(0, (chunk.usage.total_tokens ?? 0) - cacheRead),
-            };
+            ({ usage, cacheUsage } = readOpenRouterUsage(chunk.usage));
+            // OpenRouter's own usage object (cached / cache-write split, cost)
+            // goes on the LLM log so cache health can be audited from it.
+            rawProviderUsage = chunk.usage as Record<string, unknown>;
           }
         }
       }
@@ -721,6 +669,7 @@ export class OpenRouterProvider implements TextProvider {
         reasoningFields: [...reasoningFieldsSeen],
         hasUsage: !!usage,
         usage,
+        cacheUsage,
         cost: reportedCost,
       });
       const rawResponse = {
@@ -743,6 +692,7 @@ export class OpenRouterProvider implements TextProvider {
         usage,
         attachmentResults,
         rawResponse,
+        rawProviderUsage,
         ...(cacheUsage ? { cacheUsage } : {}),
         ...(fetchReasoning ? { reasoningContent: fetchReasoning } : {}),
       };

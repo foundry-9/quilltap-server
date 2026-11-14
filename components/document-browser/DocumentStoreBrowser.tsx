@@ -4,7 +4,10 @@
  * A document store's files and folders, browsed the way the wardrobe and
  * the Inventory are: the shared `FolderBrowserShell` (breadcrumb, folder
  * rows, select mode, New folder) over `useDocumentStoreSource`, with a
- * `DocumentRow` per file and a ⋮ menu on every file and folder.
+ * `DocumentRow` per file and a ⋮ menu on every file and folder. A *Pictures*
+ * view lays the same folder out as large tiles instead (`DocumentTile`:
+ * images show themselves, everything else its glyph, name and date over the
+ * foot); the choice is remembered in this browser only.
  *
  * Files open read-only in `DocumentViewerModal`; Move / Copy / Hard link go
  * through `DocumentDestinationDialog`, to any folder of this store or
@@ -16,7 +19,7 @@
  * @module components/document-browser/DocumentStoreBrowser
  */
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { FolderBrowserShell } from '@/components/item-browser/FolderBrowserShell'
 import { pluralize, useFolderBrowserState, useItemFolderHandlers, type ItemFolderOps } from '@/components/item-browser/useFolderBrowserState'
@@ -38,6 +41,7 @@ import type { DocMountLinkLocation } from '@/lib/schemas/mount-index.types'
 import type { DestinationMode } from '@/components/item-browser/DestinationPickerDialog'
 import { useDocumentStoreSource, type DocumentEntry } from './useDocumentStoreSource'
 import { DocumentRow } from './DocumentRow'
+import { DocumentTile } from './DocumentTile'
 import { DocumentViewerModal, downloadDocument } from './DocumentViewer'
 import { DocumentDestinationDialog, useStoreCatalogue, type DocumentDestination } from './DocumentDestinationDialog'
 import { DocumentDescriptionDialog, DocumentLinksDialog } from './DocumentFileDialogs'
@@ -64,6 +68,39 @@ type Transfer =
 
 const tierOf = () => OWN_TIER
 
+type BrowserLayout = 'list' | 'grid'
+const LAYOUT_STORAGE_KEY = 'quilltap.documentBrowser.layout'
+
+// The view choice is a per-browser convenience in localStorage, read through
+// `useSyncExternalStore` so a server render (always the list) hydrates
+// cleanly and every open browser follows a change made in any of them.
+let sessionLayout: BrowserLayout | null = null
+const layoutListeners = new Set<() => void>()
+
+function readStoredLayout(): BrowserLayout {
+  if (sessionLayout) return sessionLayout
+  try {
+    return window.localStorage.getItem(LAYOUT_STORAGE_KEY) === 'grid' ? 'grid' : 'list'
+  } catch {
+    return 'list'
+  }
+}
+
+function subscribeLayout(listener: () => void): () => void {
+  layoutListeners.add(listener)
+  return () => layoutListeners.delete(listener)
+}
+
+function storeLayout(layout: BrowserLayout): void {
+  sessionLayout = layout
+  try {
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, layout)
+  } catch {
+    // A private window or blocked storage: the choice lasts this visit only.
+  }
+  layoutListeners.forEach((listener) => listener())
+}
+
 export function DocumentStoreBrowser({
   storeId,
   onOpenStore,
@@ -78,6 +115,7 @@ export function DocumentStoreBrowser({
   const caps = capabilitiesOf(store)
 
   const [query, setQuery] = useState('')
+  const layout = useSyncExternalStore(subscribeLayout, readStoredLayout, () => 'list' as const)
   const [viewing, setViewing] = useState<DocumentEntry | null>(null)
   const [linksPath, setLinksPath] = useState<string | null>(null)
   const [describing, setDescribing] = useState<DocumentEntry | null>(null)
@@ -346,24 +384,47 @@ export function DocumentStoreBrowser({
             onChange={(e) => setQuery(e.target.value)}
             className="qt-input qt-input-sm flex-1 min-w-[12rem]"
           />
+          <div role="group" aria-label="View" className="flex items-center gap-1">
+            {(
+              [
+                ['list', 'List'],
+                ['grid', 'Pictures'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={layout === value}
+                className={`${layout === value ? 'qt-button-primary' : 'qt-button-secondary'} qt-button-sm`}
+                onClick={() => storeLayout(value)}
+                data-testid={`documents-layout-${value}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <span className="qt-text-xs qt-text-secondary">
             {pluralize(entries.length, 'file')} · {formatBytes(totalSize)}
           </span>
         </div>
       }
-      renderItem={(entry) => (
-        <DocumentRow
-          key={entry.id}
-          entry={entry}
-          actions={store ? documentFileActions(store, entry, { linkTargets }) : ['open', 'download']}
-          onAction={onAction}
-          onRename={renameFile}
-          selectMode={state.selectMode}
-          selected={state.selectedIds.has(entry.id)}
-          onToggle={() => state.toggleSelected(entry)}
-          showFolder={searching}
-        />
-      )}
+      layout={layout}
+      renderItem={(entry) => {
+        const Item = layout === 'grid' ? DocumentTile : DocumentRow
+        return (
+          <Item
+            key={entry.id}
+            entry={entry}
+            actions={store ? documentFileActions(store, entry, { linkTargets }) : ['open', 'download']}
+            onAction={onAction}
+            onRename={renameFile}
+            selectMode={state.selectMode}
+            selected={state.selectedIds.has(entry.id)}
+            onToggle={() => state.toggleSelected(entry)}
+            showFolder={searching}
+          />
+        )
+      }}
       selectActions={
         <>
           {caps.canWrite && caps.canMoveOut && (

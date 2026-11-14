@@ -16,7 +16,7 @@ import {
   PathResolutionError,
   type DocEditScope,
 } from '@/lib/doc-edit';
-import type { DocOpenDocumentInput, DocOpenDocumentOutput } from '../../doc-open-document-tool';
+import { docOpenDocumentTargetPath, type DocOpenDocumentInput, type DocOpenDocumentOutput } from '../../doc-open-document-tool';
 import type { DocCloseDocumentInput, DocCloseDocumentOutput } from '../../doc-close-document-tool';
 import type { DocFocusInput } from '../../doc-focus-tool';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -74,6 +74,21 @@ export async function handleOpenDocument(
   rawInput: DocOpenDocumentInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
+  // A URI must name a file. A path-less one (`qtap://general`) is refused
+  // rather than read as "create": a new blank document is asked for only by
+  // omitting both `uri` and `path`.
+  if (rawInput.uri && docOpenDocumentTargetPath(rawInput) === null) {
+    logger.debug('doc_open_document: refused a URI that names no file', {
+      chatId: context.chatId,
+      uri: rawInput.uri,
+    });
+    return {
+      success: false,
+      error:
+        `The URI "${rawInput.uri}" names no file. Give the file's path in the URI to open it, ` +
+        'or omit both `uri` and `path` to create a new blank document.',
+    };
+  }
   const input = applyQtapUriToInput(rawInput);
   const repos = getRepositories();
   const requestedScope = (input.scope || 'project') as 'document_store' | 'project' | 'general';

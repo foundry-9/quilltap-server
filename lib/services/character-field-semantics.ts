@@ -11,6 +11,7 @@
  * - the character optimizer (lib/services/character-optimizer.service.ts)
  * - the AI Wizard (lib/services/character-wizard.service.ts)
  * - Summon From Lore (lib/services/ai-import.service.ts)
+ * - the External Prompt generator (lib/services/external-prompt-generator.service.ts)
  *
  * Keep these definitions aligned with the "Character field semantics" section
  * of CLAUDE.md and the doc comments on CharacterSchema
@@ -22,7 +23,19 @@ import {
   HAIR_PHYSICAL_BOUNDARY,
   HAIR_PHYSICAL_DESCRIPTION_NOTE,
 } from '@/lib/wardrobe/slot-guidance';
-import type { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
+import {
+  CHARACTER_DESCRIPTION_MD_PATH,
+  CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
+  CHARACTER_IDENTITY_MD_PATH,
+  CHARACTER_MANIFESTO_MD_PATH,
+  CHARACTER_METADATA_JSON_PATH,
+  CHARACTER_PERSONALITY_MD_PATH,
+  CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
+  CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+  CHARACTER_PROPERTIES_JSON_PATH,
+  type CharacterVaultFilePath,
+} from '@/lib/characters/vault/paths';
+import { kindPolicy, type CharacterKind, type GeneratorDirectionKey } from '@/lib/characters/kind';
 
 export const FIELD_SEMANTICS_PREAMBLE = `Quilltap distinguishes four character fields by *vantage point*, plus a fifth foundational field (manifesto) that is not a vantage point. Use these definitions to label which field each pattern belongs to — they are not interchangeable.
 
@@ -114,6 +127,67 @@ export const COMMITTEE_DRIFT_GUARDRAIL = `Committee behaviour is drift, not char
 The same holds for probation behaviour: keeping a tally of {{user}}'s slips; reopening something already forgiven; attaching conditions to the character's own yes or affection; correcting {{user}}'s compliments, stories or offhand opinions; telling {{user}} what they really meant; managing {{user}}'s time or body. Treat these as drift to correct, and never codify agreement, warmth or following {{user}}'s lead as a weakness or a drift risk.`;
 
 /**
+ * How a generated or refined system prompt should direct a STORY character
+ * (kind `roleplay`) to react when the story turns. Without it, generators
+ * wrote temperament as an invariant ("Hostility makes you calmer. Never play
+ * yourself tense") and whole casts met an armed intruder with paperwork
+ * (docs/developer/features/complete/character-kind-and-roleplay-defaults.md §1).
+ * Chosen by `generatorDirectionFor`; never pasted beside it by hand.
+ */
+export const STAKES_AND_REACTION_DIRECTION = `The prompt must also direct how the character REACTS when the story turns, in terms fitted to this character rather than as a generic checklist:
+- Match the stakes. An ordinary scene stays ordinary, but danger, loss, threat, or outrage — to the character, or to someone or something they care about — gets a real reaction: fear, anger, alarm, a hard decision, a fast action. Say what that looks like for this particular character.
+- A temperament is a default, never an absolute. Do not write rules like "never tense", "always calm", "hostility makes you calmer", or "you never lose your temper". Write how this character's calm, humor, or composure bends or breaks when the stakes are real.
+- A character who meets danger by talking — a negotiator, a host, a diplomat — still feels the danger, and the prompt says how it shows. Negotiation is a choice under pressure, never a substitute for fear.
+- Any example in the prompt that shows a threat shows the character feeling it.
+- In a scene with several characters, this character holds their own view; they do not drift to the group's consensus or act as its moderator unless that is their role in the story.
+- When the story turns and {{user}} is not in the scene, the character does not decide where {{user}} is or what {{user}} has been doing off-screen and then act on it; they wonder aloud, call out, or go and look.
+Do not invent violence or drama the source material does not support; this is about how the character responds when the story brings it.`;
+
+/**
+ * How a generated or refined system prompt should direct an ASSISTANT
+ * character (kind `assistant`): a character whose role is doing work for
+ * {{user}}, who still keeps a voice. Chosen by `generatorDirectionFor`.
+ */
+export const ASSISTANT_TASK_DIRECTION = `This character is an assistant: their role in {{user}}'s life is doing work for them — research, drafting, organizing, advising. The prompt must also direct how they work, in the character's own voice rather than as a pasted rule list:
+- Do the task; ask one short clarifying question only when an ambiguity would change the result, otherwise state the assumption and proceed.
+- Accuracy over flourish: say plainly what they don't know or are only inferring, and never invent facts, figures, quotations, dates, or references.
+- Show the working when it helps {{user}} check it. Formatting (lists, headings, tables) is fine when it serves the work.
+- Give opinions about the work once, with reasons, and leave the decision to {{user}}.
+- The character's voice shows in how the work is delivered, not in padding: no preambles, no restating the request, no closing offers of further help.`;
+
+const GENERATOR_DIRECTIONS: Readonly<Record<GeneratorDirectionKey, string>> = {
+  stakes: STAKES_AND_REACTION_DIRECTION,
+  task: ASSISTANT_TASK_DIRECTION,
+};
+
+/**
+ * The kind-specific direction every system-prompt generator includes beside
+ * the voice and trust directions. The one place a generator learns what a
+ * character's kind asks of its prompt.
+ */
+export function generatorDirectionFor(kind: CharacterKind): string {
+  return GENERATOR_DIRECTIONS[kindPolicy(kind).generatorDirection];
+}
+
+/**
+ * Flattening as drift, for the Optimizer's analysis and refine passes on a
+ * roleplay character: the companion to COMMITTEE_DRIFT_GUARDRAIL. A character
+ * whose memories show them placid through events that should have frightened
+ * or angered them has drifted, and an absolute temperament rule in the prompt
+ * is the usual cause.
+ */
+export const FLATTENING_DRIFT_SIGNAL = `Flattening is drift, not character. If the memories show the character meeting danger, threat, loss, or outrage with the same even calm as small talk — vouching for an armed intruder, offering a threat a chair and an appointment, talking a crisis down while everyone they care about is at risk — treat it as a failure mode to correct in the prompt. An absolute temperament rule in the current prompt ("never tense", "always calm", "hostility makes you calmer") is the usual cause: replace it with how this character's temperament bends under real stakes. Never codify unflappable calm as a trait.`;
+
+/**
+ * The kind-specific drift signal for the Optimizer, or null when the kind has
+ * none. Flattening is drift for a story character; an assistant's even keel
+ * is its job.
+ */
+export function kindDriftSignalFor(kind: CharacterKind): string | null {
+  return kindPolicy(kind).generatorDirection === 'stakes' ? FLATTENING_DRIFT_SIGNAL : null;
+}
+
+/**
  * What a set of example dialogues must cover. Examples shape a character's
  * voice more strongly than any instruction, so they must model listening and
  * proportion as well as personality.
@@ -130,7 +204,7 @@ Keep most replies roughly the size of the line they answer, and most should not 
  * data, not prose. The freeform metadata fact sheet is user-authored only and
  * is deliberately NOT part of this bucket for any generation system.
  */
-export const PROPERTIES_SEMANTICS = `- PROPERTIES — small structured facts stored as data, not prose: PRONOUNS (subject/object/possessive, e.g. she/her/hers) and ALIASES (nicknames and alternate names others actually call the character — distinct from TITLE, which is the user's private framing). Only record pronouns and aliases the source material or established memories actually support; never invent placeholders. Note: pronouns also anchor image generation, so they must match the physical description.`;
+export const PROPERTIES_SEMANTICS = `- PROPERTIES — small structured facts stored as data, not prose: PRONOUNS (subject/object/possessive determiner, e.g. she/her/her) and ALIASES (nicknames and alternate names others actually call the character — distinct from TITLE, which is the user's private framing). Only record pronouns and aliases the source material or established memories actually support; never invent placeholders. Note: pronouns also anchor image generation, so they must match the physical description.`;
 
 /**
  * The physical-description bucket: the person with nothing removable —
@@ -162,26 +236,26 @@ ${WARDROBE_SEMANTICS}`;
 /**
  * The short version of what belongs in each core file of a character vault,
  * addressed to the character who owns it (the `self_inventory` tool's
- * `vault.coreFiles` checklist). Keyed by the overlay's own path list, so a
- * core file added there fails to compile until it is described here.
+ * `vault.coreFiles` checklist). Keyed by the vault layout's own path union, so
+ * a core file added there fails to compile until it is described here.
  */
-export const CORE_VAULT_FILE_SUMMARIES: Readonly<Record<(typeof SINGLE_FILE_OVERLAY_PATHS)[number], string>> = {
-  'properties.json':
+export const CORE_VAULT_FILE_SUMMARIES: Readonly<Record<CharacterVaultFilePath, string>> = {
+  [CHARACTER_PROPERTIES_JSON_PATH]:
     'Small structured facts as JSON: pronouns, aliases (names others actually call you), title (the user\'s private framing of you), firstMessage (your opening line), talkativeness (0.1–1.0), and canChooseOutfit.',
-  'metadata.json':
+  [CHARACTER_METADATA_JSON_PATH]:
     'Your fact sheet: one flat JSON object of keys the user invents. Never put into your prompt as-is; custom tools may test its keys, and the reserved "progressions" key drives your progress reports.',
-  'identity.md':
+  [CHARACTER_IDENTITY_MD_PATH]:
     'Surface knowledge of you from outside: name, station, occupation, public reputation. Third person, read only by others; never inner motivation.',
-  'description.md':
+  [CHARACTER_DESCRIPTION_MD_PATH]:
     'What someone talking with you notices: behaviour, mannerisms, verbal habits. Third person; not physical appearance, not inner monologue.',
-  'manifesto.md':
+  [CHARACTER_MANIFESTO_MD_PATH]:
     'Your axiomatic core: short, declarative truths every other file must stay consistent with. Addressed to you, in second person.',
-  'personality.md':
+  [CHARACTER_PERSONALITY_MD_PATH]:
     'What you know about yourself: your inner drivers, unseen by others unless shared. Addressed to you, in second person.',
-  'example-dialogues.md':
+  [CHARACTER_EXAMPLE_DIALOGUES_MD_PATH]:
     'Sample exchanges showing how you speak — style samples for the model, not lore.',
-  'physical-description.md':
+  [CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH]:
     'Your body with nothing removable: face, hair, eyes, skin, build, distinctive features. No clothing or accessories (those are the wardrobe). Noun phrases; also fed to image models.',
-  'physical-prompts.json':
+  [CHARACTER_PHYSICAL_PROMPTS_JSON_PATH]:
     'Image-generation prompts for your appearance as JSON: headAndShoulders, short, medium, long, complete, plus a `humanoid` flag (false when you have no head, shoulders or body to draw). Terse noun phrases, no clothing.',
 };

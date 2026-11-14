@@ -36,7 +36,7 @@
  * so a character with no Commonplace file renders byte-for-byte as before.
  */
 
-import { readVaultTextFile } from '@/lib/database/repositories/character-properties-overlay'
+import { readVaultFile } from '@/lib/characters/vault/readers'
 import { sanitizeFileName } from '@/lib/mount-index/character-vault'
 import { logger } from '@/lib/logger'
 import { estimateTokens } from '@/lib/tokens/token-counter'
@@ -205,7 +205,7 @@ export async function loadCommonplaceCanon(
   if (!holder.mountPointId) return null
   const path = commonplacePathFor(subject)
   try {
-    const raw = await readVaultTextFile(holder.mountPointId, path, holder.characterId)
+    const raw = await readVaultFile(holder.mountPointId, path, holder.characterId)
     const text = commonplaceFileToCanonText(raw)
     if (text) {
       logger.debug('[Canon] Commonplace digest loaded into canon', {
@@ -277,7 +277,7 @@ async function loadHandCanon(
 ): Promise<CanonSource> {
   if (observer.mountPointId) {
     const path = `${OTHERS_FOLDER}/${sanitizeFileName(subject.name)}.md`
-    const fromVault = await readVaultTextFile(
+    const fromVault = await readVaultFile(
       observer.mountPointId,
       path,
       observer.characterId,

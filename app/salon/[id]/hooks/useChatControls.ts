@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { patchChat, type ChatPatch } from '@/lib/chat/patch-chat'
-import { queryKeys } from '@/lib/query/keys'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
@@ -12,6 +11,7 @@ import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { Chat, Message } from '../types'
+import type { ChatTurnMode, TurnPosition } from '@/lib/schemas/storyteller.types'
 
 /**
  * Persist one `{ chat: { … } }` patch through {@link patchChat}. A server
@@ -55,7 +55,7 @@ function useOptimisticChatField<T>(
   const [value, setValue] = useState<T | null>(null)
   useEffect(() => {
     if (chatValue !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes
       setValue(chatValue ?? null)
     }
   }, [chatValue])
@@ -146,7 +146,7 @@ export function useChatControls({
   const chatResolvedAgentModeEnabled = chat?.resolvedAgentModeEnabled
   useEffect(() => {
     if (chat) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes, also set by the toggle handlers
       setAgentModeEnabled(chatResolvedAgentModeEnabled ?? null)
     }
   }, [chat, chatResolvedAgentModeEnabled])
@@ -170,7 +170,7 @@ export function useChatControls({
   // Initialize documentEditingMode from chat data
   useEffect(() => {
     if (chat?.documentEditingMode !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes, also set by the toggle handlers
       setDocumentEditingMode(chat.documentEditingMode)
     }
   }, [chat?.documentEditingMode])
@@ -178,7 +178,7 @@ export function useChatControls({
   // Initialize allowCrossCharacterVaultReads from chat data
   useEffect(() => {
     if (chat?.allowCrossCharacterVaultReads !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by toggle handler
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic local copy of a chat field: re-seeded when the chat record changes, also set by the toggle handler
       setAllowCrossCharacterVaultReads(chat.allowCrossCharacterVaultReads)
     }
   }, [chat?.allowCrossCharacterVaultReads])
@@ -191,17 +191,10 @@ export function useChatControls({
   }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
   // Fetch connection profiles for participant sidebar dropdowns
-  const { data: profilesData } = useQuery({
-    queryKey: queryKeys.connectionProfiles.all,
-    queryFn: ({ signal }) =>
-      apiFetch<{ profiles: Array<{ id: string; name: string; provider?: string; modelName?: string }> }>(
-        '/api/v1/connection-profiles',
-        { signal }
-      ),
-  })
+  const { data: profilesData } = useConnectionProfilesQuery<{ id: string; name: string; provider?: string; modelName?: string }>()
 
   const connectionProfiles = useMemo(
-    () => profilesData?.profiles?.map((p) => ({
+    () => profilesData?.map((p) => ({
       id: p.id,
       name: p.name,
       provider: p.provider,
@@ -219,17 +212,19 @@ export function useChatControls({
     await persistChatField(chatId, { isPaused: paused }, 'pause state')
   }, [chatId, setIsPaused, setChat])
 
-  // The three-position turn-mode control: Normal / Paused / Storyteller. Pause
-  // and turn mode are independent (a paused storyteller chat records posts
-  // without opening a round), so Paused keeps the turn mode, and Normal /
-  // Storyteller each un-pause and set the mode.
-  const setTurnPosition = useCallback(async (position: 'normal' | 'paused' | 'storyteller') => {
-    if (position === 'paused') {
+  // The four-position turn-mode control: Normal / Manual / Turns / Storyteller.
+  // Manual is the pause, and pause and turn mode are independent (a paused
+  // storyteller chat records posts without opening a round), so Manual keeps
+  // the turn mode, and the other three each un-pause and set the mode.
+  const setTurnPosition = useCallback(async (position: TurnPosition) => {
+    if (position === 'manual') {
       await setPauseState(true)
-      showInfoToast('Auto-responses paused')
+      showInfoToast('Manual: nobody answers until you nudge them')
       return
     }
-    const turnMode = position === 'storyteller' ? 'storyteller' : 'rotation'
+    const turnMode: ChatTurnMode = position === 'storyteller' ? 'storyteller'
+      : position === 'turns' ? 'turns'
+      : 'rotation'
     setIsPaused(false)
     setChat((prev) => (prev ? { ...prev, isPaused: false, turnMode } : prev))
     try {
@@ -242,7 +237,9 @@ export function useChatControls({
       })
       showInfoToast(turnMode === 'storyteller'
         ? 'Storyteller mode: each of your posts asks the company who wishes to answer'
-        : 'Auto-responses resumed')
+        : turnMode === 'turns'
+          ? 'Turns: everyone has their say once, then the room waits for you'
+          : 'Auto-responses resumed')
     } catch (error) {
       showErrorToast('Could not change the turn mode')
       console.error('[useChatControls] turn mode change failed', error)

@@ -33,6 +33,7 @@
  * @module mount-index/scenarios-common
  */
 
+import { resolveFileItemId } from '@/lib/utils/stable-uuid';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -82,6 +83,12 @@ export const renameScenarioSchema = z.object({
 });
 
 export interface ParsedScenario {
+  /**
+   * The scenario's id: its frontmatter `id` when present, else derived from
+   * mount and path (`resolveFileItemId`). One rule on every tier, so a
+   * scenario moved between tiers keeps its id.
+   */
+  id: string;
   /** Relative path inside the mount point, e.g. `Scenarios/welcome.md`. */
   path: string;
   /** Filename inside the folder, without the `.md` extension. */
@@ -163,6 +170,7 @@ export function parseScenarioDoc(doc: DocMountDocument): ParsedScenario | null {
   const fileNameNoExt = doc.fileName.replace(/\.md$/i, '');
 
   return {
+    id: resolveFileItemId(parsed.data?.id, 'scenario', doc.mountPointId, doc.relativePath),
     path: doc.relativePath,
     filename: fileNameNoExt,
     name: (frontmatterName ?? fileNameNoExt).slice(0, 200),
@@ -302,6 +310,8 @@ export async function setScenarioDefaultInFolder(
  * non-empty frontmatter keys into a YAML block and concatenates the body.
  */
 export function buildScenarioFileContent(input: {
+  /** The scenario's stable id, written first so it survives renames and moves. */
+  id?: string;
   name?: string;
   description?: string;
   isDefault?: boolean;
@@ -309,6 +319,9 @@ export function buildScenarioFileContent(input: {
   body: string;
 }): string {
   const frontmatter: Record<string, unknown> = {};
+  if (input.id) {
+    frontmatter.id = input.id;
+  }
   if (input.name && input.name.trim().length > 0) {
     frontmatter.name = input.name.trim();
   }

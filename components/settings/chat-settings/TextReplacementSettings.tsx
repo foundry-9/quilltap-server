@@ -208,7 +208,7 @@ export function TextReplacementSettings({
         <div className="qt-settings-section-heading">Add a rule</div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr,1fr,auto] gap-2 items-end">
           <label className="flex flex-col gap-1">
-            <span className="qt-text-small text-muted-foreground">Trigger</span>
+            <span className="qt-text-small qt-text-secondary">Trigger</span>
             <input
               type="text"
               value={form.fromText}
@@ -220,7 +220,7 @@ export function TextReplacementSettings({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="qt-text-small text-muted-foreground">Replacement</span>
+            <span className="qt-text-small qt-text-secondary">Replacement</span>
             <input
               type="text"
               value={form.toText}
@@ -249,14 +249,14 @@ export function TextReplacementSettings({
           />
           <span>Case-sensitive</span>
         </label>
-        {addError && <div className="qt-text-small text-destructive">{addError}</div>}
+        {addError && <div className="qt-text-small qt-text-destructive">{addError}</div>}
       </form>
 
       {/* Existing rules */}
       <div className="qt-settings-shell p-0">
         <div className="p-4 border-b qt-border-default">
           <div className="qt-settings-section-heading">Rules</div>
-          <div className="qt-text-small text-muted-foreground">
+          <div className="qt-text-small qt-text-secondary">
             {isLoading
               ? 'Loading…'
               : `${rules?.length ?? 0} rule${(rules?.length ?? 0) === 1 ? '' : 's'} defined.`}
@@ -275,7 +275,7 @@ export function TextReplacementSettings({
             ))}
           </ul>
         ) : !isLoading ? (
-          <div className="p-4 qt-text-small text-muted-foreground italic">
+          <div className="p-4 qt-text-small qt-text-secondary italic">
             No rules yet — add one above.
           </div>
         ) : null}
@@ -284,7 +284,7 @@ export function TextReplacementSettings({
       {/* Try-it textarea */}
       <div className="qt-settings-shell qt-settings-field-group">
         <div className="qt-settings-section-heading">Try it</div>
-        <div className="qt-text-small text-muted-foreground">
+        <div className="qt-text-small qt-text-secondary">
           Type here and add a trigger character (space, period, etc.) to see your rules
           fire. This box does not save anything.
           {!enabled && ' (Master toggle is off — replacements are paused.)'}

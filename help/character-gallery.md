@@ -4,7 +4,7 @@ url: /aurora
 
 # A Character's Photo Album — The Aurora Gallery
 
-Every character in your workshop maintains a photo album. You'll find it on the character's own page — under **Aurora**, in the gallery tab — a grid of every picture that has been deposited into that character's keeping. Portraits the character has favoured, scene illustrations they have asked the Lantern to summon and `keep_image`'d for posterity, and any photographs you have uploaded into their album yourself: all of them line up here, side by side.
+Every character in your workshop maintains a photo album. You'll find it on the character's own page — under **Aurora**, in the **Photos** card of the **Appearance** section — a grid of every picture that has been deposited into that character's keeping. Portraits the character has favoured, scene illustrations they have asked the Lantern to summon and `keep_image`'d for posterity, and any photographs you have uploaded into their album yourself: all of them line up here, side by side.
 
 ## Where the pictures actually live
 

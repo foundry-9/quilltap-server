@@ -15,6 +15,14 @@
  * This constant is the canonical, single source of truth for the prompt.
  */
 
+import {
+  CHARACTER_PERSONALITY_MD_PATH,
+  CHARACTER_PROMPTS_FOLDER,
+  CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_SCENARIOS_FOLDER,
+  CHARACTER_VAULT_FILE_PATHS,
+} from '@/lib/characters/vault/layout';
+
 export const BRAHMA_SQL_PROMPT = `## Reach for the lookup shortcuts first
 
 Most questions about characters and conversations are answered fastest by four read-only shortcuts. Each answers in names, titles and dates — no schema to learn, no IDs to carry between databases — so use them before writing any SQL:
@@ -67,12 +75,12 @@ The \`characters\` row in **main** holds only identity scaffolding, flags, and a
    SELECT l.relativePath, COALESCE(d.content, l.extractedText) AS text
    FROM doc_mount_file_links l
    LEFT JOIN doc_mount_documents d ON d.fileId = l.fileId
-   WHERE l.mountPointId = :mountPointId AND l.relativePath = 'personality.md';
+   WHERE l.mountPointId = :mountPointId AND l.relativePath = '${CHARACTER_PERSONALITY_MD_PATH}';
    \`\`\`
-Vault paths: identity.md, description.md, personality.md, manifesto.md, example-dialogues.md, physical-description.md, physical-prompts.json, properties.json (pronouns/aliases/title/firstMessage/talkativeness), Prompts/<name>.md, Scenarios/<title>.md, Wardrobe/*.md. The same pattern applies to projects (\`projects.officialMountPointId\`) and groups (\`groups.officialMountPointId\`) — the slim row only carries the pointer. If a content column you expect is missing from \`characters\`, that is the vault trap: go read the vault.
+Vault paths: ${CHARACTER_VAULT_FILE_PATHS.filter((p) => p !== CHARACTER_PROPERTIES_JSON_PATH).join(', ')}, ${CHARACTER_PROPERTIES_JSON_PATH} (pronouns/aliases/title/firstMessage/talkativeness), ${CHARACTER_PROMPTS_FOLDER}/<name>.md, ${CHARACTER_SCENARIOS_FOLDER}/<title>.md, Wardrobe/*.md. The same pattern applies to projects (\`projects.officialMountPointId\`) and groups (\`groups.officialMountPointId\`) — the slim row only carries the pointer. If a content column you expect is missing from \`characters\`, that is the vault trap: go read the vault.
 
 ### Memories (the importance question)
-\`memories\` columns that matter: \`characterId\` (the holder), \`aboutCharacterId\` (who it's about — equal to holder = self-knowledge; different = about another character/user persona; NULL = legacy), \`content\`, \`summary\`, \`importance\` (raw REAL, default 0.5), \`reinforcedImportance\` (REAL — the score recall actually uses, and the default sort), \`reinforcementCount\`, \`source\` ('AUTO'|'MANUAL'|'CONSOLIDATED' digests), \`tier\` ('hot'|'cold' — cold rows are consolidated members hidden from recall; \`supersededById\` names the digest that replaced one, \`consolidatedFrom\` is a digest's JSON member ids), \`chatId\`/\`projectId\` (provenance), \`witnessedContext\`, \`relatedMemoryIds\` (JSON graph), \`embedding\` (BLOB). When asked about "importance," show both \`importance\` and \`reinforcedImportance\` and say which is which; lead with \`reinforcedImportance\`. For a distribution, resolve the holder's id in main, then one aggregate over \`memories\` with \`CASE\` buckets, \`AVG\`, \`MIN\`, \`MAX\`, and \`source\` splits — return the histogram, not raw rows.
+\`memories\` columns that matter: \`characterId\` (the holder), \`aboutCharacterId\` (who it's about — equal to holder = self-knowledge; different = about another character/user persona; NULL = legacy), \`content\`, \`summary\`, \`importance\` (raw REAL, default 0.5), \`reinforcedImportance\` (REAL — the score recall actually uses, and the default sort), \`reinforcementCount\`, \`source\` ('AUTO'|'MANUAL'|'CONSOLIDATED' digests), \`tier\` ('hot'|'cold' — cold rows are consolidated members hidden from recall; \`supersededById\` names the row that replaced one — usually the digest it was folded into, or the newer side of a contradiction, \`consolidatedFrom\` is a digest's JSON member ids), \`chatId\`/\`projectId\` (provenance), \`witnessedContext\`, \`relatedMemoryIds\` (JSON graph), \`embedding\` (BLOB). When asked about "importance," show both \`importance\` and \`reinforcedImportance\` and say which is which; lead with \`reinforcedImportance\`. For a distribution, resolve the holder's id in main, then one aggregate over \`memories\` with \`CASE\` buckets, \`AVG\`, \`MIN\`, \`MAX\`, and \`source\` splits — return the histogram, not raw rows.
 
 ### Chats and messages
 \`chats.chatType\` is 'salon' | 'help' | 'autonomous' | 'brahma'. "My chats/conversations" almost always means \`chatType = 'salon'\` — filter to it unless they mean otherwise. \`chats.participants\` is a JSON array (each entry has a \`characterId\`). \`chat_messages\` carries \`chatId\`, \`role\`, \`content\`, \`participantId\`, token/cost columns; system/feature messages set \`systemSender\` (lantern/aurora/host/prospero/carina/…) — filter \`WHERE systemSender IS NULL\` for only real conversational turns. **\`chat_messages.content\` (also \`opaqueContent\`, \`description\`, \`context\`), \`conversation_chunks.content\` and \`llm_logs.request\`/\`response\` are stored compressed:** read them as \`qt_text("content")\`, and never compare or \`LIKE\` the bare column — that matches the compressed bytes, not the words. **Never search message text with \`qt_text(content) LIKE …\`** — it decompresses every message in the instance and takes a very long time; use \`lookup_messages\`, which uses the full-text index. \`chat_messages.participantId\` is a *seat* in that one chat, not a character id: map it through that chat's \`chats.participants\` JSON (each entry's \`id\` → \`characterId\`).

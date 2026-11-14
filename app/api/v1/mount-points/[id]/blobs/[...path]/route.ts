@@ -16,12 +16,13 @@
  * bytes actually live.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
-import { buildContentDisposition, dispositionFor } from '@/lib/api/content-disposition';
+import { dispositionFor } from '@/lib/api/content-disposition';
+import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 import { deleteDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
@@ -58,21 +59,20 @@ export const GET = createContextParamsHandler<Params>(
         const body = new Uint8Array(data.length);
         data.copy(body);
 
-        return new NextResponse(body, {
-          status: 200,
-          headers: {
-            'Content-Type': meta.storedMimeType,
-            'Content-Length': String(meta.sizeBytes),
-            // The stored basename, not originalFileName — images are transcoded
-            // to WebP on upload, so the original name's extension can mismatch
-            // the bytes actually served here.
-            'Content-Disposition': buildContentDisposition(
-              relativePath.split('/').pop() || meta.originalFileName || 'file',
-              disposition
-            ),
-            'Cache-Control': 'private, max-age=3600',
-            'X-Blob-Sha256': meta.sha256,
-          },
+        logger.debug('[Mount Points v1] Serving blob bytes', {
+          mountPointId: id,
+          relativePath,
+          storedMimeType: meta.storedMimeType,
+        });
+        return serveStoredBytes(body, {
+          mimeType: meta.storedMimeType,
+          // The stored basename, not originalFileName — images are transcoded
+          // to WebP on upload, so the original name's extension can mismatch
+          // the bytes actually served here.
+          filename: relativePath.split('/').pop() || meta.originalFileName || 'file',
+          requested: disposition,
+          cacheControl: 'private, max-age=3600',
+          extra: { 'X-Blob-Sha256': meta.sha256 },
         });
       }
 
@@ -83,18 +83,12 @@ export const GET = createContextParamsHandler<Params>(
       const body = new Uint8Array(bytes.length);
       bytes.copy(body);
 
-      return new NextResponse(body, {
-        status: 200,
-        headers: {
-          'Content-Type': mimeForDocument(doc),
-          'Content-Length': String(bytes.length),
-          'Content-Disposition': buildContentDisposition(
-            relativePath.split('/').pop() || 'document',
-            disposition
-          ),
-          'Cache-Control': 'private, max-age=3600',
-          'X-Blob-Sha256': doc.contentSha256,
-        },
+      return serveStoredBytes(body, {
+        mimeType: mimeForDocument(doc),
+        filename: relativePath.split('/').pop() || 'document',
+        requested: disposition,
+        cacheControl: 'private, max-age=3600',
+        extra: { 'X-Blob-Sha256': doc.contentSha256 },
       });
     } catch (error) {
       logger.error(

@@ -68,6 +68,12 @@ export interface OptimizerFilterOptions {
   beforeDate: string | null;
 }
 
+/** What a refinement run works from: memories, the author's instructions, or both. */
+export interface OptimizerSourceOptions {
+  useMemories: boolean;
+  instructions: string;
+}
+
 export interface CharacterOptimizerModalProps {
   characterId: string;
   characterName: string;

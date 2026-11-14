@@ -22,8 +22,8 @@ jest.mock('@/lib/logger', () => {
 });
 
 const readVaultTextFileMock = jest.fn<(mountPointId: string, path: string) => Promise<string | null>>();
-jest.mock('@/lib/database/repositories/vault-overlay/vault-readers', () => ({
-  readVaultTextFile: (...args: [string, string]) => readVaultTextFileMock(...args),
+jest.mock('@/lib/characters/vault/readers', () => ({
+  readVaultFile: (...args: [string, string]) => readVaultTextFileMock(...args),
 }));
 
 const getGeneralMountPointIdMock = jest.fn<() => Promise<string | null>>();

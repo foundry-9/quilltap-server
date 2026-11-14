@@ -76,6 +76,8 @@ function chunkRecord(index: number, total: number, dataBase64: string, sha = SHA
 function stream(records: unknown[]): AsyncIterable<unknown> {
   return (async function* () {
     for (const r of records) yield r
+    // Every real export ends with its footer; the assembler refuses one without (#201).
+    yield { kind: "__footer__", counts: {} }
   })()
 }
 

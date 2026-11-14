@@ -24,6 +24,7 @@ import { readDatabaseDocument } from '@/lib/mount-index/database-store'
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { RECALL_MULTIPLIERS } from './tags'
+import { memoryDateStamp, type MemoryClock } from '../time/clock'
 
 const logger = createServiceLogger('ConversationSummarySearch')
 
@@ -249,13 +250,18 @@ export const RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000
  * the recap's relevant section and the fold-triggered refresh whisper so both
  * surface the conversation UUID identically.
  */
-export function renderRelevantConversationsBlock(matches: VaultConversationMatch[]): string {
+export function renderRelevantConversationsBlock(
+  matches: VaultConversationMatch[],
+  clock?: Pick<MemoryClock, 'timeZone'>,
+): string {
   if (matches.length === 0) return ''
   const entries = matches
     .map(m => {
       // Episodic recall: print the conversation's date so "last week"
-      // becomes confirmable — the frontmatter finally gets read.
-      const date = m.firstMessageAt ? ` (${m.firstMessageAt.slice(0, 10)})` : ''
+      // becomes confirmable — the frontmatter finally gets read. The day is
+      // the memory calendar's, not UTC's (#187).
+      const stamp = memoryDateStamp(m.firstMessageAt, clock)
+      const date = stamp ? ` (${stamp})` : ''
       return `#### ${m.conversationTitle}${date} (\`${m.conversationId}\`)`
     })
     .join('\n')

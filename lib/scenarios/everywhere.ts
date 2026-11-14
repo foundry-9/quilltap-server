@@ -25,7 +25,6 @@ import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { SCENARIOS_FOLDER, buildScenarioList } from '@/lib/mount-index/scenarios-common';
 import {
   GENERAL_OWNER_NAME,
-  characterScenarioIdForPath,
   parseScenarioForScope,
   type ScenarioScope,
 } from '@/lib/scenarios/location';
@@ -171,9 +170,7 @@ export async function listScenariosEverywhere(
       mountPointId: owner.mountPointId,
       scenarios: scenarios.map((s) => ({
         path: s.path,
-        ...(owner.scope === 'character' && {
-          scenarioId: characterScenarioIdForPath(owner.mountPointId, s.path),
-        }),
+        ...(owner.scope === 'character' && { scenarioId: s.id }),
         filename: s.filename,
         name: s.name,
         ...(s.description !== undefined && { description: s.description }),

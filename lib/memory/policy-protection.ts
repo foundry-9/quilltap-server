@@ -30,22 +30,3 @@ export function policyProtectionOf(
   if (memory.tier === 'cold') return 'cold'
   return null
 }
-
-/** Split rows into those a bulk policy path may act on and those it must spare. */
-export function partitionByPolicyProtection<T extends Pick<Memory, 'source' | 'tier'> & Partial<Pick<Memory, 'keystone'>>>(
-  memories: readonly T[],
-): { actionable: T[]; spared: T[]; sparedBy: Record<PolicyProtection, number> } {
-  const actionable: T[] = []
-  const spared: T[] = []
-  const sparedBy: Record<PolicyProtection, number> = { keystone: 0, manual: 0, digest: 0, cold: 0 }
-  for (const memory of memories) {
-    const protection = policyProtectionOf(memory)
-    if (protection) {
-      spared.push(memory)
-      sparedBy[protection]++
-    } else {
-      actionable.push(memory)
-    }
-  }
-  return { actionable, spared, sparedBy }
-}

@@ -5,7 +5,11 @@ import type { Duplex } from 'node:stream';
 import { logger } from './lib/logger';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.HOSTNAME ?? '0.0.0.0';
+// Loopback by default: Quilltap has no login, so listening on every interface
+// hands the whole API to anyone on the network. Opt in to a wider bind with
+// QUILLTAP_HOST (or the HOSTNAME Next's standalone server reads; the Docker
+// image sets it to 0.0.0.0, where the published port is the boundary).
+const hostname = process.env.QUILLTAP_HOST || process.env.HOSTNAME || '127.0.0.1';
 const port = Number(process.env.PORT ?? 3000);
 
 const moduleLogger = logger.child({ module: 'server' });
@@ -46,8 +50,26 @@ async function main(): Promise<void> {
     load: () => Promise<(ws: WebSocket, req: IncomingMessage) => Promise<void>>,
   ): void => {
     const url = req.url ?? '';
+    // Nothing owns this socket until `wss.handleUpgrade` runs, and the handler
+    // module loads asynchronously first. A client that goes away in that window
+    // (a page reload, a closed tab) resets the socket, and the request then
+    // emits `error: aborted` (ECONNRESET). Unheard, that is an
+    // uncaughtException and it takes the whole server down. Listen from the
+    // first moment; `ws` attaches its own handlers once it takes the socket.
+    const onEarlyError = (err: Error): void => {
+      moduleLogger.debug(`${label} WS upgrade aborted before handshake`, {
+        url,
+        error: err.message,
+      });
+    };
+    req.on('error', onEarlyError);
+    socket.on('error', onEarlyError);
     load()
       .then((handle) => {
+        if (socket.destroyed) {
+          moduleLogger.debug(`${label} WS client left before handshake; skipping`, { url });
+          return;
+        }
         wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
           handle(ws, req).catch((err) => {
             moduleLogger.error(`${label} WS upgrade error`, { url }, err as Error);

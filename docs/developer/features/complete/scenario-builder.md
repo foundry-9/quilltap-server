@@ -297,9 +297,9 @@ No new entity. Saves invalidate `queryKeys.scenarios.all`; if `REALTIME_TOPICS` 
 ## 10a. Verification record (V4test, 2026-09-23)
 
 All ten §10 steps were run on V4test with the default profile (OpenAI `gpt-5`). Two defects
-surfaced and were fixed in the same change: [bug 165](../../bugs/fixed/bug-165-scenario-create-transient-id.md)
+surfaced and were fixed in the same change: [bug 165](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-165-scenario-create-transient-id.md)
 (a character scenario's create response carried a transient id, so the picker could not select
-it) and [bug 166](../../bugs/fixed/bug-166-modal-no-group-scenarios.md) (the workspace New Chat
+it) and [bug 166](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-166-modal-no-group-scenarios.md) (the workspace New Chat
 dialog never offered group scenarios). Fixing 166 also led to the save handler checking the
 re-read tiers before selecting anything.
 

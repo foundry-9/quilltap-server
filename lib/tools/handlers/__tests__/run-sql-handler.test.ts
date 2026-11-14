@@ -63,6 +63,10 @@ jest.mock('@/lib/logger', () => {
   return { logger: l };
 });
 
+// The read-only connection module imports the bare driver name, which jest maps
+// to a stub; hand it the real binding so file-backed handles can be reopened.
+jest.mock('better-sqlite3', () => ({ __esModule: true, default: loadDriver() }));
+
 jest.mock('@/lib/database/backends/sqlite/client', () => ({
   getRawDatabase: jest.fn(),
 }));
@@ -78,6 +82,9 @@ import { executeRunSqlTool, fitToBudget } from '../run-sql-handler';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
+
+import { applySqlcipherKey } from '@/lib/database/backends/sqlite/sqlcipher-key';
+import { getReadonlyQueryClient, closeReadonlyQueryClients } from '@/lib/database/backends/sqlite/readonly-query-client';
 
 const CTX = { userId: 'user-1' };
 
@@ -132,6 +139,16 @@ describe('executeRunSqlTool — read-only guard', () => {
     ['VACUUM', 'VACUUM'],
     ['REINDEX', 'REINDEX'],
     ['mutating PRAGMA', 'PRAGMA journal_mode = WAL'],
+    ['PRAGMA rekey function form', "PRAGMA rekey('x')"],
+    ['PRAGMA key function form', "PRAGMA key('x')"],
+    ['PRAGMA query_only function form', 'PRAGMA query_only(1)'],
+    ['PRAGMA writable_schema function form', 'PRAGMA writable_schema(1)'],
+    ['PRAGMA foreign_keys function form', 'PRAGMA foreign_keys(0)'],
+    ['PRAGMA cipher assignment', "PRAGMA cipher='x'"],
+    ['lowercase PRAGMA assignment', 'pragma query_only = 1'],
+    ['allowlisted PRAGMA with assignment', 'PRAGMA table_info = 1'],
+    ['allowlisted PRAGMA with two arguments', 'PRAGMA table_info(a, b)'],
+    ['non-allowlisted pragma table-valued function', "SELECT * FROM pragma_journal_mode"],
     ['multi-statement', 'SELECT 1; DELETE FROM notes'],
     ['CTE wrapping a write', 'WITH x AS (SELECT 1) DELETE FROM notes'],
   ];
@@ -149,6 +166,8 @@ describe('executeRunSqlTool — read-only guard', () => {
     ['WITH … SELECT', 'WITH t AS (SELECT 1 AS n) SELECT n FROM t'],
     ['EXPLAIN', 'EXPLAIN SELECT * FROM notes'],
     ['read-only PRAGMA', 'PRAGMA table_info(memories)'],
+    ['quoted PRAGMA argument', "PRAGMA table_info('memories')"],
+    ['pragma table-valued function', "SELECT name FROM pragma_table_info('memories')"],
   ];
 
   for (const [label, sql] of readQueries) {
@@ -184,6 +203,31 @@ describe('executeRunSqlTool — read-only guard', () => {
   it('documents the guard basis: a real prepared write reports readonly === false', () => {
     expect(mainDb.prepare("INSERT INTO notes (body) VALUES ('z')").readonly).toBe(false);
     expect(mainDb.prepare('SELECT * FROM notes').readonly).toBe(true);
+  });
+});
+
+describe('executeRunSqlTool — dedicated read-only connection', () => {
+  it('runs file-backed queries on a separate read-only handle', async () => {
+    const fs = require('fs');
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-sql-ro-'));
+    const file = path.join(dir, 'db.sqlite');
+    const rw = new Database(file);
+    applySqlcipherKey(rw);
+    rw.exec("CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (1);");
+    jest.mocked(getRawDatabase).mockReturnValue(rw as never);
+    try {
+      const result = await executeRunSqlTool({ sql: 'SELECT id FROM t' }, CTX);
+      expect(result.success).toBe(true);
+      const ro = getReadonlyQueryClient(rw as never);
+      expect(ro).not.toBeNull();
+      expect(ro).not.toBe(rw);
+      expect(() => ro!.exec('INSERT INTO t VALUES (2)')).toThrow();
+    } finally {
+      closeReadonlyQueryClients();
+      rw.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

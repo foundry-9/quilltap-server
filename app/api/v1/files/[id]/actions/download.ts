@@ -4,8 +4,8 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { FileContentMissingError } from '@/lib/file-storage/errors';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
-import { buildContentDisposition } from '../shared';
 import { dispositionFor } from '@/lib/api/content-disposition';
+import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 
 /**
  * Serve a file's bytes.
@@ -13,7 +13,8 @@ import { dispositionFor } from '@/lib/api/content-disposition';
  * `?download=1` switches the Content-Disposition from `inline` to
  * `attachment`, so the browser saves rather than renders and the Electron
  * shell streams through its `will-download` handler instead of the renderer
- * buffering a 4K image into a Blob. Nothing else about the response changes.
+ * buffering a 4K image into a Blob. Headers come from `serveStoredBytes`:
+ * only passive types are ever inline.
  */
 export async function handleDownloadFile(
   ctx: RequestContext,
@@ -34,15 +35,12 @@ export async function handleDownloadFile(
 
     const buffer = await fileStorageManager.downloadFile(fileEntry);
 
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        'Content-Type': fileEntry.mimeType,
-        'Content-Length': buffer.length.toString(),
-        'Content-Disposition': buildContentDisposition(fileEntry.originalFilename, disposition),
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'X-Frame-Options': 'SAMEORIGIN',
-        'Content-Security-Policy': "frame-ancestors 'self'",
-      },
+    logger.debug('[Files v1] Serving file bytes', { fileId, mimeType: fileEntry.mimeType, disposition });
+    return serveStoredBytes(new Uint8Array(buffer), {
+      mimeType: fileEntry.mimeType,
+      filename: fileEntry.originalFilename,
+      requested: disposition,
+      cacheControl: 'public, max-age=31536000, immutable',
     });
   } catch (error) {
     // The row outlived its bytes (a dangling avatar, a deleted mount point).

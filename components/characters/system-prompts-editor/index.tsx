@@ -6,11 +6,13 @@ import { PromptList } from './PromptList'
 import { PromptModal } from './PromptModal'
 import { ImportModal } from './ImportModal'
 import { PreviewModal } from './PreviewModal'
-import { SubpromptsSection } from './SubpromptsSection'
-import { ProgressionsSection } from '@/components/characters/progressions/ProgressionsSection'
 
 /**
- * Main SystemPromptsEditor component for managing character system prompts
+ * The character's named system prompts: list, create / import / edit /
+ * preview / delete, and the star — the one control that sets the default
+ * (the prompt's own route, which moves the flag and the
+ * `defaultSystemPromptId` column together; bug 154). Subprompts and
+ * Progressions are separate cards the character page mounts beside it.
  */
 export function SystemPromptsEditor({
   characterId,
@@ -35,7 +37,7 @@ export function SystemPromptsEditor({
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="qt-heading-4 text-foreground">System Prompts</h3>
+          <h3 className="qt-heading-4 qt-text">System Prompts</h3>
           <p className="qt-text-small">
             Manage multiple system prompts for {characterName}. Select which one to use when creating or configuring a chat.
           </p>
@@ -83,16 +85,6 @@ export function SystemPromptsEditor({
         onCreateClick={editor.openCreateModal}
         onImportClick={editor.openImportModal}
       />
-
-      {/* Subprompts — the smaller, per-chat instructions kept in the vault's
-          Subprompts/ folder. Listed under the primary prompts. */}
-      <SubpromptsSection characterId={characterId} characterName={characterName} />
-
-      {/* Progressions — the timed conditions this character carries, kept
-          under one reserved key in the vault's metadata.json. A sibling of the
-          subprompts above: both are things attached to the character rather
-          than prose fields of them, and both are read at the top of a turn. */}
-      <ProgressionsSection characterId={characterId} characterName={characterName} />
 
       {/* Create/Edit Modal */}
       <PromptModal

@@ -17,7 +17,7 @@ jest.mock('@/lib/mount-index/database-store', () => ({ writeDatabaseDocument: je
 
 import { compareScenarios, scenarioSortKey, sortScenarios } from '@/lib/scenarios/sort'
 import { buildScenarioList, parseScenarioDoc } from '@/lib/mount-index/scenarios-common'
-import { parseScenarioFilesSorted } from '@/lib/database/repositories/vault-overlay/parsers'
+import { parseScenarioFilesSorted } from '@/lib/characters/vault/parsers'
 import type { DocMountDocumentWithLink } from '@/lib/database/repositories/doc-mount-documents.repository'
 
 function doc(fileName: string, content: string): DocMountDocumentWithLink {

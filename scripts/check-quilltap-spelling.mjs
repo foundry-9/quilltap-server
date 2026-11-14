@@ -45,7 +45,6 @@ const ALLOWED_PATHS = new Map([
 
   // Documents that state the spelling rule, and so must quote the wrong spelling.
   ['CLAUDE.md', 'states the spelling rule'],
-  ['docs/developer/bugfix-sessions/README.md', 'states the spelling rule'],
   ['docs/developer/features/complete/brahma-console.md', 'states the spelling rule'],
   ['docs/developer/features/complete/brahma-sql-access.md', 'states the spelling rule'],
   ['docs/developer/features/complete/cli-tier-1-completions.md', 'states the spelling rule'],

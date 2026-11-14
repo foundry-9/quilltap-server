@@ -1,11 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
 import dynamic from 'next/dynamic'
@@ -21,9 +21,7 @@ import { useGroups } from '@/app/aurora/hooks/useGroups'
 import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
 import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
@@ -32,8 +30,8 @@ const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AII
 
 // Lazy so the list bundle doesn't pull in the character detail (chat modal,
 // optimizer, editors) until a character is actually opened in place.
-const CharacterDetailView = dynamic(
-  () => import('./[id]/view/CharacterDetailView').then((m) => m.CharacterDetailView),
+const CharacterPage = dynamic(
+  () => import('./[id]/CharacterPage').then((m) => m.CharacterPage),
   { ssr: false, loading: () => <p className="qt-text-muted p-8 text-center">Loading character…</p> }
 )
 
@@ -88,10 +86,10 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
-  const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
+  const { groups, deleteGroup, createGroup } = useGroups()
   const bgStyle = useSubsystemBackgroundStyle('aurora')
   // In a workspace tab, drilling into a character renders in place (keep-alive)
-  // instead of navigating to /aurora/[id]/view. (Group detail still routes.)
+  // instead of navigating to /aurora/[id]. (Group detail still routes.)
   const {
     inTab,
     selectedId: selectedGroupId,
@@ -99,17 +97,6 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   } = useInTabDrilldown(initialGroupId)
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [openChatForSelected, setOpenChatForSelected] = useState(false)
-
-  // Fetch groups on mount
-  useEffect(() => {
-    fetchGroups()
-  }, [fetchGroups])
-
-  // Navigating back to this tab refreshes the groups list (the characters
-  // list is TanStack-backed and refreshed by the tab-activation invalidator).
-  useOnTabActivated(() => {
-    void fetchGroups()
-  })
 
   const queryClient = useQueryClient()
   // "Show archived" opts into the tombstones the API hides by default; the two
@@ -119,17 +106,12 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     () => queryKeys.characters.list(showArchived ? { archived: 'include' } : undefined),
     [showArchived]
   )
-  const { data, isLoading: loading, error: loadError } = useQuery({
-    queryKey: charactersListKey,
-    queryFn: ({ signal }) =>
-      apiFetch<{ characters: Character[] }>(
-        showArchived ? '/api/v1/characters?archived=include' : '/api/v1/characters',
-        { signal }
-      ),
-  })
-  // Shim preserving SWR's `mutate` signature so the handlers below stay
-  // unchanged: with an updater it writes optimistically (revalidating unless
-  // `{ revalidate: false }`), with no args it revalidates.
+  const { data, isLoading: loading, error: loadError } = useCharactersList<Character>(
+    showArchived ? { archived: 'include' } : undefined,
+  )
+  // Cache writer for the handlers below: with an updater it edits the cached
+  // list (`charactersListKey` is the key `useCharactersList` reads) and
+  // revalidates unless `{ revalidate: false }`; with no args it revalidates.
   const mutateCharacters = useCallback(
     async (
       updater?: (prev: { characters: Character[] } | undefined) => { characters: Character[] } | undefined,
@@ -147,7 +129,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     },
     [queryClient, charactersListKey]
   )
-  const characters = useMemo(() => data?.characters ?? [], [data])
+  const characters = useMemo(() => data ?? [], [data])
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null
 
   const visibleCharacters = useMemo(
@@ -281,7 +263,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       setOpenChatForSelected(false)
       setSelectedCharacterId(characterId)
     } else {
-      router.push(`/aurora/${characterId}/view`)
+      router.push(`/aurora/${characterId}`)
     }
   }
 
@@ -357,35 +339,17 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     }
   }
 
-  const importTitleId = useId()
-  const importRef = useRef<HTMLDivElement>(null)
-  const importKey = useDialogFocus(importRef, importDialogOpen)
-  useEscapeKey(() => setImportDialogOpen(false), importDialogOpen)
-
-  const resetTitleId = useId()
-  const resetRef = useRef<HTMLDivElement>(null)
-  const resetKey = useDialogFocus(resetRef, resetBuiltinsDialogOpen)
-  useEscapeKey(() => setResetBuiltinsDialogOpen(false), resetBuiltinsDialogOpen && !resetBuiltinsInProgress)
-
-  const aiImportTitleId = useId()
-  const aiImportRef = useRef<HTMLDivElement>(null)
-  const aiImportKey = useDialogFocus(aiImportRef, aiImportDialogOpen)
-  useEscapeKey(() => setAIImportDialogOpen(false), aiImportDialogOpen)
-
-  const groupTitleId = useId()
-  const groupRef = useRef<HTMLDivElement>(null)
-  const groupKey = useDialogFocus(groupRef, createGroupDialogOpen)
-  useEscapeKey(() => {
+  const closeCreateGroupDialog = () => {
     setCreateGroupDialogOpen(false)
     setNewGroupName('')
     setNewGroupDescription('')
-  }, createGroupDialogOpen && !creatingGroup)
+  }
 
   // Workspace tab, drilled into a character or group: render its detail in place
   // (the detail views manage their own loading, so this precedes the list gate).
   if (inTab && selectedCharacterId) {
     return (
-      <CharacterDetailView
+      <CharacterPage
         characterId={selectedCharacterId}
         onBack={() => {
           setSelectedCharacterId(null)
@@ -400,12 +364,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     return (
       <GroupDetailView
         groupId={selectedGroupId}
-        onBack={() => {
-          setSelectedGroupId(null)
-          // Reflect any name/color/member edits in the list (a route visit would
-          // have refetched on remount).
-          void fetchGroups()
-        }}
+        onBack={() => setSelectedGroupId(null)}
       />
     )
   }
@@ -413,7 +372,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading characters...</p>
+        <p className="text-lg qt-text">Loading characters...</p>
       </div>
     )
   }
@@ -427,13 +386,13 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   }
 
   return (
-    <div className="character-page qt-page-container text-foreground" style={bgStyle}>
+    <div className="character-page qt-page-container qt-text" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="qt-page-title">Characters</h1>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setShowArchived((v) => !v)}
-            className={`qt-button character-toolbar__button inline-flex items-center gap-1.5 rounded-lg border qt-border-default px-4 py-2 text-sm qt-shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${showArchived ? 'qt-bg-primary/20 qt-text-primary' : 'qt-bg-muted/70 qt-text-primary hover:qt-bg-muted'}`}
+            className={`qt-button character-toolbar__button inline-flex items-center gap-1.5 rounded-lg border qt-border-default px-4 py-2 text-sm qt-shadow-sm transition focus-visible:outline-none focus-visible:ring-2 qt-focus-ring ${showArchived ? 'qt-bg-primary/20 qt-text-primary' : 'qt-bg-muted/70 qt-text-primary hover:qt-bg-muted'}`}
             title={showArchived ? 'Tuck the archived characters back out of sight' : 'Show characters resting in the archive'}
           >
             <Icon name="folder" className="w-4 h-4" />
@@ -441,34 +400,34 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
           </button>
           <button
             onClick={() => setResetBuiltinsDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
             title="Reset built-in characters to first-run defaults"
           >
             Reset Built-in Characters
           </button>
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
           >
             Import from SillyTavern
           </button>
           <button
             onClick={() => setAIImportDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
             title="AI generation of character from any text source"
           >
             Summon From Lore
           </button>
           <button
             onClick={() => setCreateGroupDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 qt-focus-ring"
             title="Create a new group"
           >
             Create Group
           </button>
           <Link
             href="/aurora/new"
-            className="qt-button character-toolbar__button character-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button character-toolbar__button--primary qt-button-primary"
           >
             Create Character
           </Link>
@@ -478,7 +437,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       {/* Groups Section — rendered unconditionally so GroupsGrid can show its
           empty state ("No groups yet") for first-time users. */}
       <div className="mt-8">
-        <h2 className="qt-heading-2 mb-6 text-foreground">Groups</h2>
+        <h2 className="qt-heading-2 mb-6 qt-text">Groups</h2>
         <GroupsGrid
           groups={groups}
           onCreateClick={() => setCreateGroupDialogOpen(true)}
@@ -493,7 +452,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
           <p className="mb-4 text-lg qt-text-secondary">No characters yet</p>
           <Link
             href="/aurora/new"
-            className="qt-text-primary hover:text-primary/80"
+            className="qt-text-primary hover:qt-text-brand/80"
           >
             Create your first character
           </Link>
@@ -525,9 +484,9 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                     </div>
                   )}
                   <div className="flex-grow">
-                    <h2 className="qt-heading-3 text-foreground flex items-center gap-2">
+                    <h2 className="qt-heading-3 qt-text flex items-center gap-2">
                       <Link
-                        href={`/aurora/${character.id}/view`}
+                        href={`/aurora/${character.id}`}
                         onClick={inTab ? (e) => {
                           e.preventDefault()
                           setOpenChatForSelected(false)
@@ -612,7 +571,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                 ) : (
                   <>
                     <Link
-                      href={`/aurora/${character.id}/view?action=chat`}
+                      href={`/aurora/${character.id}?action=chat`}
                       onClick={inTab ? (e) => {
                         e.preventDefault()
                         setOpenChatForSelected(true)
@@ -647,126 +606,119 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       )}
 
       {/* Import Dialog */}
-      {importDialogOpen && (
-        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div
-            ref={importRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={importTitleId}
-            tabIndex={-1}
-            onKeyDown={importKey}
-            className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
-          >
-            <h3 id={importTitleId} className="mb-4 qt-dialog-title text-foreground">
-              Import from SillyTavern
-            </h3>
-            <form onSubmit={handleImport}>
-              <div className="mb-4">
-                <label htmlFor={`${fieldId}-f0`} className="mb-2 block text-sm qt-text-primary">
-                  Select SillyTavern character file (PNG or JSON)
-                </label>
-                <input
-                  id={`${fieldId}-f0`}
-                  type="file"
-                  name="file"
-                  accept=".png,.json"
-                  required
-                  className="block w-full qt-text-small file:mr-4 file:rounded-md file:border-0 file:qt-bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:qt-bg-primary/30"
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setImportDialogOpen(false)}
-                  className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
-                >
-                  Import
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Reset Built-ins Dialog */}
-      {resetBuiltinsDialogOpen && (
-        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div
-            ref={resetRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby={resetTitleId}
-            tabIndex={-1}
-            onKeyDown={resetKey}
-            className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
-          >
-            <h3 id={resetTitleId} className="mb-3 qt-dialog-title text-foreground">
-              Reset Built-in Characters
-            </h3>
-            <p className="mb-5 qt-text-small">
-              This will delete existing Lorian and Riya records if present, then re-import their first-run versions.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setResetBuiltinsDialogOpen(false)}
-                disabled={resetBuiltinsInProgress}
-                className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleResetBuiltins}
-                disabled={resetBuiltinsInProgress}
-                className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {resetBuiltinsInProgress ? 'Resetting...' : 'Reset Built-ins'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* AI Import Dialog */}
-      {aiImportDialogOpen && (
-        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div
-            ref={aiImportRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={aiImportTitleId}
-            tabIndex={-1}
-            onKeyDown={aiImportKey}
-            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 id={aiImportTitleId} className="qt-dialog-title text-foreground">
-                Summon From Lore
-              </h3>
-              <button
-                onClick={() => setAIImportDialogOpen(false)}
-                className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
-              >
-                Close
-              </button>
-            </div>
-            <AIImportWizard
-              onClose={() => setAIImportDialogOpen(false)}
-              onImportSuccess={() => {
-                mutateCharacters()
-              }}
+      <BaseModal
+        isOpen={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        headerless
+        maxWidth="md"
+        className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+        bodyClassName="p-6 overflow-y-auto"
+        overlayClassName="character-import-dialog"
+      >
+        <ModalTitle className="mb-4 qt-dialog-title qt-text">
+          Import from SillyTavern
+        </ModalTitle>
+        <form onSubmit={handleImport}>
+          <div className="mb-4">
+            <label htmlFor={`${fieldId}-f0`} className="mb-2 qt-label">
+              Select SillyTavern character file (PNG or JSON)
+            </label>
+            <input
+              id={`${fieldId}-f0`}
+              type="file"
+              name="file"
+              accept=".png,.json"
+              required
+              className="block w-full qt-text-small file:mr-4 file:rounded-md file:border-0 file:qt-bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:qt-bg-primary/30"
             />
           </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setImportDialogOpen(false)}
+              className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="qt-button qt-button-primary"
+            >
+              Import
+            </button>
+          </div>
+        </form>
+      </BaseModal>
+
+      {/* Reset Built-ins Dialog */}
+      <BaseModal
+        isOpen={resetBuiltinsDialogOpen}
+        onClose={() => setResetBuiltinsDialogOpen(false)}
+        role="alertdialog"
+        busy={resetBuiltinsInProgress}
+        headerless
+        maxWidth="md"
+        className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+        bodyClassName="p-6 overflow-y-auto"
+        overlayClassName="character-import-dialog"
+      >
+        <ModalTitle className="mb-3 qt-dialog-title qt-text">
+          Reset Built-in Characters
+        </ModalTitle>
+        <p className="mb-5 qt-text-small">
+          This will delete existing Lorian and Riya records if present, then re-import their first-run versions.
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => setResetBuiltinsDialogOpen(false)}
+            disabled={resetBuiltinsInProgress}
+            className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleResetBuiltins}
+            disabled={resetBuiltinsInProgress}
+            className="qt-button qt-button-primary"
+          >
+            {resetBuiltinsInProgress ? 'Resetting...' : 'Reset Built-ins'}
+          </button>
         </div>
-      )}
+      </BaseModal>
+
+      {/* AI Import Dialog */}
+      {/* Summon From Lore is a wizard the user types into: a stray backdrop
+          click must not throw the draft away. */}
+      <BaseModal
+        isOpen={aiImportDialogOpen}
+        onClose={() => setAIImportDialogOpen(false)}
+        headerless
+        maxWidth="4xl"
+        className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+        bodyClassName="p-6 overflow-y-auto"
+        overlayClassName="character-import-dialog"
+        closeOnClickOutside={false}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <ModalTitle className="qt-dialog-title qt-text">
+            Summon From Lore
+          </ModalTitle>
+          <button
+            onClick={() => setAIImportDialogOpen(false)}
+            className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
+          >
+            Close
+          </button>
+        </div>
+        <AIImportWizard
+          onClose={() => setAIImportDialogOpen(false)}
+          onImportSuccess={() => {
+            mutateCharacters()
+          }}
+        />
+      </BaseModal>
 
       {/* Delete Character Dialog */}
       {deleteDialogCharacter && (
@@ -779,74 +731,68 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       )}
 
       {/* Create Group Dialog */}
-      {createGroupDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div
-            ref={groupRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={groupTitleId}
-            tabIndex={-1}
-            onKeyDown={groupKey}
-            className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl"
-          >
-            <h3 id={groupTitleId} className="mb-4 qt-dialog-title text-foreground">
-              Create Group
-            </h3>
-            <form onSubmit={handleCreateGroup}>
-              <div className="mb-4">
-                <label htmlFor={`${fieldId}-f1`} className="mb-2 block text-sm font-medium text-foreground">
-                  Group Name *
-                </label>
-                <input
-                  id={`${fieldId}-f1`}
-                  type="text"
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  placeholder="e.g., Adventuring Party"
-                  className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm"
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="mb-6">
-                <label htmlFor={`${fieldId}-f2`} className="mb-2 block text-sm font-medium text-foreground">
-                  Description (optional)
-                </label>
-                <textarea
-                  id={`${fieldId}-f2`}
-                  value={newGroupDescription}
-                  onChange={(e) => setNewGroupDescription(e.target.value)}
-                  placeholder="Optional description of this group"
-                  rows={3}
-                  className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm resize-none"
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCreateGroupDialogOpen(false)
-                    setNewGroupName('')
-                    setNewGroupDescription('')
-                  }}
-                  disabled={creatingGroup}
-                  className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingGroup || !newGroupName.trim()}
-                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {creatingGroup ? 'Creating...' : 'Create'}
-                </button>
-              </div>
-            </form>
+      <BaseModal
+        isOpen={createGroupDialogOpen}
+        onClose={closeCreateGroupDialog}
+        busy={creatingGroup}
+        headerless
+        maxWidth="md"
+        className="rounded-2xl border qt-border-default qt-bg-card shadow-2xl"
+        bodyClassName="p-6 overflow-y-auto"
+       
+        closeOnClickOutside={false}
+      >
+        <ModalTitle className="mb-4 qt-dialog-title qt-text">
+          Create Group
+        </ModalTitle>
+        <form onSubmit={handleCreateGroup}>
+          <div className="mb-4">
+            <label htmlFor={`${fieldId}-f1`} className="mb-2 block text-sm font-medium qt-text">
+              Group Name *
+            </label>
+            <input
+              id={`${fieldId}-f1`}
+              type="text"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="e.g., Adventuring Party"
+              className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent qt-text text-sm"
+              autoFocus
+              required
+            />
           </div>
-        </div>
-      )}
+          <div className="mb-6">
+            <label htmlFor={`${fieldId}-f2`} className="mb-2 block text-sm font-medium qt-text">
+              Description (optional)
+            </label>
+            <textarea
+              id={`${fieldId}-f2`}
+              value={newGroupDescription}
+              onChange={(e) => setNewGroupDescription(e.target.value)}
+              placeholder="Optional description of this group"
+              rows={3}
+              className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent qt-text text-sm resize-none"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={closeCreateGroupDialog}
+              disabled={creatingGroup}
+              className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={creatingGroup || !newGroupName.trim()}
+              className="qt-button qt-button-primary"
+            >
+              {creatingGroup ? 'Creating...' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </BaseModal>
 
     </div>
   )

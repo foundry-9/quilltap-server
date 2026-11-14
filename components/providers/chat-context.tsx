@@ -1,42 +1,51 @@
 'use client';
 
-import { createContext, useContext, ReactNode } from 'react';
-import type { Tag } from '@/components/tags/tag-editor';
+/**
+ * The Salon's per-participant actions, provided once by `SalonView` and read
+ * by the chat sidebar's participant list.
+ *
+ * These thirteen used to be props threaded from `SalonView` through
+ * `ChatSidebar` and `ParticipantsSection` to every `ParticipantCard`, untouched
+ * at each level. The sidebar's own props now carry only what the sidebar
+ * itself reads.
+ */
 
-interface ChatContextType {
-  chatId: string | null;
-  chatTitle: string | null;
-  tags: Tag[];
-  tagsLoading: boolean;
-  tagsFetched: boolean;
-  onTagAdd: (tagName: string) => Promise<void>;
-  onTagRemove: (tagId: string) => Promise<void>;
+import { createContext, useContext, type ReactNode } from 'react';
+import type { ConnectionProfileOption } from '@/components/chat/ParticipantCard';
+
+export interface ChatActions {
+  onNudge: (participantId: string) => void;
+  onQueue: (participantId: string) => void;
+  onDequeue: (participantId: string) => void;
+  onTalkativenessChange?: (participantId: string, value: number) => void;
+  onRemoveCharacter?: (participantId: string) => void;
+  onImpersonate?: (participantId: string) => void;
+  onStopImpersonate?: (participantId: string) => void;
+  connectionProfiles?: ConnectionProfileOption[];
+  onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void;
+  onSystemPromptChange?: (participantId: string, promptId: string | null) => void;
+  onSubpromptsChange?: (participantId: string, subpromptIds: string[]) => void;
+  onRebuildSystemPrompt?: (participantId: string) => void;
+  onRegenerateAvatar?: (participantId: string) => void;
 }
 
-const ChatContext = createContext<ChatContextType | undefined>(undefined);
+const ChatActionsContext = createContext<ChatActions | null>(null);
 
-export function ChatProvider({
+export function ChatActionsProvider({
   children,
   value,
 }: {
   children: ReactNode;
-  value: ChatContextType;
+  value: ChatActions;
 }) {
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+  return <ChatActionsContext.Provider value={value}>{children}</ChatActionsContext.Provider>;
 }
 
-export function useChatContext() {
-  const context = useContext(ChatContext);
+/** The participant actions. Throws outside a `ChatActionsProvider`. */
+export function useChatActions(): ChatActions {
+  const context = useContext(ChatActionsContext);
   if (!context) {
-    return {
-      chatId: null,
-      chatTitle: null,
-      tags: [],
-      tagsLoading: false,
-      tagsFetched: true,
-      onTagAdd: async () => {},
-      onTagRemove: async () => {},
-    };
+    throw new Error('useChatActions must be used within ChatActionsProvider');
   }
   return context;
 }

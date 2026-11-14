@@ -40,7 +40,7 @@ in order; section 4 is what disappears.
 
 ## 2. Defects found (file before the refactor touches the area)
 
-Each is verified against source and filed in the [bug catalogue](../../bugs.md) as bugs 187–197.
+Each is verified against source and filed in the [bug catalogue](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs.md) as bugs 187–197.
 
 | # | Severity | Defect | Where |
 |---|---|---|---|

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
+import { DEFAULT_SUBSYSTEM_DEFINITIONS } from '@/lib/foundry/subsystem-defaults'
 
 export default function Page() {
-  redirect('/settings?tab=system')
+  redirect(DEFAULT_SUBSYSTEM_DEFINITIONS['saquel'].href)
 }

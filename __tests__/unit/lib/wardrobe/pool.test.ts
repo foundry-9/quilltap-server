@@ -18,11 +18,11 @@ jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-jest.mock('@/lib/database/repositories/character-properties-overlay', () => ({
+jest.mock('@/lib/wardrobe/vault-sync', () => ({
   getOverlaidWardrobeItems: jest.fn(),
 }));
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+jest.mock('@/lib/wardrobe/vault-writes', () => ({
   createInMount: jest.fn(),
   updateInMount: jest.fn(),
   deleteInMount: jest.fn(),
@@ -55,7 +55,7 @@ const {
   resolveProjectTierForChat,
 } = require('@/lib/wardrobe/pool') as typeof import('@/lib/wardrobe/pool');
 const { WardrobeRepository } = require('@/lib/database/repositories/wardrobe.repository');
-const { getOverlaidWardrobeItems } = require('@/lib/database/repositories/character-properties-overlay');
+const { getOverlaidWardrobeItems } = require('@/lib/wardrobe/vault-sync');
 const { readSharedWardrobe } = require('@/lib/mount-index/shared-wardrobe');
 const tiered = require('@/lib/mount-index/tiered-mount-pool');
 const { getGeneralMountPointId } = require('@/lib/instance-settings');

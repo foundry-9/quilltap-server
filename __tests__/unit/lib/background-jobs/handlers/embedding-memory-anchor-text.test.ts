@@ -82,6 +82,7 @@ describe('bug 204 — background memory embeds carry the anchor line', () => {
         findById: jest.fn().mockResolvedValue(anchoredMemory),
         updateForCharacter: jest.fn().mockResolvedValue(anchoredMemory),
       },
+      embeddingProfiles: { findById: jest.fn().mockResolvedValue(null) },
       embeddingStatus: {
         markAsEmbedded: jest.fn().mockResolvedValue(undefined),
         markAsFailed: jest.fn().mockResolvedValue(undefined),

@@ -1,12 +1,11 @@
 /**
- * Import connection / image / embedding profiles. All three share the same
- * conflict-strategy shape and never restore API keys (apiKeyId is forced to
- * null on insert).
+ * Import connection / image / embedding profiles. All three go through
+ * `insertUnderPolicy`, and none ever restores an API key: a created profile
+ * has `apiKeyId: null`, and an overwritten one keeps the key it already had.
  *
  * @module import/quilltap-import/import-profiles
  */
 
-import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import type {
@@ -16,9 +15,18 @@ import type {
 } from '@/lib/schemas/types';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
-import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
+import { insertUnderPolicy, OutcomeTally } from '@/lib/backup/insert-policy';
+import { type ImportOptions, type IdMappingState, type ImportCounts, countsFrom, noteWritten } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
+
+/** The profile columns a bundle carries: no id, owner, timestamps or key. */
+function profileFields<P extends { id: string; userId?: string; createdAt?: string; updatedAt?: string; apiKeyId?: string | null }>(
+  profile: P
+): Omit<P, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'apiKeyId'> {
+  const { id: _id, userId: _userId, createdAt: _c, updatedAt: _u, apiKeyId: _key, ...fields } = profile;
+  return fields;
+}
 
 export async function importConnectionProfiles(
   userId: string,
@@ -28,105 +36,73 @@ export async function importConnectionProfiles(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
+  const tally = new OutcomeTally();
 
   // Connection-profile names are unique per user (enforced by a DB index), so
   // an insert must never reuse a name already present. Seed the taken-name set
   // from existing profiles and add each freshly-inserted name as we go.
   const existingProfiles = await repos.connections.findAll();
   const takenNames = new Set(existingProfiles.map((p) => normalizeProfileName(p.name)));
+  const claimName = (wanted: string): string => {
+    const unique = makeUniqueProfileName(wanted, takenNames);
+    if (unique !== wanted) {
+      moduleLogger.debug('Renamed connection profile on import to avoid name collision', { from: wanted, to: unique });
+    }
+    takenNames.add(normalizeProfileName(unique));
+    return unique;
+  };
 
   for (const rawProfile of profiles) {
+    let profile: ConnectionProfile;
     try {
       // Older exports predate some of the columns; seed them so the bundle's
       // age, not the table DEFAULT, decides what the profile comes back as.
-      // Shared with backup restore so the two paths can't drift. This lives
-      // *inside* the per-item try: a bundle is untrusted data, and one item
-      // that fails to seed must be named and skipped, not abort the import
-      // (bug 105).
-      const profile: ConnectionProfile = seedLegacyConnectionProfileFields(rawProfile);
-      if (
-        rawProfile.multiCharacterPrefill === undefined ||
-        rawProfile.supportsImageUpload === undefined
-      ) {
-        moduleLogger.debug('Seeded connection-profile columns the bundle predates', {
-          profileId: profile.id,
-          provider: profile.provider,
-          seededMultiCharacterPrefill: rawProfile.multiCharacterPrefill === undefined,
-          seededSupportsImageUpload: rawProfile.supportsImageUpload === undefined,
-        });
-      }
-
-      const existing = await repos.connections.findById(profile.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.connectionProfiles.set(profile.id, profile.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.connections.delete(profile.id);
-          // The overwritten row's name is no longer taken by it.
-          takenNames.delete(normalizeProfileName(existing.name));
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.connectionProfiles.set(profile.id, newId);
-          const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const uniqueName = makeUniqueProfileName(`${profileData.name} (imported)`, takenNames);
-          if (uniqueName !== `${profileData.name} (imported)`) {
-            moduleLogger.debug('Renamed connection profile on import to avoid name collision', {
-              from: `${profileData.name} (imported)`,
-              to: uniqueName,
-            });
-          }
-          takenNames.add(normalizeProfileName(uniqueName));
-          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
-          const newProfile = await repos.connections.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: uniqueName,
-          }, createOptions);
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const uniqueName = makeUniqueProfileName(profileData.name, takenNames);
-      if (uniqueName !== profileData.name) {
-        moduleLogger.debug('Renamed connection profile on import to avoid name collision', {
-          from: profileData.name,
-          to: uniqueName,
-        });
-      }
-      takenNames.add(normalizeProfileName(uniqueName));
-      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
-      const newProfile = await repos.connections.create({
-        ...profileData,
-        apiKeyId: null, // Don't restore API keys
-        name: uniqueName,
-      }, createOptions);
-      idMaps.connectionProfiles.set(profile.id, newProfile.id);
-      imported++;
+      // Shared with backup restore so the two paths can't drift. Inside the
+      // per-item guard: one item that fails to seed is named and skipped, not
+      // the whole import (bug 105).
+      profile = seedLegacyConnectionProfileFields(rawProfile);
     } catch (error) {
-      warnings.push(
-        `Failed to import connection profile "${rawProfile.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import connection profile', {
-        profileId: rawProfile.id,
-        error: error instanceof Error ? error.message : String(error),
+      tally.add({ status: 'failed' });
+      warnings.push(`Failed to import connection profile "${rawProfile.name}": ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    if (rawProfile.multiCharacterPrefill === undefined || rawProfile.supportsImageUpload === undefined) {
+      moduleLogger.debug('Seeded connection-profile columns the bundle predates', {
+        profileId: profile.id,
+        provider: profile.provider,
+        seededMultiCharacterPrefill: rawProfile.multiCharacterPrefill === undefined,
+        seededSupportsImageUpload: rawProfile.supportsImageUpload === undefined,
       });
     }
+    const fields = profileFields(profile);
+
+    noteWritten(idMaps, tally.add(await insertUnderPolicy<ConnectionProfile>({
+      kind: 'connection profile',
+      label: profile.name,
+      incomingId: profile.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => repos.connections.findById(profile.id),
+      create: ({ id, duplicate }) => repos.connections.create(
+        {
+          ...fields,
+          apiKeyId: null, // Don't restore API keys
+          name: claimName(duplicate ? `${fields.name} (imported)` : fields.name),
+        },
+        id ? { id } : undefined
+      ),
+      update: async (existing) => {
+        // The overwritten row's name is no longer taken by it.
+        takenNames.delete(normalizeProfileName(existing.name));
+        // apiKeyId is left out of the patch: the existing key stays.
+        await repos.connections.update(existing.id, { ...fields, name: claimName(fields.name) });
+      },
+      idMap: idMaps.connectionProfiles,
+      warnings,
+    })));
   }
 
-  return { imported, skipped };
+  return countsFrom(tally);
 }
 
 export async function importImageProfiles(
@@ -137,61 +113,30 @@ export async function importImageProfiles(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
-
+  const tally = new OutcomeTally();
   for (const profile of profiles) {
-    try {
-      const existing = await repos.imageProfiles.findById(profile.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.imageProfiles.set(profile.id, profile.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.imageProfiles.delete(profile.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.imageProfiles.set(profile.id, newId);
-          const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
-          const newProfile = await repos.imageProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: `${profileData.name} (imported)`,
-          }, createOptions);
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
-      const newProfile = await repos.imageProfiles.create({
-        ...profileData,
-        apiKeyId: null, // Don't restore API keys
-      }, createOptions);
-      idMaps.imageProfiles.set(profile.id, newProfile.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import image profile "${profile.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import image profile', {
-        profileId: profile.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    const fields = profileFields(profile);
+    noteWritten(idMaps, tally.add(await insertUnderPolicy<ImageProfile>({
+      kind: 'image profile',
+      label: profile.name,
+      incomingId: profile.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => repos.imageProfiles.findById(profile.id),
+      create: ({ id, duplicate }) => repos.imageProfiles.create(
+        {
+          ...fields,
+          apiKeyId: null, // Don't restore API keys
+          ...(duplicate ? { name: `${fields.name} (imported)` } : {}),
+        },
+        id ? { id } : undefined
+      ),
+      update: (existing) => repos.imageProfiles.update(existing.id, fields),
+      idMap: idMaps.imageProfiles,
+      warnings,
+    })));
   }
-
-  return { imported, skipped };
+  return countsFrom(tally);
 }
 
 export async function importEmbeddingProfiles(
@@ -202,59 +147,28 @@ export async function importEmbeddingProfiles(
   repos: ReturnType<typeof getUserRepositories>,
   warnings: string[]
 ): Promise<ImportCounts> {
-  let imported = 0;
-  let skipped = 0;
-
+  const tally = new OutcomeTally();
   for (const profile of profiles) {
-    try {
-      const existing = await repos.embeddingProfiles.findById(profile.id);
-
-      if (existing) {
-        if (options.conflictStrategy === 'skip') {
-          skipped++;
-          idMaps.embeddingProfiles.set(profile.id, profile.id);
-          continue;
-        }
-
-        if (options.conflictStrategy === 'overwrite') {
-          await repos.embeddingProfiles.delete(profile.id);
-        }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const newId = randomUUID();
-          idMaps.embeddingProfiles.set(profile.id, newId);
-          const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
-          const newProfile = await repos.embeddingProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: `${profileData.name} (imported)`,
-          }, createOptions);
-          imported++;
-          continue;
-        }
-      }
-
-      const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
-      const newProfile = await repos.embeddingProfiles.create({
-        ...profileData,
-        apiKeyId: null, // Don't restore API keys
-      }, createOptions);
-      idMaps.embeddingProfiles.set(profile.id, newProfile.id);
-      imported++;
-    } catch (error) {
-      warnings.push(
-        `Failed to import embedding profile "${profile.name}": ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to import embedding profile', {
-        profileId: profile.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    const fields = profileFields(profile);
+    noteWritten(idMaps, tally.add(await insertUnderPolicy<EmbeddingProfile>({
+      kind: 'embedding profile',
+      label: profile.name,
+      incomingId: profile.id,
+      strategy: options.conflictStrategy,
+      preserveIds: options.preserveIds,
+      findExisting: () => repos.embeddingProfiles.findById(profile.id),
+      create: ({ id, duplicate }) => repos.embeddingProfiles.create(
+        {
+          ...fields,
+          apiKeyId: null, // Don't restore API keys
+          ...(duplicate ? { name: `${fields.name} (imported)` } : {}),
+        },
+        id ? { id } : undefined
+      ),
+      update: (existing) => repos.embeddingProfiles.update(existing.id, fields),
+      idMap: idMaps.embeddingProfiles,
+      warnings,
+    })));
   }
-
-  return { imported, skipped };
+  return countsFrom(tally);
 }

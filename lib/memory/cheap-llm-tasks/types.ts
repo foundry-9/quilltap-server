@@ -5,6 +5,8 @@
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { TargetingTags } from '../candidate'
+import type { KnownThing } from '@/lib/atlas/image-reference'
+import type { SpeakerNames } from '@/lib/chat/speaker-names'
 
 /**
  * A memory as an extractor's parser yields it: the model's part of a
@@ -50,6 +52,15 @@ export interface MemoryDraft {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
+  /**
+   * The seat that wrote the line, when the source row had one. Resolved to a
+   * name by `renderLabelledTranscript` (`lib/chat/speaker-names.ts`) against
+   * the `SpeakerNames` the caller passes; absent, the line is labelled
+   * `User` / `Character`.
+   */
+  participantId?: string | null
+  /** A transcript label the caller already resolved; wins over `participantId`. */
+  speaker?: string
 }
 
 /**
@@ -118,7 +129,6 @@ export interface ImagePromptExpansionContext {
      * gives it a head, face, shoulders or limbs; `gender` is left unset.
      */
     nonHumanoid?: boolean
-    usageContext?: string
     tiers: {
       short?: string
       medium?: string
@@ -151,6 +161,12 @@ export interface ImagePromptExpansionContext {
   characterAesthetic?: string | null
   /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
   depictionGuidelines?: Array<{ characterName: string; content: string }> | null
+  /**
+   * Atlas things the prompt names, with what they look like
+   * (`lib/atlas/image-reference.ts`). Absent or empty: the request is as it
+   * always was.
+   */
+  knownThings?: KnownThing[] | null
 }
 
 /**
@@ -165,6 +181,8 @@ export interface DeriveSceneContextInput {
   recentMessages: ChatMessage[]
   /** Names of characters in the chat */
   characterNames: string[]
+  /** participantId → name for labelling `recentMessages` (`resolveSpeakerNames`); absent, lines read `User` / `Character`. */
+  speakerNames?: SpeakerNames
 }
 
 /**
@@ -193,6 +211,8 @@ export interface SceneStateInput {
   messageCount: number
   /** Chat-level scenario/system prompt that establishes the opening scene */
   chatScenario?: string
+  /** participantId → name for labelling `recentMessages` (`resolveSpeakerNames`); absent, lines read `User` / `Character`. */
+  speakerNames?: SpeakerNames
 }
 
 /**
@@ -222,6 +242,13 @@ export interface StoryBackgroundPromptContext {
    * headed for a moderated provider still gets the concealment treatment.
    */
   uncensoredImageTarget?: boolean
+  /**
+   * Atlas things named in the scene, the scenario or the recent conversation,
+   * with what they look like — a reference the crafter uses only if the thing
+   * is in the picture (`lib/atlas/image-reference.ts`). Rides this object, so
+   * a retry or re-craft carries it. Absent or empty: the request is unchanged.
+   */
+  knownThings?: KnownThing[] | null
 }
 
 /**
@@ -241,8 +268,6 @@ export interface CompressionResult {
  */
 export interface AppearanceResolutionItem {
   characterId: string
-  /** ID of the selected physical description, or null to use the first/default */
-  selectedDescriptionId: string | null
   /** What the character is currently wearing */
   clothingDescription: string
   /** How clothing was determined */
@@ -260,13 +285,11 @@ export interface CharacterAppearanceInput {
    * and must not write clothing onto body parts it lacks.
    */
   nonHumanoid?: boolean
-  physicalDescriptions: Array<{
-    id: string
-    name: string
-    usageContext?: string | null
+  /** The character's one physical description, or null when they have none. */
+  physicalDescription: {
     shortPrompt?: string | null
     mediumPrompt?: string | null
-  }>
+  } | null
   /** Equipped wardrobe items (from the wardrobe system) */
   equippedWardrobeItems?: Array<{
     slot: string        // 'top', 'bottom', 'footwear', 'accessories', 'hair'

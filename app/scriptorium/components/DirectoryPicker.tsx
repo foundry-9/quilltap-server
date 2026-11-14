@@ -43,8 +43,8 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
     setBrowseError(null)
     try {
       const url = dirPath
-        ? `/api/v1/system/browse-directory?path=${encodeURIComponent(dirPath)}`
-        : '/api/v1/system/browse-directory'
+        ? `/api/v1/system/directories?path=${encodeURIComponent(dirPath)}`
+        : '/api/v1/system/directories'
       const res = await fetch(url)
       if (!res.ok) {
         const data = await res.json()
@@ -140,7 +140,7 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
                   key={dir.path}
                   type="button"
                   onClick={() => handleNavigate(dir.path)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-foreground hover:qt-bg-muted/50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm qt-text hover:qt-bg-muted/50 transition-colors"
                 >
                   <Icon name="folder" className="w-4 h-4 qt-text-secondary shrink-0" />
                   <span className="truncate">{dir.name}</span>

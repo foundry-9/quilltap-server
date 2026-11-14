@@ -15,6 +15,11 @@
  * the two moments that need it: seeding from the worn snapshot (replaying any
  * gesture made before it arrived — Bug 61) and the Done flush.
  *
+ * The History tab's "Wear again" stages here too (`stageRollback`). On Done a
+ * staged rollback that still matches what the Live tab shows is committed
+ * through `?action=wardrobe-rollback`, so the history cursor moves rather than
+ * a new entry being appended; one edited further is an ordinary `set_all`.
+ *
  * @module components/wardrobe/hooks/useStagedLiveOutfits
  */
 
@@ -22,7 +27,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { showErrorToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import {
   EMPTY_EQUIPPED_SLOTS,
   cloneEquippedSlots,
@@ -35,8 +40,18 @@ import {
   buildSetAllEquipBody,
   classifyStagedOutfits,
   rebaseStagedGestures,
+  rollbackGesture,
+  rollbackTargetSlots,
+  standingRollbacks,
+  type HistoryEntrySlots,
   type StagedGesture,
+  type StagedRollback,
 } from '@/lib/wardrobe/staged-live-outfits'
+
+interface RollbackResponse {
+  restoredIndex: number
+  skipped?: Array<{ itemId: string; title: string | null; reason: 'archived' | 'missing' }>
+}
 
 export interface UseStagedLiveOutfitsOptions {
   chatId: string | null
@@ -62,12 +77,20 @@ export interface UseStagedLiveOutfitsResult {
   /** True when a character has staged edits Done would commit. */
   isDirty: (characterId: string) => boolean
   /**
-   * Throw away a character's staged edits — the History tab's rollback must
-   * never be flushed over on Done. The Live tab re-seeds from the next worn
-   * snapshot that arrives, or at once with `{ reseed: true }` (call that after
-   * the rollback's refetch has settled).
+   * Stage a return to a recorded outfit for the current character, replacing
+   * any other staging. Nothing is sent until Done.
    */
-  discard: (characterId: string, options?: { reseed?: boolean }) => void
+  stageRollback: (entry: { index: number; slots: HistoryEntrySlots }) => void
+  /**
+   * The history index a character's staging returns them to, or null when no
+   * rollback is staged or the Live tab has been edited away from it since.
+   */
+  stagedRollbackIndex: (characterId: string) => number | null
+  /**
+   * Throw away a character's staged edits (a staged rollback included). The
+   * Live tab re-seeds from the current worn snapshot.
+   */
+  discard: (characterId: string) => void
 }
 
 export function useStagedLiveOutfits({
@@ -84,6 +107,8 @@ export function useStagedLiveOutfits({
   // slots hold only the dissolved leaves, so these ids ride beside them on the
   // `set_all` flush for the wear ledger. Recomputed on rebase, cleared on commit.
   const [wornBundlesByChar, setWornBundlesByChar] = useState<Record<string, string[]>>({})
+  // History-tab picks, per character, until Done or discard.
+  const [rollbackByChar, setRollbackByChar] = useState<Record<string, StagedRollback>>({})
   const baselineByCharRef = useRef<Record<string, EquippedSlots>>({})
   const seededRef = useRef<Set<string>>(new Set())
   // Gestures made before the worn snapshot arrived, keyed by character. The
@@ -164,10 +189,48 @@ export function useStagedLiveOutfits({
       if (!discard) return false
     }
 
-    if (dirty.length === 0) return true
+    const rollbacks = standingRollbacks(
+      rollbackByChar,
+      stagedByChar,
+      baselineByCharRef.current,
+      wornBundlesByChar,
+    )
+    const rollbackIds = new Set(rollbacks.map((r) => r.characterId))
+    const setAll = dirty.filter((d) => !rollbackIds.has(d.characterId))
+
+    if (setAll.length === 0 && rollbacks.length === 0) return true
 
     let allOk = true
-    for (const { characterId: cid, slots, wornBundleIds } of dirty) {
+    for (const { characterId: cid, index, slots } of rollbacks) {
+      const result = await fetchJson<RollbackResponse>(
+        `/api/v1/chats/${chatId}?action=wardrobe-rollback`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ characterId: cid, index }),
+        },
+      )
+      if (!result.ok || !result.data) {
+        showErrorToast(result.error || 'Could not return to that outfit')
+        allOk = false
+        continue
+      }
+      baselineByCharRef.current[cid] = cloneEquippedSlots(slots)
+      setRollbackByChar((prev) => {
+        const next = { ...prev }
+        delete next[cid]
+        return next
+      })
+      const skipped = result.data.skipped ?? []
+      if (skipped.length > 0) {
+        const names = skipped.map((s) => s.title ?? s.itemId).join(', ')
+        showSuccessToast(
+          `Back in outfit ${result.data.restoredIndex}. ${skipped.length} item${skipped.length === 1 ? '' : 's'} could not be put back on: ${names}`,
+        )
+      }
+    }
+
+    for (const { characterId: cid, slots, wornBundleIds } of setAll) {
       const result = await fetchJson<{ equippedSlots: EquippedSlots }>(
         `/api/v1/chats/${chatId}?action=equip`,
         {
@@ -187,13 +250,18 @@ export function useStagedLiveOutfits({
           delete next[cid]
           return next
         })
+        setRollbackByChar((prev) => {
+          const next = { ...prev }
+          delete next[cid]
+          return next
+        })
       }
     }
     // A committed outfit may have put garments on — every wear tally, and the
     // worn snapshot itself, is stale.
     await queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.all })
     return allOk
-  }, [chatId, stagedByChar, wornBundlesByChar, characterName, requestConfirmation, queryClient])
+  }, [chatId, stagedByChar, wornBundlesByChar, rollbackByChar, characterName, requestConfirmation, queryClient])
 
   const isDirty = useCallback(
     (cid: string): boolean => {
@@ -201,38 +269,73 @@ export function useStagedLiveOutfits({
       if (!staged) return (pendingRef.current[cid]?.length ?? 0) > 0
       const baseline = baselineByCharRef.current[cid]
       if (!baseline) return true
-      return !equippedSlotsEqual(staged, baseline) || (wornBundlesByChar[cid]?.length ?? 0) > 0
+      return (
+        !equippedSlotsEqual(staged, baseline) ||
+        (wornBundlesByChar[cid]?.length ?? 0) > 0 ||
+        rollbackByChar[cid] !== undefined
+      )
     },
-    [stagedByChar, wornBundlesByChar],
+    [stagedByChar, wornBundlesByChar, rollbackByChar],
   )
 
   const discard = useCallback(
-    (cid: string, options?: { reseed?: boolean }) => {
-      if (options?.reseed) {
-        // Only if nothing has re-seeded it since the staging was dropped.
-        if (!seededRef.current.has(seedKeyFor(cid))) setReseedTick((t) => t + 1)
-        return
-      }
+    (cid: string) => {
       seededRef.current.delete(seedKeyFor(cid))
       delete pendingRef.current[cid]
       delete baselineByCharRef.current[cid]
-      setStagedByChar((prev) => {
+      const drop = <T,>(prev: Record<string, T>): Record<string, T> => {
         const next = { ...prev }
         delete next[cid]
         return next
-      })
+      }
+      setStagedByChar(drop)
+      setWornBundlesByChar(drop)
+      setRollbackByChar(drop)
+      // Re-seed from the snapshot already in hand.
+      setReseedTick((t) => t + 1)
+    },
+    [seedKeyFor],
+  )
+
+  const stageRollback = useCallback(
+    (entry: { index: number; slots: HistoryEntrySlots }) => {
+      if (!isInChat || !characterId) return
+      const cid = characterId
+      const gesture = rollbackGesture(entry.slots)
+      // The pick replaces the outfit outright, so it is applied to the worn
+      // snapshot — any earlier staging (and its outfit claims) goes.
+      delete pendingRef.current[cid]
+      if (!seededRef.current.has(seedKeyFor(cid))) pendingRef.current[cid] = [gesture]
       setWornBundlesByChar((prev) => {
         const next = { ...prev }
         delete next[cid]
         return next
       })
+      const base = baselineByCharRef.current[cid] ?? wornSlots
+      setStagedByChar((prev) => ({
+        ...prev,
+        [cid]: gesture.mutate(base ? cloneEquippedSlots(base) : makeEmptyEquippedSlots()),
+      }))
+      setRollbackByChar((prev) => ({ ...prev, [cid]: { index: entry.index, slots: entry.slots } }))
     },
-    [seedKeyFor],
+    [isInChat, characterId, wornSlots, seedKeyFor],
+  )
+
+  const stagedRollbackIndex = useCallback(
+    (cid: string): number | null => {
+      const rollback = rollbackByChar[cid]
+      const staged = stagedByChar[cid]
+      if (!rollback || !staged) return null
+      const base = baselineByCharRef.current[cid] ?? wornSlots
+      if (!base) return rollback.index
+      return equippedSlotsEqual(staged, rollbackTargetSlots(rollback.slots, base)) ? rollback.index : null
+    },
+    [rollbackByChar, stagedByChar, wornSlots],
   )
 
   const displaySlots: EquippedSlots = characterId
     ? stagedByChar[characterId] ?? wornSlots ?? EMPTY_EQUIPPED_SLOTS
     : EMPTY_EQUIPPED_SLOTS
 
-  return { displaySlots, apply, flush, isDirty, discard }
+  return { displaySlots, apply, flush, isDirty, stageRollback, stagedRollbackIndex, discard }
 }

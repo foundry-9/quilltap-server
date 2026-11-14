@@ -141,7 +141,7 @@ export function DiagramBlock({ engine, language, source, style, streaming = fals
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err)
-          console.debug('[diagrams] Diagram could not be drawn', { engine, error: message })
+          console.warn('[diagrams] Diagram could not be drawn', { engine, error: message })
           if (!cancelled) setResult({ key: cacheKey, error: message })
         })
     })

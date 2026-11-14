@@ -39,7 +39,7 @@ export function AutonomousRoomSettingsComponent({
     <div className="space-y-4">
       <div>
         <label className="block">
-          <span className="font-medium text-foreground">Daily token budget</span>
+          <span className="font-medium qt-text">Daily token budget</span>
           <span className="block qt-text-small mt-1 mb-2">
             Caps the cumulative input + output tokens spent across every autonomous room you own,
             rolled over at instance-local midnight. Leave blank for no cap. Pilot value: 1,000,000.
@@ -55,7 +55,7 @@ export function AutonomousRoomSettingsComponent({
 
       <div>
         <label className="block">
-          <span className="font-medium text-foreground">Default freshness window</span>
+          <span className="font-medium qt-text">Default freshness window</span>
           <span className="block qt-text-small mt-1 mb-2">
             How long after a missed scheduled run the scheduler should still consider catching up,
             in hours. Per-room overrides are honored. Default: 12 hours.
@@ -71,7 +71,7 @@ export function AutonomousRoomSettingsComponent({
 
       <div>
         <label className="block">
-          <span className="font-medium text-foreground">Default visibility</span>
+          <span className="font-medium qt-text">Default visibility</span>
           <span className="block qt-text-small mt-1 mb-2">
             Where new autonomous rooms appear by default. Per-room overrides are honored at creation.
           </span>
@@ -90,7 +90,7 @@ export function AutonomousRoomSettingsComponent({
 
       <div>
         <label className="block">
-          <span className="font-medium text-foreground">Destructive-tool policy</span>
+          <span className="font-medium qt-text">Destructive-tool policy</span>
           <span className="block qt-text-small mt-1 mb-2">
             Acts as a ceiling: <em>Always refuse</em> blocks destructive tools across every autonomous
             room regardless of per-room settings; <em>Opt in per room</em> honors a room&rsquo;s explicit

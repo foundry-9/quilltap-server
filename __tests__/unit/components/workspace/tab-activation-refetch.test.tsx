@@ -101,14 +101,15 @@ describe('tabActivationQueryKeys', () => {
     }
   })
 
-  it('scopes character-view invalidation to the payload character', () => {
-    expect(tabActivationQueryKeys(tab('character-view', { characterId: 'c9' }))).toEqual([
+  it('scopes character invalidation to the payload character', () => {
+    expect(tabActivationQueryKeys(tab('character', { characterId: 'c9' }))).toEqual([
       queryKeys.characters.detail('c9'),
       queryKeys.characters.prompts('c9'),
       queryKeys.characters.subprompts('c9'),
       queryKeys.characters.photos('c9'),
+      queryKeys.characters.stats('c9'),
     ])
-    expect(tabActivationQueryKeys(tab('character-view'))).toEqual([])
+    expect(tabActivationQueryKeys(tab('character'))).toEqual([])
   })
 
   it('leaves live surfaces and unsaved-state editors alone', () => {
@@ -118,7 +119,6 @@ describe('tabActivationQueryKeys', () => {
       'document',
       'document-standalone',
       'brahma',
-      'character-edit',
       'character-new',
       'settings-wizard',
       'about',

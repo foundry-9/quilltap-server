@@ -27,20 +27,20 @@ export type TabKind =
   | 'aurora'
   | 'prospero'
   | 'scriptorium'
-  | 'settings' // payload: { tab?: string; section?: string } (deep-link target)
+  | 'settings' // payload: SettingsTabPayload (deep-link target)
   | 'files'
   | 'photos'
   | 'scenarios'
   | 'brahma'
   | 'wardrobe' // payload: { characterId?: string } — RAIL-opened only; NO chatId
   | 'inventory' // payload: { characterId?: string; projectId?: string } — RAIL-opened only; NO chatId
+  | 'atlas' // payload: { characterId?: string; projectId?: string } — RAIL-opened only; NO chatId
   | 'profile' // the user's profile page
   | 'about' // the About page
   | 'generate-image' // standalone (chat-less) image generation
   | 'document-standalone' // standalone (chat-less) Document Mode editor — payload: DocumentStandaloneTabPayload
   | 'character-new' // the create-a-character form
-  | 'character-edit' // payload: { characterId: string; tab?: string }
-  | 'character-view' // payload: { characterId: string; tab?: string } — the read-only character detail page
+  | 'character' // payload: CharacterTabPayload — the one character page (`/aurora/[id]`)
   | 'settings-wizard' // the provider setup wizard, re-entered from Settings
   | 'custom-tools' // Pascal's Workbench — payload: CustomToolsTabPayload (absent = library view)
 
@@ -68,13 +68,13 @@ export const TAB_KINDS = [
   'brahma',
   'wardrobe',
   'inventory',
+  'atlas',
   'profile',
   'about',
   'generate-image',
   'document-standalone',
   'character-new',
-  'character-edit',
-  'character-view',
+  'character',
   'settings-wizard',
   'custom-tools',
 ] as const satisfies readonly TabKind[]
@@ -159,9 +159,16 @@ export interface AuroraTabPayload {
   groupId?: string
 }
 
+/** A settings deep link — see `resolveSettingsLink` (`lib/settings/registry.ts`). */
 export interface SettingsTabPayload {
+  group?: string
+  /** Legacy eight-tab id, bridged to a group. */
   tab?: string
   section?: string
+  persona?: string
+  q?: string
+  /** A provider card to open inside Connections → Providers. */
+  provider?: string
 }
 export interface WardrobeTabPayload {
   characterId?: string
@@ -170,20 +177,23 @@ export interface InventoryTabPayload {
   characterId?: string
   projectId?: string
 }
-export interface CharacterEditTabPayload {
-  characterId: string
-  /** Deep-link target sub-tab (e.g. `system-prompts`). */
-  tab?: string
+export interface AtlasTabPayload {
+  characterId?: string
+  projectId?: string
 }
-export interface CharacterViewTabPayload {
+/**
+ * The one character page. `section` deep-links one of its six sections
+ * (`lib/characters/page-sections.ts`). A `?action=chat` deep link is not
+ * carried here — it opens the New Chat modal once, beside the tab.
+ */
+export interface CharacterTabPayload {
   characterId: string
-  /** Deep-link target sub-tab (e.g. `conversations`). */
-  tab?: string
+  section?: string
 }
 /**
  * Pascal's Workbench. No payload = the library view. A `mountPointId` + `path`
  * pair opens one definition in the builder (one tab per open definition, like
- * `character-edit`); `create` opens the builder on a fresh draft, with
+ * the character page); `create` opens the builder on a fresh draft, with
  * `mountPointId` preselecting the destination.
  */
 export interface CustomToolsTabPayload {

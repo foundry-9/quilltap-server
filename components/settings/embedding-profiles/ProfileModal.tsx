@@ -19,6 +19,11 @@ interface ProfileModalProps {
   apiKeys: ApiKey[]
   embeddingModels: Record<string, EmbeddingModel[]>
   embeddingProviders: EmbeddingProviderInfo[]
+  /**
+   * Provider to preselect on a new profile (the per-provider card's Add menu);
+   * honoured only when it is one of `embeddingProviders`. Ignored when editing.
+   */
+  initialProvider?: string
 }
 
 export function ProfileModal({
@@ -29,6 +34,7 @@ export function ProfileModal({
   apiKeys,
   embeddingModels,
   embeddingProviders,
+  initialProvider,
 }: ProfileModalProps) {
   const id = useId()
   const {
@@ -46,11 +52,13 @@ export function ProfileModal({
 
   // Default to first available provider or 'BUILTIN'
   const defaultProvider = embeddingProviders[0]?.name || 'BUILTIN'
+  const presetProvider = embeddingProviders.find((p) => p.name === initialProvider)?.name
+  const presetKeys = presetProvider ? apiKeys.filter((k) => k.provider === presetProvider) : []
 
   const form = useFormState<EmbeddingProfileFormData>({
     name: profile?.name || '',
-    provider: profile?.provider || defaultProvider,
-    apiKeyId: profile?.apiKeyId || '',
+    provider: profile?.provider || presetProvider || defaultProvider,
+    apiKeyId: profile?.apiKeyId || (presetKeys.length === 1 ? presetKeys[0].id : ''),
     baseUrl: profile?.baseUrl || '',
     modelName: profile?.modelName || '',
     dimensions: profile?.dimensions?.toString() || '',
@@ -83,10 +91,13 @@ export function ProfileModal({
       const payload = {
         name: form.formData.name,
         provider: form.formData.provider,
-        apiKeyId: form.formData.apiKeyId || undefined,
-        baseUrl: form.formData.baseUrl || undefined,
+        // `null`, never `undefined`: JSON drops an undefined key, and an
+        // absent key on an edit means "leave it" — so a cleared field must be
+        // sent as null to be cleared.
+        apiKeyId: form.formData.apiKeyId || null,
+        baseUrl: form.formData.baseUrl || null,
         modelName,
-        dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions) : undefined,
+        dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions, 10) : null,
         isDefault: form.formData.isDefault,
       }
 
@@ -397,9 +408,9 @@ export function ProfileModal({
             name="isDefault"
             checked={form.formData.isDefault}
             onChange={form.handleChange}
-            className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+            className="qt-checkbox"
           />
-          <label htmlFor="isDefault" className="ml-2 block qt-text-label text-foreground">
+          <label htmlFor="isDefault" className="ml-2 block qt-text-label qt-text">
             Set as default embedding profile
           </label>
         </div>
@@ -439,7 +450,7 @@ export function ProfileModal({
         </div>
       }
     >
-      <p className="text-foreground">
+      <p className="qt-text">
         You&apos;ve switched the default embedding profile. All existing
         embeddings were created with a different model and need to be
         regenerated — this includes help documentation, character memories,

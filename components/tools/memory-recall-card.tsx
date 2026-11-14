@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { apiFetch } from '@/lib/query/fetcher'
@@ -49,6 +49,7 @@ const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
  * recall path; see lib/memory/recall-tags.ts.
  */
 export function MemoryRecallCard() {
+  const queryClient = useQueryClient()
   const id = useId()
   const [config, setConfig] = useState<RecallConfig>(DEFAULT_CONFIG)
   const [saving, setSaving] = useState(false)
@@ -89,6 +90,9 @@ export function MemoryRecallCard() {
         throw new Error(data.error || 'Failed to save recall settings')
       }
       const data = await response.json()
+      // Re-seed the cached read, so a remount within the stale time shows
+      // (and could re-save) the saved values rather than the pre-save ones.
+      queryClient.setQueryData(queryKeys.memories.recallConfig, data)
       setConfig({ ...DEFAULT_CONFIG, ...data.settings })
       showSuccessToast('Recall settings saved')
     } catch (err) {
@@ -156,7 +160,7 @@ export function MemoryRecallCard() {
           className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
-          <div className="font-medium text-foreground">Follow the threads between memories</div>
+          <div className="font-medium qt-text">Follow the threads between memories</div>
           <div className="qt-text-small mt-1">
             When a memory surfaces, gather the handful of others it is bound to and let them
             compete for a place in the recollection too. This rescues the memory that is plainly
@@ -175,7 +179,7 @@ export function MemoryRecallCard() {
           className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
-          <div className="font-medium text-foreground">Consult past conversations every turn</div>
+          <div className="font-medium qt-text">Consult past conversations every turn</div>
           <div className="qt-text-small mt-1">
             Ordinarily the Book re-reads its shelf of past conversations only at the opening of a
             chat, whenever it takes down a fresh summary, and when somebody speaks of days gone by.

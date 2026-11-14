@@ -23,7 +23,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 const empty = { top: [], bottom: [], footwear: [], accessories: [], hair: [] };
 
 function makeIdMaps(): any {
-  return {
+  const idMaps: any = {
     tags: new Map(),
     characters: new Map([['char-src', 'char-dest']]),
     chats: new Map([['chat-old', 'chat-new']]),
@@ -40,7 +40,14 @@ function makeIdMaps(): any {
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
     messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
   };
+  // Every mapped row is one this import wrote, so reconciliation visits it.
+  idMaps.writtenRows = new Set(
+    [idMaps.characters, idMaps.chats, idMaps.projects, idMaps.connectionProfiles].flatMap((m: Map<string, string>) => [...m.values()])
+  );
+  return idMaps;
 }
 
 function setup(chatFields: Record<string, unknown>) {

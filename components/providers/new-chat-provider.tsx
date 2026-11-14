@@ -7,8 +7,12 @@
  * streaming Salon). It is mounted INSIDE the workspace providers so the modal's
  * `useNewChat` → `useWorkspaceNavigate` opens the new chat as a tab in place.
  *
- * The {@link WorkspaceLinkInterceptor} calls `open(...)` for `/salon/new` links,
- * including autonomous-room creation (`?autonomous=1`).
+ * `open(opts)` is the only way the dialog appears: the
+ * {@link WorkspaceLinkInterceptor} calls it for `/salon/new` links (including
+ * autonomous-room creation, `?autonomous=1`), and the character page, the
+ * homepage card and the Salon's Continue Elsewhere call it directly. Closing
+ * the dialog just unmounts it, so the operator stays wherever they opened it.
+ * Outside the workspace, callers fall back to the `/salon/new` page.
  *
  * @module components/providers/new-chat-provider
  */
@@ -16,6 +20,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { NewChatModal } from '@/components/new-chat/NewChatModal'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { TimestampConfig } from '@/lib/schemas/types'
 
 export interface NewChatModalOptions {
   characterId?: string
@@ -26,6 +31,8 @@ export interface NewChatModalOptions {
   initialUserCharacterId?: string | null
   initialImageProfileId?: string | null
   initialAvatarGenerationEnabled?: boolean
+  /** Timestamp config to pre-fill (continuation mode). */
+  initialTimestampConfig?: TimestampConfig | null
   /** Concierge state to pre-fill (continuation mode). */
   initialConciergeState?: ConciergeState | null
   /** Open in autonomous-room creation mode. */
@@ -51,16 +58,16 @@ export function NewChatProvider({ children }: { children: ReactNode }) {
       {children}
       {opts && (
         <NewChatModal
-          isOpen
           onClose={close}
-          characterId={opts.characterId ?? ''}
-          characterName={opts.characterName ?? ''}
+          characterId={opts.characterId}
+          characterName={opts.characterName}
           projectId={opts.projectId}
           continuationFromChatId={opts.continuationFromChatId}
           initialSelectedCharacterIds={opts.initialSelectedCharacterIds}
           initialUserCharacterId={opts.initialUserCharacterId}
           initialImageProfileId={opts.initialImageProfileId}
           initialAvatarGenerationEnabled={opts.initialAvatarGenerationEnabled}
+          initialTimestampConfig={opts.initialTimestampConfig}
           initialConciergeState={opts.initialConciergeState}
           autonomous={opts.autonomous}
         />

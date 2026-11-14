@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=appearance&section=appearance
+url: /settings?section=appearance
 ---
 
 # Theme Quick-Switcher
 
-> **[Open this page in Quilltap](/settings?tab=appearance&section=appearance)**
+> **[Open this page in Quilltap](/settings?section=appearance)**
 
 The theme quick-switcher is a convenient sidebar button that gives you instant access to switch between themes and color modes (light/dark/system). It's an optional feature that you can enable or disable based on your preferences.
 
@@ -248,7 +248,7 @@ The quick-switcher menu is organized as:
 
 **Solutions:**
 
-- Check Settings → Appearance → "Show theme selector in navigation"
+- Check Settings → Appearance → Appearance → "Show theme selector in navigation"
 - Make sure it's enabled (toggle is ON)
 - Refresh the page if needed
 - Check that you're not in a collapsed sidebar mode where it's hidden
@@ -323,6 +323,6 @@ Every preference you set via the quick-switcher is saved to your account.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=appearance&section=appearance")`
+`help_navigate(url: "/settings?section=appearance")`
 
 The theme quick-switcher is designed for convenience—use it to keep theming controls at your fingertips!

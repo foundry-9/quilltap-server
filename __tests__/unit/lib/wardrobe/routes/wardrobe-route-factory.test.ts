@@ -39,7 +39,7 @@ jest.mock('@/lib/api/middleware', () => ({
   withActionDispatch: jest.requireActual('@/lib/api/middleware/actions').withActionDispatch,
 }));
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
+jest.mock('@/lib/wardrobe/vault-writes', () => {
   class WardrobeComponentCycleError extends Error {
     constructor(itemId: string) {
       super(`Wardrobe item ${itemId} would create a component cycle`);
@@ -62,7 +62,7 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => {
   };
 });
 
-jest.mock('@/lib/database/repositories/characters.repository', () => {
+jest.mock('@/lib/characters/archive-guard', () => {
   class CharacterArchivedError extends Error {
     constructor(characterId: string) {
       super(`Character ${characterId} is archived`);
@@ -113,8 +113,8 @@ import {
   createFolderInMount,
   renameFolderInMount,
   deleteFolderInMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+} from '@/lib/wardrobe/vault-writes';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
@@ -1445,5 +1445,43 @@ describe('POST ?action=duplicate', () => {
 
     expect(res.status).toBe(409);
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// Image-prompt optimizer — every tier
+// ============================================================================
+
+describe('image-prompt optimizer actions', () => {
+  it.each<WardrobeScope>(['character', 'group', 'project', 'general'])(
+    '%s: apply-image-prompts writes the clamped cues in one projection',
+    async (scope) => {
+      mockReadItems.mockResolvedValue([wardrobeItem({ id: 'item-1' })] as never);
+      mockReadGeneral.mockResolvedValue([wardrobeItem({ id: 'item-1' })] as never);
+      const res = await collection(scope).POST(
+        req('https://x.test/?action=apply-image-prompts', {
+          changes: [{ itemId: 'item-1', imagePrompt: '**charcoal wool greatcoat**.' }],
+        }, 'POST'),
+        ctx(),
+        { id: OWNER_ID[scope] },
+      );
+      expect(res.status).toBe(200);
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdateMany).toHaveBeenCalledTimes(1);
+      expect(mockUpdateMany.mock.calls[0][1]).toEqual([
+        { id: 'item-1', patch: { imagePrompt: 'charcoal wool greatcoat' } },
+      ]);
+      await expect(res.json()).resolves.toEqual({ updated: 1, itemIds: ['item-1'] });
+    },
+  );
+
+  it('character: apply-image-prompts refuses an empty change list', async () => {
+    await expect(
+      collection('character').POST(
+        req('https://x.test/?action=apply-image-prompts', { changes: [] }, 'POST'),
+        ctx(),
+        { id: CHAR_ID },
+      ),
+    ).rejects.toThrow();
   });
 });

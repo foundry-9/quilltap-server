@@ -158,7 +158,7 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
   }
 
   const renderToolRow = (tool: CustomToolLibraryEntry) => (
-    <div key={`${tool.mountPointId}:${tool.definitionPath}`} className={`qt-card p-3 ${tool.disabled ? 'opacity-60' : ''}`}>
+    <div key={`${tool.mountPointId}:${tool.definitionPath}`} className="qt-card p-3">
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"

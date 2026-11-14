@@ -6,6 +6,8 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
 import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
+import { useConnectionProfilesQuery } from '@/lib/hooks/use-profiles'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 type StaffId =
@@ -68,6 +70,8 @@ interface AudienceCandidate {
   status?: 'active' | 'silent' | 'absent' | 'removed'
 }
 
+const EMPTY_CARDS: CharacterCard[] = []
+
 interface InsertAnnouncementDialogProps {
   isOpen: boolean
   onClose: () => void
@@ -99,10 +103,10 @@ export default function InsertAnnouncementDialog({
   const [characterId, setCharacterId] = useState<string>('')
   const [customName, setCustomName] = useState('')
   const [content, setContent] = useState('')
-  const [characters, setCharacters] = useState<CharacterCard[]>([])
-  const [charsLoading, setCharsLoading] = useState(false)
+  const [wantCharacters, setWantCharacters] = useState(false)
   const [charSearch, setCharSearch] = useState('')
-  const [profiles, setProfiles] = useState<ProfileCard[]>([])
+  // Shared connection-profile list, fetched only while the dialog is open.
+  const { data: profiles = [], error: profilesError } = useConnectionProfilesQuery<ProfileCard>({ enabled: isOpen })
   // Explicit user choices for the in-character rewrite. Null means "use the
   // computed default" — that way the default updates automatically when the
   // character or profile list changes, but a deliberate pick sticks.
@@ -120,41 +124,22 @@ export default function InsertAnnouncementDialog({
   // renders this component (`{insertAnnouncementOpen && <... />}`), so each
   // open is a fresh mount and useState() initializers fire again.
 
-  const loadCharactersIfNeeded = useCallback(() => {
-    if (characters.length > 0 || charsLoading) return
-    setCharsLoading(true)
-    fetch('/api/v1/characters')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data) => {
-        const all: CharacterCard[] = data.characters || []
-        setCharacters(all)
-      })
-      .catch((err) => {
-        showErrorToast(`Failed to load characters: ${err.message}`)
-      })
-      .finally(() => setCharsLoading(false))
-  }, [characters.length, charsLoading])
-
-  // Load connection profiles once per open. Cheap — the response is small
-  // and the user has at most a couple dozen profiles.
+  // The roster is read once the "character" tab is first opened.
+  const loadCharactersIfNeeded = useCallback(() => setWantCharacters(true), [])
+  const {
+    data: characters = EMPTY_CARDS,
+    isLoading: charsLoading,
+    error: charsError,
+  } = useCharactersList<CharacterCard>(undefined, { enabled: wantCharacters })
   useEffect(() => {
-    if (!isOpen) return
-    fetch('/api/v1/connection-profiles')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data) => {
-        const all: ProfileCard[] = (data.profiles || []).map((p: Record<string, unknown>) => ({
-          id: String(p.id),
-          name: String(p.name ?? ''),
-          provider: String(p.provider ?? ''),
-          modelName: String(p.modelName ?? ''),
-          isDefault: Boolean(p.isDefault),
-        }))
-        setProfiles(all)
-      })
-      .catch((err) => {
-        showErrorToast(`Failed to load connection profiles: ${err.message}`)
-      })
-  }, [isOpen])
+    if (charsError) showErrorToast(`Failed to load characters: ${charsError.message}`)
+  }, [charsError])
+
+  useEffect(() => {
+    if (profilesError) {
+      showErrorToast(`Failed to load connection profiles: ${profilesError.message}`)
+    }
+  }, [profilesError])
 
   const selectedCharacter = useMemo(
     () => characters.find((c) => c.id === characterId) || null,
@@ -398,7 +383,7 @@ export default function InsertAnnouncementDialog({
         <div className="flex-1 overflow-y-auto p-4">
           {/* Mode selector */}
           <div className="mb-4">
-            <label className="block text-sm qt-text-primary mb-2">Sender</label>
+            <label className="qt-label mb-2">Sender</label>
             <div className="flex gap-2" role="tablist" aria-label="Announcement sender type">
               <button
                 type="button"
@@ -447,7 +432,7 @@ export default function InsertAnnouncementDialog({
           <div className="mb-4">
             {mode === 'staff' && (
               <div>
-                <label htmlFor="announce-staff" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="announce-staff" className="qt-label mb-2">
                   Staff member
                 </label>
                 <select
@@ -468,7 +453,7 @@ export default function InsertAnnouncementDialog({
 
             {mode === 'character' && (
               <div>
-                <label htmlFor="announce-character-search" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="announce-character-search" className="qt-label mb-2">
                   Off-scene character
                 </label>
                 <input
@@ -522,7 +507,7 @@ export default function InsertAnnouncementDialog({
                 {selectedCharacter && (
                   <div className="space-y-3">
                     <div>
-                      <label htmlFor="announce-profile" className="block text-sm qt-text-primary mb-2">
+                      <label htmlFor="announce-profile" className="qt-label mb-2">
                         How should they say it?
                       </label>
                       <select
@@ -549,7 +534,7 @@ export default function InsertAnnouncementDialog({
 
                     {showSystemPromptPicker && (
                       <div>
-                        <label htmlFor="announce-prompt" className="block text-sm qt-text-primary mb-2">
+                        <label htmlFor="announce-prompt" className="qt-label mb-2">
                           System prompt
                         </label>
                         <select
@@ -581,7 +566,7 @@ export default function InsertAnnouncementDialog({
 
             {mode === 'custom' && (
               <div>
-                <label htmlFor="announce-custom-name" className="block text-sm qt-text-primary mb-2">
+                <label htmlFor="announce-custom-name" className="qt-label mb-2">
                   Display name
                 </label>
                 <input
@@ -604,7 +589,7 @@ export default function InsertAnnouncementDialog({
           {/* Audience — public by default; naming anyone makes it a whisper. */}
           {audienceCandidates.length > 0 && mode !== 'fact' && (
             <div className="mb-4">
-              <label className="block text-sm qt-text-primary mb-2" id="announce-audience-label">
+              <label className="qt-label mb-2" id="announce-audience-label">
                 Who hears it
               </label>
               <div
@@ -677,7 +662,7 @@ export default function InsertAnnouncementDialog({
           {/* Seed editor */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm qt-text-primary">
+              <label className="qt-label">
                 {willRewrite
                   ? `What you want the character to ${isWhisper ? 'say privately' : 'announce'}`
                   : mode === 'fact'

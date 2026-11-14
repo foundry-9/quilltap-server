@@ -36,11 +36,23 @@ export interface ProviderInfo {
   }
 }
 
+/**
+ * Shown in the key field for a key that already exists (settings mode). It is
+ * never a real key: validating with it untouched tests the stored key.
+ */
+export const EXISTING_KEY_MASK = '********'
+
 export interface ApiKeyEntry {
   label: string
   key: string
   validated: boolean
   apiKeyId?: string
+  /**
+   * True when this wizard run stored the key. Re-validating with a different
+   * key then replaces that row's value instead of adding another; a key the
+   * operator already had is never overwritten.
+   */
+  storedByWizard?: boolean
   error?: string
 }
 

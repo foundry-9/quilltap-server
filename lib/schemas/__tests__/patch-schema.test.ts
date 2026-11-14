@@ -36,4 +36,18 @@ describe('patchSchemaOf', () => {
     expect(patchSchemaOf(schema).parse({ stray: 1 })).toEqual({})
     expect(patchSchemaOf(schema).parse({ nested: {} })).toEqual({ nested: { a: true } })
   })
+
+  // `.default(256).optional()` still yields 256 for an absent key in Zod 4, so
+  // a default under an optional or nullable wrapper must go too — otherwise
+  // every chat-settings PUT reset the sidebar width.
+  it('strips a default nested under optional or nullable, keeping the wrapper', () => {
+    const schema = z.object({
+      width: z.number().min(256).default(256).optional(),
+      label: z.string().default('x').nullable(),
+    })
+    const patch = patchSchemaOf(schema)
+    expect(patch.parse({})).toEqual({})
+    expect(patch.parse({ label: null })).toEqual({ label: null })
+    expect(patch.safeParse({ width: 10 }).success).toBe(false)
+  })
 })

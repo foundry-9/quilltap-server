@@ -12,6 +12,7 @@
 import { renderHook, act } from '@testing-library/react'
 
 import { useSSEStreaming, type StorytellerStreamEvent } from '@/app/salon/[id]/hooks/useSSEStreaming'
+import type { GreenRoomEvent } from '@/lib/chat/stream-frames'
 import type { Message } from '@/app/salon/[id]/types'
 import { showErrorToast, showWarningToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
@@ -58,6 +59,7 @@ function setup(name: GoldenStream) {
 
   const fetchChat = jest.fn(async () => {})
   const onStorytellerEvent = jest.fn<void, [StorytellerStreamEvent]>()
+  const onGreenRoom = jest.fn<void, [GreenRoomEvent]>()
   const inputRef = {
     current: {
       focus: jest.fn(),
@@ -92,6 +94,7 @@ function setup(name: GoldenStream) {
       getFirstCharacterParticipant: () => ({ id: 'p-ada' }) as never,
       setPauseState: jest.fn(),
       onStorytellerEvent,
+      onGreenRoom,
     } as never),
   )
 
@@ -107,9 +110,15 @@ function setup(name: GoldenStream) {
     })
   }
 
+  const openChat = async () => {
+    await act(async () => {
+      await rendered.result.current.openChat()
+    })
+  }
+
   const byId = (id: string) => messages.find((m) => m.id === id)
 
-  return { send, runStoryteller, rendered, fetchChat, onStorytellerEvent, byId, messages: () => messages }
+  return { send, runStoryteller, openChat, rendered, fetchChat, onStorytellerEvent, onGreenRoom, byId, messages: () => messages }
 }
 
 describe('useSSEStreaming — golden streams', () => {
@@ -184,5 +193,22 @@ describe('useSSEStreaming — golden streams', () => {
     expect(showErrorToast).toHaveBeenCalledWith('Nothing came back.')
     expect(showErrorToast).toHaveBeenCalledWith(expect.stringContaining('Failed to send: boom'), expect.any(Number))
     expect(h.messages().some((m) => m.role === 'ASSISTANT')).toBe(false)
+  })
+
+  it('opening: the Green Room narrates, then the greeting lands as an ordinary bubble', async () => {
+    const h = setup('opening')
+    await h.openChat()
+
+    const events = h.onGreenRoom.mock.calls.map(([e]) => e.event)
+    expect(events).toEqual([
+      'phase', 'status', 'phase', 'status', 'wardrobeStart', 'wardrobeResult', 'inventory', 'log', 'phase', 'status', 'done',
+    ])
+    expect(h.messages().filter((m) => m.role === 'ASSISTANT')).toEqual([
+      expect.objectContaining({ content: "Ah — you're early. Do come in.", participantId: 'p-ada' }),
+    ])
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+    expect(body).toMatchObject({ continueMode: true, opening: true })
+    expect(h.fetchChat).toHaveBeenCalled()
+    expect(showErrorToast).not.toHaveBeenCalled()
   })
 })

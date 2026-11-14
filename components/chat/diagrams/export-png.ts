@@ -171,7 +171,7 @@ function fontAsDataUrl(url: string): Promise<string | null> {
       .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(`HTTP ${res.status}`))))
       .then(blobToDataUrl)
       .catch((err: unknown) => {
-        console.debug('[diagrams] Could not embed a font for PNG export', {
+        console.warn('[diagrams] Could not embed a font for PNG export', {
           url,
           error: err instanceof Error ? err.message : String(err),
         })
@@ -357,14 +357,6 @@ export async function prepareSvgForRaster(live: SVGSVGElement, options: { scale?
     styleEl.textContent = css
     clone.insertBefore(styleEl, clone.firstChild)
   }
-
-  console.debug('[diagrams] Prepared diagram for PNG export', {
-    width,
-    height,
-    scale,
-    replacedForeignObjects: count,
-    embeddedFamilies: embedded,
-  })
 
   return {
     markup: new XMLSerializer().serializeToString(clone),

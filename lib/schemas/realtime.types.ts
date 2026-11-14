@@ -55,6 +55,14 @@ export const REALTIME_TOPICS = [
    */
   'inventory',
   /**
+   * Atlas entries: a file created, edited, archived, moved or deleted, or a
+   * folder made, renamed or removed — published by every write through an
+   * Atlas location (`lib/atlas/location.ts`). Collection-wide: the browser's
+   * lists, folders and overlap notices, and every chat's Atlas chips (an
+   * edited entry changes what a chip's popup says).
+   */
+  'atlas',
+  /**
    * Wardrobe items and folders: a file created, edited, archived, deleted or
    * filed, or a folder made, renamed or removed — published by every write
    * through a wardrobe location (`lib/wardrobe/location.ts`). Collection-wide:

@@ -35,6 +35,7 @@ import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstr
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { OutfitComposer } from './outfit-composer'
 import { ImportFromImageModal } from './import-from-image-modal'
+import { ImagePromptOptimizerModal } from './image-prompt-optimizer-modal'
 import { AvatarGenerationPane } from './AvatarGenerationPane'
 import { WardrobeBrowser, WardrobeItemOverlays } from './WardrobeBrowser'
 import { useWardrobeListData } from './hooks/useWardrobeListData'
@@ -178,6 +179,7 @@ function WardrobeControlDialogInner({
 
   const [rightTab, setRightTab] = useState<RightTab>(isInChat ? 'live' : 'builder')
   const [importFromImageOpen, setImportFromImageOpen] = useState(false)
+  const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false)
 
   /**
    * The row buttons route to the Outfit Builder when its tab is active (or
@@ -231,9 +233,23 @@ function WardrobeControlDialogInner({
     [catalogue.characters, selectedCharacterId],
   )
 
+  /** The browsed tier owner's name, for the portrait-cue wizard's wording. */
+  const optimizerOwnerName = useMemo(() => {
+    switch (selectedContainer?.scope) {
+      case 'character':
+        return selectedCharacter?.name
+      case 'project':
+        return catalogue.projects.find((p) => p.id === selectedContainer.id)?.name
+      case 'group':
+        return catalogue.groups.find((g) => g.id === selectedContainer.id)?.name
+      default:
+        return undefined
+    }
+  }, [selectedContainer, selectedCharacter, catalogue.projects, catalogue.groups])
+
   // While an overlay is up, a click inside it (rendered as a sibling) must not
   // close the outer dialog via BaseModal's click-outside handler.
-  const overlayOpen = actions.overlayOpen || importFromImageOpen
+  const overlayOpen = actions.overlayOpen || importFromImageOpen || promptOptimizerOpen
 
   return (
     <ItemControlDialogShell
@@ -259,6 +275,18 @@ function WardrobeControlDialogInner({
               characterId={selectedCharacterId}
               onClose={() => setImportFromImageOpen(false)}
               onImported={() => {
+                void actions.refresh()
+              }}
+            />
+          )}
+
+          {/* Portrait-cue wizard — the browsed tier's own garments only */}
+          {promptOptimizerOpen && selectedContainer && (
+            <ImagePromptOptimizerModal
+              container={selectedContainer}
+              ownerName={optimizerOwnerName}
+              onClose={() => setPromptOptimizerOpen(false)}
+              onApplied={() => {
                 void actions.refresh()
               }}
             />
@@ -297,6 +325,9 @@ function WardrobeControlDialogInner({
             }
             onImportFromImage={
               selectedCharacterId ? () => setImportFromImageOpen(true) : undefined
+            }
+            onOptimizePrompts={
+              selectedContainer ? () => setPromptOptimizerOpen(true) : undefined
             }
           />
 
@@ -346,7 +377,9 @@ function WardrobeControlDialogInner({
                   characterId={selectedCharacterId}
                   characterName={selectedCharacter?.name ?? 'this character'}
                   hasStagedEdits={live.isDirty(selectedCharacterId)}
-                  discardStagedEdits={(options) => live.discard(selectedCharacterId, options)}
+                  stagedIndex={live.stagedRollbackIndex(selectedCharacterId)}
+                  stageEntry={live.stageRollback}
+                  discardStagedEdits={() => live.discard(selectedCharacterId)}
                   requestConfirmation={requestConfirmation}
                 />
               ) : rightTab === 'live' && isInChat ? (

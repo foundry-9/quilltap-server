@@ -23,6 +23,8 @@ Click the chip to pin the card open, so a long identity can be scrolled and read
 
 Only the first mention in the whole chat is marked. The name may turn up fifty times thereafter; the chip stays where the acquaintance began. A name inside code, a link or emphasis is passed over in favour of the next plain mention in that message.
 
+Should you lose the thread, the **Concepts Named** drawer of the [Chat Sidebar](chat-participants.md) lists everyone the conversation has named who is not in it — portrait, name, and the word they went by — and a click there carries you back to the line where each was first mentioned.
+
 ## What the Characters Are Told
 
 The chip is for *you*. The characters never see it — nor did they ever read a card in the conversation, for a card wedged between a remark and the reply that leaned on it had a habit of making a "she" lose track of whom it meant.
@@ -42,6 +44,10 @@ When a conversation is carried off by **Continue Elsewhere** and someone from th
 
 This one *does* stay in the conversation, where the characters read it. The carried-over history keeps every remark the travelling party made *to* the absentee, but none of the absentee's own replies, so without the notice the company would take them for a guest in the room who has gone oddly quiet.
 
+## Things, Too
+
+Places, vehicles, houses and contraptions kept in [the Atlas](atlas.md) are treated in much the same way. A thing's first mention in the chat — very often in the Host's scenario card — wears a chip of its own, told from a person's by its dashed rule; its card shows the thing's picture, its other names, its appearance, what is known of it and the shelf it is kept on. The characters who can reach it are told its particulars in a note of their own, placed just after the note about who is being spoken of. Where a word could mean a person or a thing, the person wins: the chip is theirs, and the thing is not called up.
+
 ## Older Conversations
 
 Chats from before the chips arrived may hold the Host's old introduction cards. They are kept in the record but no longer shown in the feed, and the characters do not read them; the chip and the private note do that work now.
@@ -52,6 +58,7 @@ Chats from before the chips arrived may hold the Host's old introduction cards. 
 - **It doesn't mark your own character — wherever you speak.** In an ordinary Salon, your persona is the voice of your messages even when it holds no seat, so it is never "absent". An **autonomous room** is another matter: you are not speaking there at all, so if the cast starts addressing your character, they are treated like any other absent acquaintance.
 - **It doesn't read lowercase.** Names are matched as written, capitals and all, so a character called *Ember* is not marked every time someone mentions the embers of a fire.
 - **It doesn't reach across chats.** Each Salon marks its own first mentions.
+- **Things are matched in any case.** Unlike a person's name, an Atlas word is found in capitals or out of them — *car* finds "the car" and "Car!" — but never inside another word, so "cars" and "carpet" are passed by.
 
 ## In-Chat Navigation
 

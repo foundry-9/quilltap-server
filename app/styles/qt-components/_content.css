@@ -1563,6 +1563,16 @@
      ========================================================================== */
 
   /**
+   * Loading state container — a spinner and its words, centred in a row.
+   * (qt-empty-state is the column layout for an icon, title and action.)
+   * Add `py-12` for a taller pane.
+   */
+  .qt-loading-state {
+    @apply flex items-center justify-center;
+    @apply py-8;
+  }
+
+  /**
    * Empty state container
    */
   .qt-empty-state {

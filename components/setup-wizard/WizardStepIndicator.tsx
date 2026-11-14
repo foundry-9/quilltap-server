@@ -29,9 +29,9 @@ export function WizardStepIndicator({ currentStep, completedSteps = [] }: Wizard
                 className={`
                   flex items-center justify-center w-8 h-8 rounded-full qt-label transition-colors
                   ${isActive
-                    ? 'qt-bg-primary/10 ring-2 ring-[var(--color-primary)] qt-text-primary'
+                    ? 'qt-bg-primary/10 ring-2 qt-ring-brand qt-text-primary'
                     : isCompleted
-                      ? 'bg-[var(--qt-color-primary)] qt-text-overlay'
+                      ? 'qt-bg-primary qt-text-overlay'
                       : 'qt-bg-muted qt-text-muted'
                   }
                 `}
@@ -54,7 +54,7 @@ export function WizardStepIndicator({ currentStep, completedSteps = [] }: Wizard
             {index < WIZARD_STEPS.length - 1 && (
               <div
                 className={`w-6 sm:w-10 h-0.5 mx-1 transition-colors ${
-                  index < currentIndex ? 'bg-[var(--qt-color-primary)]' : 'qt-bg-muted'
+                  index < currentIndex ? 'qt-bg-primary' : 'qt-bg-muted'
                 }`}
               />
             )}

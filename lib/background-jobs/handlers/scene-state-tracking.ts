@@ -16,6 +16,7 @@ import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resol
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names';
 import type { SceneStateTrackingPayload } from '../queue-service';
 import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped';
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash';
@@ -230,14 +231,21 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     ? chatScenarioParts.join('\n\n')
     : undefined;
 
-  // 9. Call updateSceneState
+  // 9. Call updateSceneState — the transcript is labelled by speaker, never by role.
+  const speakerNames = await resolveSpeakerNames(chat);
   const sceneStateInput = {
     previousSceneState,
     characters: characterBaselines,
     recentMessages,
     messageCount: chat.messageCount ?? 0,
     chatScenario,
+    speakerNames,
   };
+  logger.debug('[SceneStateTracking] Resolved transcript speaker names', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    namedSeats: speakerNames.size,
+  });
 
   // Build uncensored fallback options for the built-in retry in executeCheapLLMTask —
   // a refusal retry, so only where the policy allows failover (on duty, not Locked).
@@ -264,14 +272,15 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
 
   // 9b. If the result looks like a content refusal (location "Unknown" or empty),
   // retry with uncensored provider if available and we haven't already used it
+  const firstLocation = result.result?.location;
   const looksLikeRefusal = result.success && result.result &&
-    ((result.result as any).location === 'Unknown' || (result.result as any).location === 'unknown' || !(result.result as any).location);
+    (firstLocation === 'Unknown' || firstLocation === 'unknown' || !firstLocation);
 
   if (looksLikeRefusal && uncensoredLLMSelection && cheapLLMSelection !== uncensoredLLMSelection) {
     logger.info('[SceneStateTracking] Result looks like content refusal, retrying with uncensored provider', {
       jobId: job.id,
       chatId: payload.chatId,
-      originalLocation: (result.result as any)?.location,
+      originalLocation: firstLocation,
       provider: uncensoredLLMSelection.provider,
     });
 
@@ -282,17 +291,17 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
       payload.chatId
     );
 
-    if (retryResult.success && retryResult.result &&
-        (retryResult.result as any).location && (retryResult.result as any).location !== 'Unknown') {
+    const retryLocation = retryResult.result?.location;
+    if (retryResult.success && retryResult.result && retryLocation && retryLocation !== 'Unknown') {
       result = retryResult;
       cheapLLMSelection = uncensoredLLMSelection;
       logger.info('[SceneStateTracking] Retry with uncensored provider succeeded', {
-        jobId: job.id, chatId: payload.chatId, location: (retryResult.result as any).location,
+        jobId: job.id, chatId: payload.chatId, location: retryLocation,
       });
     } else {
       logger.warn('[SceneStateTracking] Retry with uncensored provider also produced poor result', {
         jobId: job.id, chatId: payload.chatId,
-        location: (retryResult.result as any)?.location,
+        location: retryLocation,
         error: retryResult.error,
       });
     }
@@ -341,15 +350,13 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     }
   }
 
-  const sceneCharacters = (sceneState as { characters?: unknown }).characters as
-    | Array<{ characterId: string; clothing?: string | null; clothingHash?: string | null }>
-    | undefined;
+  const sceneCharacters = sceneState.characters;
   if (sceneCharacters) {
     for (const sceneChar of sceneCharacters) {
-      const slots = equippedSlotsByCharacterId.get(sceneChar.characterId) ?? null;
+      const slots = (sceneChar.characterId && equippedSlotsByCharacterId.get(sceneChar.characterId)) || null;
       if (hasEquippedItems(slots)) {
         const currentHash = hashEquippedSlots(slots);
-        const prev = prevClothingByCharacterId.get(sceneChar.characterId);
+        const prev = sceneChar.characterId ? prevClothingByCharacterId.get(sceneChar.characterId) : undefined;
         if (prev && prev.clothingHash === currentHash && prev.clothing) {
           // Wardrobe unchanged since the cached summary was derived — reuse it
           // verbatim so the line stays stable and we don't re-summarize.
@@ -368,7 +375,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   if (result.usage) {
     await createSystemEvent(payload.chatId, {
       systemEventType: 'SCENE_STATE_TRACKING',
-      description: `Scene state updated: ${(sceneState as any).location || 'unknown location'}`,
+      description: `Scene state updated: ${sceneState.location || 'unknown location'}`,
       promptTokens: result.usage.promptTokens,
       completionTokens: result.usage.completionTokens,
       totalTokens: result.usage.totalTokens,
@@ -379,14 +386,14 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
 
   // 12. Persist scene state to chat
   await repos.chats.update(payload.chatId, {
-    sceneState: sceneState as Record<string, unknown>,
+    sceneState,
   });
 
   logger.info('[SceneStateTracking] Scene state updated', {
     jobId: job.id,
     chatId: payload.chatId,
-    location: (sceneState as any).location,
-    characterCount: (sceneState as any).characters?.length ?? 0,
+    location: sceneState.location,
+    characterCount: sceneState.characters?.length ?? 0,
     presentCharacterCount: presentCharacters.length,
     messageCount: chat.messageCount,
     isDangerousChat,

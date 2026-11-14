@@ -22,6 +22,7 @@ import { logger } from '@/lib/logger';
 import {
   BrahmaConsoleSettingsSchema,
   type BrahmaConsoleSettings,
+  DEFAULT_BRAHMA_MAX_AGENT_TURNS,
   DataRetentionSettingsSchema,
   type DataRetentionSettings,
   MemoryConsolidationSettingsSchema,
@@ -95,7 +96,7 @@ const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
   staleChatDays: 30,
 };
 const DEFAULT_BRAHMA_CONSOLE_SETTINGS: BrahmaConsoleSettings = {
-  maxAgentTurns: 50,
+  maxAgentTurns: DEFAULT_BRAHMA_MAX_AGENT_TURNS,
 };
 const DEFAULT_TABOO_SETTINGS: TabooSettings = {
   phrases: [],
@@ -301,7 +302,7 @@ export async function setDataRetentionSettings(
 /**
  * Read the per-instance Brahma Console settings (the agent-turn budget that
  * caps how many tool-use rounds a Console query may take before it is forced to
- * answer). Returns the documented default (50 turns) when the setting hasn't
+ * answer). Returns the documented default (10 turns) when the setting hasn't
  * been written yet. The duplicate/stale-query guard is independent of this
  * value and still short-circuits a stuck loop regardless.
  */

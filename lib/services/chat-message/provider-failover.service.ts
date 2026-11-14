@@ -9,9 +9,18 @@
  *  - **Hard error** — the call did not succeed at all (auth, rate limit,
  *    network, missing model, 5xx). Walk the profile's fallback chain.
  *
- * `state.effectiveProfile` / `state.effectiveApiKey` are the single mutable
- * seam every downstream stage already reads, so a swap made here composes with
- * message finalization, token accounting and the tool loop for free.
+ * Every stand-in — the same-profile retry, the Concierge's uncensored
+ * understudy, each step of the fallback chain — is called by `callSubstitute`,
+ * and nothing else. It owns everything that depends on which profile is being
+ * called: the tools in that provider's shape and tool mode (#181), the image
+ * transport budget, the model params, the stream, and the one "did it answer"
+ * predicate (prose, or tool calls — #182). The three sites differ only in how
+ * they pick the candidate and how they record the attempt.
+ *
+ * On an answer, `state.effectiveProfile` / `effectiveApiKey` / `effectiveCall`
+ * are swapped together. That trio is the seam every downstream stage reads, so
+ * finalization, token accounting and the tool loops continue on the stand-in's
+ * own profile, tools and message array.
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
@@ -27,6 +36,7 @@ import {
 import { readCurrentConciergeOnDuty, readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
+import { profileParams } from '@/lib/llm/cheap-llm'
 import {
   applyImageTransportBudget,
   collectAttachmentMimeTypes,
@@ -40,6 +50,9 @@ import {
   type FallbackRepos,
 } from '@/lib/llm/fallback'
 import type { ConnectionProfile, Character } from '@/lib/schemas/types'
+import { reanchorMultiCharacterTurn } from '@/lib/chat/multi-character-anchor'
+import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
+import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 /**
@@ -58,7 +71,14 @@ import {
   applyReasoningChunk,
   flushReasoningSegment,
 } from './streaming.service'
-import type { StreamingState } from './types'
+import { detectToolCallsInResponse } from './tool-execution.service'
+import type {
+  EffectiveCall,
+  FormatToolsFor,
+  StreamingState,
+  TurnCallMessage,
+  TurnToolMode,
+} from './types'
 import { recordRouteFailure, setRouteVia, classifyEmptyBody, viaOf } from './route-trail'
 
 const logger = createServiceLogger('ProviderFailover')
@@ -87,7 +107,241 @@ async function recordTextRefusal(
   })
 }
 
-export interface AttemptEmptyResponseRecoveryOptions {
+// ============================================================================
+// THE SUBSTITUTE CALL
+// ============================================================================
+
+/**
+ * What every stand-in call shares for one turn: the primary's call shape (its
+ * message array as built, its tools, mode, params and stop sequences), the
+ * slate's per-profile tool formatter, and the stream to write into.
+ */
+export interface FailoverTurn {
+  state: StreamingState
+  /** The primary's call: the shape `state.effectiveProfile` was sent with. */
+  primaryCall: EffectiveCall
+  /** Formats the turn's tools for a substitute (`TurnToolSlate.formatToolsFor`). */
+  formatToolsFor: FormatToolsFor
+  userId: string
+  chatId: string
+  character: Pick<Character, 'id' | 'name'>
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+  preGeneratedAssistantMessageId?: string
+  /** Present re-applies the image transport budget for a substitute (bug 106). */
+  repos?: FailoverRepos
+}
+
+export interface SubstituteCandidate {
+  profile: ConnectionProfile
+  apiKey: string
+  /**
+   * Clear the streaming buffers first: the stand-in's answer *replaces* what
+   * came before rather than continuing it. The empty-body path keeps its
+   * historical append (there is nothing to replace but reasoning).
+   */
+  replace: boolean
+  /** For the image-budget log only. */
+  kind?: string
+}
+
+export interface SubstituteResult {
+  /** It answered — with prose or with tool calls. */
+  answered: boolean
+  /**
+   * `skipped`: never called — its resolved tool mode differs from the turn's,
+   * and the system prompt was built for the turn's (§8 decision 1).
+   * `client-gone`: the operator's stream closed mid-call. The walk stops;
+   * nothing is recorded as a provider failure.
+   */
+  outcome: 'answered' | 'empty' | 'error' | 'skipped' | 'client-gone'
+  /** The thrown error (`error`), or why the candidate was passed over (`skipped`). */
+  error?: unknown
+}
+
+/**
+ * The one "did it answer" predicate. A response is an answer if it carries
+ * prose, or a native tool call — a tool-call-only response goes to the tool
+ * loop like the primary's would, never to the next stand-in (#182).
+ */
+export function responseAnswered(state: StreamingState, provider: string): boolean {
+  if (state.fullResponse.trim().length > 0) return true
+  if (!state.rawResponse) return false
+  return detectToolCallsInResponse(state.rawResponse, provider).length > 0
+}
+
+/**
+ * The call shape for one profile, or null when it cannot take this turn's
+ * shape. The profile already holding the turn keeps its own (that is the
+ * same-profile retry); any other gets tools formatted for its provider, the
+ * transport budget re-applied for it, and its own params.
+ */
+async function callShapeFor(profile: ConnectionProfile, turn: FailoverTurn, kind?: string): Promise<EffectiveCall | null> {
+  const { state, primaryCall } = turn
+  if (profile.id === state.effectiveProfile.id) {
+    return state.effectiveCall ?? primaryCall
+  }
+
+  const tools = await turn.formatToolsFor(profile)
+  if (tools.resolvedToolMode !== primaryCall.toolMode) {
+    logger.info('[Failover] Substitute passed over: its tool mode differs from the turn\'s', {
+      chatId: turn.chatId,
+      profileId: profile.id,
+      provider: profile.provider,
+      turnToolMode: primaryCall.toolMode,
+      substituteToolMode: tools.resolvedToolMode,
+    })
+    return null
+  }
+
+  // The array was built for the primary. The substitute gets the whole
+  // transport budget re-applied for its own profile — count, bytes and
+  // capability — with the overflow described or omitted with a note (same
+  // reference back when nothing changes).
+  const budgeted = turn.repos
+    ? (await applyImageTransportBudget(primaryCall.messages, profile, {
+        repos: turn.repos,
+        userId: turn.userId,
+        logContext: { chatId: turn.chatId, ...(kind ? { kind } : {}) },
+        describeOptions: { chatId: turn.chatId },
+      })).messages
+    : primaryCall.messages
+
+  // The multi-character anchor was chosen for the primary's profile. A
+  // substitute that refuses assistant prefill (Anthropic 4.6+) must not
+  // inherit a trailing `[Name]` message, and one that prefills gets it (#217).
+  const anchored = reanchorMultiCharacterTurn(
+    budgeted,
+    turn.character.name,
+    profileUsesNamePrefill(
+      profile,
+      profileRunsThinkingTurn(
+        profile.provider,
+        profile.modelName,
+        profile.parameters as Record<string, unknown> | null | undefined
+      )
+    ),
+  )
+
+  return {
+    messages: anchored,
+    tools: tools.actualTools,
+    toolMode: tools.resolvedToolMode,
+    useNativeWebSearch: tools.useNativeWebSearch,
+    modelParams: profileParams(profile) ?? {},
+    stop: tools.stopSequences,
+  }
+}
+
+/**
+ * Call one stand-in for this turn. The only place a substitute is called.
+ *
+ * Shapes the call for `candidate.profile`, streams it into `turn.state`, and
+ * decides whether it answered. On an answer the profile, key and call shape
+ * are installed on the state together; otherwise the state's profile is left
+ * alone (the caller records the attempt against the candidate).
+ *
+ * Never throws: a provider failure comes back as `outcome: 'error'`.
+ */
+export async function callSubstitute(
+  candidate: SubstituteCandidate,
+  turn: FailoverTurn,
+): Promise<SubstituteResult> {
+  const { state } = turn
+
+  let call: EffectiveCall | null
+  try {
+    call = await callShapeFor(candidate.profile, turn, candidate.kind)
+  } catch (error) {
+    return { answered: false, outcome: 'error', error }
+  }
+  if (!call) {
+    return {
+      answered: false,
+      outcome: 'skipped',
+      error: new Error(`tool mode differs from the turn's (${turn.primaryCall.toolMode}); not called`),
+    }
+  }
+
+  if (candidate.replace) resetStreamingBuffersForSwap(state)
+
+  try {
+    const streamed = await restreamInto(state, {
+      connectionProfile: candidate.profile,
+      apiKey: candidate.apiKey,
+      call,
+      userId: turn.userId,
+      chatId: turn.chatId,
+      character: turn.character,
+      controller: turn.controller,
+      encoder: turn.encoder,
+      preGeneratedAssistantMessageId: turn.preGeneratedAssistantMessageId,
+    })
+    if (streamed.clientGone) {
+      logger.info('[Failover] The client went away mid-substitute; stopping', {
+        chatId: turn.chatId,
+        profileId: candidate.profile.id,
+        partialLength: state.fullResponse.length,
+      })
+      return { answered: false, outcome: 'client-gone' }
+    }
+  } catch (error) {
+    return { answered: false, outcome: 'error', error }
+  }
+
+  if (!responseAnswered(state, candidate.profile.provider)) {
+    return { answered: false, outcome: 'empty' }
+  }
+
+  state.effectiveProfile = candidate.profile
+  state.effectiveApiKey = candidate.apiKey
+  state.effectiveCall = call
+  logger.debug('[Failover] Substitute answered', {
+    chatId: turn.chatId,
+    profileId: candidate.profile.id,
+    provider: candidate.profile.provider,
+    toolCount: call.tools.length,
+    toolMode: call.toolMode,
+    responseLength: state.fullResponse.length,
+  })
+  return { answered: true, outcome: 'answered' }
+}
+
+/** The thrown error's message, for the trail and the log. */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** The primary's call shape, as the turn's callers hand it over. */
+interface TurnCallOptions {
+  formattedMessages: TurnCallMessage[]
+  modelParams: Record<string, unknown>
+  actualTools: unknown[]
+  useNativeWebSearch: boolean
+  /** The turn's resolved tool mode (`TurnToolSlate.resolvedToolMode`). */
+  resolvedToolMode: TurnToolMode
+  /** `TurnToolSlate.formatToolsFor`: the tools in a substitute's own shape. */
+  formatToolsFor: FormatToolsFor
+  /** Provider stop sequences the primary was sent with. */
+  stop?: string[]
+}
+
+function primaryCallOf(opts: TurnCallOptions): EffectiveCall {
+  return {
+    messages: opts.formattedMessages,
+    tools: opts.actualTools,
+    toolMode: opts.resolvedToolMode,
+    useNativeWebSearch: opts.useNativeWebSearch,
+    modelParams: opts.modelParams,
+    stop: opts.stop,
+  }
+}
+
+// ============================================================================
+// EMPTY RESPONSE
+// ============================================================================
+
+export interface AttemptEmptyResponseRecoveryOptions extends TurnCallOptions {
   state: StreamingState
   toolMessagesLength: number
   contentWasFlaggedDangerous: boolean
@@ -100,19 +354,6 @@ export interface AttemptEmptyResponseRecoveryOptions {
    */
   conciergeState?: ConciergeState
   connectionProfile: ConnectionProfile
-  formattedMessages: Array<{
-    role: string
-    content: string
-    attachments?: unknown[]
-    name?: string
-    thoughtSignature?: string
-    reasoningContent?: string
-    toolCallId?: string
-    toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
-  }>
-  modelParams: Record<string, unknown>
-  actualTools: unknown[]
-  useNativeWebSearch: boolean
   userId: string
   chatId: string
   character: Pick<Character, 'id' | 'name'>
@@ -128,8 +369,6 @@ export interface AttemptEmptyResponseRecoveryOptions {
   repos?: FailoverRepos
   /** Capability flags for the chain. Required alongside `repos`. */
   fallbackContext?: Omit<FallbackContext, 'userId' | 'purpose' | 'alreadyTried'>
-  /** Provider stop sequences to carry into a chain attempt. */
-  stop?: string[]
 }
 
 export interface EmptyResponseRecoveryFlags {
@@ -140,34 +379,54 @@ export interface EmptyResponseRecoveryFlags {
   chainFallbackAttempted: boolean
   /** The failed attempts from that chain walk, for the log and the message. */
   chainAttempts: FallbackAttempt[]
+  /**
+   * Some retry or stand-in answered — with prose or with tool calls. The
+   * caller runs the tool loops again: an answer that is only a tool call has
+   * not been acted on yet (#182).
+   */
+  recovered: boolean
+  /** The client went away mid-retry; the walk stopped there. */
+  clientGone: boolean
 }
 
 /**
  * Attempt to recover from an empty assistant response.
  * Mutates `state` directly — the caller reads updated values from the same object.
  */
-export async function attemptEmptyResponseRecovery({
-  state,
-  toolMessagesLength,
-  contentWasFlaggedDangerous,
-  conciergePolicy,
-  conciergeState,
-  formattedMessages,
-  modelParams,
-  actualTools,
-  useNativeWebSearch,
-  userId,
-  chatId,
-  character,
-  controller,
-  encoder,
-  preGeneratedAssistantMessageId,
-  repos,
-  fallbackContext,
-  stop,
-}: AttemptEmptyResponseRecoveryOptions): Promise<EmptyResponseRecoveryFlags> {
+export async function attemptEmptyResponseRecovery(
+  opts: AttemptEmptyResponseRecoveryOptions,
+): Promise<EmptyResponseRecoveryFlags> {
+  const {
+    state,
+    toolMessagesLength,
+    contentWasFlaggedDangerous,
+    conciergePolicy,
+    conciergeState,
+    userId,
+    chatId,
+    character,
+    controller,
+    encoder,
+    repos,
+    fallbackContext,
+  } = opts
+  const turn: FailoverTurn = {
+    state,
+    primaryCall: primaryCallOf(opts),
+    formatToolsFor: opts.formatToolsFor,
+    userId,
+    chatId,
+    character,
+    controller,
+    encoder,
+    preGeneratedAssistantMessageId: opts.preGeneratedAssistantMessageId,
+    repos,
+  }
+
   let uncensoredRetryAttempted = false
   let sameProviderRetryAttempted = false
+  let recovered = false
+  let clientGone = false
 
   // Profiles this recovery has already spent. The chain walk at the bottom
   // reads it so a route that has already come back empty isn't asked twice.
@@ -178,6 +437,8 @@ export async function attemptEmptyResponseRecovery({
     sameProviderRetryAttempted,
     chainFallbackAttempted: false,
     chainAttempts: [],
+    recovered,
+    clientGone,
   })
 
   // The operator stopped the turn: an empty reply is what they asked for, not
@@ -231,62 +492,55 @@ export async function attemptEmptyResponseRecovery({
       characterId: character.id,
     }))
 
-    try {
-      await restreamInto(state, {
-        connectionProfile: state.effectiveProfile,
-        apiKey: state.effectiveApiKey,
-        formattedMessages,
-        modelParams,
-        actualTools,
-        useNativeWebSearch,
-        userId,
-        chatId,
-        character,
-        controller,
-        encoder,
-        preGeneratedAssistantMessageId,
-      })
+    const retry = await callSubstitute(
+      { profile: state.effectiveProfile, apiKey: state.effectiveApiKey, replace: false },
+      turn,
+    )
 
-      if (state.fullResponse.trim().length > 0) {
-        setRouteVia(state, 'retry')
-        logger.info('[EmptyResponse] Same-provider retry succeeded', {
-          chatId,
-          provider: state.effectiveProfile.provider,
-          model: state.effectiveProfile.modelName,
-          responseLength: state.fullResponse.length,
-        })
-      } else {
-        // Classify BEFORE anything downstream resets the buffers: the finish
-        // reason that tells a refusal from a plain empty body lives in
-        // `state.rawResponse`, which `resetStreamingBuffersForSwap` clears.
-        const retryVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
-        recordRouteFailure(state, state.effectiveProfile, 'retry', retryVerdict.outcome,
-          retryVerdict.trigger, retryVerdict.detail, retryVerdict.evidence)
-        if (!turnRefusal && retryVerdict.outcome === 'refused') {
-          turnRefusal = { profile: state.effectiveProfile, evidence: retryVerdict.evidence }
-        }
-        logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
-          chatId,
-          provider: state.effectiveProfile.provider,
-          model: state.effectiveProfile.modelName,
-        })
-      }
-    } catch (retryError) {
-      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
+    if (retry.answered) {
+      recovered = true
+      setRouteVia(state, 'retry')
+      logger.info('[EmptyResponse] Same-provider retry succeeded', {
+        chatId,
+        provider: state.effectiveProfile.provider,
+        model: state.effectiveProfile.modelName,
+        responseLength: state.fullResponse.length,
+      })
+    } else if (retry.outcome === 'client-gone') {
+      clientGone = true
+      await recordOpeningRefusal()
+      return flags()
+    } else if (retry.outcome === 'error') {
+      const retryMessage = messageOf(retry.error)
       recordRouteFailure(state, state.effectiveProfile, 'retry', 'failed',
-        classifyFallbackTrigger(retryError) ?? 'provider-error', retryMessage)
+        classifyFallbackTrigger(retry.error) ?? 'provider-error', retryMessage)
       logger.error('[EmptyResponse] Same-provider retry failed', {
         chatId,
         error: retryMessage,
+      })
+    } else {
+      // Classify BEFORE anything downstream resets the buffers: the finish
+      // reason that tells a refusal from a plain empty body lives in
+      // `state.rawResponse`, which `resetStreamingBuffersForSwap` clears.
+      const retryVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
+      recordRouteFailure(state, state.effectiveProfile, 'retry', retryVerdict.outcome,
+        retryVerdict.trigger, retryVerdict.detail, retryVerdict.evidence)
+      if (!turnRefusal && retryVerdict.outcome === 'refused') {
+        turnRefusal = { profile: state.effectiveProfile, evidence: retryVerdict.evidence }
+      }
+      logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
+        chatId,
+        provider: state.effectiveProfile.provider,
+        model: state.effectiveProfile.modelName,
       })
     }
   }
 
   // Read at refusal time, not when the turn began: the operator may have
   // locked the chat while the provider was thinking.
-  const lockedOut = state.fullResponse.trim().length === 0
+  const lockedOut = !recovered
     && !conciergeStateMayFailOver(await readCurrentConciergeState(chatId, conciergeState))
-  if (state.fullResponse.trim().length === 0 && lockedOut && turnRefusal) {
+  if (!recovered && lockedOut && turnRefusal) {
     // A Locked chat's refusal stands. Say so, once, and let the ordinary
     // chain below have its turn.
     logger.info('[EmptyResponse] Refusal not rerouted: the chat is Locked', {
@@ -309,31 +563,26 @@ export async function attemptEmptyResponseRecovery({
   // The policy was resolved when the turn began; the Concierge may have been
   // sent off duty since. Only asked when there is a refusal to act on.
   if (
-    state.fullResponse.trim().length === 0 && !lockedOut && conciergePolicy.failoverAllowed
+    !recovered && !lockedOut && conciergePolicy.failoverAllowed
     && await readCurrentConciergeOnDuty(userId, conciergePolicy.onDuty)
   ) {
     const uncensored = await attemptUncensoredRetry({
-      state,
+      turn,
       conciergePolicy,
-      formattedMessages,
-      modelParams,
-      actualTools,
-      useNativeWebSearch,
-      userId,
-      chatId,
-      character,
-      controller,
-      encoder,
-      preGeneratedAssistantMessageId,
-      repos,
       alreadyTried: triedProfileIds,
       contentWasFlaggedDangerous,
       refusalWasStated: openingVerdict.outcome === 'refused',
-      substitute: false,
+      replace: false,
     })
     uncensoredRetryAttempted = uncensored.attempted
     uncensoredRecovered = uncensored.recovered
+    if (uncensored.recovered) recovered = true
     if (uncensored.understudyId) triedProfileIds.push(uncensored.understudyId)
+    if (uncensored.clientGone) {
+      clientGone = true
+      await recordOpeningRefusal()
+      return flags()
+    }
   }
 
   // Third and last: the effective profile's own fallback chain.
@@ -348,9 +597,9 @@ export async function attemptEmptyResponseRecovery({
   // a connection profile like any other and carries its own understudy, whose
   // chain then runs with `dangerous: true` so tier picks stay cleared for the
   // content.
-  if (state.fullResponse.trim().length === 0 && repos && fallbackContext) {
+  if (!recovered && repos && fallbackContext) {
     const chainResult = await attemptEmptyResponseChainFallback({
-      state,
+      turn,
       repos,
       context: {
         ...fallbackContext,
@@ -361,16 +610,6 @@ export async function attemptEmptyResponseRecovery({
         dangerous: fallbackContext.dangerous || uncensoredRetryAttempted || contentWasFlaggedDangerous,
         alreadyTried: triedProfileIds,
       },
-      formattedMessages,
-      modelParams,
-      actualTools,
-      useNativeWebSearch,
-      chatId,
-      character,
-      controller,
-      encoder,
-      preGeneratedAssistantMessageId,
-      stop,
     })
 
     await recordOpeningRefusal()
@@ -379,6 +618,8 @@ export async function attemptEmptyResponseRecovery({
       sameProviderRetryAttempted,
       chainFallbackAttempted: true,
       chainAttempts: chainResult.attempts,
+      recovered: chainResult.recovered,
+      clientGone: chainResult.clientGone === true,
     }
   }
 
@@ -387,20 +628,8 @@ export async function attemptEmptyResponseRecovery({
 }
 
 export interface AttemptUncensoredRetryOptions {
-  state: StreamingState
+  turn: FailoverTurn
   conciergePolicy: ResolvedConciergePolicy
-  formattedMessages: AttemptEmptyResponseRecoveryOptions['formattedMessages']
-  modelParams: Record<string, unknown>
-  actualTools: unknown[]
-  useNativeWebSearch: boolean
-  userId: string
-  chatId: string
-  character: Pick<Character, 'id' | 'name'>
-  controller: ReadableStreamDefaultController<Uint8Array>
-  encoder: TextEncoder
-  preGeneratedAssistantMessageId?: string
-  /** Present re-adapts the message array for the understudy (bug 106). */
-  repos?: FailoverRepos
   /** Profile ids already spent on this call; the understudy is never one of them. */
   alreadyTried: string[]
   /** Passed to the empty-body classifier when the understudy comes back empty. */
@@ -416,8 +645,7 @@ export interface AttemptUncensoredRetryOptions {
    * path needs it (the primary may have left reasoning behind); the empty-body
    * path keeps its historical append.
    */
-  substitute: boolean
-  stop?: string[]
+  replace: boolean
 }
 
 export interface UncensoredRetryResult {
@@ -427,6 +655,8 @@ export interface UncensoredRetryResult {
   recovered: boolean
   /** The understudy that was asked, for the caller's loop guard. */
   understudyId?: string
+  /** The client went away mid-call; the caller stops its walk. */
+  clientGone?: boolean
 }
 
 /**
@@ -437,18 +667,15 @@ export interface UncensoredRetryResult {
  * stated at its call site.
  * This function asks `resolveUncensoredTextUnderstudy` (the configured
  * uncensored profile, else any `isDangerousCompatible` one), excluding every
- * profile already tried, streams one attempt, and records the outcome on the
- * route trail. Used by the empty-body recovery and by the hard-error failover
- * when the error was a content refusal.
+ * profile already tried, calls it through `callSubstitute`, and records the
+ * outcome on the route trail. Used by the empty-body recovery and by the
+ * hard-error failover when the error was a content refusal.
  */
 export async function attemptUncensoredRetry(
   opts: AttemptUncensoredRetryOptions
 ): Promise<UncensoredRetryResult> {
-  const {
-    state, conciergePolicy, formattedMessages, modelParams, actualTools, useNativeWebSearch,
-    userId, chatId, character, controller, encoder, preGeneratedAssistantMessageId, repos,
-    alreadyTried, contentWasFlaggedDangerous, refusalWasStated, substitute, stop,
-  } = opts
+  const { turn, conciergePolicy, alreadyTried, contentWasFlaggedDangerous, refusalWasStated, replace } = opts
+  const { state, userId, chatId, character, controller, encoder } = turn
 
   const understudy = await resolveUncensoredTextUnderstudy({
     userId,
@@ -456,7 +683,7 @@ export async function attemptUncensoredRetry(
     exclude: [...alreadyTried, state.effectiveProfile.id],
     // What the array is actually carrying, so the scan does not offer a
     // substitute the payload rules out (bug 106).
-    turnAttachmentMimeTypes: collectAttachmentMimeTypes(formattedMessages),
+    turnAttachmentMimeTypes: collectAttachmentMimeTypes(turn.primaryCall.messages),
   })
 
   if (!understudy) {
@@ -499,72 +726,55 @@ export async function attemptUncensoredRetry(
     characterId: character.id,
   }))
 
-  try {
-    // The array was built for the profile that just refused. An explicitly
-    // configured uncensored profile is honoured ahead of the scan, so it may
-    // still be one that cannot read this turn's images, or takes fewer per
-    // request — re-apply the transport budget before spending the attempt, or
-    // the gateway 400s (bug 106).
-    const reroutedMessages = repos
-      ? (await applyImageTransportBudget(formattedMessages, reroute, {
-          repos, userId, logContext: { chatId }, describeOptions: { chatId },
-        })).messages
-      : formattedMessages
+  // Captured before the call: on an answer `callSubstitute` swaps the state
+  // to the understudy, and the log below names the profile that refused.
+  const refusing = state.effectiveProfile
+  const result = await callSubstitute(
+    { profile: reroute, apiKey: understudy.apiKey, replace, kind: 'concierge' },
+    turn,
+  )
 
-    if (substitute) resetStreamingBuffersForSwap(state)
-
-    await restreamInto(state, {
-      connectionProfile: reroute,
-      apiKey: understudy.apiKey,
-      formattedMessages: reroutedMessages,
-      modelParams,
-      actualTools,
-      useNativeWebSearch,
-      userId,
+  if (result.answered) {
+    setRouteVia(state, 'concierge')
+    logger.info('[DangerousContent] Uncensored retry succeeded', {
       chatId,
-      character,
-      controller,
-      encoder,
-      preGeneratedAssistantMessageId,
-      stop,
+      uncensoredProvider: reroute.provider,
+      uncensoredModel: reroute.modelName,
+      responseLength: state.fullResponse.length,
     })
+    return { attempted: true, recovered: true, understudyId: reroute.id }
+  }
 
-    if (state.fullResponse.trim().length > 0) {
-      state.effectiveProfile = reroute
-      state.effectiveApiKey = understudy.apiKey
-      setRouteVia(state, 'concierge')
-      logger.info('[DangerousContent] Uncensored retry succeeded', {
-        chatId,
-        uncensoredProvider: reroute.provider,
-        uncensoredModel: reroute.modelName,
-        responseLength: state.fullResponse.length,
-      })
-      return { attempted: true, recovered: true, understudyId: reroute.id }
-    }
+  if (result.outcome === 'client-gone') {
+    return { attempted: true, recovered: false, understudyId: reroute.id, clientGone: true }
+  }
 
-    // Recorded from `reroute`, NOT from `state`: the swap above only happens
-    // on success, so an uncensored profile that comes back empty is otherwise
-    // absent from every record — and this row is precisely the one the user
-    // asked for. Classified here, before anything resets the buffers.
+  // Recorded from `reroute`, NOT from `state`: the swap only happens on an
+  // answer, so an uncensored profile that fails is otherwise absent from
+  // every record — and this row is precisely the one the user asked for.
+  if (result.outcome === 'empty') {
+    // Classified here, before anything resets the buffers.
     const verdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
     recordRouteFailure(state, reroute, 'concierge', verdict.outcome, verdict.trigger,
       verdict.detail, verdict.evidence)
     logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
       chatId,
-      safeProvider: state.effectiveProfile.provider,
-      safeModel: state.effectiveProfile.modelName,
+      safeProvider: refusing.provider,
+      safeModel: refusing.modelName,
       uncensoredProvider: reroute.provider,
       uncensoredModel: reroute.modelName,
     })
-  } catch (retryError) {
-    const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
-    const refusal = classifyRefusal({ error: retryError })
+  } else if (result.outcome === 'skipped') {
+    recordRouteFailure(state, reroute, 'concierge', 'failed', 'provider-error', messageOf(result.error))
+  } else {
+    const retryMessage = messageOf(result.error)
+    const refusal = classifyRefusal({ error: result.error })
     if (refusal.refused) {
       recordRouteFailure(state, reroute, 'concierge', 'refused', 'moderation-refusal',
         refusal.detail ?? retryMessage, refusal.evidence)
     } else {
       recordRouteFailure(state, reroute, 'concierge', 'failed',
-        classifyFallbackTrigger(retryError) ?? 'provider-error', retryMessage)
+        classifyFallbackTrigger(result.error) ?? 'provider-error', retryMessage)
     }
     logger.error('[DangerousContent] Uncensored retry failed', {
       chatId,
@@ -572,7 +782,7 @@ export async function attemptUncensoredRetry(
     })
   }
 
-  if (substitute) resetStreamingBuffersForSwap(state)
+  if (replace) resetStreamingBuffersForSwap(state)
   return { attempted: true, recovered: false, understudyId: reroute.id }
 }
 
@@ -636,26 +846,17 @@ export function getEmptyResponseReason({
   return `The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.${understudyRoll}`
 }
 
-export interface RestreamOptions {
+interface RestreamOptions {
   connectionProfile: ConnectionProfile
   apiKey: string
-  formattedMessages: AttemptEmptyResponseRecoveryOptions['formattedMessages']
-  modelParams: Record<string, unknown>
-  actualTools: unknown[]
-  useNativeWebSearch: boolean
+  /** The call shape for `connectionProfile` (`callShapeFor`). */
+  call: EffectiveCall
   userId: string
   chatId: string
   character: Pick<Character, 'id' | 'name'>
   controller: ReadableStreamDefaultController<Uint8Array>
   encoder: TextEncoder
   preGeneratedAssistantMessageId?: string
-  /**
-   * Provider stop sequences (e.g. simple-json's `</tool_call>`). Optional so
-   * the empty-response callers above keep their existing behaviour; the
-   * hard-error failover path passes the primary call's sequences so a
-   * pseudo-tool profile's framing survives the swap.
-   */
-  stop?: string[]
 }
 
 /**
@@ -664,38 +865,50 @@ export interface RestreamOptions {
  * Appends to `state.fullResponse` rather than replacing it. Callers that are
  * *substituting* a response rather than continuing one must clear the
  * streaming buffers first — see `resetStreamingBuffersForSwap`.
+ *
+ * Every frame goes through `safeEnqueue`. A closed controller is the client
+ * going away, not the provider failing: the stream stops and reports
+ * `clientGone`, with whatever arrived kept in the buffers for the partial
+ * preserver, instead of throwing into a failover site that would read it as a
+ * provider error.
  */
-export async function restreamInto(
+async function restreamInto(
   state: StreamingState,
   opts: RestreamOptions
-): Promise<void> {
+): Promise<{ clientGone: boolean }> {
   for await (const chunk of streamMessage({
-    messages: opts.formattedMessages,
+    messages: opts.call.messages,
     connectionProfile: opts.connectionProfile,
     apiKey: opts.apiKey,
-    modelParams: opts.modelParams,
-    tools: opts.actualTools,
-    useNativeWebSearch: opts.useNativeWebSearch,
+    modelParams: opts.call.modelParams,
+    tools: opts.call.tools,
+    useNativeWebSearch: opts.call.useNativeWebSearch,
     userId: opts.userId,
     messageId: opts.preGeneratedAssistantMessageId,
     chatId: opts.chatId,
     characterId: opts.character.id,
-    stop: opts.stop,
+    stop: opts.call.stop,
   })) {
     applyReasoningChunk(state, chunk, opts.controller, opts.encoder)
     if (chunk.content) {
+      // Buffered before it is sent: a chunk the provider produced is kept for
+      // the partial preserver even when nobody is left to read it.
+      let delivered = true
       if (!state.hasStartedStreaming) {
-        safeEnqueue(opts.controller, encodeStatusEvent(opts.encoder, {
+        delivered = safeEnqueue(opts.controller, encodeStatusEvent(opts.encoder, {
           stage: 'streaming',
           message: `${opts.character.name} is responding...`,
           characterName: opts.character.name,
           characterId: opts.character.id,
-        }))
+        })) !== false
         state.hasStartedStreaming = true
       }
       flushReasoningSegment(state)
       state.fullResponse += chunk.content
-      opts.controller.enqueue(encodeContentChunk(opts.encoder, chunk.content))
+      if (delivered) {
+        delivered = safeEnqueue(opts.controller, encodeContentChunk(opts.encoder, chunk.content)) !== false
+      }
+      if (!delivered) return { clientGone: true }
     }
 
     if (chunk.done) {
@@ -709,6 +922,7 @@ export async function restreamInto(
       flushReasoningSegment(state)
     }
   }
+  return { clientGone: false }
 }
 
 // ============================================================================
@@ -740,8 +954,8 @@ function resetStreamingBuffersForSwap(state: StreamingState): void {
   state.reasoningFlushedLen = 0
 }
 
-export interface WalkFallbackChainOptions {
-  state: StreamingState
+interface WalkFallbackChainOptions {
+  turn: FailoverTurn
   /**
    * Reads only. `findApiKeyById` is needed on top of the engine's own surface
    * because an understudy's key has to be decrypted before its call goes out.
@@ -757,16 +971,6 @@ export interface WalkFallbackChainOptions {
    * added by the walk, so callers need only list the *extra* ones.
    */
   context: FallbackContext
-  formattedMessages: AttemptEmptyResponseRecoveryOptions['formattedMessages']
-  modelParams: Record<string, unknown>
-  actualTools: unknown[]
-  useNativeWebSearch: boolean
-  chatId: string
-  character: Pick<Character, 'id' | 'name'>
-  controller: ReadableStreamDefaultController<Uint8Array>
-  encoder: TextEncoder
-  preGeneratedAssistantMessageId?: string
-  stop?: string[]
 }
 
 export interface FallbackChainResult {
@@ -778,31 +982,27 @@ export interface FallbackChainResult {
   /** Whether the chain offered an auto-picked tier candidate. Feeds the
    *  "no tier replacement qualified" half of the user-facing summary. */
   tierPickWasOffered: boolean
+  /** The client went away mid-call; the walk stopped without calling anyone else. */
+  clientGone?: boolean
 }
 
 /**
- * Walk a profile's fallback chain, streaming the first answer that arrives
- * into `state`.
+ * Walk a profile's fallback chain, calling each candidate through
+ * `callSubstitute` until one answers.
  *
  * `openingFailure` is the attempt that sent us here — the primary's error, or
  * its empty response. It leads the attempt trail and seeds the loop guard, so
  * the chain never re-offers the profile that just failed.
  *
- * On success `state.effectiveProfile` / `effectiveApiKey` are swapped to the
- * understudy: that pair is the seam every downstream stage reads, so
- * finalization, token accounting and the tool loop all attribute the message
- * to whoever actually wrote it. On exhaustion the buffers are left empty — a
- * stray fragment from a dead understudy is not this character's words.
+ * On exhaustion the buffers are left empty — a stray fragment from a dead
+ * understudy is not this character's words.
  */
 async function walkFallbackChain(
   opts: WalkFallbackChainOptions,
   openingFailure: FallbackAttempt
 ): Promise<FallbackChainResult> {
-  const {
-    state, repos, context, formattedMessages, modelParams, actualTools,
-    useNativeWebSearch, chatId, character, controller, encoder,
-    preGeneratedAssistantMessageId, stop,
-  } = opts
+  const { turn, repos, context } = opts
+  const { state, chatId, character, controller, encoder } = turn
 
   const failedProfile = state.effectiveProfile
   const attempts: FallbackAttempt[] = [openingFailure]
@@ -816,6 +1016,7 @@ async function walkFallbackChain(
 
   for (const candidate of chain) {
     const understudy = candidate.profile
+    const via = viaOf(candidate.kind)
 
     const keyResolution = await resolveConnectionProfileApiKey(repos, understudy)
     if (!keyResolution.ok) {
@@ -826,7 +1027,7 @@ async function walkFallbackChain(
         reason: keyResolution.reason,
       })
       attempts.push(recordAttempt(understudy, 'auth', new Error(keyResolution.reason)))
-      recordRouteFailure(state, understudy, viaOf(candidate.kind), 'failed', 'auth', keyResolution.reason)
+      recordRouteFailure(state, understudy, via, 'failed', 'auth', keyResolution.reason)
       continue
     }
 
@@ -837,59 +1038,40 @@ async function walkFallbackChain(
       characterId: character.id,
     }))
 
-    resetStreamingBuffersForSwap(state)
+    const result = await callSubstitute(
+      { profile: understudy, apiKey: keyResolution.apiKey, replace: true, kind: candidate.kind },
+      turn,
+    )
 
-    try {
-      // The array was built for the primary. The understudy gets the whole
-      // transport budget re-applied for its own profile — count, bytes and
-      // capability — with the overflow described or omitted with a note
-      // (same reference back when nothing changes). One that can't see images
-      // at all was already left out of the chain.
-      const { messages: understudyMessages } = await applyImageTransportBudget(
-        formattedMessages, understudy, {
-          repos, userId: context.userId, logContext: { chatId, kind: candidate.kind }, describeOptions: { chatId },
-        },
-      )
-      await restreamInto(state, {
-        connectionProfile: understudy,
-        apiKey: keyResolution.apiKey,
-        formattedMessages: understudyMessages,
-        modelParams,
-        actualTools,
-        useNativeWebSearch,
-        userId: context.userId,
-        chatId,
-        character,
-        controller,
-        encoder,
-        preGeneratedAssistantMessageId,
-        stop,
-      })
-    } catch (understudyError) {
-      const understudyTrigger = classifyFallbackTrigger(understudyError) ?? 'provider-error'
-      const understudyMessage = understudyError instanceof Error ? understudyError.message : String(understudyError)
-      attempts.push(recordAttempt(understudy, understudyTrigger, understudyError))
-      recordRouteFailure(state, understudy, viaOf(candidate.kind), 'failed', understudyTrigger, understudyMessage)
-      logger.warn('[Failover] Understudy also failed', {
+    if (result.answered) {
+      setRouteVia(state, via)
+      logger.info('[Failover] Understudy answered', {
         chatId,
         understudyId: understudy.id,
         understudyName: understudy.name,
         provider: understudy.provider,
         model: understudy.modelName,
         kind: candidate.kind,
-        trigger: understudyTrigger,
-        error: understudyError instanceof Error ? understudyError.message : String(understudyError),
+        responseLength: state.fullResponse.length,
+        failedAttemptsBefore: attempts.length,
       })
-      continue
+      return { recovered: true, attempts, tierPickWasOffered }
     }
 
-    if (state.fullResponse.trim().length === 0) {
+    if (result.outcome === 'client-gone') {
+      // Nobody is listening: calling the next stand-in would spend a paid
+      // call on an empty room, and this one did not fail. What arrived stays
+      // in the buffers for the partial preserver.
+      return { recovered: false, attempts, tierPickWasOffered, clientGone: true }
+    }
+
+    if (result.outcome === 'empty') {
       attempts.push(recordAttempt(understudy, 'empty-response', new Error('empty response')))
       // Classified HERE, before the next iteration's `resetStreamingBuffersForSwap`
       // wipes `state.rawResponse` — that is where the finish reason lives, and
       // it is the only thing that tells a stated refusal from a blank body.
       const understudyVerdict = classifyEmptyBody(state, context.dangerous)
-      recordRouteFailure(state, understudy, viaOf(candidate.kind), understudyVerdict.outcome,
+      recordRouteFailure(state, understudy, via, understudyVerdict.outcome,
         understudyVerdict.trigger, understudyVerdict.detail, understudyVerdict.evidence)
       logger.warn('[Failover] Understudy returned an empty response', {
         chatId,
@@ -900,22 +1082,25 @@ async function walkFallbackChain(
       continue
     }
 
-    state.effectiveProfile = understudy
-    state.effectiveApiKey = keyResolution.apiKey
-    setRouteVia(state, viaOf(candidate.kind))
-
-    logger.info('[Failover] Understudy answered', {
+    // `error` or `skipped`: the call failed, or was never made.
+    const understudyTrigger = result.outcome === 'skipped'
+      ? 'provider-error'
+      : classifyFallbackTrigger(result.error) ?? 'provider-error'
+    const understudyMessage = messageOf(result.error)
+    attempts.push(recordAttempt(understudy, understudyTrigger, result.error))
+    recordRouteFailure(state, understudy, via, 'failed', understudyTrigger, understudyMessage)
+    logger.warn(result.outcome === 'skipped'
+      ? '[Failover] Understudy passed over'
+      : '[Failover] Understudy also failed', {
       chatId,
       understudyId: understudy.id,
       understudyName: understudy.name,
       provider: understudy.provider,
       model: understudy.modelName,
       kind: candidate.kind,
-      responseLength: state.fullResponse.length,
-      failedAttemptsBefore: attempts.length,
+      trigger: understudyTrigger,
+      error: understudyMessage,
     })
-
-    return { recovered: true, attempts, tierPickWasOffered }
   }
 
   logger.error('[Failover] Fallback chain exhausted', {
@@ -935,7 +1120,21 @@ async function walkFallbackChain(
   return { recovered: false, attempts, tierPickWasOffered }
 }
 
-export interface AttemptHardErrorFailoverOptions extends WalkFallbackChainOptions {
+// ============================================================================
+// HARD ERROR
+// ============================================================================
+
+export interface AttemptHardErrorFailoverOptions extends TurnCallOptions {
+  state: StreamingState
+  /** Reads only; see `WalkFallbackChainOptions.repos`. */
+  repos: FailoverRepos
+  /** See `WalkFallbackChainOptions.context`. */
+  context: FallbackContext
+  chatId: string
+  character: Pick<Character, 'id' | 'name'>
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+  preGeneratedAssistantMessageId?: string
   /** The error that ended the primary attempt. */
   error: unknown
   /**
@@ -971,7 +1170,7 @@ export interface AttemptHardErrorFailoverOptions extends WalkFallbackChainOption
 export async function attemptHardErrorFailover(
   opts: AttemptHardErrorFailoverOptions
 ): Promise<FallbackChainResult> {
-  const { state, error, chatId, context } = opts
+  const { state, error, chatId, context, repos } = opts
   const trigger = classifyFallbackTrigger(error)
 
   if (!trigger) {
@@ -993,7 +1192,22 @@ export async function attemptHardErrorFailover(
     return { recovered: false, attempts: [], tierPickWasOffered: false }
   }
 
-  const failureMessage = error instanceof Error ? error.message : String(error)
+  const turn: FailoverTurn = {
+    state,
+    primaryCall: primaryCallOf(opts),
+    formatToolsFor: opts.formatToolsFor,
+    userId: context.userId,
+    chatId,
+    character: opts.character,
+    controller: opts.controller,
+    encoder: opts.encoder,
+    preGeneratedAssistantMessageId: opts.preGeneratedAssistantMessageId,
+    repos,
+  }
+  const walk = (walkContext: FallbackContext, opening: FallbackAttempt) =>
+    walkFallbackChain({ turn, repos, context: walkContext }, opening)
+
+  const failureMessage = messageOf(error)
 
   logger.warn('[Failover] Primary call failed; walking the fallback chain', {
     chatId,
@@ -1039,7 +1253,7 @@ export async function attemptHardErrorFailover(
         },
       })
       await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
-      return walkFallbackChain(opts, openingAttempt)
+      return walk(context, openingAttempt)
     }
     // Re-asked at refusal time: the Concierge may have gone off duty mid-call.
     if (
@@ -1047,31 +1261,22 @@ export async function attemptHardErrorFailover(
       && await readCurrentConciergeOnDuty(context.userId, opts.conciergePolicy.onDuty)
     ) {
       const uncensored = await attemptUncensoredRetry({
-        state,
+        turn,
         conciergePolicy: opts.conciergePolicy,
-        formattedMessages: opts.formattedMessages,
-        modelParams: opts.modelParams,
-        actualTools: opts.actualTools,
-        useNativeWebSearch: opts.useNativeWebSearch,
-        userId: context.userId,
-        chatId,
-        character: opts.character,
-        controller: opts.controller,
-        encoder: opts.encoder,
-        preGeneratedAssistantMessageId: opts.preGeneratedAssistantMessageId,
-        repos: opts.repos,
         alreadyTried,
         contentWasFlaggedDangerous: context.dangerous,
         refusalWasStated: true,
-        substitute: true,
-        stop: opts.stop,
+        replace: true,
       })
       if (uncensored.recovered) {
         await recordTextRefusal(chatId, refusingProfile, refusal.evidence, true)
         return { recovered: true, attempts: [openingAttempt], tierPickWasOffered: false }
       }
-      if (uncensored.understudyId) alreadyTried.push(uncensored.understudyId)
       await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
+      if (uncensored.clientGone) {
+        return { recovered: false, attempts: [openingAttempt], tierPickWasOffered: false, clientGone: true }
+      }
+      if (uncensored.understudyId) alreadyTried.push(uncensored.understudyId)
 
       // `state.effectiveProfile` is still the profile that refused (the swap
       // only happens on success), so this is the refusing profile's own
@@ -1082,10 +1287,7 @@ export async function attemptHardErrorFailover(
         understudyId: uncensored.understudyId,
         alreadyTried,
       })
-      return walkFallbackChain(
-        { ...opts, context: { ...context, dangerous: true, alreadyTried } },
-        openingAttempt,
-      )
+      return walk({ ...context, dangerous: true, alreadyTried }, openingAttempt)
     }
 
     logger.info('[Failover] Refusal not rerouted to an uncensored profile: the Concierge policy does not permit it', {
@@ -1094,7 +1296,7 @@ export async function attemptHardErrorFailover(
       conciergeState: opts.conciergePolicy?.state,
     })
     await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
-    return walkFallbackChain(opts, openingAttempt)
+    return walk(context, openingAttempt)
   }
 
   // The failure that opens the chain is the trail's first row. `state.routeVia`
@@ -1102,7 +1304,7 @@ export async function attemptHardErrorFailover(
   // 'concierge' when the Concierge's pre-call reroute had already swapped it.
   recordRouteFailure(state, state.effectiveProfile, state.routeVia, 'failed', trigger, failureMessage)
 
-  return walkFallbackChain(opts, openingAttempt)
+  return walk(context, openingAttempt)
 }
 
 
@@ -1122,10 +1324,11 @@ export async function attemptHardErrorFailover(
  * chain runs with `dangerous: true` so tier picks stay cleared for the
  * content.
  */
-export async function attemptEmptyResponseChainFallback(
+async function attemptEmptyResponseChainFallback(
   opts: WalkFallbackChainOptions
 ): Promise<FallbackChainResult> {
-  const { state, chatId, context } = opts
+  const { turn, context } = opts
+  const { state, chatId } = turn
 
   logger.warn('[Failover] Empty response survived local recovery; walking the fallback chain', {
     chatId,

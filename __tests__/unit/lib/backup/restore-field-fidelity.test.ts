@@ -1098,7 +1098,7 @@ describe('restore field fidelity — 4.11 data-model additions', () => {
     mockedGetRepositories.mockReturnValue(
       new Proxy(globalRepos, {
         get(target, prop: string) {
-          if (prop === 'roleplayTemplates') return repoStub({ create: roleplayCreate })
+          if (prop === 'roleplayTemplates') return repoStub({ create: roleplayCreate, findById: jest.fn().mockResolvedValue(null) })
           return target[prop]
         },
       }) as never
@@ -1113,6 +1113,8 @@ describe('restore field fidelity — 4.11 data-model additions', () => {
     await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
 
     expect(roleplayCreate.mock.calls[0][0]).toMatchObject({ ...unmarked, userId: 'user-1' })
+    // Restored under its backup id, so chats naming it still find it (#190).
+    expect(roleplayCreate.mock.calls[0][1]).toEqual({ id: 'rt-1' })
   })
 
   it("carries an LLM log's storytellerRoundId and every Log entry through restore", async () => {
@@ -1253,5 +1255,61 @@ describe('restore field fidelity — 4.12 data-model additions', () => {
 
     expect(connectionsCreate).toHaveBeenCalledTimes(1)
     expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('maxImagesPerRequest', 4)
+  })
+})
+
+describe('restore field fidelity — 4.13 data-model additions', () => {
+  const mockedIsLLMLogsDegraded = jest.requireMock('@/lib/database/backends/sqlite/llm-logs-client')
+    .isLLMLogsDegraded as jest.Mock
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockedIsLLMLogsDegraded.mockReturnValue(true)
+  })
+
+  function profileArchive(profile: Record<string, unknown>) {
+    primeArchive(
+      makeBackupData({
+        connectionProfiles: [
+          {
+            id: 'profile-1',
+            userId: 'old-user',
+            name: 'A Profile',
+            provider: 'ANTHROPIC',
+            createdAt: '2026-11-01T00:00:00.000Z',
+            updatedAt: '2026-11-01T00:00:00.000Z',
+            ...profile,
+          },
+        ],
+      })
+    )
+  }
+
+  it("carries a connection profile's toolResultVerbatimTurns through restore", async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    profileArchive({ toolResultVerbatimTurns: 12 })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate).toHaveBeenCalledTimes(1)
+    expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('toolResultVerbatimTurns', 12)
+  })
+
+  it('keeps a stored 0 (never elide) rather than reading it as absent', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    profileArchive({ toolResultVerbatimTurns: 0 })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('toolResultVerbatimTurns', 0)
+  })
+
+  it('restores an archive older than toolResultVerbatimTurns with the documented default of 3', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    profileArchive({})
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('toolResultVerbatimTurns', 3)
   })
 })

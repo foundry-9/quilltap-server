@@ -89,8 +89,8 @@ function chatDocumentIdOf(payload: unknown): string {
 
 /**
  * De-dupe key for a tab. Salon/terminal tabs are keyed by their (parent) chat
- * id and character-edit/character-view by its character id (so each character
- * gets its own editor and detail tab). Document tabs are keyed by chat id **and** the open document's
+ * id and the character page by its character id (so each character gets its
+ * own page tab). Document tabs are keyed by chat id **and** the open document's
  * row id, so a single chat can have several document tabs open at once (one per
  * document). Every other kind is a singleton keyed by kind alone.
  */
@@ -104,10 +104,8 @@ export function tabIdentity(tab: { kind: TabKind; payload?: unknown }): string {
       return `document:${chatIdOf(tab.payload)}:${chatDocumentIdOf(tab.payload)}`
     case 'document-standalone':
       return `document-standalone:${(tab.payload as { docKey?: string } | undefined)?.docKey ?? ''}`
-    case 'character-edit':
-      return `character-edit:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
-    case 'character-view':
-      return `character-view:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
+    case 'character':
+      return `character:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
     case 'custom-tools': {
       // One tab per open definition; the payload-less library is its own tab.
       const payload = tab.payload as { mountPointId?: string; path?: string } | undefined
@@ -275,6 +273,12 @@ export function workspaceReducer(
     case 'OPEN_TAB': {
       const focus = action.focus ?? true
       const identity = tabIdentity({ kind: action.kind, payload: action.payload })
+      // A settings deep link titles its tab by where it points, unless the opener names it.
+      const derivedTitle =
+        action.title ??
+        (action.kind === 'settings' && action.payload !== undefined
+          ? defaultTabMeta(action.kind, action.payload).title
+          : undefined)
       const existing = Object.values(state.tabs).find(
         (t) => tabIdentity(t) === identity
       )
@@ -285,14 +289,14 @@ export function workspaceReducer(
         let tabs = state.tabs
         if (
           (action.payload !== undefined && !payloadEqual(existing.payload, action.payload)) ||
-          (action.title !== undefined && action.title !== existing.title)
+          (derivedTitle !== undefined && derivedTitle !== existing.title)
         ) {
           tabs = {
             ...state.tabs,
             [existing.id]: {
               ...existing,
               payload: action.payload !== undefined ? action.payload : existing.payload,
-              title: action.title ?? existing.title,
+              title: derivedTitle ?? existing.title,
             },
           }
         }
@@ -319,7 +323,7 @@ export function workspaceReducer(
       // Defensive: focused pane could reference a collapsed right pane.
       if (targetPane === 'right' && !panes.right) targetPane = 'left'
 
-      const meta = defaultTabMeta(action.kind)
+      const meta = defaultTabMeta(action.kind, action.payload)
       const tab: WorkspaceTab = {
         id: action.id,
         kind: action.kind,

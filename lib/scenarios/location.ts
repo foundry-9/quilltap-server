@@ -50,11 +50,10 @@ import {
   type ListScenariosResult,
   type ParsedScenario,
 } from '@/lib/mount-index/scenarios-common';
-import {
-  parseScenarioFile,
-  stableUuidFromString,
-} from '@/lib/database/repositories/vault-overlay/parsers';
-import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
+import { parseScenarioFile } from '@/lib/characters/vault/parsers';
+import type {
+  DocMountDocumentWithLink as DocMountDocument,
+} from '@/lib/database/repositories/doc-mount-documents.repository';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 
 export const ScenarioScopeSchema = z.enum(['character', 'project', 'group', 'general']);
@@ -113,8 +112,6 @@ export interface ScenarioLocation {
   list(opts?: { includeArchived?: boolean }): Promise<ListScenariosResult>;
   /** One scenario, archived included; `isDefault` reflects only the file (or column) itself. */
   read(path: string): Promise<ParsedScenario | null>;
-  /** The id a character-tier scenario carries (`stableUuidFromString('scenario:…')`); null for other scopes. */
-  idForPath(path: string): string | null;
   /** Parse one of this folder's documents with the scope's parser. */
   parse(doc: DocMountDocument, defaultScenarioId?: string | null): ParsedScenario | null;
 }
@@ -151,11 +148,6 @@ function usableCharacter(character: CharacterRow | null, userId: string): (Chara
   return character as CharacterRow & { characterDocumentMountPointId: string };
 }
 
-/** Ref → character-scenario id. A pure function of the ref. */
-export function characterScenarioIdForPath(mountPointId: string, path: string): string {
-  return stableUuidFromString(`scenario:${mountPointId}:${path}`);
-}
-
 /**
  * Parse a document from any owner's `Scenarios/` folder with that scope's
  * parser. The character tier's default is a column, so its caller passes the
@@ -172,6 +164,7 @@ export function parseScenarioForScope(
   if (!parsed) return null;
   const isDefault = !!options.defaultScenarioId && parsed.id === options.defaultScenarioId;
   return {
+    id: parsed.id,
     path: doc.relativePath,
     filename: doc.fileName.replace(/\.md$/i, ''),
     name: parsed.title,
@@ -247,6 +240,8 @@ function storeLocation(
         mountPointId,
         path,
         buildScenarioFileContent({
+          // A new scenario gets its id now, so it never changes (D5).
+          id: crypto.randomUUID(),
           name: input.name,
           description: input.description,
           isDefault: input.isDefault,
@@ -268,6 +263,9 @@ function storeLocation(
         mountPointId,
         resolved,
         buildScenarioFileContent({
+          // The serializer rewrites the whole file; keep the id it carries
+          // (or stamp the path-derived one a legacy file has been answering to).
+          id: parseScenarioDoc(existing)?.id,
           name: patch.name,
           description: patch.description,
           isDefault: patch.isDefault,
@@ -306,9 +304,6 @@ function storeLocation(
     async setDefault(path) {
       await setScenarioDefaultInFolder(mountPointId, path === null ? null : requirePath(path), SCENARIOS_FOLDER);
     },
-    idForPath() {
-      return null;
-    },
     parse(doc) {
       return parseScenarioDoc(doc);
     },
@@ -328,7 +323,6 @@ function characterLocation(
   // The character's default is a column on the row this location was built
   // from; nothing writes through a character location, so that copy holds.
   const defaultScenarioId = character.defaultScenarioId ?? null;
-  const idForPath = (path: string) => characterScenarioIdForPath(mountPointId, path);
   const parse = (doc: DocMountDocument, defaultId: string | null = defaultScenarioId) =>
     parseScenarioForScope('character', doc, { characterId, defaultScenarioId: defaultId });
 
@@ -349,7 +343,6 @@ function characterLocation(
       const doc = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, requirePath(path));
       return doc ? parse(doc) : null;
     },
-    idForPath,
     parse,
   };
 }
@@ -424,19 +417,10 @@ async function resolve(
   return storeLocation(store.scope, store.owner.id, store.mountPointId, name, repos);
 }
 
-/** Which owner a mount belongs to, or null when it is none of the four kinds. */
-export async function classifyScenarioMount(
-  mountPointId: string,
-  repos: RepositoryContainer,
-  userId: string,
-): Promise<{ scope: ScenarioScope; id: string | null } | null> {
-  const owner = await classify(mountPointId, repos, userId);
-  return owner ? { scope: owner.scope, id: owner.id } : null;
-}
-
 /**
- * `classifyScenarioMount`, keeping the character row it read so a ref lookup
- * needn't read it again. A filter over the shared `classifyMount`: another
+ * Which owner a mount belongs to, or null when it is none of the four kinds,
+ * keeping the character row it read so a ref lookup needn't read it again.
+ * A filter over the shared `classifyMount`: another
  * user's or an archived character's vault holds no scenarios for this caller.
  */
 async function classify(

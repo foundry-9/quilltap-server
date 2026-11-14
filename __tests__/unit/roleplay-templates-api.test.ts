@@ -40,6 +40,7 @@ const defaultSession = {
 function createMockRequest(url: string, body?: Record<string, any> | null, method = 'GET') {
   return {
     url,
+    nextUrl: new URL(url, 'http://localhost'),
     method,
     headers: new Map(),
     json: async () => body ?? {},
@@ -145,8 +146,10 @@ describe('Roleplay Template Routes', () => {
       const res = await createRoleplayTemplate(req)
       const data = await res.json()
 
+      // The schema's message, delivered by the middleware's validation 400.
       expect(res.status).toBe(400)
-      expect(data).toEqual({ error: 'Name is required' })
+      expect(data.error).toBe('Validation error')
+      expect(data.message).toContain('Name is required')
       expect(mockRoleplayRepo.findByName).not.toHaveBeenCalled()
     })
 

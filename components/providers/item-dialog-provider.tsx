@@ -1,13 +1,14 @@
 'use client'
 
 /**
- * Item Dialog Provider — the open / close context behind the global Wardrobe
- * and Inventory dialogs, stated once and parameterised by kind.
+ * Item Dialog Provider — the open / close context behind the global Wardrobe,
+ * Inventory and Atlas dialogs, stated once and parameterised by kind.
  *
  * Each kind's dialog lives once at the layout level; any component inside the
  * authenticated layout summons it with `useItemDialog(kind).open(ctx)` (or
- * the kind-bound `useWardrobeDialog` / `useInventoryDialog`), passing the
- * optional context that kind's dialog reads. The two kinds keep separate
+ * the kind-bound `useWardrobeDialog` / `useInventoryDialog` /
+ * `useAtlasDialog`), passing the optional context that kind's dialog reads.
+ * The kinds keep separate
  * React contexts, so opening one never touches the other.
  *
  * Mirrors the HelpChatProvider pattern.
@@ -41,10 +42,23 @@ export interface InventoryDialogContext {
   groupId?: string
 }
 
+/** What `open()` may pass the Atlas dialog. */
+export interface AtlasDialogContext {
+  /** Browse this character's own Atlas. */
+  characterId?: string
+  /** The chat it was opened from (its project, when it has one, is browsed). */
+  chatId?: string
+  /** Browse this project's Atlas. */
+  projectId?: string
+  /** Browse this group's Atlas. */
+  groupId?: string
+}
+
 /** Each kind's `open()` context. */
 export interface ItemDialogContexts {
   wardrobe: WardrobeDialogContext
   inventory: InventoryDialogContext
+  atlas: AtlasDialogContext
 }
 
 export interface ItemDialogContextValue<C> {
@@ -59,12 +73,14 @@ type ItemDialogCtx<K extends ItemKind> = Context<ItemDialogContextValue<ItemDial
 const CONTEXTS: { [K in ItemKind]: ItemDialogCtx<K> } = {
   wardrobe: createContext<ItemDialogContextValue<WardrobeDialogContext> | null>(null),
   inventory: createContext<ItemDialogContextValue<InventoryDialogContext> | null>(null),
+  atlas: createContext<ItemDialogContextValue<AtlasDialogContext> | null>(null),
 }
 
 /** The names the hooks' misuse errors use. */
 const NAMES: Record<ItemKind, { hook: string; provider: string }> = {
   wardrobe: { hook: 'useWardrobeDialog', provider: 'WardrobeDialogProvider' },
   inventory: { hook: 'useInventoryDialog', provider: 'InventoryDialogProvider' },
+  atlas: { hook: 'useAtlasDialog', provider: 'AtlasDialogProvider' },
 }
 
 export function ItemDialogProvider<K extends ItemKind>({ kind, children }: { kind: K; children: ReactNode }) {

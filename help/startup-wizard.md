@@ -33,14 +33,14 @@ On your very first launch, Quilltap will walk you through three initial steps:
 
 3. **AI Stack Setup Wizard** (`/setup/providers`) — A guided wizard walks you through selecting providers, entering API keys, choosing models, and configuring embeddings and images. See [AI Stack Setup Wizard](setup-wizard.md) for full details.
 
-After completing the wizard, you can re-run it anytime from the **AI Providers** tab in Settings (`/settings?tab=providers`).
+After completing the wizard, you can re-run it anytime from the **Setup Wizard** card in the **Connections** group of Settings (`/settings?section=setup-wizard`).
 
 **Profile Setup** — You'll enter your name and choose an archetype:
    - **The Proprietor** — Direct and professional, focused on getting things done
    - **The Resident** — Curious and sociable, here to connect with characters
    - **The Author** — Imaginative and expressive, approaching characters as a storyteller
 
-   This creates a user-controlled character that represents you in conversations. Characters will greet you by name and know a bit about your style. You can change your name, avatar, and details anytime from Aurora.
+   This creates a user-controlled character that represents you in conversations, and the name you give is also the one the home page greets you by. Characters will greet you by name and know a bit about your style. You can change your name, avatar, and details anytime from Aurora.
 
 ### Understanding the Basics
 
@@ -214,7 +214,7 @@ Now that you have an API key (or Ollama installed), let's add it to Quilltap.
 
 1. **Open Settings**
    - Click **Settings** (gear icon) in the left sidebar
-   - Or go to: **Settings** (`/settings?tab=providers`)
+   - Or go to: **Settings** (`/settings?group=connections`)
 
 2. **Add a New API Key**
    - Click **Add API Key** or **+ New Key**
@@ -270,7 +270,7 @@ Ollama doesn't require an API key, but you need Ollama running:
 A connection profile tells Quilltap which AI to use and how to use it. This is where you choose your model and configure settings.
 
 1. **Open Connection Profiles**
-   - Go to: **Settings** (`/settings?tab=providers`)
+   - Go to: **Settings** (`/settings?group=connections`)
 
 2. **Create a New Profile**
    - Click **Add Profile** or **+ New Profile**
@@ -299,7 +299,7 @@ A connection profile tells Quilltap which AI to use and how to use it. This is w
    - **Recommendations:**
      - OpenRouter: `anthropic/claude-3.5-sonnet` or `openai/gpt-4o`
      - OpenAI: `gpt-4o` or `gpt-4o-mini` (cheaper)
-     - Anthropic: `claude-3-5-sonnet-20241022` or `claude-3-5-haiku-20241022` (cheaper)
+     - Anthropic: a Sonnet for the conversation, or a Haiku when thrift matters (the dropdown lists only the models your key can presently reach)
      - Ollama: `llama3.2` or `mistral`
 
    **Base URL (for custom servers):**
@@ -330,7 +330,7 @@ Quilltap includes a built-in embedding system that works without any external se
 
 **Check if it's working:**
 
-1. Go to: the **Commonplace Book** tab in Settings (`/settings?tab=memory`)
+1. Go to: **Connections → Providers** in Settings (`/settings?section=embedding-profiles`)
 2. Look for a profile named "Built-in TF-IDF" or similar
 3. It should show as the default (star icon)
 
@@ -356,7 +356,7 @@ For more sophisticated semantic search, you can use external embedding services.
 
 **Using OpenAI Embeddings:**
 
-1. Go to: the **Commonplace Book** tab in Settings (`/settings?tab=memory`)
+1. Go to: **Connections → Providers** in Settings (`/settings?section=embedding-profiles`)
 2. Click **Add Profile**
 3. Select **OpenAI** as the provider
 4. Select your OpenAI API key
@@ -389,15 +389,15 @@ These don't need your most powerful (expensive) model. Setting up a "cheap LLM" 
 ### To Set Up a Cheap LLM:
 
 1. **Create a Second Connection Profile**
-   - Go to: **Settings** (`/settings?tab=providers`)
+   - Go to: **Settings** (`/settings?group=connections`)
    - Create a new profile with a cheaper model:
      - OpenAI: `gpt-4o-mini` is much cheaper than `gpt-4o`
-     - Anthropic: `claude-3-5-haiku` is cheaper than `claude-3-5-sonnet`
+     - Anthropic: a Haiku is cheaper than a Sonnet
      - OpenRouter: Look for models with lower per-token costs
    - Name it something like "Cheap - GPT-4o-mini"
 
 2. **Configure Chat Settings**
-   - Go to: the **Chat** tab in Settings (`/settings?tab=chat`)
+   - Go to: the **Cheap LLM Settings** card under **Connections** (`/settings?section=cheap-llm`)
    - Find the **Cheap LLM** section
    - Toggle **Enable Cheap LLM** on
    - Select your cheaper profile from the dropdown
@@ -534,7 +534,7 @@ You're ready to chat! Quilltap comes with a starter character, or you can create
 - Check that an embedding profile is configured and set as default
 - Verify the cheap LLM is configured (for memory extraction)
 - Wait a moment — memory extraction happens in the background
-- Check the Tasks Queue in **Settings** (`/settings?tab=system`) for any errors
+- Check the Tasks Queue in **Settings** (`/settings?section=tasks-queue`) for any errors
 
 ---
 
@@ -555,13 +555,13 @@ Now that you're set up, explore more of Quilltap:
 
 | What You Need | Where to Find It |
 |---------------|------------------|
-| Add API Keys | **Settings** (`/settings?tab=providers`) |
-| Create Connection Profiles | **Settings** (`/settings?tab=providers`) |
-| Configure Embeddings | **Settings** (`/settings?tab=memory`) |
-| Set Up Cheap LLM | **Settings** (`/settings?tab=chat`) |
+| Add API Keys | **Settings** (`/settings?group=connections`) |
+| Create Connection Profiles | **Settings** (`/settings?group=connections`) |
+| Configure Embeddings | **Settings** (`/settings?section=embedding-profiles`) |
+| Set Up Cheap LLM | **Settings** (`/settings?section=cheap-llm`) |
 | Manage Characters | [Characters](/aurora) |
-| View Background Tasks | **Settings** (`/settings?tab=system`) |
-| Customize Appearance | **Settings** (`/settings?tab=appearance`) |
+| View Background Tasks | **Settings** (`/settings?section=tasks-queue`) |
+| Customize Appearance | **Settings** (`/settings?group=appearance`) |
 
 ---
 
@@ -576,7 +576,7 @@ Characters with help tools enabled can navigate directly to this page:
 If you run into issues:
 
 1. Check the help documentation for the specific feature
-2. Look at the **Settings** page (`/settings?tab=system`) for error messages in the Tasks Queue
+2. Look at the **Settings** page (`/settings?section=tasks-queue`) for error messages in the Tasks Queue
 3. Review your API provider's status page for outages
 4. For Quilltap-specific issues, check the project's GitHub
 

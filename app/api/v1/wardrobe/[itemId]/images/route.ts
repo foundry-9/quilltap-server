@@ -31,7 +31,7 @@ import type { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, conflict, created } from '@/lib/api/responses';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 import {
   ForeignWardrobeImageError,
   UnlinkableWardrobeImageError,

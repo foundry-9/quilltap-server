@@ -7,6 +7,7 @@
  * by the `zip` binary to avoid OOM in memory-constrained VMs.
  */
 
+import { readOwnedCharacters, readOwnedProjects, readOwnedGroups, readAllLlmLogs, unreadableStoreWarning } from './owned-rows';
 import { loadBundleCursors, withBundleCursorFields } from '@/lib/memory/extraction/cursor-bundle';
 import { execFile } from 'child_process';
 import fs from 'fs';
@@ -16,6 +17,7 @@ import { promisify } from 'util';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { logger } from '@/lib/logger';
+import { redactPluginConfigSecrets } from '@/lib/plugins/config-secrets';
 import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -132,13 +134,13 @@ function* streamDocMountBlobsWithData(): Generator<{ meta: DocMountBlobMetadata;
 /**
  * Collects all user data from database repositories
  */
-async function collectUserData(userId: string): Promise<Omit<BackupData, 'manifest'>> {
+async function collectUserData(userId: string): Promise<{ data: Omit<BackupData, 'manifest'>; warnings: string[] }> {
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
 
   // Collect all entities in parallel
   const [
-    characters,
+    ownedCharacters,
     chatMetadatas,
     tags,
     connectionProfiles,
@@ -148,14 +150,17 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     promptTemplates,
     roleplayTemplates,
     providerModels,
-    projects,
-    groups,
+    ownedProjects,
+    ownedGroups,
     llmLogs,
     pluginConfigs,
     chatSettingsResult,
     folders,
   ] = await Promise.all([
-    repos.characters.findAll(),
+    // Raw rows laid under the hydrated ones: a character, project or group
+    // whose store cannot be read is still backed up, as its bare row, with
+    // its memories (#202).
+    readOwnedCharacters(userId),
     repos.chats.findAll(),
     repos.tags.findAll(),
     repos.connections.findAll(),
@@ -168,11 +173,11 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Get provider models
     globalRepos.providerModels.findAll(),
     // Get projects
-    repos.projects.findAll(),
-    // Get groups (hydrated from each group's official document store, like projects)
-    repos.groups.findAll(),
-    // Get LLM logs
-    repos.llmLogs.findAll(10000), // High limit to get all user logs
+    readOwnedProjects(userId),
+    // Groups (hydrated from each group's official document store, like projects)
+    readOwnedGroups(userId),
+    // Every LLM log, a page at a time — not the newest 10,000 (#202)
+    readAllLlmLogs(userId),
     // Get plugin configurations
     globalRepos.pluginConfigs.findByUserId(userId),
     // Get chat settings (returns single object or null)
@@ -180,6 +185,14 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Get folders
     globalRepos.folders.findByUserId(userId),
   ]);
+  const characters = ownedCharacters.rows;
+  const projects = ownedProjects.rows;
+  const groups = ownedGroups.rows;
+  const warnings = [
+    unreadableStoreWarning('character', ownedCharacters.unreadable),
+    unreadableStoreWarning('project', ownedProjects.unreadable),
+    unreadableStoreWarning('group', ownedGroups.unreadable),
+  ].filter((warning): warning is string => warning !== null);
   // Wardrobe items live in document stores (`Wardrobe/*.md`), which the backup
   // carries as documents; the legacy `wardrobeItems` array stays empty so old
   // restorers still read the format.
@@ -291,6 +304,10 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   const wardrobeHistory = await globalRepos.wardrobeHistory.findAll();
   moduleLogger.debug('Collected outfit history for backup', { rowCount: wardrobeHistory.length });
 
+  // The Salon avatar timeline: every chat's dated avatars per character.
+  const avatarTimeline = await globalRepos.avatarTimeline.findAll();
+  moduleLogger.debug('Collected avatar timeline for backup', { rowCount: avatarTimeline.length });
+
   // The Log: instance-wide lines in the LLM logs database (no userId), so the
   // whole table is the user's. Empty while the logs DB is degraded.
   const logEntries = await globalRepos.logEntries.findAllEntries();
@@ -359,10 +376,22 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Keep apiKeyId reference but note that actual keys aren't backed up
   }));
 
+  // Plugin config secrets (password-typed or `secret` fields) are left out of
+  // backups, as API keys are; `_redactedKeys` tells the restore what to ask
+  // the operator to re-enter.
+  const sanitizedPluginConfigs = pluginConfigs.map((config) => {
+    const { config: safeConfig, redactedKeys } = redactPluginConfigSecrets(config.pluginName, config.config);
+    return {
+      ...config,
+      config: safeConfig,
+      ...(redactedKeys.length > 0 && { _redactedKeys: redactedKeys }),
+    };
+  });
+
   // Wrap chatSettings in an array for backup (it's a single record per user)
   const chatSettings = chatSettingsResult ? [chatSettingsResult] : [];
 
-  return {
+  const data = {
     characters,
     chats,
     tags,
@@ -377,7 +406,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     projects,
     groups,
     llmLogs,
-    pluginConfigs,
+    pluginConfigs: sanitizedPluginConfigs,
     chatSettings,
     folders,
     wardrobeItems,
@@ -402,8 +431,10 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     textReplacementRules,
     wardrobeWear,
     wardrobeHistory,
+    avatarTimeline,
     logEntries,
   };
+  return { data, warnings };
 }
 
 /**
@@ -452,7 +483,7 @@ function countUserInstalledThemes(): number {
 function createManifest(
   userId: string,
   data: Omit<BackupData, 'manifest'>,
-  options?: { compact?: boolean }
+  options?: { compact?: boolean; warnings?: string[] }
 ): BackupManifest {
   const totalMessages = data.chats.reduce((sum, chat) => sum + chat.messages.length, 0);
 
@@ -463,6 +494,7 @@ function createManifest(
     userId,
     appVersion: APP_VERSION,
     ...(options?.compact && { compact: true }),
+    ...(options?.warnings && options.warnings.length > 0 && { warnings: options.warnings }),
     counts: {
       characters: data.characters.length,
       chats: data.chats.length,
@@ -506,6 +538,7 @@ function createManifest(
       textReplacementRules: data.textReplacementRules?.length || 0,
       wardrobeWear: data.wardrobeWear?.length || 0,
       wardrobeHistory: data.wardrobeHistory?.length || 0,
+      avatarTimeline: data.avatarTimeline?.length || 0,
       logEntries: data.logEntries?.length || 0,
     },
   };
@@ -630,9 +663,10 @@ export async function createBackup(
   }
 
   // Collect all user data
-  const collected = await collectUserData(userId);
+  const { data: collected, warnings: readWarnings } = await collectUserData(userId);
   const data = options?.compact ? compactBackupData(collected) : collected;
-  const manifest = createManifest(userId, data, options);
+  const manifest = createManifest(userId, data, { ...options, warnings: readWarnings });
+  for (const warning of readWarnings) moduleLogger.warn('Backup carries a row without its store', { userId, warning });
   if (options?.compact) {
     moduleLogger.debug('Compact backup — embeddings and derived tables omitted', {
       userId,
@@ -715,6 +749,8 @@ export async function createBackup(
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-wear.json'), data.wardrobeWear || []);
     // Outfit history (4.11). Optional on the way back in, like the wear ledger.
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-history.json'), data.wardrobeHistory || []);
+    // Salon avatar timeline. Optional on the way back in, like the outfit history.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'avatar-timeline.json'), data.avatarTimeline || []);
     // The Log (4.11). Optional on the way back in, like the wear ledger.
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'log-entries.json'), data.logEntries || []);
 

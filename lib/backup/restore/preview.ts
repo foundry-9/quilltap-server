@@ -9,9 +9,9 @@ import path from 'path';
 import type { RestoreSummary } from '../types';
 import {
   parseBackupZip,
-  countNpmPluginsInExtractedBackup,
   cleanupDir,
 } from './archive';
+import { listNpmPluginsInExtractedBackup } from './archive-guard';
 
 /**
  * Previews what will be restored without actually restoring.
@@ -23,7 +23,7 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
 
   try {
     const totalMessages = data.chats.reduce((sum, chat) => sum + chat.messages.length, 0);
-    const npmPluginCount = await countNpmPluginsInExtractedBackup(rootPath);
+    const npmPluginNames = await listNpmPluginsInExtractedBackup(rootPath);
 
     return {
       characters: data.characters.length,
@@ -49,7 +49,8 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       chatSettings: data.chatSettings?.length || 0,
       folders: data.folders?.length || 0,
       wardrobeItems: data.wardrobeItems?.length || 0,
-      npmPlugins: npmPluginCount,
+      npmPlugins: npmPluginNames.length,
+      npmPluginNames,
       characterPluginData: data.characterPluginData?.length || 0,
       conversationAnnotations: data.conversationAnnotations?.length || 0,
       userInstalledThemes: 0, // Counted after zip extraction; not shown in preview
@@ -72,6 +73,7 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       textReplacementRules: data.textReplacementRules?.length || 0,
       wardrobeWear: data.wardrobeWear?.length || 0,
       wardrobeHistory: data.wardrobeHistory?.length || 0,
+      avatarTimeline: data.avatarTimeline?.length || 0,
       logEntries: data.logEntries?.length || 0,
       warnings: [],
     };

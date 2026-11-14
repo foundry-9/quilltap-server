@@ -58,7 +58,7 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
   // Fetch models when provider changes
   useEffect(() => {
     if (selectedProvider && selectedProvider !== BUILTIN_TFIDF_ID) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- refetches the model list into local state whenever the selected provider changes
       loadModels(selectedProvider)
     } else {
       setModels([])
@@ -108,6 +108,7 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
           <button
             type="button"
             onClick={() => handleProviderSelect(BUILTIN_TFIDF_ID)}
+            aria-pressed={selectedProvider === BUILTIN_TFIDF_ID}
             className={`w-full text-left p-3 rounded-lg transition-colors ${
               selectedProvider === BUILTIN_TFIDF_ID
                 ? 'qt-option-selected'
@@ -133,6 +134,7 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
               key={provider.id}
               type="button"
               onClick={() => handleProviderSelect(provider.id)}
+              aria-pressed={selectedProvider === provider.id}
               className={`w-full text-left p-3 rounded-lg transition-colors ${
                 selectedProvider === provider.id
                   ? 'qt-option-selected'

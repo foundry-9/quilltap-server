@@ -6,6 +6,8 @@
  * context matching for auto-expanding the relevant category.
  */
 
+import { SETTINGS_GROUPS, resolveSettingsHref, settingsGroupHref, type SettingsGroupId } from '@/lib/settings/registry';
+
 interface HelpCategory {
   id: string;
   label: string;
@@ -130,15 +132,26 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
   },
 ];
 
+/**
+ * The help category each Settings group belongs to. The settings rows of
+ * `URL_CATEGORY_MAP` derive from this and the registry, so a new group cannot
+ * be forgotten here (the Record type demands every group).
+ */
+export const SETTINGS_GROUP_HELP_CATEGORY: Record<SettingsGroupId, string> = {
+  connections: 'ai-providers',
+  'composer-display': 'chats',
+  'context-memory': 'memory-search',
+  'characters-prompts': 'settings-system',
+  images: 'content-routing',
+  'games-tools': 'chats',
+  moderation: 'content-routing',
+  appearance: 'appearance',
+  security: 'settings-system',
+  'data-maintenance': 'settings-system',
+};
+
 export const URL_CATEGORY_MAP: readonly { pattern: string; categoryId: string }[] = [
-  { pattern: '/settings?tab=system', categoryId: 'settings-system' },
-  { pattern: '/settings?tab=templates', categoryId: 'settings-system' },
-  { pattern: '/settings?tab=concierge', categoryId: 'content-routing' },
-  { pattern: '/settings?tab=images', categoryId: 'content-routing' },
-  { pattern: '/settings?tab=memory', categoryId: 'memory-search' },
-  { pattern: '/settings?tab=appearance', categoryId: 'appearance' },
-  { pattern: '/settings?tab=chat', categoryId: 'chats' },
-  { pattern: '/settings?tab=providers', categoryId: 'ai-providers' },
+  ...SETTINGS_GROUPS.map((g) => ({ pattern: settingsGroupHref(g.id), categoryId: SETTINGS_GROUP_HELP_CATEGORY[g.id] })),
   { pattern: '/settings', categoryId: 'settings-system' },
   { pattern: '/profile', categoryId: 'account' },
   { pattern: '/prospero', categoryId: 'projects' },
@@ -150,6 +163,12 @@ export const URL_CATEGORY_MAP: readonly { pattern: string; categoryId: string }[
 ];
 
 export function getCategoryForUrl(pathname: string): string | null {
+  // Any settings address (new or legacy, by group, card or tab) resolves
+  // through the registry; a bare or unresolvable one falls to the
+  // `/settings` row below.
+  const settingsLink = resolveSettingsHref(pathname);
+  if (settingsLink) return SETTINGS_GROUP_HELP_CATEGORY[settingsLink.group];
+
   // Find all matching patterns
   const matches = URL_CATEGORY_MAP.filter((entry) => {
     const patternPath = entry.pattern.split('?')[0];
@@ -160,7 +179,7 @@ export function getCategoryForUrl(pathname: string): string | null {
       return inputPath === '/';
     }
 
-    // Prefix match for other paths (e.g., /aurora matches /aurora/123/edit)
+    // Prefix match for other paths (e.g., /aurora matches /aurora/123)
     const inputPath = pathname.split('?')[0];
     if (!inputPath.startsWith(patternPath)) {
       return false;

@@ -48,7 +48,8 @@
               "conversationAnnotations": { "type": "array", "items": { "$ref": "#/$defs/ConversationAnnotation" } },
               "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } },
               "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } },
-              "wardrobeHistory": { "type": "array", "items": { "$ref": "#/$defs/WardrobeHistory" } }
+              "wardrobeHistory": { "type": "array", "items": { "$ref": "#/$defs/WardrobeHistory" } },
+              "avatarTimeline": { "type": "array", "items": { "$ref": "#/$defs/AvatarTimeline" } }
             },
             "additionalProperties": false
           }
@@ -380,6 +381,7 @@
         "chatDocuments": { "type": "integer", "minimum": 0 },
         "chatInforms": { "type": "integer", "minimum": 0 },
         "wardrobeHistory": { "type": "integer", "minimum": 0 },
+        "avatarTimeline": { "type": "integer", "minimum": 0 },
         "wardrobeWear": { "type": "integer", "minimum": 0 },
         "files": { "type": "integer", "minimum": 0 },
         "folders": { "type": "integer", "minimum": 0 },
@@ -492,6 +494,16 @@
           "type": "string",
           "enum": ["handDrawn", "clean"],
           "description": "How the character's Mermaid and Graphviz diagrams look: 'handDrawn' (sketched) or 'clean' (as the engine drew them). Absent or unrecognized reads as 'handDrawn'. Rendering only; never sent to a model. Stored in the vault's properties.json."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["roleplay", "assistant"],
+          "description": "How the character is performed: 'roleplay' (a person inside a story, the default) or 'assistant' (a character whose job is to do work for the user). Absent or unrecognized reads as 'roleplay'. Stored in the vault's properties.json."
+        },
+        "birthday": {
+          "type": ["string", "null"],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Optional real birthday, YYYY-MM-DD. When set, the character's age is calculated from it on the instance calendar (never stored) and leads their public identity. Absent, null or not a real date reads as no birthday. Stored in the vault's properties.json."
         },
         "systemTransparency": {
           "type": ["boolean", "null"],
@@ -726,8 +738,8 @@
           "description": "Why the chat is in its conciergeMode. NULL when Moderated."
         },
         "turnMode": {
-          "enum": ["rotation", "storyteller", null],
-          "description": "The chat's turn mode. NULL reads as 'rotation' (the weighted rotation). 'storyteller' = each operator post opens a round: every LLM character is asked for a bid, and the operator chooses who speaks."
+          "enum": ["rotation", "turns", "storyteller", null],
+          "description": "The chat's turn mode. NULL reads as 'rotation' (the weighted rotation). 'turns' = the rotation runs one full cycle (every present character speaks or passes once), then waits for the operator. 'storyteller' = each operator post opens a round: every LLM character is asked for a bid, and the operator chooses who speaks."
         },
         "storytellerInviteFilter": {
           "type": ["boolean", "null"],
@@ -745,6 +757,22 @@
         "consoleConnectionProfileId": {
           "type": ["string", "null"],
           "description": "Brahma Console (chatType='brahma') active connection profile (model). NULL on every other chat type."
+        },
+        "consoleMode": {
+          "enum": ["writing", null],
+          "description": "Brahma Console (chatType='brahma') mode, fixed at creation: 'writing' = Writing Assistant conversation; NULL = the ordinary Console."
+        },
+        "consoleContext": {
+          "type": ["array", "null"],
+          "description": "Brahma Console Writing Assistant sources, in order. Each entry is {kind:'chat'|'project'|'store', id} (store = a document store id) or {kind:'general'}. Remapped by kind on import; an entry whose target is missing is dropped.",
+          "items": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": { "enum": ["chat", "project", "store", "general"] },
+              "id": { "type": "string", "format": "uuid" }
+            }
+          }
         },
 
         "budgetMaxTurns": {
@@ -1335,6 +1363,12 @@
           "maximum": 50,
           "description": "The most images sent to this profile in one request. Images past the cap are described in text instead. Defaults to 4; absent in older bundles, which import with the default."
         },
+        "toolResultVerbatimTurns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "How many turns a tool result is sent to this profile in full before it is elided to a one-line stub in the history. 0 keeps every result in full. Defaults to 3; absent in older bundles, which import with the default."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_apiKeyLabel": {
@@ -1490,6 +1524,22 @@
         "actorCharacterId": { "type": ["string", "null"], "description": "Who made the change: for `character`, the character whose tool call it was; for `pascal`, the rolling character; for `operator`, the character the user was speaking as at the time (null when the user drove no character). Null for arrivals and seeds." },
         "actorToolName": { "type": ["string", "null"], "description": "For `pascal` entries: the name of the custom tool whose wardrobe effects made the change. Null otherwise. Absent in bundles from before the field; read as null." },
         "isCurrent": { "type": "boolean", "description": "The cursor: the entry the character is wearing now." },
+        "createdAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "AvatarTimeline": {
+      "type": "object",
+      "description": "One avatar-timeline row (chat_avatar_timeline): one dated avatar a chat bound for one character, so the Salon draws each bubble with the avatar in force when it was written. In an NDJSON stream each row is an `avatar_timeline` record emitted with its chat. Ids are source-instance ids: the importer mints a fresh id, remaps chatId and characterId, follows imageId through the imported vault links (an id with no entry is kept), and copies effectiveAt, source and createdAt as they are.",
+      "required": ["id", "chatId", "characterId", "imageId", "effectiveAt", "source", "createdAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "characterId": { "type": "string", "minLength": 1 },
+        "imageId": { "type": ["string", "null"], "description": "Vault link id (or legacy files.id) of the avatar; null means the character's own avatar from here on." },
+        "effectiveAt": { "$ref": "#/$defs/Timestamp", "description": "When the avatar took effect. A baseline row is dated 1970-01-01T00:00:00.000Z, before any message." },
+        "source": { "enum": ["baseline", "generated", "cache", "operator", "operator-removed"] },
         "createdAt": { "$ref": "#/$defs/Timestamp" }
       }
     },

@@ -118,7 +118,7 @@ export function PendingInformChips({ chatId, participantNames }: Readonly<Pendin
               anchorClassName="gap-2 min-w-0"
             >
               <Icon name="info" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
-              <span className="text-foreground max-w-[280px] truncate">{label}</span>
+              <span className="qt-text max-w-[280px] truncate">{label}</span>
             </Tooltip>
             <Tooltip content={batch.permanent ? 'Withdraw this standing inform' : 'Withdraw this inform'}>
               <button

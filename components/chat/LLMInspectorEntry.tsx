@@ -28,6 +28,7 @@ const TYPE_BADGE_CLASSES: Record<LLMLogType, string> = {
   WARDROBE_IMAGE_ANALYSIS: 'qt-bg-warning/15 qt-text-warning',
   WARDROBE_ITEM_IMAGE: 'qt-bg-warning/15 qt-text-warning',
   INVENTORY_ITEM_IMAGE: 'qt-bg-warning/15 qt-text-warning',
+  ATLAS_ENTRY_IMAGE: 'qt-bg-warning/15 qt-text-warning',
   DANGER_CLASSIFICATION: 'qt-bg-destructive/15 qt-text-destructive',
   CHARACTER_WIZARD: 'qt-bg-success/15 qt-text-success',
   AI_IMPORT: 'qt-bg-success/15 qt-text-success',
@@ -56,6 +57,7 @@ const TYPE_LABELS: Record<LLMLogType, string> = {
   WARDROBE_IMAGE_ANALYSIS: 'Wardrobe Scan',
   WARDROBE_ITEM_IMAGE: 'Wardrobe Img',
   INVENTORY_ITEM_IMAGE: 'Inventory Img',
+  ATLAS_ENTRY_IMAGE: 'Atlas Img',
   DANGER_CLASSIFICATION: 'Safety',
   CHARACTER_WIZARD: 'Wizard',
   AI_IMPORT: 'Import',
@@ -293,7 +295,7 @@ function ExpandableContent({ content }: { content: string }) {
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-primary hover:underline mt-1"
+          className="text-xs qt-text-brand hover:underline mt-1"
         >
           {expanded ? 'Show less' : `Show all ${content.length.toLocaleString()} chars`}
         </button>
@@ -327,7 +329,7 @@ function MessageContentBlock({ role, contentLength, hasAttachments, children }: 
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-primary hover:underline mt-1"
+          className="text-xs qt-text-brand hover:underline mt-1"
         >
           {expanded ? 'Show less' : `Show all ${contentLength.toLocaleString()} chars`}
         </button>

@@ -137,6 +137,14 @@ export const ProgressionSchema = z
     reportTemplate: z.string().min(1).max(MAX_REPORT_TEMPLATE_LENGTH).optional(),
     onComplete: OnCompleteSchema.default('keep'),
     /**
+     * Whether other people can see it. A public progression (the default) is
+     * part of what others know about the character — the Host's introduction,
+     * the identity card a tool returns — rendered in neutral third-person
+     * wording by `renderPublicProgressionLine`. A private one is still reported
+     * to the character themselves every turn; only the outside view loses it.
+     */
+    public: z.boolean().default(true),
+    /**
      * Stamped by every writer Quilltap controls (the Aurora editor, Pascal's
      * applier). An entry whose `updatedAt` is later than the character's last
      * turn reports regardless of cadence — a re-armed cannon is announced
@@ -218,6 +226,7 @@ export const WRITABLE_PROGRESSION_FIELDS = [
   'reportFrequency',
   'onComplete',
   'reportTemplate',
+  'public',
   'quantity.total',
   'quantity.unit',
   'quantity.precision',

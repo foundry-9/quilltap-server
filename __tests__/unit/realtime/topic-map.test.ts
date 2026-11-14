@@ -47,7 +47,9 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.background('chat-1'),
       queryKeys.chats.gallery('chat-1'),
       queryKeys.chats.informs('chat-1'),
+      queryKeys.chats.avatarTimeline('chat-1'),
       queryKeys.chats.absentMentions('chat-1'),
+      queryKeys.chats.atlasMentions('chat-1'),
       queryKeys.wardrobe.outfit('chat-1'),
       queryKeys.wardrobe.histories('chat-1'),
       queryKeys.inventory.equipped('chat-1'),
@@ -64,6 +66,20 @@ describe('queryKeysForTopic', () => {
       queryKeys.inventory.archetypeLists,
       queryKeys.inventory.equippedLists,
     ]);
+  });
+
+  it('refreshes the Atlas browser and every chat\'s thing chips on the atlas topic', () => {
+    // Every write through an Atlas location publishes it; an edited entry
+    // changes what a chip's popup says, in every chat.
+    expect(queryKeysForTopic('atlas')).toEqual([
+      queryKeys.atlas.lists,
+      queryKeys.atlas.folderLists,
+      queryKeys.atlas.overlapLists,
+      queryKeys.chats.atlasMentionLists,
+    ]);
+    // The chip prefix reaches every chat's chips.
+    expect(queryKeys.chats.atlasMentions('chat-9').slice(0, 1)).toEqual([...queryKeys.chats.atlasMentionLists]);
+    expect(queryKeys.atlas.list('general:', { includeArchived: false }).slice(0, 2)).toEqual([...queryKeys.atlas.lists]);
   });
 
   it('refreshes the wardrobe browser\'s lists and folder trees on the wardrobe topic', () => {
@@ -153,6 +169,7 @@ describe('queryKeysForTopic', () => {
       queryKeys.characters.prompts('char-1'),
       queryKeys.characters.subprompts('char-1'),
       queryKeys.characters.photos('char-1'),
+      queryKeys.characters.stats('char-1'),
     ]);
   });
 });

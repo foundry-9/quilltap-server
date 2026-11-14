@@ -1,6 +1,6 @@
 # better-sqlite3-multiple-ciphers 13 (Node-API) — upgrade spec
 
-**Status:** implemented 2026-10-28 (see [As built](#as-built)) · **Target release:** 4.12.0 · **Written:** 2026-10-28 (facts below verified that day on macOS arm64) · **Companion:** [better-sqlite3-multiple-ciphers-v13-shell-notes.md](../better-sqlite3-multiple-ciphers-v13-shell-notes.md) (for the quilltap-shell repo; nothing in it blocks this spec)
+**Status:** implemented 2026-10-28 (see [As built](#as-built)) · **Target release:** 4.12.0 · **Written:** 2026-10-28 (facts below verified that day on macOS arm64) · **Companion:** [better-sqlite3-multiple-ciphers-v13-shell-notes.md](better-sqlite3-multiple-ciphers-v13-shell-notes.md) (for the quilltap-shell repo; nothing in it blocks this spec)
 
 This spec is written to be executed by Claude Code. Plan it in Opus; the steps marked **(delegable)** are mechanical enough for a cheaper agent once the plan is settled. Do not use `git stash` or worktrees for the delegated pieces.
 

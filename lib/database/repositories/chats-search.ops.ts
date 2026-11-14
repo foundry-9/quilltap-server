@@ -13,7 +13,7 @@ import { chatMessageFtsEligibilitySql } from '../backends/sqlite/chat-message-ft
 import { buildFtsMatchExpression } from './fts-query';
 import { isCharacterAuthoredMessage } from '@/lib/chat/chat-activity';
 import { escapeLikeLiteral } from './like-escape';
-import { ChatOpsContext } from './chats-ops-context';
+import type { ChatOpsContext, LegacyChatMessagesDoc } from './chats-ops-context';
 import { ChatMessagesOps } from './chats-messages.ops';
 import { safeQuery } from './safe-query';
 
@@ -102,8 +102,8 @@ function buildFtsSearchSql(chatIdCount: number): string {
  * the fallback is reserved for queries the index genuinely cannot serve.
  *
  * Built as a direct `LIKE … ESCAPE` rather than through the repository's
- * `$regex` filter, whose regex→LIKE conversion drops the escape clause and
- * turns a user's `.` into a wildcard.
+ * `$contains` filter because the content column is compressed and must be
+ * read through `qt_text()`, which the filter layer does not do.
  */
 function buildLikeSearchSql(chatIdCount: number): string {
   const placeholders = Array.from({ length: chatIdCount }, () => '?').join(', ');
@@ -306,9 +306,9 @@ export class ChatSearchReplaceOps {
     return safeQuery(async () => {
       const messages = await this.messagesOps.getMessages(chatId);
       let updatedCount = 0;
-      const messagesCollection = await this.ctx.getMessagesCollection();
 
       if (this.ctx.isSQLiteBackend()) {
+        const messagesCollection = await this.ctx.getMessagesCollection();
         // SQLite: Update each matching message row individually
         for (const msg of messages) {
           if (msg.type === 'message' && msg.content.includes(searchText)) {
@@ -317,7 +317,7 @@ export class ChatSearchReplaceOps {
               const validated = ChatEventSchema.parse({ ...msg, content: newContent });
               await messagesCollection.updateOne(
                 { id: msg.id } as QueryFilter,
-                { $set: { content: newContent } } as any
+                { $set: { content: newContent } }
               );
               updatedCount++;
             }
@@ -341,6 +341,7 @@ export class ChatSearchReplaceOps {
         if (hasChanges) {
           const validated = updatedMessages.map(msg => ChatEventSchema.parse(msg));
           const now = this.ctx.getCurrentTimestamp();
+          const messagesCollection = await this.ctx.getMessagesCollection<LegacyChatMessagesDoc>();
 
           await messagesCollection.updateOne(
             { chatId } as QueryFilter,
@@ -349,7 +350,7 @@ export class ChatSearchReplaceOps {
                 messages: validated,
                 updatedAt: now,
               },
-            } as any
+            }
           );
         }
       }

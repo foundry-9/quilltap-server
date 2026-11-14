@@ -29,6 +29,7 @@ import {
   NANOGPT_LORA_FAMILIES,
 } from './image-loras';
 import { fitImageShape } from './image-sizes';
+import { downloadRemoteImage } from './remote-image';
 
 const logger = createPluginLogger('qtap-plugin-nanogpt');
 
@@ -285,15 +286,9 @@ export class NanoGPTImageProvider implements ImageProviderBase {
         let data = img.b64_json;
         let mimeType = 'image/png';
         if (!data && img.url) {
-          const imageResponse = await fetch(img.url);
-          if (!imageResponse.ok) {
-            throw new Error(`Failed to download NanoGPT image: HTTP ${imageResponse.status}`);
-          }
-          const contentType = imageResponse.headers.get('content-type');
-          if (contentType && contentType.startsWith('image/')) {
-            mimeType = contentType.split(';')[0];
-          }
-          data = Buffer.from(await imageResponse.arrayBuffer()).toString('base64');
+          const downloaded = await downloadRemoteImage(img.url, 'NanoGPT');
+          data = downloaded.data;
+          mimeType = downloaded.mimeType;
         }
         if (!data) {
           throw new Error('NanoGPT image entry carried neither base64 data nor a URL');

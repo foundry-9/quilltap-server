@@ -337,3 +337,42 @@ describe('chooseLLMOutfit — variety', () => {
     expect([...order(reversed)].sort()).toEqual(POOL.map((i) => i.id).sort());
   });
 });
+
+describe('chooseLLMOutfit — outfit sets', () => {
+  beforeEach(() => {
+    mockExecute.mockReset();
+    mockExecute.mockResolvedValue({ success: true, result: null });
+  });
+
+  async function promptFor(pool: ReturnType<typeof item>[]) {
+    await chooseLLMOutfit(
+      'Bertie', 'd', 'p', 'm', pool, 'a garden party', null,
+      { profileId: 'cheap' }, 'user-1', 'chat-1', 'char-1', null, {},
+    );
+    const call = mockExecute.mock.calls[0];
+    return { system: call[1][0].content as string, user: call[1][1].content as string };
+  }
+
+  it("names a set's pieces by title, counting the ones not offered", async () => {
+    const { user } = await promptFor([
+      item('blazer', ['top'], { title: 'Linen Blazer' }),
+      item('trousers', ['bottom'], { title: 'Linen Trousers' }),
+      item('suit', ['top', 'bottom', 'footwear'], {
+        title: 'Linen Suit',
+        componentItemIds: ['blazer', 'trousers', 'held-back-loafers'],
+      }),
+    ]);
+    expect(user).toContain('"Linen Suit" [composite — bundles "Linen Blazer", "Linen Trousers", 1 other item]');
+  });
+
+  it('marks a plain item with no composite note', async () => {
+    const { user } = await promptFor([item('blazer', ['top'], { title: 'Linen Blazer' })]);
+    expect(user).not.toContain('composite');
+  });
+
+  it('tells the model it may wear one piece of a set alone', async () => {
+    const { system } = await promptFor([item('blazer', ['top'])]);
+    expect(system).toMatch(/You need not take a set whole/);
+    expect(system).toMatch(/pick that piece by its own ID/);
+  });
+});

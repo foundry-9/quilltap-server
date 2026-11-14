@@ -47,7 +47,7 @@ When `package.json` reads `X.Y.0-dev.N`, check `docs/releases/X.Y.0.md` first.
    git log --no-merges --format='%h %ad %s' --date=short "rel/X.(Y-1).0"..main
    ```
    Read bodies (`git show --stat <sha>`) for anything whose subject is ambiguous.
-3. The `### X.Y-dev` section of [docs/CHANGELOG.md](../../docs/CHANGELOG.md) — the most complete account of what changed. Also skim feature specs moved into `docs/developer/features/complete/` this cycle, `help/*.md` changes (`git diff --stat "rel/X.(Y-1).0"..main -- help/`), and bugs closed this cycle (catalogue entries in `docs/developer/bugs/fixed/` plus `gh issue list --state closed --label bug --search "closed:>=<previous release date>"`).
+3. The `### X.Y-dev` section of [docs/CHANGELOG.md](../../docs/CHANGELOG.md) — the most complete account of what changed. Also skim feature specs moved into `docs/developer/features/complete/` this cycle, `help/*.md` changes (`git diff --stat "rel/X.(Y-1).0"..main -- help/`), and bugs closed this cycle (`gh issue list --state closed --label bug --search "closed:>=<previous release date>"`).
 4. Anything in the patch releases `X.(Y-1).1`, `X.(Y-1).2`, … was already announced in their own notes — don't re-announce it as new.
 5. Migrations added this cycle (`git diff --name-only "rel/X.(Y-1).0"..main -- migrations/scripts/`) — these feed the **Upgrading** section.
 

@@ -52,6 +52,7 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { ChatAvatarTimelineRow } from '@/lib/schemas/chat-avatar-timeline.types';
 
 const logger = baseLogger.child({ module: 'import:quilltap-import-stream' });
 
@@ -152,6 +153,7 @@ export async function assembleExportFromStream(
   const chatInforms: ChatInform[] = [];
   const wardrobeWear: WardrobeWearStatsRow[] = [];
   const wardrobeHistory: ChatWardrobeHistoryRow[] = [];
+  const avatarTimeline: ChatAvatarTimelineRow[] = [];
 
   const folderRecords: ExportedFolder[] = [];
   const filesById = new Map<string, ExportedFileWithBytes>();
@@ -333,6 +335,12 @@ export async function assembleExportFromStream(
         wardrobeHistory.push((record as { data: ChatWardrobeHistoryRow }).data);
         break;
 
+      // Avatar-timeline rows. Source-instance ids; the executor remaps them
+      // once every chat, character and vault link has landed.
+      case 'avatar_timeline':
+        avatarTimeline.push((record as { data: ChatAvatarTimelineRow }).data);
+        break;
+
       case 'doc_mount_point':
         mountPoints.push((record as { data: ExportedDocumentStore }).data);
         break;
@@ -474,6 +482,13 @@ export async function assembleExportFromStream(
       `NDJSON export truncated: ${blobAccumulators.size} blob(s) missing chunks — ${JSON.stringify(pending)}`
     );
   }
+  // The writer always ends with a footer. A stream that stops before it was
+  // cut short, and importing what arrived would report a partial export as a
+  // success (#201).
+  if (!footerCounts) {
+    throw new Error('NDJSON export is truncated — it ends before its __footer__ record');
+  }
+
 
   if (fileBlobAccumulators.size > 0) {
     const pending = Array.from(fileBlobAccumulators.entries()).map(([fileId, a]) => ({
@@ -507,7 +522,7 @@ export async function assembleExportFromStream(
 
   // If the footer carried counts, trust them over what we emitted on the
   // envelope — the writer leaves envelope counts empty on purpose.
-  const counts = footerCounts ?? manifest.counts ?? {};
+  const counts = footerCounts;
 
   const data = buildExportDataForType(manifest.exportType, {
     tags,
@@ -530,6 +545,7 @@ export async function assembleExportFromStream(
     chatInforms,
     wardrobeWear,
     wardrobeHistory,
+    avatarTimeline,
     fileFolders: folderRecords,
     files: fileOrder.map((id) => filesById.get(id)!),
     promptTemplates,
@@ -571,6 +587,7 @@ interface CollectedArrays {
   chatInforms: ChatInform[];
   wardrobeWear: WardrobeWearStatsRow[];
   wardrobeHistory: ChatWardrobeHistoryRow[];
+  avatarTimeline: ChatAvatarTimelineRow[];
   /**
    * General file-library folders. Named `fileFolders` rather than `folders`
    * because `folders` is already taken by the document-store folder rows.
@@ -607,6 +624,7 @@ function buildExportDataForType(
         ...(c.chatDocuments.length > 0 && { chatDocuments: c.chatDocuments }),
         ...(c.chatInforms.length > 0 && { chatInforms: c.chatInforms }),
         ...(c.wardrobeHistory.length > 0 && { wardrobeHistory: c.wardrobeHistory }),
+        ...(c.avatarTimeline.length > 0 && { avatarTimeline: c.avatarTimeline }),
       };
     case 'roleplay-templates':
       return { roleplayTemplates: c.roleplayTemplates };

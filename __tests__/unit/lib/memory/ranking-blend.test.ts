@@ -122,30 +122,52 @@ describe('F4 — anti-repetition penalty', () => {
 
 describe('F4 — recall-history ring buffer', () => {
   it('parses malformed input safely', () => {
-    expect(parseRecallHistory(null)).toEqual([])
-    expect(parseRecallHistory({})).toEqual([])
-    expect(parseRecallHistory({ turns: 'nope' })).toEqual([])
-    expect(parseRecallHistory({ turns: [['a', 1, 'b'], 'x'] })).toEqual([['a', 'b']])
+    expect(parseRecallHistory(null, 'c1')).toEqual([])
+    expect(parseRecallHistory({}, 'c1')).toEqual([])
+    expect(parseRecallHistory({ turns: 'nope' }, 'c1')).toEqual([])
+    expect(parseRecallHistory({ byCharacter: 'nope' }, 'c1')).toEqual([])
+    expect(parseRecallHistory({ byCharacter: { c1: [['a', 1, 'b'], 'x'] } }, 'c1')).toEqual([['a', 'b']])
   })
 
-  it('unions IDs across retained turns', () => {
-    const history = { turns: [['a', 'b'], ['b', 'c']] }
-    const set = recentlyWhisperedIdSet(history)
-    expect([...set].sort()).toEqual(['a', 'b', 'c'])
+  it('reads a pre-4.13 shared ring for a character with none of their own', () => {
+    expect(parseRecallHistory({ turns: [['a', 1, 'b'], 'x'] }, 'c1')).toEqual([['a', 'b']])
+    expect(parseRecallHistory({ turns: [['a']], byCharacter: { c1: [['z']] } }, 'c1')).toEqual([['z']])
   })
 
-  it('appends and caps to the last RECALL_HISTORY_TURNS turns', () => {
-    let h: ReturnType<typeof appendRecallTurn> = { turns: [] }
+  it('unions IDs across one character\'s retained turns', () => {
+    const history = { byCharacter: { c1: [['a', 'b'], ['b', 'c']], c2: [['d']] } }
+    expect([...recentlyWhisperedIdSet(history, 'c1')].sort()).toEqual(['a', 'b', 'c'])
+    expect([...recentlyWhisperedIdSet(history, 'c2')]).toEqual(['d'])
+  })
+
+  it('appends and caps one character\'s ring to the last RECALL_HISTORY_TURNS turns', () => {
+    let h: ReturnType<typeof appendRecallTurn> = {}
     for (let i = 0; i < RECALL_HISTORY_TURNS + 2; i++) {
-      h = appendRecallTurn(h, [`turn-${i}`])
+      h = appendRecallTurn(h, 'c1', [`turn-${i}`])
     }
-    expect(h.turns).toHaveLength(RECALL_HISTORY_TURNS)
+    const ring = h.byCharacter!.c1
+    expect(ring).toHaveLength(RECALL_HISTORY_TURNS)
     // Oldest turns dropped; most recent retained.
-    expect(h.turns[h.turns.length - 1]).toEqual([`turn-${RECALL_HISTORY_TURNS + 1}`])
+    expect(ring[ring.length - 1]).toEqual([`turn-${RECALL_HISTORY_TURNS + 1}`])
   })
 
   it('does not record an empty turn', () => {
-    const h = appendRecallTurn({ turns: [['a']] }, [])
-    expect(h.turns).toEqual([['a']])
+    const h = appendRecallTurn({ byCharacter: { c1: [['a']] } }, 'c1', [])
+    expect(h.byCharacter).toEqual({ c1: [['a']] })
+  })
+
+  it('A14: in a room of four, a character\'s own heads survive the others\' turns', () => {
+    let h: unknown = null
+    // Round one: each of four characters whispers once.
+    for (const c of ['c1', 'c2', 'c3', 'c4']) h = appendRecallTurn(h, c, [`${c}-head`])
+    // By c1's next turn the shared three-slot ring would hold only c2–c4.
+    expect(recentlyWhisperedIdSet(h, 'c1').has('c1-head')).toBe(true)
+    expect(recentlyWhisperedIdSet(h, 'c1').has('c2-head')).toBe(false)
+  })
+
+  it('drops the pre-4.13 shared ring once a character writes', () => {
+    const h = appendRecallTurn({ turns: [['old']] }, 'c1', ['new'])
+    expect(h.turns).toBeUndefined()
+    expect(h.byCharacter).toEqual({ c1: [['old'], ['new']] })
   })
 })

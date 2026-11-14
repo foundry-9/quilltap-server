@@ -47,10 +47,38 @@ describe('applyCharacterFieldUpdates', () => {
     const urls = fetchMock.mock.calls.map((c) => c[0])
     expect(urls).toContain('/api/v1/characters/char-1/prompts/p1')
     expect(urls).toContain('/api/v1/characters/char-1')
-    // Prompt PUT fires before the main PUT.
-    expect(urls.indexOf('/api/v1/characters/char-1/prompts/p1')).toBeLessThan(
-      urls.indexOf('/api/v1/characters/char-1')
+    // The main PUT first, then the per-item calls.
+    expect(urls.indexOf('/api/v1/characters/char-1')).toBeLessThan(
+      urls.indexOf('/api/v1/characters/char-1/prompts/p1')
     )
+  })
+
+  // A whole-array scenarios PUT un-archived every archived scenario and
+  // dropped descriptions (#150). Scenario changes now go one item at a time,
+  // naming only the fields that changed.
+  it('sends scenario changes through the per-item route, never the main PUT', async () => {
+    const fetchMock = mockFetch(() => ({ ok: true }))
+
+    const { errors } = await applyCharacterFieldUpdates('char-1', {
+      mainUpdates: {},
+      scenarioUpdates: [{ id: 's1', content: 'Refined.' }],
+    })
+
+    expect(errors).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/v1/characters/char-1/scenarios?scenarioId=s1')
+    expect(init?.method).toBe('PUT')
+    expect(JSON.parse(init?.body as string)).toEqual({ content: 'Refined.' })
+  })
+
+  it('collects a failed scenario write without throwing', async () => {
+    mockFetch((url) => (url.includes('/scenarios') ? { ok: false } : { ok: true }))
+    const { errors } = await applyCharacterFieldUpdates('char-1', {
+      mainUpdates: {},
+      scenarioUpdates: [{ id: 's1', content: 'x' }],
+    })
+    expect(errors).toEqual(['A scenario could not be saved.'])
   })
 
   it('does not fire the main PUT when there are no mainUpdates', async () => {

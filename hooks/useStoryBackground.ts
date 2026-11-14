@@ -76,7 +76,7 @@ export function useStoryBackground(
     refetchOnReconnect: false,
   })
 
-  // Derive background state from SWR data
+  // Derive background state from the query data
   const backgroundUrl_derived = useMemo(
     () => data?.backgroundUrl || null,
     [data]

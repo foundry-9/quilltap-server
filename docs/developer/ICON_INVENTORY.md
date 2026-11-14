@@ -2,7 +2,7 @@
 
 **Status:** Phase 1 (the `<Icon>` system), the Phase 2 sidebar pilot, **and the Phase 2b app-wide sweep are all complete.** Every icon-bearing component file has been migrated to `<Icon>`; the only inline `<svg>` left in `components/` are the genuine non-icon graphics catalogued in §4. The canonical name list below (signed off 2026-06-09, plus the 14 names the sweep surfaced — see §2.1) is the permanent public contract that `.qtap-theme` bundles target. Renaming an icon after themes ship overrides for it is a breaking change; add freely, rename with care.
 
-Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts) (**85 icons**). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
+Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.ts`](../../components/ui/icons/icon-registry.ts) (**90 icons**). Adding/renaming an icon = edit that file, drop the default SVG in `public/images/icons/`, and run `npm run generate:icon-css`.
 
 ---
 
@@ -91,6 +91,7 @@ Source of truth for the *implemented* set: [`components/ui/icons/icon-registry.t
 | `dice` | NEW | die w/ pips | RNG dropdown (Pascal) |
 | `deus-ex-machina` | NEW | game-master's screen (Madman's Box: eye in a triangle) | Deus Ex Machina toggle on the composer portrait and its armed chip |
 | `inventory` | NEW | open box with flaps | the Inventory (sidebar, participant card, Prospero Inventory card) |
+| `atlas` | NEW | folded map in three panels | the Atlas (sidebar, workspace tab, Prospero Atlas card, Aurora character page, browser rows without a picture) |
 | `sparkles` | NEW | sparkles | inline "generate" / AI-flavored actions |
 | `wand` | NEW | magic wand | the AI Wizard (distinct from inline `sparkles`) |
 | `thinking` | NEW | quill on the diagonal | the rocking "awaiting / streaming / tool running" indicator — see §6 (deliberately **not** `brand`) |

@@ -7,14 +7,14 @@
  */
 
 import Link from 'next/link'
-import type { Project, EditForm } from '../types'
+import type { Project, HeaderDraft } from '../types'
 import { Icon } from '@/components/ui/icon'
 
 interface ProjectDetailHeaderProps {
   project: Project
   isEditing: boolean
-  editForm: EditForm
-  onEditFormChange: (form: EditForm) => void
+  draft: HeaderDraft
+  onDraftChange: (draft: HeaderDraft) => void
   onEditClick: () => void
   onCancelEdit: () => void
   onSave: () => void
@@ -26,8 +26,8 @@ interface ProjectDetailHeaderProps {
 export function ProjectDetailHeader({
   project,
   isEditing,
-  editForm,
-  onEditFormChange,
+  draft,
+  onDraftChange,
   onEditClick,
   onCancelEdit,
   onSave,
@@ -56,8 +56,8 @@ export function ProjectDetailHeader({
             <input
               aria-label="Project name"
               type="text"
-              value={editForm.name}
-              onChange={(e) => onEditFormChange({ ...editForm, name: e.target.value })}
+              value={draft.name}
+              onChange={(e) => onDraftChange({ ...draft, name: e.target.value })}
               className="qt-heading-2 bg-transparent border-b qt-border-primary focus:outline-none"
             />
           ) : (
@@ -67,8 +67,8 @@ export function ProjectDetailHeader({
             <input
               aria-label="Project description"
               type="text"
-              value={editForm.description}
-              onChange={(e) => onEditFormChange({ ...editForm, description: e.target.value })}
+              value={draft.description}
+              onChange={(e) => onDraftChange({ ...draft, description: e.target.value })}
               placeholder="Add a description..."
               className="qt-text-small bg-transparent border-b qt-border-default focus:outline-none w-full"
             />
@@ -95,7 +95,7 @@ export function ProjectDetailHeader({
             </button>
             <button
               onClick={onSave}
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
+              className="qt-button qt-button-primary"
             >
               Save
             </button>

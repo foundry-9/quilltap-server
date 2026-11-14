@@ -72,3 +72,19 @@ it("the project's official store wins over a linked store (was: the last linked)
 
   expect(pool.get(id)?.name).toBe('lantern')
 })
+
+it('lists consulted stores in tier order, not read-settlement order (#155)', async () => {
+  state.groups = [
+    { id: 'g-dangling', name: 'Dangling', officialMountPointId: 'mp-dangling' },
+    { id: 'g-covenant', name: 'Covenant', officialMountPointId: 'mp-covenant' },
+  ]
+  state.groupMounts.set('c-viv', [
+    { group: { id: 'g-covenant', name: 'Covenant' }, mountPointIds: ['mp-covenant'] },
+    { group: { id: 'g-dangling', name: 'Dangling' }, mountPointIds: ['mp-dangling'] },
+  ])
+
+  const pool = await loadInventoryPool(repos(), { characterId: 'c-viv', projectId: 'project-1' })
+
+  // Own, then the group tier (strongest first, as the kernel reads every tier), then project, then General.
+  expect(pool.consultedMounts).toEqual(['mp-c-viv', 'mp-covenant', 'mp-dangling', 'mp-project', 'mp-general'])
+})

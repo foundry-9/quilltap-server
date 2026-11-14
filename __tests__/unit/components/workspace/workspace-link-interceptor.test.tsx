@@ -6,7 +6,7 @@
 
 /* Raw <a> elements are intentional here — they simulate the un-wired links
    (e.g. the Settings footer) the interceptor is meant to catch. */
-/* eslint-disable @next/next/no-html-link-for-pages */
+/* eslint-disable @next/next/no-html-link-for-pages -- raw <a> elements stand in for the un-wired links the interceptor must catch */
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/workspace',
@@ -46,7 +46,7 @@ function setup() {
           Aurora tab) → must NOT be intercepted. The onClick prevents jsdom's
           unimplemented-navigation noise. */}
       <a href="/aurora/c1/view" data-testid="viewchar">Character detail</a>
-      <a href="/aurora/c1" data-testid="nomap" onClick={(e) => e.preventDefault()}>Bare character detail</a>
+      <a href="/unlock" data-testid="nomap" onClick={(e) => e.preventDefault()}>No tab equivalent</a>
       <a href="https://example.com" data-testid="ext" onClick={(e) => e.preventDefault()}>External</a>
       <a href="/salon/new" data-testid="newchat">New chat</a>
       <a href="/salon/new?projectId=p1" data-testid="newchat-proj">New chat in project</a>
@@ -77,14 +77,15 @@ describe('WorkspaceLinkInterceptor', () => {
     expect(countKind('settings')).toBe(1)
   })
 
-  it('opens the character creator and editor as tabs', () => {
+  it('opens the character creator and the character page as tabs (one per character)', () => {
     setup()
     fireEvent.click(screen.getByTestId('newchar'))
     expect(countKind('character-new')).toBe(1)
     fireEvent.click(screen.getByTestId('editchar'))
-    expect(countKind('character-edit')).toBe(1)
+    expect(countKind('character')).toBe(1)
+    // The retired view URL for the same character focuses the same tab.
     fireEvent.click(screen.getByTestId('viewchar'))
-    expect(countKind('character-view')).toBe(1)
+    expect(countKind('character')).toBe(1)
   })
 
   it('leaves links with no tab equivalent (and external links) alone', () => {

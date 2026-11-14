@@ -32,13 +32,13 @@ jest.mock('@/lib/mount-index/database-store', () => ({
   readDatabaseDocument: jest.fn(),
 }))
 
+import { stableUuidFromString } from '@/lib/utils/stable-uuid'
 import { createHash } from 'crypto'
 import {
   resolveScenarioSelection,
   sameResolvedScenario,
   ScenarioRefRefusedError,
 } from '@/lib/chat/scenario-selection'
-import { characterScenarioIdForPath } from '@/lib/scenarios/location'
 import { logger } from '@/lib/logger'
 import { makeScenarioStores, type FakeScenarioStores } from '../../../helpers/scenario-stores'
 
@@ -64,7 +64,7 @@ function options(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const TAVERN_ID = () => characterScenarioIdForPath(VAULT, 'Scenarios/Tavern.md')
+const TAVERN_ID = () => stableUuidFromString(`scenario:${VAULT}:${'Scenarios/Tavern.md'}`)
 
 beforeEach(() => {
   jest.clearAllMocks()

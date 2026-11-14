@@ -19,6 +19,12 @@ jest.mock('@/lib/file-storage/manager', () => ({
 
 const mockedGetUserRepositories = getUserRepositories as jest.MockedFunction<typeof getUserRepositories>
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
+
+/** The raw readers owned-row enumeration uses; every row here hydrates. */
+function withRawReaders(globalRepos: Record<string, unknown>) {
+  const none = { findAllRaw: jest.fn().mockResolvedValue([]) }
+  return { characters: none, projects: none, groups: none, ...globalRepos }
+}
 const mockedListUserFiles = fileStorageManager.listUserFiles as jest.MockedFunction<typeof fileStorageManager.listUserFiles>
 
 describe('backup restore service - delete preview', () => {
@@ -66,7 +72,7 @@ describe('backup restore service - delete preview', () => {
         ]),
       },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
 
@@ -102,7 +108,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-empty')
     expect(summary.characters).toBe(0)
@@ -138,7 +144,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.memories).toBe(5) // 2 + 0 + 3
@@ -166,7 +172,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.files).toBe(4) // total files
@@ -198,7 +204,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.apiKeys).toBe(4)
@@ -232,7 +238,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.profiles).toEqual({ connection: 0, image: 3, embedding: 2 })
@@ -262,7 +268,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.tags).toBe(3)
@@ -300,7 +306,7 @@ describe('backup restore service - delete preview', () => {
         ]),
       },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.templates).toEqual({ prompt: 3, roleplay: 2 })
@@ -330,7 +336,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.projects).toBe(3)
@@ -366,7 +372,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue(Array.from({ length: 15 }, (_, i) => ({ id: `pt-${i}` }))) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue(Array.from({ length: 8 }, (_, i) => ({ id: `rp-${i}` }))) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.characters).toBe(50)
@@ -405,7 +411,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.files).toBe(6)
@@ -432,7 +438,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.templates).toEqual({ prompt: 0, roleplay: 0 })
@@ -458,7 +464,7 @@ describe('backup restore service - delete preview', () => {
       promptTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
       roleplayTemplates: { findByUserId: jest.fn().mockResolvedValue([]) },
     }
-    mockedGetRepositories.mockReturnValue(globalRepos as any)
+    mockedGetRepositories.mockReturnValue(withRawReaders(globalRepos) as any)
 
     const summary = await previewDeleteAllUserData('user-1')
     expect(summary.profiles).toEqual({ connection: 0, image: 0, embedding: 0 })

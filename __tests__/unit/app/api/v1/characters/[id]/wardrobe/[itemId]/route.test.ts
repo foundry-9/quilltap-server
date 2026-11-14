@@ -37,7 +37,7 @@ jest.mock('@/lib/api/responses', () => ({
   successResponse: (data: any, status = 200) => ({ body: data, status }),
 }))
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+jest.mock('@/lib/wardrobe/vault-writes', () => ({
   WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
   readMountItems: jest.fn(),
   createInMount: jest.fn(),
@@ -46,7 +46,7 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
   resolveWardrobeMount: jest.fn(),
 }))
 
-jest.mock('@/lib/database/repositories/characters.repository', () => ({
+jest.mock('@/lib/characters/archive-guard', () => ({
   CharacterArchivedError: class CharacterArchivedError extends Error {},
 }))
 
@@ -70,7 +70,7 @@ import {
   deleteInMount,
   readMountItems,
   resolveWardrobeMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
+} from '@/lib/wardrobe/vault-writes'
 
 const CHAR_ID = 'char-1'
 const ITEM_ID = 'item-1'

@@ -27,7 +27,6 @@
  */
 
 import { logger } from '@/lib/logger';
-import { publishRealtime } from '@/lib/realtime/bus';
 import {
   createInventoryFolderInMount,
   createInventoryInMount,
@@ -41,8 +40,9 @@ import {
   updateInventoryManyInMount,
   type InventoryMount,
   type InventoryRecordPatch,
-} from '@/lib/database/repositories/vault-overlay/inventory-writes';
+} from '@/lib/inventory/vault-writes';
 import { groupMountsFor, groupOriginMap, resolveOwnerStore } from '@/lib/mount-index/reach';
+import { cleanPatch, locationWriter } from '@/lib/mount-index/item-store';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   INVENTORY_FOLDER,
@@ -84,45 +84,17 @@ export interface InventoryLocation extends ItemFolderLocation {
 
 export { locationKey } from '@/lib/mount-index/item-folder-location';
 
-/** Identity and timestamps are the writer's, never a patch's. */
-function cleanPatch(patch: Partial<InventoryRecord>): Partial<InventoryRecord> {
-  const rest = { ...patch };
-  delete rest.id;
-  delete rest.createdAt;
-  delete rest.updatedAt;
-  return rest;
-}
-
 /**
  * Build a location over a folder. Writes re-resolve a character's mount at
- * write time so the tombstone check sees the character as it is now.
+ * write time so the tombstone check sees the character as it is now, and
+ * publish the `inventory` topic only when something landed.
  */
 export function inventoryLocationForMount(
   mount: InventoryMount,
   id: string | null,
   origin: InventoryOrigin,
 ): InventoryLocation {
-  const writableMount = async (): Promise<InventoryMount> => {
-    if (mount.scope !== 'character') return mount;
-    const current = await resolveInventoryMount(mount.characterId);
-    if (!current) throw new Error(`Character ${mount.characterId} has no linked vault`);
-    return current;
-  };
-
-  /**
-   * Run a write against the current writable mount, then tell the open
-   * dialogs — only when something landed (`landed`, default always; a batch
-   * that matched nothing changed nothing).
-   */
-  const write = async <T>(
-    fn: (target: InventoryMount) => Promise<T>,
-    landed: (result: T) => boolean = () => true,
-  ): Promise<T> => {
-    const result = await fn(await writableMount());
-    if (landed(result)) publishRealtime('inventory');
-    return result;
-  };
-  const nonEmpty = (result: readonly unknown[]) => result.length > 0;
+  const { writableMount, write, nonEmpty } = locationWriter('inventory', mount, resolveInventoryMount);
 
   const updateMany: InventoryLocation['updateMany'] = (patches, opts) =>
     write(

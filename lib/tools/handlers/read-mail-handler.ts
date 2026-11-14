@@ -4,7 +4,7 @@
  * Reads one letter from the CALLER's own mailbox (and only its own — the
  * reference is confined to its `Mail/` folder). Like `list_mail`, it reaches
  * the vault through `ensureCharacterVault` rather than the doc-tool resolver,
- * so the systemTransparency covenant — which hides character vaults from
+ * so the systemTransparency covenant — which keeps a vault's core, `Mail/` included, from
  * `doc_*` tools — never keeps a character from its own post.
  *
  * Reading a letter Suparṇā has not yet announced marks it announced: the

@@ -24,6 +24,7 @@
  */
 
 import type { Character } from '@/lib/schemas/types'
+import { characterManagedDefaults } from '@/lib/schemas/character.types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
@@ -224,11 +225,15 @@ export async function runMaintenance(
     return finish()
   }
   report.characterName = holderRaw.name
-  let holder: Character = holderRaw
+  // A broken vault still lets maintenance run, on a holder with no content:
+  // the row plus every managed field at its default (no manifesto, no
+  // identity) — said here, not left for a raw row to imply.
+  const contentless: Character = { ...characterManagedDefaults(), ...holderRaw }
+  let holder: Character = contentless
   try {
-    holder = (await repos.characters.findById(characterId)) ?? holderRaw
+    holder = (await repos.characters.findById(characterId)) ?? contentless
   } catch {
-    holder = holderRaw
+    holder = contentless
   }
   const userId = ctx.userId ?? holderRaw.userId
 

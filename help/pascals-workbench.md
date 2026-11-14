@@ -8,7 +8,7 @@ url: /custom-tools
 
 A [custom tool](custom-tools.md) is a modest JSON document, and hand-writing JSON is a fine occupation for a certain sort of evening — but the format is strict, and one misspelled comparator will see your contrivance slide off the table with nothing but an apologetic badge to mark its passing. **Pascal's Workbench** is the fitting room: a visual editor where contrivances are built, inspected, proved against ten thousand imaginary evenings, and filed wherever they ought to live — with never an invalid file written, because the form simply cannot produce one.
 
-Find it in the left rail, from **Settings → Chat → Custom tools**, from the composer's custom-tools dialog (the little wrench beside each listed tool, and *New contrivance…* at its foot), or from any `Tools/*.tool.json` file's row in the Scriptorium.
+Find it in the left rail, from **Settings → Games & Tools → Custom Tools**, from the composer's custom-tools dialog (the little wrench beside each listed tool, and *New contrivance…* at its foot), or from any `Tools/*.tool.json` file's row in the Scriptorium.
 
 ## The library
 

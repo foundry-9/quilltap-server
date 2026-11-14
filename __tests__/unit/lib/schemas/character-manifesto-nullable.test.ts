@@ -19,7 +19,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { CharacterSchema } from '@/lib/schemas/character.types';
-import { markdownToNullable } from '@/lib/database/repositories/vault-overlay/parsers';
+import { markdownToNullable } from '@/lib/characters/vault/parsers';
 
 // A minimal, otherwise-complete character. CharacterSchema requires only
 // id/userId/name/createdAt/updatedAt; everything else is optional or defaulted.

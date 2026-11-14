@@ -43,6 +43,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { listDatabaseFiles, listDatabaseBlobTexts } from '@/lib/mount-index/database-store';
 import { readDocument, writeDocument } from '@/lib/documents/core';
 import { compilePathGlob } from '@/lib/doc-edit/path-glob';
+import { compileSafeRegex } from '@/lib/utils/safe-regex';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   logger,
@@ -50,6 +51,7 @@ import {
   applyQtapUriToInput,
   collectPeerCharacterIdsForReads,
   actingCharacterIsOpaqueToVaults,
+  ownVaultEntryFilter,
   buildReadResolutionContext,
   buildWriteResolutionContext,
   buildDocStoreUriResolver,
@@ -599,7 +601,11 @@ export async function handleGrep(
   let searchPattern: RegExp;
   try {
     if (input.is_regex) {
-      searchPattern = new RegExp(input.query, input.case_sensitive ? 'g' : 'gi');
+      const compiled = compileSafeRegex(input.query, input.case_sensitive ? 'g' : 'gi');
+      if (!compiled.ok) {
+        return { success: false, error: `Invalid regex pattern: ${compiled.reason}` };
+      }
+      searchPattern = compiled.regexp;
     } else {
       // Escape regex special chars for literal matching
       const escaped = input.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -791,14 +797,14 @@ export async function handleGrep(
       : undefined;
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
     // Enumeration honours the same covenant resolution does: an opaque
-    // character must not SEE the vault names she would then be refused
-    // (bug 153). Derived from the one helper the context builders use.
-    const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+    // character must not SEE the vaults or core files she would then be
+    // refused (bug 153). Derived from the one helper the context builders use.
+    const guardOwnVault = await actingCharacterIsOpaqueToVaults(context);
     const mountPoints = await getAccessibleMountPoints({
       projectId: context.projectId,
       characterId: context.characterId,
-      extraCharacterIds: peerCharacterIds,
-      hideCharacterVaults,
+      extraCharacterIds: guardOwnVault ? undefined : peerCharacterIds,
+      guardOwnVault,
       mountPool: context.mountPool,
     });
 
@@ -806,10 +812,12 @@ export async function handleGrep(
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
         continue;
       }
-      // Hide character_read:false documents from characters (operator unaffected).
+      // Hide character_read:false documents from characters (operator
+      // unaffected), and the core of an opaque character's own vault.
       const blockedPaths = await getCharacterBlockedReadPaths(mp.id, context);
-      const isBlocked = blockedPaths.size > 0
-        ? (rel: string) => blockedPaths.has(rel.toLowerCase())
+      const isOwnVaultCore = ownVaultEntryFilter(mp);
+      const isBlocked = blockedPaths.size > 0 || mp.ownVaultGuarded
+        ? (rel: string) => blockedPaths.has(rel.toLowerCase()) || isOwnVaultCore(rel, 'file')
         : undefined;
       const makeUri = (relPath: string) => uriResolver.uriForMount(mp.name, mp.id, relPath);
       if (mp.mountType === 'database') {
@@ -939,7 +947,8 @@ export async function handleListFiles(
     mountPointName?: string,
     folder?: string,
     makeUri?: (relPath: string) => string,
-    isBlocked?: (relativePath: string) => boolean
+    isBlocked?: (relativePath: string) => boolean,
+    isHiddenEntry?: (relativePath: string, kind: 'file' | 'folder') => boolean
   ): Promise<void> => {
     const startDir = folder ? path.join(baseDir, folder) : baseDir;
 
@@ -952,6 +961,7 @@ export async function handleListFiles(
 
           if (entry.isDirectory()) {
             if (entry.name.startsWith('.')) continue; // Skip hidden dirs
+            if (isHiddenEntry?.(relativePath, 'folder')) continue;
             // Add folder entry
             files.push({
               path: relativePath,
@@ -966,6 +976,7 @@ export async function handleListFiles(
           } else if (entry.isFile()) {
             if (matchesPattern && !matchesPattern(relativePath)) continue;
             if (isBlocked && isBlocked(relativePath)) continue;
+            if (isHiddenEntry?.(relativePath, 'file')) continue;
 
             try {
               const stat = await fs.stat(fullPath);
@@ -1013,12 +1024,12 @@ export async function handleListFiles(
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
     // See doc_grep: the listing must not advertise what resolution will refuse
     // (bug 153).
-    const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+    const guardOwnVault = await actingCharacterIsOpaqueToVaults(context);
     const mountPoints = await getAccessibleMountPoints({
       projectId: context.projectId,
       characterId: context.characterId,
-      extraCharacterIds: peerCharacterIds,
-      hideCharacterVaults,
+      extraCharacterIds: guardOwnVault ? undefined : peerCharacterIds,
+      guardOwnVault,
       mountPool: context.mountPool,
     });
     for (const mp of mountPoints) {
@@ -1035,6 +1046,16 @@ export async function handleListFiles(
       const isBlocked = blockedPaths.size > 0
         ? (rel: string) => blockedPaths.has(rel.toLowerCase())
         : undefined;
+      // The core of an opaque character's own vault: root files, core folders
+      // and their contents are left out of the listing entirely.
+      const isOwnVaultCore = ownVaultEntryFilter(mp);
+      if (mp.ownVaultGuarded && input.folder && isOwnVaultCore(input.folder, 'folder')) {
+        logger.debug('doc_list_files: skipped a core folder of the own vault', {
+          mountPointId: mp.id,
+          folder: input.folder,
+        });
+        continue;
+      }
       const makeUri = (relPath: string) => uriResolver.uriForMount(mp.name, mp.id, relPath);
       if (mp.mountType === 'database') {
         // Bytes live in doc_mount_documents; list from the mirror doc_mount_files rows.
@@ -1042,6 +1063,7 @@ export async function handleListFiles(
         for (const entry of dbEntries) {
           if (matchesPattern && !matchesPattern(entry.relativePath)) continue;
           if (entry.kind !== 'folder' && isBlocked && isBlocked(entry.relativePath)) continue;
+          if (isOwnVaultCore(entry.relativePath, entry.kind === 'folder' ? 'folder' : 'file')) continue;
           files.push({
             path: entry.relativePath,
             mount_point: mp.name,
@@ -1054,7 +1076,7 @@ export async function handleListFiles(
         }
         continue;
       }
-      await collectFiles(mp.basePath, mpScope, mp.name, input.folder, makeUri, isBlocked);
+      await collectFiles(mp.basePath, mpScope, mp.name, input.folder, makeUri, isBlocked, isOwnVaultCore);
     }
   }
 

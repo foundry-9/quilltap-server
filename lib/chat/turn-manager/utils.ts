@@ -217,6 +217,35 @@ export function isAllLLMChat(participants: ChatParticipantBase[]): boolean {
 }
 
 /**
+ * Whether a lone character has just answered and the floor returns to the
+ * operator (bug 249). The selector answers "who could speak next" with the
+ * same character (`only_character`) because it has nobody to alternate with,
+ * but when a human is present that is not a reason to keep talking: the turn
+ * is over. An all-LLM chat with no human presence, or an autonomous room,
+ * keeps its monologue.
+ *
+ * One rule for the orchestrator (stop chaining) and the finalizer (report the
+ * operator's floor, so the turn-close work — memory extraction — runs, #225).
+ */
+export function loneCharacterHasAnswered(args: {
+  reason: TurnSelectionResult['reason'] | string;
+  nextSpeakerId: string | null;
+  lastSpeakerId: string | null;
+  /** No user-controlled seat in the room (`isAllLLMChat`). */
+  isAllLLM: boolean;
+  userParticipantId: string | null;
+  hasUserMessages: boolean;
+  neverPauseForUser: boolean;
+}): boolean {
+  if (args.reason !== 'only_character') return false;
+  if (args.nextSpeakerId === null || args.nextSpeakerId !== args.lastSpeakerId) return false;
+  if (args.neverPauseForUser) return false;
+  const hasUserPresence = args.userParticipantId !== null || args.hasUserMessages;
+  const effectiveAllLLM = args.isAllLLM && !hasUserPresence;
+  return !effectiveAllLLM;
+}
+
+/**
  * The seat the "your turn" banner speaks for — and the seat its Skip passes.
  *
  * Two different questions can both have an answer at once, and they are not the

@@ -8,6 +8,9 @@
 import { QueryFilter, QueryOptions, SortSpec, UpdateSpec, UpdateOperators } from '../../interfaces';
 import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayContainsLike, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson, embeddingToBlob } from './json-columns';
 import { textToBlob } from '@/lib/database/text-compression';
+import { escapeLikeLiteral } from '@/lib/database/repositories/like-escape';
+import { QueryTranslationError } from '@/lib/database/query-translation-error';
+import { sqlInList } from './in-list';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -37,6 +40,49 @@ function toSqliteParam(value: unknown): unknown {
     return value ? 1 : 0;
   }
   return value;
+}
+
+function isNullish(value: unknown): value is null | undefined {
+  return value === null || value === undefined;
+}
+
+/**
+ * The one spelling of a null test. SQL NULL compares UNKNOWN to everything,
+ * so `= ?` / `!= ?` bound to NULL match no row at all (#196): a comparison
+ * against null must be written `IS NULL` / `IS NOT NULL`, never bound.
+ */
+function nullTest(columnExpr: string, isNull: boolean): string {
+  return `${columnExpr} ${isNull ? 'IS NULL' : 'IS NOT NULL'}`;
+}
+
+/**
+ * A literal-text operand for `$contains` / `$startsWith`. Anything but a
+ * string is refused: these exist for user text, and coercing an object to
+ * `[object Object]` would search for that instead.
+ */
+function literalOperand(op: string, field: string, value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new QueryTranslationError(`${op} on "${field}" needs a string, got ${value === null ? 'null' : typeof value}`);
+  }
+  return value;
+}
+
+/**
+ * Translate a hand-written `$regex` to a `%…%` LIKE pattern: `.*` → `%`,
+ * `.` → `_`. That is all it can express, so a pattern carrying a backslash —
+ * which is always an escaped user string (`Mr\. Darcy`) — is refused: LIKE
+ * would match the backslashes literally and find nothing (#192). User text
+ * goes through `$contains`.
+ */
+function regexToLikePattern(field: string, value: unknown): string {
+  const source = value instanceof RegExp ? value.source : String(value);
+  if (source.includes('\\')) {
+    throw new QueryTranslationError(
+      `$regex on "${field}" carries an escaped pattern, which cannot be translated to LIKE; ` +
+        `use $contains for literal text`
+    );
+  }
+  return `%${source.replace(/\.\*/g, '%').replace(/\./g, '_')}%`;
 }
 
 /**
@@ -103,14 +149,13 @@ function translateFieldFilter(
           }
           case '$ne': {
             // NOT EXISTS for not equal
-            const { sql } = jsonArrayObjectMatch(column, nestedPath, opValue);
+            const { sql, params: p } = jsonArrayObjectMatch(column, nestedPath, opValue);
             clauses.push(`NOT ${sql}`);
-            params.push(opValue);
+            params.push(...p);
             break;
           }
           default:
-            logger.warn('Unsupported operator for array object query', { operator: op, field });
-            clauses.push('0');
+            throw new QueryTranslationError(`Unsupported operator ${op} for array-object field "${field}"`);
         }
       }
     } else {
@@ -137,8 +182,8 @@ function translateFieldFilter(
   }
 
   // Handle different value types
-  if (value === null || value === undefined) {
-    clauses.push(`${columnExpr} IS NULL`);
+  if (isNullish(value)) {
+    clauses.push(nullTest(columnExpr, true));
   } else if (isComparisonCondition(value)) {
     // Handle comparison operators
     const conditions = value as Record<string, unknown>;
@@ -146,21 +191,35 @@ function translateFieldFilter(
     for (const [op, opValue] of Object.entries(conditions)) {
       switch (op) {
         case '$eq':
-          clauses.push(`${columnExpr} = ?`);
-          params.push(toSqliteParam(opValue));
+          if (isNullish(opValue)) {
+            clauses.push(nullTest(columnExpr, true));
+          } else {
+            clauses.push(`${columnExpr} = ?`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$ieq':
           // Case-insensitive equals via SQLite's NOCASE collation. ASCII-only
           // case folding — sufficient for filesystem paths and identifiers,
           // not for arbitrary Unicode text.
-          clauses.push(`${columnExpr} = ? COLLATE NOCASE`);
-          params.push(toSqliteParam(opValue));
+          if (isNullish(opValue)) {
+            clauses.push(nullTest(columnExpr, true));
+          } else {
+            clauses.push(`${columnExpr} = ? COLLATE NOCASE`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$ne':
-          clauses.push(`${columnExpr} != ?`);
-          params.push(toSqliteParam(opValue));
+          if (isNullish(opValue)) {
+            clauses.push(nullTest(columnExpr, false));
+          } else {
+            // `IS NOT` rather than `!=`: a NULL column is not equal to the
+            // value, so it matches — `!=` would compare UNKNOWN and drop it.
+            clauses.push(`${columnExpr} IS NOT ?`);
+            params.push(toSqliteParam(opValue));
+          }
           break;
 
         case '$gt':
@@ -192,10 +251,19 @@ function translateFieldFilter(
               clauses.push(sql);
               params.push(...p);
             } else {
-              // Standard IN query - convert booleans in array
-              const placeholders = opValue.map(() => '?').join(', ');
-              clauses.push(`${columnExpr} IN (${placeholders})`);
-              params.push(...opValue.map(toSqliteParam));
+              // Standard IN query - convert booleans in array. A null in the
+              // list is matched with IS NULL; bound into IN (…) it never matches.
+              const values = opValue.filter(v => !isNullish(v));
+              const parts: string[] = [];
+              if (values.length > 0) {
+                const list = sqlInList(values.map(toSqliteParam));
+                parts.push(`${columnExpr} IN ${list.sql}`);
+                params.push(...list.params);
+              }
+              if (values.length < opValue.length) {
+                parts.push(nullTest(columnExpr, true));
+              }
+              clauses.push(parts.length > 1 ? `(${parts.join(' OR ')})` : parts[0]);
             }
           } else {
             // Empty $in always false
@@ -205,20 +273,26 @@ function translateFieldFilter(
 
         case '$nin':
           if (Array.isArray(opValue) && opValue.length > 0) {
-            // Convert booleans in array
-            const placeholders = opValue.map(() => '?').join(', ');
-            clauses.push(`${columnExpr} NOT IN (${placeholders})`);
-            params.push(...opValue.map(toSqliteParam));
+            // A NULL column is "not in" a list of values, so it matches unless
+            // the list names null. Bound NULLs are kept out of NOT IN (…): one
+            // there makes the test UNKNOWN for every row.
+            const values = opValue.filter(v => !isNullish(v));
+            const excludesNull = values.length < opValue.length;
+            if (values.length === 0) {
+              clauses.push(nullTest(columnExpr, false));
+            } else {
+              const list = sqlInList(values.map(toSqliteParam));
+              const notIn = `${columnExpr} NOT IN ${list.sql}`;
+              // NOT IN is already UNKNOWN (dropped) for a NULL column.
+              clauses.push(excludesNull ? notIn : `(${nullTest(columnExpr, true)} OR ${notIn})`);
+              params.push(...list.params);
+            }
           }
           // Empty $nin is always true, no clause needed
           break;
 
         case '$exists':
-          if (opValue) {
-            clauses.push(`${columnExpr} IS NOT NULL`);
-          } else {
-            clauses.push(`${columnExpr} IS NULL`);
-          }
+          clauses.push(nullTest(columnExpr, !opValue));
           break;
 
         case '$like': {
@@ -233,32 +307,39 @@ function translateFieldFilter(
         }
 
         case '$regex': {
-          // SQLite LIKE with pattern conversion (limited regex support)
-          // Extract pattern source if it's a RegExp object, otherwise use as string
-          let pattern: string;
-          if (opValue instanceof RegExp) {
-            pattern = opValue.source;
-          } else {
-            pattern = String(opValue);
-          }
-          // Convert basic regex patterns to LIKE wildcards
-          pattern = pattern.replace(/\.\*/g, '%');
-          pattern = pattern.replace(/\./g, '_');
-
-          // Check if this is a JSON array column - use jsonArrayContainsLike
+          // Hand-written patterns only; see regexToLikePattern.
+          const pattern = regexToLikePattern(field, opValue);
           if (jsonColumns.has(field)) {
-            const { sql, params: p } = jsonArrayContainsLike(field, `%${pattern}%`);
+            const { sql, params: p } = jsonArrayContainsLike(field, pattern);
             clauses.push(sql);
             params.push(...p);
           } else {
             clauses.push(`${columnExpr} LIKE ?`);
-            params.push(`%${pattern}%`);
+            params.push(pattern);
+          }
+          break;
+        }
+
+        case '$contains':
+        case '$startsWith': {
+          // Literal text: `%` and `_` (and the escape character) in the value
+          // are escaped and the SQL declares ESCAPE '\', so the user's
+          // characters match themselves. LIKE folds ASCII case.
+          const literal = escapeLikeLiteral(literalOperand(op, field, opValue));
+          const pattern = op === '$contains' ? `%${literal}%` : `${literal}%`;
+          if (jsonColumns.has(field)) {
+            const { sql, params: p } = jsonArrayContainsLike(field, pattern, { escaped: true });
+            clauses.push(sql);
+            params.push(...p);
+          } else {
+            clauses.push(`${columnExpr} LIKE ? ESCAPE '\\'`);
+            params.push(pattern);
           }
           break;
         }
 
         default:
-          logger.warn('Unknown query operator', { operator: op, field });
+          throw new QueryTranslationError(`Unknown query operator ${op} on "${field}"`);
       }
     }
   } else if (Array.isArray(value)) {
@@ -299,8 +380,7 @@ function parseFieldRef(value: unknown): string | null {
 function translateExpr(expr: Record<string, unknown>): string | null {
   for (const [op, value] of Object.entries(expr)) {
     if (!Array.isArray(value) || value.length !== 2) {
-      logger.warn('Unsupported $expr format', { operator: op, value });
-      continue;
+      throw new QueryTranslationError(`Unsupported $expr format for ${op}`);
     }
 
     const [left, right] = value;
@@ -309,8 +389,7 @@ function translateExpr(expr: Record<string, unknown>): string | null {
 
     // Both operands must be field references for field-to-field comparison
     if (!leftField || !rightField) {
-      logger.warn('$expr requires field references (e.g., $fieldName)', { left, right });
-      continue;
+      throw new QueryTranslationError(`$expr ${op} requires two field references (e.g. $fieldName)`);
     }
 
     switch (op) {
@@ -327,7 +406,7 @@ function translateExpr(expr: Record<string, unknown>): string | null {
       case '$ne':
         return `"${leftField}" != "${rightField}"`;
       default:
-        logger.warn('Unsupported $expr operator', { operator: op });
+        throw new QueryTranslationError(`Unsupported $expr operator ${op}`);
     }
   }
 
@@ -402,9 +481,15 @@ export function translateFilter(
 // ============================================================================
 
 /**
- * Translate sort specification to SQL ORDER BY clause
+ * Translate sort specification to SQL ORDER BY clause.
+ *
+ * `columns` is the table's column set. A field that is not one is refused:
+ * SQLite reads an unknown double-quoted identifier as a string literal, so
+ * the result would come back silently unsorted. Callers that take a sort key
+ * from a request validate it against an allowlist first; this is the
+ * backstop. Without a column set (pure-shape tests) fields are not checked.
  */
-export function translateSort(sort?: SortSpec): string {
+export function translateSort(sort?: SortSpec, columns?: ReadonlySet<string>): string {
   if (!sort || Object.keys(sort).length === 0) {
     return '';
   }
@@ -412,8 +497,12 @@ export function translateSort(sort?: SortSpec): string {
   const orderClauses: string[] = [];
 
   for (const [field, direction] of Object.entries(sort)) {
+    if (columns && !columns.has(field)) {
+      throw new QueryTranslationError(`Cannot sort on "${field}": not a column`);
+    }
     const dir = direction === 'desc' || direction === -1 ? 'DESC' : 'ASC';
-    orderClauses.push(`"${field}" ${dir}`);
+    // Quote the identifier, doubling any embedded quote so it stays one identifier.
+    orderClauses.push(`"${field.replace(/"/g, '""')}" ${dir}`);
   }
 
   return orderClauses.length > 0 ? `ORDER BY ${orderClauses.join(', ')}` : '';
@@ -626,10 +715,11 @@ export function buildSelectQuery(
   filter: QueryFilter,
   options?: QueryOptions,
   jsonColumns?: Set<string>,
-  arrayColumns?: Set<string>
+  arrayColumns?: Set<string>,
+  columns?: ReadonlySet<string>
 ): TranslatedQuery {
   const whereClause = translateFilter(filter, jsonColumns, arrayColumns);
-  const orderBy = translateSort(options?.sort);
+  const orderBy = translateSort(options?.sort, columns);
   const pagination = translatePagination(options);
 
   let sql = `SELECT * FROM "${table}" WHERE ${whereClause.sql}`;

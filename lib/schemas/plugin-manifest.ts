@@ -242,6 +242,12 @@ export const ConfigSchemaSchema = z.object({
   min: z.number().optional(),
   /** Maximum value (for number type) */
   max: z.number().optional(),
+  /**
+   * The value is a secret (a credential, or a blob that contains one). Secret
+   * fields — and every `password` field — are removed from exports and
+   * backups. Use it on fields whose input type is not `password`.
+   */
+  secret: z.boolean().optional(),
 });
 
 export type ConfigSchema = z.infer<typeof ConfigSchemaSchema>;

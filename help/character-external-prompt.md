@@ -4,7 +4,7 @@ url: /aurora
 
 # Non-Quilltap Prompt Generator
 
-> **[Open this page in Quilltap](/aurora)** — then select a character and click **Non-Quilltap Prompt**
+> **[Open this page in Quilltap](/aurora)** — then select a character and choose **Generate ▾ → Non-Quilltap prompt…**
 
 There comes a time in every character's life when they must venture beyond the comfortable confines of Quilltap and make their debut in the wider world — Claude Desktop, ChatGPT, or some other establishment that, while perfectly respectable, lacks the sophisticated character management to which they've grown accustomed. The Non-Quilltap Prompt Generator is their letter of introduction: a single, self-contained system prompt that captures everything an external tool needs to portray your character faithfully.
 
@@ -12,13 +12,13 @@ There comes a time in every character's life when they must venture beyond the c
 
 The generator takes your character's carefully curated fields — description, personality, system prompt, and optionally a scenario, physical appearance, and attire — and hands them to an LLM of your choosing with instructions to synthesize everything into a single second-person Markdown prompt. The result is a document written in the style of "You are [Name]. You always..." that can be pasted directly into any tool that accepts a system prompt or custom instructions.
 
-The generated prompt now carries the same listening and register direction as Quilltap's other character generators — answer what is meant, size the reply to the moment, save the formal language for matters of weight — and the safeguards described under [Whose story it is](prompts.md): what you narrate is what happened, the conversation outranks the character's notes, no setting facts invented to win a point, nothing binds you unless you agreed in plain words, and disagreement without a committee. As ever, these are rendered in the character's own voice rather than as a pasted list. A *disposition of trust* is included only when the character's material establishes them as your companion, partner, family, or crew. Since the prompt travels to establishments where Quilltap cannot keep an eye on things, these safeguards matter there at least as much as at home.
+The generated prompt now carries the same listening and register direction as Quilltap's other character generators — answer what is meant, size the reply to the moment, save the formal language for matters of weight — and the safeguards described under [Whose story it is](prompts.md): what you narrate is what happened, the conversation outranks the character's notes, no setting facts invented to win a point, nothing binds you unless you agreed in plain words, and disagreement without a committee. As ever, these are rendered in the character's own voice rather than as a pasted list. A *disposition of trust* is included only when the character's material establishes them as your companion, partner, family, or crew. Since the prompt travels to establishments where Quilltap cannot keep an eye on things, these safeguards matter there at least as much as at home. It also follows the character's **kind** (set in the **Facts** card on their **Details** section): a roleplay character's prompt says how they react when the story turns — matching the stakes, with their usual temper as a starting point rather than a vow, so that no prompt ever decrees "never tense" or "always calm" — while an assistant's prompt says how they do the work: accurately, owning up to what they do not know, and without padding.
 
 ## Accessing the Generator
 
 1. Navigate to the **Aurora** page (`/aurora`)
 2. Select the character whose external debut you wish to arrange
-3. In the character header, click the **Non-Quilltap Prompt** button (the document icon, located near "Convert to NPC")
+3. In the character's header, open the **Generate ▾** menu and choose **Non-Quilltap prompt…**
 4. A configuration dialog opens
 
 ## Configuration Options
@@ -73,4 +73,4 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Character System Prompts](character-system-prompts.md) — managing multiple system prompts per character
 - [Character Import & Export](character-import-export.md) — other ways to move characters between systems
-- [Refine from Memories](character-optimizer.md) — improving character data before generating an external prompt
+- [Refine from Memories & Instructions](character-optimizer.md) — improving character data before generating an external prompt

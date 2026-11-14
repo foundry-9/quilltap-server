@@ -1,117 +1,49 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useCallback, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
-import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { useApiKeysQuery } from '@/lib/hooks/use-profiles'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { useModalState } from '@/hooks/useModalState'
-import { fetchJson } from '@/lib/fetch-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
 import LoadingState from '@/components/ui/LoadingState'
 import ErrorAlert from '@/components/ui/ErrorAlert'
 import EmptyState from '@/components/ui/EmptyState'
-import { ProfileCard } from '@/components/ui/ProfileCard'
 import { ApiKeyModal } from './api-keys/ApiKeyModal'
+import { ApiKeyCard, type ApiKeyListItem } from './api-keys/ApiKeyCard'
+import { useApiKeyActions } from './api-keys/hooks/useApiKeyActions'
 import { ExportKeysDialog } from './api-keys/ExportKeysDialog'
 import { ImportKeysDialog } from './api-keys/ImportKeysDialog'
 
-interface ApiKey {
-  id: string
-  provider: string
-  label: string
-  isActive: boolean
-  lastUsed: string | null
-  createdAt: string
-  updatedAt: string
-  keyPreview: string
-}
+const EMPTY_KEYS: ApiKeyListItem[] = []
 
 export default function ApiKeysTab() {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
-  const [testingKeyId, setTestingKeyId] = useState<string | null>(null)
-  const [testResults, setTestResults] = useState<{ [key: string]: string }>({})
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
-  const { data, isLoading, error: loadError, refetch: mutateKeys } = useQuery({
-    queryKey: queryKeys.apiKeys.all,
-    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys', { signal }),
-  })
+  const queryClient = useQueryClient()
+  const { data, isLoading, error: loadError } = useApiKeysQuery<ApiKeyListItem>()
+  // A key written here refreshes every list that shows keys (the by-provider
+  // card, the profile modals' pickers, the attention strip).
+  const mutateKeys = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all }),
+    [queryClient],
+  )
   const {
     isOpen: isModalOpen,
     openModal: handleOpenModal,
     closeModal: handleCloseModal,
     handleSuccess: handleModalSuccess,
   } = useModalState(() => mutateKeys())
-  const apiKeys = data?.apiKeys ?? []
-  const deleteKey = useAsyncOperation<void>()
-  const testKey = useAsyncOperation<{ valid: boolean; error?: string }>()
+  const apiKeys = data ?? EMPTY_KEYS
+  const keyActions = useApiKeyActions(mutateKeys)
   const triggerAutoAssociate = useAutoAssociate()
 
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
     triggerAutoAssociate()
   }, [triggerAutoAssociate])
-
-  const handleDeleteClick = (id: string) => {
-    setDeleteConfirmId(id)
-  }
-
-  const handleDeleteCancel = () => {
-    setDeleteConfirmId(null)
-  }
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteConfirmId) return
-
-    const result = await deleteKey.execute(async () => {
-      const response = await fetchJson<void>(`/api/v1/api-keys/${deleteConfirmId}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error(response.error || 'Failed to delete API key')
-      }
-    })
-
-    if (result !== null) {
-      setDeleteConfirmId(null)
-      await mutateKeys()
-    }
-  }
-
-  const handleTest = async (id: string) => {
-    setTestingKeyId(id)
-    setTestResults({})
-
-    const result = await testKey.execute(async () => {
-      const response = await fetchJson<{ valid: boolean; error?: string }>(
-        `/api/v1/api-keys/${id}?action=test`,
-        { method: 'POST' }
-      )
-
-      if (!response.ok) {
-        throw new Error(response.error || 'Failed to test API key')
-      }
-
-      return response.data || { valid: false }
-    })
-
-    if (result) {
-      if (result.valid) {
-        setTestResults({ [id]: '✓ Key is valid' })
-      } else {
-        setTestResults({ [id]: `✗ ${result.error || 'Key is invalid'}` })
-      }
-    } else {
-      setTestResults({ [id]: 'Connection failed' })
-      console.error('API key test connection failed', { id })
-    }
-
-    setTestingKeyId(null)
-  }
 
   const handleOpenExportDialog = () => {
     setIsExportDialogOpen(true)
@@ -152,9 +84,9 @@ export default function ApiKeysTab() {
       )}
 
       {/* Delete key error state */}
-      {deleteKey.error && (
+      {keyActions.deleteError && (
         <ErrorAlert
-          message={deleteKey.error}
+          message={keyActions.deleteError}
           className="mb-4"
         />
       )}
@@ -162,7 +94,7 @@ export default function ApiKeysTab() {
       {/* API Keys List */}
       <div className="mb-8">
         <div className="flex items-center justify-between gap-4 mb-4">
-          <h2 className="qt-text-section text-foreground flex-1">
+          <h2 className="qt-text-section qt-text flex-1">
             Your API Keys ({sortedKeys.length})
           </h2>
           <div className="flex gap-2 flex-shrink-0">
@@ -203,47 +135,7 @@ export default function ApiKeysTab() {
         ) : (
           <div className="qt-card-grid-auto">
             {sortedKeys.map((key) => (
-              <ProfileCard
-                key={key.id}
-                title={key.label}
-                subtitle={`${key.provider} • ${key.keyPreview}`}
-                actions={[
-                  {
-                    label: 'Test',
-                    onClick: () => handleTest(key.id),
-                    variant: 'secondary',
-                    loading: testingKeyId === key.id,
-                    loadingLabel: 'Testing...',
-                  },
-                ]}
-                deleteConfig={{
-                  isConfirming: deleteConfirmId === key.id,
-                  onConfirmChange: (confirming) => confirming ? handleDeleteClick(key.id) : handleDeleteCancel(),
-                  onConfirm: handleDeleteConfirm,
-                  message: 'Delete this API key?',
-                  isDeleting: deleteKey.loading,
-                }}
-              >
-                {/* Last used date */}
-                {key.lastUsed && (
-                  <p className="qt-text-xs">
-                    Last used: {new Date(key.lastUsed).toLocaleDateString()}
-                  </p>
-                )}
-
-                {/* Test results */}
-                {testResults[key.id] && (
-                  <p
-                    className={`text-sm mt-2 ${
-                      testResults[key.id].startsWith('✓')
-                        ? 'qt-text-success'
-                        : 'qt-text-destructive/80'
-                    }`}
-                  >
-                    {testResults[key.id]}
-                  </p>
-                )}
-              </ProfileCard>
+              <ApiKeyCard key={key.id} apiKey={key} actions={keyActions} />
             ))}
           </div>
         )}

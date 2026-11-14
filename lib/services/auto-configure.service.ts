@@ -14,6 +14,7 @@
  */
 
 import { executeWebSearchTool, formatWebSearchResults } from '@/lib/tools/handlers/web-search-handler'
+import { withReasoningHeadroom } from '@/lib/llm/reasoning-headroom'
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
 import { createLLMProvider } from '@/lib/llm'
 import { parseLLMJson } from '@/lib/llm/llm-json'
@@ -210,7 +211,7 @@ async function cleanupWithCheapLLM(
 
   const cleanupStartedAt = Date.now()
   const cleanupResponse = await cheapProvider.sendMessage(
-    { messages: cleanupMessages, model: cheapSelection.modelName, temperature: 0.1, maxTokens: 500, profileParameters: cheapSelection.profileParameters },
+    { messages: cleanupMessages, model: cheapSelection.modelName, temperature: 0.1, maxTokens: withReasoningHeadroom(500), profileParameters: cheapSelection.profileParameters },
     cheapApiKey
   )
   const cleanupDurationMs = Date.now() - cleanupStartedAt
@@ -224,7 +225,7 @@ async function cleanupWithCheapLLM(
     request: {
       messages: cleanupMessages.map(m => ({ role: m.role, content: m.content })),
       temperature: 0.1,
-      maxTokens: 500,
+      maxTokens: withReasoningHeadroom(500),
     },
     response: { content: cleanupResponse.content },
     usage: cleanupResponse.usage,

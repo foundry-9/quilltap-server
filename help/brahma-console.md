@@ -1,7 +1,7 @@
 ---
 title: Brahma Console
 url: /
-tags: [help, chat, console, llm, model, tools, brahma]
+tags: [help, chat, console, llm, model, tools, brahma, writing assistant, attachments]
 ---
 
 # The Brahma Console
@@ -45,16 +45,60 @@ Switching the engine **continues the same conversation**. The transcript carries
 The Console is a capable, concise, neutral assistant. Beyond plain conversation, it carries a deliberately small kit of tools:
 
 - **Search** — It can search across your past conversations and every one of your document stores, including the knowledge folders within them.
-- **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well.
+- **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well (except in a Writing Assistant conversation, where it reads only).
 - **The clerk's shortcuts** — Four ready-made enquiries that answer the commonest questions in a single stroke each. See *The clerk's shortcuts*, below.
 - **The ledgers themselves** — It can put **read-only questions** straight to the databases that keep your establishment running. See *Consulting the ledgers*, below.
-- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly.
+- **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly. (The `curl` plugin counts as a *writing* tool — it can send as well as fetch — so a Writing Assistant conversation, which reads only, does without it.)
+
+## Sending papers along with the question
+
+Some questions are best asked with the evidence on the desk. The Console's composer — in an ordinary conversation and a Writing Assistant one alike — accepts **attachments**: press the **paperclip** beside the message box to choose files, **paste** an image or file straight from the clipboard, or simply **drag and drop** it onto the composer. Each arrives as a small chip above the message box — a thumbnail for a picture, a name for anything else — and shows *Uploading…* until it has been safely filed; the send button waits politely until every chip is ready. Change your mind, and the little cross on a chip withdraws it at once. A message may consist of attachments alone, with no words at all.
+
+The files go wherever the Salon's would: images, text, PDFs and the rest, by the same rules. A picture reaches an engine that can see; an engine without the gift of sight receives a careful description of it instead — and should you switch to such an engine halfway through, the earlier pictures simply arrive described from then on. A text file is read in full. The engine is also told where each file now lives, so it may open the original with its document tools if it wants a second look.
+
+**Where they are kept.** Every attachment is filed flat in a folder named **Brahma** at the top of **Quilltap General**, under its own name (a second `notes.md` becomes `notes-2.md`; a pasted picture with no name is stamped with the date and hour, as `pasted-20261112-143005.png`). In the transcript, a picture shows as a thumbnail that opens full-screen; any other file as a chip that opens the stored copy; and a file since removed as a chip struck through.
+
+**They leave with the conversation.** Deleting a Console conversation deletes its attachments too, and the Console asks first, naming how many files will go. A file you have since **moved out** of the Brahma folder is yours to keep: it stays exactly where you put it. Because the Brahma folder sits in Quilltap General, its contents are indexed like any General document — and so may turn up in a character's search. A file you would rather keep from the household belongs somewhere else.
+
+## The Writing Assistant
+
+Sometimes one does not want a conversation at all, but a *piece*: the response text for a custom tool, a line a particular character would say, a tidy write-up of a terminal session. For that, the Console keeps a writing desk.
+
+### Opening a writing conversation
+
+On the roster of past conversations, the title bar carries a switch marked **Writing Assistant**, beside the model picker. It is **off** every time the roster appears. Flip it on before asking your first question, and the conversation that opens is a Writing Assistant conversation — **for good**. Inside it the switch gives way to a small **Writing Assistant** badge; the mode is settled when a conversation opens and cannot be changed afterwards. (Start a fresh conversation for ordinary chatter.) On the roster, writing conversations wear a small **pen** mark.
+
+### Naming the sources
+
+While the Writing Assistant is on, a **context bar** sits beneath the title bar. Press **Add to context** to name the sources the piece should draw upon:
+
+- **Conversations** — any Salon or autonomous conversation, found by searching its title; each shows its cast and when it last stirred. Name a conversation and the **character vaults** of everyone in it join the sources automatically (shown as smaller chips beneath it; an archived character is named, but brings no vault).
+- **Projects** — every store linked to the project.
+- **Document stores** — any store in the Scriptorium.
+- **Quilltap General** — a single checkbox.
+
+Each source is a chip with a cross to remove it. The list may be changed at any time, even mid-conversation; a change applies from the next answer. A source that has since vanished shows struck through, and may be removed. An empty context is perfectly allowable — the Writing Assistant will write from its own resources.
+
+The sources are a list, not a reading assignment: the engine is told what you have named and consults what the request calls for, searching and reading as it sees fit, and may look further afield when they fall short. It may search, read and consult the ledgers freely — but in this mode it **cannot write** to any store, and it still has no access to your characters' memories.
+
+### What comes back
+
+Every answer is **the piece itself**, in Markdown: no greeting, no preamble, no account of where it looked, no offers of further help, no questions — where your request leaves something open, it chooses and writes. Each answer is drawn as an **output card** in its own frame. Ask for a change and you receive the **whole piece again**, revised, as a fresh card; the earlier cards stay as they were. The engine's thinking may still be shown, and any remarks it makes to itself along the way appear small and muted as **working notes**. Should it run out of turns before finishing, you receive a plain notice rather than a half-made piece.
+
+Each output card carries four controls:
+
+- **Copy** — the Markdown, exactly as stored, onto your clipboard.
+- **Download** — a `.md` file named after the conversation (a second output becomes `-2.md`, a third `-3.md`).
+- **Save to store** — choose a document store, a folder and a name, and the piece is filed there as a Markdown document. Should a file of that name already sit there, you are offered the choice to overwrite it or pick another name.
+- **Rendered / Source** — see the piece as it will read, or as the exact Markdown that will be copied and saved.
 
 ## Watching the engine think
 
 The Console's replies arrive as they are composed, word following word across the wire rather than landing all at once when the engine has finished. And when you have chosen an engine given to **reasoning aloud** — one of the thinking models — the Console will show you its working as well as its conclusion.
 
 Above each such answer sits a small, dimmed **Thinking** panel. While the engine deliberates the panel stands open, and you may watch the chain of thought unspool in real time; once the answer is settled the panel folds itself shut, leaving the reply uncluttered. Press it open again at any time, on a fresh answer or one long since concluded, to revisit how the engine reasoned its way there.
+
+When the engine consults the ledgers along the way, its musings are not lumped together at the top like a stack of unsorted correspondence. Each stretch of thought sits just before the query it prompted, so the transcript reads in the order things happened: a thought, a query, a further thought, another query, and at last the answer.
 
 This musing is shown to you and to you alone. Like everything in the thinking panel throughout Quilltap, it is **for your eyes only** — never fed back to the engine, never filed into a memory, never counted as part of the answer. Engines that do not reason aloud simply show no panel at all.
 
@@ -76,12 +120,14 @@ Behind every character, every conversation, every memory and document and tallie
 Three points of etiquette govern the arrangement:
 
 - **It reads only; it never writes.** The Console may pore over the ledgers to its heart's content, but the pen is locked away. Any attempt to alter, add, or erase is refused before it can run — querying is perfectly safe, and you may invite it to explore freely.
+- **Only the introspection PRAGMAs are admitted.** `run_sql` accepts `table_info`, `table_xinfo`, `table_list`, `index_list`, `index_info`, `index_xinfo` and `foreign_key_list` (or the `SELECT * FROM pragma_table_info('x')` forms), and runs on a read-only connection.
+
 - **The three ledgers are kept in separate rooms.** There is the **main** ledger (characters, chats, messages, memories, profiles, projects), the **engine log** (every model call, its tokens, its cost, its duration), and the **document index** (the document stores, and the full text of every character, project, and group vault). A single question reaches into one room at a time; for a question that spans rooms, the Console carries the answer from one to the next.
 - **Inspection is not remembrance.** That the Console may now *read* the memory ledger — to summarise it, to count it, to chart how importance is distributed — is a different thing entirely from *recalling* a memory. Reading the table changes nothing and is filed nowhere; the Console still forms no memories of its own, and its search still cannot draw upon them as a source.
 
 ### Seeing the Console's working
 
-You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, two tidy panels slip into the transcript at that very spot. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed — to the row cap, or because the rows were too bulky to carry whole, in which case the longest entries are shortened and the Console is told to ask a narrower question. Both panels appear the instant the query lands and may be folded shut with a tap, so the conversation stays unhurried while the evidence remains within easy reach.
+You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, a slim **Ran SQL** card slips into the transcript at that very spot, folded shut as neatly as a calling card: it names the ledger consulted, gives the first line or so of the query, and reports how many rows came back (or that the attempt failed). Press it open and two tidy panels unfold. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed — to the row cap, or because the rows were too bulky to carry whole, in which case the longest entries are shortened and the Console is told to ask a narrower question. The card appears the instant the query lands, so the conversation stays unhurried while the evidence remains within easy reach.
 
 Should a query go awry — a misremembered column, a table that isn't there — the **Result** panel reports the ledger's own complaint in plain words rather than a polite shrug, so you (and the engine) can see exactly what went wrong. The Console takes such a rebuff as a cue to inspect the ledger's true shape and try again, rather than guess a second time.
 
@@ -93,7 +139,7 @@ Consulted this way, the Console keeps all of its console powers — the read-onl
 
 ### Choosing the engine for `@Brahma`
 
-The floating Console has its own model picker; the Salon line does not, so it is told which engine to use. In **Settings → Chat → Brahma Console**, the picker labelled **Engine for `@Brahma` in the Salon** names the connection profile that answers. Leave it at **Use my default profile** and Brahma borrows your default, as it always has.
+The floating Console has its own model picker; the Salon line does not, so it is told which engine to use. In **Settings → Games & Tools → Brahma Console**, the picker labelled **Engine for `@Brahma` in the Salon** names the connection profile that answers. Leave it at **Use my default profile** and Brahma borrows your default, as it always has.
 
 A project may overrule that choice for its own conversations: open the project, find the **Model Behavior** card, and set **Inline Brahma Engine** (see [Project Settings](project-settings.md)). The order of precedence is plain — the project's choice, then the global setting, then your default profile — and should a chosen profile since have been deleted, Brahma quietly moves down the list rather than falling silent.
 
@@ -101,9 +147,9 @@ Enquiries of this sort reward a capable engine. A model that handles tools deftl
 
 ## Setting the Console's patience
 
-A thorny question — *"where in all these ledgers is the airship first mentioned?"* — is rarely answered in a single stroke. The Console works such a problem the way any diligent clerk would: one step at a time, a query here, a document read there, each step a **turn** at the telegraph key. It takes as many turns as the question demands, up to a ceiling you set, at which point it must lay down its tools and report whatever it has gathered so far.
+A thorny question — *"where in all these ledgers is the airship first mentioned?"* — is rarely answered in a single stroke. The Console works such a problem the way any diligent clerk would: one step at a time, a query here, a document read there, each step a **turn** at the telegraph key. It takes as many turns as the question demands, up to a ceiling you set — and only you set it — at which point it must lay down its tools and report whatever it has gathered so far.
 
-That ceiling lives in **Settings → Chat → Brahma Console**, as **"Let the Console take up to N turns"** (5–200; the default is 50). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
+That ceiling lives in **Settings → Games & Tools → Brahma Console**, as **"Let the Console take up to N turns"** (any whole number from 1 upward, with no upper limit; the default is 10). Raise it when you find the Console repeatedly running out of rope in the middle of a deep search of the ledgers; lower it if you would rather it answer briskly from what lies near to hand. The same figure governs the Console summoned from the sidebar and the `@Brahma` line called from the Salon floor alike.
 
 A generous ceiling costs nothing on questions the Console dispatches quickly, and it carries no risk of a runaway search: should the engine fall to asking the very same question twice, Quilltap recognises it chasing its own tail and calls a halt at once — no matter how high the ceiling stands. The dial buys patience for genuine progress, never licence to spin.
 
@@ -125,7 +171,7 @@ help_navigate(url: "/")
 
 To take the user straight to the Console's settings (the turn budget and the engine for `@Brahma` in the Salon):
 ```
-help_navigate(url: "/settings?tab=chat&section=brahma-console")
+help_navigate(url: "/settings?section=brahma-console")
 ```
 
 ## Related Pages

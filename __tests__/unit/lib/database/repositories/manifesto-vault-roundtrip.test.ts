@@ -17,7 +17,7 @@
  * The database-store is mocked with an in-memory Map acting as the vault, so the
  * real write-overlay code and the real read transform run against a shared
  * store — a genuine write→store→read cycle without the full mount-index DB.
- * Mirrors the mock set of character-properties-overlay.test.ts.
+ * Mirrors the mock set of vault-hydrate-write.test.ts.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
@@ -57,10 +57,8 @@ jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: jest.fn().mockResolvedValue(undefined),
 }));
 
-import {
-  applyDocumentStoreWriteOverlay,
-} from '@/lib/database/repositories/character-properties-overlay';
-import { markdownToNullable } from '@/lib/database/repositories/vault-overlay/parsers';
+import { applyDocumentStoreWriteOverlay } from '@/lib/characters/vault/write';
+import { markdownToNullable } from '@/lib/characters/vault/parsers';
 import { writeDatabaseDocument, readDatabaseDocument } from '@/lib/mount-index/database-store';
 
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;

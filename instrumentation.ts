@@ -67,9 +67,9 @@ export async function register() {
 
             if (legacyState === 'resolved' || legacyState === 'needs-vault-storage') {
               // Successfully extracted pepper from old vault — write .dbkey file
-              const { storeEnvPepperInDbKey, getDbKeyState } = await import('./lib/startup/dbkey');
+              const { storeEnvPepperInDbKey, getDbKeyState, overrideDbKeyState } = await import('./lib/startup/dbkey');
               // Override the state to allow storage
-              (global as any).__quilltapDbKeyState = 'needs-vault-storage';
+              overrideDbKeyState('needs-vault-storage');
               storeEnvPepperInDbKey('');
               dbKeyState = 'resolved';
             } else if (legacyState === 'needs-unlock') {
@@ -483,24 +483,6 @@ export async function register() {
       }
 
       // ================================================================
-      // PHASE 1.25: Seed Initial Data (first startup only)
-      // ================================================================
-      // Seeds default character(s) when database is empty
-      startupState.setPhase('seeding');
-      startupProgress.setCurrent('subsystem:seeding');
-
-      try {
-        const { seedInitialData } = await import('./lib/startup/seed-initial-data');
-        await seedInitialData();
-      } catch (seedError) {
-        // Seeding failure should not block startup
-        logger.warn('Error during initial data seeding, continuing startup', {
-          context: 'instrumentation.register',
-          error: seedError instanceof Error ? seedError.message : String(seedError),
-        });
-      }
-
-      // ================================================================
       // PHASE 1.5: Auto-upgrade npm-installed plugins
       // ================================================================
       startupState.setPhase('plugin-updates');
@@ -594,6 +576,27 @@ export async function register() {
         logger.warn('Structural table check could not run, continuing startup', {
           context: 'instrumentation.register',
           error: verifyError instanceof Error ? verifyError.message : String(verifyError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.15: Seed Initial Data (first startup only)
+      // ================================================================
+      // Seeds default character(s) when database is empty. Runs after file
+      // storage and the structural-table check (3.1), which creates every
+      // mount-index table: seeding before them left the sample characters as
+      // bare rows whose vault writes failed (no doc_mount_files yet).
+      startupState.setPhase('seeding');
+      startupProgress.setCurrent('subsystem:seeding');
+
+      try {
+        const { seedInitialData } = await import('./lib/startup/seed-initial-data');
+        await seedInitialData();
+      } catch (seedError) {
+        // Seeding failure should not block startup
+        logger.warn('Error during initial data seeding, continuing startup', {
+          context: 'instrumentation.register',
+          error: seedError instanceof Error ? seedError.message : String(seedError),
         });
       }
 
@@ -783,6 +786,20 @@ export async function register() {
         });
       }
 
+      // Built-in roleplay templates now have fixed ids (#190). The migration
+      // re-pointed the main database; a project's pointer lives in its store,
+      // so it is re-pointed here, through the repository, once the stores exist.
+      // A no-op once the migration's re-key map has been applied and cleared.
+      try {
+        const { rekeyProjectRoleplayTemplatePointers } = await import('./lib/startup/rekey-project-roleplay-template-pointers');
+        await rekeyProjectRoleplayTemplatePointers();
+      } catch (rekeyError) {
+        logger.warn('Error re-pointing projects at built-in roleplay templates, continuing startup', {
+          context: 'instrumentation.register',
+          error: rekeyError instanceof Error ? rekeyError.message : String(rekeyError),
+        });
+      }
+
       // ================================================================
       // PHASE 3.4: Ensure Project Scenario Infrastructure
       // ================================================================
@@ -901,8 +918,28 @@ export async function register() {
           });
         }
 
+        // Chats whose opening a restart broke off go back to 'pending', so the
+        // next visit (or run start) resumes them from the phase they reached.
+        try {
+          const { reconcileStaleOpeningsAtStartup } = await import('./lib/chat/opening/run');
+          const { getRepositories } = await import('./lib/repositories/factory');
+          await reconcileStaleOpeningsAtStartup(getRepositories());
+        } catch (openingError) {
+          logger.warn('Failed to reconcile broken-off chat openings at startup, continuing', {
+            context: 'instrumentation.register',
+            error: openingError instanceof Error ? openingError.message : String(openingError),
+          });
+        }
+
         const { scheduleAutonomousRooms } = await import('./lib/background-jobs/scheduled-autonomous-rooms');
         scheduleAutonomousRooms();
+
+        // Resume jobs left pending by the last run. This used to wait for the
+        // first poll of `GET /api/v1/system/jobs`, which started the processor
+        // as a side effect; a read no longer writes, so boot starts it.
+        const { ensureProcessorRunning } = await import('./lib/background-jobs/processor');
+        ensureProcessorRunning();
+        logger.debug('Background-job processor started at boot', { context: 'instrumentation.register' });
 
         // Start filesystem watcher for real-time sync
         const { startWatcher } = await import('./lib/file-storage/watcher');

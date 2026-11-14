@@ -11,6 +11,8 @@ import {
   TRUST_SAFEGUARDS_DIRECTION,
   COMPANION_TRUST_DISPOSITION,
   COMPANION_TRUST_DISPOSITION_GATE,
+  STAKES_AND_REACTION_DIRECTION,
+  ASSISTANT_TASK_DIRECTION,
 } from '@/lib/services/character-field-semantics'
 
 describe('ai-import SYSTEM_PROMPTS_PROMPT', () => {
@@ -31,5 +33,10 @@ describe('ai-import SYSTEM_PROMPTS_PROMPT', () => {
 
   it('allows prompts up to 600 words', () => {
     expect(SYSTEM_PROMPTS_PROMPT).toContain('300-600 words')
+  })
+
+  it('writes a summoned character as a roleplay character: the stakes direction, never the task one', () => {
+    expect(SYSTEM_PROMPTS_PROMPT).toContain(STAKES_AND_REACTION_DIRECTION)
+    expect(SYSTEM_PROMPTS_PROMPT).not.toContain(ASSISTANT_TASK_DIRECTION)
   })
 })

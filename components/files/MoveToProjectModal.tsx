@@ -8,9 +8,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FolderPicker from '@/components/files/FolderPicker'
@@ -46,12 +44,8 @@ export default function MoveToProjectModal({
   const [selectedValue, setSelectedValue] = useState<string>('')
   const [selectedFolderPath, setSelectedFolderPath] = useState('/')
 
-  const { data: projectsData, isLoading } = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) => apiFetch<{ projects: Project[] }>('/api/v1/projects', { signal }),
-    enabled: isOpen,
-  })
-  const projects = projectsData?.projects || []
+  const { data: projectsData, isLoading } = useProjectsQuery<Project>({ enabled: isOpen })
+  const projects = projectsData ?? []
 
   // Determine if a project is selected (vs general files)
   const isGeneralFilesSelected = selectedValue === GENERAL_FILES_VALUE

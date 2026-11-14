@@ -209,7 +209,7 @@ describe('ProfileModal base URL (Bug 73)', () => {
         hook.form.setField('baseUrl', 'http://localhost:11434')
         hook.form.setField('name', 'Local')
         hook.form.setField('modelName', 'qwen3')
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- test harness seeds the form once on mount; hook is a fresh object every render
       }, [])
       return (
         <button type="button" onClick={() => hook.handleSubmit('profile-1')}>

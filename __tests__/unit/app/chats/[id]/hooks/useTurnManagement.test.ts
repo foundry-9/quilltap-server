@@ -339,10 +339,10 @@ describe('useTurnManagement', () => {
       // Adding to the queue AND triggering continueMode caused the chain loop
       // to pop the queued entry and generate a second duplicate response.
       expect(mockFetch).not.toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn-nudge`,
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ action: 'nudge', participantId: 'p1' }),
+          body: JSON.stringify({ participantId: 'p1' }),
         })
       )
       expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
@@ -420,10 +420,10 @@ describe('useTurnManagement', () => {
       expect(mockAddToQueue).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
       expect(mockFetch).toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn-queue`,
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ action: 'queue', participantId: 'p1' }),
+          body: JSON.stringify({ participantId: 'p1' }),
         })
       )
     })
@@ -484,10 +484,10 @@ describe('useTurnManagement', () => {
       expect(mockRemoveFromQueue).toHaveBeenCalledWith(stateWithQueue, 'p1')
       expect(setTurnState).toHaveBeenCalled()
       expect(mockFetch).toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn-dequeue`,
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ action: 'dequeue', participantId: 'p1' }),
+          body: JSON.stringify({ participantId: 'p1' }),
         })
       )
     })
@@ -519,10 +519,10 @@ describe('useTurnManagement', () => {
       })
 
       expect(mockFetch).toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn-query`,
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ action: 'query' }),
+          body: JSON.stringify({}),
         })
       )
       expect(triggerContinueMode).toHaveBeenCalledWith('p1')
@@ -590,7 +590,7 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('should not auto-continue when next speaker is user-controlled', async () => {
+    it('should hand the floor back, not auto-continue, when next speaker is user-controlled', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => createMockTurnResponse({
@@ -617,7 +617,9 @@ describe('useTurnManagement', () => {
         await result.current.handleContinue()
       })
 
-      expect(mockShowInfoToast).not.toHaveBeenCalled()
+      expect(mockShowInfoToast).toHaveBeenCalledWith(
+        'The floor is yours — post a line, or skip your turn.'
+      )
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
@@ -651,7 +653,7 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('should show info toast when next speaker matches user participant id', async () => {
+    it('should say the floor is yours when next speaker is the user participant', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => createMockTurnResponse({ nextSpeakerId: 'p3' }),
@@ -676,7 +678,7 @@ describe('useTurnManagement', () => {
       })
 
       expect(mockShowInfoToast).toHaveBeenCalledWith(
-        'No characters available to speak. Try adding or activating a character.'
+        'The floor is yours — post a line, or skip your turn.'
       )
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
@@ -706,10 +708,10 @@ describe('useTurnManagement', () => {
       })
 
       expect(mockFetch).toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn-skip-user`,
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ action: 'skipUserTurn', participantId: 'p3' }),
+          body: JSON.stringify({ participantId: 'p3' }),
         })
       )
       expect(triggerContinueMode).toHaveBeenCalledWith('p1')
@@ -732,9 +734,9 @@ describe('useTurnManagement', () => {
       })
 
       expect(mockFetch).toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn-skip-user`,
         expect.objectContaining({
-          body: JSON.stringify({ action: 'skipUserTurn', participantId: 'p1' }),
+          body: JSON.stringify({ participantId: 'p1' }),
         })
       )
       expect(triggerContinueMode).toHaveBeenCalledWith('p2')
@@ -886,10 +888,10 @@ describe('useTurnManagement', () => {
 
       // Should call the API with query action
       expect(mockFetch).toHaveBeenCalledWith(
-        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn-query`,
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ action: 'query' }),
+          body: JSON.stringify({}),
         })
       )
     })

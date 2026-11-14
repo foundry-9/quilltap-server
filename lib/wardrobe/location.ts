@@ -48,7 +48,7 @@ import {
   resolveWardrobeMount,
   updateManyInMount,
   type WardrobeMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
+} from '@/lib/wardrobe/vault-writes';
 import type { ItemFolderLocation } from '@/lib/mount-index/item-folder-location';
 import { groupMountsFor, groupOriginMap, resolveOwnerStore } from '@/lib/mount-index/reach';
 import { SHARED_WARDROBE_FOLDER } from '@/lib/mount-index/shared-wardrobe';

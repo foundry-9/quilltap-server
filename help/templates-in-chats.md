@@ -30,7 +30,7 @@ When a template is active in a chat, it:
 
 The New Chat form carries its own **Roleplay Template** dropdown, just beneath **Play As**. It saves a trip to the sidebar for chats you already know the style of.
 
-- **Pre-selected for you** — It arrives set to whatever the chat would have used anyway: the project's default template (when the chat is filed under a project), your own default from **Settings → Templates** otherwise, or **No Template** when you keep no default
+- **Pre-selected for you** — It arrives set to whatever the chat would have used anyway: the project's default template (when the chat is filed under a project), your own default from **Settings → Characters & Prompts → Roleplay Templates** otherwise, or **No Template** when you keep no default
 - **The default is labelled** — The option that would have been chosen for you is marked *(default)*, so an override is obvious
 - **Built-in templates are labelled** — Same "(Built-in)" marker as the in-chat dropdown
 - **Hidden when there's nothing to choose** — With no templates installed, the dropdown doesn't appear
@@ -285,7 +285,7 @@ Some templates include:
 **Solutions:**
 
 - Refresh Chat Settings
-- Go to the **Templates** tab in Settings (`/settings?tab=templates`) → Roleplay Templates to verify it was created
+- Go to the **Templates** tab in Settings (`/settings?group=characters-prompts`) → Roleplay Templates to verify it was created
 - Make sure you're looking in the right section
 - Try closing and reopening Chat Settings
 - Refresh the entire page

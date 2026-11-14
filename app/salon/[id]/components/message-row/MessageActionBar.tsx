@@ -136,19 +136,17 @@ export function MessageActionBar({
             )}
           </button>
         </Tooltip>
-        {/* Edit (user messages only) */}
-        {message.role === 'USER' && (
-          <Tooltip content="Edit message">
-            <button
-              type="button"
-              onClick={() => onEditStart(message)}
-              className="qt-chat-message-action-icon"
-              aria-label="Edit message"
-            >
-              <Icon name="pencil" />
-            </button>
-          </Tooltip>
-        )}
+        {/* Edit — any line: the operator's, a character's, a Staff row's */}
+        <Tooltip content="Edit message">
+          <button
+            type="button"
+            onClick={() => onEditStart(message)}
+            className="qt-chat-message-action-icon"
+            aria-label="Edit message"
+          >
+            <Icon name="pencil" />
+          </button>
+        </Tooltip>
         {/* Delete */}
         <Tooltip content="Delete message">
           <button

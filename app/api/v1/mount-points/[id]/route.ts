@@ -30,7 +30,7 @@ import {
   deconvertMountPointToFilesystem,
   validateDeconvertTarget,
 } from '@/lib/mount-index/conversion';
-import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { scaffoldCharacterMount } from '@/lib/characters/vault/scaffold';
 import { copyFile, moveFile, writeFile, deleteFile, linkFile, FileOpError } from '@/lib/mount-index/file-ops';
 import { copyFolder, deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
 import { publishMountChange } from '@/lib/mount-index/realtime';
@@ -106,20 +106,27 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
       const body = await req.json();
       const validatedData = updateMountPointSchema.parse(body);
 
-      if (validatedData.name !== undefined && validatedData.name !== existing.name) {
-        // A live character vault is named after its character; renaming the
-        // vault alone would be undone by the next store-name reconcile.
-        const owner = (await repos.characters.findAllRaw()).find(
-          (c) => c.characterDocumentMountPointId === id
-        );
+      const renames = validatedData.name !== undefined && validatedData.name !== existing.name;
+      const retypes =
+        (validatedData.storeType !== undefined && validatedData.storeType !== existing.storeType) ||
+        (validatedData.mountType !== undefined && validatedData.mountType !== existing.mountType);
+      if (renames || retypes) {
+        // A live character vault is named after its character and must stay a
+        // database-backed character store; renaming or retyping it alone would
+        // be undone by the next reconcile or break the character (#169).
+        const owner = await repos.characters.findByStorePointerRaw(id);
         if (owner) {
-          logger.warn('[Mount Points v1] Rejected rename of a live character vault', {
+          logger.warn('[Mount Points v1] Rejected rename/retype of a live character vault', {
             mountPointId: id,
             characterId: owner.id,
+            renames,
+            retypes,
             userId: user.id,
           });
           return conflict(
-            `This vault belongs to ${owner.name} and is named after them. Rename the character to rename the vault.`
+            renames
+              ? `This vault belongs to ${owner.name} and is named after them. Rename the character to rename the vault.`
+              : `This vault belongs to ${owner.name}; its store type and mount type cannot be changed.`
           );
         }
       }
@@ -177,6 +184,8 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
 
       return successResponse({ mountPoint: updated });
     } catch (error) {
+      // A validation failure is the middleware's 400, not a 500 (#166).
+      if (error instanceof z.ZodError) throw error;
       logger.error('[Mount Points v1] Error updating mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to update mount point');
     }
@@ -839,17 +848,19 @@ async function handleWriteFile(
   }
 }
 
+/** `?action=delete-file` body: the store-relative path to remove. */
+const DeleteFileSchema = z.object({
+  path: z.string({ error: 'Missing "path" field' }).trim().min(1, 'Missing "path" field'),
+});
+
 async function handleDeleteFile(
   req: NextRequest,
   { user }: RequestContext,
   { id }: { id: string }
 ): Promise<NextResponse> {
+  // A malformed body is the middleware's 400.
+  const { path: relativePath } = DeleteFileSchema.parse(await req.json().catch(() => ({})));
   try {
-    const body = await req.json().catch(() => ({}));
-    const relativePath = typeof body?.path === 'string' ? body.path.trim() : '';
-    if (!relativePath) {
-      return badRequest('Missing "path" field');
-    }
     const result = await deleteFile({ mountPointId: id, relativePath });
     logger.info('[Mount Points v1] Deleted file', {
       ...result,

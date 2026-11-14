@@ -6,7 +6,7 @@
  * Displays all document stores (mount points) with CRUD and scan actions.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useDocumentStores } from './hooks/useDocumentStores'
 import {
   DocumentStoresGrid,
@@ -64,14 +64,10 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
   } = useInTabDrilldown(initialStoreId)
   const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
-  useEffect(() => {
-    fetchStores()
-  }, [fetchStores])
-
-  // Navigating back to this tab refreshes the list in place (silent — no
-  // loading flip, which would unmount an in-place store detail).
+  // Navigating back to this tab refreshes the list in place (a cached list
+  // stays on screen, so an in-place store detail stays mounted).
   useOnTabActivated(() => {
-    void fetchStores({ silent: true })
+    void fetchStores()
   })
 
   const handleCreate = async (data: CreateDocumentStoreData) => {
@@ -149,7 +145,7 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
   }
 
   return (
-    <div className="qt-page-container text-foreground" style={bgStyle}>
+    <div className="qt-page-container qt-text" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
           <h1 className="qt-page-title">The Scriptorium</h1>
@@ -181,11 +177,14 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
         onSubmit={handleCreate}
       />
 
-      <EditDocumentStoreDialog
-        store={editStore}
-        onClose={() => setEditStore(null)}
-        onSubmit={handleUpdate}
-      />
+      {editStore && (
+        <EditDocumentStoreDialog
+          key={editStore.id}
+          store={editStore}
+          onClose={() => setEditStore(null)}
+          onSubmit={handleUpdate}
+        />
+      )}
 
       <DeleteDocumentStoreDialog
         open={deleteStoreId !== null}

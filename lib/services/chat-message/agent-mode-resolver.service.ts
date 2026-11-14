@@ -4,14 +4,33 @@
  * Handles resolving agent mode settings through the cascade:
  * Global ChatSettings → Character → Project → Chat
  *
+ * The cascade decides only whether Agent Mode is on. What it means — its
+ * flavour — comes from the responding character's kind
+ * (`lib/characters/kind.ts`): a roleplay character acts in the scene
+ * (`in-character`), an assistant researches and reports (`research`). The
+ * Brahma Console, the Help chat and the one-shot loops are assistants by
+ * construction and always pass `research`.
+ *
  * Also provides system prompt instructions for agent mode behavior.
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { ChatMetadata, Character, Project, ChatSettings } from '@/lib/schemas/types'
 import type { AgentModeSettings } from '@/lib/schemas/settings.types'
+import { characterKindPolicy, type AgentModeFlavor } from '@/lib/characters/kind'
 
 const logger = createServiceLogger('AgentModeResolverService')
+
+/**
+ * What the agent-mode instructions are for: a character's kind-derived flavor,
+ * or `'writing'` — the Brahma Console's Writing Assistant, whose final answer
+ * is the finished piece and nothing else.
+ */
+export type AgentInstructionKind = AgentModeFlavor | 'writing'
+
+/** The Writing Assistant's "finish now" instruction (forced final turn and stuck-loop nudge). */
+export const WRITING_FINISH_NOW =
+  'Stop researching and do not call any more tools except submit_final_response. Call the submit_final_response tool NOW with the finished piece and nothing else: no preamble, no notes, no account of what you read.'
 
 /**
  * Resolved agent mode state
@@ -23,6 +42,8 @@ export interface ResolvedAgentMode {
   maxTurns: number
   /** Where the enabled setting came from */
   enabledSource: 'global' | 'character' | 'project' | 'chat'
+  /** What Agent Mode means for the responding character (from its kind) */
+  flavor: AgentModeFlavor
 }
 
 /**
@@ -41,7 +62,7 @@ export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = {
  *
  * @param chat The chat metadata (may have agentModeEnabled)
  * @param project The project (may have defaultAgentModeEnabled)
- * @param character The primary character (may have defaultAgentModeEnabled)
+ * @param character The responding character (may have defaultAgentModeEnabled; its kind sets the flavour)
  * @param globalSettings The global chat settings (has agentModeSettings)
  * @returns The resolved agent mode state
  */
@@ -79,6 +100,7 @@ export function resolveAgentModeSetting(
     enabled,
     maxTurns,
     enabledSource,
+    flavor: characterKindPolicy(character).agentFlavor,
   }
 
   logger.info('[AgentMode] Resolved agent mode', {
@@ -90,15 +112,40 @@ export function resolveAgentModeSetting(
 }
 
 /**
- * Build the agent mode system prompt instructions
+ * Build the agent mode system prompt instructions.
  *
- * These instructions guide the LLM on how to behave in agent mode,
- * including when and how to use the submit_final_response tool.
+ * `research` guides the assistant's loop, including when and how to use the
+ * submit_final_response tool. `in-character` tells a roleplay character that
+ * its tools are things it does in the scene, and that the turn is still
+ * written in character, as prose; that flavour is never offered
+ * submit_final_response.
  *
  * @param maxTurns Maximum turns before forced final response
+ * @param flavor What Agent Mode means for this caller
  * @returns System prompt text to inject
  */
-export function buildAgentModeInstructions(maxTurns: number): string {
+export function buildAgentModeInstructions(maxTurns: number, flavor: AgentInstructionKind): string {
+  if (flavor === 'writing') {
+    return `
+## Agent Mode Instructions
+
+You may use tools iteratively to research the piece before you write it: search, read and query as much as the request calls for. You have up to **${maxTurns} tool iterations**; when you reach the limit you will be asked to finish at once.
+
+When the piece is ready, call the \`submit_final_response\` tool with the finished piece and nothing else in its \`response\` parameter — no preamble, no notes, no account of your research. If you do not call it, your last message without tool calls is taken as the piece, so it too must be the finished piece and nothing else. Do NOT call other tools after \`submit_final_response\`.
+`.trim()
+  }
+  if (flavor === 'in-character') {
+    return `
+## Acting in the scene
+
+You can use tools this turn, and you may use several in a row when the moment calls for it. Your tools are things you do in the story: looking something up, checking a record, moving an object, sending word to someone. Use them when you would, for your own reasons, and not because they are there.
+
+When you have done what you meant to do, write your turn as you always do: in character, in prose. Do not summarize what you did, report results as a list, or address anyone outside the story.
+
+You have up to **${maxTurns} tool steps** this turn.
+`.trim()
+  }
+
   return `
 ## Agent Mode Instructions
 
@@ -128,14 +175,22 @@ When you do submit, your final response should be polished and ready for the use
 }
 
 /**
- * Build the "force final" system message
+ * Build the "force final" message sent when the max turns limit is reached.
  *
- * This message is sent when the max turns limit is reached to prompt
- * the LLM to call submit_final_response with its best answer.
+ * `research` prompts the LLM to call submit_final_response with its best
+ * answer. `in-character` has no such tool: it tells the character to stop
+ * using tools and write the turn.
  *
- * @returns System message to force final response
+ * @param flavor What Agent Mode means for this caller
+ * @returns Message to force the final response
  */
-export function buildForceFinalMessage(): string {
+export function buildForceFinalMessage(flavor: AgentInstructionKind): string {
+  if (flavor === 'writing') {
+    return WRITING_FINISH_NOW
+  }
+  if (flavor === 'in-character') {
+    return `You have used every tool step you have this turn. Do not call any more tools. Write your turn now, in character and in prose, from what you have found and done.`
+  }
   return `You have reached the maximum number of agent turns. Please call the submit_final_response tool NOW with your best answer based on the information you have gathered. Do not call any other tools - only submit_final_response.`
 }
 

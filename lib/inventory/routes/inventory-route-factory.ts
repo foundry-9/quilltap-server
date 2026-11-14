@@ -225,7 +225,7 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
   }
 
   const GET = createContextParamsHandler<P>(
-    withActionDispatch<P>({ folders: handleGetFolders, archetypes: handleGetArchetypes }, handleList),
+    withActionDispatch<P>({ folders: handleGetFolders, archetypes: handleGetArchetypes, ...config.extraGetActions }, handleList),
   );
 
   const POST = createContextParamsHandler<P>(
@@ -236,6 +236,7 @@ export function createInventoryCollectionHandlers<P extends Params>(config: Inve
         'move-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('move', req, ctx, params)),
         'copy-items': withInventoryErrors((req: NextRequest, ctx: RequestContext, params: P) => handleFileItems('copy', req, ctx, params)),
         duplicate: withInventoryErrors(handleDuplicate),
+        ...config.extraPostActions,
       },
       withInventoryErrors(handleCreate),
     ),

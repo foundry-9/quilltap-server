@@ -17,6 +17,7 @@ import { parseCarinaQuery } from '@/lib/chat/carina-parser';
 import { runCarinaQuery } from './carina.service';
 import { postProsperoCarinaError } from '@/lib/services/prospero-notifications/writer';
 import type { MessageEvent } from '@/lib/schemas/types';
+import type { ToolEffect } from '@/lib/tools/effects';
 
 export interface CarinaMarkupLogLabels {
   /** Fills "Carina query detected in <detected>" (e.g. `'user message'`). */
@@ -60,6 +61,11 @@ export interface CarinaMarkupOptions {
    * hears it. A whisper answer is scoped to the asker and never delivered here.
    */
   onPublicAnswer?: (message: MessageEvent) => void;
+  /**
+   * The effect ceiling of the turn whose text carried the markup (assistant
+   * path). The answerer's tools run under it; see `runCarinaQuery`.
+   */
+  effectCeiling?: ToolEffect;
 }
 
 /**
@@ -93,6 +99,7 @@ export async function runCarinaMarkupQuery(opts: CarinaMarkupOptions): Promise<v
       askerParticipantId: opts.askerParticipantId,
       operatorInitiated: opts.operatorInitiated,
       onPosted: opts.onPosted,
+      effectCeiling: opts.effectCeiling,
     });
     if (carinaResult.ok) {
       // Splice a PUBLIC answer into the live turn; whispers stay scoped to the asker.

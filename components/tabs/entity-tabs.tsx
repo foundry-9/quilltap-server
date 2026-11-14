@@ -15,10 +15,27 @@ interface EntityTabsProps {
   persistToUrl?: boolean
   /** Extra class name(s) applied to the tab content panel wrapper */
   contentClassName?: string
+  /**
+   * Controlled mode: the owner holds the active tab (and any URL sync), and
+   * `onTabChange` reports clicks. `persistToUrl` is ignored when set.
+   */
+  activeTab?: string
+  onTabChange?: (tabId: string) => void
+  /** Accessible name of the tab strip. */
+  ariaLabel?: string
   children: (activeTab: string) => React.ReactNode
 }
 
-export function EntityTabs({ tabs, defaultTab, persistToUrl = true, contentClassName, children }: EntityTabsProps) {
+export function EntityTabs({
+  tabs,
+  defaultTab,
+  persistToUrl = true,
+  contentClassName,
+  activeTab: controlledTab,
+  onTabChange,
+  ariaLabel = 'Tabs',
+  children,
+}: EntityTabsProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -30,10 +47,13 @@ export function EntityTabs({ tabs, defaultTab, persistToUrl = true, contentClass
   const urlTab = tabFromUrl && tabs.some(t => t.id === tabFromUrl) ? tabFromUrl : fallbackTab
   const [localTab, setLocalTab] = useState(fallbackTab)
 
-  const activeTab = persistToUrl ? urlTab : localTab
+  const controlled = controlledTab !== undefined
+  const activeTab = controlled ? controlledTab : persistToUrl ? urlTab : localTab
 
   const handleTabChange = (tabId: string) => {
-    if (persistToUrl) {
+    if (controlled) {
+      onTabChange?.(tabId)
+    } else if (persistToUrl) {
       const params = new URLSearchParams(searchParams.toString())
       if (tabId === fallbackTab) {
         params.delete('tab')
@@ -53,13 +73,15 @@ export function EntityTabs({ tabs, defaultTab, persistToUrl = true, contentClass
     <div>
       {/* Tab Navigation */}
       <div className="mb-6">
-        <nav className="qt-tab-group" aria-label="Tabs">
+        {/* Scrolls sideways rather than wrapping or overflowing the page at phone width. */}
+        <nav className="qt-tab-group overflow-x-auto" aria-label={ariaLabel}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => handleTabChange(tab.id)}
-              className={`qt-tab ${activeTab === tab.id ? 'qt-tab-active' : ''}`}
+              className={`qt-tab flex-shrink-0 ${activeTab === tab.id ? 'qt-tab-active' : ''}`}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
             >
               <span className="qt-tab-icon">{tab.icon}</span>
               <span>{tab.label}</span>

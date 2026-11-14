@@ -4,7 +4,8 @@
  * Reads one letter from the CALLER's own mailbox, named by its bare file name.
  * The handler puts the `Mail/` folder on it and reads the caller's own vault
  * directly, so a character who keeps the Staff at arm's length (no
- * `systemTransparency`, hence no `doc_*` access to its own vault) can still
+ * `systemTransparency`, whose own `Mail/` folder is in the core the `doc_*`
+ * tools keep from it — lib/characters/vault/core-guard.ts) can still
  * read its post. The Zod schema is the single source of truth for both
  * runtime validation and the derived OpenAI-format `parameters`.
  */

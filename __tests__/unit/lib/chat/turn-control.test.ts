@@ -7,7 +7,6 @@ import {
   currentTurnStopSignal,
   isCurrentTurnStopped,
   takeRaisedHand,
-  hasActiveTurn,
   setHandRaised,
   stopActiveTurns,
   waitForEarlierTurns,
@@ -16,6 +15,9 @@ import {
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }))
+
+/** How many open streams the registry holds for a chat (lowering a hand is harmless). */
+const openStreams = (chatId: string): number => setHandRaised(chatId, false)
 
 /** A latch the test opens to let a registered stream finish. */
 function latch(): { promise: Promise<void>; open: () => void } {
@@ -34,19 +36,19 @@ describe('turn control', () => {
   it('registers a stream for its lifetime only', async () => {
     const gate = latch()
     const run = runWithTurnControl('chat-a', async () => {
-      expect(hasActiveTurn('chat-a')).toBe(true)
+      expect(openStreams('chat-a')).toBe(1)
       expect(currentTurnStopSignal()?.aborted).toBe(false)
       await gate.promise
       return 'done'
     })
     gate.open()
     await expect(run).resolves.toBe('done')
-    expect(hasActiveTurn('chat-a')).toBe(false)
+    expect(openStreams('chat-a')).toBe(0)
   })
 
   it('unregisters a stream that throws', async () => {
     await expect(runWithTurnControl('chat-b', async () => { throw new Error('boom') })).rejects.toThrow('boom')
-    expect(hasActiveTurn('chat-b')).toBe(false)
+    expect(openStreams('chat-b')).toBe(0)
   })
 
   it('hands a raised hand to the first turn that asks, and only once', async () => {

@@ -16,7 +16,7 @@ jest.mock('@/lib/instance-settings', () => ({
   getGeneralMountPointId: jest.fn(async () => 'general-mount'),
 }))
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+jest.mock('@/lib/wardrobe/vault-writes', () => ({
   resolveWardrobeMount: jest.fn(),
   updateMountWardrobeItem: jest.fn(),
 }))

@@ -6,6 +6,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm';
+import { REASONING_HEADROOM_TOKENS, withReasoningHeadroom } from '@/lib/llm/reasoning-headroom';
 import { profileParams } from '@/lib/llm/cheap-llm';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
@@ -17,6 +18,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
 import { parseLLMJson } from '@/lib/llm/llm-json';
+import { isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason';
 import {
   describeGeneratedProperties,
   parseGeneratedProperties,
@@ -29,6 +31,7 @@ import {
   CONVERSATIONAL_VOICE_DIRECTION,
   TRUST_SAFEGUARDS_DIRECTION,
   GATED_COMPANION_TRUST_DISPOSITION,
+  generatorDirectionFor,
   EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
@@ -39,6 +42,7 @@ import {
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { DEFAULT_CHARACTER_KIND, resolveCharacterKind, type CharacterKind } from '@/lib/characters/kind';
 
 // ============================================================================
 // Types
@@ -84,7 +88,6 @@ export interface WizardRequest {
 }
 
 export interface GeneratedPhysicalDescription {
-  name: string;
   headAndShouldersPrompt: string;
   shortPrompt: string;
   mediumPrompt: string;
@@ -211,8 +214,16 @@ ${EXAMPLE_DIALOGUE_COVERAGE}`,
 - Refer to the person being addressed as {{user}} if a direct reference is needed.
 
 Respond with ONLY the message, no explanation.`,
+};
 
-  systemPrompt: `${PROMPT_SEMANTICS}
+/**
+ * The default-system-prompt meta-prompt, for a character of the given kind.
+ * The kind-specific direction (stakes for a roleplay character, the work for
+ * an assistant) comes from `generatorDirectionFor`, between the trust
+ * safeguards and the companion gate.
+ */
+export function buildSystemPromptFieldPrompt(kind: CharacterKind): string {
+  return `${PROMPT_SEMANTICS}
 
 Write a system prompt that instructs an AI how to roleplay as this character. This will serve as the default system prompt (characters can have multiple named system prompts for different interaction styles or different models, but this one should be a comprehensive general-purpose default).
 
@@ -230,10 +241,21 @@ ${CONVERSATIONAL_VOICE_DIRECTION}
 
 ${TRUST_SAFEGUARDS_DIRECTION}
 
+${generatorDirectionFor(kind)}
+
 ${GATED_COMPANION_TRUST_DISPOSITION}
 
-Keep it under 600 words but comprehensive.`,
-};
+Keep it under 600 words but comprehensive.`;
+}
+
+/**
+ * The meta-prompt for one Wizard field. `systemPrompt` depends on the
+ * character's kind; every other field is kind-free.
+ */
+export function wizardFieldPrompt(field: string, kind: CharacterKind): string {
+  return field === 'systemPrompt' ? buildSystemPromptFieldPrompt(kind) : FIELD_PROMPTS[field];
+}
+
 
 export const PROPERTIES_PROMPT = `${PROPERTIES_SEMANTICS}
 
@@ -241,11 +263,12 @@ Determine this character's PROPERTIES from the context provided.
 
 Respond with ONLY valid JSON, no markdown fences:
 {
-  "pronouns": { "subject": "she", "object": "her", "possessive": "hers" },
+  "pronouns": { "subject": "she", "object": "her", "possessive": "her" },
   "aliases": ["Nickname", "Alternate name"]
 }
 
 Rules:
+- "possessive" is the form that comes before a noun ("her book", "their book"), never the one that stands alone ("hers", "theirs").
 - If the context does not clearly indicate the character's pronouns, set "pronouns" to JSON null. Never invent placeholders like "unknown", "n/a", or empty strings.
 - "aliases" lists only nicknames or alternate names the context actually supports — names other people call the character. Do NOT include the character's primary name, and do NOT include their title/epithet (that is a separate private field). Use an empty array when there are none.`;
 
@@ -395,6 +418,43 @@ ${existingFields.join('\n')}
 type LLMProvider = ReturnType<typeof createLLMProvider> extends Promise<infer T> ? T : never;
 
 /**
+ * Room added to every Wizard call's completion budget for the model's own
+ * reasoning. Current reasoning models think by default when a request names
+ * no thinking setting (Claude Sonnet 5.5, Opus 5.5, Haiku 5.5) and the thinking
+ * counts against `max_tokens`, so a 500-token field budget could be spent
+ * before the answer began: fields came back cut off mid-sentence or empty
+ * ("No response from model"). Each field's length is set by its prompt; the
+ * per-field numbers are the answer's room and this is the thinking's.
+ */
+export const WIZARD_REASONING_HEADROOM = REASONING_HEADROOM_TOKENS;
+
+/** The `max_tokens` to send for a Wizard call whose answer needs `answerTokens`. */
+export function wizardCompletionBudget(answerTokens: number): number {
+  return withReasoningHeadroom(answerTokens);
+}
+
+/**
+ * The Wizard's answer, or a throw that says why there is none. A reply cut off
+ * by the token ceiling is a failure, not a field: storing half an identity as
+ * if it were whole is worse than reporting the field as not generated.
+ */
+export function requireCompleteWizardAnswer(
+  response: { content?: string | null; finishReason?: string | null } | null | undefined,
+  what: string,
+): string {
+  const finishReason = response?.finishReason ?? null;
+  if (isTruncatedFinishReason(finishReason)) {
+    throw new Error(`The model ran out of room before finishing the ${what} (finish reason: ${finishReason})`);
+  }
+  if (!response?.content) {
+    throw new Error(
+      finishReason ? `No response from model (finish reason: ${finishReason})` : 'No response from model',
+    );
+  }
+  return response.content;
+}
+
+/**
  * Generate a single field using the LLM
  */
 export async function generateField(
@@ -416,11 +476,12 @@ export async function generateField(
 
   const startTime = Date.now();
 
+  const budget = wizardCompletionBudget(maxTokens);
   const response = await provider.sendMessage(
     {
       model: modelName,
       messages,
-      maxTokens,
+      maxTokens: budget,
       temperature: 0.8,
       profileParameters,
     },
@@ -429,9 +490,16 @@ export async function generateField(
 
   const durationMs = Date.now() - startTime;
 
-  if (!response?.content) {
-    throw new Error('No response from model');
-  }
+  logger.debug('[CharacterWizard] Field call returned', {
+    modelName,
+    answerTokens: maxTokens,
+    budget,
+    finishReason: response?.finishReason ?? null,
+    completionTokens: response?.usage?.completionTokens,
+    contentLength: response?.content?.length ?? 0,
+  });
+
+  const content = requireCompleteWizardAnswer(response, 'field');
 
   // Log the wizard LLM call if userId is available (fire and forget)
   if (userId && profileProvider) {
@@ -447,11 +515,12 @@ export async function generateField(
           { role: 'user', content: fieldPrompt },
         ],
         temperature: 0.8,
-        maxTokens,
+        maxTokens: budget,
       },
       response: {
-        content: response.content,
+        content,
         error: undefined,
+        finishReason: response.finishReason ?? null,
       },
       usage: response.usage,
       durationMs,
@@ -462,7 +531,7 @@ export async function generateField(
     });
   }
 
-  return response.content.trim();
+  return content.trim();
 }
 
 const MAX_VISION_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -533,7 +602,7 @@ async function runGenerateImageDescription(
     {
       model: visionProfile.modelName,
       messages,
-      maxTokens: 1000,
+      maxTokens: wizardCompletionBudget(1000),
       temperature: 0.7,
       profileParameters: profileParams(visionProfile),
     },
@@ -542,9 +611,7 @@ async function runGenerateImageDescription(
 
   const durationMs = Date.now() - startTime;
 
-  if (!response?.content) {
-    throw new Error('No response from vision model');
-  }
+  const description = requireCompleteWizardAnswer(response, 'image description');
   // Log the vision LLM call if userId is available (fire and forget)
   if (userId) {
     logLLMCall({
@@ -563,11 +630,12 @@ async function runGenerateImageDescription(
           },
         ],
         temperature: 0.7,
-        maxTokens: 1000,
+        maxTokens: wizardCompletionBudget(1000),
       },
       response: {
-        content: response.content,
+        content: description,
         error: undefined,
+        finishReason: response.finishReason ?? null,
       },
       usage: response.usage,
       durationMs,
@@ -578,7 +646,7 @@ async function runGenerateImageDescription(
     });
   }
 
-  return response.content.trim();
+  return description.trim();
 }
 
 /**
@@ -594,9 +662,7 @@ export async function generatePhysicalDescriptions(
   profileProvider?: string,
   profileParameters?: Record<string, unknown>
 ): Promise<GeneratedPhysicalDescription> {
-  const results: Partial<GeneratedPhysicalDescription> = {
-    name: 'AI Generated',
-  };
+  const results: Partial<GeneratedPhysicalDescription> = {};
 
   for (const [level, prompt] of Object.entries(PHYSICAL_DESCRIPTION_PROMPTS)) {
     const maxTokens = level === 'full' ? 1500 : level === 'complete' ? 400 : 300;
@@ -700,6 +766,49 @@ export async function generateProperties(
 // ============================================================================
 // Main Service Function
 // ============================================================================
+
+/**
+ * The completion budget for one Wizard text field. A system prompt asks for up
+ * to 600 words across voice, listening, the trust safeguards and the kind's
+ * direction; at the old shared 1000-token cap a reasoning model spent part of
+ * the budget thinking and the prompt came back cut off mid-sentence.
+ */
+export function wizardFieldMaxTokens(field: string): number {
+  if (field === 'systemPrompt') return 2500;
+  if (field === 'exampleDialogues' || field === 'firstMessage') return 1000;
+  if (field === 'scenarios') return 4000;
+  return 500;
+}
+
+/**
+ * The kind of the character the Wizard is writing for: the stored kind of the
+ * character being edited, or the default (roleplay) for a new one. The Wizard
+ * never guesses a kind from the material — staff who serve the operator's
+ * household read as "assistants" to a model, and that is the failure the
+ * kind exists to prevent. A character whose vault cannot be read is written
+ * for the default, with a warning.
+ */
+async function resolveWizardCharacterKind(
+  request: WizardRequest,
+  repos: RepositoryContainer
+): Promise<CharacterKind> {
+  if (!request.characterId) {
+    logger.debug('[CharacterWizard] New character; writing for the default kind', { kind: DEFAULT_CHARACTER_KIND });
+    return DEFAULT_CHARACTER_KIND;
+  }
+  try {
+    const character = await repos.characters.findById(request.characterId);
+    const kind = resolveCharacterKind(character);
+    logger.debug('[CharacterWizard] Writing for the character\'s kind', { characterId: request.characterId, kind });
+    return kind;
+  } catch (error) {
+    logger.warn('[CharacterWizard] Could not read the character; writing for the default kind', {
+      characterId: request.characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return DEFAULT_CHARACTER_KIND;
+  }
+}
 
 /**
  * Run the AI character wizard
@@ -850,6 +959,8 @@ export async function runCharacterWizard(
     documentContent
   );
 
+  const characterKind = await resolveWizardCharacterKind(request, repos);
+
   // Generate remaining fields (excluding 'name' which was already handled)
   for (const field of request.fieldsToGenerate) {
     if (field === 'name') continue; // Already handled above
@@ -889,11 +1000,8 @@ export async function runCharacterWizard(
           profileParams(primaryProfile)
         );
       } else {
-        const fieldPrompt = FIELD_PROMPTS[field];
-        const maxTokens =
-          field === 'exampleDialogues' || field === 'systemPrompt' || field === 'firstMessage'
-            ? 1000
-            : field === 'scenarios' ? 4000 : 500;
+        const fieldPrompt = wizardFieldPrompt(field, characterKind);
+        const maxTokens = wizardFieldMaxTokens(field);
         const rawContent = await generateField(
           primaryProvider,
           primaryApiKey,
@@ -1117,6 +1225,8 @@ export async function runCharacterWizardStreaming(
       documentContent
     );
 
+    const characterKind = await resolveWizardCharacterKind(request, repos);
+
     // Generate remaining fields (excluding 'name' which was already handled)
     for (const field of request.fieldsToGenerate) {
       if (field === 'name') continue;
@@ -1168,11 +1278,8 @@ export async function runCharacterWizardStreaming(
             snippet: describeGeneratedProperties(props, 'no pronouns found'),
           });
         } else {
-          const fieldPrompt = FIELD_PROMPTS[field];
-          const maxTokens =
-            field === 'exampleDialogues' || field === 'systemPrompt' || field === 'firstMessage'
-              ? 1000
-              : field === 'scenarios' ? 4000 : 500;
+          const fieldPrompt = wizardFieldPrompt(field, characterKind);
+          const maxTokens = wizardFieldMaxTokens(field);
           const rawContent = await generateField(
             primaryProvider,
             primaryApiKey,

@@ -14,16 +14,27 @@
 
 import { z } from 'zod'
 
-/** The schema under any `.default()` / `.prefault()` wrappers. */
+type WrapperDef = { type: string; innerType?: z.ZodType }
+
+/**
+ * The schema with every `.default()` / `.prefault()` removed, including one
+ * sitting under an `.optional()` or `.nullable()` (`z.number().default(256)
+ * .optional()` still hands back 256 for an absent key in Zod 4). The optional
+ * and nullable wrappers themselves are kept.
+ */
 function withoutDefault(schema: z.ZodType): z.ZodType {
-  let current = schema
-  for (;;) {
-    const def = (current as unknown as { _zod: { def: { type: string; innerType?: z.ZodType } } })._zod.def
-    if ((def.type === 'default' || def.type === 'prefault') && def.innerType) {
-      current = def.innerType
-      continue
-    }
-    return current
+  const def = (schema as unknown as { _zod: { def: WrapperDef } })._zod.def
+  if (!def.innerType) return schema
+  switch (def.type) {
+    case 'default':
+    case 'prefault':
+      return withoutDefault(def.innerType)
+    case 'optional':
+      return withoutDefault(def.innerType).optional()
+    case 'nullable':
+      return withoutDefault(def.innerType).nullable()
+    default:
+      return schema
   }
 }
 

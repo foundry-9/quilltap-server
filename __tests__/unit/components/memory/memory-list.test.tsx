@@ -53,6 +53,7 @@ describe('MemoryList', () => {
       rendered = render(<MemoryList {...props} />, { wrapper: createQueryWrapper().wrapper })
       await flushPromises()
     })
+    await waitFor(() => expect(screen.queryByText(/loading memories/i)).toBeNull())
 
     return rendered!
   }
@@ -66,14 +67,10 @@ describe('MemoryList', () => {
   })
 
   it('shows loading text before rendering the list header', async () => {
-    render(<MemoryList characterId={mockCharacterId} />)
+    render(<MemoryList characterId={mockCharacterId} />, { wrapper: createQueryWrapper().wrapper })
     expect(screen.getByText(/loading memories/i)).toBeInTheDocument()
 
-    await act(async () => {
-      await flushPromises()
-    })
-
-    expect(screen.getByText(/Memories \(0\)/i)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText(/Memories \(0\)/i)).toBeInTheDocument())
   })
 
   it('fetches memories and displays the count', async () => {
@@ -113,7 +110,7 @@ describe('MemoryList', () => {
       expect(screen.getByText(/Memories \(2\)/i)).toBeInTheDocument()
     })
 
-    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/v1/memories?characterId=${mockCharacterId}&limit=`), undefined)
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/v1/memories?characterId=${mockCharacterId}&limit=`), expect.anything())
   })
 
   it('shows an error message if the fetch fails', async () => {
@@ -177,5 +174,31 @@ describe('MemoryList', () => {
     // The list's own "Keystones only" filter is a checkbox too; count the dialog's.
     const dialog = screen.getByText(/memory maintenance/i).closest('.qt-dialog') as HTMLElement
     expect(within(dialog).getAllByRole('checkbox')).toHaveLength(4)
+  })
+
+  it('a slow answer for an older search term never replaces a newer one', async () => {
+    const row = (id: string, summary: string) => ({
+      id, characterId: mockCharacterId, content: summary, summary, keywords: [], tags: [],
+      importance: 0.5, source: 'AUTO', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    })
+    mockFetch.mockImplementation(async (url: string) => {
+      const search = new URL(url, 'http://localhost').searchParams.get('search')
+      if (search === 'a') {
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        return createMockResponse({ memories: [row('old', 'Stale answer')], totalCount: 1 })
+      }
+      if (search === 'ab') return createMockResponse({ memories: [row('new', 'Fresh answer')], totalCount: 1 })
+      return createMockResponse({ memories: [], totalCount: 0 })
+    })
+    await renderMemoryList()
+
+    const searchInput = screen.getByPlaceholderText(/search memories/i)
+    fireEvent.change(searchInput, { target: { value: 'a' } })
+    fireEvent.change(searchInput, { target: { value: 'ab' } })
+
+    await waitFor(() => expect(screen.getAllByText('Fresh answer').length).toBeGreaterThan(0))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)) })
+    expect(screen.queryAllByText('Stale answer')).toHaveLength(0)
+    expect(screen.getAllByText('Fresh answer').length).toBeGreaterThan(0)
   })
 })

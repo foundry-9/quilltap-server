@@ -38,6 +38,7 @@ import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-inde
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
 import {
+  clearMountLinks,
   gcOrphanedFileRow,
   reapOrphanedStoreChildren,
   type OrphanedStoreChildrenSwept,
@@ -847,9 +848,9 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
   // ============================================================================
 
   /**
-   * Delete a link. Cascades to chunks (FK ON DELETE CASCADE). If the link
-   * was the last reference to its file, also deletes the file row, which
-   * cascades to doc_mount_documents and doc_mount_blobs via FK.
+   * Delete a link and its chunks. If the link was the last reference to its
+   * file, also deletes the file row and its document/blob payload
+   * (`gcOrphanedFileRow`). Nothing here relies on a foreign-key cascade.
    *
    * Returns the fileId of the deleted link (so callers can react), and a
    * boolean indicating whether the underlying file was garbage-collected.
@@ -868,8 +869,11 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
         }
 
         const tx = db.transaction(() => {
-          // Chunks cascade via FK ON DELETE CASCADE, but invalidate the
-          // mount-chunk cache for this mount before the row vanishes.
+          // Chunks are deleted explicitly (#189): the ON DELETE CASCADE this
+          // used to rely on exists only on tables the pre-4.5 migration
+          // built, so on schema-translator tables a deleted document's chunks
+          // and embeddings kept answering semantic search.
+          dropChunksForLinks(db, [linkId]);
           db.prepare('DELETE FROM doc_mount_file_links WHERE id = ?').run(linkId);
 
           // A group of one is not a hard link any more — unlinking the last
@@ -903,51 +907,21 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
   }
 
   /**
-   * Bulk delete every link for a mount point, running GC against the
-   * underlying file rows. Returns count of links deleted and count of
-   * files garbage-collected.
+   * Bulk delete every link for a mount point with its chunks, running GC
+   * against the underlying file rows (see `clearMountLinks`). Returns count of
+   * links deleted and count of files garbage-collected.
    */
   async deleteByMountPointId(mountPointId: string): Promise<{ linksDeleted: number; filesGC: number }> {
     return this.withRawDb(
       { linksDeleted: 0, filesGC: 0 },
       async (db) => {
-        // Snapshot the affected fileIds so we can ref-count them after the
-        // bulk link delete.
-        const affectedFileIds = db.prepare(
-          'SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?'
-        ).all(mountPointId) as { fileId: string }[];
-
-        let linksDeleted = 0;
-        let filesGC = 0;
-
-        const tx = db.transaction(() => {
-          const deleteRes = db.prepare(
-            'DELETE FROM doc_mount_file_links WHERE mountPointId = ?'
-          ).run(mountPointId);
-          linksDeleted = deleteRes.changes;
-
-          if (affectedFileIds.length > 0) {
-            // Any file whose link count is now 0 gets dropped. Documents/
-            // blobs cascade via FK.
-            const placeholders = affectedFileIds.map(() => '?').join(',');
-            const orphaned = db.prepare(
-              `SELECT f.id FROM doc_mount_files f
-               WHERE f.id IN (${placeholders})
-                 AND NOT EXISTS (
-                   SELECT 1 FROM doc_mount_file_links l WHERE l.fileId = f.id
-                 )`
-            ).all(...affectedFileIds.map(f => f.fileId)) as { id: string }[];
-
-            for (const f of orphaned) {
-              db.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(f.id);
-              filesGC += 1;
-            }
-          }
-        });
-
-        tx();
+        // Chunks, links, and only the content rows no other store still
+        // links (#191) — never "every file this mount links", since content
+        // is shared across stores by design.
+        const cleared = db.transaction(() => clearMountLinks(db, mountPointId))();
         invalidateMountPoint(mountPointId);
-        return { linksDeleted, filesGC };
+        logger.debug('[DocMountFileLinks] Cleared mount point links', { mountPointId, ...cleared });
+        return { linksDeleted: cleared.links, filesGC: cleared.files };
       },
       'Error deleting file links by mount point ID',
       { mountPointId }
@@ -1078,7 +1052,9 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
       // index means a second write to the same path — in any casing —
       // overwrites the existing link's metadata in place rather than
       // creating a duplicate. Case-preserving: the existing row keeps its
-      // relativePath/fileName casing.
+      // relativePath/fileName casing. NOCASE folds ASCII only; JS code that
+      // must agree with this lookup compares through `foldStorePath`
+      // (`lib/mount-index/store-path-fold.ts`), never `toLowerCase()` (#224).
       const existingLink = db.prepare(
         `SELECT id, fileId, linkGroupId FROM doc_mount_file_links
          WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
@@ -1248,7 +1224,8 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
       }
 
       // Case-insensitive, case-preserving upsert: a write to `NOTES.md`
-      // updates the row stored as `notes.md` and keeps its casing.
+      // updates the row stored as `notes.md` and keeps its casing. ASCII-only
+      // (NOCASE); the JS twin of this rule is `foldStorePath` (#224).
       const existingLink = db.prepare(
         `SELECT id, fileId, linkGroupId FROM doc_mount_file_links
          WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
@@ -1529,10 +1506,10 @@ export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<D
    */
   async sweepOrphanedStoreChildren(): Promise<OrphanedStoreChildrenSwept> {
     return this.withRawDb(
-      { links: 0, folders: 0, documents: 0 },
+      { links: 0, folders: 0, documents: 0, chunks: 0 },
       async (db) => {
         const swept = reapOrphanedStoreChildren(db);
-        if (swept.links > 0 || swept.folders > 0 || swept.documents > 0) {
+        if (swept.links > 0 || swept.folders > 0 || swept.documents > 0 || swept.chunks > 0) {
           logger.info('Swept orphaned doc-store children', swept);
         } else {
           logger.debug('Swept orphaned doc-store children (none found)');

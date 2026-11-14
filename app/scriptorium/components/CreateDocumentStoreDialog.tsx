@@ -6,10 +6,8 @@
  * Modal dialog for creating a new document store (mount point).
  */
 
-import { useId, useRef, useState } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { createPortal } from 'react-dom'
+import { useId, useState } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import { DirectoryPicker } from './DirectoryPicker'
 import type { CreateDocumentStoreData } from '../types'
 
@@ -24,11 +22,6 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
   const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>('filesystem')
   const [storeType, setStoreType] = useState<'documents' | 'character'>('documents')
   const [basePath, setBasePath] = useState('')
-
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, open)
-  useEscapeKey(onClose, open)
 
   if (!open) return null
 
@@ -60,148 +53,145 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
     onSubmit(data)
   }
 
-  return createPortal(
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-lg p-6"
-      >
-        <h3 id={titleId} className="qt-dialog-title mb-4">Add Document Store</h3>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label htmlFor={`${fieldId}-f0`} className="qt-label mb-2 block">Name</label>
-            <input
-              id={`${fieldId}-f0`}
-              type="text"
-              name="name"
-              required
-              maxLength={200}
-              placeholder="My Obsidian Vault"
-              className="qt-input"
-            />
-          </div>
+  return (
+    <BaseModal
+      isOpen={open}
+      onClose={onClose}
+      headerless
+      className="p-6"
+      bodyClassName="overflow-y-auto"
+     
+      closeOnClickOutside={false}
+    >
+      <ModalTitle className="qt-dialog-title mb-4">Add Document Store</ModalTitle>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor={`${fieldId}-f0`} className="qt-label mb-2 block">Name</label>
+          <input
+            id={`${fieldId}-f0`}
+            type="text"
+            name="name"
+            required
+            maxLength={200}
+            placeholder="My Obsidian Vault"
+            className="qt-input"
+          />
+        </div>
 
-          <div className="mb-4">
-            <label htmlFor={`${fieldId}-f1`} className="qt-label mb-2 block">Contents</label>
-            <select
-              id={`${fieldId}-f1`}
-              name="storeType"
-              value={storeType}
-              onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
-              className="qt-input"
-            >
-              <option value="documents">Documents — general notes, references, research</option>
-              <option value="character">Character — character sheets and related material</option>
-            </select>
-          </div>
+        <div className="mb-4">
+          <label htmlFor={`${fieldId}-f1`} className="qt-label mb-2 block">Contents</label>
+          <select
+            id={`${fieldId}-f1`}
+            name="storeType"
+            value={storeType}
+            onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
+            className="qt-input"
+          >
+            <option value="documents">Documents — general notes, references, research</option>
+            <option value="character">Character — character sheets and related material</option>
+          </select>
+        </div>
 
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Type</label>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="mountType"
-                  value="filesystem"
-                  checked={mountType === 'filesystem'}
-                  onChange={() => setMountType('filesystem')}
-                  className="qt-radio"
-                />
-                <span className="qt-body">Filesystem — read/write documents on disk</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="mountType"
-                  value="obsidian"
-                  checked={mountType === 'obsidian'}
-                  onChange={() => setMountType('obsidian')}
-                  className="qt-radio"
-                />
-                <span className="qt-body">Obsidian Vault — filesystem with Obsidian-friendly defaults</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="mountType"
-                  value="database"
-                  checked={mountType === 'database'}
-                  onChange={() => setMountType('database')}
-                  className="qt-radio"
-                />
-                <span className="qt-body">Database-backed — everything stays encrypted inside Quilltap</span>
-              </label>
-            </div>
-          </div>
-
-          {!isDatabaseBacked && (
-            <div className="mb-4">
-              <label className="qt-label mb-2 block">Path</label>
-              <DirectoryPicker
-                value={basePath}
-                onChange={setBasePath}
-                required
-                placeholder="/path/to/documents"
+        <div className="mb-4">
+          <label className="qt-label mb-2 block">Type</label>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="mountType"
+                value="filesystem"
+                checked={mountType === 'filesystem'}
+                onChange={() => setMountType('filesystem')}
+                className="qt-radio"
               />
-              <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
-            </div>
-          )}
-
-          {isDatabaseBacked && (
-            <div className="mb-4 qt-callout">
-              <p className="qt-body">
-                Database-backed stores live entirely inside Quilltap&apos;s encrypted mount-index database — no
-                filesystem path required. Documents and blobs you upload are included in the standard Quilltap backups.
-              </p>
-            </div>
-          )}
-
-          {!isDatabaseBacked && (
-            <>
-              <div className="mb-4">
-                <label htmlFor={`${fieldId}-f2`} className="qt-label mb-2 block">Include Patterns (optional)</label>
-                <input
-                  id={`${fieldId}-f2`}
-                  type="text"
-                  name="includePatterns"
-                  placeholder="*.md, *.txt, *.pdf, *.docx"
-                  defaultValue="*.md, *.txt, *.pdf, *.docx"
-                  className="qt-input"
-                />
-                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
-              </div>
-
-              <div className="mb-4">
-                <label htmlFor={`${fieldId}-f3`} className="qt-label mb-2 block">Exclude Patterns (optional)</label>
-                <input
-                  id={`${fieldId}-f3`}
-                  type="text"
-                  name="excludePatterns"
-                  placeholder=".git, node_modules, .obsidian, .trash"
-                  defaultValue=".git, node_modules, .obsidian, .trash"
-                  className="qt-input"
-                />
-                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
-              </div>
-            </>
-          )}
-
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onClose} className="qt-button-secondary">
-              Cancel
-            </button>
-            <button type="submit" className="qt-button-primary">
-              Add Store
-            </button>
+              <span className="qt-body">Filesystem — read/write documents on disk</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="mountType"
+                value="obsidian"
+                checked={mountType === 'obsidian'}
+                onChange={() => setMountType('obsidian')}
+                className="qt-radio"
+              />
+              <span className="qt-body">Obsidian Vault — filesystem with Obsidian-friendly defaults</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="mountType"
+                value="database"
+                checked={mountType === 'database'}
+                onChange={() => setMountType('database')}
+                className="qt-radio"
+              />
+              <span className="qt-body">Database-backed — everything stays encrypted inside Quilltap</span>
+            </label>
           </div>
-        </form>
-      </div>
-    </div>,
-    document.body
+        </div>
+
+        {!isDatabaseBacked && (
+          <div className="mb-4">
+            <label className="qt-label mb-2 block">Path</label>
+            <DirectoryPicker
+              value={basePath}
+              onChange={setBasePath}
+              required
+              placeholder="/path/to/documents"
+            />
+            <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
+          </div>
+        )}
+
+        {isDatabaseBacked && (
+          <div className="mb-4 qt-callout">
+            <p className="qt-body">
+              Database-backed stores live entirely inside Quilltap&apos;s encrypted mount-index database — no
+              filesystem path required. Documents and blobs you upload are included in the standard Quilltap backups.
+            </p>
+          </div>
+        )}
+
+        {!isDatabaseBacked && (
+          <>
+            <div className="mb-4">
+              <label htmlFor={`${fieldId}-f2`} className="qt-label mb-2 block">Include Patterns (optional)</label>
+              <input
+                id={`${fieldId}-f2`}
+                type="text"
+                name="includePatterns"
+                placeholder="*.md, *.txt, *.pdf, *.docx"
+                defaultValue="*.md, *.txt, *.pdf, *.docx"
+                className="qt-input"
+              />
+              <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor={`${fieldId}-f3`} className="qt-label mb-2 block">Exclude Patterns (optional)</label>
+              <input
+                id={`${fieldId}-f3`}
+                type="text"
+                name="excludePatterns"
+                placeholder=".git, node_modules, .obsidian, .trash"
+                defaultValue=".git, node_modules, .obsidian, .trash"
+                className="qt-input"
+              />
+              <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onClose} className="qt-button-secondary">
+            Cancel
+          </button>
+          <button type="submit" className="qt-button-primary">
+            Add Store
+          </button>
+        </div>
+      </form>
+    </BaseModal>
   )
 }

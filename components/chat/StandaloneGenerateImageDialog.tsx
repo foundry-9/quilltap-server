@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useRef, useId } from 'react'
+import { useState, useRef } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { useEntitySearch } from './useEntitySearch'
 import { EntitySearchDropdown } from './EntitySearchDropdown'
@@ -126,176 +125,163 @@ export default function StandaloneGenerateImageDialog({
     }
   }
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-
-  useEscapeKey(onClose, isOpen && !isGenerating)
-
   if (!isOpen) return null
 
   // Get current chat participants for quick buttons
   const characterParticipants = participants.filter(p => p.type === 'CHARACTER' && p.controlledBy !== 'user')
   const userCharacterParticipant = participants.find(p => p.controlledBy === 'user')
 
+  const footer = (
+    <>
+      <div className="flex items-center gap-2">
+        <label htmlFor="image-count" className="text-sm qt-text-secondary">
+          Images:
+        </label>
+        <select
+          id="image-count"
+          value={imageCount}
+          onChange={(e) => setImageCount(Number(e.target.value))}
+          className="qt-input w-16"
+          disabled={isGenerating}
+        >
+          <option value={1}>1</option>
+          <option value={2}>2</option>
+          <option value={3}>3</option>
+          <option value={4}>4</option>
+        </select>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={onClose}
+          className="qt-button qt-button-secondary"
+          disabled={isGenerating}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleGenerate}
+          disabled={!selectedProfileId || !prompt.trim() || isGenerating}
+          className="qt-button qt-button-primary"
+        >
+          {isGenerating ? (
+            <>
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Generating...
+            </>
+          ) : (
+            <>
+              <Icon name="image" className="w-4 h-4" />
+              Generate Image
+            </>
+          )}
+        </button>
+      </div>
+    </>
+  )
+
   return (
-    <div className="qt-dialog-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog max-w-3xl max-h-[90vh] flex flex-col"
-      >
-        {/* Header */}
-        <div className="qt-dialog-header flex items-center justify-between">
-          <h2 id={titleId} className="qt-dialog-title">
-            Generate Image
-          </h2>
-          <button
-            aria-label="Close"
-            onClick={onClose}
-            className="qt-button qt-button-ghost p-2"
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Generate Image"
+      maxWidth="3xl"
+      busy={isGenerating}
+      closeOnClickOutside={false}
+      footerClassName="qt-dialog-footer flex items-center justify-between"
+      headerActions={
+        <button
+          aria-label="Close"
+          onClick={onClose}
+          className="qt-button qt-button-ghost p-2"
+          disabled={isGenerating}
+        >
+          <Icon name="close" className="w-6 h-6" />
+        </button>
+      }
+      footer={footer}
+    >
+      {/* Image Profile Picker */}
+      <div className="mb-4">
+        <label className="qt-label mb-2">
+          Image Profile
+        </label>
+        <ImageProfilePicker
+          value={selectedProfileId}
+          onChange={setSelectedProfileId}
+          preselectDefault
+          disabled={isGenerating}
+        />
+      </div>
+
+      <div className="flex gap-4">
+        {/* Left side - Quick buttons */}
+        <div className="w-48 flex-shrink-0 space-y-2">
+          <div className="qt-text-small font-medium mb-3">
+            Quick Insert
+          </div>
+
+          {/* Me button */}
+          {userCharacterParticipant?.character && (
+            <button
+              onClick={() => insertPlaceholder('me')}
+              className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 qt-text-brand rounded border qt-border-primary/30 transition-colors"
+              disabled={isGenerating}
+            >
+              <div className="font-medium">{userCharacterParticipant.character.name}</div>
+              <div className="text-xs opacity-75">{'{{me}}'}</div>
+            </button>
+          )}
+
+          {/* Character buttons */}
+          {characterParticipants.map(p => (
+            p.character && (
+              <button
+                key={p.id}
+                onClick={() => insertPlaceholder(p.character!.name)}
+                className="w-full px-3 py-2 text-left text-sm qt-bg-accent hover:qt-bg-accent/80 qt-text-on-accent rounded border border-accent transition-colors"
+                disabled={isGenerating}
+              >
+                <div className="font-medium truncate">{p.character.name}</div>
+                <div className="text-xs opacity-75">{`{{${p.character.name}}}`}</div>
+              </button>
+            )
+          ))}
+
+          {/* Search dropdown */}
+          <EntitySearchDropdown
+            isDropdownOpen={entitySearch.isDropdownOpen}
+            setIsDropdownOpen={entitySearch.setIsDropdownOpen}
+            searchTerm={entitySearch.searchTerm}
+            setSearchTerm={entitySearch.setSearchTerm}
+            filteredEntities={entitySearch.filteredEntities}
+            onEntitySelect={(entity) => entitySearch.handleEntitySelect(entity, insertPlaceholder)}
+            dropdownRef={entitySearch.dropdownRef}
             disabled={isGenerating}
-          >
-            <Icon name="close" className="w-6 h-6" />
-          </button>
+          />
         </div>
 
-        {/* Content */}
-        <div className="qt-dialog-body flex-1 overflow-y-auto">
-          {/* Image Profile Picker */}
-          <div className="mb-4">
-            <label className="block text-sm qt-text-primary mb-2">
-              Image Profile
-            </label>
-            <ImageProfilePicker
-              value={selectedProfileId}
-              onChange={setSelectedProfileId}
-              disabled={isGenerating}
-            />
-          </div>
-
-          <div className="flex gap-4">
-            {/* Left side - Quick buttons */}
-            <div className="w-48 flex-shrink-0 space-y-2">
-              <div className="qt-text-small font-medium mb-3">
-                Quick Insert
-              </div>
-
-              {/* Me button */}
-              {userCharacterParticipant?.character && (
-                <button
-                  onClick={() => insertPlaceholder('me')}
-                  className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 text-primary rounded border qt-border-primary/30 transition-colors"
-                  disabled={isGenerating}
-                >
-                  <div className="font-medium">{userCharacterParticipant.character.name}</div>
-                  <div className="text-xs opacity-75">{'{{me}}'}</div>
-                </button>
-              )}
-
-              {/* Character buttons */}
-              {characterParticipants.map(p => (
-                p.character && (
-                  <button
-                    key={p.id}
-                    onClick={() => insertPlaceholder(p.character!.name)}
-                    className="w-full px-3 py-2 text-left text-sm bg-accent hover:bg-accent/80 text-accent-foreground rounded border border-accent transition-colors"
-                    disabled={isGenerating}
-                  >
-                    <div className="font-medium truncate">{p.character.name}</div>
-                    <div className="text-xs opacity-75">{`{{${p.character.name}}}`}</div>
-                  </button>
-                )
-              ))}
-
-              {/* Search dropdown */}
-              <EntitySearchDropdown
-                isDropdownOpen={entitySearch.isDropdownOpen}
-                setIsDropdownOpen={entitySearch.setIsDropdownOpen}
-                searchTerm={entitySearch.searchTerm}
-                setSearchTerm={entitySearch.setSearchTerm}
-                filteredEntities={entitySearch.filteredEntities}
-                onEntitySelect={(entity) => entitySearch.handleEntitySelect(entity, insertPlaceholder)}
-                dropdownRef={entitySearch.dropdownRef}
-                disabled={isGenerating}
-              />
-            </div>
-
-            {/* Right side - Prompt input */}
-            <div className="flex-1">
-              <label htmlFor="standalone-image-prompt" className="block text-sm qt-text-primary mb-2">
-                Image Prompt
-              </label>
-              <textarea
-                id="standalone-image-prompt"
-                ref={promptRef}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the image you want to generate. Use {{placeholders}} for characters and personas.&#10;&#10;Examples:&#10;- {{me}} in a forest clearing at sunset&#10;- {{Alice}} and {{me}} having coffee together&#10;- A serene mountain landscape"
-                className="qt-textarea h-64"
-                disabled={isGenerating}
-              />
-              <div className="mt-2 qt-text-xs">
-                Click buttons on the left or type {'{{name}}'} to insert placeholders
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="qt-dialog-footer flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <label htmlFor="image-count" className="text-sm qt-text-secondary">
-              Images:
-            </label>
-            <select
-              id="image-count"
-              value={imageCount}
-              onChange={(e) => setImageCount(Number(e.target.value))}
-              className="qt-input w-16"
-              disabled={isGenerating}
-            >
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-              <option value={4}>4</option>
-            </select>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="qt-button qt-button-secondary"
-              disabled={isGenerating}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={!selectedProfileId || !prompt.trim() || isGenerating}
-              className="qt-button qt-button-primary"
-            >
-              {isGenerating ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Icon name="image" className="w-4 h-4" />
-                  Generate Image
-                </>
-              )}
-            </button>
+        {/* Right side - Prompt input */}
+        <div className="flex-1">
+          <label htmlFor="standalone-image-prompt" className="qt-label mb-2">
+            Image Prompt
+          </label>
+          <textarea
+            id="standalone-image-prompt"
+            ref={promptRef}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Describe the image you want to generate. Use {{placeholders}} for characters and personas.&#10;&#10;Examples:&#10;- {{me}} in a forest clearing at sunset&#10;- {{Alice}} and {{me}} having coffee together&#10;- A serene mountain landscape"
+            className="qt-textarea h-64"
+            disabled={isGenerating}
+          />
+          <div className="mt-2 qt-text-xs">
+            Click buttons on the left or type {'{{name}}'} to insert placeholders
           </div>
         </div>
       </div>
-    </div>
+    </BaseModal>
   )
 }

@@ -23,42 +23,24 @@ import {
 
 describe('Encryption Service', () => {
   describe('maskApiKey', () => {
-    it('should mask a standard API key', () => {
-      const masked = maskApiKey('sk-1234567890abcdefghijklmnop')
-      // Shows first 8 chars, 4 bullets, last 4 chars (fixed length masking)
-      expect(masked).toBe('sk-12345••••mnop')
+    it('shows only the last 4 characters', () => {
+      expect(maskApiKey('sk-1234567890abcdefghijklmnop')).toBe('••••mnop')
     })
 
-    it('should handle short keys', () => {
-      const masked = maskApiKey('short')
-      expect(masked).toBe('••••••••••••')
+    it('fully masks short keys', () => {
+      expect(maskApiKey('short')).toBe('••••••••••••')
     })
 
-    it('should handle very long keys', () => {
-      const longKey = 'sk-' + 'a'.repeat(100)
-      const masked = maskApiKey(longKey)
-      // Should always use exactly 4 bullets regardless of length
-      expect(masked).toBe('sk-aaaaa••••aaaa')
+    it('fully masks an empty string', () => {
+      expect(maskApiKey('')).toBe('••••••••••••')
     })
 
-    it('should handle empty string', () => {
-      const masked = maskApiKey('')
-      expect(masked).toBe('••••••••••••')
-    })
-
-    it('should not leak key length information', () => {
-      const shortKey = 'sk-shortkey1'
-      const longKey = 'sk-verylongapikey123456789012345678901234567890'
-      const shortMasked = maskApiKey(shortKey)
-      const longMasked = maskApiKey(longKey)
-
-      // Both should have exactly 4 bullets in the middle
-      expect(shortMasked).toMatch(/^.{8}••••.{4}$/)
-      expect(longMasked).toMatch(/^.{8}••••.{4}$/)
-
-      // Verify the actual values
-      expect(shortMasked).toBe('sk-short••••key1')
-      expect(longMasked).toBe('sk-veryl••••7890')
+    it('does not leak key length or prefix', () => {
+      const a = maskApiKey('sk-shortkey1')
+      const b = maskApiKey('sk-verylongapikey123456789012345678901234567890')
+      expect(a).toMatch(/^••••.{4}$/)
+      expect(b).toMatch(/^••••.{4}$/)
+      expect(a).not.toContain('sk-')
     })
   })
 
@@ -190,6 +172,36 @@ describe('Encryption Service', () => {
 
     it('should return false for invalid signature format', () => {
       expect(verifyWithPassphrase('data', 'not-valid-hex!', 'pass')).toBe(false)
+    })
+  })
+
+  describe('passphrase export format', () => {
+    it('records 600,000 iterations for new exports and round-trips', () => {
+      const enc = encryptWithPassphrase({ a: 1 }, 'pw')
+      expect(enc.iterations).toBe(600000)
+      expect(decryptWithPassphrase<{ a: number }>(enc, 'pw')).toEqual({ a: 1 })
+    })
+
+    it('still decrypts a legacy file with no iteration count (100,000)', () => {
+      const crypto = require('crypto')
+      const salt = crypto.randomBytes(32)
+      const key = crypto.pbkdf2Sync('pw', salt, 100000, 32, 'sha256')
+      const iv = crypto.randomBytes(16)
+      const c = crypto.createCipheriv('aes-256-gcm', key, iv)
+      const ct = c.update(JSON.stringify({ legacy: true }), 'utf8', 'hex') + c.final('hex')
+      const legacy = { salt: salt.toString('hex'), iv: iv.toString('hex'), ciphertext: ct, authTag: c.getAuthTag().toString('hex') }
+      expect(decryptWithPassphrase(legacy, 'pw')).toEqual({ legacy: true })
+    })
+
+    it('rejects a truncated authentication tag', () => {
+      const enc = encryptWithPassphrase({ a: 1 }, 'pw')
+      expect(() => decryptWithPassphrase({ ...enc, authTag: enc.authTag.slice(0, 8) }, 'pw')).toThrow()
+    })
+
+    it('rejects an out-of-range iteration count', () => {
+      const enc = encryptWithPassphrase({ a: 1 }, 'pw')
+      expect(() => decryptWithPassphrase({ ...enc, iterations: 1e12 }, 'pw')).toThrow()
+      expect(() => decryptWithPassphrase({ ...enc, iterations: 0 }, 'pw')).toThrow()
     })
   })
 })

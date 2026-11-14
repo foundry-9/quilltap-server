@@ -114,7 +114,7 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
                     className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:qt-bg-muted"
                   >
                     <WardrobeItemThumbnail fileId={outfit.imageFileId} size={28} />
-                    <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+                    <span className="min-w-0 flex-1 break-words text-sm qt-text">
                       {outfit.title}
                     </span>
                     <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">

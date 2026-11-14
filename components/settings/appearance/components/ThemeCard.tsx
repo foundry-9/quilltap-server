@@ -109,7 +109,7 @@ export function ThemeCard({
         className={`
           relative flex flex-col items-start p-4 rounded-lg border-2 transition-all
           text-left w-full overflow-hidden
-          ${isActive ? 'qt-border-primary' : 'qt-border-default hover:border-input'}
+          ${isActive ? 'qt-border-primary' : 'qt-border-default hover:qt-border-input'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
         style={{
@@ -134,15 +134,18 @@ export function ThemeCard({
 
       {/* Theme Description */}
       {description && (
-        <div className="text-sm mt-1 line-clamp-2" style={{ color: cardMutedColor }}>
+        <div
+          className="text-sm mt-1 line-clamp-2"
+          style={{ color: cardMutedColor, '--qt-brand-fg': cardTextColor } as React.CSSProperties}
+        >
           {description}
         </div>
       )}
 
       {/* Bottom row with source badge, mode badges and preview button */}
-      <div className="flex items-center justify-between w-full mt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 w-full mt-3">
         {/* Source + Mode Badges */}
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {/* Source badge */}
           {(() => {
             const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
@@ -208,7 +211,7 @@ export function ThemeCard({
             className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded qt-text-label-xs"
             style={{
               backgroundColor: previewColors?.dark?.primary || '#22c55e',
-              color: '#ffffff',
+              color: getContrastingTextColor(previewColors?.dark?.primary || '#22c55e'),
             }}
           >
             <Icon name="check" className="w-3 h-3" />

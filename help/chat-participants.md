@@ -6,13 +6,14 @@ url: /salon/:id
 
 > **[Open this page in Quilltap](/salon)**
 
-The Chat Sidebar is your right-hand control room for any conversation in The Salon — a single tasteful cabinet of drawers from which the entire chat may be conducted, tuned, and tidied. Where once there were three separate apparatus (a Participants Sidebar, a Tools palette popover, and a Chat Settings modal) you now have one cabinet with five drawers: **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content**.
+The Chat Sidebar is your right-hand control room for any conversation in The Salon — a single tasteful cabinet of drawers from which the entire chat may be conducted, tuned, and tidied. Where once there were three separate apparatus (a Participants Sidebar, a Tools palette popover, and a Chat Settings modal) you now have one cabinet with five drawers: **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content** — and a sixth, **Concepts Named**, which appears only once the conversation has mentioned a character who is not in it, or something from [the Atlas](atlas.md).
 
 ## What the Chat Sidebar Holds
 
 Each drawer attends to a different aspect of running the conversation:
 
 - **Participants** — the cast of characters, who's speaking, who's queued, and every dial for tuning their behaviour. (This page treats that drawer in considerable detail; the rest are sketched briefly below with cross-references.)
+- **Concepts Named** — only present once the chat has named a character who is not in it, or something from [the Atlas](atlas.md). Everyone and everything mentioned so far, in the order first named, with a portrait or picture; rest the pointer on one for its card, click it to be taken to its first mention.
 - **Chat** — the per-chat dials. Agent Mode, Roleplay Template, Project assignment, Image Provider, Lantern announcements, automatic avatar generation, and the gateways to the Tools and Run Tool modals. Regenerate Background lives here too, when story backgrounds are switched on.
 - **Visibility** — only present in multi-character chats. Two toggles: **All Whispers** (show or hide private asides) and **Shared Vaults** (whether characters may read one another's vaults).
 - **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and the Gallery, which is always present and holds every picture in the conversation.
@@ -132,7 +133,7 @@ This makes switching models the fastest possible action — no need to open a se
 
 ### System Prompt Dropdown
 
-Immediately beneath the connection profile selector, each LLM-controlled character card also carries a **system prompt dropdown**. If the character has more than one named system prompt (defined on the character's edit page), this lets you pick which one the LLM should speak from — without leaving the chat:
+Immediately beneath the connection profile selector, each LLM-controlled character card also carries a **system prompt dropdown**. If the character has more than one named system prompt (kept in the **Prompts** section of the character's page), this lets you pick which one the LLM should speak from — without leaving the chat:
 
 - **Use default prompt** — the entry marked as default on the character takes the stage
 - **Every named prompt** the character carries appears in the list, with the default marked
@@ -235,20 +236,24 @@ If characters are queued:
 - **"2 in queue"** — Shows how many are waiting
 - Queue empties as characters speak
 
-### Turn Mode: Normal, Paused, Storyteller
+### Turn Mode: Normal, Manual, Turns, Storyteller
 
-In the expanded sidebar the old Pause button has become a three-way control (the collapsed strip
+In the expanded sidebar the old Pause button has become a four-way control (the collapsed strip
 keeps its single Pause/Resume button):
 
-- **Normal** — The company answers in its ordinary weighted rotation
-- **Paused** — Nothing happens by itself. Your remarks are set down in the record and answered by
-  nobody; the rotation waits where you left it. **Nudge** a character while paused and they take
-  exactly one turn, and the room falls quiet again
+- **Normal** — The company answers in its ordinary weighted rotation, carrying on among itself
+  until the floor comes back to you
+- **Manual** — Nothing happens by itself. Your remarks are set down in the record and answered by
+  nobody; the rotation waits where you left it. **Nudge** a character and they take exactly one
+  turn, and the room falls quiet again. (This position was once called *Paused*.)
+- **Turns** — One full round at a time. Every character present speaks once — or passes, if they
+  have nothing to add — and then the room waits, with the round's memories sent off to the
+  Commonplace Book. Post a line, or press **Next Round** beneath the control, to run the next one
 - **Storyteller** — Each of your posts asks every character, privately, whether they wish to answer
   and what they mean to do, and you choose who goes ahead. See [Storyteller Mode](storyteller-mode.md)
 
-Pausing a storyteller chat keeps the mode: Paused records your posts without asking for bids, and
-Storyteller resumes the bidding.
+Manual keeps whichever mode you were in: a storyteller chat set to Manual records your posts without
+asking for bids, and choosing Storyteller again resumes the bidding.
 
 **Invite by talkativeness** appears beneath the control in Storyteller mode. Off (the default),
 every character is asked every round. On, each is asked with a likelihood that rises with their
@@ -292,9 +297,11 @@ Click any chip to unfold it into its full announcement; click it again — or th
 4. Configure options:
    - **History Access** — Can they see previous messages?
    - **Join Scenario** — Optional entrance description
-   - **Starting Outfit** — The wardrobe with which they cross the threshold: defaults, a slot-by-slot composition, the cheap LLM's best guess from the scene, or nothing at all
+   - **Starting Outfit** — The wardrobe with which they cross the threshold: defaults, a slot-by-slot composition, the cheap LLM's best guess from the scene, or nothing at all. Leave it be and a character permitted to dress themselves does exactly that; everyone else arrives in their defaults
 5. Click **Add** to confirm
-6. Character appears in the sidebar
+6. Character appears in the sidebar — and is dressed in plain view
+
+A newcomer is received precisely as an opening cast is. The dialog closes at once and **The Green Room** unfolds above the conversation to narrate the arrival: the wardrobe consultation (should they be choosing for themselves), what they packed, the Host's welcome, and Aurora's note of what they walked in wearing — after which, if the chat draws avatars, their portrait is brought up to date to match. The same courtesy attends a character returning from removal, who keeps whatever they had on unless you chose otherwise, and characters folded in by **Merge In…**, who arrive dressed as they were in the conversation they came from.
 
 #### Creating an Ad-Hoc NPC
 
@@ -439,7 +446,7 @@ If impersonating multiple characters:
 
 ### In Their Own Words
 
-An optional amenity, switched off by the factory, addresses the perennial embarrassment of an impersonated character who sounds rather too much like you. Turn on **Impersonated lines in the character's own words** in the Composer card on the Chat tab in Settings, and a line you type while wearing a character's seat is handed first to that character — their own model, their own prompt, their own memory of the evening — and returned for your inspection before anything reaches the room. Send their restatement, have it attempted afresh, retire to the composer and rewrite, or send your own words exactly as typed; nothing posts until you choose. It fires only for seats taken with **Impersonate** — speaking as yourself, or as a seat you have set to *User (you type)*, is left entirely alone. See [In their own words](/settings?tab=chat&section=composer-spellcheck) for the full account.
+An optional amenity, switched off by the factory, addresses the perennial embarrassment of an impersonated character who sounds rather too much like you. Turn on **Impersonated lines in the character's own words** in the Composer card in the Composer & Display group of Settings, and a line you type while wearing a character's seat is handed first to that character — their own model, their own prompt, their own memory of the evening — and returned for your inspection before anything reaches the room. Send their restatement, have it attempted afresh, retire to the composer and rewrite, or send your own words exactly as typed; nothing posts until you choose. It fires only for seats taken with **Impersonate** — speaking as yourself, or as a seat you have set to *User (you type)*, is left entirely alone. See [In their own words](/settings?section=composer-spellcheck) for the full account.
 
 ## Pause and Resume
 
@@ -476,9 +483,13 @@ In all-LLM chats (no user-controlled characters):
 The same pause is pressed for you when a turn fails outright, and while the Courier holds a
 conversation waiting for a reply you must paste in by hand. **Resume** is the way out of all of them.
 
-## The Other Four Drawers
+## The Other Drawers
 
 Opening any of these closes whichever drawer is presently open. None of them is open by default.
+
+### Concepts Named
+
+Present only when the conversation has named at least one [character who is not in it](salon-host-introductions.md), or one entry from [the Atlas](atlas.md) — the very people and things that wear a chip in the transcript. The drawer's header line counts them ("1 character not here · 2 from the Atlas"). Inside are two short lists, **Characters not here** and **From the Atlas**, each in the order first mentioned and each shown only when it has someone or something in it. Every row carries a portrait or picture (or a plain silhouette, or the Atlas's compass, when there is none), the name, and, when the transcript called it something else, the word it went by ("as “Grandma”", "as “ship”"). Rest the pointer on a row, or tab to it, to read the same card its chip would show. Click it and the transcript is scrolled to the message where it was first named, with a brief glow to mark the spot; if that is the Host's folded scenario card, the card is unfolded for you. On a narrow window, where the sidebar lies over the conversation, the sidebar steps aside as you go.
 
 ### Chat
 

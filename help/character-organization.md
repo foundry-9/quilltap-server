@@ -37,24 +37,25 @@ Tags are customizable labels you can apply to characters:
 
 ### Adding Tags When Creating
 
-1. Create or edit character
-2. Scroll to **Tags** section
-3. Click **Add Tag** or tag input field
+The New Character form keeps to the essentials and has no tag field; tags are added the moment the character exists:
+
+1. Create the character — their page opens
+2. Find **Tags** in the **Facts** card on **Details**
+3. Click the tag input field
 4. Type existing tag name or create new
-5. Select or confirm tag
-6. Save character
+5. Select or confirm tag — it saves at once
 
 **Tip:** Start typing to search existing tags or create new ones.
 
 ### Adding Tags to Existing Character
 
-**Method 1: From Edit Screen**
+**Method 1: From the Character's Page**
 
-1. Edit character
-2. Scroll to Tags section
+1. Open the character's page
+2. Find **Tags** in the **Facts** card on **Details**
 3. Click **Add Tag**
 4. Select or create tag
-5. Save
+5. Saves at once
 
 **Method 2: From Character List**
 
@@ -74,12 +75,12 @@ Tags are customizable labels you can apply to characters:
 
 ### Removing Tags
 
-**From Edit Screen:**
+**From the Character's Page:**
 
-1. Edit character
-2. Locate tag in Tags section
+1. Open the character's page
+2. Locate the tag in the **Facts** card on **Details**
 3. Click **X** next to tag
-4. Save
+4. Removed at once
 
 **From Character List:**
 
@@ -271,10 +272,10 @@ Favorite characters appear at top and get special treatment.
 4. Star fills in solid
 5. Character moves to favorites section at top
 
-**Method 2: From Character View/Edit**
+**Method 2: From the Character's Page**
 
-1. Open character view or edit
-2. Click **Star** icon at top
+1. Open the character's page
+2. Click the **⭐** in the header
 3. Character marked favorite
 4. Star fills in
 
@@ -299,20 +300,12 @@ Quick Hide temporarily hides characters from normal view.
 
 ### Hiding Characters
 
-**Method 1: From Character List**
+**From Character List**
 
 1. Hover over character
 2. Right-click or click menu
 3. Select **Quick Hide**
 4. Character disappears from list
-
-**Method 2: From Character View**
-
-1. Open character
-2. Click menu (⋮ or ⋯)
-3. Select **Quick Hide**
-4. Redirected to character list
-5. Character no longer visible
 
 ### Viewing Hidden Characters
 
@@ -494,7 +487,7 @@ Some views show character as cards:
 - Tag display
 - Quick actions (favorite, hide, delete)
 - Last modified date
-- Click card to view/edit
+- Click card to open the character's page
 
 ## Search and Discovery
 

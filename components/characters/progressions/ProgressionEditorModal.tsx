@@ -21,15 +21,15 @@
  * one mounts a fresh form and half-typed edits never bleed between entries.
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Icon } from '@/components/ui/icon'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import {
   UNIT_MS,
   deriveProgression,
   renderProgressionReport,
+  renderPublicProgressionLine,
 } from '@/lib/progressions/engine'
 import {
   MAX_PROGRESSION_DESCRIPTION_LENGTH,
@@ -76,6 +76,8 @@ export interface ProgressionEditorModalProps {
   editing: { id: string; progression: Progression } | null
   /** Ids already in use, so a create cannot silently overwrite one. */
   existingIds: string[]
+  /** Whose progression it is, for the preview's caption. */
+  characterName?: string
   saving: boolean
   onClose: () => void
   onSave: (id: string, progression: Progression) => void
@@ -90,6 +92,7 @@ interface FormState {
   end: string
   increment: TimeIncrement
   percentageReport: boolean
+  isPublic: boolean
   cadenceMode: CadenceMode
   periodCount: string
   periodUnit: string
@@ -127,6 +130,7 @@ function initialForm(editing: ProgressionEditorModalProps['editing']): FormState
       end: toLocalInput(new Date(now + UNIT_MS.hour).toISOString()),
       increment: 'minute',
       percentageReport: true,
+      isPublic: true,
       cadenceMode: 'turn',
       periodCount: '1',
       periodUnit: 'h',
@@ -150,6 +154,7 @@ function initialForm(editing: ProgressionEditorModalProps['editing']): FormState
     end: toLocalInput(p.endTime),
     increment: p.timeIncrement,
     percentageReport: p.percentageReport,
+    isPublic: p.public,
     cadenceMode: p.reportFrequency === 'turn' ? 'turn' : p.reportFrequency === 'increment' ? 'increment' : 'period',
     periodCount: period?.[1] ?? '1',
     periodUnit: period?.[2] ?? 'h',
@@ -175,6 +180,7 @@ function toProgression(form: FormState): { ok: true; value: Progression } | { ok
     endTime,
     timeIncrement: form.increment,
     percentageReport: form.percentageReport,
+    public: form.isPublic,
     reportFrequency:
       form.cadenceMode === 'period' ? `${form.periodCount}${form.periodUnit}` : form.cadenceMode,
     onComplete: form.onComplete,
@@ -200,6 +206,7 @@ function toProgression(form: FormState): { ok: true; value: Progression } | { ok
 export function ProgressionEditorModal({
   editing,
   existingIds,
+  characterName,
   saving,
   onClose,
   onSave,
@@ -207,10 +214,6 @@ export function ProgressionEditorModal({
   const [form, setForm] = useState<FormState>(() => initialForm(editing))
   const [idTouched, setIdTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, true)
-  useEscapeKey(onClose, !saving)
 
   // The clock the live preview reads. Held in state and advanced by an
   // interval rather than read during render: `Date.now()` in a render body is
@@ -231,11 +234,19 @@ export function ProgressionEditorModal({
   // file addresses the id, and a rename would break it silently.
   const effectiveId = isCreate && !idTouched ? idFromName(form.name) : form.id
 
-  /** The line this progression would produce right now, for the live preview. */
+  /**
+   * The lines this progression would produce right now, for the live preview:
+   * what the character reads, and what others are told (null when private or
+   * gone quiet).
+   */
   const preview = useMemo(() => {
     const built = toProgression(form)
     if (!built.ok) return null
-    return renderProgressionReport(built.value, deriveProgression(effectiveId || 'preview', built.value, nowMs))
+    const derived = deriveProgression(effectiveId || 'preview', built.value, nowMs)
+    return {
+      own: renderProgressionReport(built.value, derived),
+      public: renderPublicProgressionLine(built.value, derived),
+    }
   }, [form, effectiveId, nowMs])
 
   const handleSave = () => {
@@ -265,300 +276,325 @@ export function ProgressionEditorModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-card qt-bg-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4"
-      >
-        <div className="flex items-start justify-between">
-          <h3 id={titleId} className="qt-heading-4">{isCreate ? 'New progression' : `Edit “${form.name || effectiveId}”`}</h3>
-          <button type="button" onClick={onClose} className="qt-button-icon qt-button-ghost" aria-label="Close">
-            <Icon name="close" className="w-4 h-4" />
-          </button>
-        </div>
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      headerless
+      busy={saving}
+      // A half-written progression is not lost to a stray click on the backdrop.
+      closeOnClickOutside={false}
+      maxWidth="2xl"
+      className="w-full"
+     
+      bodyClassName="flex-1 overflow-y-auto p-6 space-y-4"
+    >
+      <div className="flex items-start justify-between">
+        <ModalTitle className="qt-heading-4">{isCreate ? 'New progression' : `Edit “${form.name || effectiveId}”`}</ModalTitle>
+        <button type="button" onClick={onClose} className="qt-button-icon qt-button-ghost" aria-label="Close">
+          <Icon name="close" className="w-4 h-4" />
+        </button>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="space-y-1">
-            <span className="qt-text-small">Name</span>
-            <input
-              type="text"
-              value={form.name}
-              maxLength={MAX_PROGRESSION_NAME_LENGTH}
-              onChange={(e) => set('name', e.target.value)}
-              placeholder="Cannon recharge"
-              className="qt-input w-full"
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="qt-text-small">
-              Identifier{' '}
-              <span className="qt-text-secondary">
-                {isCreate ? '(how a tool addresses it)' : '(fixed — tools address it)'}
-              </span>
-            </span>
-            <input
-              type="text"
-              value={effectiveId}
-              disabled={!isCreate}
-              onChange={(e) => {
-                setIdTouched(true)
-                set('id', e.target.value)
-              }}
-              placeholder="cannon"
-              className="qt-input w-full font-mono"
-            />
-          </label>
-        </div>
-
-        <label className="space-y-1 block">
-          <span className="qt-text-small">
-            Description <span className="qt-text-secondary">— one sentence, in the second person</span>
-          </span>
-          <textarea
-            value={form.description}
-            maxLength={MAX_PROGRESSION_DESCRIPTION_LENGTH}
-            onChange={(e) => set('description', e.target.value)}
-            rows={2}
-            placeholder="You are carrying a child."
-            className="qt-textarea w-full"
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="space-y-1">
+          <span className="qt-text-small">Name</span>
+          <input
+            type="text"
+            value={form.name}
+            maxLength={MAX_PROGRESSION_NAME_LENGTH}
+            onChange={(e) => set('name', e.target.value)}
+            placeholder="Cannon recharge"
+            className="qt-input w-full"
           />
         </label>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="space-y-1">
-            <span className="qt-text-small">Begins</span>
-            <input
-              type="datetime-local"
-              value={form.start}
-              onChange={(e) => set('start', e.target.value)}
-              className="qt-input w-full"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="qt-text-small">Ends</span>
-            <input
-              type="datetime-local"
-              value={form.end}
-              onChange={(e) => set('end', e.target.value)}
-              className="qt-input w-full"
-            />
-          </label>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="qt-text-small qt-text-secondary">Or ends</span>
-          {([
-            [10, 'minute'],
-            [1, 'hour'],
-            [1, 'day'],
-            [1, 'week'],
-            [9, 'month'],
-          ] as Array<[number, TimeIncrement]>).map(([count, unit]) => (
-            <button
-              key={`${count}${unit}`}
-              type="button"
-              onClick={() => applyDuration(count, unit)}
-              className="qt-button qt-button-ghost qt-button-sm"
-            >
-              +{count} {unit}
-              {count === 1 ? '' : 's'}
-            </button>
-          ))}
-          <span className="qt-text-small qt-text-secondary">after it begins.</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="space-y-1">
-            <span className="qt-text-small">
-              Spoken in <span className="qt-text-secondary">— the unit the report uses</span>
+        <label className="space-y-1">
+          <span className="qt-text-small">
+            Identifier{' '}
+            <span className="qt-text-secondary">
+              {isCreate ? '(how a tool addresses it)' : '(fixed — tools address it)'}
             </span>
-            <select
-              value={form.increment}
-              onChange={(e) => set('increment', e.target.value as TimeIncrement)}
-              className="qt-select w-full"
-            >
-              {INCREMENTS.map((unit) => (
-                <option key={unit} value={unit}>
-                  {unit}s
-                </option>
-              ))}
-            </select>
+          </span>
+          <input
+            type="text"
+            value={effectiveId}
+            disabled={!isCreate}
+            onChange={(e) => {
+              setIdTouched(true)
+              set('id', e.target.value)
+            }}
+            placeholder="cannon"
+            className="qt-input w-full font-mono"
+          />
+        </label>
+      </div>
+
+      <label className="space-y-1 block">
+        <span className="qt-text-small">
+          Description <span className="qt-text-secondary">— one sentence, in the second person</span>
+        </span>
+        <textarea
+          value={form.description}
+          maxLength={MAX_PROGRESSION_DESCRIPTION_LENGTH}
+          onChange={(e) => set('description', e.target.value)}
+          rows={2}
+          placeholder="You are carrying a child."
+          className="qt-textarea w-full"
+        />
+      </label>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="space-y-1">
+          <span className="qt-text-small">Begins</span>
+          <input
+            type="datetime-local"
+            value={form.start}
+            onChange={(e) => set('start', e.target.value)}
+            className="qt-input w-full"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="qt-text-small">Ends</span>
+          <input
+            type="datetime-local"
+            value={form.end}
+            onChange={(e) => set('end', e.target.value)}
+            className="qt-input w-full"
+          />
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="qt-text-small qt-text-secondary">Or ends</span>
+        {([
+          [10, 'minute'],
+          [1, 'hour'],
+          [1, 'day'],
+          [1, 'week'],
+          [9, 'month'],
+        ] as Array<[number, TimeIncrement]>).map(([count, unit]) => (
+          <button
+            key={`${count}${unit}`}
+            type="button"
+            onClick={() => applyDuration(count, unit)}
+            className="qt-button qt-button-ghost qt-button-sm"
+          >
+            +{count} {unit}
+            {count === 1 ? '' : 's'}
+          </button>
+        ))}
+        <span className="qt-text-small qt-text-secondary">after it begins.</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="space-y-1">
+          <span className="qt-text-small">
+            Spoken in <span className="qt-text-secondary">— the unit the report uses</span>
+          </span>
+          <select
+            value={form.increment}
+            onChange={(e) => set('increment', e.target.value as TimeIncrement)}
+            className="qt-select w-full"
+          >
+            {INCREMENTS.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit}s
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1">
+          <span className="qt-text-small">Once it finishes</span>
+          <select
+            value={form.onComplete}
+            onChange={(e) => set('onComplete', e.target.value as 'keep' | 'once')}
+            className="qt-select w-full"
+          >
+            <option value="keep">keep reporting it</option>
+            <option value="once">say so once, then go quiet</option>
+          </select>
+        </label>
+      </div>
+
+      <fieldset className="space-y-2">
+        <legend className="qt-text-small">Mentioned</legend>
+        {([
+          ['turn', 'every turn'],
+          ['increment', `whenever the ${form.increment} count changes`],
+          ['period', 'at most once every'],
+        ] as Array<[CadenceMode, string]>).map(([mode, label]) => (
+          <label key={mode} className="flex items-center gap-2 qt-text-small">
+            <input
+              type="radio"
+              name="cadence"
+              checked={form.cadenceMode === mode}
+              onChange={() => set('cadenceMode', mode)}
+            />
+            {label}
+            {mode === 'period' && (
+              <span className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={99999}
+                  value={form.periodCount}
+                  onChange={(e) => set('periodCount', e.target.value)}
+                  disabled={form.cadenceMode !== 'period'}
+                  className="qt-input qt-input-sm w-20"
+                  aria-label="Cadence count"
+                />
+                <select
+                  value={form.periodUnit}
+                  onChange={(e) => set('periodUnit', e.target.value)}
+                  disabled={form.cadenceMode !== 'period'}
+                  className="qt-select qt-select-sm w-28"
+                  aria-label="Cadence unit"
+                >
+                  {PERIOD_UNITS.map((u) => (
+                    <option key={u.value} value={u.value}>
+                      {u.label}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            )}
           </label>
+        ))}
+        <p className="qt-hint">
+          A change you make here, or one a tool makes, is always announced on the very next turn — the cadence
+          only governs the quiet stretches in between.
+        </p>
+      </fieldset>
 
-          <label className="space-y-1">
-            <span className="qt-text-small">Once it finishes</span>
-            <select
-              value={form.onComplete}
-              onChange={(e) => set('onComplete', e.target.value as 'keep' | 'once')}
-              className="qt-select w-full"
-            >
-              <option value="keep">keep reporting it</option>
-              <option value="once">say so once, then go quiet</option>
-            </select>
-          </label>
-        </div>
+      <label className="flex items-center gap-2 qt-text-small">
+        <input
+          type="checkbox"
+          checked={form.percentageReport}
+          onChange={(e) => set('percentageReport', e.target.checked)}
+        />
+        Include the percentage in the default wording
+      </label>
 
-        <fieldset className="space-y-2">
-          <legend className="qt-text-small">Mentioned</legend>
-          {([
-            ['turn', 'every turn'],
-            ['increment', `whenever the ${form.increment} count changes`],
-            ['period', 'at most once every'],
-          ] as Array<[CadenceMode, string]>).map(([mode, label]) => (
-            <label key={mode} className="flex items-center gap-2 qt-text-small">
-              <input
-                type="radio"
-                name="cadence"
-                checked={form.cadenceMode === mode}
-                onChange={() => set('cadenceMode', mode)}
-              />
-              {label}
-              {mode === 'period' && (
-                <span className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={1}
-                    max={99999}
-                    value={form.periodCount}
-                    onChange={(e) => set('periodCount', e.target.value)}
-                    disabled={form.cadenceMode !== 'period'}
-                    className="qt-input qt-input-sm w-20"
-                    aria-label="Cadence count"
-                  />
-                  <select
-                    value={form.periodUnit}
-                    onChange={(e) => set('periodUnit', e.target.value)}
-                    disabled={form.cadenceMode !== 'period'}
-                    className="qt-select qt-select-sm w-28"
-                    aria-label="Cadence unit"
-                  >
-                    {PERIOD_UNITS.map((u) => (
-                      <option key={u.value} value={u.value}>
-                        {u.label}
-                      </option>
-                    ))}
-                  </select>
-                </span>
-              )}
-            </label>
-          ))}
-          <p className="qt-hint">
-            A change you make here, or one a tool makes, is always announced on the very next turn — the cadence
-            only governs the quiet stretches in between.
-          </p>
-        </fieldset>
-
+      <div className="space-y-1">
         <label className="flex items-center gap-2 qt-text-small">
           <input
             type="checkbox"
-            checked={form.percentageReport}
-            onChange={(e) => set('percentageReport', e.target.checked)}
+            checked={form.isPublic}
+            onChange={(e) => set('isPublic', e.target.checked)}
           />
-          Include the percentage in the default wording
+          Public — others may know of it
         </label>
+        <p className="qt-hint">
+          A public progression is part of what others are told about the character — the Host&rsquo;s
+          introduction and the identity a tool looks up — in plain third-person wording, never your description
+          or template. A private one is still reported to the character themselves.
+        </p>
+      </div>
 
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 qt-text-small">
-            <input
-              type="checkbox"
-              checked={form.hasQuantity}
-              onChange={(e) => set('hasQuantity', e.target.checked)}
-            />
-            It fills a measurable amount (megajoules, litres, rounds)
-          </label>
-          {form.hasQuantity && (
-            <div className="grid grid-cols-3 gap-2">
-              <label className="space-y-1">
-                <span className="qt-text-small">Full amount</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={form.quantityTotal}
-                  onChange={(e) => set('quantityTotal', e.target.value)}
-                  className="qt-input w-full"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="qt-text-small">Unit</span>
-                <input
-                  type="text"
-                  maxLength={16}
-                  value={form.quantityUnit}
-                  onChange={(e) => set('quantityUnit', e.target.value)}
-                  placeholder="MJ"
-                  className="qt-input w-full"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="qt-text-small">Decimals</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={6}
-                  value={form.quantityPrecision}
-                  onChange={(e) => set('quantityPrecision', e.target.value)}
-                  className="qt-input w-full"
-                />
-              </label>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <label className="space-y-1 block">
-            <span className="qt-text-small">
-              How it&rsquo;s told <span className="qt-text-secondary">— leave blank for the default wording</span>
-            </span>
-            <textarea
-              value={form.reportTemplate}
-              maxLength={MAX_REPORT_TEMPLATE_LENGTH}
-              onChange={(e) => set('reportTemplate', e.target.value)}
-              rows={2}
-              placeholder="{{description}} You are {{elapsedWhole}} along; due in {{remaining}}."
-              className="qt-textarea w-full"
-            />
-          </label>
-          <details className="qt-text-small">
-            <summary className="cursor-pointer qt-text-secondary">What you may write in it</summary>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 mt-2">
-              {PLACEHOLDER_LEGEND.map(([token, meaning]) => (
-                <div key={token} className="contents">
-                  <dt className="font-mono text-xs qt-text">{token}</dt>
-                  <dd className="text-xs qt-text-secondary">{meaning}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="qt-hint mt-2">
-              This wording covers the stretch while it is running. Before it starts and after it finishes the
-              report says so in its own words, which no template overrides.
-            </p>
-          </details>
-        </div>
-
-        {preview && (
-          <div className="qt-card p-3">
-            <p className="qt-text-small qt-text-secondary mb-1">As {form.name || 'this character'} would read it now:</p>
-            <p className="qt-text-small italic">{preview}</p>
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 qt-text-small">
+          <input
+            type="checkbox"
+            checked={form.hasQuantity}
+            onChange={(e) => set('hasQuantity', e.target.checked)}
+          />
+          It fills a measurable amount (megajoules, litres, rounds)
+        </label>
+        {form.hasQuantity && (
+          <div className="grid grid-cols-3 gap-2">
+            <label className="space-y-1">
+              <span className="qt-text-small">Full amount</span>
+              <input
+                type="number"
+                step="any"
+                value={form.quantityTotal}
+                onChange={(e) => set('quantityTotal', e.target.value)}
+                className="qt-input w-full"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="qt-text-small">Unit</span>
+              <input
+                type="text"
+                maxLength={16}
+                value={form.quantityUnit}
+                onChange={(e) => set('quantityUnit', e.target.value)}
+                placeholder="MJ"
+                className="qt-input w-full"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="qt-text-small">Decimals</span>
+              <input
+                type="number"
+                min={0}
+                max={6}
+                value={form.quantityPrecision}
+                onChange={(e) => set('quantityPrecision', e.target.value)}
+                className="qt-input w-full"
+              />
+            </label>
           </div>
         )}
-
-        {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="qt-button-secondary" disabled={saving}>
-            Cancel
-          </button>
-          <button type="button" onClick={handleSave} className="qt-button-primary" disabled={saving}>
-            {saving ? 'Saving…' : isCreate ? 'Add progression' : 'Save changes'}
-          </button>
-        </div>
       </div>
-    </div>
+
+      <div className="space-y-2">
+        <label className="space-y-1 block">
+          <span className="qt-text-small">
+            How it&rsquo;s told <span className="qt-text-secondary">— leave blank for the default wording</span>
+          </span>
+          <textarea
+            value={form.reportTemplate}
+            maxLength={MAX_REPORT_TEMPLATE_LENGTH}
+            onChange={(e) => set('reportTemplate', e.target.value)}
+            rows={2}
+            placeholder="{{description}} You are {{elapsedWhole}} along; due in {{remaining}}."
+            className="qt-textarea w-full"
+          />
+        </label>
+        <details className="qt-text-small">
+          <summary className="cursor-pointer qt-text-secondary">What you may write in it</summary>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 mt-2">
+            {PLACEHOLDER_LEGEND.map(([token, meaning]) => (
+              <div key={token} className="contents">
+                <dt className="font-mono text-xs qt-text">{token}</dt>
+                <dd className="text-xs qt-text-secondary">{meaning}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="qt-hint mt-2">
+            This wording covers the stretch while it is running. Before it starts and after it finishes the
+            report says so in its own words, which no template overrides.
+          </p>
+        </details>
+      </div>
+
+      {preview && (
+        <div className="qt-card p-3 space-y-2">
+          <div>
+            <p className="qt-text-small qt-text-secondary mb-1">As {characterName || 'the character'} would read it now:</p>
+            <p className="qt-text-small italic">{preview.own}</p>
+          </div>
+          <div>
+            <p className="qt-text-small qt-text-secondary mb-1">As others are told it:</p>
+            <p className="qt-text-small italic">
+              {preview.public ?? (form.isPublic ? 'Nothing — it has finished and gone quiet.' : 'Nothing — it is private.')}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button type="button" onClick={onClose} className="qt-button-secondary" disabled={saving}>
+          Cancel
+        </button>
+        <button type="button" onClick={handleSave} className="qt-button-primary" disabled={saving}>
+          {saving ? 'Saving…' : isCreate ? 'Add progression' : 'Save changes'}
+        </button>
+      </div>
+    </BaseModal>
   )
 }

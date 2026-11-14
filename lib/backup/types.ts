@@ -37,6 +37,7 @@ import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { ChatWardrobeHistoryRow } from '@/lib/schemas/chat-wardrobe-history.types';
+import type { ChatAvatarTimelineRow } from '@/lib/schemas/chat-avatar-timeline.types';
 import type { LogEntry } from '@/lib/schemas/log-entry.types';
 import type {
   DocMountPoint,
@@ -163,6 +164,12 @@ export interface BackupManifest {
    * compact restore would come back with search quietly cold.
    */
   compact?: boolean;
+  /**
+   * What the backup could not carry whole — a character, project or group
+   * whose document store could not be read, backed up as its bare row with
+   * its memories (#202). Absent when there is nothing to say.
+   */
+  warnings?: string[];
 
   /** Counts of all backed-up entities for validation and progress tracking */
   counts: {
@@ -250,6 +257,8 @@ export interface BackupManifest {
     wardrobeWear?: number;
     /** Number of outfit-history rows (`chat_wardrobe_history`) */
     wardrobeHistory?: number;
+    /** Number of avatar-timeline rows (`chat_avatar_timeline`) */
+    avatarTimeline?: number;
     /** Number of Log lines (`log_entries`, in the LLM logs database) */
     logEntries?: number;
   };
@@ -319,7 +328,11 @@ export interface BackupData {
   llmLogs: LLMLog[];
 
   /** Array of PluginConfig entities (user plugin configurations) */
-  pluginConfigs?: PluginConfig[];
+  /**
+   * Plugin configs with secret keys removed; `_redactedKeys` names what was
+   * withheld (`['*']` when the plugin's manifest was unavailable).
+   */
+  pluginConfigs?: Array<PluginConfig & { _redactedKeys?: string[] }>;
 
   /** Array of ChatSettings entities (user chat/display settings) */
   chatSettings?: ChatSettings[];
@@ -432,6 +445,13 @@ export interface BackupData {
    * it cascades from; optional, so an older archive simply has none.
    */
   wardrobeHistory?: ChatWardrobeHistoryRow[];
+
+  /**
+   * The Salon avatar timeline (`chat_avatar_timeline`): the dated avatars each
+   * chat bound for each character. Restored after the chats it cascades from;
+   * optional, so an older archive simply has none.
+   */
+  avatarTimeline?: ChatAvatarTimelineRow[];
 
   /**
    * The Log (`log_entries`, in the LLM logs database): lines written by
@@ -559,8 +579,17 @@ export interface RestoreSummary {
   /** Number of WardrobeItem entities restored */
   wardrobeItems?: number;
 
-  /** Number of npm plugins restored */
+  /**
+   * Number of npm plugins restored. Restore never installs plugin code, so a
+   * completed restore reports 0; a preview reports how many the backup holds.
+   */
   npmPlugins?: number;
+
+  /**
+   * Names of the npm plugins the backup holds. They are not installed by a
+   * restore; the operator reinstalls the ones they want.
+   */
+  npmPluginNames?: string[];
 
   /** Number of CharacterPluginData entities restored */
   characterPluginData?: number;
@@ -632,6 +661,9 @@ export interface RestoreSummary {
 
   /** Number of outfit-history rows restored */
   wardrobeHistory?: number;
+
+  /** Number of avatar-timeline rows restored */
+  avatarTimeline?: number;
 
   /** Number of Log lines restored */
   logEntries?: number;

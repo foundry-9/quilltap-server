@@ -19,6 +19,9 @@ jest.mock('@/lib/tools/handlers/run-sql-handler', () => ({
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { executeToolCallWithContext } from '@/lib/chat/tool-executor';
 import { executeRunSqlTool } from '@/lib/tools/handlers/run-sql-handler';
+import { OPERATOR_TOOL_OFFER, offeredTools } from '@/lib/tools/effects';
+
+const offer = offeredTools(['run_sql']);
 
 describe('run_sql surface gate', () => {
   beforeEach(() => {
@@ -28,7 +31,7 @@ describe('run_sql surface gate', () => {
   it('rejects when operatorSurface is falsy, without executing the handler', async () => {
     const result = await executeToolCallWithContext(
       { name: 'run_sql', arguments: { sql: 'SELECT 1' } },
-      { chatId: 'chat-1', userId: 'user-1' }, // no operatorSurface
+      { chatId: 'chat-1', userId: 'user-1', toolOffer: offer }, // no operatorSurface
     );
 
     expect(result.success).toBe(false);
@@ -48,7 +51,7 @@ describe('run_sql surface gate', () => {
 
     const result = await executeToolCallWithContext(
       { name: 'run_sql', arguments: { sql: 'SELECT 1 AS n' } },
-      { chatId: 'chat-1', userId: 'user-1', operatorSurface: true },
+      { chatId: 'chat-1', userId: 'user-1', operatorSurface: true, toolOffer: offer },
     );
 
     expect(executeRunSqlTool).toHaveBeenCalledWith({ sql: 'SELECT 1 AS n' }, { userId: 'user-1' });
@@ -64,11 +67,21 @@ describe('run_sql surface gate', () => {
 
     const result = await executeToolCallWithContext(
       { name: 'run_sql', arguments: { sql: 'DELETE FROM notes' } },
-      { chatId: 'chat-1', userId: 'user-1', operatorSurface: true },
+      { chatId: 'chat-1', userId: 'user-1', operatorSurface: true, toolOffer: offer },
     );
 
     expect(result.success).toBe(false);
     expect(result.result).toBeNull();
     expect(result.error).toMatch(/read-only/i);
+  });
+
+  it('rejects an operator-run call off the operator surface', async () => {
+    const result = await executeToolCallWithContext(
+      { name: 'lookup_memories', arguments: { character: 'Ada' } },
+      { chatId: 'chat-1', userId: 'user-1', toolOffer: OPERATOR_TOOL_OFFER },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/only available in the Brahma Console/i);
   });
 });

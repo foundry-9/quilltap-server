@@ -12,6 +12,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
 
+const cryptoLogger = logger.child({ module: 'theme-crypto' });
+
 // ============================================================================
 // KEY PAIR GENERATION
 // ============================================================================
@@ -204,22 +206,72 @@ export async function signBundleDirectory(
 }
 
 /**
- * Verify a bundle signature against files in a directory.
+ * The signature document a bundle carries as `signature.json`, in either of
+ * the two shapes in use: {@link BundleSignature} (written by
+ * `signBundleDirectory`, hash lines `file:hash`) or the CLI's
+ * `quilltap themes registry sign` output (`version: 1`, `files`, hash lines
+ * `hash  file`).
  */
-export async function verifyBundleSignature(
-  bundleDir: string,
-  sig: BundleSignature,
+export type BundleSignatureDocument =
+  | BundleSignature
+  | {
+      version: 1;
+      algorithm: 'ed25519';
+      signature: string;
+      files: Record<string, string>;
+      signedAt?: string;
+    };
+
+const SIGNATURE_FILENAME = 'signature.json';
+
+/** Normalise a signature document to its signed file map and signed text. */
+function signedPayload(
+  sig: BundleSignatureDocument
+): { fileHashes: Record<string, string>; hashData: string } | null {
+  if (!sig || typeof sig !== 'object' || typeof sig.signature !== 'string') return null;
+  if ('fileHashes' in sig && sig.fileHashes && typeof sig.fileHashes === 'object') {
+    const fileHashes = Object.fromEntries(
+      Object.entries(sig.fileHashes).filter(([file]) => file !== SIGNATURE_FILENAME)
+    );
+    const hashData = Object.entries(fileHashes)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([file, hash]) => `${file}:${hash}`)
+      .join('\n');
+    return { fileHashes, hashData };
+  }
+  if ('files' in sig && sig.files && typeof sig.files === 'object') {
+    const fileHashes = Object.fromEntries(
+      Object.entries(sig.files).filter(([file]) => file !== SIGNATURE_FILENAME)
+    );
+    // The CLI writes its map in sorted-path order and signs it in that order.
+    const hashData = Object.keys(fileHashes)
+      .sort()
+      .map((file) => `${fileHashes[file]}  ${file}`)
+      .join('\n');
+    return { fileHashes, hashData };
+  }
+  return null;
+}
+
+/**
+ * Verify a bundle signature against a map of the bundle's actual file hashes
+ * (relative path, `/`-separated, to hex SHA-256). Every file must be listed
+ * with a matching hash, nothing may be listed that is absent, and the
+ * signature must verify under `publicKeyStr` — the key the operator trusts,
+ * never the key the signature document names.
+ */
+export function verifyBundleSignatureHashes(
+  currentHashes: Record<string, string>,
+  sig: BundleSignatureDocument,
   publicKeyStr: string
-): Promise<{ valid: boolean; errors: string[] }> {
+): { valid: boolean; errors: string[] } {
+  const payload = signedPayload(sig);
+  if (!payload) {
+    return { valid: false, errors: ['Unrecognised signature format'] };
+  }
   const errors: string[] = [];
 
-  // Recompute file hashes
-  const currentHashes: Record<string, string> = {};
-  await hashDirectoryFiles(bundleDir, bundleDir, currentHashes);
-
-  // Check for missing or modified files
-  for (const [file, expectedHash] of Object.entries(sig.fileHashes)) {
-    if (file === 'signature.json') continue; // Skip the signature file itself
+  for (const [file, expectedHash] of Object.entries(payload.fileHashes)) {
     const currentHash = currentHashes[file];
     if (!currentHash) {
       errors.push(`Missing file: ${file}`);
@@ -228,31 +280,37 @@ export async function verifyBundleSignature(
     }
   }
 
-  // Check for new files not in the signature
   for (const file of Object.keys(currentHashes)) {
-    if (file === 'signature.json') continue;
-    if (!sig.fileHashes[file]) {
+    if (file === SIGNATURE_FILENAME) continue;
+    if (!payload.fileHashes[file]) {
       errors.push(`Unexpected file: ${file}`);
     }
   }
 
   if (errors.length > 0) {
+    cryptoLogger.debug('Bundle signature file set mismatch', { errorCount: errors.length });
     return { valid: false, errors };
   }
 
-  // Verify the signature
-  const hashData = Object.entries(sig.fileHashes)
-    .filter(([file]) => file !== 'signature.json')
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([file, hash]) => `${file}:${hash}`)
-    .join('\n');
-
-  if (!verifySignature(hashData, sig.signature, publicKeyStr)) {
-    errors.push('Signature verification failed');
-    return { valid: false, errors };
+  if (!verifySignature(payload.hashData, sig.signature, publicKeyStr)) {
+    cryptoLogger.debug('Bundle signature did not verify');
+    return { valid: false, errors: ['Signature verification failed'] };
   }
 
   return { valid: true, errors: [] };
+}
+
+/**
+ * Verify a bundle signature against files in a directory.
+ */
+export async function verifyBundleSignature(
+  bundleDir: string,
+  sig: BundleSignatureDocument,
+  publicKeyStr: string
+): Promise<{ valid: boolean; errors: string[] }> {
+  const currentHashes: Record<string, string> = {};
+  await hashDirectoryFiles(bundleDir, bundleDir, currentHashes);
+  return verifyBundleSignatureHashes(currentHashes, sig, publicKeyStr);
 }
 
 // ============================================================================
@@ -286,7 +344,7 @@ async function hashDirectoryFiles(
     if (entry.isDirectory()) {
       await hashDirectoryFiles(baseDir, fullPath, hashes);
     } else if (entry.isFile()) {
-      hashes[relativePath] = await hashFile(fullPath);
+      hashes[relativePath.split(path.sep).join('/')] = await hashFile(fullPath);
     }
   }
 }

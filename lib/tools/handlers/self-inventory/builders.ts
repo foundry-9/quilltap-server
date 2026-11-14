@@ -16,7 +16,11 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { groupMountsFor } from '@/lib/mount-index/reach';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
-import { buildSystemPrompt, buildOtherParticipantsInfo, type OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
+import {
+  buildSystemPrompt,
+  buildOtherParticipantsInfo,
+  type OtherParticipantInfo,
+} from '@/lib/chat/context/system-prompt-builder';
 import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions';
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver';
 import { getModelContextLimit, resolveContextWindow } from '@/lib/llm/model-context-data';
@@ -26,11 +30,56 @@ import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import { formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { isDockerEnvironment, isElectronShell, getElectronShellVersion } from '@/lib/paths';
 import { isDevelopment } from '@/lib/env';
-import type { SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultGroup, SelfInventoryVaultIncludedParts, SelfInventoryVaultAccessIncludedParts, SelfInventoryVaultCoreFilesSection, SelfInventoryCoreFile, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryGroupVaultAccess, SelfInventoryGroupVaultMember, SelfInventoryVaultAccessParticipant, SelfInventoryVaultAccessLevel, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryQuilltapIncludedParts, SelfInventoryRuntimeMode, SelfInventoryClientShell, SelfInventoryContextSection, SelfInventoryContextIncludedParts, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextGroup, SelfInventoryContextCharacters, SelfInventoryContextCharacter, SelfInventoryContextFiles, SelfInventoryContextFile, SelfInventoryContextMount, SelfInventorySection } from '../../self-inventory-tool';
-import { getErrorMessage, roundPercent, mapVaultFiles, HIGH_IMPORTANCE_THRESHOLD, type SelfInventoryToolContext } from './helpers';
+import type {
+  SelfInventoryVaultSection,
+  SelfInventoryVaultCharacterSection,
+  SelfInventoryVaultGroupsSection,
+  SelfInventoryVaultGroup,
+  SelfInventoryVaultIncludedParts,
+  SelfInventoryVaultAccessIncludedParts,
+  SelfInventoryVaultCoreFilesSection,
+  SelfInventoryCoreFile,
+  SelfInventoryVaultAccessSection,
+  SelfInventoryVaultAccessCharacterSection,
+  SelfInventoryVaultAccessGroupsSection,
+  SelfInventoryGroupVaultAccess,
+  SelfInventoryGroupVaultMember,
+  SelfInventoryVaultAccessParticipant,
+  SelfInventoryVaultAccessLevel,
+  SelfInventoryMemorySection,
+  SelfInventoryLoadedMemoriesSection,
+  SelfInventoryChatSection,
+  SelfInventoryPromptSection,
+  SelfInventoryLastTurnSection,
+  SelfInventoryCarinaSection,
+  SelfInventoryQuilltapSection,
+  SelfInventoryQuilltapIncludedParts,
+  SelfInventoryRuntimeMode,
+  SelfInventoryClientShell,
+  SelfInventoryContextSection,
+  SelfInventoryContextIncludedParts,
+  SelfInventoryContextChat,
+  SelfInventoryContextProject,
+  SelfInventoryContextGroups,
+  SelfInventoryContextGroup,
+  SelfInventoryContextCharacters,
+  SelfInventoryContextCharacter,
+  SelfInventoryContextFiles,
+  SelfInventoryContextFile,
+  SelfInventoryContextMount,
+  SelfInventorySection,
+} from '../../self-inventory-tool';
+import {
+  getErrorMessage,
+  roundPercent,
+  mapVaultFiles,
+  HIGH_IMPORTANCE_THRESHOLD,
+  type SelfInventoryToolContext,
+} from './helpers';
 import { chatActivityAt } from '@/lib/chat/chat-activity';
-import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
+import { CHARACTER_VAULT_FILE_PATHS } from '@/lib/characters/vault/layout';
 import { CORE_VAULT_FILE_SUMMARIES } from '@/lib/services/character-field-semantics';
+import { composePublicIdentity } from '@/lib/characters/public-identity';
 
 async function buildVaultCharacterSection(
   character: Character,
@@ -117,7 +166,7 @@ async function buildVaultCoreFilesSection(
   const rows = await repos.docMountFiles.findByMountPointId(mountPointId);
   const byLowerPath = new Map(rows.map((row) => [row.relativePath.toLowerCase(), row]));
 
-  const files: SelfInventoryCoreFile[] = SINGLE_FILE_OVERLAY_PATHS.map((corePath) => {
+  const files: SelfInventoryCoreFile[] = CHARACTER_VAULT_FILE_PATHS.map((corePath) => {
     const row = byLowerPath.get(corePath.toLowerCase());
     const foundPath = row?.relativePath ?? corePath;
     return {
@@ -1010,7 +1059,8 @@ async function buildContextCharacters(
       id: c.id,
       name: c.name,
       aliases: c.aliases ?? [],
-      identity: c.identity ?? null,
+      // The public identity: age, public progressions and pronouns, then identity.md.
+      identity: composePublicIdentity(c, c.identity) || null,
       isUserPersona: p.controlledBy === 'user',
     });
   }

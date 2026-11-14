@@ -357,7 +357,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "description": "Where to write. \"state.<path>\" writes tiered persistent state at the tier where the key already lives (chat if nowhere). \"metadata.<key>\" writes the rolling character's fact sheet; the remainder is taken WHOLE, so dots inside a key are fine. \"progress.<id>.<field>\" writes one of their timed progressions — writable fields are name, description, startTime, endTime, timeIncrement, percentageReport, reportFrequency, onComplete, reportTemplate, quantity.total, quantity.unit, quantity.precision, plus the pseudo-field remove (write true to delete the progression). Writing a field of an id nobody authored CREATES it with defaults, and a time field takes epoch milliseconds or an ISO instant, normalised to ISO on write. A write needs both target and value."
+          "description": "Where to write. \"state.<path>\" writes tiered persistent state at the tier where the key already lives (chat if nowhere). \"metadata.<key>\" writes the rolling character's fact sheet; the remainder is taken WHOLE, so dots inside a key are fine. \"progress.<id>.<field>\" writes one of their timed progressions — writable fields are name, description, startTime, endTime, timeIncrement, percentageReport, reportFrequency, onComplete, reportTemplate, public, quantity.total, quantity.unit, quantity.precision, plus the pseudo-field remove (write true to delete the progression). Writing a field of an id nobody authored CREATES it with defaults, and a time field takes epoch milliseconds or an ISO instant, normalised to ISO on write. A write needs both target and value."
         },
         "value": {
           "description": "What to write. A JSON number or boolean is a literal, stored as-is. A JSON string is ALWAYS an expression — quote literal prose inside it: \"'broken pick'\", not \"broken pick\" (the bare form is a load-time parse error). Expressions take arithmetic (+ - * /), string concatenation (+ with a string operand), parentheses, number/string/boolean literals, and {{ref}} substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{params.x}}, {{metadata.key}}, {{state.path}}) — no identifiers, no function calls, no member access. {{dice}} and {{llm}} are strings and are never numerically coerced. Division by zero, or any reference that does not resolve, skips the effect at run time.",
@@ -617,7 +617,7 @@
         "progress": {
           "type": "object",
           "minProperties": 1,
-          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
+          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), public (boolean), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
           "additionalProperties": {
             "$ref": "#/$defs/MetadataComparator"
           },
@@ -726,7 +726,7 @@
         "progress": {
           "type": "object",
           "minProperties": 1,
-          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
+          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), public (boolean), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match.",
           "additionalProperties": {
             "$ref": "#/$defs/MetadataComparator"
           },
@@ -836,7 +836,7 @@
         "progress": {
           "type": "object",
           "minProperties": 1,
-          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match. A character with no progressions at all therefore fails every availableWhen and satisfies no withheldWhen.",
+          "description": "Test the invoking character's timed progressions, keyed \"<progression id>.<field>\" — e.g. \"cannon.complete\". The fields are derived fresh from the wall clock: name, percent (uncapped), elapsedMs, remainingMs (negative when overdue), startTime and endTime (epoch milliseconds), started, complete, state (pending/active/complete), public (boolean), elapsed, remaining, and quantity when the progression carries one. Fail-soft: a progression the character does not carry, or a field that does not exist on it, simply does not match. A character with no progressions at all therefore fails every availableWhen and satisfies no withheldWhen.",
           "additionalProperties": {
             "$ref": "#/$defs/GateComparator"
           },

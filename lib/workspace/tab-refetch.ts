@@ -13,16 +13,17 @@
  *  - `salon` / `terminal` / `document` — live surfaces fed by SSE/PTY; a
  *    blanket invalidation risks disturbing an in-flight stream (the Salon's
  *    streaming transport is out of bounds per the TanStack migration spec).
- *  - `character-edit`, `character-new`, `document-standalone`,
- *    `settings-wizard` — editors holding unsaved user state; refreshing under
- *    the user's feet could clobber work in progress.
+ *  - `character-new`, `document-standalone`, `settings-wizard` — editors
+ *    holding unsaved user state; refreshing under the user's feet could
+ *    clobber work in progress. (The character page is not among them: it
+ *    autosaves, and its fields keep a focused or unsent draft over a refetch.)
  *  - `brahma` — a console chat, live by nature.
  *  - `about` — static.
  *  - `scenarios` / `wardrobe` — their views fetch outside TanStack Query and
  *    re-run their own loads via `useOnTabActivated`.
  *
  * Views that still fetch outside TanStack Query (Prospero, the Scriptorium,
- * Photos, the character detail, FileBrowser, …) additionally re-run their own
+ * Photos, FileBrowser, …) additionally re-run their own
  * loads via `useOnTabActivated` (see
  * `components/workspace/workspace-tab-context.tsx`); the entries here cover
  * their TanStack-side reads and keep working as those views migrate.
@@ -32,7 +33,7 @@
 
 import { queryKeys } from '@/lib/query/keys'
 import { queryKeysForTopic } from '@/lib/realtime/topic-map'
-import type { CharacterViewTabPayload, WorkspaceTab } from './types'
+import type { CharacterTabPayload, WorkspaceTab } from './types'
 
 type QueryKeyPrefix = readonly unknown[]
 
@@ -61,16 +62,21 @@ export function tabActivationQueryKeys(tab: WorkspaceTab): QueryKeyPrefix[] {
         queryKeys.settings.chat,
       ]
     case 'aurora':
-      return [queryKeys.characters.all, queryKeys.groups.all, queryKeys.tags.all]
-    case 'character-view': {
-      const payload = tab.payload as CharacterViewTabPayload | undefined
+      // A group's page lives in this tab: its record, members and linked
+      // stores sit under `groups`, and its store picker reads the store list.
+      return [queryKeys.characters.all, queryKeys.groups.all, queryKeys.tags.all, queryKeys.mountPoints.lists]
+    case 'character': {
+      const payload = tab.payload as CharacterTabPayload | undefined
       if (!payload?.characterId) return []
       // The realtime topic map already owns the row-scoped character keys
       // (detail/prompts/photos); reuse it rather than restating the triple.
       return [...queryKeysForTopic('characters', payload.characterId)]
     }
     case 'prospero':
-      return [queryKeys.projects.all]
+      // A project's page lives in this tab: its record, chats, files and
+      // linked stores sit under `projects`, and its store picker reads the
+      // store list.
+      return [queryKeys.projects.all, queryKeys.mountPoints.lists]
     case 'scriptorium':
       return [queryKeys.mountPoints.all]
     case 'files':

@@ -23,6 +23,7 @@ import {
   segmentsToHtml,
 } from '@/lib/chat/roleplay-rendering';
 import { escapeRegex } from '@/lib/utils/regex';
+import { sanitizeClassName } from '@/lib/utils/css-class';
 
 /**
  * Process roleplay syntax in HTML content and wrap inline matches with styled
@@ -139,10 +140,10 @@ export function applyDialogueDetection(html: string, detection: DialogueDetectio
     if (isDialogueParagraph(plainText, detection)) {
       // Add dialogue class to existing class attribute or create new one
       if (attrs.includes('class="')) {
-        const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${detection.className}"`);
+        const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${sanitizeClassName(detection.className)}"`);
         return `<p${newAttrs}>${content}</p>`;
       } else {
-        return `<p${attrs} class="${detection.className}">${content}</p>`;
+        return `<p${attrs} class="${sanitizeClassName(detection.className)}">${content}</p>`;
       }
     }
 
@@ -182,10 +183,10 @@ export function applyLineScopedClasses(html: string, compiledRules: CompiledRule
       }
 
       if (attrs.includes('class="')) {
-        const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${lm.className}"`);
+        const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${sanitizeClassName(lm.className)}"`);
         return `<${tag}${newAttrs}>${body}</${tag}>`;
       }
-      return `<${tag}${attrs} class="${lm.className}">${body}</${tag}>`;
+      return `<${tag}${attrs} class="${sanitizeClassName(lm.className)}">${body}</${tag}>`;
     },
   );
 }
@@ -226,7 +227,7 @@ export function applyWrapBlockClasses(html: string, compiledRules: CompiledRule[
         inner = inner.slice(0, inner.length - wrap.suffix.length);
       }
 
-      return `<${tag}${attrs}><span class="${wrap.className}">${inner}</span></${tag}>`;
+      return `<${tag}${attrs}><span class="${sanitizeClassName(wrap.className)}">${inner}</span></${tag}>`;
     },
   );
 }

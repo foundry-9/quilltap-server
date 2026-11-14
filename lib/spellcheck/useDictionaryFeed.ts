@@ -15,9 +15,7 @@
  */
 
 import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
 
 const MAX_DICTIONARY_WORDS = 5000
 
@@ -50,27 +48,20 @@ export function tokenizeNames(names: string[]): string[] {
   return arr
 }
 
-interface CharactersResponse {
-  characters?: Array<{ name?: string | null }>
-}
-
 /**
  * Pushes Aurora character names to the shell dictionary whenever the
  * `/api/v1/characters` payload changes. Silent no-op outside Electron.
  */
 export function useDictionaryFeed(): void {
-  const { data } = useQuery({
-    queryKey: queryKeys.characters.list(),
-    queryFn: ({ signal }) => apiFetch<CharactersResponse>('/api/v1/characters', { signal }),
-  })
+  const { data } = useCharactersList<{ name?: string | null }>()
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const shell = window.quilltap
     if (typeof shell?.setDictionaryWords !== 'function') return
-    if (!data?.characters) return
+    if (!data) return
 
-    const names = data.characters
+    const names = data
       .map((c) => c?.name)
       .filter((n): n is string => typeof n === 'string' && n.length > 0)
     const words = tokenizeNames(names)
@@ -81,5 +72,5 @@ export function useDictionaryFeed(): void {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[spellcheck-feed] push failed', { error: message })
       })
-  }, [data?.characters])
+  }, [data])
 }

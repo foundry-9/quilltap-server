@@ -62,10 +62,8 @@ import {
   parseMountIndexBackupFilename,
 } from '../../lib/database/backends/sqlite/physical-backup';
 import { ensureCharacterVault } from '../../lib/mount-index/character-vault';
-import {
-  writeCharacterVaultManagedFields,
-  projectVaultWardrobe,
-} from '../../lib/database/repositories/character-properties-overlay';
+import { writeCharacterVaultManagedFields } from '../../lib/characters/vault/write';
+import { projectVaultWardrobe } from '../../lib/wardrobe/vault-sync';
 import { getMountIndexSQLiteClient } from '../../lib/database/backends/sqlite/mount-index-client';
 import { loadMountIndexConfig } from '../../lib/database/config';
 import { getRepositories } from '../../lib/repositories/factory';
@@ -569,10 +567,9 @@ async function processOneCharacter(character: Character): Promise<CharacterOutco
       const provisioned = await ensureCharacterVault(character);
       outcome.vaultMountPointId = provisioned.mountPointId;
       if (provisioned.created) {
+        // ensureCharacterVault no longer projects content (it scaffolds only),
+        // so a freshly created vault falls through to the populate step below.
         outcome.action = 'vault-created';
-        // ensureCharacterVault calls populate on create, so the vault is
-        // now whole. Skip the missing-files branch.
-        return outcome;
       }
     } catch (err) {
       outcome.action = 'blocked';
@@ -597,7 +594,7 @@ async function processOneCharacter(character: Character): Promise<CharacterOutco
     // longer handles it. The raw DB rows are still the source here (the table
     // exists when this cutover runs) and project into the vault's Wardrobe/ folder.
     await projectVaultWardrobe(mountPointId, character.id, wardrobeItems);
-    outcome.action = 'populated';
+    if (outcome.action !== 'vault-created') outcome.action = 'populated';
   } catch (err) {
     outcome.action = 'blocked';
     outcome.blockedReason = `populate failed: ${err instanceof Error ? err.message : String(err)}`;

@@ -46,7 +46,7 @@ export function ExportSelectStep({
             onChange={() => onScopeChange('all')}
             className="w-4 h-4"
           />
-          <span className="font-medium text-foreground">Export All</span>
+          <span className="font-medium qt-text">Export All</span>
         </label>
         <label className="flex items-center gap-3 cursor-pointer">
           <input
@@ -57,7 +57,7 @@ export function ExportSelectStep({
             onChange={() => onScopeChange('selected')}
             className="w-4 h-4"
           />
-          <span className="font-medium text-foreground">Select Specific</span>
+          <span className="font-medium qt-text">Select Specific</span>
         </label>
       </div>
 
@@ -90,7 +90,7 @@ export function ExportSelectStep({
                     onChange={() => onToggleSelection(entity.id)}
                     className="w-4 h-4"
                   />
-                  <span className="text-foreground">{entity.name}</span>
+                  <span className="qt-text">{entity.name}</span>
                 </label>
               ))}
             </div>

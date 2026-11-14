@@ -93,6 +93,8 @@ function makeJob() {
   } as any
 }
 
+const avatarTimelineRecord = jest.fn().mockResolvedValue({ kind: 'appended', baseline: true })
+
 beforeEach(() => {
   jest.clearAllMocks()
 
@@ -110,6 +112,7 @@ beforeEach(() => {
       getEquippedOutfitForCharacter: jest.fn().mockResolvedValue({}),
       update: jest.fn().mockResolvedValue(undefined),
     },
+    avatarTimeline: { record: avatarTimelineRecord },
     characters: {
       findById: jest.fn().mockResolvedValue({
         id: CHARACTER_ID,
@@ -266,5 +269,20 @@ describe('character-avatar handler — orientation + measured dimensions', () =>
     expect(mockCreateImageProvider).toHaveBeenCalledWith('grok')
     const providerInstance = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
     expect(providerInstance.generateImage.mock.calls[0][1]).toBe('sk-desk')
+  })
+})
+
+describe('character-avatar handler — Salon avatar timeline', () => {
+  it('records the freshly drawn avatar as a generated timeline entry', async () => {
+    await handleCharacterAvatarGeneration(makeJob())
+
+    expect(avatarTimelineRecord).toHaveBeenCalledTimes(1)
+    expect(avatarTimelineRecord).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      characterId: CHARACTER_ID,
+      imageId: expect.any(String),
+      source: 'generated',
+      priorImageId: null,
+    })
   })
 })

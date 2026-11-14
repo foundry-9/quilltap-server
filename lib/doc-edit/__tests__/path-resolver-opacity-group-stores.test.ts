@@ -152,14 +152,15 @@ describe('an opaque character keeps her own group stores', () => {
   });
 });
 
-describe('the covenant itself is unchanged', () => {
-  it('keeps the acting character OWN vault hidden by name', async () => {
+describe('the covenant: peers hidden, own vault guarded', () => {
+  it('reaches the acting character OWN vault by name, guarded', async () => {
     mockWorld();
     const ctx = await buildReadResolutionContext({ mount_point: OWN_VAULT.name }, toolContext);
 
-    await expect(resolveDocEditPath('document_store', 'x.md', ctx)).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    } as Partial<PathResolutionError>);
+    await expect(resolveDocEditPath('document_store', 'Knowledge/x.md', ctx)).resolves.toMatchObject({
+      mountPointId: OWN_VAULT.id,
+      ownVaultGuarded: true,
+    });
   });
 
   it('keeps a PEER vault hidden by name, and does not admit it exists', async () => {
@@ -173,20 +174,30 @@ describe('the covenant itself is unchanged', () => {
     } as Partial<PathResolutionError>);
   });
 
-  it('refuses the reserved "self" token', async () => {
+  it('resolves the reserved "self" token to her own vault, guarded', async () => {
     mockWorld();
     const ctx = await buildWriteResolutionContext({ mount_point: SELF_VAULT_TOKEN }, toolContext);
 
-    await expect(resolveDocEditPath('document_store', 'x.md', ctx)).rejects.toMatchObject({
-      code: 'NOT_FOUND',
+    await expect(resolveDocEditPath('document_store', 'Scenarios/x.md', ctx)).resolves.toMatchObject({
+      mountPointId: OWN_VAULT.id,
+      ownVaultGuarded: true,
+    });
+  });
+
+  it('refuses a core folder of her own vault', async () => {
+    mockWorld();
+    const ctx = await buildWriteResolutionContext({ mount_point: SELF_VAULT_TOKEN }, toolContext);
+
+    await expect(resolveDocEditPath('document_store', 'Prompts/default.md', ctx)).rejects.toMatchObject({
+      code: 'ACCESS_DENIED',
     } as Partial<PathResolutionError>);
   });
 
-  it('sets hideCharacterVaults while KEEPING the character the group tier is keyed on', async () => {
+  it('sets guardOwnVault while KEEPING the character the group tier is keyed on', async () => {
     mockWorld();
     const ctx = await buildWriteResolutionContext({ mount_point: GROUP_STORE.name }, toolContext);
 
-    expect(ctx.hideCharacterVaults).toBe(true);
+    expect(ctx.guardOwnVault).toBe(true);
     expect(ctx.characterId).toBe(ACTING);
   });
 });
@@ -205,7 +216,7 @@ describe('a transparent character is unaffected', () => {
       mountPointId: GROUP_STORE.id,
     });
 
-    expect(vaultCtx.hideCharacterVaults).toBeUndefined();
+    expect(vaultCtx.guardOwnVault).toBeUndefined();
   });
 });
 

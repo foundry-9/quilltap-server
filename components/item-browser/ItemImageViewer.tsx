@@ -1,11 +1,12 @@
 'use client'
 
 /**
- * A Wardrobe item's or Inventory object's picture, full screen.
+ * A Wardrobe item's, Inventory object's or Atlas entry's picture, full screen.
  *
  * The shared `FullScreenImageViewer` frame with three buttons: Save (the
  * Salon's `SaveImageDialog`, offered every document store, filing a copy in
- * the chosen store's `photos/`), Download, and Copy. Opened from a row
+ * the chosen store's `photos/` through the kind's images route), Download,
+ * and Copy. Opened from a row
  * thumbnail and from the item editor's picture section, where Previous / Next
  * walk the item's pictures.
  *
@@ -35,6 +36,8 @@ import { queryKeys } from '@/lib/query/keys'
 import { deleteWardrobeItemImage, wardrobeImageUrl } from '@/lib/wardrobe/item-images-client'
 import { inventoryImagesUrl } from '@/lib/inventory/container'
 import { inventoryRequest } from '@/lib/inventory/request'
+import { atlasImagesUrl } from '@/lib/atlas/container'
+import { atlasRequest } from '@/lib/atlas/request'
 import type { ItemKind } from '@/lib/folder-browser/item-kind'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 
@@ -62,6 +65,13 @@ const KIND_SPECS: Record<ItemKind, KindSpec> = {
     deleteMissing: (itemId, container, fileId) =>
       inventoryRequest(inventoryImagesUrl(container, itemId, 'delete-image'), 'POST', { fileId }),
     refreshKey: queryKeys.inventory.all,
+  },
+  atlas: {
+    fallbackStem: 'atlas_entry',
+    label: 'atlas picture',
+    deleteMissing: (entryId, container, fileId) =>
+      atlasRequest(atlasImagesUrl(container, entryId, 'delete-image'), 'POST', { fileId }),
+    refreshKey: queryKeys.atlas.all,
   },
 }
 

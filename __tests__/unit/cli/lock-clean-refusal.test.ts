@@ -12,7 +12,7 @@
  *
  * Guards:
  *   - packages/quilltap/bin/quilltap.js (the --lock-clean arms)
- *   - docs/developer/bugs/fixed/bug-144-lock-clean-claims-dead-holder-is-alive.md
+ *   - https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-144-lock-clean-claims-dead-holder-is-alive.md
  */
 
 import { execFileSync } from 'child_process';

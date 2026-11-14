@@ -14,6 +14,7 @@ export {
   buildExtractionContext,
   clockAt,
   pickExtractionConnectionProfileId,
+  resolveChatExtractionProfileId,
   ExtractionContextError,
   type BuildExtractionContextOptions,
   type CastMember,

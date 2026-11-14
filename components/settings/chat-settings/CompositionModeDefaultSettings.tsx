@@ -23,10 +23,10 @@ export function CompositionModeDefaultSettings({
           checked={enabled}
           onChange={(e) => onChange(e.target.checked)}
           disabled={saving}
-          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
-          <div className="font-medium text-foreground">
+          <div className="font-medium qt-text">
             Start New Chats in Composition Mode
           </div>
           <div className="qt-text-small mt-1">

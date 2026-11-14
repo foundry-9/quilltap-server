@@ -32,7 +32,7 @@ Each provider card shows capability badges:
 
 ### Step 2: Present Your Credentials
 
-For each selected provider that requires an API key, you'll enter your key and the wizard will validate it against the provider's servers. A green checkmark confirms all is in order; a red notice means something's amiss — usually a miscopied key or insufficient credits.
+For each selected provider that requires an API key, you'll enter your key and the wizard will validate it against the provider's servers. A green checkmark confirms all is in order; a red notice means something's amiss — usually a miscopied key or insufficient credits. A key is put away in the vault only once the provider has accepted it, so a mistyped one leaves no trace, and validating again with a corrected key replaces the one the wizard saved rather than filing a second copy. When you revisit the wizard from Settings, a key you already have shows as asterisks; leave it be and **Re-validate** tests the stored key without touching it.
 
 Providers like Ollama, which run locally and don't require credentials, need only a base URL (typically `http://localhost:11434`).
 
@@ -41,7 +41,9 @@ Providers like Ollama, which run locally and don't require credentials, need onl
 With credentials verified, the wizard fetches available models from each provider and presents them for your selection:
 
 - **Primary Chat Model** — Your main conversationalist, the model that will power most interactions
-- **Cheap LLM Strategy** — For background tasks like memory extraction and title generation. "Auto" (recommended) lets Quilltap pick the most economical option; "Manual" lets you choose a specific model
+- **Cheap LLM Strategy** — For background tasks like memory extraction and title generation. "Auto" (recommended) uses the cheapest model of your primary chat provider — for Anthropic, whichever Haiku Anthropic reports as newest, looked up rather than remembered; "Manual" lets you choose a specific provider and model, which the wizard saves as a profile and sets as your **User Defined** cheap LLM. See [Cheap LLM Configuration](chat-settings-ai-services.md#cheap-llm-configuration)
+
+A provider with a long roster of models offers a search box rather than a plain list. Type to narrow it, or press the Down arrow to step into the list; the arrows move between models, Enter chooses one, and Escape closes the list and returns you to the search box. A screen reader announces it as a list of choices, labelled with the provider's name.
 
 ### Step 4: The Memory Engine (Optional)
 
@@ -53,7 +55,7 @@ Similarly optional, this step lets you configure image generation if your provid
 
 ### Step 6: Review & Confirm
 
-A summary of everything you've configured, with the opportunity to test your connections before committing. The "Test All" button sends a brief message to verify your chat model responds properly. When satisfied, "Save & Complete" creates all necessary profiles in one decisive stroke.
+A summary of everything you've configured, with the opportunity to test your connections before committing. The "Test All" button sends a brief message to verify your chat model responds properly, and asks your embedding model to file away a single short line, so a mistake on the Memory Engine step is caught here rather than after your first conversation. Each row it checks earns a tick or a cross of its own, and the note beside the button names exactly what was tested. The Built-in (TF-IDF) option has nothing to dial up, and image generation is deliberately left untested, since a test would commission (and bill you for) an actual picture; try the Lantern once you're settled. When satisfied, "Save & Complete" creates all necessary profiles in one decisive stroke.
 
 ## Multi-Provider Stacking
 
@@ -69,7 +71,7 @@ Each service connects through its own API key, and the wizard ensures all the pl
 
 **"No chat-capable provider selected"** — You must select at least one provider with the Chat capability badge before proceeding past Step 1.
 
-**API key validation fails** — Double-check you've copied the entire key. Verify your account has credits. For Ollama, ensure the service is running locally.
+**API key validation fails** — The wizard says the provider "did not accept this key", which is all the provider tells it. Double-check you've copied the entire key. Verify your account has credits. If both are right, the provider may simply be unreachable for the moment; try again shortly. For Ollama, ensure the service is running locally.
 
 **No models appear** — The provider may be temporarily unavailable, or your API key may lack the necessary permissions. Try the "Refresh" button or check your provider's status page.
 

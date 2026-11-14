@@ -114,7 +114,7 @@ When the AI uses a tool:
 
 - Search Web tool must be enabled
 - Connection profile must allow web search
-- A search provider API key must be configured in Settings > API Keys (e.g., Serper)
+- A search provider API key must be configured in Settings → Connections → Providers → API Keys (e.g., Serper)
 
 **Best practices:**
 
@@ -213,7 +213,7 @@ Some responses involve a sequence of tool calls:
 
 **Enable these first:**
 
-- Help tools must be enabled on the character (in the character's Profiles tab)
+- Help tools must be enabled on the character (in the **Chat Defaults** section of the character's page, under **Help tools**)
 
 **Best practices:**
 

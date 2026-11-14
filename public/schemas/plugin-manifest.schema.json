@@ -478,6 +478,9 @@
           },
           "max": {
             "type": "number"
+          },
+          "secret": {
+            "type": "boolean"
           }
         },
         "required": [

@@ -110,6 +110,18 @@ describe('seedLegacyConnectionProfileFields', () => {
     })
   })
 
+  describe('toolResultVerbatimTurns (4.13+, DEFAULT 3)', () => {
+    it('seeds the previous fixed window for an archive that predates the column', () => {
+      expect(seedLegacyConnectionProfileFields({ provider: 'ANTHROPIC' }).toolResultVerbatimTurns).toBe(3)
+    })
+
+    it('never overrides a stored window, including 0 (never elide)', () => {
+      expect(
+        seedLegacyConnectionProfileFields({ provider: 'ANTHROPIC', toolResultVerbatimTurns: 0 }).toolResultVerbatimTurns
+      ).toBe(0)
+    })
+  })
+
   it('returns a copy and leaves the archive record untouched', () => {
     const archived = { provider: 'OPENAI', name: 'A Profile' }
     const seeded = seedLegacyConnectionProfileFields(archived)

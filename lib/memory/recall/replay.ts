@@ -28,6 +28,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { extractMemorySearchKeywords, stripToolArtifacts } from '../cheap-llm-tasks'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { partitionMessagesIntoTurns } from '@/lib/chat/context-summary'
+import { resolveSpeakerNames } from '@/lib/chat/speaker-names'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { MessageEvent } from '@/lib/schemas/types'
 import type { EmbeddingResult } from '@/lib/embedding/embedding-service'
@@ -178,12 +179,18 @@ const REPLAY_DEFAULT_MEMORY_BUDGET = 2000
  * head ids of the last few recall records before it. Null when the chat has no
  * recall records that early (it predates them).
  */
-export function ringAsOf(messages: readonly MessageEvent[], beforeMessageId: string): string[][] | null {
+export function ringAsOf(
+  messages: readonly MessageEvent[],
+  beforeMessageId: string,
+  participantIds?: ReadonlySet<string>,
+): string[][] | null {
   const cutoff = messages.findIndex(m => m.id === beforeMessageId)
   const before = cutoff >= 0 ? messages.slice(0, cutoff) : messages
   const turns: string[][] = []
   let sawRecord = false
   for (const m of before) {
+    // The ring is per character (A14): only this character's own turns feed it.
+    if (participantIds && !(m.participantId && participantIds.has(m.participantId))) continue
     const ring = ringFromDebugLog(m.debugMemoryLogs)
     if (ring === null) continue
     sawRecord = true
@@ -235,9 +242,11 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     [...window].reverse().find(m => m.createdAt)?.createdAt ?? new Date().toISOString()
 
   // Distill the turn signals (same call, same inputs the live path uses).
+  // Lines keep their seats so the transcript is labelled by speaker.
   const recentForDistill = window.slice(-12).map(m => ({
     role: m.role.toLowerCase() as 'user' | 'assistant',
     content: (m.role === 'ASSISTANT' ? stripToolArtifacts(m.content || '') : m.content) || '',
+    participantId: m.participantId ?? null,
   })).filter(m => m.content.length > 0)
 
   let signals: MemorySearchExtraction | null
@@ -245,6 +254,13 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     signals = input.signals
     logger.debug('Recall replay using pinned signals', { chatId: input.chatId, turnIndex })
   } else {
+    const speakerNames = await resolveSpeakerNames(chat)
+    logger.debug('Recall replay distilling signals', {
+      chatId: input.chatId,
+      turnIndex,
+      lines: recentForDistill.length,
+      namedSeats: speakerNames.size,
+    })
     const distill = await extractMemorySearchKeywords(
       recentForDistill,
       character.name,
@@ -253,6 +269,8 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
       input.chatId,
       character.id,
       { nowIso: clockIso, timelineMode: chat.timelineMode ?? 'realtime' },
+      undefined,
+      speakerNames,
     )
     signals = distill.success ? distill.result ?? null : null
   }
@@ -301,7 +319,9 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
   // on the messages before it; a chat older than those records falls back to
   // its current ring.
   const messageEvents = allMessages.filter((m): m is MessageEvent => m.type === 'message')
-  const reconstructed = openingMessage ? ringAsOf(messageEvents, openingMessage.id) : null
+  const ownSeats = new Set(chat.participants.filter(p => p.characterId === character.id).map(p => p.id))
+  const reconstructed = openingMessage ? ringAsOf(messageEvents, openingMessage.id, ownSeats) : null
+  const replayRing = reconstructed ? { byCharacter: { [character.id]: reconstructed } } : null
   const ringSource: 'debug-log' | 'chat' = reconstructed ? 'debug-log' : 'chat'
 
   const retrospective = query.retrospective
@@ -315,7 +335,8 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
   // The same context assembly as the live paths (lib/memory/recall/tags.ts).
   // The OLD path leaves the retrospective flag off entirely.
   const baseCtx = buildTurnRecallContext({
-    chat: reconstructed ? { ...chat, commonplaceRecallHistory: { turns: reconstructed } } : chat,
+    characterId: character.id,
+    chat: replayRing ? { ...chat, commonplaceRecallHistory: replayRing } : chat,
     recallSettings,
     turnContext: signals?.context ?? null,
     turnTemporal: signals?.temporal ?? null,
@@ -353,7 +374,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
   const bundle = await assembleRecall({
     userId: input.userId,
     character: { id: character.id, name: character.name },
-    chat: reconstructed ? { ...chat, commonplaceRecallHistory: { turns: reconstructed } } : chat,
+    chat: replayRing ? { ...chat, commonplaceRecallHistory: replayRing } : chat,
     memoryBudget: input.memoryBudget ?? REPLAY_DEFAULT_MEMORY_BUDGET,
     minImportance: RECALL_MIN_IMPORTANCE,
     skipMemories: false,

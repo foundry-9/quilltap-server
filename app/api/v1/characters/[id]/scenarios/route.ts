@@ -7,10 +7,10 @@
  * PUT /api/v1/characters/[id]/scenarios?scenarioId=xxx - Update a scenario
  * DELETE /api/v1/characters/[id]/scenarios?scenarioId=xxx - Remove a scenario
  *
- * NOTE: the filtering here is a RESPONSE filter only. `character.scenarios`
- * itself always carries the archived entries, because the vault write overlay
- * projects that array back over the `Scenarios/` folder and deletes any file
- * missing from it — a filtered array would delete the archived files.
+ * Writes are per item (one file each) and ids are stable: the id a POST
+ * returns is the id every later GET returns, and a title change keeps it.
+ * The filtering is a RESPONSE filter only: `character.scenarios` itself always
+ * carries the archived entries.
  */
 
 import { z } from 'zod';
@@ -18,16 +18,20 @@ import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, notFound, serverError, badRequest, created } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
+import { publishRealtime } from '@/lib/realtime/bus';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 
 const createScenarioSchema = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1),
+  description: z.string().max(500).optional(),
   archived: z.boolean().optional(),
 });
 
 const updateScenarioSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   content: z.string().min(1).optional(),
+  description: z.string().max(500).optional(),
   archived: z.boolean().optional(),
 });
 
@@ -59,7 +63,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
     const body = await request.json();
     const validated = createScenarioSchema.parse(body);
 
-    const character = await repos.characters.findById(characterId);
+    const character = await repos.characters.findByIdRaw(characterId);
 
     if (!exists(character)) {
       return notFound('Character');
@@ -68,6 +72,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
     const scenario = await repos.characters.addScenario(characterId, {
       title: validated.title,
       content: validated.content,
+      ...(validated.description !== undefined && { description: validated.description }),
       ...(validated.archived !== undefined && { archived: validated.archived }),
     });
 
@@ -86,6 +91,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
       scenarioTitle: validated.title,
     });
 
+    publishRealtime('characters', characterId);
     return created({ scenario });
   }
 );
@@ -103,7 +109,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
     const body = await request.json();
     const validated = updateScenarioSchema.parse(body);
 
-    const character = await repos.characters.findById(characterId);
+    const character = await repos.characters.findByIdRaw(characterId);
 
     if (!exists(character)) {
       return notFound('Character');
@@ -121,6 +127,7 @@ export const PUT = createContextParamsHandler<{ id: string }>(
       scenarioId,
     });
 
+    publishRealtime('characters', characterId);
     return successResponse({ scenario: updated });
   }
 );
@@ -136,7 +143,7 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
         return badRequest('scenarioId query parameter is required');
       }
 
-      const character = await repos.characters.findById(characterId);
+      const character = await repos.characters.findByIdRaw(characterId);
 
       if (!exists(character)) {
         return notFound('Character');
@@ -148,14 +155,23 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
         return notFound('Scenario');
       }
 
+      // A default that names a scenario no longer there would pre-select
+      // nothing in the New Chat dialog; clear it with the scenario.
+      if (character.defaultScenarioId === scenarioId) {
+        await repos.characters.update(characterId, { defaultScenarioId: null });
+        logger.debug('[Characters v1] Cleared default scenario with its scenario', { characterId, scenarioId });
+      }
+
       logger.info('[Characters v1] Scenario removed from character', {
         characterId,
         userId: user.id,
         scenarioId,
       });
 
+      publishRealtime('characters', characterId);
       return successResponse({ message: 'Scenario removed' });
     } catch (error) {
+      if (error instanceof CharacterArchivedError) throw error;
       logger.error('[Characters v1] Error removing character scenario', {}, error instanceof Error ? error : undefined);
       return serverError('Failed to remove character scenario');
     }

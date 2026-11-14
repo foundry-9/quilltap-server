@@ -92,7 +92,7 @@ describe('BoundedNumberInstanceSetting (via DataRetentionSettings / BrahmaConsol
     renderWithQuery(<BrahmaConsoleSettings />)
 
     const input = (await screen.findByLabelText(/Let the Console take up to/)) as HTMLInputElement
-    expect(input.value).toBe('50')
+    expect(input.value).toBe('10')
   })
 
   it('reverts an out-of-bounds entry without a request', async () => {
@@ -100,11 +100,23 @@ describe('BoundedNumberInstanceSetting (via DataRetentionSettings / BrahmaConsol
     renderWithQuery(<BrahmaConsoleSettings />)
 
     const input = (await screen.findByLabelText(/Let the Console take up to/)) as HTMLInputElement
-    fireEvent.change(input, { target: { value: '999' } })
+    fireEvent.change(input, { target: { value: '0' } })
     fireEvent.blur(input)
 
     expect(input.value).toBe('50')
     expect(putBodies(spy)).toEqual([])
+  })
+
+  it('has no upper bound on the Console turn budget', async () => {
+    const spy = stubSettingsRoute(CONSOLE_URL, { maxAgentTurns: 50 })
+    renderWithQuery(<BrahmaConsoleSettings />)
+
+    const input = (await screen.findByLabelText(/Let the Console take up to/)) as HTMLInputElement
+    expect(input).not.toHaveAttribute('max')
+    fireEvent.change(input, { target: { value: '999' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(putBodies(spy)).toEqual([{ maxAgentTurns: 999 }]))
   })
 
   it('normalises an unchanged entry without a request', async () => {

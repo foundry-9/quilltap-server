@@ -249,7 +249,7 @@ Then `npx jest -u lib/tools/__tests__/tool-definitions-snapshot.test.ts` and rev
 
 Keep the two texts in step. Neither is part of `buildIdentityStack`, so no builder version bump.
 
-**Sequencing note (2026-11-04):** `native-tool-prompt.ts` and its test were being reworked by the character-kind / agent-mode work ([character-kind-and-roleplay-defaults.md](../character-kind-and-roleplay-defaults.md)) when this spec was written. Land this sentence after that work is committed, and find the rule by its text ("Recalling past events"), not by line number.
+**Sequencing note (2026-11-04):** `native-tool-prompt.ts` and its test were being reworked by the character-kind / agent-mode work ([character-kind-and-roleplay-defaults.md](character-kind-and-roleplay-defaults.md)) when this spec was written. Land this sentence after that work is committed, and find the rule by its text ("Recalling past events"), not by line number.
 
 ### 7. Per-turn recall: unsummarized chats in the retrospective mini-recap
 

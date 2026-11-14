@@ -17,6 +17,8 @@ export interface RestorePreview {
   tags: number
   files: number
   memories: number
+  /** Plugins the backup holds; a restore does not install them. */
+  npmPluginNames?: string[]
 }
 
 export interface RestoreState {

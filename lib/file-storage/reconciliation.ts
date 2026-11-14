@@ -10,7 +10,9 @@
  * 3. For each file on disk: match to DB by storageKey, collect unmatched
  * 3.5. SHA-256 cross-match unmatched disk files with unmatched DB records to detect moves
  * 4. For each DB record not on disk and not matched by cross-matching: delete
- *    (unless referenced by characters or has linkedTo — those are preserved)
+ *    (unless referenced by characters or has linkedTo — those are preserved).
+ *    Rows with a `mount-blob:` storageKey live in the mount-index database,
+ *    not on disk, and are left out of steps 3.5 and 4 entirely.
  * 5. Log summary
  *
  * @module file-storage/reconciliation
@@ -22,6 +24,7 @@ import { getFilesDir } from '@/lib/paths';
 import { deriveFolderPathFromStorageKey } from '@/lib/files/folder-utils';
 import { scanDirectory, computeSha256, detectMimeType } from './scanner';
 import { preservesContentDigest } from './digest-policy';
+import { isMountBlobStorageKey } from './mount-blob-key';
 
 const logger = createLogger('file-storage:reconciliation');
 
@@ -136,10 +139,24 @@ export async function reconcileFilesystem(): Promise<void> {
       unmatchedDiskFiles.push(scannedFile);
     }
 
-    // Collect unmatched DB records (on DB but not on disk)
-    const unmatchedDbRecords = allDbFiles.filter(
-      (f) => f.storageKey && !diskKeySet.has(f.storageKey)
-    );
+    // Collect unmatched DB records (on DB but not on disk). Rows whose bytes
+    // live in a database-backed document store (`mount-blob:` keys) are never
+    // under files/, so "absent from disk" says nothing about them: they must
+    // not be deleted as stale (step 4) nor re-pointed at a disk file that
+    // happens to share their sha256 (step 3.5).
+    let mountBlobRecords = 0;
+    const unmatchedDbRecords = allDbFiles.filter((f) => {
+      if (!f.storageKey) return false;
+      if (isMountBlobStorageKey(f.storageKey)) {
+        mountBlobRecords++;
+        return false;
+      }
+      return !diskKeySet.has(f.storageKey);
+    });
+    logger.debug('Excluded mount-blob records from disk reconciliation', {
+      mountBlobRecords,
+      unmatchedDbRecords: unmatchedDbRecords.length,
+    });
 
     // Step 3.5: SHA-256 cross-matching to detect file moves
     // Build a sha256 → dbRecord map from unmatched DB records for O(1) lookups
@@ -291,6 +308,7 @@ export async function reconcileFilesystem(): Promise<void> {
     logger.info('Filesystem reconciliation complete', {
       filesOnDisk,
       dbRecords: allDbFiles.length,
+      mountBlobRecords,
       recordsCreated,
       recordsDeleted,
       recordsUpdated,

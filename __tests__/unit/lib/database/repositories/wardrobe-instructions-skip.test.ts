@@ -59,7 +59,7 @@ jest.mock('@/lib/mount-index/database-store', () => {
   };
 });
 
-import { readCharacterVaultWardrobe } from '@/lib/database/repositories/vault-overlay/vault-readers';
+import { readCharacterVaultWardrobe } from '@/lib/wardrobe/vault-readers';
 import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { logger } from '@/lib/logger';
 

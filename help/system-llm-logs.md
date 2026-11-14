@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system&section=llm-logs
+url: /settings?section=llm-logs
 ---
 
 # LLM Logs
 
-> **[Open this page in Quilltap](/settings?tab=system&section=llm-logs)**
+> **[Open this page in Quilltap](/settings?section=llm-logs)**
 
 The LLM Logs tool shows detailed records of all AI model interactions and API calls in your Quilltap system.
 
@@ -44,7 +44,7 @@ There are three ways to summon the Inspector:
 2. **Keyboard shortcut** - Press **Cmd+Shift+L** (macOS) or **Ctrl+Shift+L** (Windows/Linux)
 3. **Per-message button** - Click "View LLM logs" on any assistant message that has associated logs; the Inspector will open scrolled directly to that entry
 
-The toolbar button and keyboard shortcut are only available when LLM logging is enabled in your Chat Settings.
+The toolbar button and keyboard shortcut are only available when LLM logging is enabled in the **LLM Logging** card (Settings → Data & Maintenance).
 
 ### What the Inspector Shows
 
@@ -92,7 +92,7 @@ After you send a message and receive a response, the Inspector automatically ref
 
 ## Accessing LLM Logs from Settings
 
-**Go to the **Data & System** tab in Settings** (`/settings?tab=system&section=llm-logs`) and expand the **LLM Logs** card.
+**Go to the Data & Maintenance group of Settings** (`/settings?section=llm-logs`) and expand the **LLM Logs** card.
 
 The card shows:
 
@@ -237,9 +237,10 @@ The card shows:
 
 **How long logs are kept:**
 
-- Configurable in Chat Settings (default: 30 days)
+- Configurable in Settings → Data & Maintenance → LLM Logging (default: 30 days)
 - Older logs are automatically cleaned up, and so are lines in [the Log](the-log.md) (the characters' shared book, kept in the same database), even when LLM logging is switched off
 - Set retention to 0 for indefinite storage
+- The number is put into effect when you leave the field or press Enter, not with every keystroke, so typing "60" over "30" does not briefly ask for six days. A field left empty, or holding something that is not a number, is quietly restored to its previous value rather than taken as 0 — a blank is not a request to keep everything forever. Values above 365 are trimmed to 365.
 
 **Log storage:**
 
@@ -319,14 +320,14 @@ The card shows:
 
 **Inspector button not visible**
 
-- LLM logging may be disabled in Chat Settings
-- Enable it in Settings > Chat tab > LLM Logging
+- LLM logging may be disabled in Settings → Data & Maintenance → LLM Logging
+- Enable it in Settings → Data & Maintenance → LLM Logging
 
 **Log seems incomplete**
 
 - Some logs are truncated for display
 - Click to expand and view full details
-- Enable "Verbose Mode" in Chat Settings for complete message content
+- Enable "Verbose Mode" in the LLM Logging card for complete message content
 
 **Wrong information in log**
 
@@ -376,7 +377,7 @@ The card shows:
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=llm-logs")`
+`help_navigate(url: "/settings?section=llm-logs")`
 
 ## Related Topics
 

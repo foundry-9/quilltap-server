@@ -11,10 +11,14 @@
  *
  * **It frames the text once, and only to vouch for it.** The operator's words
  * go through verbatim, under a single fixed header (`INFORM_BLOCK_HEADER`)
- * telling the character the passages are true, already known, and outrank an
- * older memory that disagrees. A bare sentence buried in the prompt read as
- * ambient noise: a character who recalled a contradicting memory simply
- * disbelieved it. There is still no "do not mention this" and no Host voice,
+ * telling the character the passages are true of the story and of them — what
+ * has happened, what they know, how they feel or what they have resolved —
+ * and outrank an older memory, a record, or their usual temperament. A bare
+ * sentence buried in the prompt read as ambient noise: a character who
+ * recalled a contradicting memory simply disbelieved it. And a header that
+ * vouched for facts alone let a character file "You are very alarmed" as
+ * information and stay calm (amended 4.13; docs/developer/features/
+ * character-kind-and-roleplay-defaults.md §5.7). There is still no "do not mention this" and no Host voice,
  * for transparent and opaque characters alike, and several passages join with
  * a `---` rule and nothing else.
  *
@@ -56,11 +60,14 @@ export const INFORM_BLOCK_SEPARATOR = '\n\n---\n\n'
  * The one line of framing the block carries, ahead of the operator's passages.
  * Second person: it is read inside the character's own prompt. It vouches for
  * the passages and nothing more — it neither hides them nor tells the
- * character what to do with them.
+ * character what to do with them. It vouches for feelings and resolve as well
+ * as facts, and it outranks the character's usual temperament, so an operator
+ * who writes "You are very alarmed" is believed about the alarm.
  */
 export const INFORM_BLOCK_HEADER =
-  'Things you now know, as of this moment — true in this story, and already known to you. ' +
-  'Where any of it conflicts with an older memory or something in your records, this is the current truth:'
+  'Things now true in this story and in you, as of this moment — what has happened, what you know, ' +
+  'and how you feel or what you have resolved. Where any of it conflicts with an older memory, ' +
+  'your records, or your usual temperament, this is the current truth:'
 
 export interface BuildInformBlockOptions {
   repos: ReturnType<typeof getRepositories>

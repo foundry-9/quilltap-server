@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { MemoryCard } from './memory-card'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { MemoryEditor } from './memory-editor'
 import { MaintenanceDialog } from './maintenance-dialog'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -15,6 +16,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ListPager } from '@/components/ui/ListPager'
 
 interface Tag {
   id: string
@@ -53,15 +55,9 @@ type SortOrder = 'asc' | 'desc'
 
 const MEMORIES_PER_PAGE = 30
 
-export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
-  const [memories, setMemories] = useState<Memory[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [hasMore, setHasMore] = useState(true)
-  const [page, setPage] = useState(0)
-  const [totalCount, setTotalCount] = useState(0)
+const EMPTY_MEMORIES: Memory[] = []
 
+export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -69,117 +65,69 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [tierFilter, setTierFilter] = useState<'ALL' | 'hot' | 'cold'>('ALL')
   const [keystoneOnly, setKeystoneOnly] = useState(false)
   const [viewedDigest, setViewedDigest] = useState<Memory | null>(null)
-  const digestTitleId = useId()
-  const digestDialogRef = useRef<HTMLDivElement>(null)
-  const handleDigestFocusKeyDown = useDialogFocus(digestDialogRef, viewedDigest !== null)
   const closeDigest = useCallback(() => setViewedDigest(null), [])
-  useEscapeKey(closeDigest, viewedDigest !== null)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
   const [showEditor, setShowEditor] = useState(false)
   const [showMaintenance, setShowMaintenance] = useState(false)
 
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const loadMoreRef = useRef<HTMLDivElement | null>(null)
-  const fetchMemories = useCallback(async (pageNum: number, currentSearch: string, append: boolean = false) => {
-    if (pageNum === 0) {
-      setIsLoading(true)
-    } else {
-      setLoadingMore(true)
-    }
+  // One page at a time, replacing what is shown — paged, not an infinite
+  // scroller. Every input is in the query key: typing, sorting or filtering
+  // makes a new query, so an older search term's slow answer is simply not
+  // the query on screen (it had no guard against landing last before).
+  const filtersKey = [characterId, sortBy, sortOrder, search, sourceFilter, tierFilter, String(keystoneOnly)].join('\u0000')
+  // The page belongs to one filter set; a new one starts at the first page.
+  const [pageState, setPageState] = useState({ filtersKey, page: 0 })
+  const page = pageState.filtersKey === filtersKey ? pageState.page : 0
+  const setPage = (next: number) => setPageState({ filtersKey, page: next })
 
-    try {
+  const queryClient = useQueryClient()
+  const pageQuery = useQuery({
+    queryKey: queryKeys.memories.list({ characterId, sortBy, sortOrder, search, sourceFilter, tierFilter, keystoneOnly, page }),
+    queryFn: ({ signal }) => {
       const params = new URLSearchParams()
       params.set('characterId', characterId)
       params.set('limit', String(MEMORIES_PER_PAGE))
-      params.set('offset', String(pageNum * MEMORIES_PER_PAGE))
+      params.set('offset', String(page * MEMORIES_PER_PAGE))
       params.set('sortBy', sortBy)
       params.set('sortOrder', sortOrder)
-      if (currentSearch) params.set('search', currentSearch)
+      if (search) params.set('search', search)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
       if (tierFilter !== 'ALL') params.set('tier', tierFilter)
       if (keystoneOnly) params.set('keystone', 'true')
+      return apiFetch<{ memories?: Memory[]; totalCount?: number }>(`/api/v1/memories?${params}`, { signal })
+    },
+    // A page or filter change keeps the current page on screen (dimmed).
+    placeholderData: keepPreviousData,
+  })
+  const memories = pageQuery.data?.memories ?? EMPTY_MEMORIES
+  const totalCount = pageQuery.data?.totalCount ?? 0
+  const isLoading = pageQuery.isPending
+  const loadingPage = pageQuery.isPlaceholderData
+  const error = pageQuery.error ? apiErrorMessage(pageQuery.error, 'Failed to fetch memories') : null
 
-      const result = await fetchJson<{ memories: Memory[]; totalCount: number }>(
-        `/api/v1/memories?${params}`
-      )
+  /** Re-read this character's memory pages. */
+  const refreshMemories = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.memories.lists }),
+    [queryClient],
+  )
 
-      if (!result.ok) {
-        throw new Error(result.error || 'Failed to fetch memories')
-      }
-
-      const newMemories = result.data?.memories || []
-      const total = result.data?.totalCount ?? 0
-
-      if (append) {
-        // Offset-based pagination is unstable while the corpus is being
-        // mutated (e.g. a regenerate-all sweep deleting and re-extracting).
-        // Skip any IDs already in the list so React keys stay unique.
-        setMemories(prev => {
-          const seen = new Set(prev.map(m => m.id))
-          const additions = newMemories.filter(m => !seen.has(m.id))
-          return additions.length === newMemories.length
-            ? [...prev, ...newMemories]
-            : [...prev, ...additions]
-        })
-      } else {
-        setMemories(newMemories)
-      }
-
-      setTotalCount(total)
-      setHasMore(newMemories.length === MEMORIES_PER_PAGE)
-      setError(null)
-    } catch (err) {
-      const errorMessage = getErrorMessage(err, 'Failed to fetch memories')
-      console.error('MemoryList: Fetch failed', { error: errorMessage })
-      setError(errorMessage)
-    } finally {
-      setIsLoading(false)
-      setLoadingMore(false)
-    }
-  }, [characterId, sortBy, sortOrder, sourceFilter, tierFilter, keystoneOnly])
-
-  // Reset and refetch when filters change or refreshKey changes
+  // The parent's refresh signal (an import, a regeneration) re-reads the list.
+  const lastRefreshKey = useRef(refreshKey)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- page resets to 0 whenever the paginated query key changes
-    setPage(0)
-    fetchMemories(0, search, false)
-  }, [fetchMemories, search, refreshKey])
+    if (lastRefreshKey.current === refreshKey) return
+    lastRefreshKey.current = refreshKey
+    void refreshMemories()
+  }, [refreshKey, refreshMemories])
+
+  const goToPage = setPage
 
   // Debounced search handler
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setSearch(value)
   }, [])
-
-  // Set up infinite scroll observer
-  useEffect(() => {
-    if (observerRef.current) {
-      observerRef.current.disconnect()
-    }
-
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading && !loadingMore) {
-          const nextPage = page + 1
-          setPage(nextPage)
-          fetchMemories(nextPage, search, true)
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    if (loadMoreRef.current) {
-      observerRef.current.observe(loadMoreRef.current)
-    }
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-      }
-    }
-  }, [hasMore, isLoading, loadingMore, page, search, fetchMemories])
 
   const handleDelete = useCallback(async (id: string) => {
     const confirmed = await showConfirmation('Are you sure you want to delete this memory?')
@@ -191,16 +139,19 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       if (!result.ok) {
         throw new Error(result.error || 'Failed to delete memory')
       }
-      setMemories(prev => prev.filter(m => m.id !== id))
-      setTotalCount(prev => prev - 1)
       showSuccessToast('Memory deleted')
+      // Re-read the page so the next memory fills the gap; step back a page
+      // when this emptied the last one.
+      const lastPage = Math.max(0, Math.ceil((totalCount - 1) / MEMORIES_PER_PAGE) - 1)
+      goToPage(Math.min(page, lastPage))
+      await refreshMemories()
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to delete memory')
       showErrorToast(errorMessage)
     } finally {
       setDeletingId(null)
     }
-  }, [])
+  }, [goToPage, page, totalCount, refreshMemories])
 
   const handleViewDigest = useCallback(async (digestId: string) => {
     try {
@@ -229,20 +180,20 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
     setEditingMemory(null)
   }, [])
 
-  const handleEditorSave = useCallback(() => {
+  const handleEditorSave = () => {
     setShowEditor(false)
     setEditingMemory(null)
-    // Reset to first page and refetch
+    // Back to the first page, re-read
     setPage(0)
-    fetchMemories(0, search, false)
-  }, [fetchMemories, search])
+    void refreshMemories()
+  }
 
   // A real run is queued and works in the background; re-read the first page
   // so anything it has already finished shows.
-  const handleMaintenanceQueued = useCallback(() => {
+  const handleMaintenanceQueued = () => {
     setPage(0)
-    fetchMemories(0, search, false)
-  }, [fetchMemories, search])
+    void refreshMemories()
+  }
 
   // Show loading state when initially loading
   if (isLoading && memories.length === 0) {
@@ -264,7 +215,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         {memories.length > 0 && (
           <button
             onClick={() => setShowMaintenance(true)}
-            className="px-3 py-1.5 qt-bg-muted text-foreground text-sm rounded-lg qt-hover-accent"
+            className="px-3 py-1.5 qt-bg-muted qt-text text-sm rounded-lg qt-hover-accent"
             title="Fold repetitions, consolidate, and keep this character under the cap"
           >
             Maintenance
@@ -296,7 +247,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         </select>
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg qt-hover-accent"
+          className="px-3 py-2 text-sm border qt-border-input qt-bg-default qt-text rounded-lg qt-hover-accent"
           title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
         >
           {sortOrder === 'asc' ? '↑' : '↓'}
@@ -335,7 +286,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
 
       {/* Error State */}
       {error && (
-        <ErrorAlert message={error} onRetry={() => { setPage(0); fetchMemories(0, search, false) }} />
+        <ErrorAlert message={error} onRetry={() => void pageQuery.refetch()} />
       )}
 
       {/* Empty State */}
@@ -353,7 +304,10 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
 
       {/* Memory Grid */}
       {memories.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
+        <div
+          className={`grid gap-4 sm:grid-cols-1 lg:grid-cols-2 transition-opacity ${loadingPage ? 'opacity-60' : ''}`}
+          aria-busy={loadingPage}
+        >
           {memories.map((memory) => (
             <MemoryCard
               key={memory.id}
@@ -367,18 +321,14 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         </div>
       )}
 
-      {/* Load more trigger */}
-      <div ref={loadMoreRef} className="py-2">
-        {loadingMore && (
-          <div className="flex items-center justify-center gap-2 qt-text-secondary">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
-            Loading more memories...
-          </div>
-        )}
-        {!hasMore && memories.length > 0 && memories.length < totalCount && (
-          <p className="text-center qt-text-small">All memories loaded</p>
-        )}
-      </div>
+      <ListPager
+        page={page}
+        total={totalCount}
+        pageSize={MEMORIES_PER_PAGE}
+        onPageChange={goToPage}
+        disabled={loadingPage}
+        noun="memories"
+      />
 
       {/* Memory Editor Modal */}
       {showEditor && (
@@ -390,34 +340,24 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         />
       )}
 
-      {/* Digest viewer (portalled so the overlay clears any stacking context) */}
-      {viewedDigest && typeof document !== 'undefined' && createPortal(
-        <div className="qt-dialog-overlay p-4 z-[100]">
-          <div
-            className="qt-dialog max-w-xl max-h-[90vh] overflow-y-auto"
-            ref={digestDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={digestTitleId}
-            tabIndex={-1}
-            onKeyDown={handleDigestFocusKeyDown}
-          >
-            <div className="qt-dialog-header">
-              <h2 id={digestTitleId} className="qt-dialog-title">The Digest</h2>
-              <p className="qt-dialog-description">The denser note that took this one&rsquo;s place on the active shelf.</p>
-            </div>
-            <div className="p-6">
-              <MemoryCard memory={viewedDigest} />
-            </div>
-            <div className="qt-dialog-footer flex justify-end">
-              <button type="button" className="qt-button qt-button-secondary" onClick={() => setViewedDigest(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      {/* Digest viewer */}
+      <BaseModal
+        isOpen={viewedDigest !== null}
+        onClose={closeDigest}
+        title="The Digest"
+        subtitle={<>The denser note that took this one&rsquo;s place on the active shelf.</>}
+        maxWidth="xl"
+       
+        bodyClassName="flex-1 overflow-y-auto p-6"
+        footerClassName="qt-dialog-footer flex justify-end"
+        footer={
+          <button type="button" className="qt-button qt-button-secondary" onClick={closeDigest}>
+            Close
+          </button>
+        }
+      >
+        {viewedDigest && <MemoryCard memory={viewedDigest} />}
+      </BaseModal>
 
       {/* Maintenance Dialog */}
       {showMaintenance && (

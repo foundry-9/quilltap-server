@@ -256,9 +256,9 @@ export async function handleGetScenarioSource(
     source,
     owner,
     scenarioName: lookup.status === 'ok' ? lookup.scenario.name : null,
-    // A character scenario's path-derived id, so the picker can show it under
-    // its native heading.
-    scenarioId: location?.idForPath(source.path) ?? null,
+    // A character scenario's id, so the picker can show it under its native
+    // heading.
+    scenarioId: lookup.status === 'ok' && location?.scope === 'character' ? lookup.scenario.id : null,
     exists,
     changed,
     notes,

@@ -21,17 +21,29 @@ import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
 import {
-  postHostAddAnnouncement,
   postHostRemoveAnnouncement,
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
-import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections';
-import { applyInventoryDefaults } from '@/lib/inventory/apply-defaults';
-import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
-import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
-import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
-import { refreshAvatarForOutfit } from '@/lib/wardrobe/outfit-change-effects';
+import { seatArrival } from '@/lib/chat/opening/arrival';
+import type { GreenRoomNarrator } from '@/lib/chat/opening/narrator';
+import { openNarrationStream } from '@/lib/chat/opening/narrator-frames';
+import { sseStreamResponse } from '@/lib/services/chat-message';
+
+/**
+ * Answer an add-participant request with the Green Room's narration of the
+ * arrival, for a Salon that is watching (`narrate: true`).
+ */
+function narratedArrival(
+  characterName: string,
+  arrive: (narrator: GreenRoomNarrator) => Promise<void>,
+): NextResponse {
+  return sseStreamResponse(openNarrationStream(async (narrator) => {
+    narrator.phase('arrivals', `${characterName} arrives…`);
+    narrator.status(`${characterName} arrives…`);
+    await arrive(narrator);
+  }));
+}
 
 /**
  * Start impersonating a participant
@@ -186,105 +198,6 @@ export async function handleSetActiveSpeaker(
 }
 
 /**
- * Apply the chosen starting outfit for a freshly-added (or reactivated)
- * participant. Falls back to `'default'` mode when the caller didn't send
- * anything — matches the new-chat behavior so the character shows up
- * dressed in their wardrobe defaults rather than undressed by accident.
- *
- * Failures are logged and swallowed: outfit-application should never block
- * a participant from joining the chat.
- */
-async function applyOutfitForAddedParticipant(
-  chatId: string,
-  chat: ChatMetadata,
-  characterId: string,
-  outfitSelection: OutfitSelection | undefined,
-  userId: string,
-  repos: RequestContext['repos'],
-): Promise<void> {
-  const selection: OutfitSelection = outfitSelection ?? {
-    characterId,
-    mode: 'default',
-  };
-
-  try {
-    const chatSettings = await repos.chatSettings.findByUserId(userId);
-    await applyOutfitSelections(
-      chatId,
-      [selection],
-      repos,
-      {
-        userId,
-        // Project wardrobe tier for this chat, so a joining character can be
-        // dressed from the project's shared stores as well as their own vault.
-        projectMountPointIds: await resolveProjectMountPointIds(chat.projectId ?? null),
-        scenarioText: chat.scenarioText ?? null,
-        cheapLLMConfig: buildCheapLLMConfig(chatSettings),
-        source: 'participant-added',
-      },
-    );
-    logger.debug('[Chats v1] Outfit applied for added participant', {
-      chatId,
-      characterId,
-      mode: selection.mode,
-    });
-  } catch (error) {
-    logger.error('[Chats v1] Failed to apply outfit for added participant', {
-      chatId,
-      characterId,
-      mode: selection.mode,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  // What the arriving character carries: their equipped-by-default objects,
-  // unless a returning seat already has an entry. Never throws.
-  await applyInventoryDefaults(repos, chatId, [characterId], { source: 'participant-added', userId });
-}
-
-/**
- * Bring an arriving character's per-chat avatar in line with what they are
- * wearing, the same way chat-open does for the opening cast. Without this a
- * character added (or re-added) mid-chat keeps showing their default avatar
- * even in a chat that auto-updates avatars on wardrobe changes.
- *
- * Goes through the ordinary avatar job, so the configuration cache answers
- * first: an outfit that has already been drawn is simply rebound, and only a
- * new configuration costs a generation. Gated on the chat's
- * `avatarGenerationEnabled` (and skipped for autonomous rooms) by
- * `refreshAvatarForOutfit`. Never allowed to fail the join.
- */
-async function refreshAvatarForArrivingCharacter(
-  chatId: string,
-  characterId: string,
-  userId: string,
-  repos: RequestContext['repos'],
-): Promise<void> {
-  try {
-    const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
-    if (!equippedSlots) {
-      logger.debug('[Chats v1] No equipped outfit for arriving character, avatar left as-is', {
-        chatId,
-        characterId,
-      });
-      return;
-    }
-
-    await refreshAvatarForOutfit(repos, { userId, chatId, characterId }, '[Chats v1] participant-join');
-    logger.debug('[Chats v1] Avatar refresh requested for arriving character', {
-      chatId,
-      characterId,
-    });
-  } catch (error) {
-    logger.warn('[Chats v1] Failed to request avatar refresh for arriving character', {
-      chatId,
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-/**
  * Add a new participant to the chat
  */
 export async function handleAddParticipantAction(
@@ -344,44 +257,17 @@ export async function handleAddParticipantAction(
         controlledBy,
       });
 
-      if (reactivatedCharacter && reactivatedParticipant) {
-        await postHostAddAnnouncement({
-          chatId,
-          character: reactivatedCharacter,
-          participantId: reactivatedParticipant.id,
-          initialStatus: reactivatedParticipant.status,
-        });
-
-        // Phase H: recompile the identity stack for the reactivated
-        // participant in case it had been dropped.
-        try {
-          await compileIdentityStackForParticipant(updatedChat, removedParticipant.id);
-        } catch (error) {
-          logger.warn('[Chats v1] Failed to compile identity stack for reactivated participant', {
-            chatId, participantId: removedParticipant.id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-
-      // Reactivation: only re-apply an outfit when the caller explicitly
-      // sent one. Otherwise preserve whatever they had on before they were
-      // removed.
-      if (validatedData.outfitSelection && reactivatedParticipant?.characterId) {
-        await applyOutfitForAddedParticipant(
-          chatId,
-          updatedChat,
-          reactivatedParticipant.characterId,
-          validatedData.outfitSelection,
-          user.id,
-          repos,
-        );
-      }
-
-      // Whether or not the outfit was re-applied, the returning character's
-      // avatar should match what they now have on.
-      if (reactivatedParticipant?.characterId) {
-        await refreshAvatarForArrivingCharacter(chatId, reactivatedParticipant.characterId, user.id, repos);
+      // The returning seat arrives as every seat does. It keeps what it had
+      // on unless the caller sent a new outfit.
+      if (reactivatedCharacter && reactivatedParticipant?.characterId) {
+        const characterId = reactivatedParticipant.characterId;
+        const arrive = (narrator?: GreenRoomNarrator) => seatArrival(repos, chatId, {
+          characterId,
+          outfitSelection: validatedData.outfitSelection,
+          redress: !!validatedData.outfitSelection,
+        }, { source: 'participant-added', userId: user.id, narrator });
+        if (validatedData.narrate) return narratedArrival(reactivatedCharacter.name, arrive);
+        await arrive();
       }
 
       return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
@@ -412,52 +298,25 @@ export async function handleAddParticipantAction(
   });
 
   if (addedCharacter && newParticipant) {
-    await postHostAddAnnouncement({
-      chatId,
-      character: addedCharacter,
-      participantId: newParticipant.id,
-      initialStatus: newParticipant.status,
-    });
-
-    // Phase H: compile the identity stack for the new participant.
-    if (newParticipant) {
-      try {
-        await compileIdentityStackForParticipant(result.chat, newParticipant.id);
-      } catch (error) {
-        logger.warn('[Chats v1] Failed to compile identity stack for added participant', {
-          chatId, participantId: newParticipant.id,
-          error: error instanceof Error ? error.message : String(error),
+    // Dressed, packed, compiled, welcomed, announced and drawn — the one
+    // arrival — then the scene the newcomer walks into, when one was given.
+    const arrive = async (narrator?: GreenRoomNarrator) => {
+      await seatArrival(repos, chatId, {
+        characterId: addedCharacter.id,
+        outfitSelection: validatedData.outfitSelection,
+        redress: true,
+      }, { source: 'participant-added', userId: user.id, narrator });
+      if (validatedData.joinScenario && !(validatedData.hasHistoryAccess ?? false)) {
+        await postHostJoinScenarioAnnouncement({
+          chatId,
+          characterName: addedCharacter.name,
+          targetParticipantId: newParticipant.id,
+          joinScenario: validatedData.joinScenario,
         });
       }
-    }
-
-    if (
-      newParticipant &&
-      validatedData.joinScenario &&
-      !(validatedData.hasHistoryAccess ?? false)
-    ) {
-      await postHostJoinScenarioAnnouncement({
-        chatId,
-        characterName: addedCharacter.name,
-        targetParticipantId: newParticipant.id,
-        joinScenario: validatedData.joinScenario,
-      });
-    }
-  }
-
-  // Apply the chosen starting outfit for the new participant. Defaults to
-  // 'default' mode when the caller didn't supply one, matching the new-chat
-  // flow so the character arrives dressed in their wardrobe defaults.
-  if (validatedData.characterId) {
-    await applyOutfitForAddedParticipant(
-      chatId,
-      result.chat,
-      validatedData.characterId,
-      validatedData.outfitSelection,
-      user.id,
-      repos,
-    );
-    await refreshAvatarForArrivingCharacter(chatId, validatedData.characterId, user.id, repos);
+    };
+    if (validatedData.narrate) return narratedArrival(addedCharacter.name, arrive);
+    await arrive();
   }
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat }, { status: 201 });

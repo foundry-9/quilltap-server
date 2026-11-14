@@ -20,6 +20,7 @@
  * @module lib/inventory/refs
  */
 
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import type { ResolvedInventoryItem } from '@/lib/schemas/inventory.types';
 import { isKin, kitState } from '@/lib/inventory/resolve';
 import type { AggregateObject, AggregateScope } from '@/lib/pascal/inventory-aggregate';
@@ -52,7 +53,7 @@ export interface ResolveInventoryRefOptions {
 }
 
 function norm(value: string | null | undefined): string {
-  return (value ?? '').trim().toLowerCase();
+  return foldItemName(value ?? '');
 }
 
 /** A pool's objects by id, built once per pool (its `items` array) and reused. */

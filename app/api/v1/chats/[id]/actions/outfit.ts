@@ -21,10 +21,10 @@ import { logger } from '@/lib/logger';
 import { serverError, notFound, badRequest } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { applyDisplacement } from '@/lib/wardrobe/outfit-displacement';
-import { isComposite, WARDROBE_SLOT_TYPES, EquippedSlotsSchema, WardrobeItemTypeEnum, bySlot } from '@/lib/schemas/wardrobe.types';
+import { isComposite, WARDROBE_SLOT_TYPES, EquippedSlotsSchema, WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { loadCastPools, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
+import { buildOutfitSummary } from '@/lib/wardrobe/outfit-summary';
 import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
 import { wornBundlesFor, type WornBundle } from '@/lib/wardrobe/slot-ops';
 import { resolveWearable, wearItem, type PutOnMode } from '@/lib/wardrobe/wear-ops';
@@ -119,35 +119,10 @@ export async function handleGetOutfitSummary(
   { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
-    const chat = await repos.chats.findById(chatId);
-    if (!chat) {
+    const summary = await buildOutfitSummary(repos, chatId);
+    if (!summary) {
       return notFound('Chat');
     }
-
-    const equippedOutfit = (await repos.chats.getEquippedOutfit(chatId)) ?? {};
-    const characterIds = Object.keys(equippedOutfit);
-    const pools = await loadCastPools(repos, chat.projectId, characterIds);
-
-    type SummaryEntry = { itemId: string; title: string };
-    const summary: Record<string, Record<string, SummaryEntry[]>> = {};
-
-    for (const [characterId, slots] of Object.entries(equippedOutfit)) {
-      const pool = pools.get(characterId);
-      if (!slots || !pool) {
-        summary[characterId] = bySlot<SummaryEntry[]>(() => []);
-        continue;
-      }
-      const { leafItemsBySlot } = resolveEquippedOutfitForCharacter(pool, slots);
-      summary[characterId] = bySlot((slot) =>
-        leafItemsBySlot[slot].map((leaf) => ({ itemId: leaf.id, title: leaf.title })),
-      );
-    }
-
-    logger.debug('[Chats v1] Built outfit summary', {
-      chatId,
-      characterCount: characterIds.length,
-      context: 'wardrobe',
-    });
     return NextResponse.json({ summary });
   } catch (error) {
     logger.error('[Chats v1] Error fetching equipped outfit summary', { chatId }, error instanceof Error ? error : undefined);

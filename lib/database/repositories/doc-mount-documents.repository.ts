@@ -292,8 +292,9 @@ export class DocMountDocumentsRepository extends AbstractDedicatedDbRepository<D
 
   /**
    * Bulk delete every document row associated with the given mount point's
-   * links. Walks doc_mount_file_links (which carries the mountPointId
-   * post-refactor) and removes the matching documents. Cascade from
+   * links that no OTHER mount also links (#191 — content rows are shared
+   * across stores by design, and deleting a shared one leaves the other
+   * store's link reading "not found"). Cascade from
    * doc_mount_files only fires when the file's last link goes away —
    * the deleteByMountPointId on docMountFileLinks handles that cleanup.
    * Kept here as a convenience for code that wants to clear documents
@@ -307,8 +308,11 @@ export class DocMountDocumentsRepository extends AbstractDedicatedDbRepository<D
           `DELETE FROM doc_mount_documents
            WHERE fileId IN (
              SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?
+           )
+           AND fileId NOT IN (
+             SELECT fileId FROM doc_mount_file_links WHERE mountPointId <> ?
            )`
-        ).run(mountPointId);
+        ).run(mountPointId, mountPointId);
         return res.changes;
       },
       'Error deleting documents by mount point ID',

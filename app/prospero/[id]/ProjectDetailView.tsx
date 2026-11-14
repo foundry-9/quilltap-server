@@ -9,9 +9,15 @@
  * @module app/prospero/[id]/ProjectDetailView
  */
 
-import { useEffect, useState } from 'react'
-import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
-import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState, useProjectDocumentStores } from './hooks'
+import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
+import { useImageProfilesQuery } from '@/lib/hooks/use-profiles'
+import { useProjectFilesQuery } from '@/lib/hooks/use-project-files'
+import { useOwnerStoreLinks } from '@/lib/hooks/use-owner-store-links'
+import type { DocumentStore } from '@/app/scriptorium/types'
+import { useProjectDetail, useProjectChats, useProjectCardState } from './hooks'
+import type { ProjectFile } from './types'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
 import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
@@ -27,7 +33,18 @@ import {
   ScenariosCard,
   WardrobeCard,
   InventoryCard,
+  AtlasCard,
 } from './components'
+
+interface ImageProfileOption {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+}
+
+const NO_IMAGE_PROFILES: ImageProfileOption[] = []
+const NO_FILES: ProjectFile[] = []
 
 export interface ProjectDetailViewProps {
   projectId: string
@@ -39,12 +56,16 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     project,
     loading,
     error,
-    editForm,
-    setEditForm,
+    headerDraft,
+    setHeaderDraft,
+    instructionsDraft,
+    setInstructionsDraft,
+    instructionsDirty,
     isEditing,
-    setIsEditing,
-    fetchProject,
-    handleSave,
+    startEditing,
+    cancelEditing,
+    handleSaveHeader,
+    handleSaveInstructions,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
     handleSaveAnswerConfirmationOverride,
@@ -58,29 +79,25 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
-  // Image profiles for the default image profile selector
-  const [imageProfiles, setImageProfiles] = useState<Array<{ id: string; name: string; provider: string; modelName: string }>>([])
+  // Image profiles for the default image profile selector (the shared list).
+  const { data: imageProfiles = NO_IMAGE_PROFILES } = useImageProfilesQuery<ImageProfileOption>()
 
   const {
     chats,
     loading: chatsLoading,
     loadingMore,
     pagination,
-    fetchChats,
     loadMoreChats,
     handleRemoveChat,
   } = useProjectChats(projectId)
 
-  const { files, fetchFiles } = useProjectFiles(projectId)
+  const queryClient = useQueryClient()
+  const { data: files = NO_FILES } = useProjectFilesQuery<ProjectFile>(projectId)
+  const refreshFiles = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.projects.files(projectId) })
+  }, [queryClient, projectId])
 
-  const {
-    linkedStores,
-    allStores,
-    fetchLinkedStores,
-    fetchAllStores,
-    linkStore,
-    unlinkStore,
-  } = useProjectDocumentStores(projectId)
+  const { linkedStores, allStores, linkStore, unlinkStore } = useOwnerStoreLinks<DocumentStore>('project', projectId)
 
   // Card expansion state - all open on first visit, all closed on subsequent visits
   const { cardState, toggleCard } = useProjectCardState(projectId)
@@ -101,36 +118,15 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
   const { backgroundImage: prosperoBackgroundImage } = useSubsystemInfo('prospero')
   useReportWorkspaceBackdrop(storyBackgroundUrl || prosperoBackgroundImage || null, false)
 
-  useEffect(() => {
-    fetchProject()
-    fetchChats()
-    fetchFiles()
-    fetchLinkedStores()
-    fetchAllStores()
-    // Fetch image profiles for the default image profile selector
-    fetch('/api/v1/image-profiles')
-      .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image profiles')))
-      .then(data => setImageProfiles(data?.profiles || []))
-      .catch(() => {/* non-critical, selector will just be empty */})
-  }, [projectId, fetchProject, fetchChats, fetchFiles, fetchLinkedStores, fetchAllStores])
-
-  // Navigating back to the containing workspace tab refreshes everything this
-  // page shows (fetchProject only flips `loading` on the very first load, so
-  // the page stays on screen during the refresh). While the header edit form
-  // is open, skip the project refetch — fetchProject resets editForm and would
-  // clobber in-progress typing.
-  useOnTabActivated(() => {
-    if (!isEditing) void fetchProject()
-    void fetchChats()
-    void fetchFiles()
-    void fetchLinkedStores()
-    void fetchAllStores()
-  })
+  // Every read on this page is a query under the `projects` prefix (or the
+  // store and profile lists), so the Prospero tab's activation refetch and
+  // the realtime topics refresh it; the project re-read never touches an
+  // edited draft (#170).
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading project...</p>
+        <p className="text-lg qt-text">Loading project...</p>
       </div>
     )
   }
@@ -150,17 +146,17 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
 
   return (
     <div
-      className="qt-page-container text-foreground"
+      className="qt-page-container qt-text"
       style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <ProjectDetailHeader
         project={project}
         isEditing={isEditing}
-        editForm={editForm}
-        onEditFormChange={setEditForm}
-        onEditClick={() => setIsEditing(true)}
-        onCancelEdit={() => setIsEditing(false)}
-        onSave={handleSave}
+        draft={headerDraft}
+        onDraftChange={setHeaderDraft}
+        onEditClick={startEditing}
+        onCancelEdit={cancelEditing}
+        onSave={handleSaveHeader}
         onBack={onBack}
       />
 
@@ -174,7 +170,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
           expanded={cardState.files}
           onToggle={() => toggleCard('files')}
           projectId={projectId}
-          onFilesChange={fetchFiles}
+          onFilesChange={refreshFiles}
         />
         <DocumentStoresCard
           linkedStores={linkedStores}
@@ -201,6 +197,11 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
           expanded={cardState.inventory}
           onToggle={() => toggleCard('inventory')}
         />
+        <AtlasCard
+          projectId={projectId}
+          expanded={cardState.atlas}
+          onToggle={() => toggleCard('atlas')}
+        />
         <CharactersCard
           project={project}
           onAddCharacter={handleAddCharacter}
@@ -222,9 +223,10 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
             across the whole grid instead of flexing beside a compact card. */}
         <SettingsCard
           project={project}
-          editForm={editForm}
-          onEditFormChange={setEditForm}
-          onSave={handleSave}
+          instructions={instructionsDraft}
+          onInstructionsChange={setInstructionsDraft}
+          instructionsDirty={instructionsDirty}
+          onSave={handleSaveInstructions}
           expanded={cardState.settings}
           onToggle={() => toggleCard('settings')}
         />

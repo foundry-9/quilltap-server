@@ -122,9 +122,9 @@ describe('countTemplateLiterals', () => {
 })
 
 describe('applyTemplateTransform', () => {
-  it('forward: routes system prompts separately and merges scenarios/physical', () => {
+  it('forward: routes prompts and scenarios per item and merges the physical description', () => {
     const character = makeCharacter()
-    const { mainUpdates, changedSystemPrompts } = applyTemplateTransform(character, (t) =>
+    const { mainUpdates, changedSystemPrompts, changedScenarios } = applyTemplateTransform(character, (t) =>
       replaceWithTemplate(t, 'Alice', '{{char}}')
     )
 
@@ -135,19 +135,18 @@ describe('applyTemplateTransform', () => {
     expect(mainUpdates.firstMessage).toBe('Hello from {{char}}.')
     expect(mainUpdates).not.toHaveProperty('personality')
 
-    // Scenarios: full array sent, only the changed one rewritten.
-    expect(mainUpdates.scenarios).toEqual([
-      { id: 's1', content: '{{char}} meets Bob.' },
-      { id: 's2', content: 'A quiet morning.' },
-    ])
+    // Scenarios: only the changed one, through its per-item route — never the
+    // whole array, which un-archived scenarios (#150).
+    expect(mainUpdates).not.toHaveProperty('scenarios')
+    expect(changedScenarios).toEqual([{ id: 's1', content: '{{char}} meets Bob.' }])
 
-    // Physical: merged object, name preserved, only changed prose rewritten.
+    // Physical: the text fields, changed prose rewritten; no id, no name.
     expect(mainUpdates.physicalDescription).toMatchObject({
-      id: 'pd1',
-      name: 'Appearance',
       fullDescription: '{{char}} has red hair.',
       shortPrompt: 'red hair',
     })
+    expect(mainUpdates.physicalDescription).not.toHaveProperty('id')
+    expect(mainUpdates.physicalDescription).not.toHaveProperty('name')
 
     // System prompts go to the dedicated channel, not the PUT body.
     expect(mainUpdates).not.toHaveProperty('systemPrompts')
@@ -161,15 +160,15 @@ describe('applyTemplateTransform', () => {
       scenarios: [{ id: 's1', content: '{{user}} arrives.' }],
       physicalDescription: null,
     })
-    const { mainUpdates, changedSystemPrompts } = applyTemplateTransform(character, (t) =>
+    const { mainUpdates, changedSystemPrompts, changedScenarios } = applyTemplateTransform(character, (t) =>
       replaceTemplateWithName(t, 'user', 'Bob')
     )
     expect(mainUpdates.identity).toBe('Greets Bob warmly.')
-    expect(mainUpdates.scenarios).toEqual([{ id: 's1', content: 'Bob arrives.' }])
+    expect(changedScenarios).toEqual([{ id: 's1', content: 'Bob arrives.' }])
     expect(changedSystemPrompts).toEqual([{ id: 'p1', content: 'Address Bob politely.' }])
   })
 
-  it('falls back the physical name to "Appearance" when empty, never transforming name', () => {
+  it('never sends the retired physical-description name', () => {
     const character = makeCharacter({
       physicalDescription: {
         id: 'pd1',
@@ -180,10 +179,7 @@ describe('applyTemplateTransform', () => {
     const { mainUpdates } = applyTemplateTransform(character, (t) =>
       replaceWithTemplate(t, 'Alice', '{{char}}')
     )
-    expect(mainUpdates.physicalDescription).toMatchObject({
-      name: 'Appearance',
-      fullDescription: '{{char}} stands tall.',
-    })
+    expect(mainUpdates.physicalDescription).toEqual({ fullDescription: '{{char}} stands tall.' })
   })
 
   it('emits nothing when no field contains the target name', () => {
@@ -222,7 +218,7 @@ describe('count/transform parity (anti-drift guarantee)', () => {
     }
 
     const collectedKinds = new Set(collectTemplateFields(character).map((f) => f.kind))
-    const { mainUpdates, changedSystemPrompts } = applyTemplateTransform(character, (t) =>
+    const { mainUpdates, changedSystemPrompts, changedScenarios } = applyTemplateTransform(character, (t) =>
       replaceWithTemplate(t, 'X', '{{char}}')
     )
 
@@ -230,7 +226,7 @@ describe('count/transform parity (anti-drift guarantee)', () => {
     expect(collectedKinds).toEqual(new Set(['scalar', 'scenario', 'systemPrompt', 'physical']))
     expect(mainUpdates).toHaveProperty('identity')
     expect(mainUpdates).toHaveProperty('manifesto')
-    expect(mainUpdates).toHaveProperty('scenarios')
+    expect(changedScenarios).toHaveLength(1)
     expect(mainUpdates).toHaveProperty('physicalDescription')
     expect(changedSystemPrompts).toHaveLength(1)
   })

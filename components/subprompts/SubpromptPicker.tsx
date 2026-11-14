@@ -71,7 +71,7 @@ export function SubpromptPicker({
   const small = size === 'sm'
   const buttonClass = small
     ? 'qt-select qt-select-sm w-full flex items-center justify-between gap-2 text-left'
-    : 'w-full flex items-center justify-between gap-2 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-left'
+    : 'w-full flex items-center justify-between gap-2 rounded-lg border qt-border-default qt-bg-default px-3 py-1.5 text-sm qt-text focus:outline-none focus:ring-2 qt-focus-ring text-left'
 
   return (
     <div className="subprompt-picker">
@@ -115,7 +115,7 @@ export function SubpromptPicker({
                 disabled={disabled}
                 aria-label={`Subprompt ${s.title}`}
               />
-              <span className="text-sm text-foreground min-w-0 truncate">{s.title}</span>
+              <span className="text-sm qt-text min-w-0 truncate">{s.title}</span>
             </label>
           ))}
           {/* Ids ticked on that no longer match a file — still shown so they can be unticked. */}

@@ -36,7 +36,7 @@ export function VoiceRewriteReviewPanel({
 }: VoiceRewriteReviewPanelProps) {
   return (
     <div>
-      <label className="block text-sm qt-text-primary mb-2">
+      <label className="qt-label mb-2">
         What {characterName} will say
       </label>
       {generating ? (

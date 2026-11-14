@@ -6,7 +6,7 @@
  * network, no vision model.
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals'
+import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals'
 
 jest.mock('@/lib/logger', () => {
   const makeLogger = (): any => ({
@@ -228,5 +228,79 @@ describe('wardrobe image analysis — the shared vision path (bug 197)', () => {
       'user-1',
     )
     expect(result.provider).toBe('ANTHROPIC')
+  })
+})
+
+describe('wardrobe image analysis — a profile chosen in the dialog', () => {
+  const SECOND = { ...PROFILE, id: 'p2', provider: 'OPENAI', modelName: 'gpt-4o', isDefault: false }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    repos.chatSettings.findByUserId.mockResolvedValue(null)
+    repos.connections.findById.mockResolvedValue(null)
+    repos.connections.findByUserId.mockResolvedValue([PROFILE, SECOND])
+    mockSendMessage.mockResolvedValue({ content: JSON.stringify({ items: [] }) })
+  })
+
+  afterAll(() => {
+    repos.connections.findByUserId.mockResolvedValue([PROFILE])
+  })
+
+  it('reads the photograph with the chosen profile, not the auto-pick', async () => {
+    const result = await analyzeImageForWardrobeItems(
+      { image: 'AAAA', mimeType: 'image/png', profileId: 'p2' },
+      repos as never,
+      'user-1',
+    )
+    expect(result.provider).toBe('OPENAI')
+    expect(result.model).toBe('gpt-4o')
+  })
+
+  it('refuses a chosen profile it cannot use rather than quietly picking another', async () => {
+    await expect(
+      analyzeImageForWardrobeItems(
+        { image: 'AAAA', mimeType: 'image/png', profileId: 'not-mine' },
+        repos as never,
+        'user-1',
+      ),
+    ).rejects.toThrow(/chosen profile/)
+    expect(mockSendMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('wardrobe image analysis — every piece gets a portrait cue', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('keeps the cue the model wrote, cleaned', async () => {
+    const items = (await analyze([
+      { title: 'Duster', description: 'Brown leather', imagePrompt: '  **worn brown leather duster**. ', types: ['top'] },
+    ])) as unknown as { imagePrompt: string }[]
+    expect(items[0].imagePrompt).toBe('worn brown leather duster')
+  })
+
+  it('lets the title stand in when the model omits one', async () => {
+    const items = (await analyze([
+      { title: 'Velvet Opera Gloves', description: 'Elbow-length', types: ['accessories'] },
+    ])) as unknown as { imagePrompt: string }[]
+    expect(items[0].imagePrompt).toBe('Velvet Opera Gloves')
+  })
+
+  it('holds a long cue to 200 characters', async () => {
+    const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+    const items = (await analyze([
+      { title: 'Gown', description: 'Long', imagePrompt: long, types: ['top', 'bottom'] },
+    ])) as unknown as { imagePrompt: string }[]
+    expect(items[0].imagePrompt.length).toBeLessThanOrEqual(200)
+    expect(long.startsWith(items[0].imagePrompt)).toBe(true)
+  })
+
+  it('asks the model for an imagePrompt on every item', async () => {
+    await analyze([])
+    const [request] = mockSendMessage.mock.calls[0] as [{ messages: { role: string; content: string }[] }]
+    const system = request.messages.find((m) => m.role === 'system')!.content
+    expect(system).toContain('"imagePrompt"')
+    expect(system).toContain('Every item MUST have a non-empty "imagePrompt" of at most 200 characters.')
   })
 })

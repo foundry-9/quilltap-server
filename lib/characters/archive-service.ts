@@ -57,18 +57,7 @@ import { retireMemories } from '@/lib/memory/retire';
 import { memoryIndex } from '@/lib/memory/index-store';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { CHARACTER_INVENTORY_FOLDER, CHARACTER_WARDROBE_FOLDER } from '@/lib/mount-index/character-vault';
-import {
-  CHARACTER_PROPERTIES_JSON_PATH,
-  CHARACTER_METADATA_JSON_PATH,
-  CHARACTER_IDENTITY_MD_PATH,
-  CHARACTER_DESCRIPTION_MD_PATH,
-  CHARACTER_MANIFESTO_MD_PATH,
-  CHARACTER_PERSONALITY_MD_PATH,
-  CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
-  CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
-  CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
-  CHARACTER_WARDROBE_JSON_PATH,
-} from '@/lib/database/repositories/vault-overlay/schema';
+import { CHARACTER_VAULT_KEEP_PATHS } from '@/lib/characters/vault/layout';
 import type { FileCategory } from '@/lib/schemas/file.types';
 import type { ParticipantStatus } from '@/lib/schemas/chat.types';
 import { isTextDocumentFileType } from '@/lib/schemas/mount-index.types';
@@ -128,20 +117,7 @@ export class ArchiveVerificationError extends Error {
 /** Vault folders kept whole, with everything beneath them. */
 const KEPT_FOLDERS: readonly string[] = [CHARACTER_WARDROBE_FOLDER, CHARACTER_INVENTORY_FOLDER];
 
-const KEPT_MANAGED_PATHS = new Set(
-  [
-    CHARACTER_PROPERTIES_JSON_PATH,
-    CHARACTER_METADATA_JSON_PATH,
-    CHARACTER_IDENTITY_MD_PATH,
-    CHARACTER_DESCRIPTION_MD_PATH,
-    CHARACTER_MANIFESTO_MD_PATH,
-    CHARACTER_PERSONALITY_MD_PATH,
-    CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
-    CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
-    CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
-    CHARACTER_WARDROBE_JSON_PATH,
-  ].map((p) => p.toLowerCase())
-);
+const KEPT_MANAGED_PATHS = new Set(CHARACTER_VAULT_KEEP_PATHS.map((p) => p.toLowerCase()));
 
 export async function archiveCharacter(
   userId: string,

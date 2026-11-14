@@ -1,12 +1,12 @@
 ---
-url: /settings?tab=system&section=plugins
+url: /settings?section=plugins
 ---
 
 # Plugins
 
-> **[Open this page in Quilltap](/settings?tab=system&section=plugins)**
+> **[Open this page in Quilltap](/settings?section=plugins)**
 
-Plugins extend Quilltap's functionality by adding new features, themes, and capabilities. The Plugins tab is where you manage installed plugins, install new ones, and check for updates.
+Plugins extend Quilltap's functionality by adding new features, themes, and capabilities. The Plugins card (in the Data & Maintenance group of Settings) is where you manage installed plugins, install new ones, and check for updates.
 
 ## Understanding Plugins
 
@@ -90,6 +90,8 @@ Some plugins have custom settings:
 3. A configuration modal appears
 4. Adjust settings for the plugin
 5. Click **Save** to apply changes
+
+Plugin authors may mark a config field `secret: true`; such fields are left out of exports and backups, and must be entered afresh on a new instance. The curl plugin's allowlist patterns match the parts of a URL (a `*` in a host matches within that host only, and a pattern without a port allows only the scheme's default port), and redirects are followed only to allowlisted public addresses.
 
 **Common plugin settings:**
 
@@ -232,7 +234,7 @@ Most plugins can be uninstalled:
 
 **What they do:** Customize Quilltap's appearance
 
-**Installation:** Install plugin → Go to Appearance tab → Select theme
+**Installation:** Install plugin → Go to the Appearance group in Settings → Select theme
 
 **Examples:** Dark mode variants, custom color schemes, light themes
 
@@ -258,7 +260,7 @@ Most plugins can be uninstalled:
 - Serper (bundled) — Google search via serper.dev
 - Custom web search integrations
 
-**Installation:** Install → Add API key in Settings > API Keys → Enable web search in connection profile
+**Installation:** Install → Add API key in Settings → Connections → Providers → API Keys → Enable web search in connection profile
 
 ### Provider Plugins
 
@@ -270,7 +272,7 @@ Most plugins can be uninstalled:
 - Alternative embedding services
 - Custom language model wrappers
 
-**Installation:** Install → Create profile using new provider in relevant Settings tab
+**Installation:** Install → Create a profile using the new provider under Settings → Connections → Providers
 
 ## Managing Multiple Plugins
 
@@ -358,7 +360,7 @@ Some plugins may conflict with each other:
 
 - Refresh page (Ctrl+R or Cmd+R)
 - Restart Quilltap
-- Go to relevant settings tab to configure plugin
+- Go to the relevant Settings group (usually Connections) to configure the plugin
 - Check plugin documentation
 
 ### Plugin version conflicts
@@ -395,15 +397,15 @@ Some plugins may conflict with each other:
 3. Find theme you like
 4. Click Install
 5. Confirm installation
-6. Go to the **Appearance** tab in Settings (`/settings?tab=appearance`)
+6. Go to the **Appearance** group in Settings (`/settings?group=appearance`)
 7. Select new theme
 
 ### Setting Up Image Generation
 
 1. Get API key from provider (DALL-E, Stable Diffusion, etc.)
-2. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) → API Keys
+2. Go to the **Connections** group in Settings (`/settings?group=connections`) → Providers → API Keys
 3. Add API key for image service
-4. Go to the **Images** tab in Settings (`/settings?tab=images`) → Image Profiles
+4. Go to the **Connections** group again → Providers → Image Profiles (switch to *By kind* if you like to see them together)
 5. Create image profile
 6. Now ready to generate images in chats
 
@@ -448,7 +450,7 @@ Characters with help tools enabled can read your system-level settings during a 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=plugins")`
+`help_navigate(url: "/settings?section=plugins")`
 
 ## Plugin Resources
 

@@ -171,6 +171,8 @@ To save a file to your computer:
 3. File downloads to your Downloads folder
 4. Can download multiple files
 
+Stored files open in the browser only when they are images (PNG, JPEG, GIF, WebP, AVIF), PDFs or plain text; every other stored file (HTML, SVG, XML, scripts and their kin) is downloaded rather than opened.
+
 ### Previewing Files
 
 To view file content without downloading:

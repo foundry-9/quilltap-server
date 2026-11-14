@@ -26,7 +26,7 @@ export function ProfileSelectionStep({
 }: ProfileSelectionStepProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="qt-loading-state py-12">
         <div className="flex items-center gap-3 qt-text-secondary">
           <svg
             className="w-5 h-5 animate-spin"
@@ -77,7 +77,7 @@ export function ProfileSelectionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="qt-heading-4 text-foreground mb-2">
+        <h3 className="qt-heading-4 qt-text mb-2">
           Select AI Model
         </h3>
         <p className="text-sm qt-text-secondary">
@@ -106,17 +106,17 @@ export function ProfileSelectionStep({
       </div>
 
       {selectedProfile && (
-        <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/30">
-          <h4 className="font-medium text-foreground mb-2">Selected Profile</h4>
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/30">
+          <h4 className="font-medium qt-text mb-2">Selected Profile</h4>
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="qt-text-secondary">Provider:</dt>
-            <dd className="text-foreground">{selectedProfile.provider}</dd>
+            <dd className="qt-text">{selectedProfile.provider}</dd>
             <dt className="qt-text-secondary">Model:</dt>
-            <dd className="text-foreground">{selectedProfile.modelName}</dd>
+            <dd className="qt-text">{selectedProfile.modelName}</dd>
             {selectedProfile.isCheap && (
               <>
                 <dt className="qt-text-secondary">Type:</dt>
-                <dd className="text-foreground">
+                <dd className="qt-text">
                   <span className="inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs qt-bg-success/10 qt-text-success">
                     Cost-efficient
                   </span>
@@ -127,13 +127,13 @@ export function ProfileSelectionStep({
         </div>
       )}
 
-      <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20">
-        <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
+      <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/20">
+        <h4 className="font-medium qt-text mb-2 flex items-center gap-2">
           <Icon name="info" className="w-4 h-4 qt-text-info" />
           Tip
         </h4>
         <p className="text-sm qt-text-secondary">
-          For best results, choose a capable model like GPT-4, Claude Opus, or Gemini Pro.
+          For best results, choose your most capable model, such as the top tier from OpenAI, Anthropic, or Google.
           Cost-efficient models may produce simpler results.
         </p>
       </div>

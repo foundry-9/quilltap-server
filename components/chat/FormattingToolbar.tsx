@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { LexicalEditor } from 'lexical'
@@ -77,7 +77,7 @@ interface CharPickerToolbarButtonProps {
 
 /**
  * One toolbar button plus its `CharPickerPanel` popover. Each instance is its
- * own `qt-formatting-toolbar-section` so the popover anchors under its own
+ * own `qt-formatting-toolbar-anchor` so the popover anchors under its own
  * button rather than under its sibling's. Both share
  * `qt-formatting-button-emoji`: that class does nothing emoji-specific — it
  * sizes a GLYPH label the way the arrow-glyph buttons are sized, which is
@@ -97,7 +97,7 @@ function CharPickerToolbarButton({
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   return (
-    <div className="qt-formatting-toolbar-section relative">
+    <div className="qt-formatting-toolbar-anchor">
       <Tooltip content={title}>
         <button
           ref={buttonRef}
@@ -144,6 +144,40 @@ function markdownButtonName(format: { label: string; tooltip: string }): string 
  * and roleplay delimiter buttons based on the active template.
  * Dispatches Lexical commands for formatting.
  */
+/**
+ * Hide a toolbar divider that has no group beside it on its own row.
+ *
+ * The toolbar's sections are `display: contents`, so every button wraps in one
+ * flow, and a divider can land at the start or end of a wrapped row, where it
+ * separates nothing. A divider stays visible only when the item before it and
+ * the item after it share its row. It is hidden with `visibility` (via
+ * `data-wrapped`), never `display`, so hiding one cannot reflow the toolbar and
+ * change the answer.
+ */
+function markStrandedDividers(toolbar: HTMLElement) {
+  const items: HTMLElement[] = []
+  for (const child of Array.from(toolbar.children) as HTMLElement[]) {
+    if (child.classList.contains('qt-formatting-toolbar-section')) {
+      items.push(...(Array.from(child.children) as HTMLElement[]))
+    } else {
+      items.push(child)
+    }
+  }
+  const rowOf = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect()
+    return Math.round(r.top + r.height / 2)
+  }
+  items.forEach((item, i) => {
+    if (!item.classList.contains('qt-formatting-toolbar-divider')) return
+    const prev = items[i - 1]
+    const next = items[i + 1]
+    const row = rowOf(item)
+    const stranded = !prev || !next || Math.abs(rowOf(prev) - row) > 2 || Math.abs(rowOf(next) - row) > 2
+    if (stranded) item.dataset.wrapped = 'true'
+    else delete item.dataset.wrapped
+  })
+}
+
 export default function FormattingToolbar({
   roleplayTemplateId,
   editor,
@@ -494,8 +528,22 @@ export default function FormattingToolbar({
     : filteredDelimiters
   const hasDelimiters = !loadingTemplate && allDelimiters.length > 0
 
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  // Re-mark after every render (the button set changes with the template) and
+  // whenever the toolbar's width changes (a narrow editor, a resized dialog).
+  useLayoutEffect(() => {
+    if (toolbarRef.current) markStrandedDividers(toolbarRef.current)
+  })
+  useEffect(() => {
+    const toolbar = toolbarRef.current
+    if (!toolbar || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => markStrandedDividers(toolbar))
+    observer.observe(toolbar)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <div className="qt-formatting-toolbar">
+    <div className="qt-formatting-toolbar" ref={toolbarRef}>
       {/* Markdown buttons - always shown */}
       <div className="qt-formatting-toolbar-section">
         {MARKDOWN_FORMATS.filter(
@@ -599,10 +647,10 @@ export default function FormattingToolbar({
         onMouseDown={preventFocusLoss}
       />
 
-      {/* Source mode toggle - always at the end */}
+      {/* Source mode toggle - always at the end, beside the pickers with no
+          divider of its own */}
       {onToggleSource && (
         <>
-          <div className="qt-formatting-toolbar-divider" />
           <div className="qt-formatting-toolbar-section">
             <Tooltip content={showSource ? 'Switch to rich text editor' : 'Edit markdown source'}>
               <button

@@ -1,6 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback, ReactNode } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { usePluginsQuery } from '@/lib/hooks/use-plugins'
 import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { BrandName } from '@/components/ui/brand-name'
 import { PluginConfigModal } from './plugins/PluginConfigModal'
@@ -49,14 +53,6 @@ interface NpmPlugin {
   score: number
 }
 
-interface PluginStats {
-  total: number
-  enabled: number
-  disabled: number
-  errors: number
-  initialized: boolean
-}
-
 const getSourceBadge = (source: PluginSource): SettingsCardBadge => {
   switch (source) {
     case 'included':
@@ -95,9 +91,9 @@ function PluginToggle({
       disabled={isToggling}
       className={`
         relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
-        transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring
+        transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 qt-focus-ring
         focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
-        ${enabled ? 'bg-primary' : 'qt-bg-muted'}
+        ${enabled ? 'qt-bg-primary' : 'qt-toggle-off'}
       `}
       role="switch"
       aria-checked={enabled}
@@ -105,7 +101,7 @@ function PluginToggle({
     >
       <span
         className={`
-          pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0
+          pointer-events-none inline-block h-5 w-5 transform rounded-full qt-bg-default shadow ring-0
           transition duration-200 ease-in-out
           ${enabled ? 'translate-x-5' : 'translate-x-0'}
         `}
@@ -163,14 +159,67 @@ function KeywordBadges({ keywords }: { keywords?: string[] }) {
   )
 }
 
+const EMPTY_PLUGINS: Plugin[] = []
+const EMPTY_INSTALLED: InstalledPlugin[] = []
+const EMPTY_UPGRADES: PluginUpgrade[] = []
+
 export default function PluginsTab() {
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<ActiveTab>('installed')
-  const [plugins, setPlugins] = useState<Plugin[]>([])
-  const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>([])
-  const [stats, setStats] = useState<PluginStats | null>(null)
-  const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState<Set<string>>(new Set())
-  const [deploymentInfo, setDeploymentInfo] = useState<DeploymentInfo | null>(null)
+
+  // The registry, the site-installed list, the deployment shape and the
+  // upgrade check are cached reads; every write below invalidates
+  // `queryKeys.plugins.all`, which also refreshes the attention strip.
+  const pluginsQuery = usePluginsQuery<Plugin>()
+  const plugins = pluginsQuery.data?.plugins ?? EMPTY_PLUGINS
+  const stats = pluginsQuery.data?.stats ?? null
+  useEffect(() => {
+    if (pluginsQuery.error) showErrorToast(apiErrorMessage(pluginsQuery.error, 'Failed to load plugins'))
+  }, [pluginsQuery.error])
+
+  // A failure here falls back to the main list (`isPluginInstalled` reads both).
+  const { data: installedPlugins = EMPTY_INSTALLED } = useQuery({
+    queryKey: queryKeys.plugins.installed(),
+    queryFn: ({ signal }) => apiFetch<{ plugins?: InstalledPlugin[] }>('/api/v1/plugins?filter=installed', { signal }),
+    select: (data) => data.plugins ?? EMPTY_INSTALLED,
+  })
+
+  // Unreadable: assume user-managed.
+  const { data: deploymentInfo = null, isPending: deploymentPending } = useQuery({
+    queryKey: queryKeys.system.deployment,
+    queryFn: ({ signal }) =>
+      apiFetch<DeploymentInfo>('/api/v1/system/deployment', { signal }).catch(
+        (): DeploymentInfo => ({ isUserManaged: true, isHosted: false }),
+      ),
+    staleTime: Infinity,
+  })
+
+  const upgradesQuery = useQuery({
+    queryKey: queryKeys.plugins.upgrades(),
+    queryFn: ({ signal }) =>
+      apiFetch<{ upgrades?: PluginUpgrade[]; lastChecked?: string }>('/api/v1/plugins?action=check-upgrades', { signal }),
+    // The check reaches npm; it runs once the list is on screen.
+    enabled: !pluginsQuery.isPending,
+  })
+  const availableUpgrades = upgradesQuery.data?.upgrades ?? EMPTY_UPGRADES
+  const upgradesLastChecked = upgradesQuery.data ? upgradesQuery.data.lastChecked ?? null : null
+  const upgradesLoading = upgradesQuery.isFetching
+  useEffect(() => {
+    if (upgradesQuery.error) showErrorToast(apiErrorMessage(upgradesQuery.error, 'Failed to check for upgrades'))
+  }, [upgradesQuery.error])
+  const { refetch: refetchUpgrades } = upgradesQuery
+  const fetchAvailableUpgrades = useCallback(() => {
+    void refetchUpgrades()
+  }, [refetchUpgrades])
+
+  const loading = pluginsQuery.isPending || deploymentPending
+
+  /** Re-read every plugin list (the registry, installed, upgrades, the attention strip). */
+  const refreshPlugins = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all }),
+    [queryClient],
+  )
 
   // Browse state
   const [searchQuery, setSearchQuery] = useState('')
@@ -182,72 +231,8 @@ export default function PluginsTab() {
   const [configModalPlugin, setConfigModalPlugin] = useState<{ name: string; title: string } | null>(null)
 
   // Upgrades state
-  const [availableUpgrades, setAvailableUpgrades] = useState<PluginUpgrade[]>([])
-  const [upgradesLoading, setUpgradesLoading] = useState(false)
-  const [upgradesLastChecked, setUpgradesLastChecked] = useState<string | null>(null)
   const [upgradeInProgress, setUpgradeInProgress] = useState<string | null>(null)
   const [confirmingUpgrade, setConfirmingUpgrade] = useState<PluginUpgrade | null>(null)
-
-  const fetchPlugins = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/plugins')
-      if (!res.ok) throw new Error('Failed to fetch plugins')
-      const data = await res.json()
-      setPlugins(data.plugins || [])
-      setStats(data.stats || null)
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to load plugins')
-    }
-  }, [])
-
-  const fetchInstalledPlugins = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/plugins?filter=installed')
-      if (!res.ok) throw new Error('Failed to fetch installed plugins')
-      const data = await res.json()
-      setInstalledPlugins(data.plugins || [])
-    } catch (err) {
-      // Silently fail for installed plugins list, use main plugins list as fallback
-    }
-  }, [])
-
-  const fetchDeploymentInfo = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/system/deployment')
-      if (!res.ok) throw new Error('Failed to fetch deployment info')
-      const data: DeploymentInfo = await res.json()
-      setDeploymentInfo(data)
-    } catch (err) {
-      // Silently fail, assume user-managed by default
-      setDeploymentInfo({ isUserManaged: true, isHosted: false })
-    }
-  }, [])
-
-  const fetchAvailableUpgrades = useCallback(async () => {
-    setUpgradesLoading(true)
-    try {
-      const res = await fetch('/api/v1/plugins?action=check-upgrades')
-      if (!res.ok) throw new Error('Failed to check for upgrades')
-      const data = await res.json()
-      setAvailableUpgrades(data.upgrades || [])
-      setUpgradesLastChecked(data.lastChecked || new Date().toISOString())
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to check for upgrades')
-    } finally {
-      setUpgradesLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true)
-      await Promise.all([fetchPlugins(), fetchInstalledPlugins(), fetchDeploymentInfo()])
-      setLoading(false)
-      // Fetch upgrades in background after initial load
-      fetchAvailableUpgrades()
-    }
-    loadData()
-  }, [fetchPlugins, fetchInstalledPlugins, fetchDeploymentInfo, fetchAvailableUpgrades])
 
   const handleTogglePlugin = async (pluginName: string, currentEnabled: boolean) => {
     setToggling(prev => new Set(prev).add(pluginName))
@@ -263,19 +248,7 @@ export default function PluginsTab() {
         throw new Error(data.error || 'Failed to update plugin')
       }
 
-      setPlugins(prev =>
-        prev.map(p =>
-          p.name === pluginName ? { ...p, enabled: !currentEnabled } : p
-        )
-      )
-
-      if (stats) {
-        setStats({
-          ...stats,
-          enabled: stats.enabled + (currentEnabled ? -1 : 1),
-          disabled: stats.disabled + (currentEnabled ? 1 : -1),
-        })
-      }
+      await refreshPlugins()
 
       showSuccessToast(
         !currentEnabled ? 'Plugin enabled successfully' : 'Plugin disabled successfully'
@@ -350,9 +323,8 @@ export default function PluginsTab() {
         showSuccessToast(data.message || 'Plugin installed successfully!')
       }
 
-      // Refresh installed plugins list and switch to installed tab
-      await fetchInstalledPlugins()
-      await fetchPlugins()
+      // Refresh the lists and switch to the installed tab
+      await refreshPlugins()
       setActiveTab('installed')
 
     } catch (err) {
@@ -384,22 +356,8 @@ export default function PluginsTab() {
 
       showSuccessToast(data.message || 'Plugin uninstalled successfully!')
 
-      // Optimistically remove from local state for immediate UI update
-      setPlugins(prev => prev.filter(p => p.name !== packageName && p.packageName !== packageName))
-      setInstalledPlugins(prev => prev.filter(p => p.name !== packageName))
-
-      // Update stats
-      if (stats) {
-        setStats(prev => prev ? {
-          ...prev,
-          total: prev.total - 1,
-          enabled: prev.enabled - 1, // Assume it was enabled
-        } : null)
-      }
-
-      // Refresh from server to ensure consistency
-      await fetchInstalledPlugins()
-      await fetchPlugins()
+      // Refresh from the server: the registry, installed list and stats.
+      await refreshPlugins()
 
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Uninstall failed')
@@ -425,12 +383,12 @@ export default function PluginsTab() {
 
       showSuccessToast(`${upgrade.pluginTitle} upgraded to v${upgrade.latestVersion}`)
 
-      // Remove from available upgrades list
-      setAvailableUpgrades(prev => prev.filter(u => u.packageName !== upgrade.packageName))
-
-      // Refresh plugins list
-      await fetchPlugins()
-      await fetchInstalledPlugins()
+      // Drop it from the cached upgrade list at once, then re-read everything.
+      queryClient.setQueryData<{ upgrades?: PluginUpgrade[]; lastChecked?: string }>(
+        queryKeys.plugins.upgrades(),
+        (prev) => prev && { ...prev, upgrades: (prev.upgrades ?? []).filter(u => u.packageName !== upgrade.packageName) },
+      )
+      await refreshPlugins()
 
       // Close confirmation modal if open
       setConfirmingUpgrade(null)
@@ -463,7 +421,7 @@ export default function PluginsTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="qt-loading-state py-12">
         <div className="flex items-center gap-3">
           <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
           <p className="qt-text-secondary">Loading plugins...</p>
@@ -480,7 +438,7 @@ export default function PluginsTab() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
               <p className="qt-text-label">Total Plugins</p>
-              <p className="qt-heading-2 text-primary">{stats.total}</p>
+              <p className="qt-heading-2 qt-text-brand">{stats.total}</p>
             </div>
             <div>
               <p className="qt-text-label">Enabled</p>
@@ -513,39 +471,39 @@ export default function PluginsTab() {
             onClick={() => setActiveTab('installed')}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'installed'
-                ? 'text-foreground'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-text'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Installed
             {activeTab === 'installed' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 qt-bg-primary" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('upgrades')}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'upgrades'
-                ? 'text-foreground'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-text'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Upgrades{availableUpgrades.length > 0 && ` (${availableUpgrades.length})`}
             {activeTab === 'upgrades' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 qt-bg-primary" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('browse')}
             className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'browse'
-                ? 'text-foreground'
-                : 'qt-text-secondary hover:text-foreground'
+                ? 'qt-text'
+                : 'qt-text-secondary hover:qt-text'
             }`}
           >
             Browse npm
             {activeTab === 'browse' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 qt-bg-primary" />
             )}
           </button>
         </div>
@@ -567,7 +525,7 @@ export default function PluginsTab() {
           {plugins.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <Icon name="files" className="mx-auto h-12 w-12 qt-text-secondary/50" />
-              <h3 className="mt-4 text-lg text-primary">
+              <h3 className="mt-4 text-lg qt-text-brand">
                 No Plugins Found
               </h3>
               <p className="mt-2 qt-text-small">
@@ -694,7 +652,7 @@ export default function PluginsTab() {
           )}
 
           {upgradesLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="qt-loading-state py-12">
               <div className="flex items-center gap-3">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
                 <p className="qt-text-secondary">Checking for updates...</p>
@@ -703,7 +661,7 @@ export default function PluginsTab() {
           ) : availableUpgrades.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <Icon name="check-circle" className="mx-auto h-12 w-12 qt-text-success" />
-              <h3 className="mt-4 text-lg text-primary">
+              <h3 className="mt-4 text-lg qt-text-brand">
                 All Plugins Up to Date
               </h3>
               <p className="mt-2 qt-text-small">
@@ -759,7 +717,7 @@ export default function PluginsTab() {
                           href={upgrade.repository}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
+                          className="qt-text-secondary hover:qt-text inline-flex items-center gap-1"
                         >
                           Repository
                           <Icon name="external-link" className="w-3 h-3" />
@@ -770,7 +728,7 @@ export default function PluginsTab() {
                           href={upgrade.changelogUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
+                          className="qt-text-secondary hover:qt-text inline-flex items-center gap-1"
                         >
                           Changelog
                           <Icon name="external-link" className="w-3 h-3" />
@@ -780,7 +738,7 @@ export default function PluginsTab() {
                         href={upgrade.npmUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
+                        className="qt-text-secondary hover:qt-text inline-flex items-center gap-1"
                       >
                         npm
                         <Icon name="external-link" className="w-3 h-3" />
@@ -846,7 +804,7 @@ export default function PluginsTab() {
             {searchResults.length === 0 && !searching && (
               <div className="qt-card p-8 text-center">
                 <Icon name="search" className="mx-auto h-12 w-12 qt-text-secondary/50" />
-                <h3 className="mt-4 text-lg text-primary">
+                <h3 className="mt-4 text-lg qt-text-brand">
                   Search for Plugins
                 </h3>
                 <p className="mt-2 qt-text-small">
@@ -936,7 +894,7 @@ export default function PluginsTab() {
           pluginTitle={configModalPlugin.title}
           onSuccess={() => {
             // Refresh plugins list to update any status changes
-            fetchPlugins()
+            void refreshPlugins()
           }}
         />
       )}

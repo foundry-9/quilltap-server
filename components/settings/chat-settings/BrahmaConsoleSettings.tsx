@@ -7,6 +7,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { InlineBrahmaProfileSelect } from '@/components/brahma-console/InlineBrahmaProfileSelect'
 import { BoundedNumberInstanceSetting } from './components/BoundedNumberInstanceSetting'
+import { DEFAULT_BRAHMA_MAX_AGENT_TURNS } from '@/lib/schemas/settings.types'
 
 const SETTINGS_URL = '/api/v1/settings/brahma-console'
 
@@ -40,7 +41,7 @@ function InlineBrahmaProfileSetting() {
       showSuccessToast('Inline Brahma engine saved')
     },
     onError: (err) => {
-      console.debug('[BrahmaConsoleSettings] Inline profile save failed', { error: getErrorMessage(err) })
+      console.warn('[BrahmaConsoleSettings] Inline profile save failed', { error: getErrorMessage(err) })
       showErrorToast(getErrorMessage(err, 'Failed to save Brahma Console settings'))
     },
   })
@@ -69,9 +70,8 @@ function InlineBrahmaProfileSetting() {
   )
 }
 
-const DEFAULT_MAX_AGENT_TURNS = 50
-const MIN_TURNS = 5
-const MAX_TURNS = 200
+// No upper bound: the operator's figure is the only ceiling.
+const MIN_TURNS = 1
 
 /**
  * The instance-wide Brahma Console agent-turn budget
@@ -88,9 +88,8 @@ export function BrahmaConsoleSettings() {
         queryKey={queryKeys.settings.brahmaConsole}
         url="/api/v1/settings/brahma-console"
         field="maxAgentTurns"
-        defaultValue={DEFAULT_MAX_AGENT_TURNS}
+        defaultValue={DEFAULT_BRAHMA_MAX_AGENT_TURNS}
         min={MIN_TURNS}
-        max={MAX_TURNS}
         loadFailureMessage="Failed to load Brahma Console settings"
         saveFailureMessage="Failed to save Brahma Console settings"
         successToast="Console turn budget saved"

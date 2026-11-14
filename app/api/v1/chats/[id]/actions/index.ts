@@ -18,7 +18,7 @@ export {
 } from './participants';
 export { handleTurnAction } from './turn';
 export { handleStopTurn, handleRaiseHand } from './interrupt';
-export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';
+export { handleGetAvatars, handleGetAvatarTimeline, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
 export { handleQueueMemories, handleExtractMemoriesDryRun } from './memories';
@@ -31,12 +31,12 @@ export { handleGetStoryBackground, handleRegenerateBackground } from './story-ba
 export { handleReclassifyDanger } from './danger-classification';
 export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot, handleGetWardrobeHistory, handleWardrobeRollback } from './outfit';
 export { handleGetAbsentMentions } from './absent-mentions';
+export { handleGetAtlasMentions } from './atlas-mentions';
 export { handleGetInventory, handleInventoryEquip, handleInventoryResetDefaults } from './inventory';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';
 export {
-  handleActiveDocument,
   handleOpenDocuments,
   handleRecentDocuments,
   handleAccessibleStores,

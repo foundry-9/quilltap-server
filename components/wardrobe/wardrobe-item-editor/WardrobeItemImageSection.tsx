@@ -29,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useImageProfilesQuery } from '@/lib/hooks/use-profiles'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
@@ -141,12 +142,8 @@ function ActiveImageSection({
       apiFetch<WardrobeItemImagesResponse>(wardrobeItemImagesUrl(item.id, container), { signal }),
   })
 
-  const { data: profilesData } = useQuery({
-    queryKey: queryKeys.imageProfiles.all,
-    queryFn: ({ signal }) =>
-      apiFetch<{ profiles: ImageProfileOption[] }>('/api/v1/image-profiles', { signal }),
-  })
-  const profiles = useMemo(() => profilesData?.profiles ?? [], [profilesData])
+  const { data: profilesData } = useImageProfilesQuery<ImageProfileOption>()
+  const profiles = useMemo(() => profilesData ?? [], [profilesData])
 
   const { data: designatedProfileId = null } = useChatSettingsQuery(selectDesignatedProfileId)
 

@@ -22,6 +22,7 @@ export {
   updateTurnStateAfterMessage,
   computeSpokenThisCycleAfterMessage,
   computeSpokenThisCycleAfterSkip,
+  turnClosesCycle,
   computeCycleOrderAfterMessage,
   computeCycleOrderAfterSkip,
 } from './state';
@@ -97,6 +98,7 @@ export {
   getActiveLLMParticipants,
   isMultiCharacterChat,
   isAllLLMChat,
+  loneCharacterHasAnswered,
 } from './utils';
 
 // Turn order computation (display-only)

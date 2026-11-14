@@ -13,9 +13,8 @@
  */
 
 import { useCallback, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useImageProfilesQuery } from '@/lib/hooks/use-profiles'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { triggerDownload } from '@/lib/download-utils'
@@ -38,6 +37,8 @@ export interface AvatarGenerationPaneProps {
   slots: EquippedSlots
 }
 
+const EMPTY_IMAGE_PROFILES: ImageProfileSummary[] = []
+
 export function AvatarGenerationPane({
   characterId,
   characterName,
@@ -45,12 +46,7 @@ export function AvatarGenerationPane({
   slots,
 }: AvatarGenerationPaneProps) {
   const inChat = chatId !== null
-  const { data: profilesData } = useQuery({
-    queryKey: queryKeys.imageProfiles.all,
-    queryFn: ({ signal }) =>
-      apiFetch<{ profiles?: ImageProfileSummary[] }>('/api/v1/image-profiles', { signal }),
-  })
-  const imageProfiles = profilesData?.profiles ?? []
+  const { data: imageProfiles = EMPTY_IMAGE_PROFILES } = useImageProfilesQuery<ImageProfileSummary>()
   // Null = "the system default" until the operator picks one.
   const [pickedProfileId, setPickedProfileId] = useState<string | null>(null)
   const selectedProfileId =
@@ -80,7 +76,7 @@ export function AvatarGenerationPane({
         }
       } else {
         const result = await fetchJson<{ fileId: string; url: string }>(
-          '/api/v1/wardrobe/preview-avatar',
+          '/api/v1/wardrobe?action=preview-avatar',
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
         )
         if (!result.ok || !result.data) {
@@ -165,7 +161,7 @@ export function AvatarGenerationPane({
               onClick={() => setPreview(null)}
               aria-label="Discard preview"
               title="Discard preview"
-              className="absolute top-1 right-1 w-6 h-6 rounded-full qt-bg-default border qt-border-default flex items-center justify-center qt-text-secondary hover:text-foreground shadow-sm"
+              className="absolute top-1 right-1 w-6 h-6 rounded-full qt-bg-default border qt-border-default flex items-center justify-center qt-text-secondary hover:qt-text shadow-sm"
             >
               ×
             </button>

@@ -17,18 +17,21 @@
  *  - **Not locked.** A locked instance is waiting on a passphrase and its
  *    databases are shut; API routes answer 423. A socket must not be the one
  *    door left ajar.
- *  - **Same origin.** Browsers do not apply CORS to WebSocket upgrades, so a
- *    page on any other origin can open a socket against a localhost server and
- *    read whatever it streams. An `Origin` whose host disagrees with `Host` is
- *    refused. A *missing* origin is allowed: that is a non-browser client
- *    (`wscat`, the integration tests, the Electron shell's own probes), which
- *    is not the threat this check exists for.
+ *  - **Same origin, known host.** Browsers do not apply CORS to WebSocket
+ *    upgrades, so a page on any other origin can open a socket against a
+ *    localhost server and read whatever it streams. The request goes through
+ *    `checkRequestOrigin` (`lib/api/request-origin.ts`), the gate `proxy.ts`
+ *    applies to HTTP: an unknown `Host` (DNS rebinding) or a cross-site
+ *    `Origin` is refused. A *missing* origin is allowed: that is a non-browser
+ *    client (`wscat`, the integration tests, the Electron shell's own probes),
+ *    which is not the threat this check exists for.
  *
  * @module lib/realtime/upgrade-auth
  */
 
 import type { IncomingMessage } from 'http';
 
+import { checkRequestOrigin } from '@/lib/api/request-origin';
 import { getServerSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
 import { startupState } from '@/lib/startup/startup-state';
@@ -43,27 +46,20 @@ export type UpgradeAuthResult =
   | { ok: false; reason: string };
 
 /**
- * Reject an upgrade whose `Origin` names a different host than the request's
- * `Host`. Returns null when the request is acceptable.
+ * Refuse an upgrade from another site, or addressed to a host we do not answer
+ * to, through the same gate as every HTTP request (`checkRequestOrigin`).
+ * Returns null when the request is acceptable.
  */
 function checkOrigin(req: IncomingMessage): string | null {
-  const origin = req.headers.origin;
-  // No Origin at all, or the opaque `null` origin: not a browser page acting
-  // on behalf of another site, so the hijacking threat doesn't apply.
-  if (!origin || origin === 'null') return null;
-
-  const host = req.headers.host;
-  if (!host) return 'request has an Origin but no Host';
-
-  try {
-    const originHost = new URL(origin).host;
-    if (originHost !== host) {
-      return `cross-origin upgrade (origin ${originHost} vs host ${host})`;
-    }
-  } catch {
-    return `unparseable Origin header (${origin})`;
-  }
-  return null;
+  const header = (name: string): string | undefined => {
+    const value = req.headers[name];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const verdict = checkRequestOrigin(
+    { host: header('host'), origin: header('origin'), secFetchSite: header('sec-fetch-site') },
+    { requireSameOrigin: true },
+  );
+  return verdict.ok ? null : verdict.reason;
 }
 
 /**

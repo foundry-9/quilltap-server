@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { badRequest } from '@/lib/api/responses';
 import { executeToolCallWithContext } from '@/lib/chat/tool-executor';
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
+import { OPERATOR_TOOL_OFFER } from '@/lib/tools/effects';
 import type { RequestContext } from '@/lib/api/middleware';
 
 /**
@@ -79,6 +80,9 @@ export async function handleRunTool(
     characterId: characterParticipant?.characterId || undefined,
     callingParticipantId: characterParticipant?.id || undefined,
     projectId: chat.projectId || undefined,
+    // The operator ran this by hand: the offered-set test does not apply, but
+    // the operator-surface gate and any ceiling still do.
+    toolOffer: OPERATOR_TOOL_OFFER,
   };
 
   // Execute the tool

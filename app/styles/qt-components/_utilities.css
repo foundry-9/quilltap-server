@@ -379,6 +379,21 @@
   }
 
   /**
+   * Form-field border — the input token, for controls that are not a full
+   * qt-input (a bare file input, a dropdown trigger styled like a field).
+   */
+  .qt-border-input {
+    border-color: var(--color-input);
+  }
+
+  /**
+   * Default divider colour between children (pairs with divide-x / divide-y).
+   */
+  .qt-divide-default > :not(:last-child) {
+    border-color: var(--color-border);
+  }
+
+  /**
    * Primary color border
    */
   .qt-border-primary {
@@ -553,10 +568,33 @@
   }
 
   /**
+   * Foreground text at 80% — a quieter heading or sub-label.
+   */
+  .qt-text\/80 {
+    color: color-mix(in srgb, var(--color-foreground) 80%, transparent);
+  }
+
+  /**
    * Secondary/muted text color
    */
   .qt-text-secondary {
     color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Brand (primary-colour) text — the theme's --color-primary as a text colour.
+   * Not to be confused with qt-text-primary, which is the primary *foreground*
+   * text colour. Use for brand-tinted links and hover accents.
+   */
+  .qt-text-brand {
+    color: var(--color-primary);
+  }
+
+  /**
+   * Brand text at 70% — an eyebrow caption in the brand colour.
+   */
+  .qt-text-brand\/70 {
+    color: color-mix(in srgb, var(--color-primary) 70%, transparent);
   }
 
   /**
@@ -773,6 +811,61 @@
   }
 
   /**
+   * Hover text colour: foreground at 80%.
+   */
+  .hover\:qt-text\/80:hover {
+    color: color-mix(in srgb, var(--color-foreground) 80%, transparent);
+  }
+
+  /**
+   * Hover text colour: brand at 80% — the hover of a brand-coloured link.
+   */
+  .hover\:qt-text-brand\/80:hover {
+    color: color-mix(in srgb, var(--color-primary) 80%, transparent);
+  }
+
+  /**
+   * Hover background: accent, and accent at 80%.
+   */
+  .hover\:qt-bg-accent:hover {
+    background-color: var(--color-accent);
+  }
+
+  .hover\:qt-bg-accent\/80:hover {
+    background-color: color-mix(in srgb, var(--color-accent) 80%, transparent);
+  }
+
+  /**
+   * Hover border: the input token.
+   */
+  .hover\:qt-border-input:hover {
+    border-color: var(--color-input);
+  }
+
+  /**
+   * Focus ring colour — the theme's ring token on :focus and :focus-visible.
+   * Pairs with a ring width (`focus:ring-2`, `focus-visible:ring-2`); on its
+   * own it draws nothing. Use it instead of `focus:ring-ring` /
+   * `focus:ring-primary`, so every focus ring follows the theme's ring colour.
+   */
+  .qt-focus-ring:focus,
+  .qt-focus-ring:focus-visible {
+    --tw-ring-color: var(--color-ring);
+  }
+
+  /**
+   * Brand ring colour — a selected or highlighted item's ring (pairs with a
+   * ring width such as `ring-2`), and its hover form.
+   */
+  .qt-ring-brand {
+    --tw-ring-color: var(--color-primary);
+  }
+
+  .hover\:qt-ring-brand:hover {
+    --tw-ring-color: var(--color-primary);
+  }
+
+  /**
    * Hover background for destructive/10
    */
   .hover\:qt-bg-destructive\/10:hover {
@@ -942,6 +1035,10 @@
 
   .hover\:qt-text-primary:hover {
     color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  .hover\:qt-text-brand:hover {
+    color: var(--color-primary);
   }
 
   /**
@@ -1212,6 +1309,18 @@
    */
   .qt-bg-toggle-knob {
     background-color: var(--qt-toggle-knob-bg, white);
+  }
+
+  /**
+   * Toggle switch track, off state. The muted fill alone sits at ~1.1:1 on a
+   * card, so an "off" switch all but vanished (WCAG 1.4.11); the inset edge in
+   * the muted-foreground colour outlines the track at 3:1 or better in every
+   * bundled theme without moving the knob.
+   * Usage: ${on ? 'qt-bg-primary' : 'qt-toggle-off'} on the track element.
+   */
+  .qt-toggle-off {
+    background-color: var(--color-muted);
+    box-shadow: inset 0 0 0 1px var(--color-muted-foreground);
   }
 
   /* ==========================================================================

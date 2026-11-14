@@ -15,6 +15,8 @@ import {
 } from './common.types';
 import { TimestampConfigSchema } from './settings.types';
 import { DEFAULT_DIAGRAM_STYLE, DIAGRAM_STYLES } from '@/lib/markdown/diagrams';
+import { CHARACTER_KINDS, DEFAULT_CHARACTER_KIND } from '@/lib/characters/kind';
+import { BirthdaySchema } from '@/lib/characters/birthday';
 
 // ============================================================================
 // CHARACTER SYSTEM PROMPTS
@@ -63,11 +65,13 @@ export type CharacterScenario = z.infer<typeof CharacterScenarioSchema>;
 // PHYSICAL DESCRIPTIONS
 // ============================================================================
 
-// Physical Description for image generation prompts
+// Physical Description for image generation prompts. A character has exactly
+// one (`physicalDescription`), so it carries no name or usage context — those
+// belonged to the old list of several and were retired with it. Old records
+// that still carry `name` / `usageContext` parse fine: the object is not
+// strict, so the keys are stripped on read.
 export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
-  name: z.string().min(1),
-  usageContext: z.string().max(200).nullable().optional(),
   // Tight head-and-shoulders portrait prompt — face/hair/expression/neckline
   // only, never below-shoulder anatomy. Preferred source for avatar generation
   // (avatars are a head-and-shoulders crop); see lib/image-gen/avatar-prompt.ts.
@@ -125,10 +129,101 @@ export type Pronouns = z.infer<typeof PronounsSchema>;
 export const ControlledByEnum = z.enum(['llm', 'user']);
 export type ControlledBy = z.infer<typeof ControlledByEnum>;
 
-export const CharacterSchema = z.object({
+/**
+ * The `characters` table: the slim row. Every content field lives in the
+ * character's vault, not here (the 4.6 cutover) — see
+ * {@link CharacterManagedFieldsSchema}. `findByIdRaw` / `findAllRaw` /
+ * `findByStorePointerRaw` return this shape, so a raw read cannot be
+ * mistaken for a hydrated one: the compiler refuses a managed field on it.
+ */
+export const CharacterRowSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   name: z.string(),
+  defaultImageId: UUIDSchema.nullable().optional(),
+  defaultConnectionProfileId: UUIDSchema.nullable().optional(),
+  defaultPartnerId: UUIDSchema.nullable().optional(),  // Default user-controlled character to pair with when chatting
+  defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
+  defaultImageProfileId: UUIDSchema.nullable().optional(),  // Default image generation profile for this character
+  sillyTavernData: JsonSchema.nullable().optional(),
+  isFavorite: z.boolean().default(false),
+  npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
+  controlledBy: ControlledByEnum.default('llm'),  // Who controls this character: 'llm' (AI) or 'user' (player)
+  /** Default agent mode enabled state for chats with this character (null = inherit from global) */
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
+  /** Default help tools enabled state for chats with this character (null = inherit from global, default disabled) */
+  defaultHelpToolsEnabled: z.boolean().nullable().optional(),
+  /** Default timestamp configuration for chats with this character (null = use global default / disabled) */
+  defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
+  /** Default scenario ID for chats with this character (null = no default scenario) */
+  defaultScenarioId: UUIDSchema.nullable().optional(),
+  /** Default system prompt ID for chats with this character (null = use first/isDefault prompt) */
+  defaultSystemPromptId: UUIDSchema.nullable().optional(),
+  /** Linked character document store (mountType='database', storeType='character'); null = not linked */
+  characterDocumentMountPointId: UUIDSchema.nullable().optional(),
+  /** Tombstone marker; when set the character is archived and should not accept writes. */
+  archivedAt: TimestampSchema.nullable().optional(),
+  /** Archive bundle file row for this character's tombstone export. */
+  archiveFileId: UUIDSchema.nullable().optional(),
+  /** Thumbnail copy of the archived avatar for tombstone rendering. */
+  archivedAvatarFileId: UUIDSchema.nullable().optional(),
+  /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
+  canDressThemselves: z.boolean().nullable().optional(),
+  /** Whether this character can create new wardrobe items mid-conversation (null = enabled by default, requires tool use) */
+  canCreateOutfits: z.boolean().nullable().optional(),
+  /** Whether this character may use the inventory_* tools (null = enabled by default) */
+  canManageInventory: z.boolean().nullable().optional(),
+  /**
+   * When true, this character may inspect and access "the Staff" of personified
+   * features — chat-level toggles for self_inventory, Staff messages
+   * (Lantern/Aurora/Librarian/Prospero/Host announcements), and any character
+   * vault (their own or peers') still apply. When null/false, the character
+   * cannot see Staff messages, the self_inventory tool is withheld, and every
+   * character vault (including their own) is hidden from doc_* tools — the
+   * character-level setting is a hard override on top of chat/project settings.
+   * Default: null (opaque).
+   */
+  systemTransparency: z.boolean().nullable().optional(),
+  /**
+   * Aurora Core whisper — per-character override of the global `coreWhisper.enabled`
+   * setting. NULL = inherit from global default. When set, applies regardless
+   * of per-chat override (chat → character → global precedence). The Core
+   * whisper periodically re-offers this character's own `Core/` vault folder
+   * before their next turn.
+   */
+  coreWhisperEnabled: z.boolean().nullable().optional(),
+  /**
+   * Carina (inline LLM queries) — when true, this character can be invoked as
+   * an "answerer" via `@Name:` / `@Name?` markup or the `ask_carina` tool in any
+   * chat, producing a minimal isolated reference answer (identity only, no chat
+   * history, no memory) without joining the conversation. NULL/false = not an
+   * answerer. The character need not be a participant in the chat that invokes
+   * them.
+   */
+  canBeCarina: z.boolean().nullable().optional(),
+  // Relationships
+  partnerLinks: z.array(z.object({
+    partnerId: UUIDSchema,
+    isDefault: z.boolean(),
+  })).default([]),
+  tags: z.array(UUIDSchema).default([]),
+  avatarOverrides: z.array(z.object({
+    chatId: UUIDSchema,
+    imageId: UUIDSchema,
+  })).default([]),
+  // Timestamps
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type CharacterRow = z.infer<typeof CharacterRowSchema>;
+
+/**
+ * The vault-managed fields: content that lives in the character's vault files
+ * (`lib/characters/vault/`) and is hydrated onto the row on read. There is no
+ * DB column behind any of them.
+ */
+export const CharacterManagedFieldsSchema = z.object({
   /**
    * The user's or character's own private label/framing for this character —
    * a tag like "the love interest", "the rival", "the protagonist". Not visible
@@ -170,12 +265,6 @@ export const CharacterSchema = z.object({
   firstMessage: z.string().nullable().optional(),
   exampleDialogues: z.string().nullable().optional(),
   systemPrompts: z.array(CharacterSystemPromptSchema).default([]),  // Named system prompts array
-  defaultImageId: UUIDSchema.nullable().optional(),
-  defaultConnectionProfileId: UUIDSchema.nullable().optional(),
-  defaultPartnerId: UUIDSchema.nullable().optional(),  // Default user-controlled character to pair with when chatting
-  defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
-  defaultImageProfileId: UUIDSchema.nullable().optional(),  // Default image generation profile for this character
-  sillyTavernData: JsonSchema.nullable().optional(),
   /**
    * The character's fact sheet: a flat object of user-authored keys with any
    * JSON value — `{ "hasAnsibleAccess": true, "clearanceLevel": 3 }`. Lives in
@@ -190,8 +279,10 @@ export const CharacterSchema = z.object({
    * transparent character can read and edit the file through the ordinary
    * doc_* tools, like any vault document.
    *
-   * **Raw metadata is never injected into a prompt.** The one sanctioned
-   * reader is the derived character-progressions report: the reserved
+   * **Raw metadata is never injected into a prompt.** The sanctioned
+   * readers are derived: the public identity (`lib/characters/public-identity.ts`,
+   * public progressions only, third person) and the character-progressions
+   * report: the reserved
    * `progressions` key (validated by `lib/progressions/schema.ts` — the only
    * reserved key; every other key stays freeform) is turned into a
    * second-person line by `lib/progressions/prompt-section.ts` and appended to
@@ -199,45 +290,7 @@ export const CharacterSchema = z.object({
    * model.
    */
   metadata: JsonSchema.nullable().optional(),
-  isFavorite: z.boolean().default(false),
-  npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
-  controlledBy: ControlledByEnum.default('llm'),  // Who controls this character: 'llm' (AI) or 'user' (player)
-
-  /** Default agent mode enabled state for chats with this character (null = inherit from global) */
-  defaultAgentModeEnabled: z.boolean().nullable().optional(),
-
-  /** Default help tools enabled state for chats with this character (null = inherit from global, default disabled) */
-  defaultHelpToolsEnabled: z.boolean().nullable().optional(),
-
-  /** Default timestamp configuration for chats with this character (null = use global default / disabled) */
-  defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
-
-  /** Default scenario ID for chats with this character (null = no default scenario) */
-  defaultScenarioId: UUIDSchema.nullable().optional(),
-
-  /** Default system prompt ID for chats with this character (null = use first/isDefault prompt) */
-  defaultSystemPromptId: UUIDSchema.nullable().optional(),
-
-  /** Linked character document store (mountType='database', storeType='character'); null = not linked */
-  characterDocumentMountPointId: UUIDSchema.nullable().optional(),
-
-  /** Tombstone marker; when set the character is archived and should not accept writes. */
-  archivedAt: TimestampSchema.nullable().optional(),
-  /** Archive bundle file row for this character's tombstone export. */
-  archiveFileId: UUIDSchema.nullable().optional(),
-  /** Thumbnail copy of the archived avatar for tombstone rendering. */
-  archivedAvatarFileId: UUIDSchema.nullable().optional(),
-
-  /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
-  canDressThemselves: z.boolean().nullable().optional(),
-
-  /** Whether this character can create new wardrobe items mid-conversation (null = enabled by default, requires tool use) */
-  canCreateOutfits: z.boolean().nullable().optional(),
-
-  /** Whether this character may use the inventory_* tools (null = enabled by default) */
-  canManageInventory: z.boolean().nullable().optional(),
-
   /**
    * When true, a new chat with this character defaults its Starting Outfit to
    * "Let character choose" — the character picks their opening outfit based on
@@ -247,7 +300,6 @@ export const CharacterSchema = z.object({
    * `properties.json`, not a DB column.
    */
   canChooseOutfit: z.boolean().default(false),
-
   /**
    * When true, this character is told it may draw diagrams — fenced
    * ```mermaid / ```dot / ```svg blocks that the Salon renders as pictures.
@@ -255,57 +307,27 @@ export const CharacterSchema = z.object({
    * Lives in the vault's `properties.json`, not a DB column.
    */
   canDrawDiagrams: z.boolean().default(false),
-
   /**
    * How this character's Mermaid and Graphviz diagrams look (`handDrawn` or
    * `clean`). A rendering choice only — the model never hears it. Kept even
    * while `canDrawDiagrams` is off. Lives in the vault's `properties.json`.
    */
   diagramStyle: z.enum(DIAGRAM_STYLES).default(DEFAULT_DIAGRAM_STYLE),
-
   /**
-   * When true, this character may inspect and access "the Staff" of personified
-   * features — chat-level toggles for self_inventory, Staff messages
-   * (Lantern/Aurora/Librarian/Prospero/Host announcements), and any character
-   * vault (their own or peers') still apply. When null/false, the character
-   * cannot see Staff messages, the self_inventory tool is withheld, and every
-   * character vault (including their own) is hidden from doc_* tools — the
-   * character-level setting is a hard override on top of chat/project settings.
-   * Default: null (opaque).
+   * How this character is performed: `roleplay` (a person inside a story, the
+   * default) or `assistant` (a character whose job is to do work for the
+   * operator). Read only through `lib/characters/kind.ts`. Lives in the
+   * vault's `properties.json`, not a DB column.
    */
-  systemTransparency: z.boolean().nullable().optional(),
-
-  /**
-   * Aurora Core whisper — per-character override of the global `coreWhisper.enabled`
-   * setting. NULL = inherit from global default. When set, applies regardless
-   * of per-chat override (chat → character → global precedence). The Core
-   * whisper periodically re-offers this character's own `Core/` vault folder
-   * before their next turn.
-   */
-  coreWhisperEnabled: z.boolean().nullable().optional(),
-
-  /**
-   * Carina (inline LLM queries) — when true, this character can be invoked as
-   * an "answerer" via `@Name:` / `@Name?` markup or the `ask_carina` tool in any
-   * chat, producing a minimal isolated reference answer (identity only, no chat
-   * history, no memory) without joining the conversation. NULL/false = not an
-   * answerer. The character need not be a participant in the chat that invokes
-   * them.
-   */
-  canBeCarina: z.boolean().nullable().optional(),
-
-  // Relationships
-  partnerLinks: z.array(z.object({
-    partnerId: UUIDSchema,
-    isDefault: z.boolean(),
-  })).default([]),
+  kind: z.enum(CHARACTER_KINDS).default(DEFAULT_CHARACTER_KIND),
   aliases: z.array(z.string()).default([]),
   pronouns: PronounsSchema.nullable().optional(),
-  tags: z.array(UUIDSchema).default([]),
-  avatarOverrides: z.array(z.object({
-    chatId: UUIDSchema,
-    imageId: UUIDSchema,
-  })).default([]),
+  /**
+   * Optional real birthday, `YYYY-MM-DD`. When set, the character's age is
+   * calculated from it (`lib/characters/birthday.ts`) and goes up every year;
+   * it is never stored. Lives in the vault's `properties.json`.
+   */
+  birthday: BirthdaySchema.nullable().optional(),
   /**
    * The character's physical description plus token-sized prompt variants
    * (short / medium / long / complete) for image generation. Singular per
@@ -316,13 +338,33 @@ export const CharacterSchema = z.object({
    * unchanged.
    */
   physicalDescription: PhysicalDescriptionSchema.nullable().optional(),
-
-  // Timestamps
-  createdAt: TimestampSchema,
-  updatedAt: TimestampSchema,
 });
 
+/** The hydrated character: the row plus every vault-managed field. */
+export const CharacterSchema = CharacterRowSchema.extend(CharacterManagedFieldsSchema.shape);
+
 export type Character = z.infer<typeof CharacterSchema>;
+
+/** A vault-managed field name: a key of `Character` that `CharacterRow` lacks. */
+export type CharacterManagedField = Exclude<keyof Character, keyof CharacterRow>;
+
+/**
+ * Every vault-managed field, derived from the schemas — never hand-listed.
+ * These are exactly the keys a row write must not carry and a raw read does
+ * not have.
+ */
+export const CHARACTER_MANAGED_FIELDS: readonly CharacterManagedField[] = Object.freeze(
+  Object.keys(CharacterManagedFieldsSchema.shape) as CharacterManagedField[],
+);
+
+/**
+ * The managed fields at their schema defaults — what a character with a
+ * linked but empty vault, or with no vault, hydrates to before any file is
+ * read (`scenarios: []`, `talkativeness: 0.5`, `kind: 'roleplay'`, …).
+ */
+export function characterManagedDefaults(): z.infer<typeof CharacterManagedFieldsSchema> {
+  return CharacterManagedFieldsSchema.parse({});
+}
 
 // Input type for creating characters - makes fields with defaults optional
 export type CharacterInput = z.input<typeof CharacterSchema>;

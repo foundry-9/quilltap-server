@@ -140,6 +140,8 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   // Collection-wide: an Inventory file write is announced as the bare topic
   // (see INVENTORY_PATH_PATTERN below).
   inventory: [],
+  // Collection-wide likewise (see ATLAS_PATH_PATTERN below).
+  atlas: [],
   // Collection-wide likewise (see WARDROBE_PATH_PATTERN below).
   wardrobe: [],
   // Storyteller rounds never run in the job child; the round service
@@ -161,6 +163,23 @@ function writesInventoryFile(write: { method: string; args?: readonly unknown[] 
   if (!write.method.startsWith('docMount')) return false;
   try {
     return INVENTORY_PATH_PATTERN.test(JSON.stringify(write.args ?? []));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A document-store write naming a path under a tier's `Atlas/` folder — an
+ * entry a job child's document write touched (an opaque character's own
+ * `doc_*` tools cannot reach it, but a Document-Mode edit relayed through a
+ * job can). Implies the `atlas` topic beside `mountPoints`.
+ */
+const ATLAS_PATH_PATTERN = /(^|[\\/"])Atlas\//;
+
+function writesAtlasFile(write: { method: string; args?: readonly unknown[] }): boolean {
+  if (!write.method.startsWith('docMount')) return false;
+  try {
+    return ATLAS_PATH_PATTERN.test(JSON.stringify(write.args ?? []));
   } catch {
     return false;
   }
@@ -228,6 +247,10 @@ export function topicsForWriteBatch(
     if (!seen.has('inventory') && writesInventoryFile(write)) {
       seen.add('inventory');
       hints.push({ topic: 'inventory' });
+    }
+    if (!seen.has('atlas') && writesAtlasFile(write)) {
+      seen.add('atlas');
+      hints.push({ topic: 'atlas' });
     }
     if (!seen.has('wardrobe') && writesWardrobeFile(write)) {
       seen.add('wardrobe');

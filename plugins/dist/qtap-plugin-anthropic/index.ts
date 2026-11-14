@@ -8,7 +8,7 @@
  * - Function calling / tool use
  */
 
-import type { TextProviderPlugin, ProviderOptionsSchema } from './types'
+import type { TextProviderPlugin, ProviderOptionsSchema, CheapModelConfig } from './types'
 import { AnthropicProvider } from './provider'
 import {
   createPluginLogger,
@@ -82,11 +82,15 @@ const messageFormat = {
 };
 
 /**
- * Cheap model configuration for background tasks
+ * Cheap model configuration for background tasks.
+ *
+ * Anthropic has no model name that tracks the newest release — every ID,
+ * short ones included, is a pinned snapshot that eventually retires — so no
+ * default is written here. The host asks `resolveDefaultModel`, which reads
+ * the live Models API for the newest active Haiku, and caches the answer.
  */
-const cheapModels = {
-  defaultModel: 'claude-haiku-4-5-20251001',
-  recommendedModels: ['claude-haiku-4-5-20251001', 'claude-3-haiku-20240307'],
+const cheapModels: CheapModelConfig = {
+  resolveDefaultModel: (apiKey: string) => new AnthropicProvider().resolveCheapModel(apiKey),
 };
 
 /**
@@ -198,8 +202,7 @@ export const plugin: TextProviderPlugin = {
 
 
   /**
-   * Get list of available models from Anthropic
-   * Anthropic doesn't provide a models endpoint, so we return known models
+   * Get list of available models from Anthropic's live Models API
    */
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
     try {
@@ -224,87 +227,6 @@ export const plugin: TextProviderPlugin = {
       logger.error('Error validating Anthropic API key', { context: 'plugin.validateApiKey' }, error instanceof Error ? error : undefined);
       return false;
     }
-  },
-
-  /**
-   * Get static model information
-   * Returns cached information about Claude models without needing API calls
-   */
-  getModelInfo: () => {
-    return [
-      {
-        id: 'claude-opus-4-6',
-        name: 'Claude Opus 4.6',
-        contextWindow: 200000,
-        maxOutputTokens: 16000,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-sonnet-4-6',
-        name: 'Claude Sonnet 4.6',
-        contextWindow: 200000,
-        maxOutputTokens: 16000,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-sonnet-4-5-20250929',
-        name: 'Claude Sonnet 4.5',
-        contextWindow: 200000,
-        maxOutputTokens: 16000,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-haiku-4-5-20251001',
-        name: 'Claude Haiku 4.5',
-        contextWindow: 200000,
-        maxOutputTokens: 16000,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-opus-4-1-20250805',
-        name: 'Claude Opus 4.1',
-        contextWindow: 200000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-sonnet-4-20250514',
-        name: 'Claude Sonnet 4',
-        contextWindow: 200000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-opus-4-20250514',
-        name: 'Claude Opus 4',
-        contextWindow: 200000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-3-opus-20240229',
-        name: 'Claude 3 Opus',
-        contextWindow: 200000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'claude-3-haiku-20240307',
-        name: 'Claude 3 Haiku',
-        contextWindow: 200000,
-        maxOutputTokens: 4096,
-        supportsImages: true,
-        supportsTools: true,
-      },
-    ];
   },
 
   /**

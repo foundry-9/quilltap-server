@@ -69,7 +69,7 @@ describe('composeTrailingMessage', () => {
 
 describe('buildTurnNotes', () => {
   it('builds neither note by default', () => {
-    expect(buildTurnNotes({ operatorName: 'Charlie', chatId: 'chat' })).toEqual({ turnSkip: '', turnYield: '' })
+    expect(buildTurnNotes({ operatorName: 'Charlie', chatId: 'chat' })).toEqual({ turnSkip: '', turnYield: '', turnOpening: '' })
   })
 
   it('offers the pass and the yield with their sentinels', () => {
@@ -83,5 +83,15 @@ describe('buildTurnNotes', () => {
     expect(notes.turnSkip).toContain('Friday appears to have been directly addressed')
     expect(notes.turnYield).toContain(YIELD_SENTINEL)
     expect(notes.turnYield).toContain('Charlie has raised a hand')
+  })
+})
+
+describe('buildTurnNotes — the opening', () => {
+  it('adds the opening note on a chat\'s first line, addressed to the operator', () => {
+    const notes = buildTurnNotes({ opening: true, operatorName: 'Charlie', chatId: 'chat' })
+    expect(notes.turnOpening).toContain('Turn note from the Salon')
+    expect(notes.turnOpening).toContain('The chat is beginning now')
+    expect(notes.turnOpening).toContain('invite Charlie to engage')
+    expect(notes.turnSkip).toBe('')
   })
 })

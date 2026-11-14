@@ -48,6 +48,10 @@ const globalRepos = {
   folders: { findByUserId: jest.fn().mockResolvedValue([]), delete: jest.fn() },
   wardrobe: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
   logEntries: { deleteAll: jest.fn().mockResolvedValue(0) },
+  characters: { findAllRaw: jest.fn().mockResolvedValue([]) },
+  projects: { findAllRaw: jest.fn().mockResolvedValue([]) },
+  groups: { findAllRaw: jest.fn().mockResolvedValue([]) },
+  llmLogs: { deleteByUserId: jest.fn().mockResolvedValue(0) },
 };
 
 jest.mock('@/lib/repositories/user-scoped', () => ({

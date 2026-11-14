@@ -114,10 +114,10 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onVie
                 onClick={() => onViewDigest(memory.supersededById!)}
                 className="qt-link"
               >
-                Superseded by a digest
+                Superseded by a newer memory
               </button>
             ) : (
-              'Superseded by a digest.'
+              'Superseded by a newer memory.'
             )
           )}
         </p>
@@ -131,7 +131,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onVie
         {memory.content.length > 150 && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-xs text-primary hover:underline mt-1"
+            className="text-xs qt-text-brand hover:underline mt-1"
           >
             {expanded ? 'Show less' : 'Show more'}
           </button>
@@ -171,7 +171,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onVie
           {memory.source === 'AUTO' && memory.sourceMessageId && memory.chatId && onNavigateToSource && (
             <button
               onClick={() => onNavigateToSource(memory.chatId!, memory.sourceMessageId!)}
-              className="text-xs text-primary hover:underline flex items-center gap-1"
+              className="text-xs qt-text-brand hover:underline flex items-center gap-1"
               title="View source message"
             >
               <Icon name="external-link" className="w-3 h-3" />
@@ -183,7 +183,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, onVie
           {onEdit && (
             <button
               onClick={() => onEdit(memory)}
-              className="text-xs text-primary hover:underline"
+              className="text-xs qt-text-brand hover:underline"
             >
               Edit
             </button>

@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * The frame both tiered control dialogs share — the Wardrobe's and the
- * Inventory's — stated once:
+ * The frame the tiered control dialogs share — the Wardrobe's, the
+ * Inventory's and the Atlas's — stated once:
  *
  *  - {@link useItemControlState}: which container is browsed (the opener's,
  *    else the first character once the catalogue settles, else Quilltap
@@ -32,10 +32,11 @@ import {
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
 import { useContainerCatalogue, type ContainerCatalogue } from '@/lib/hooks/use-container-catalogue'
+import type { ItemKind } from '@/lib/folder-browser/item-kind'
 import { ContainerSelect } from './ContainerSelect'
 
-/** The two tiered item browsers. */
-export type ItemControlKind = 'wardrobe' | 'inventory'
+/** The tiered item browsers. */
+export type ItemControlKind = ItemKind
 
 /** A tier an item can live in; the Wardrobe and the Inventory share the shape. */
 export type ItemContainer = WardrobeContainer
@@ -77,6 +78,18 @@ const KIND_COPY: Record<ItemControlKind, KindCopy> = {
     sharedNote: (reach) =>
       `A shared inventory — every character who can reach this ${reach} can carry what is here, ` +
       'and its archetypes can be instantiated by any of them.',
+  },
+  atlas: {
+    title: 'The Atlas',
+    selectLabel: 'Atlas:',
+    placeholder: 'Select an atlas',
+    tabClass: 'qt-atlas-tab',
+    characterLabel: (name) => `${name ?? 'this character'}'s private atlas`,
+    project: 'this project',
+    group: 'this group',
+    sharedNote: (reach) =>
+      `A shared atlas — every character who can reach this ${reach} is told what is written here ` +
+      'whenever one of its entries is spoken of, and the painters consult it before they draw.',
   },
 }
 

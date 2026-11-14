@@ -29,7 +29,7 @@ import {
   NoWardrobeImageProfileError,
   WardrobeImageGenerationError,
 } from '@/lib/wardrobe/item-image-generation';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
 
 const LOG_CONTEXT = 'background-jobs.wardrobe-item-image';
 

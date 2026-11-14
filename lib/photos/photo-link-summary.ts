@@ -116,17 +116,3 @@ export async function getPhotoLinkSummaryBySha256(
     return EMPTY_SUMMARY;
   }
 }
-
-/**
- * Convenience wrapper: resolve link summary for an image-v2 FileEntry id.
- * Returns the empty summary if the file id is unknown.
- */
-export async function getPhotoLinkSummaryByFileId(
-  fileId: string,
-  repos: ReturnType<typeof getRepositories> = getRepositories()
-): Promise<PhotoLinkSummary> {
-  if (!fileId) return EMPTY_SUMMARY;
-  const entry = await repos.files.findById(fileId);
-  if (!entry?.sha256) return EMPTY_SUMMARY;
-  return getPhotoLinkSummaryBySha256(entry.sha256, repos);
-}

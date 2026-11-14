@@ -104,6 +104,8 @@ interface ChatModalsProps {
   getFirstUserCharacter: () => { id: string; name: string; [key: string]: any } | null | undefined
   // Callbacks
   onCharacterAdded: () => void
+  /** A watched join's Green Room narration, for the Salon to read. */
+  onArrivalStream?: (response: Response, characterName: string) => void
   onReattributed: () => Promise<void>
   onConfirmStopImpersonation: (participantId: string, connectionProfileId: string) => Promise<void>
   // Memory cascade
@@ -155,7 +157,7 @@ export function ChatModals({
   // Participants
   getFirstCharacter, getFirstUserCharacter,
   // Callbacks
-  onCharacterAdded, onReattributed, onConfirmStopImpersonation,
+  onCharacterAdded, onArrivalStream, onReattributed, onConfirmStopImpersonation,
   // Memory cascade
   memoryCascadeConfirmation, cancelMemoryCascadeConfirmation, handleMemoryCascadeConfirm,
   // All-LLM pause
@@ -336,6 +338,7 @@ export function ChatModals({
           .map(p => p.character?.id)
           .filter((id): id is string => id !== null && id !== undefined) || []}
         onCharacterAdded={onCharacterAdded}
+        onArrivalStream={onArrivalStream}
       />
 
       {insertAnnouncementOpen && (

@@ -1,0 +1,219 @@
+/**
+ * The Green Room — the panel above the Salon transcript that narrates a
+ * chat's opening (and a watched join), then folds to one line; closed, it
+ * docks into the transcript as a collapsed card.
+ *
+ *   qt-green-room            — the panel (sits on a qt-card)
+ *   qt-green-room-docked     — closed: docked in the transcript as a card
+ *   qt-green-room-header     — the headline/disclosure row plus close button
+ *   qt-green-room-headline   — running: pulse, title, status
+ *   qt-green-room-disclosure — folded: the "curtain is up" toggle
+ *   qt-green-room-toggle     — docked while running: the record's toggle
+ *   qt-green-room-close      — pinned: close (dock into the transcript)
+ *   qt-green-room-body       — the record: wardrobe, packing, activity log
+ *   qt-green-room-character* — one character's consultation line
+ *   qt-green-room-log*       — the activity log
+ *
+ * Plain CSS (no @apply) so the theme-storybook mirror is the same text.
+ * Every colour reads a --qt-green-room-* hook with a token fallback.
+ *
+ * Component: app/salon/[id]/components/GreenRoomPanel.tsx
+ */
+
+@layer components {
+  .qt-green-room {
+    width: 100%;
+    max-width: var(--qt-green-room-max-width, 48rem);
+    margin: 0.75rem auto;
+    padding: 0.75rem;
+  }
+
+  .qt-green-room-docked {
+    margin: 0.5rem auto;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .qt-green-room-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .qt-green-room-header > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .qt-green-room-close,
+  .qt-green-room-toggle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+    background: none;
+    border: none;
+    border-radius: 0.25rem;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .qt-green-room-toggle {
+    font-size: 0.875rem;
+    min-width: 1rem;
+  }
+
+  .qt-green-room-close:hover,
+  .qt-green-room-toggle:hover {
+    color: var(--qt-green-room-title, var(--color-foreground));
+  }
+
+  .qt-green-room-headline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .qt-green-room-pulse {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--qt-green-room-pulse, var(--color-accent));
+    animation: qt-green-room-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes qt-green-room-pulse {
+    50% { opacity: 0.5; }
+  }
+
+  .qt-green-room-title {
+    font-weight: 600;
+    color: var(--qt-green-room-title, var(--color-foreground));
+  }
+
+  .qt-green-room-status {
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+
+  .qt-green-room-disclosure {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+    font-size: 0.875rem;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .qt-green-room-disclosure:disabled {
+    cursor: default;
+  }
+
+  .qt-green-room-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    max-height: var(--qt-green-room-body-max-height, 16rem);
+    overflow-y: auto;
+  }
+
+  .qt-green-room-character {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .qt-green-room-character-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .qt-green-room-character-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--qt-green-room-title, var(--color-foreground));
+  }
+
+  .qt-green-room-character-note {
+    font-size: 0.75rem;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+
+  .qt-green-room-spinner {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    opacity: 0.7;
+    animation: qt-green-room-spin 1s linear infinite;
+  }
+
+  @keyframes qt-green-room-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .qt-green-room-packed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+
+  .qt-green-room-activity {
+    border-top: 1px solid var(--qt-green-room-divider, var(--color-border));
+    padding-top: 0.5rem;
+  }
+
+  .qt-green-room-activity-label {
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+
+  .qt-green-room-log {
+    max-height: var(--qt-green-room-log-max-height, 10rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+
+  .qt-green-room-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .qt-green-room-log-time {
+    margin-right: 0.5rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--qt-green-room-status, var(--color-muted-foreground));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qt-green-room-pulse,
+    .qt-green-room-spinner {
+      animation: none;
+    }
+  }
+}

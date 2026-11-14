@@ -12,6 +12,7 @@ import { applySqlcipherKey } from './sqlcipher-key';
 import { registerTextCodecFunction } from './text-codec-function';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
+import { closeReadonlyQueryClients } from './readonly-query-client';
 import { closeMountIndexSQLiteClient } from './mount-index-client';
 import { releaseActiveInstanceLock, registerInstanceLockShutdownHandler } from './instance-lock';
 
@@ -175,6 +176,7 @@ function configurePragmas(db: DatabaseType, config: SQLiteConfig): void {
  * the WAL into the main database file, then optimizes and closes.
  */
 export function closeSQLiteClient(): void {
+  closeReadonlyQueryClients();
   const db = getDb();
   if (db) {
     try {
@@ -314,6 +316,13 @@ export function setupSQLiteShutdownHandlers(): void {
   registerInstanceLockShutdownHandler(handleShutdown);
 
   process.on('uncaughtException', (error) => {
+    if (isClientDisconnectAbort(error)) {
+      logger.warn('Client hung up mid-request (recovered, server kept alive)', {
+        error: error.message,
+        code: (error as NodeJS.ErrnoException).code,
+      });
+      return;
+    }
     if (isRecoverableContentParseError(error)) {
       logger.warn('Uncaught content-parse error (recovered, server kept alive)', {
         error: error.message,
@@ -410,6 +419,24 @@ function isRecoverableNetworkRejection(reason: unknown): boolean {
   }
 
   return false;
+}
+
+/**
+ * Node destroys an incoming request with `Error('aborted')`, code
+ * `ECONNRESET`, when the browser goes away before the request finished — a
+ * page reload, a closed tab, a navigation that cancels in-flight fetches.
+ * When that error escapes the request's own promise chain (a body stream
+ * nobody is reading any more, a socket handed off for an upgrade) it lands
+ * here as an uncaughtException, and exiting over it took the whole server
+ * down on an ordinary reload. It is the client's request that failed, never
+ * the server's state, so it is always safe to keep running.
+ */
+export function isClientDisconnectAbort(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message === 'aborted' &&
+    (error as NodeJS.ErrnoException).code === 'ECONNRESET'
+  );
 }
 
 /**

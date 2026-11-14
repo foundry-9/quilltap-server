@@ -8,9 +8,8 @@
  * and optionally remember the choice for future deletions.
  */
 
-import { useId, useRef, useState } from 'react'
-import { useDialogFocus } from '@/hooks/useDialogFocus'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useState } from 'react'
+import { BaseModal, ModalTitle } from '@/components/ui/BaseModal'
 import type { MemoryCascadeAction } from '@/lib/schemas/settings.types'
 
 export type { MemoryCascadeAction }
@@ -41,11 +40,6 @@ export function MemoryCascadeDialog({
   const [rememberChoice, setRememberChoice] = useState(false)
   const [selectedAction, setSelectedAction] = useState<MemoryCascadeAction>('DELETE_MEMORIES')
 
-  const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen)
-  useEscapeKey(onClose, isOpen)
-
   if (!isOpen) return null
 
   const messageText = isSwipeGroup
@@ -57,96 +51,94 @@ export function MemoryCascadeDialog({
   }
 
   return (
-    <div className="qt-dialog-overlay z-[100]">
-      <div
-        ref={dialogRef}
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleFocusKeyDown}
-        className="qt-dialog-content max-w-md"
-      >
-        <h3 id={titleId} className="qt-heading-sm mb-4">Delete Message</h3>
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      role="alertdialog"
+      headerless
+      maxWidth="md"
+      className="p-6"
+      bodyClassName="overflow-y-auto"
+    >
+      <ModalTitle className="qt-heading-sm mb-4">Delete Message</ModalTitle>
 
-        <p className="qt-text-small mb-4">{messageText}</p>
+      <p className="qt-text-small mb-4">{messageText}</p>
 
-        <p className="qt-text-small mb-4">What would you like to do with the memories?</p>
+      <p className="qt-text-small mb-4">What would you like to do with the memories?</p>
 
-        <div className="space-y-2 mb-4">
-          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
-            <input
-              type="radio"
-              name="cascadeAction"
-              value="DELETE_MEMORIES"
-              checked={selectedAction === 'DELETE_MEMORIES'}
-              onChange={() => setSelectedAction('DELETE_MEMORIES')}
-              className="mt-0.5"
-            />
-            <div>
-              <span className="qt-text-small font-medium">Delete memories too</span>
-              <p className="qt-text-xs qt-text-secondary mt-0.5">
-                Permanently remove associated memories
-              </p>
-            </div>
-          </label>
-
-          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
-            <input
-              type="radio"
-              name="cascadeAction"
-              value="KEEP_MEMORIES"
-              checked={selectedAction === 'KEEP_MEMORIES'}
-              onChange={() => setSelectedAction('KEEP_MEMORIES')}
-              className="mt-0.5"
-            />
-            <div>
-              <span className="qt-text-small font-medium">Keep memories</span>
-              <p className="qt-text-xs qt-text-secondary mt-0.5">
-                Memories will be orphaned (no link to source message)
-              </p>
-            </div>
-          </label>
-
-          <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
-            <input
-              type="radio"
-              name="cascadeAction"
-              value="REGENERATE_MEMORIES"
-              checked={selectedAction === 'REGENERATE_MEMORIES'}
-              onChange={() => setSelectedAction('REGENERATE_MEMORIES')}
-              className="mt-0.5"
-            />
-            <div>
-              <span className="qt-text-small font-medium">Delete and regenerate</span>
-              <p className="qt-text-xs qt-text-secondary mt-0.5">
-                Delete old memories and extract new ones from conversation context
-              </p>
-            </div>
-          </label>
-        </div>
-
-        <label className="flex items-center gap-2 cursor-pointer mb-6 p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
+      <div className="space-y-2 mb-4">
+        <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
           <input
-            type="checkbox"
-            checked={rememberChoice}
-            onChange={(e) => setRememberChoice(e.target.checked)}
+            type="radio"
+            name="cascadeAction"
+            value="DELETE_MEMORIES"
+            checked={selectedAction === 'DELETE_MEMORIES'}
+            onChange={() => setSelectedAction('DELETE_MEMORIES')}
+            className="mt-0.5"
           />
-          <span className="qt-text-xs qt-text-secondary">
-            Remember this choice (can be changed in Settings)
-          </span>
+          <div>
+            <span className="qt-text-small font-medium">Delete memories too</span>
+            <p className="qt-text-xs qt-text-secondary mt-0.5">
+              Permanently remove associated memories
+            </p>
+          </div>
         </label>
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="qt-button-secondary qt-button-sm">
-            Cancel
-          </button>
-          <button onClick={handleConfirm} className="qt-button-destructive qt-button-sm">
-            Delete Message
-          </button>
-        </div>
+        <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
+          <input
+            type="radio"
+            name="cascadeAction"
+            value="KEEP_MEMORIES"
+            checked={selectedAction === 'KEEP_MEMORIES'}
+            onChange={() => setSelectedAction('KEEP_MEMORIES')}
+            className="mt-0.5"
+          />
+          <div>
+            <span className="qt-text-small font-medium">Keep memories</span>
+            <p className="qt-text-xs qt-text-secondary mt-0.5">
+              Memories will be orphaned (no link to source message)
+            </p>
+          </div>
+        </label>
+
+        <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
+          <input
+            type="radio"
+            name="cascadeAction"
+            value="REGENERATE_MEMORIES"
+            checked={selectedAction === 'REGENERATE_MEMORIES'}
+            onChange={() => setSelectedAction('REGENERATE_MEMORIES')}
+            className="mt-0.5"
+          />
+          <div>
+            <span className="qt-text-small font-medium">Delete and regenerate</span>
+            <p className="qt-text-xs qt-text-secondary mt-0.5">
+              Delete old memories and extract new ones from conversation context
+            </p>
+          </div>
+        </label>
       </div>
-    </div>
+
+      <label className="flex items-center gap-2 cursor-pointer mb-6 p-2 rounded-lg hover:qt-bg-surface-hover transition-colors">
+        <input
+          type="checkbox"
+          checked={rememberChoice}
+          onChange={(e) => setRememberChoice(e.target.checked)}
+        />
+        <span className="qt-text-xs qt-text-secondary">
+          Remember this choice (can be changed in Settings)
+        </span>
+      </label>
+
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose} className="qt-button-secondary qt-button-sm">
+          Cancel
+        </button>
+        <button onClick={handleConfirm} className="qt-button-destructive qt-button-sm">
+          Delete Message
+        </button>
+      </div>
+    </BaseModal>
   )
 }
 

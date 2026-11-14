@@ -87,6 +87,11 @@
         "default": "keep",
         "description": "'keep': once endTime has passed, the completed state keeps being reported on the same cadence ('complete; 3 days past due'). 'once': the completion is reported exactly on the first turn after it happened, then the progression goes silent — it stays in the file, still readable by a Pascal tool, until you or a tool removes it."
       },
+      "public": {
+        "type": "boolean",
+        "default": true,
+        "description": "Whether others can see it. A public progression is part of the character's public identity — the Host's introduction and the identity a tool returns — in fixed third-person wording ('Pregnancy: 13 weeks, 1 day elapsed, 25 weeks, 6 days remaining.'); the description and reportTemplate are never used there. A private one is still reported to the character themselves. A completed 'once' progression drops out of the public view once it has gone quiet."
+      },
       "updatedAt": {
         "type": "string",
         "pattern": "^\\d{4}-\\d{2}-\\d{2}[Tt ]\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,9})?)?([Zz]|[+-]\\d{2}:?\\d{2})$",

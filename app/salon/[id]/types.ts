@@ -1,6 +1,7 @@
 import type { ConciergeModeReason, RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { DiagramStyle } from '@/lib/markdown/diagrams'
+import type { ChatTurnMode } from '@/lib/schemas/storyteller.types'
 
 export interface MessageAttachment {
   id: string
@@ -242,6 +243,8 @@ export interface Chat {
   title: string
   /** Discriminates salon chats from autonomous rooms ("enclaves"). Gates the Edit Enclave control. */
   chatType?: 'salon' | 'autonomous' | 'help' | 'brahma'
+  /** How far the chat's opening has got; the Salon opens a chat that is not 'done'. */
+  openingState?: 'pending' | 'running' | 'done'
   roleplayTemplateId?: string | null
   participants: Participant[]
   user: {
@@ -260,8 +263,8 @@ export interface Chat {
   lastTurnParticipantId?: string | null
   /** Whether auto-responses are paused in multi-character chats */
   isPaused?: boolean
-  /** Turn mode: rotation (Normal) or storyteller (each operator post opens a round of bids) */
-  turnMode?: 'rotation' | 'storyteller'
+  /** Turn mode: rotation (Normal), turns (one full round, then wait) or storyteller (each operator post opens a round of bids) */
+  turnMode?: ChatTurnMode
   /** Storyteller: invite seats to bid weighted by talkativeness */
   storytellerInviteFilter?: boolean
   /** Whether the user has manually renamed this chat (disables auto-renaming) */

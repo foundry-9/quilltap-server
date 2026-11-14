@@ -55,6 +55,7 @@ jest.mock('@/lib/api/responses', () => ({
   // lands on `.body`, exactly as the raw NextResponse.json calls used to.
   successResponse: (data: any, status = 200) => ({ body: data, status }),
   created: (data: any) => ({ body: data, status: 201 }),
+  validationError: (error: any) => ({ __kind: 'validationError', status: 400, issues: error.issues }),
 }))
 
 jest.mock('@/lib/services/chat-message/regenerate-swipe.service', () => ({
@@ -226,6 +227,7 @@ describe('POST /api/v1/messages/[id]?action=swipe&stream=1', () => {
   function swipeReq(stream: boolean) {
     return {
       json: async () => ({}),
+      text: async () => '',
       nextUrl: { searchParams: new URLSearchParams(stream ? 'stream=1' : '') },
     }
   }
@@ -314,5 +316,66 @@ describe('POST /api/v1/messages/[id]?action=swipe&stream=1', () => {
 
     expect(res.status).toBe(201)
     expect(res.body.message).toEqual({ id: 'swipe-1' })
+  })
+})
+
+/**
+ * #168: a body or query that is present and fails its schema is a 400. It must
+ * never be read as "absent" — for the swipe that meant a billable regeneration,
+ * for the delete it meant skipping the memory confirmation.
+ */
+describe('malformed input is a 400, not a fallback (#168)', () => {
+  beforeEach(() => {
+    ;(getActionParam as jest.Mock).mockReturnValue('swipe')
+  })
+
+  for (const swipeIndex of ['2', -1, 1.5]) {
+    it(`rejects swipeIndex ${JSON.stringify(swipeIndex)} without calling a provider`, async () => {
+      const repos = buildRepos()
+      mockCtx = { user: { id: OWNER_ID }, repos }
+
+      const res: any = await POST(
+        { json: async () => ({ swipeIndex }), text: async () => JSON.stringify({ swipeIndex }), nextUrl: { searchParams: new URLSearchParams() } },
+        params,
+      )
+
+      expect(res.status).toBe(400)
+      expect(res.__kind).toBe('validationError')
+      expect(regenerateMessageAsSwipe).not.toHaveBeenCalled()
+    })
+  }
+
+  it('refuses a body that is present but not JSON, without regenerating (#220)', async () => {
+    const repos = buildRepos()
+    mockCtx = { user: { id: OWNER_ID }, repos }
+
+    await expect(POST(
+      { json: async () => { throw new SyntaxError('bad') }, text: async () => 'not-json{', nextUrl: { searchParams: new URLSearchParams() } },
+      params,
+    )).rejects.toMatchObject({ name: 'RequestBodyParseError' })
+    expect(regenerateMessageAsSwipe).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown memoryAction before touching the message', async () => {
+    const repos = buildRepos({ memories: { countBySourceMessageIds: jest.fn().mockResolvedValue(3) } })
+    mockCtx = { user: { id: OWNER_ID }, repos }
+
+    const res: any = await DELETE(
+      { nextUrl: { searchParams: new URLSearchParams('memoryAction=anything') } },
+      params,
+    )
+
+    expect(res.status).toBe(400)
+    expect(repos.chats.deleteMessagesByIds).not.toHaveBeenCalled()
+  })
+
+  it('still asks for confirmation when memoryAction is absent', async () => {
+    const repos = buildRepos({ memories: { countBySourceMessageIds: jest.fn().mockResolvedValue(3) } })
+    mockCtx = { user: { id: OWNER_ID }, repos }
+
+    const res: any = await DELETE(deleteReq(), params)
+
+    expect(res.body.requiresConfirmation).toBe(true)
+    expect(repos.chats.deleteMessagesByIds).not.toHaveBeenCalled()
   })
 })

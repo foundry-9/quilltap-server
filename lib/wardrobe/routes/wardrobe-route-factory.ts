@@ -11,7 +11,8 @@
  * are written once: list / create (each with `?action=instructions`), the
  * folder actions (`GET ?action=folders`; `POST ?action=create-folder`,
  * `rename-folder`, `delete-folder`, `move-items`, `copy-items`), `POST
- * ?action=duplicate`, and get (with `?action=wear-history`) / update /
+ * ?action=duplicate`, `optimize-image-prompts` / `apply-image-prompts`
+ * (`routes/prompt-optimizer-handlers.ts`), and get (with `?action=wear-history`) / update /
  * delete. Each route file is a config. The config shape, the per-tier labels,
  * the resolver, the read probe, `?action=folders` and the error mapping are
  * the shared item-route preamble (`lib/mount-index/item-folder-routes.ts`),
@@ -40,8 +41,8 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, conflict, created, notFound, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
-import { WardrobeComponentCycleError } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
+import { CharacterArchivedError } from '@/lib/characters/archive-guard';
+import { WardrobeComponentCycleError } from '@/lib/wardrobe/vault-writes';
 import { groupMountsFor, groupOriginMap } from '@/lib/mount-index/reach';
 import {
   copyWardrobeItemsSchema,
@@ -67,7 +68,7 @@ import {
   type ItemRouteKind,
 } from '@/lib/mount-index/item-folder-routes';
 import { draftFromItem, draftToPayload } from '@/lib/wardrobe/item-draft';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
+import { nextCopyTitle } from '@/lib/mount-index/item-rules';
 import { cleanupEquippedRefs, cleanupItemImages, imageChoiceError } from '@/lib/wardrobe/item-route-steps';
 import {
   resolveWardrobeLocation,
@@ -76,6 +77,10 @@ import {
 } from '@/lib/wardrobe/location';
 import { withOrigin, type WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { attachWear, buildWearHistoryPayload } from '@/lib/wardrobe/wear-history';
+import {
+  handleApplyImagePrompts,
+  handleOptimizeImagePrompts,
+} from '@/lib/wardrobe/routes/prompt-optimizer-handlers';
 import {
   handleReadWardrobeInstructions,
   handleWriteWardrobeInstructions,
@@ -295,8 +300,31 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     return created({ wardrobeItem: await serializeOne(stored, location.origin, ctx.repos) });
   }
 
+  /**
+   * The image-prompt optimizer, on every tier. The review is a read probe
+   * (never provisions); applying writes to the tier's store.
+   */
+  async function handleOptimize(req: NextRequest, ctx: RequestContext, params: P) {
+    const body = await req.json().catch(() => ({}));
+    const probed = await probe(ctx, params);
+    if (!probed.ok) return probed.response;
+    return handleOptimizeImagePrompts(body, ctx, probed.location);
+  }
+
+  async function handleApply(req: NextRequest, ctx: RequestContext, params: P) {
+    const body = await req.json();
+    const resolved = await resolveLocation(ctx, params, false);
+    if (!resolved.ok) return resolved.response;
+    try {
+      return await handleApplyImagePrompts(body, ctx, resolved.location);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+
+
   const GET = createContextParamsHandler<P>(
-    withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders }, async (req, ctx, params) => {
+    withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders, ...config.extraGetActions }, async (req, ctx, params) => {
       // A read probe never provisions: a tier with no store yet lists as empty.
       const probed = await probe(ctx, params);
       if (!probed.ok) return probed.response;
@@ -327,6 +355,9 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
       'move-items': handleMoveItems,
       'copy-items': handleCopyItems,
       duplicate: handleDuplicate,
+      'optimize-image-prompts': handleOptimize,
+      'apply-image-prompts': handleApply,
+      ...config.extraPostActions,
     }, async (req, ctx, params) => {
       // Parse before resolving: an invalid body must never provision a store.
       const body = createWardrobeSchema.parse(await req.json());

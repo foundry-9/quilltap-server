@@ -48,6 +48,44 @@ import { logger } from '@/lib/logger';
 // ============================================================================
 
 /**
+ * Each connection's table columns, read from `PRAGMA table_info` — the live
+ * table, so a column a migration added outside the Zod schema counts. Used
+ * to refuse a sort on a field that is not a column (refactor 4.13 §5.1).
+ * Cached per connection; a miss re-reads once, so a column added after the
+ * first read is still found.
+ */
+const tableColumnCache = new WeakMap<DatabaseType, Map<string, Set<string>>>();
+
+function readTableColumns(db: DatabaseType, table: string): Set<string> {
+  const rows = db.prepare(`PRAGMA table_info("${table.replace(/"/g, '""')}")`).all() as Array<{ name: string }>;
+  const columns = new Set(rows.map(r => r.name));
+  let perDb = tableColumnCache.get(db);
+  if (!perDb) {
+    perDb = new Map();
+    tableColumnCache.set(db, perDb);
+  }
+  perDb.set(table, columns);
+  return columns;
+}
+
+/**
+ * The column set to validate `sort` against, or undefined when there is no
+ * sort to check. Re-reads the table once when a sort names a column the
+ * cached set lacks.
+ */
+function sortColumnsFor(db: DatabaseType, table: string, options?: QueryOptions): Set<string> | undefined {
+  const fields = options?.sort ? Object.keys(options.sort) : [];
+  if (fields.length === 0) return undefined;
+  const cached = tableColumnCache.get(db)?.get(table);
+  if (cached && fields.every(f => cached.has(f))) return cached;
+  const fresh = readTableColumns(db, table);
+  if (fields.some(f => !fresh.has(f))) {
+    logger.debug('Sort names a field that is not a column', { table, fields });
+  }
+  return fresh;
+}
+
+/**
  * SQLite implementation of DatabaseCollection
  */
 export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
@@ -75,7 +113,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async findOne(filter: TypedQueryFilter<T>, options?: QueryOptions): Promise<T | null> {
     try {
-      const query = buildSelectQuery(this.name, filter as QueryFilter, { ...options, limit: 1 }, this.jsonColumns, this.arrayColumns);
+      const query = buildSelectQuery(this.name, filter as QueryFilter, { ...options, limit: 1 }, this.jsonColumns, this.arrayColumns, sortColumnsFor(this.db, this.name, options));
       const row = this.db.prepare(query.sql).get(...query.params) as Record<string, unknown> | undefined;
 
       if (!row) {
@@ -97,7 +135,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async find(filter: TypedQueryFilter<T>, options?: QueryOptions): Promise<T[]> {
     try {
-      const query = buildSelectQuery(this.name, filter as QueryFilter, options, this.jsonColumns, this.arrayColumns);
+      const query = buildSelectQuery(this.name, filter as QueryFilter, options, this.jsonColumns, this.arrayColumns, sortColumnsFor(this.db, this.name, options));
       const rows = this.db.prepare(query.sql).all(...query.params) as Record<string, unknown>[];
 
       return rows.map(row => this.hydrateRow(row));

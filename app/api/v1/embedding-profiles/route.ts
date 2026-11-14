@@ -3,6 +3,7 @@
  *
  * GET /api/v1/embedding-profiles - List all embedding profiles for current user
  * POST /api/v1/embedding-profiles - Create a new embedding profile
+ * POST /api/v1/embedding-profiles?action=test - Embed one short text with an unsaved profile's settings
  * GET /api/v1/embedding-profiles?action=list-models - List available embedding models
  * GET /api/v1/embedding-profiles?action=fetch-models&provider=OLLAMA&baseUrl=... - Fetch installed models from provider
  */
@@ -10,9 +11,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
+import { successResponse, created, notFound, badRequest, serverError, conflict } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import type { EmbeddingProfileProvider } from '@/lib/schemas/types';
+import { EmbeddingProfileCreateSchema, EmbeddingProfileTestSchema } from '@/lib/embedding/embedding-profile-input';
+import { apiKeyExists } from '@/lib/schemas/profile-input';
 import {
   getEmbeddingProviders,
   getEmbeddingModels,
@@ -20,6 +22,7 @@ import {
 } from '@/lib/plugins/provider-validation';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { isLocalEmbeddingProvider } from '@quilltap/plugin-types';
+import type { EmbeddingProfile } from '@/lib/schemas/profile.types';
 
 /**
  * GET /api/v1/embedding-profiles
@@ -250,112 +253,113 @@ async function handleListModels(req: NextRequest, context: RequestContext) {
 /**
  * POST /api/v1/embedding-profiles - Create a new embedding profile
  */
-export const POST = createContextHandler(async (req, { user, repos }) => {
-  try {
-    const body = await req.json();
-    const {
-      name,
-      provider,
-      apiKeyId,
-      baseUrl,
-      modelName,
-      dimensions,
-      truncateToDimensions,
-      normalizeL2,
-      isDefault = false,
-    } = body;
+async function handleCreateEmbeddingProfile(req: NextRequest, { user, repos }: RequestContext) {
+  // A malformed body is the middleware's 400.
+  const input = EmbeddingProfileCreateSchema.parse(await req.json());
 
-
-    // Validation
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return badRequest('Name is required');
-    }
-
-    if (!provider || typeof provider !== 'string' || provider.trim().length === 0) {
-      return badRequest('Provider is required');
-    }
-
-    if (!modelName || typeof modelName !== 'string' || modelName.trim().length === 0) {
-      return badRequest('Model name is required');
-    }
-
-    if (dimensions !== undefined && dimensions !== null && (typeof dimensions !== 'number' || dimensions <= 0)) {
-      return badRequest('Dimensions must be a positive number');
-    }
-
-    if (
-      truncateToDimensions !== undefined &&
-      truncateToDimensions !== null &&
-      (typeof truncateToDimensions !== 'number' || !Number.isInteger(truncateToDimensions) || truncateToDimensions <= 0)
-    ) {
-      return badRequest('truncateToDimensions must be a positive integer');
-    }
-
-    if (normalizeL2 !== undefined && typeof normalizeL2 !== 'boolean') {
-      return badRequest('normalizeL2 must be a boolean');
-    }
-
-    // Validate apiKeyId if provided
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
-      if (!apiKey) {
-        return notFound('API key');
-      }
-    }
-
-    // Check for duplicate name
-    const existingProfile = await repos.embeddingProfiles.findByName(user.id, name.trim());
-    if (existingProfile) {
-      return NextResponse.json(
-        { error: 'An embedding profile with this name already exists' },
-        { status: 409 }
-      );
-    }
-
-    // If setting as default, unset other defaults
-    if (isDefault) {
-      await repos.embeddingProfiles.unsetAllDefaults(user.id);
-    }
-
-    // Create profile
-    const profile = await repos.embeddingProfiles.create({
-      userId: user.id,
-      name: name.trim(),
-      provider: provider as EmbeddingProfileProvider,
-      apiKeyId: apiKeyId || null,
-      baseUrl: baseUrl || null,
-      modelName: modelName.trim(),
-      dimensions: dimensions || null,
-      truncateToDimensions: truncateToDimensions ?? null,
-      normalizeL2: normalizeL2 ?? true,
-      isDefault,
-      tags: [],
-    });
-
-    // Enrich with API key info
-    const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
-
-    logger.info('[Embedding Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
-
-    // If this is a default profile, trigger help doc embedding immediately
-    if (profile.isDefault) {
-      try {
-        const { enqueueEmbeddingReindexAll } = await import('@/lib/background-jobs/queue-service');
-        await enqueueEmbeddingReindexAll(user.id, { profileId: profile.id });
-        logger.info('[Embedding Profiles v1] Triggered initial embedding for new default profile', {
-          profileId: profile.id,
-        });
-      } catch (embeddingError) {
-        logger.warn('[Embedding Profiles v1] Failed to trigger initial embedding', {
-          profileId: profile.id,
-          error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
-        });
-      }
-    }
-
-    return created({ ...profile, apiKey });
-  } catch (error) {
-    logger.error('[Embedding Profiles v1] Error creating profile', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create embedding profile');
+  if (!(await apiKeyExists(input.apiKeyId, repos))) {
+    return notFound('API key');
   }
-});
+
+  if (await repos.embeddingProfiles.findByName(user.id, input.name)) {
+    return conflict('An embedding profile with this name already exists');
+  }
+
+  // If setting as default, unset other defaults
+  if (input.isDefault) {
+    await repos.embeddingProfiles.unsetAllDefaults(user.id);
+  }
+
+  const profile = await repos.embeddingProfiles.create({
+    ...input,
+    userId: user.id,
+    apiKeyId: input.apiKeyId ?? null,
+    baseUrl: input.baseUrl ?? null,
+    dimensions: input.dimensions ?? null,
+    truncateToDimensions: input.truncateToDimensions ?? null,
+    tags: [],
+  });
+
+  const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
+
+  logger.info('[Embedding Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
+
+  // If this is a default profile, trigger help doc embedding immediately
+  if (profile.isDefault) {
+    try {
+      const { enqueueEmbeddingReindexAll } = await import('@/lib/background-jobs/queue-service');
+      await enqueueEmbeddingReindexAll(user.id, { profileId: profile.id });
+      logger.info('[Embedding Profiles v1] Triggered initial embedding for new default profile', {
+        profileId: profile.id,
+      });
+    } catch (embeddingError) {
+      logger.warn('[Embedding Profiles v1] Failed to trigger initial embedding', {
+        profileId: profile.id,
+        error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
+      });
+    }
+  }
+
+  return created({ ...profile, apiKey });
+}
+
+/**
+ * POST /api/v1/embedding-profiles?action=test - Embed one short text with the
+ * settings of a profile that has not been saved, so the setup wizard's Test
+ * All can say the embedding step works rather than assume it. Nothing is
+ * stored. A Built-in (TF-IDF) profile has no provider to call and is fitted
+ * later from the instance's own text, so it reports success without a call.
+ */
+async function handleTestEmbedding(req: NextRequest, { user, repos }: RequestContext) {
+  const input = EmbeddingProfileTestSchema.parse(await req.json());
+
+  if (input.provider === 'BUILTIN') {
+    return successResponse({ success: true, message: 'Built-in embeddings need no connection.' });
+  }
+
+  if (!(await apiKeyExists(input.apiKeyId, repos))) {
+    return notFound('API key');
+  }
+
+  const now = new Date().toISOString();
+  const transientProfile = {
+    id: '00000000-0000-4000-8000-000000000000',
+    userId: user.id,
+    name: 'Connection test',
+    provider: input.provider,
+    apiKeyId: input.apiKeyId ?? null,
+    baseUrl: input.baseUrl ?? null,
+    modelName: input.modelName,
+    dimensions: input.dimensions ?? null,
+    truncateToDimensions: null,
+    normalizeL2: true,
+    isDefault: false,
+    tags: [],
+    createdAt: now,
+    updatedAt: now,
+  } as EmbeddingProfile;
+
+  try {
+    const { generateEmbedding } = await import('@/lib/embedding/embedding-service');
+    const result = await generateEmbedding('Quilltap embedding connection test', transientProfile, user.id);
+    logger.debug('[Embedding Profiles v1] Test embedding succeeded', {
+      provider: input.provider,
+      modelName: input.modelName,
+      dimensions: result.dimensions,
+    });
+    return successResponse({ success: true, dimensions: result.dimensions });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn('[Embedding Profiles v1] Test embedding failed', {
+      provider: input.provider,
+      modelName: input.modelName,
+      error: message,
+    });
+    return successResponse({ success: false, error: message });
+  }
+}
+
+// An unknown ?action= is a 400 from the dispatcher, never a create (#219).
+export const POST = createContextHandler((req: NextRequest, ctx: RequestContext) =>
+  dispatchAction(req, { test: () => handleTestEmbedding(req, ctx) }, () => handleCreateEmbeddingProfile(req, ctx))
+);

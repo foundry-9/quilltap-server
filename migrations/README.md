@@ -42,12 +42,12 @@ migrations/
 ├── types.ts              # Migration interfaces
 ├── state.ts              # Migration state persistence
 ├── lib/
-│   ├── logger.ts         # Migration logging
-│   ├── s3-utils.ts       # S3 utilities for migrations
-│   ├── file-manager.ts   # File operations
-│   ├── secrets.ts        # Encryption utilities
-│   ├── database-utils.ts # SQLite database utilities
-│   └── json-store/       # JSON store utilities for migrations
+│   ├── logger.ts                # Migration logging
+│   ├── progress.ts              # reportProgress() for the loading screen
+│   ├── secrets.ts               # Encryption utilities
+│   ├── database-utils.ts        # SQLite database utilities
+│   ├── mount-index-schema.ts    # Mount-index DDL used by migrations
+│   └── legacy-wardrobe-rows.ts  # Legacy wardrobe row shapes for migrations
 └── scripts/
     ├── index.ts                              # Migration registry
     ├── add-use-native-web-search-field.ts    # v2.7.0

@@ -27,7 +27,7 @@ jest.mock('@/lib/api/middleware', () => ({
   },
 }))
 
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+jest.mock('@/lib/wardrobe/vault-writes', () => ({
   WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
   readMountItems: jest.fn(),
   createInMount: jest.fn(),
@@ -78,12 +78,15 @@ import {
   deleteInMount,
   readMountItems,
   resolveWardrobeMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
+} from '@/lib/wardrobe/vault-writes'
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 import { getGeneralMountPointId } from '@/lib/instance-settings'
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store'
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
-import { resolveGroupMountsForCharacter, resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool'
+import {
+  resolveGroupMountsForCharacter,
+  resolveProjectMountPointIds,
+} from '@/lib/mount-index/tiered-mount-pool'
 import { resolveWardrobeLocation } from '@/lib/wardrobe/location'
 import { carryItemImages, commitMovedImages } from '@/lib/wardrobe/item-images'
 

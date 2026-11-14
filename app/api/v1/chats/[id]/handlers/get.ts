@@ -6,6 +6,7 @@
  * GET /api/v1/chats/[id]?action=export-markdown - Export chat as a Markdown transcript
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
+ * GET /api/v1/chats/[id]?action=avatar-timeline - Each character's dated avatars in this chat, images resolved
  * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
@@ -20,6 +21,7 @@
  * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
  * GET /api/v1/chats/[id]?action=scenario-source - Where the scene came from, and whether its file has changed
  * GET /api/v1/chats/[id]?action=absent-mentions - Absent characters named in the chat: first mention and card
+ * GET /api/v1/chats/[id]?action=atlas-mentions - Atlas entries named in the chat (cast view): first mention and card
  *
  * An unregistered `?action=` answers 400 with the list above; it never falls
  * through to the chat body.
@@ -31,14 +33,13 @@ import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
-import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
-import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reembed';
 import { projectChatTranscript } from '@/lib/chat/transcript-projection';
 import {
   handleGetAvatars,
+  handleGetAvatarTimeline,
   handleGetState,
   handleGetOutfit,
   handleGetOutfitSummary,
@@ -54,6 +55,7 @@ import {
   handleGetStoryBackground,
   handleGetScenarioSource,
   handleGetAbsentMentions,
+  handleGetAtlasMentions,
 } from '../actions';
 import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -73,6 +75,7 @@ export async function handleGet(
       'export': () => handleExport(req, ctx, chatId),
       'export-markdown': () => handleExportMarkdown(chatId, ctx),
       'get-avatars': () => handleGetAvatars(chatId, ctx),
+      'avatar-timeline': () => handleGetAvatarTimeline(chatId, ctx),
       'get-state': () => handleGetState(chatId, ctx),
       'outfit': () => handleGetOutfit(chatId, ctx),
       'outfit-summary': () => handleGetOutfitSummary(chatId, ctx),
@@ -91,6 +94,7 @@ export async function handleGet(
       'gallery': () => handleGallery(req, ctx, chatId),
       'scenario-source': () => handleGetScenarioSource(chatId, ctx),
       'absent-mentions': () => handleGetAbsentMentions(chatId, ctx),
+      'atlas-mentions': () => handleGetAtlasMentions(chatId, ctx),
       'cost': () => handleCost(req, ctx, chatId),
     },
     () => handleGetChat(req, ctx, chatId)
@@ -180,7 +184,7 @@ async function handleExport(
     return new NextResponse(jsonlContent, {
       headers: {
         'Content-Type': 'application/x-ndjson',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': buildContentDisposition(filename, 'attachment'),
       },
     });
   } catch (error) {
@@ -267,30 +271,10 @@ async function handleGetChat(
       return notFound('Chat');
     }
 
-    // Un-embedded chunk re-warm: if this chat has conversation chunks with
-    // content but no embedding (an outage mid-render, a died render job, or
-    // a leftover from before chunk embeddings were kept warm
-    // unconditionally), opening it re-enqueues them through the standard
-    // embedding pipeline. Fire-and-forget (debounced + deduped inside) —
-    // never allowed to slow or break the chat load.
-    maybeEnqueueColdChunkReembed(user.id, chatId).catch((error) => {
-      logger.warn('[Chats v1] Cold-chunk re-embed check failed — continuing', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-
-    // Sweep terminal sessions whose PTYs were lost across a server restart
-    // (DB row says "live" but ptyManager doesn't have it) and post the close
-    // announcements before we read the message history below.
-    await reconcileTerminalSessionsForChat(chatId);
-
-    // The Post Office: announce any letters addressed to the operator's own
-    // character(s) before we read the history below. A user-controlled
-    // participant never takes an LLM turn, so the per-turn mail check never
-    // covers it; without this, mail to the operator's character would sit
-    // unannounced in an idle room. Idempotent and warn-only inside.
-    await surfaceOperatorMailForChat(chatId, chatMetadata.participants);
+    // A read only reads. The housekeeping this used to do on every load —
+    // the cold-chunk re-embed, terminal reconciliation, operator mail — is
+    // `POST ?action=visit` (`actions/visit.ts`), which the Salon posts before
+    // each full read.
 
     const enrichedParticipants = await Promise.all(
       chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))
@@ -301,12 +285,11 @@ async function handleGetChat(
     // (`GET /api/v1/messages?chatId=…&action=transcript`) also uses, so the two
     // reads of the same conversation cannot drift apart.
     //
-    // The counter is read here rather than taken from `chatMetadata`, which was
-    // loaded before the terminal reconciliation and the operator-mail sweep
-    // above — both of which can post a message. Reading it now, still before
-    // the projection, keeps the version no newer than the rows it is handed out
-    // with: too old only ever costs the tab a redundant read, while too new
-    // would have it answered "unchanged" for a message it never received.
+    // The counter is read here, just before the projection, so the version is
+    // never newer than the rows it is handed out with: too old only ever costs
+    // the tab a redundant read, while too new would have it answered
+    // "unchanged" for a message it never received (a visit or a turn can post
+    // between the metadata read and this one).
     const transcriptVersion = await repos.chats.getTranscriptVersion(chatId);
     const { messages, offSceneCharacters } = await projectChatTranscript(
       chatId,
@@ -345,6 +328,8 @@ async function handleGetChat(
     // The Concierge's tally, for the helper text of a chat he moved after
     // refusals ("after N refusals"). Emptied when the chat returns to Moderated.
     const conciergeLedger = await repos.chats.getModerationRefusalLedger(chatId);
+    // How far the chat's opening has got; the Salon opens a chat that is not 'done'.
+    const opening = await repos.chats.getOpeningState(chatId);
     const resolvedAgentMode = resolveAgentModeSetting(chatMetadata, project, primaryCharacter, chatSettings);
 
     const chat = {
@@ -353,6 +338,7 @@ async function handleGetChat(
       // Surfaced so the Salon sidebar can gate the "Edit Enclave" control to
       // autonomous rooms. Defaults to 'salon' for legacy rows without the column.
       chatType: chatMetadata.chatType ?? 'salon',
+      openingState: opening.state,
       contextSummary: chatMetadata.contextSummary,
       roleplayTemplateId: chatMetadata.roleplayTemplateId,
       imageProfileId: chatMetadata.imageProfileId ?? null,

@@ -44,8 +44,7 @@ import {
   type InventoryUpdateBody,
   type ResolvedInventoryItem,
 } from '@/lib/schemas/inventory.types';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
+import { archivedPatch, nextCopyTitle } from '@/lib/mount-index/item-rules';
 import {
   INVENTORY_FOLDER_RULES,
   InventoryFolderPathError,
@@ -66,7 +65,7 @@ import {
   InventoryRefusal,
   InventoryShapeError,
 } from '@/lib/inventory/errors';
-import { resolveInventoryMount } from '@/lib/database/repositories/vault-overlay/inventory-writes';
+import { resolveInventoryMount } from '@/lib/inventory/vault-writes';
 import { inventoryLocationForMount, type InventoryLocation } from '@/lib/inventory/location';
 import { loadPoolForLocation, type InventoryPool } from '@/lib/inventory/pool';
 import { resolveItem, withInventoryDefaults } from '@/lib/inventory/resolve';

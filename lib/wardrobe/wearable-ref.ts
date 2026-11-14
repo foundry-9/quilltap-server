@@ -17,6 +17,7 @@
  * @module lib/wardrobe/wearable-ref
  */
 
+import { foldItemName } from '@/lib/mount-index/item-rules';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { scanPlaceholders } from '@/lib/pascal/placeholders';
 
@@ -28,9 +29,9 @@ type RefTarget = Pick<WardrobeItem, 'id' | 'title'>;
  * whole of the server pool's `findByTitle`.
  */
 export function matchWearableTitle<T extends RefTarget>(pool: readonly T[], title: string): T | undefined {
-  const wanted = title.trim().toLowerCase();
+  const wanted = foldItemName(title);
   if (!wanted) return undefined;
-  return pool.find((item) => item.title.toLowerCase() === wanted);
+  return pool.find((item) => foldItemName(item.title) === wanted);
 }
 
 /** True when a reference carries a `{{…}}` placeholder and so is chosen at run time. */

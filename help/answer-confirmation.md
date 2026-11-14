@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=chat&section=answer-confirmation
+url: /settings?section=answer-confirmation
 ---
 
 # Answer Confirmation — A Quiet Word With the Fact-Checker
@@ -26,7 +26,7 @@ Every checked reply carries a small badge — *Vouched*, *Amended*, *Stood by*, 
 
 The whole apparatus arrives **switched off**, for it adds a round-trip or two to every qualifying turn. Turn it on wherever suits you; the more particular setting always carries the day.
 
-- **Globally** — Settings → Chat → *Answer Confirmation*. The default for every new chat.
+- **Globally** — Settings → Games & Tools → *Answer Confirmation*. The default for every new chat.
 - **By project** — a project's *Model Behavior* card (in Prospero) offers *Inherit*, *Enabled*, or *Disabled*. Set a project to Enabled and its chats confirm automatically.
 - **By chat** — the **Visibility** panel in the Salon sidebar offers an *Answer Confirmation* control: *Inherit* (defer to the project, then the global default), *On*, or *Off*. A chat's own choice overrules its project and the global default alike.
 
@@ -37,5 +37,5 @@ The consistency check is handled by your configured cheap engine (the same modes
 ## In-Chat Navigation
 
 ```
-help_navigate(url: "/settings?tab=chat&section=answer-confirmation")
+help_navigate(url: "/settings?section=answer-confirmation")
 ```

@@ -37,9 +37,6 @@ export function RealtimeProvider({ children }: { children?: React.ReactNode }) {
         const prefixes = queryKeysForTopic(event.topic, event.id)
         if (prefixes.length === 0) {
           // An older client meeting a newer server. Shrug and carry on.
-          if (process.env.NODE_ENV === 'development') {
-            console.debug('[realtime] ignoring unknown topic', event.topic)
-          }
           return
         }
         for (const queryKey of prefixes) {

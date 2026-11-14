@@ -138,7 +138,7 @@ function ColorModeOption({ mode, label, icon, isActive, onSelect }: ColorModeOpt
       <span className="w-4 h-4 flex-shrink-0 qt-text-secondary">{icon}</span>
       <span className="text-sm qt-text-primary flex-1">{label}</span>
       {isActive && (
-        <Icon name="check" className="w-4 h-4 text-primary flex-shrink-0" />
+        <Icon name="check" className="w-4 h-4 qt-text-brand flex-shrink-0" />
       )}
     </button>
   )
@@ -222,7 +222,7 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode, headingFont
 
       {/* Active indicator */}
       {isActive && (
-        <Icon name="check" className="w-4 h-4 text-primary flex-shrink-0" />
+        <Icon name="check" className="w-4 h-4 qt-text-brand flex-shrink-0" />
       )}
     </button>
   )

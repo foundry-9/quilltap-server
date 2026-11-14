@@ -1,16 +1,16 @@
 ---
-url: /settings?tab=chat&section=composer-spellcheck
+url: /settings?section=composer-spellcheck
 ---
 
 # In their own words: impersonated lines, rehearsed
 
-> **[Open this page in Quilltap](/settings?tab=chat&section=composer-spellcheck)**
+> **[Open this page in Quilltap](/settings?section=composer-spellcheck)**
 
 There is a particular embarrassment known to everyone who has ever taken a character's seat. You know *what* Evangeline would say — you know it precisely, you could sketch it on the back of an envelope — and what arrives under her portrait is nevertheless unmistakably yours: your rhythms, your vocabulary, your fondness for the semicolon. She sounds, for one line, like a person who has been reading your correspondence.
 
 This amenity addresses the matter with the oldest device in the theatre: a prompter's box. You write the line. Before a syllable reaches the room, it is laid before you once more — and, should you ask, Evangeline herself is handed your draft — her own model, her own prompt, her own memory of the evening — and asked to say it as she would actually say it. Nothing is posted until you say so.
 
-It lives in the **Composer** card on the Chat tab in Settings, and has three positions:
+It lives in the **Composer** card in the Composer & Display group of Settings, and has three positions:
 
 - **Never** — the factory setting. Impersonated lines go straight to the room, as typed.
 - **Ask each time** — the prompter stands by but keeps his mouth shut. The panel opens on your draft alone; no model is consulted, and no request is spent, unless you press **Restate in their voice**. The presumption is that you are speaking for Evangeline yourself, and **Send as written** is the button that sits in the place of honour.
@@ -72,12 +72,12 @@ Should you find a particular kind of notation reliably mangled, the remedy is a 
 
 ## Related
 
-- [Chat Settings](/settings?tab=chat) — the Composer card, where the setting lives
+- [Composer settings](/settings?section=composer-spellcheck) — the Composer card, where the setting lives
 - [Chat Participants](/chats) — the Impersonate button and what it does to a seat
 - [Inserting your own announcements](/salon) — the off-scene cousin of this rehearsal
 
 ## In-Chat Navigation
 
 ```
-help_navigate(url: "/settings?tab=chat&section=composer-spellcheck")
+help_navigate(url: "/settings?section=composer-spellcheck")
 ```

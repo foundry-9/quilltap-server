@@ -39,7 +39,7 @@ export function GalleryControls({
           onClick={() => {
             onUploadClick()
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:qt-bg-primary/90 rounded-md transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium qt-text-on-primary qt-bg-primary hover:qt-bg-primary/90 rounded-md transition-colors"
         >
           <Icon name="upload" className="w-4 h-4" />
           Upload
@@ -63,7 +63,7 @@ export function GalleryControls({
             onZoomOut()
           }}
           disabled={thumbnailSizeIndex === 0}
-          className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
+          className="p-1 qt-text-secondary hover:qt-text disabled:opacity-50"
           title="Smaller thumbnails"
         >
           <Icon name="zoom-out" className="w-5 h-5" />
@@ -76,7 +76,7 @@ export function GalleryControls({
             onZoomIn()
           }}
           disabled={thumbnailSizeIndex === maxThumbnailIndex}
-          className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
+          className="p-1 qt-text-secondary hover:qt-text disabled:opacity-50"
           title="Larger thumbnails"
         >
           <Icon name="zoom-in" className="w-5 h-5" />

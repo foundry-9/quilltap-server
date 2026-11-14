@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import { StorytellerBoard, withBid, type StorytellerRoundResponse } from '@/components/chat/StorytellerBoard'
 import type { StorytellerStreamEvent } from './hooks/useSSEStreaming'
@@ -16,13 +15,10 @@ import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
-import { useChatContext } from '@/components/providers/chat-context'
+import { ChatActionsProvider, type ChatActions } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
-import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
-import { MESSAGE_REVEAL_EVENT, takePendingMessageReveal, type MessageRevealRequest } from '@/lib/chat/message-navigation'
-import { findConversationMatches, type ConversationSearchSource } from '@/lib/chat/conversation-search'
 import {
   getConciergeProvenance,
   getConciergeReason,
@@ -37,8 +33,6 @@ import {
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { ConciergeTooltipBody } from '@/components/chat/ConciergeMark'
-import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
-import { staffAvatar } from '@/lib/chat/staff-display-names'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -83,10 +77,10 @@ import { groupToolMessagesIntoAssistants } from './group-tool-messages'
 import { retryUncensoredTurnUrl, type ConciergeRetryHandlers } from './concierge-retry'
 import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
+import { useSalonAvatars } from './hooks/useSalonAvatars'
+import { useMessageReveal } from './hooks/useMessageReveal'
 import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
-import { buildRenderItems, type RenderItem } from './announcement-render-items'
-import { useSearchHighlight } from './hooks/useSearchHighlight'
-import { getAnnouncementSenderName } from './components/system-message-labels'
+import { buildRenderItems, insertGreenRoomItems } from './announcement-render-items'
 import { isOffSceneMentionIntroduction } from '@/lib/services/host-notifications/off-scene-kinds'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
@@ -98,7 +92,9 @@ import {
   ChatModals,
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
-import { NewChatModal } from '@/components/new-chat/NewChatModal'
+import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
+import { GreenRoomPanel } from './components/GreenRoomPanel'
+import { useGreenRoom } from './hooks/useGreenRoom'
 import { MergeConversationModal } from '@/components/chat/MergeConversationModal'
 import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
@@ -114,11 +110,6 @@ import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
 import { ChatHeaderBreadcrumb } from '@/components/chat/ChatHeaderBreadcrumb'
 import { ReplyAnnouncer } from '@/components/chat/ReplyAnnouncer'
-
-/** Fallback re-read cadence for the avatar watch, while the socket is down. */
-const AVATAR_POLL_INTERVAL_MS = 5000
-/** How long the avatar watch waits before giving up on a generation. */
-const AVATAR_WATCH_TIMEOUT_MS = 2 * 60_000
 
 export interface SalonViewProps {
   /** The conversation this Salon tab renders. */
@@ -140,6 +131,12 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // --- Core data hook ---
   const chatDataHook = useChatData(id)
   const { chat, messages, loading, error, swipeStates, chatMemoryCount } = chatDataHook
+  // #173: a refresh that fails while the chat is on screen is news, not a
+  // dead end — say so once and keep the room up; the next read clears it.
+  const hasChat = chat !== null
+  useEffect(() => {
+    if (error && hasChat) showErrorToast(`The chat could not be refreshed: ${error}`)
+  }, [error, hasChat])
   const { setChat, setMessages, setSwipeStates, selectSwipeVariant } = chatDataHook
   const { fetchChat, refreshTranscript, clearProvisionalMessages, fetchChatMemoryCount } = chatDataHook
 
@@ -162,7 +159,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   const { total: chatGalleryTotal, invalidate: invalidateChatGallery } = useChatGallery(id)
 
   // --- Story background ---
-  // When the backdrop URL changes (active regeneration poll or passive SWR revalidation), refresh
+  // When the backdrop URL changes (active regeneration poll or a passive query refetch), refresh
   // the chat so any Lantern announcement posted alongside the new backdrop lands in the UI without
   // requiring the user to leave and return.
   const {
@@ -179,7 +176,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
 
   // Quick-hide "Salon Images" withholds the backdrop along with every other
   // image in the room; the URL is still tracked so it returns on un-hide.
-  const { shouldHideByIds, hiddenTagIds, hideSalonImages } = useQuickHide()
+  const { hideSalonImages } = useQuickHide()
   const visibleStoryBackgroundUrl = hideSalonImages ? null : storyBackgroundUrl
 
   // In the workspace, surrender the story background to the single arbitrated
@@ -302,93 +299,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     setWhisperTarget({ participantId, name })
   }, [chat?.participants])
 
-  // --- Avatar generation watch ---
-  // After triggering avatar generation, watch for the participant's avatar URL
-  // to change and then refresh the chat.
-  //
-  // The live signal is a `chats:<id>` hint, published when the
-  // CHARACTER_AVATAR_GENERATION job's writes commit — normally the very first
-  // check finds the new avatar. The interval is the fallback for a dropped
-  // socket, and the expiry keeps a failed generation from watching forever.
-  const [avatarWatch, setAvatarWatch] = useState<
-    { characterId: string; snapshotAvatarUrl: string | null; expiresAt: number } | null
-  >(null)
-
-  const checkAvatarUpdate = useCallback(async (watch: {
-    characterId: string
-    snapshotAvatarUrl: string | null
-  }) => {
-    try {
-      const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
-      if (!res.ok) return
-      const data = await res.json()
-      // Check the enriched participant avatar URL — this changes when avatarOverrides update
-      const updatedParticipant = data.chat?.participants?.find(
-        (p: { character?: { id?: string } }) => p.character?.id === watch.characterId
-      )
-      const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
-      if (newAvatarUrl && newAvatarUrl !== watch.snapshotAvatarUrl) {
-        setAvatarWatch(null)
-        await fetchChat()
-        showInfoToast('Avatar updated')
-      }
-    } catch {
-      // Silently keep watching.
-    }
-  }, [id, fetchChat])
-
-  const startAvatarPoll = useCallback((characterId: string) => {
-    // Snapshot the current avatar URL for this character to detect when it changes
-    const participant = chat?.participants.find(p => p.character?.id === characterId)
-    setAvatarWatch({
-      characterId,
-      snapshotAvatarUrl: participant?.character?.avatarUrl ?? null,
-      expiresAt: Date.now() + AVATAR_WATCH_TIMEOUT_MS,
-    })
-  }, [chat?.participants])
-
-  useRealtimeTopic('chats', () => {
-    if (avatarWatch) void checkAvatarUpdate(avatarWatch)
-  }, id)
-
-  useRealtimeFallbackPoll(
-    () => { if (avatarWatch) void checkAvatarUpdate(avatarWatch) },
-    AVATAR_POLL_INTERVAL_MS,
-    avatarWatch != null,
-  )
-
-  useEffect(() => {
-    if (!avatarWatch) return
-    const timer = setTimeout(
-      () => setAvatarWatch(null),
-      Math.max(0, avatarWatch.expiresAt - Date.now()),
-    )
-    return () => clearTimeout(timer)
-  }, [avatarWatch])
-
-  const handleRegenerateAvatar = useCallback(async (participantId: string) => {
-    const participant = chat?.participants.find(p => p.id === participantId)
-    const characterId = participant?.character?.id
-    const name = participant?.character?.name || 'Unknown'
-    if (!characterId) return
-    try {
-      const res = await fetch(`/api/v1/chats/${id}?action=regenerate-avatar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId }),
-      })
-      if (res.ok) {
-        showInfoToast(`Avatar regeneration queued for ${name}`)
-        startAvatarPoll(characterId)
-      } else {
-        const data = await res.json().catch(() => ({}))
-        showErrorToast(data.error || 'Failed to regenerate avatar')
-      }
-    } catch {
-      showErrorToast('Failed to regenerate avatar')
-    }
-  }, [chat?.participants, id, startAvatarPoll])
-
   const userParticipantIdSet = useMemo(() => {
     if (!chat?.participants) return new Set<string>()
     return new Set(
@@ -443,10 +353,21 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // horizontally instead of each taking a full-width virtualized row. Depends on
   // expandedSystemMessageIds because expanding one announcement breaks it out of
   // its group. This is what the virtualizer indexes over.
+  //
+  // A closed (docked) Green Room is laid into the same list as a card at the
+  // head of its part of the conversation, so it scrolls with the transcript.
+  // It is a UI record only; nothing here reaches a model.
+  const greenRoom = useGreenRoom()
   const renderItems = useMemo(
-    () => buildRenderItems(renderMessages, expandedSystemMessageIds),
-    [renderMessages, expandedSystemMessageIds],
+    () => insertGreenRoomItems(buildRenderItems(renderMessages, expandedSystemMessageIds), greenRoom.docked),
+    [renderMessages, expandedSystemMessageIds, greenRoom.docked],
   )
+  // The ids on the page when a Green Room begins mark where its card docks.
+  const greenRoomMessagesRef = useRef(messages)
+  useEffect(() => {
+    greenRoomMessagesRef.current = messages
+  }, [messages])
+  const currentMessageIds = useCallback(() => greenRoomMessagesRef.current.map(m => m.id), [])
 
   // --- Modal state hook ---
   const modals = useModalState()
@@ -579,7 +500,10 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   }, [id, storytellerQueryClient])
 
   // --- SSE Streaming hook ---
+  // The Green Room: a chat cast but not yet opened is opened here, narrated in
+  // a panel pinned above the transcript; a watched join narrates the same way.
   const sseStreaming = useSSEStreaming({
+    onGreenRoom: greenRoom.onEvent,
     chatId: id,
     chat,
     messages,
@@ -630,6 +554,54 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
       }
     },
   })
+
+  // Open a chat that was cast but not yet opened — once per chat per visit.
+  // The server walks the opening on this stream (resuming a broken-off one
+  // where it stopped) and the greeting streams beneath the Green Room panel.
+  const { openChat } = sseStreaming
+  const { begin: beginGreenRoom, end: endGreenRoom } = greenRoom
+  const openedChatRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (loading || !chat || chat.id !== id) return
+    if (!chat.openingState || chat.openingState === 'done') return
+    if (openedChatRef.current === id) return
+    openedChatRef.current = id
+    beginGreenRoom('The Green Room', currentMessageIds())
+    // The panel folds when the stream says `done`; if the stream ends without
+    // one (an error, a dropped connection) it folds when the request settles.
+    void openChat().finally(endGreenRoom)
+  }, [loading, chat, id, openChat, beginGreenRoom, endGreenRoom, currentMessageIds])
+
+  // Continue Elsewhere opens the one New Chat dialog, in continuation mode,
+  // pre-filled from this chat.
+  const newChatModal = useNewChatModalOptional()
+  useEffect(() => {
+    if (!modals.continueChatModalOpen || !chat) return
+    modals.closeContinueChat()
+    if (!newChatModal) {
+      showErrorToast('The New Chat dialog is not available here.')
+      return
+    }
+    const opener = chat.participants.find((p) => p.controlledBy !== 'user')?.character
+    newChatModal.open({
+      characterId: opener?.id,
+      characterName: opener?.name,
+      projectId: chat.projectId ?? undefined,
+      continuationFromChatId: id,
+      initialSelectedCharacterIds: chat.participants
+        .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && !p.removedAt)
+        .map((p) => p.character?.id)
+        .filter((cid): cid is string => typeof cid === 'string' && cid.length > 0),
+      initialUserCharacterId: chat.participants
+        .find((p) => p.type === 'CHARACTER' && p.controlledBy === 'user' && !p.removedAt)
+        ?.character?.id ?? null,
+      initialImageProfileId: chat.imageProfileId ?? null,
+      initialAvatarGenerationEnabled: chat.avatarGenerationEnabled ?? false,
+      // A spicy conversation that changes venue stays spicy by default — and
+      // the new chat's Concierge bubble says so. Overridable on the form.
+      initialConciergeState: getConciergeState(chat),
+    })
+  }, [modals, chat, id, newChatModal])
 
   // Keep refs in sync with SSE streaming state
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
@@ -849,7 +821,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   // handlers by identity: a fresh object per render would redraw them all.
   const { retryPicture, retryBackground } = useConciergeRetry(id, fetchChat, startBackgroundPolling)
   const regenerate = regenerationController.regenerate
-  const hasChat = !!chat
   const chatIsLocked = getConciergeState(chat) === 'locked'
   const conciergeRetry = useMemo<ConciergeRetryHandlers | undefined>(() => {
     if (!hasChat || chatIsLocked) return undefined
@@ -962,13 +933,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
   }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds, chat?.cycleOrderParticipantIds])
 
 
-  // --- Quick-hide logic ---
-  const chatContext = useChatContext()
-  const quickHideActive = hiddenTagIds.size > 0
-  const isCurrentChat = chatContext.chatId === id
-  const chatTags = chatContext.tags.map(tag => tag.id)
-  const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
-  const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
   // --- Initialization effects ---
   useEffect(() => {
@@ -1254,8 +1218,8 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
               onClick={toggleInspector}
               className={`p-1.5 rounded transition-colors ${
                 inspectorOpen
-                  ? 'qt-bg-primary/15 text-primary'
-                  : 'qt-text-secondary hover:text-foreground'
+                  ? 'qt-bg-primary/15 qt-text-brand'
+                  : 'qt-text-secondary hover:qt-text'
               }`}
               title="LLM Inspector (Cmd+Shift+L)"
               aria-label="Toggle LLM Inspector"
@@ -1279,6 +1243,14 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     return () => setRightContent(null)
   }, [id, chatSettings?.tokenDisplaySettings?.showChatTotals, chatSettings?.llmLoggingSettings?.enabled, setRightContent, messages.length, toggleInspector, inspectorOpen])
 
+  // --- Avatars: the regenerate-avatar watch and each bubble's face ---
+  const { handleRegenerateAvatar, getMessageAvatar } = useSalonAvatars({
+    chatId: id,
+    chat,
+    fetchChat,
+    participants: participantsWithImpersonation,
+  })
+
   // --- UI helpers ---
   const shouldShowAvatars = useCallback(() => {
     if (!chatSettings) return true
@@ -1300,259 +1272,22 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     return participantsWithImpersonation.getFirstCharacter() ?? undefined
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
-  const getMessageAvatar = useCallback((message: Message) => {
-    // Ad-hoc announcement bubble (Insert Announcement composer button), or a
-    // Pascal outcome its tool has the rolling character announce
-    // (`announceAsCharacter`). customAnnouncer takes precedence over
-    // systemSender: when both are set, the named speaker wears the bubble.
-    if (message.customAnnouncer) {
-      if (message.customAnnouncer.kind === 'character' && message.customAnnouncer.characterId) {
-        const charId = message.customAnnouncer.characterId
-        const participant = chat?.participants.find(p => p.character?.id === charId)
-        if (participant?.character) {
-          return {
-            name: participant.character.name,
-            characterId: participant.character.id,
-            title: participant.character.title ?? null,
-            avatarUrl: participant.character.avatarUrl ?? null,
-            defaultImage: participant.character.defaultImage ?? null,
-          }
-        }
-        const offScene = chat?.offSceneCharacters?.find(c => c.id === charId)
-        if (offScene) {
-          return {
-            name: offScene.name,
-            title: offScene.title,
-            avatarUrl: offScene.avatarUrl,
-            defaultImage: null,
-          }
-        }
-        // Character no longer exists; render with a placeholder name so the
-        // bubble is still legible.
-        return { name: 'Off-scene character', title: null, avatarUrl: null, defaultImage: null }
-      }
-      if (message.customAnnouncer.kind === 'custom') {
-        return {
-          name: message.customAnnouncer.displayName || 'Announcement',
-          title: null,
-          avatarUrl: null,
-          defaultImage: null,
-        }
-      }
-    }
-    // Staff-authored messages render with the member's own name and face,
-    // from the one table in lib/chat/staff-display-names.ts. Carina (null
-    // there) and an unrecognised sender fall through.
-    const staff = staffAvatar(message.systemSender)
-    if (staff) {
-      return { ...staff, defaultImage: null }
-    }
-    // Carina (inline LLM queries): a reference answer renders with the ANSWERER
-    // character's own avatar — there is no dedicated Carina staff avatar. Resolve
-    // them via carinaMeta.answererId among participants, then off-scene cards,
-    // then a legible placeholder.
-    if (message.systemSender === 'carina') {
-      const answererId = message.carinaMeta?.answererId
-      // The Brahma Console pseudocharacter has no character record; render its
-      // reference card with the dedicated Brahma name + avatar.
-      if (answererId === BRAHMA_CARINA_ANSWERER_ID) {
-        return { name: 'Brahma', title: null, avatarUrl: '/images/avatars/brahma-avatar.webp', defaultImage: null }
-      }
-      if (answererId) {
-        const participant = chat?.participants.find(p => p.character?.id === answererId)
-        if (participant?.character) {
-          return {
-            name: participant.character.name,
-            characterId: participant.character.id,
-            title: participant.character.title ?? null,
-            avatarUrl: participant.character.avatarUrl ?? null,
-            defaultImage: participant.character.defaultImage ?? null,
-          }
-        }
-        const offScene = chat?.offSceneCharacters?.find(c => c.id === answererId)
-        if (offScene) {
-          return { name: offScene.name, title: offScene.title, avatarUrl: offScene.avatarUrl, defaultImage: null }
-        }
-      }
-      return { name: 'Carina', title: null, avatarUrl: null, defaultImage: null }
-    }
-    if (message.participantId) {
-      const participant = participantsWithImpersonation.getParticipantById(message.participantId)
-      if (participant) {
-        if (participant.type === 'CHARACTER' && participant.character) {
-          return { name: participant.character.name, characterId: participant.character.id, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
-        }
-      }
-    }
-    if (message.role === 'USER') {
-      const userChar = participantsWithImpersonation.getFirstUserCharacter()
-      if (userChar) {
-        return { name: userChar.name, characterId: userChar.id, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
-      } else if (chat?.user) {
-        return { name: chat.user.name || 'User', title: null, avatarUrl: chat.user.image ?? null, defaultImage: null }
-      }
-    } else if (message.role === 'ASSISTANT') {
-      const character = participantsWithImpersonation.getFirstCharacter()
-      if (character) {
-        return { name: character.name, characterId: character.id, title: character.title, avatarUrl: character.avatarUrl, defaultImage: character.defaultImage }
-      }
-    }
-    return null
-  }, [participantsWithImpersonation, chat?.user, chat?.participants, chat?.offSceneCharacters])
-
-  // --- In-conversation search (header search bar) ---
-  // The header search bar looks inside this chat before searching everywhere.
-  // The source is one stable object per chat that reads the transcript through
-  // a ref, so publishing it never churns the toolbar on a streamed token.
-  const [searchHighlightQuery, setSearchHighlightQuery] = useState<string | null>(null)
-  useSearchHighlight(messagesContainerRef, searchHighlightQuery)
-  const [pendingReveal, setPendingReveal] = useState<{ messageId: string; nonce: number } | null>(null)
-  const searchStateRef = useRef({ messages, renderMessages, renderItems, getMessageAvatar, announcerNames })
-  useEffect(() => {
-    searchStateRef.current = { messages, renderMessages, renderItems, getMessageAvatar, announcerNames }
-  }, [messages, renderMessages, renderItems, getMessageAvatar, announcerNames])
-
-  // Scroll a message to the top of the transcript and flash it. The list is
-  // virtualized, so the row may not exist yet: expand a collapsed announcement
-  // (its text is only on screen expanded), ask the virtualizer for the index,
-  // then nudge until the row's top sits at the container's top.
-  const revealMessage = useCallback((messageId: string) => {
-    // A global search hit can name a line this view doesn't show — a whisper
-    // to someone else, or another variant of a reply. Say so rather than
-    // silently going nowhere.
-    const { messages: allMessages, renderMessages: shown } = searchStateRef.current
-    if (!shown.some(m => m.id === messageId)) {
-      const hidden = allMessages.find(m => m.id === messageId)
-      showInfoToast(
-        hidden?.targetParticipantIds?.length
-          ? 'That line was a whisper meant for other ears. Choose “Show all whispers” in the sidebar to see it.'
-          : 'That line isn’t on the page — it may belong to another version of a reply, or have been tidied away.',
-      )
-      return
-    }
-    const inChipGroup = searchStateRef.current.renderItems.some(
-      item => item.kind === 'announcement-group' && item.members.some(m => m.message.id === messageId),
-    )
-    if (inChipGroup) {
-      setExpandedSystemMessageIds(prev => (prev.has(messageId) ? prev : new Set(prev).add(messageId)))
-    }
-    setPendingReveal({ messageId, nonce: Date.now() })
-  }, [])
-  const revealMessageRef = useRef(revealMessage)
-  useEffect(() => {
-    revealMessageRef.current = revealMessage
-  }, [revealMessage])
-
-  // --- Scroll to a requested message (`?msg=` links, e.g. a Message search result) ---
-  // A request made before this Salon mounted (or loaded) waits in storage until
-  // the transcript is here; one made while it is open arrives as an event.
-  // Either way only a request for this chat is taken, and only once the
-  // initial scroll to the newest message is done (`isInitialScrollDone`), which would
-  // otherwise carry the view straight back down. Declared after the refs they
-  // read are refreshed, so a just-mounted Salon sees its loaded transcript.
-  const routeRevealTakenRef = useRef(false)
-  useEffect(() => {
-    if (loading || !isInitialScrollDone || messages.length === 0) return
-    let target = takePendingMessageReveal(id)
-    if (!target && revealMessageId && !routeRevealTakenRef.current) {
-      routeRevealTakenRef.current = true
-      target = revealMessageId
-    }
-    if (target) revealMessageRef.current(target)
-  }, [loading, isInitialScrollDone, messages.length, id, revealMessageId])
-  useEffect(() => {
-    if (loading || !isInitialScrollDone) return
-    const onReveal = (event: Event) => {
-      const request = (event as CustomEvent<MessageRevealRequest>).detail
-      if (request?.chatId !== id) return
-      const target = takePendingMessageReveal(id)
-      if (target) revealMessageRef.current(target)
-    }
-    window.addEventListener(MESSAGE_REVEAL_EVENT, onReveal)
-    return () => window.removeEventListener(MESSAGE_REVEAL_EVENT, onReveal)
-  }, [loading, isInitialScrollDone, id])
-
-  useEffect(() => {
-    if (!pendingReveal) return
-    const { messageId } = pendingReveal
-    const index = renderItems.findIndex((item: RenderItem) =>
-      item.kind === 'message' ? item.id === messageId : item.members.some(m => m.message.id === messageId),
-    )
-    if (index < 0) return
-    // Still a chip: the expansion above hasn't rendered yet; this effect re-runs when it does.
-    if (renderItems[index].kind === 'announcement-group') return
-
-    virtualizer.scrollToIndex(index, { align: 'start' })
-    let frame = 0
-    let attempts = 0
-    let lastScrollTop = -1
-    let hiddenFrames = 0
-    const settle = () => {
-      const container = messagesContainerRef.current
-      if (!container || ++attempts > 40) {
-        setPendingReveal(null)
-        return
-      }
-      // A kept-alive tab is display:none until it is activated, and a request
-      // can arrive in the same tick as the activation: wait until it shows.
-      if (container.clientHeight === 0) {
-        if (++hiddenFrames > 600) {
-          setPendingReveal(null)
-          return
-        }
-        attempts--
-        frame = requestAnimationFrame(settle)
-        return
-      }
-      const row = container.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
-      if (!row) {
-        virtualizer.scrollToIndex(index, { align: 'start' })
-        frame = requestAnimationFrame(settle)
-        return
-      }
-      const offset = row.getBoundingClientRect().top - container.getBoundingClientRect().top - 12
-      // Keep nudging while rows above are still being measured, until the row
-      // is at the top or the container can scroll no further.
-      if (Math.abs(offset) > 2 && container.scrollTop !== lastScrollTop) {
-        lastScrollTop = container.scrollTop
-        container.scrollTop += offset
-        frame = requestAnimationFrame(settle)
-        return
-      }
-      row.classList.add('qt-memory-source-highlight')
-      setTimeout(() => row.classList.remove('qt-memory-source-highlight'), 3000)
-      setPendingReveal(null)
-    }
-    frame = requestAnimationFrame(settle)
-    return () => cancelAnimationFrame(frame)
-  }, [pendingReveal, renderItems, virtualizer])
-
-  const conversationSearchSource = useMemo<ConversationSearchSource>(() => ({
+  // --- In-conversation search and reveal (header search bar, `?msg=` links) ---
+  useMessageReveal({
     chatId: id,
-    search: (query, limit) => {
-      const { renderMessages: rows, getMessageAvatar: avatarOf, announcerNames: announcers } = searchStateRef.current
-      return findConversationMatches(rows, query, {
-        limit,
-        speakerOf: message =>
-          message.systemSender
-            ? getAnnouncementSenderName(message, announcers)
-            : avatarOf(message)?.name ?? null,
-      })
-    },
-    reveal: messageId => revealMessageRef.current(messageId),
-    setHighlight: query => setSearchHighlightQuery(query),
-  }), [id])
-
-  // Offer this chat to the header search bar — not while quick-hide is
-  // covering it, when the transcript isn't on screen to search.
-  useEffect(() => {
-    if (chatHidden) return
-    setConversationSearch(conversationSearchSource)
-    return () => {
-      conversationSearchSource.setHighlight(null)
-      setConversationSearch(null)
-    }
-  }, [chatHidden, conversationSearchSource, setConversationSearch])
+    revealMessageId,
+    loading,
+    isInitialScrollDone,
+    messages,
+    renderMessages,
+    renderItems,
+    getMessageAvatar,
+    announcerNames,
+    messagesContainerRef,
+    virtualizer,
+    setExpandedSystemMessageIds,
+    setConversationSearch,
+  })
 
   // --- Reattribute handler ---
   const handleReattribute = useCallback((messageId: string) => {
@@ -1629,23 +1364,39 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     await handleImpersonateAndTakeTurn(participantId)
   }, [modals, handleImpersonateAndTakeTurn])
 
+  // The participant cards' actions, read from context by the sidebar's
+  // participant list rather than threaded through it as props.
+  const chatActions = useMemo<ChatActions>(() => ({
+    onNudge: turnManagement.handleNudge,
+    onQueue: turnManagement.handleQueue,
+    onDequeue: turnManagement.handleDequeue,
+    onTalkativenessChange: chatControls.handleTalkativenessChange,
+    onRemoveCharacter: chatControls.handleRemoveCharacter,
+    onImpersonate: handleImpersonateAndTakeTurn,
+    onStopImpersonate: impersonation.handleStopImpersonation,
+    connectionProfiles: chatControls.connectionProfiles,
+    onConnectionProfileChange: chatControls.handleConnectionProfileChange,
+    onSystemPromptChange: chatControls.handleSystemPromptChange,
+    onSubpromptsChange: chatControls.handleSubpromptsChange,
+    onRebuildSystemPrompt: chatControls.handleRebuildSystemPrompt,
+    onRegenerateAvatar: handleRegenerateAvatar,
+  }), [
+    turnManagement.handleNudge,
+    turnManagement.handleQueue,
+    turnManagement.handleDequeue,
+    chatControls.handleTalkativenessChange,
+    chatControls.handleRemoveCharacter,
+    handleImpersonateAndTakeTurn,
+    impersonation.handleStopImpersonation,
+    chatControls.connectionProfiles,
+    chatControls.handleConnectionProfileChange,
+    chatControls.handleSystemPromptChange,
+    chatControls.handleSubpromptsChange,
+    chatControls.handleRebuildSystemPrompt,
+    handleRegenerateAvatar,
+  ])
+
   // --- Early returns ---
-  if (awaitingTagInfo) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg qt-text-secondary">Loading chat...</p>
-      </div>
-    )
-  }
-
-  if (chatHidden) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <HiddenPlaceholder />
-      </div>
-    )
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1654,7 +1405,9 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
     )
   }
 
-  if (error || !chat) {
+  // #173: the full-page error is for a chat that never loaded. One that is
+  // already on screen keeps showing; a failed refresh is a toast (above).
+  if (!chat) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-lg qt-text-destructive">Error: {error || 'Chat not found'}</p>
@@ -1698,9 +1451,13 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onCloseTerminal={terminalModeHook.hidePane}
           chatContent={
             <>
+        {greenRoom.pinned && (
+          <GreenRoomPanel state={greenRoom.pinned} onToggle={greenRoom.toggle} onClose={greenRoom.dock} />
+        )}
         <VirtualizedMessageList
           messages={renderMessages}
           renderItems={renderItems}
+          onToggleGreenRoom={greenRoom.toggle}
           virtualizer={virtualizer}
           messagesContainerRef={messagesContainerRef}
           messagesEndRef={messagesEndRef}
@@ -1895,6 +1652,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           inputRef={inputRef}
           disabled={sseStreaming.sending || regenerationController.isRegenerating}
           sending={sseStreaming.sending}
+          streamInFlight={sseStreaming.isStreamInFlight}
           hasActiveCharacters={participantsWithImpersonation.hasActiveCharacters}
           streaming={sseStreaming.streaming}
           waitingForResponse={sseStreaming.waitingForResponse}
@@ -2060,35 +1818,6 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           }}
         />
 
-        {/* Continue Elsewhere — fork this conversation into a new chat with a
-            different scenario or project. Reuses the standard new-chat modal
-            in continuation mode, which posts continuationFromChatId to the
-            create endpoint so the server backfills the new chat with the
-            tail of this one. */}
-        {chat && (
-          <NewChatModal
-            isOpen={modals.continueChatModalOpen}
-            onClose={modals.closeContinueChat}
-            characterId={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.id || ''}
-            characterName={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.name || ''}
-            projectId={chat.projectId ?? undefined}
-            continuationFromChatId={id}
-            initialSelectedCharacterIds={chat.participants
-              .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && !p.removedAt)
-              .map((p) => p.character?.id)
-              .filter((cid): cid is string => typeof cid === 'string' && cid.length > 0)}
-            initialUserCharacterId={chat.participants
-              .find((p) => p.type === 'CHARACTER' && p.controlledBy === 'user' && !p.removedAt)
-              ?.character?.id ?? null}
-            initialImageProfileId={chat.imageProfileId ?? null}
-            initialAvatarGenerationEnabled={chat.avatarGenerationEnabled ?? false}
-            /* A spicy conversation that changes venue stays spicy by default —
-               and the new chat's Concierge bubble says so, which the replayed
-               history alone would not. Overridable on the form. */
-            initialConciergeState={getConciergeState(chat)}
-          />
-        )}
-
         {/* Merge In… — fold another conversation's characters and summary into
             this one at the latest point. The inverse of Continue Elsewhere.
             Mounted only while open so its state starts fresh each time. */}
@@ -2165,6 +1894,10 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
           getFirstUserCharacter={participantsWithImpersonation.getFirstUserCharacter}
           onCharacterAdded={chatControls.handleCharacterAdded}
+          onArrivalStream={(response, characterName) => {
+            greenRoom.begin(`${characterName} arrives`, currentMessageIds())
+            void sseStreaming.readGreenRoomStream(response)
+          }}
           onReattributed={handleReattributed}
           onConfirmStopImpersonation={impersonation.handleConfirmStopImpersonation}
           memoryCascadeConfirmation={messageActions.memoryCascadeConfirmation}
@@ -2212,6 +1945,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
       />
 
       {modals.showParticipantSidebar && (
+        <ChatActionsProvider value={chatActions}>
         <ChatSidebar
           participants={participantsWithImpersonation.participantData}
           turnState={turnState}
@@ -2224,28 +1958,16 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onTogglePause={chatControls.togglePause}
           turnMode={chat?.turnMode ?? 'rotation'}
           onSetTurnPosition={chatControls.setTurnPosition}
+          onNextRound={turnManagement.handleContinue}
           storytellerInviteFilter={chat?.storytellerInviteFilter === true}
           onToggleStorytellerInviteFilter={chatControls.toggleStorytellerInviteFilter}
-          onNudge={turnManagement.handleNudge}
-          onQueue={turnManagement.handleQueue}
-          onDequeue={turnManagement.handleDequeue}
           onSkip={turnManagement.handleContinue}
-          onTalkativenessChange={chatControls.handleTalkativenessChange}
           onAddCharacter={modals.openAddCharacter}
-          onRemoveCharacter={chatControls.handleRemoveCharacter}
           impersonatingParticipantIds={impersonation.impersonatingParticipantIds}
           activeTypingParticipantId={impersonation.activeTypingParticipantId}
-          onImpersonate={handleImpersonateAndTakeTurn}
-          onStopImpersonate={impersonation.handleStopImpersonation}
-          connectionProfiles={chatControls.connectionProfiles}
-          onConnectionProfileChange={chatControls.handleConnectionProfileChange}
-          onSystemPromptChange={chatControls.handleSystemPromptChange}
-          onSubpromptsChange={chatControls.handleSubpromptsChange}
-          onRebuildSystemPrompt={chatControls.handleRebuildSystemPrompt}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
           chatId={id}
-          onRegenerateAvatar={handleRegenerateAvatar}
           // Chat section
           agentModeEnabled={chatControls.agentModeEnabled}
           onAgentModeToggle={chatControls.handleToggleAgentMode}
@@ -2308,6 +2030,7 @@ export function SalonView({ chatId, revealMessageId }: SalonViewProps) {
           onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
           chatMemoryCount={chatMemoryCount}
         />
+        </ChatActionsProvider>
       )}
 
       <EditEnclaveModal

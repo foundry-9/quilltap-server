@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { ProviderIcon } from './ProviderIcon'
 
 interface ApiKey {
@@ -26,6 +29,12 @@ interface ImageProfilePickerProps {
   characterId?: string
   userCharacterId?: string
   disabled?: boolean
+  /**
+   * When nothing is selected yet, select the instance's default profile once
+   * the list loads (a one-off image generator). Leave off where an empty
+   * value means something — "use the fallback chain" or "none".
+   */
+  preselectDefault?: boolean
 }
 
 export function ImageProfilePicker({
@@ -34,39 +43,39 @@ export function ImageProfilePicker({
   characterId,
   userCharacterId,
   disabled,
+  preselectDefault,
 }: ImageProfilePickerProps) {
-  const [profiles, setProfiles] = useState<ImageProfile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // The server orders the list by tag match for the given characters, so the
+  // fetch is keyed on them; the key sits under `imageProfiles.all`, so a profile
+  // created or deleted anywhere refreshes this picker.
+  const {
+    data: profiles = [],
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: queryKeys.imageProfiles.sorted(characterId, userCharacterId),
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams()
+      if (characterId) params.set('sortByCharacter', characterId)
+      if (userCharacterId) params.set('sortByUserCharacter', userCharacterId)
+      const query = params.toString()
+      return apiFetch<{ profiles?: ImageProfile[] }>(
+        `/api/v1/image-profiles${query ? `?${query}` : ''}`,
+        { signal },
+      )
+    },
+    select: (data) => data.profiles ?? [],
+  })
+  const error = queryError ? queryError.message || 'Failed to fetch profiles' : null
 
+  const preselected = useRef(false)
   useEffect(() => {
-    const fetchProfiles = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const url = new URL('/api/v1/image-profiles', window.location.origin)
-        if (characterId) {
-          url.searchParams.set('sortByCharacter', characterId)
-        }
-        if (userCharacterId) {
-          url.searchParams.set('sortByUserCharacter', userCharacterId)
-        }
-
-        const res = await fetch(url.toString())
-        if (!res.ok) throw new Error('Failed to fetch profiles')
-
-        const data = await res.json()
-        setProfiles(data.profiles || [])
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch profiles')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchProfiles()
-  }, [characterId, userCharacterId])
+    if (!preselectDefault || preselected.current || loading || value) return
+    const fallback = profiles.find(p => p.isDefault && p.apiKey)
+    if (!fallback) return
+    preselected.current = true
+    onChange?.(fallback.id)
+  }, [preselectDefault, loading, value, profiles, onChange])
 
   if (loading) {
     return (
@@ -84,7 +93,7 @@ export function ImageProfilePicker({
         value={value || ''}
         onChange={e => onChange?.(e.target.value || null)}
         disabled={disabled}
-        className="w-full px-3 py-2 border qt-border-default qt-bg-card text-foreground rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+        className="qt-select disabled:opacity-50"
       >
         <option value="">No image generation</option>
         {profiles.map(profile => {
@@ -119,7 +128,7 @@ export function ImageProfilePicker({
                 <div className="flex items-center gap-2">
                   <ProviderIcon provider={selected.provider} />
                   <div>
-                    <p className="font-medium text-sm text-foreground">{selected.name}</p>
+                    <p className="font-medium text-sm qt-text">{selected.name}</p>
                     <p className="text-xs qt-text-secondary">{selected.modelName}</p>
                   </div>
                 </div>

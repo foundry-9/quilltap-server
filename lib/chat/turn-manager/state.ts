@@ -115,6 +115,77 @@ export function updateTurnStateAfterMessage(
   return newState;
 }
 
+function parseSpokenThisCycle(currentSpokenJson: string | null | undefined): string[] {
+  if (!currentSpokenJson) return [];
+  try {
+    const parsed = JSON.parse(currentSpokenJson);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((id): id is string => typeof id === 'string');
+    }
+  } catch {
+    // Treat as empty cycle; we'll overwrite.
+  }
+  return [];
+}
+
+/**
+ * Whether recording `participantId` completes the cycle: every present
+ * CHARACTER seat has then spoken (or passed) at least once. This is the exact
+ * moment {@link advanceSpokenThisCycle} wraps the list, so the two can never
+ * disagree. Read against the list *before* the turn is recorded — once
+ * persisted, a wrap has already reset it to just the new speaker.
+ */
+function closesCycleWith(
+  participantId: string,
+  participants: ChatParticipantBase[],
+  current: string[],
+): boolean {
+  const activeIds = new Set(getPresentCharacterSeats(participants).map(p => p.id));
+  if (activeIds.size === 0) return false;
+  const next = current.includes(participantId) ? current : [...current, participantId];
+  return next.filter(id => activeIds.has(id)).length >= activeIds.size;
+}
+
+/**
+ * Core of the two cycle-advance helpers: record `participantId` as having taken
+ * a turn this cycle, wrapping the list to just that id once every active
+ * CHARACTER participant has spoken. Returns the JSON to persist, or `null` when
+ * no write is needed. Shared by {@link computeSpokenThisCycleAfterMessage} and
+ * {@link computeSpokenThisCycleAfterSkip}.
+ */
+function advanceSpokenThisCycle(
+  participantId: string,
+  participants: ChatParticipantBase[],
+  currentSpokenJson: string | null | undefined,
+): string | null {
+  const current = parseSpokenThisCycle(currentSpokenJson);
+
+  // Cycle wrap: when every active CHARACTER participant has spoken at least
+  // once this cycle, reset to just the new speaker so the next round starts
+  // fresh. This matches the wrap behavior `selectNextSpeaker` produces when
+  // it returns `cycleComplete: true`.
+  if (closesCycleWith(participantId, participants, current)) {
+    return JSON.stringify([participantId]);
+  }
+
+  if (current.includes(participantId)) return null; // no-op
+  return JSON.stringify([...current, participantId]);
+}
+
+/**
+ * Whether a character's turn (a spoken line or a pass) by `participantId`
+ * closes the current cycle, judged against the persisted
+ * `spokenThisCycleParticipantIds` read *before* the turn is recorded. Turns
+ * mode stops its chain on exactly this signal.
+ */
+export function turnClosesCycle(
+  participantId: string,
+  participants: ChatParticipantBase[],
+  spokenBeforeJson: string | null | undefined,
+): boolean {
+  return closesCycleWith(participantId, participants, parseSpokenThisCycle(spokenBeforeJson));
+}
+
 /**
  * Returns the next value for `chat.spokenThisCycleParticipantIds` after the
  * given message is persisted, or `null` if the field should not change (the
@@ -131,51 +202,6 @@ export function updateTurnStateAfterMessage(
  * to signal "no write needed". Returning `null` (rather than the existing
  * value) lets callers skip the column entirely in their update payload.
  */
-/**
- * Core of the two cycle-advance helpers: record `participantId` as having taken
- * a turn this cycle, wrapping the list to just that id once every active
- * CHARACTER participant has spoken. Returns the JSON to persist, or `null` when
- * no write is needed. Shared by {@link computeSpokenThisCycleAfterMessage} and
- * {@link computeSpokenThisCycleAfterSkip}.
- */
-function advanceSpokenThisCycle(
-  participantId: string,
-  participants: ChatParticipantBase[],
-  currentSpokenJson: string | null | undefined,
-): string | null {
-  let current: string[] = [];
-  if (currentSpokenJson) {
-    try {
-      const parsed = JSON.parse(currentSpokenJson);
-      if (Array.isArray(parsed)) {
-        current = parsed.filter((id): id is string => typeof id === 'string');
-      }
-    } catch {
-      // Treat as empty cycle; we'll overwrite.
-    }
-  }
-
-  const next = current.includes(participantId)
-    ? current
-    : [...current, participantId];
-
-  // Cycle wrap: when every active CHARACTER participant has spoken at least
-  // once this cycle, reset to just the new speaker so the next round starts
-  // fresh. This matches the wrap behavior `selectNextSpeaker` produces when
-  // it returns `cycleComplete: true`.
-  const activeIds = new Set(getPresentCharacterSeats(participants).map(p => p.id));
-
-  if (activeIds.size > 0) {
-    const spokenActive = next.filter(id => activeIds.has(id));
-    if (spokenActive.length >= activeIds.size) {
-      return JSON.stringify([participantId]);
-    }
-  }
-
-  if (next === current) return null; // no-op
-  return JSON.stringify(next);
-}
-
 export function computeSpokenThisCycleAfterMessage(
   message: ChatEvent,
   participants: ChatParticipantBase[],

@@ -98,7 +98,7 @@ export function WardrobeComponentPicker({
                   type="button"
                   aria-label={`Remove ${c.title}`}
                   onClick={() => onToggleComponent(c.id)}
-                  className="qt-text-secondary hover:text-foreground"
+                  className="qt-text-secondary hover:qt-text"
                 >
                   ×
                 </button>
@@ -164,7 +164,7 @@ export function WardrobeComponentPicker({
                               checked={checked}
                               onChange={() => onToggleComponent(c.id)}
                             />
-                            <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+                            <span className="min-w-0 flex-1 break-words text-sm qt-text">
                               {c.title}
                             </span>
                             {originLabel && (
@@ -206,7 +206,7 @@ export function WardrobeComponentPicker({
             checked={replace}
             onChange={(e) => onReplaceChange(e.target.checked)}
           />
-          <span className="text-sm text-foreground">
+          <span className="text-sm qt-text">
             Replace everything in its designated slots
             <span className="block qt-text-xs qt-text-muted">
               Off by default this outfit layers onto whatever&apos;s already worn.

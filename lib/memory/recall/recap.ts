@@ -53,72 +53,21 @@ export function rampLimit(
   return Math.round(min + ratio * (max - min))
 }
 
-// Recent-conversations greeting block: ramp 5→20 over 4K→32K (unchanged).
-const RECENT_CONVERSATIONS_MIN = 5
-const RECENT_CONVERSATIONS_MAX = 20
-const RECENT_CONVERSATIONS_RAMP_MIN_TOKENS = 4000
-const RECENT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000
-
-// Recap conversation lists (recent + relevant): each ramps on the shared
-// relevant-conversations curve (3→10 over 4K→32K), independently. Combined
-// 6–20 entries before dedup.
-
-export function calculateRecentConversationsLimit(maxContext?: number | null): number {
-  return rampLimit(
-    maxContext,
-    RECENT_CONVERSATIONS_MIN,
-    RECENT_CONVERSATIONS_MAX,
-    RECENT_CONVERSATIONS_RAMP_MIN_TOKENS,
-    RECENT_CONVERSATIONS_RAMP_MAX_TOKENS,
-  )
-}
-
 /**
- * The greeting's "Recent Conversations" block — what the character remembers
- * having talked about lately, rendered once before the opening line.
- *
- * Each entry is capped through `truncateGist` and the block closes with
- * `READ_CONVERSATION_CALL_NOTE`, exactly as `buildConversationRecallLists`
- * renders the same rows on the per-turn path. Both matter here, and bug 158 is
- * why: a chat created before that fix carried its own scenario in
- * `contextSummary`, so an unsummarized prior chat contributed its entire raw
- * scenario — 9 KB of it, in the reported case — to the greeting prompt, at full
- * length, with nothing marking it as past, immediately before "open with a
- * concise greeting". The character greeted from it. The seed is fixed at the
- * source, and these two lines are the standing guard: an entry that is somehow
- * the wrong text is now a truncated wrong text that announces itself as a
- * transcript the model may go read, not a stage direction adjacent to the
- * instruction to act.
+ * Cap an inlined conversation gist so the recap block stays bounded. Bug 158:
+ * a chat created before that fix carried its own scenario in `contextSummary`,
+ * and an uncapped gist put 9 KB of stage direction into the prompt. The cap and
+ * the closing `READ_CONVERSATION_CALL_NOTE` are the standing guard.
  */
-export async function buildRecentConversationsBlock(
-  characterId: string,
-  currentChatId: string | undefined,
-  limit: number
-): Promise<string> {
-  if (limit <= 0) return ''
-  const repos = getRepositories()
-  const eligible = await repos.chats.findRecentSummarizedByCharacter(characterId, {
-    limit,
-    excludeChatId: currentChatId,
-  })
-  if (eligible.length === 0) return ''
-  const entries = eligible
-    .map(c => {
-      const gist = (c.contextSummary ?? '').trim()
-      return gist.length > 0
-        ? `#### ${c.title} (\`${c.id}\`)\n${truncateGist(gist)}`
-        : `#### ${c.title} (\`${c.id}\`)`
-    })
-    .join('\n\n')
-  return `### Recent Conversations\n\n${entries}\n\n${READ_CONVERSATION_CALL_NOTE}`
-}
-
-/** Cap an inlined conversation gist so the recap block stays bounded. */
 function truncateGist(text: string, maxChars = 280): string {
   const trimmed = text.trim()
   if (trimmed.length <= maxChars) return trimmed
   return trimmed.slice(0, maxChars - 1).trimEnd() + '…'
 }
+
+// Recap conversation lists (recent + relevant): each ramps on the shared
+// relevant-conversations curve (3→10 over 4K→32K), independently. Combined
+// 6–20 entries before dedup.
 
 export interface ConversationRecallListsParams {
   characterId: string

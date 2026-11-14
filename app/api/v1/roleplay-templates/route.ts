@@ -7,13 +7,13 @@
  * Roleplay templates provide formatting instructions that are prepended to character system prompts.
  */
 
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { createContextHandler } from '@/lib/api/middleware';
+import { NextRequest } from 'next/server';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { generateTemplateRenderingPatterns } from '@/lib/chat/annotations';
-import { TemplateDelimiterSchema, UnmarkedStyleSchema } from '@/lib/schemas/template.types';
+import { RoleplayTemplateCreateSchema } from '@/lib/roleplay-templates/template-input';
 
 /**
  * GET /api/v1/roleplay-templates
@@ -56,80 +56,32 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
  *   systemPrompt: string
  * }
  */
-export const POST = createContextHandler(async (req, { user, repos }) => {
-  try {const body = await req.json();
-    const { name, description, systemPrompt, narrationDelimiters } = body;
-
-    // Validation
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return errorResponse('Name is required', 400);
-    }
-
-    if (name.trim().length > 100) {
-      return errorResponse('Name must be 100 characters or less', 400);
-    }
-
-    if (!systemPrompt || typeof systemPrompt !== 'string' || systemPrompt.trim().length === 0) {
-      return errorResponse('System prompt is required', 400);
-    }
-
-    if (description && typeof description === 'string' && description.length > 500) {
-      return errorResponse('Description must be 500 characters or less', 400);
-    }
-
-    // Validate narrationDelimiters (required; an explicit null means narration
-    // is unmarked plain prose)
-    if (narrationDelimiters === undefined || narrationDelimiters === '') {
-      return errorResponse('Narration delimiters are required (null for unmarked prose)', 400);
-    }
-    if (narrationDelimiters === null) {
-      // Unmarked narration — nothing further to check.
-    } else if (typeof narrationDelimiters === 'string') {
-      if (narrationDelimiters.length === 0) {
-        return errorResponse('Narration delimiters string must not be empty', 400);
-      }
-    } else if (Array.isArray(narrationDelimiters)) {
-      if (narrationDelimiters.length !== 2 || !narrationDelimiters[0] || !narrationDelimiters[1]) {
-        return errorResponse('Narration delimiters array must have exactly 2 non-empty elements [open, close]', 400);
-      }
-    } else {
-      return errorResponse('Narration delimiters must be a string or [string, string] array', 400);
-    }
+async function handleCreateRoleplayTemplate(req: NextRequest, { user, repos }: RequestContext) {
+  // A malformed body is the middleware's 400 (rethrown below).
+  const input = RoleplayTemplateCreateSchema.parse(await req.json());
+  try {
+    const { name, narrationDelimiters } = input;
 
     // Check for duplicate name among user's own templates
-    const existingTemplate = await repos.roleplayTemplates.findByName(user.id, name.trim());
+    const existingTemplate = await repos.roleplayTemplates.findByName(user.id, name);
     if (existingTemplate) {
       return errorResponse('A roleplay template with this name already exists', 409);
     }
 
-    // Validate delimiters against the discriminated-union schema (gives a 400
-    // with a useful message instead of a 500 at repo-write time).
-    const delimitersResult = z.array(TemplateDelimiterSchema).optional().safeParse(body.delimiters);
-    if (!delimitersResult.success) {
-      return errorResponse(`Invalid delimiters: ${delimitersResult.error.issues[0]?.message ?? 'malformed'}`, 400);
-    }
-
-    const unmarkedResult = UnmarkedStyleSchema.nullable().optional().safeParse(body.unmarkedStyle);
-    if (!unmarkedResult.success) {
-      return errorResponse(`Invalid unmarked style: ${unmarkedResult.error.issues[0]?.message ?? 'malformed'}`, 400);
-    }
-    if (body.markdownAsterisks !== undefined && typeof body.markdownAsterisks !== 'boolean') {
-      return errorResponse('markdownAsterisks must be a boolean', 400);
-    }
-    const unmarkedStyle = unmarkedResult.data ?? null;
-    const markdownAsterisks: boolean = body.markdownAsterisks ?? true;
+    const unmarkedStyle = input.unmarkedStyle ?? null;
+    const markdownAsterisks = input.markdownAsterisks ?? true;
+    const templateDelimiters = input.delimiters ?? [];
 
     // Auto-generate rendering patterns from delimiters if not explicitly provided
-    const templateDelimiters = delimitersResult.data || [];
-    let renderingPatterns = body.renderingPatterns || [];
-    if (!renderingPatterns || renderingPatterns.length === 0) {
-      renderingPatterns = generateTemplateRenderingPatterns({
-        delimiters: templateDelimiters,
-        narrationDelimiters,
-        unmarkedStyle,
-        markdownAsterisks,
-      });
-    }
+    const renderingPatterns =
+      input.renderingPatterns && input.renderingPatterns.length > 0
+        ? input.renderingPatterns
+        : generateTemplateRenderingPatterns({
+            delimiters: templateDelimiters,
+            narrationDelimiters,
+            unmarkedStyle,
+            markdownAsterisks,
+          });
     logger.debug('Roleplay template patterns resolved for create', {
       delimiterCount: templateDelimiters.length,
       patternCount: renderingPatterns.length,
@@ -140,15 +92,15 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     // Create template
     const template = await repos.roleplayTemplates.create({
       userId: user.id,
-      name: name.trim(),
-      description: description?.trim() || null,
-      systemPrompt: systemPrompt.trim(),
+      name,
+      description: input.description ?? null,
+      systemPrompt: input.systemPrompt,
       isBuiltIn: false,
       tags: [],
       delimiters: templateDelimiters,
       renderingPatterns,
-      dialogueDetection: body.dialogueDetection || null,
-      narrationDelimiters: narrationDelimiters as string | [string, string] | null,
+      dialogueDetection: input.dialogueDetection ?? null,
+      narrationDelimiters,
       unmarkedStyle,
       markdownAsterisks,
     });
@@ -171,4 +123,9 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     );
     return errorResponse('Failed to create roleplay template', 500);
   }
-});
+}
+
+// An unknown ?action= is a 400 from the dispatcher, never a create (#219).
+export const POST = createContextHandler((req: NextRequest, ctx: RequestContext) =>
+  dispatchAction(req, {}, () => handleCreateRoleplayTemplate(req, ctx))
+);

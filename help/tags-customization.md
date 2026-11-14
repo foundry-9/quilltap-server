@@ -4,16 +4,16 @@ url: /aurora
 
 # Tag Customization
 
-> **[Open this page in Quilltap](/settings?tab=appearance&section=tags)**
+> **[Open this page in Quilltap](/settings?section=tags)**
 
-The Tags customization tab in your Settings is where you control how tags look and function throughout Quilltap. Here you can customize every aspect of your tags' appearance and set up which tags are available for quick-hide.
+The **Tags** card in the Appearance group of Settings is where you control how tags look and function throughout Quilltap. Here you can customize every aspect of your tags' appearance and set up which tags are available for quick-hide.
 
 ## Accessing Tag Customization
 
 ### Navigate to Settings
 
 1. Click the **Settings icon** in the sidebar footer
-2. Look for the **Tags** tab in the Settings menu
+2. Open the **Appearance** group and find the **Tags** card
 3. You'll see all your tags listed with their current customization
 
 If you don't have any tags yet, the list will be empty. Tags are created automatically when you add them to characters or profiles.

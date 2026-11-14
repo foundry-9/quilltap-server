@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Developer prose is not markup. Tailwind's automatic source detection reads
+   every file in the repo, so a doc that merely mentions a class (say
+   `text-[var(…)]`) became invalid CSS and failed the whole build, and every
+   doc save recompiled this stylesheet and full-reloaded every open page. */
+@source not "../docs";
+
 @font-face {
   font-family: "Inter";
   src: url("/fonts/Inter-Regular.woff2") format("woff2");
@@ -299,3 +305,19 @@
   }
 }
 
+
+/*
+ * Template-token highlighting inside the character page's Markdown editors.
+ *
+ * Painted with the CSS Custom Highlight API (`CSS.highlights`) by
+ * components/markdown-editor/TemplateTokenHighlightPlugin.tsx, so the editor's
+ * document is never touched: `{{char}}` / `{{user}}` tokens, and the names that
+ * could become them, are tinted where they sit. Browsers without the API show
+ * plain text.
+ */
+::highlight(qt-template-char) {
+  background-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+::highlight(qt-template-user) {
+  background-color: color-mix(in srgb, var(--color-success) 18%, transparent);
+}

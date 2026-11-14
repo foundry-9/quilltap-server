@@ -93,6 +93,7 @@ export async function selectTurnCheapLLM(params: {
         // CheapLLMConfig reads absent ids as undefined, never null.
         userDefinedProfileId: config.userDefinedProfileId ?? undefined,
         defaultCheapProfileId: config.defaultCheapProfileId ?? undefined,
+        outfitSelectionProfileId: config.outfitSelectionProfileId ?? undefined,
       },
       allProfiles,
       false // Ollama availability is not probed per turn

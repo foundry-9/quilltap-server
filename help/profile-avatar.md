@@ -57,7 +57,7 @@ If you don't see any images in the avatar selector, you'll need to upload some f
 
 ## Drawing a New Avatar
 
-The **Select Avatar** window has an **Import Image** button in its header, and the import dialog offers **Generate with AI**. Commissioned from there, a picture is always drawn in **portrait** --- taller than wide, as befits a likeness --- whatever shape the chosen image provider calls portrait; the size picker steps aside in favour of a plain note saying so. (Character avatars chosen through the same window, on a character's edit page, are drawn the same way, as are the portraits the wardrobe draws when a character changes clothes.)
+The **Select Avatar** window has an **Import Image** button in its header, and the import dialog offers **Generate with AI**. Commissioned from there, a picture is always drawn in **portrait** --- taller than wide, as befits a likeness --- whatever shape the chosen image provider calls portrait; the size picker steps aside in favour of a plain note saying so. (Character avatars chosen through the same window — from the avatar menu at the top of a character's page — are drawn the same way, as are the portraits the wardrobe draws when a character changes clothes.)
 
 ## Changing Your Avatar
 

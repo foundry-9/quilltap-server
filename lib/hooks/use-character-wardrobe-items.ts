@@ -67,6 +67,25 @@ export interface UseCharacterWardrobeItemsOptions {
 const EMPTY: TierItem[] = []
 
 /**
+ * The one read of the project a chat belongs to, shared by
+ * {@link useChatProjectId} and imperative callers (`queryClient.fetchQuery`,
+ * the left sidebar's Atlas button) so both hit the same cache entry.
+ */
+export function chatProjectIdQuery(chatId: string) {
+  return {
+    queryKey: queryKeys.chats.project(chatId),
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      const data = await apiFetch<{ chat?: { projectId?: string | null } }>(
+        `/api/v1/chats/${chatId}`,
+        { signal },
+      )
+      return data?.chat?.projectId ?? null
+    },
+    staleTime: Infinity,
+  }
+}
+
+/**
  * The project a chat belongs to — the one field the wardrobe needs from it.
  * Null while unknown or when the chat has no project.
  */
@@ -75,18 +94,7 @@ export function useChatProjectId(chatId: string | null | undefined, enabled = tr
   settled: boolean
 } {
   const active = Boolean(chatId) && enabled
-  const query = useQuery({
-    queryKey: queryKeys.chats.project(chatId ?? 'none'),
-    queryFn: async ({ signal }) => {
-      const data = await apiFetch<{ chat?: { projectId?: string | null } }>(
-        `/api/v1/chats/${chatId}`,
-        { signal },
-      )
-      return data?.chat?.projectId ?? null
-    },
-    enabled: active,
-    staleTime: Infinity,
-  })
+  const query = useQuery({ ...chatProjectIdQuery(chatId ?? 'none'), enabled: active })
   return { projectId: query.data ?? null, settled: !active || query.isFetched }
 }
 

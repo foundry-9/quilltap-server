@@ -1,12 +1,12 @@
 ---
 title: Wardrobe Images
-url: /settings?tab=images&section=wardrobe-images
+url: /settings?section=wardrobe-images
 tags: [wardrobe, images, image generation, settings, concierge]
 ---
 
 # Wardrobe Images
 
-> **[Open this page in Quilltap](/settings?tab=images&section=wardrobe-images)**
+> **[Open this page in Quilltap](/settings?section=wardrobe-images)**
 
 Every garment and outfit in the Wardrobe may sit for its portrait (see [Portraits of the Garments](wardrobe.md#portraits-of-the-garments)). The **Wardrobe Images** card on the **Images** tab of Settings decides who holds the brush.
 
@@ -47,7 +47,7 @@ The editor's **▾** beside **Generate** overrides the artist for a single sitti
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=images&section=wardrobe-images")`
+`help_navigate(url: "/settings?section=wardrobe-images")`
 
 ## Related Topics
 

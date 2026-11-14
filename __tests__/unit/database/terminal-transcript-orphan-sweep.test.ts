@@ -19,6 +19,13 @@ const NOW = new Date('2026-10-26T12:00:00.000Z');
 let repo: TerminalSessionsRepository;
 let transcriptsDir: string;
 
+/** Stand the repository's collection on `rows` — raw rows, as SQLite returns them. */
+function sessionRows(rows: unknown[]) {
+  const find = jest.fn().mockResolvedValue(rows);
+  (repo as any).getCollection = jest.fn().mockResolvedValue({ find });
+  return find;
+}
+
 function writeFile(name: string, ageMs: number): string {
   const p = path.join(transcriptsDir, name);
   writeFileSync(p, 'output');
@@ -43,7 +50,7 @@ describe('TerminalSessionsRepository.sweepOrphanedTranscripts', () => {
   it('removes transcripts no row names and spares named, live, recent and non-log files', async () => {
     // Rows remaining after a chat delete cascaded the others away.
     const customPath = writeFile('custom-name.log', 48 * HOUR);
-    (repo as any).findAll = jest.fn().mockResolvedValue([
+    sessionRows([
       { id: 'kept', transcriptPath: null },
       { id: 'other', transcriptPath: customPath },
     ]);
@@ -71,16 +78,42 @@ describe('TerminalSessionsRepository.sweepOrphanedTranscripts', () => {
 
   it('returns zeros when the transcript directory does not exist', async () => {
     rmSync(transcriptsDir, { recursive: true, force: true });
-    (repo as any).findAll = jest.fn().mockResolvedValue([]);
+    const find = sessionRows([]);
 
     const result = await repo.sweepOrphanedTranscripts({ isLive: () => false, graceMs: HOUR, now: NOW });
 
     expect(result).toEqual({ scanned: 0, deleted: 0 });
-    expect((repo as any).findAll).not.toHaveBeenCalled();
+    expect(find).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing and throws when the sessions read fails (#206)', async () => {
+    (repo as any).getCollection = jest.fn().mockRejectedValue(new Error('database is locked'));
+    const a = writeFile('session-a.log', 48 * HOUR);
+    const b = writeFile('session-b.log', 48 * HOUR);
+
+    await expect(
+      repo.sweepOrphanedTranscripts({ isLive: () => false, graceMs: HOUR, now: NOW })
+    ).rejects.toThrow(/database is locked/);
+
+    expect(existsSync(a)).toBe(true);
+    expect(existsSync(b)).toBe(true);
+  });
+
+  it('a row that fails validation still keeps its transcript (#206)', async () => {
+    // Raw rows: missing every required field but id, a non-string path.
+    sessionRows([{ id: 'broken-row', transcriptPath: 42 }, { chatId: 'no-id' }]);
+    const broken = writeFile('broken-row.log', 48 * HOUR);
+    const orphan = writeFile('orphan.log', 48 * HOUR);
+
+    const result = await repo.sweepOrphanedTranscripts({ isLive: () => false, graceMs: HOUR, now: NOW });
+
+    expect(existsSync(broken)).toBe(true);
+    expect(existsSync(orphan)).toBe(false);
+    expect(result).toEqual({ scanned: 2, deleted: 1 });
   });
 
   it('tolerates a file vanishing between listing and unlink', async () => {
-    (repo as any).findAll = jest.fn().mockResolvedValue([]);
+    sessionRows([]);
     writeFile('gone.log', 48 * HOUR);
     const unlinkSpy = jest.spyOn(fsp, 'unlink').mockImplementation(async () => {
       const e: NodeJS.ErrnoException = new Error('missing');

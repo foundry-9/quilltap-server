@@ -1,0 +1,97 @@
+'use client'
+
+/**
+ * The character page's reads, on TanStack Query.
+ *
+ * `useCharacter` reads the row under `queryKeys.characters.detail(id)` — the
+ * same key and response shape the progressions section and the pronoun
+ * guidance filter already share, so the page, its sections and those readers
+ * are one cache entry that realtime `characters` hints refresh together.
+ * `useCharacterStats` is the header's counts, groups and vault summary.
+ * `useCharacterPageSupport` is the reference data the sections need (the
+ * connection profiles and the user-controlled characters for the partner
+ * picker), shared with every other surface that reads them.
+ *
+ * @module app/aurora/[id]/hooks/useCharacter
+ */
+
+import { useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useRealtimeTopic } from '@/hooks/useRealtime'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useCharactersList } from '@/lib/hooks/use-characters-list'
+import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
+import type {
+  Character,
+  CharacterStats,
+  CharacterVaultSummary,
+  GroupBadge,
+  UserControlledCharacter,
+} from '../types'
+
+export interface CharacterResponse {
+  character: Character
+}
+
+export function useCharacter(characterId: string) {
+  const query = useQuery({
+    queryKey: queryKeys.characters.detail(characterId),
+    queryFn: ({ signal }) =>
+      apiFetch<CharacterResponse>(`/api/v1/characters/${characterId}`, { signal, cache: 'no-store' }),
+  })
+  return {
+    character: query.data?.character ?? null,
+    isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+  }
+}
+
+export interface CharacterStatsResponse {
+  stats: CharacterStats | null
+  groups: GroupBadge[]
+  vault: CharacterVaultSummary | null
+}
+
+export function useCharacterStats(characterId: string) {
+  const query = useQuery({
+    queryKey: queryKeys.characters.stats(characterId),
+    queryFn: ({ signal }) =>
+      apiFetch<CharacterStatsResponse>(`/api/v1/characters/${characterId}?action=stats`, {
+        signal,
+        cache: 'no-store',
+      }),
+  })
+  // The header counts the character's own wardrobe and Inventory shelf. Those
+  // topics carry no character id, so a write to either re-reads the counts
+  // (one cheap request) rather than leaving them stale behind an open dialog.
+  const { refetch } = query
+  const refreshCounts = useCallback(() => void refetch(), [refetch])
+  useRealtimeTopic('inventory', refreshCounts)
+  useRealtimeTopic('wardrobe', refreshCounts)
+  return {
+    stats: query.data?.stats ?? null,
+    groups: query.data?.groups ?? [],
+    vault: query.data?.vault ?? null,
+    refetch: query.refetch,
+  }
+}
+
+function toUserControlledCharacters(
+  rows: Array<{ id: string; name: string; title?: string | null }>,
+): UserControlledCharacter[] {
+  return rows.map((c) => ({ id: c.id, name: c.name, title: c.title ?? null }))
+}
+
+const EMPTY_USER_CHARACTERS: UserControlledCharacter[] = []
+
+export function useCharacterPageSupport() {
+  const { profiles } = useConnectionProfiles()
+  // The same list `useUserCharacterDisplayName` reads, so the two share one fetch.
+  const { data: userControlledCharacters = EMPTY_USER_CHARACTERS } = useCharactersList<
+    { id: string; name: string; title?: string | null },
+    UserControlledCharacter[]
+  >({ controlledBy: 'user' }, { select: toUserControlledCharacters })
+  return { profiles, userControlledCharacters }
+}

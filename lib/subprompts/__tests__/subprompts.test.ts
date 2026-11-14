@@ -54,7 +54,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 jest.mock('@/lib/mount-index/character-vault', () => ({
   ensureCharacterVault: jest.fn(),
 }));
-jest.mock('@/lib/database/repositories/characters.repository', () => ({
+jest.mock('@/lib/characters/archive-guard', () => ({
   CharacterArchivedError: class CharacterArchivedError extends Error {
     constructor(id: string) {
       super(`Character ${id} is archived`);

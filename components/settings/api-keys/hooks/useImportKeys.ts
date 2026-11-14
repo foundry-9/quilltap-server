@@ -1,5 +1,6 @@
 'use client'
 
+import { readErrorMessage } from '@/lib/fetch-helpers'
 import { useCallback, useMemo } from 'react'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useDialogStateWithFileInput } from '@/hooks/useDialogState'
@@ -136,7 +137,7 @@ export function useImportKeys({
       const data: PreviewResponse = await response.json()
 
       if (!data.valid) {
-        throw new Error(data.error || 'Invalid passphrase or corrupted file')
+        throw new Error(readErrorMessage(data) || 'Invalid passphrase or corrupted file')
       }
 
 
@@ -183,7 +184,7 @@ export function useImportKeys({
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Failed to import API keys')
+        throw new Error(readErrorMessage(data) || 'Failed to import API keys')
       }
 
       const result: ImportResult = await response.json()

@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query/keys'
+import { useRoleplayTemplatesQuery } from '@/lib/hooks/use-profiles'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { useChatSettingsMutation } from '@/hooks/useChatSettingsMutation'
 import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA, EMPTY_ADD_ONS } from '../types'
 import type { TemplateDelimiter, DelimiterAddOns, UnmarkedStyle } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
@@ -30,7 +32,6 @@ export interface UseRoleplayTemplatesReturn {
 
   // Data fetching
   fetchTemplates: () => Promise<void>
-  fetchChatSettings: () => Promise<void>
 
   // Modal handlers
   openCreateModal: () => void
@@ -191,7 +192,6 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [defaultSaving, setDefaultSaving] = useState(false)
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -204,57 +204,32 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  // Fetch templates and settings via TanStack Query
+  // The template list and the default pick, both from the shared cache.
   const queryClient = useQueryClient()
-  const { data: templatesData, isLoading: loading, refetch: mutateTemplates } = useQuery({
-    queryKey: queryKeys.roleplayTemplates.all,
-    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
-  })
-  const { data: chatSettingsData } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) =>
-      apiFetch<{ defaultRoleplayTemplateId?: string | null }>('/api/v1/settings/chat', { signal }),
-  })
+  const { data: templatesData, isLoading: loading, refetch: refetchTemplates } =
+    useRoleplayTemplatesQuery<RoleplayTemplate>()
+  const { data: defaultTemplateId = null } = useChatSettingsQuery(
+    (settings) => settings.defaultRoleplayTemplateId ?? null,
+  )
+  const { save: saveChatSettings, saving: defaultSaving } = useChatSettingsMutation()
 
   const templates = templatesData ?? []
-  const defaultTemplateId = chatSettingsData?.defaultRoleplayTemplateId ?? null
 
-  // Fetch helpers (backward compatibility)
   const fetchTemplates = useCallback(async () => {
-    await mutateTemplates()
-  }, [mutateTemplates])
-
-  const fetchChatSettings = useCallback(async () => {
-    // Settings already synced via SWR
-  }, [])
+    await refetchTemplates()
+  }, [refetchTemplates])
 
   const handleDefaultTemplateChange = async (templateId: string | null) => {
-    try {
-      setDefaultSaving(true)
-      setError(null)
-
-      const res = await fetch('/api/v1/settings/chat', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultRoleplayTemplateId: templateId }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(data?.error || `Failed to update default template (${res.status})`)
-      }
-
-      // The picker reads the shared settings row, so the saved value has to
-      // land in the cache or the selection snaps back until the next refetch.
-      queryClient.setQueryData(queryKeys.settings.chat, await res.json())
+    setError(null)
+    // The picker reads the shared settings row: the mutation writes it at
+    // once and rolls it back (with a toast) if the server refuses.
+    const ok = await saveChatSettings(
+      { defaultRoleplayTemplateId: templateId },
+      { failure: 'Failed to update default template' },
+    )
+    if (ok) {
       setSuccess('Default template updated successfully')
       setTimeout(() => setSuccess(null), 3000)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
-      setError(message)
-      console.error('Error updating default template:', message, err)
-    } finally {
-      setDefaultSaving(false)
     }
   }
 
@@ -305,7 +280,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         }
 
         await res.json()
-        await mutateTemplates()
+        await queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all })
         setSuccess('Template updated successfully')
       } else {
         // Create new template
@@ -321,7 +296,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         }
 
         const created = await res.json()
-        await mutateTemplates()
+        await queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all })
         setSuccess('Template created successfully')
       }
 
@@ -350,7 +325,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         throw new Error(data?.error || `Failed to delete template (${res.status})`)
       }
 
-      await mutateTemplates()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.roleplayTemplates.all })
       setSuccess('Template deleted successfully')
       setDeleteConfirm(null)
       setTimeout(() => setSuccess(null), 3000)
@@ -396,7 +371,6 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     previewTemplate,
     deleteConfirm,
     fetchTemplates,
-    fetchChatSettings,
     openCreateModal,
     openEditModal,
     closeModal,

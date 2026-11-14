@@ -241,7 +241,6 @@ File operations are exposed through versioned REST API routes:
 
 ### Orphaned File Cleanup
 - **POST `/api/v1/files?action=cleanup-orphans`** - Detect and clean up orphaned files (untracked files without database records). Supports dry-run mode (`dryRun: true`) to preview results before acting. Actions: `move` relocates unique orphans to `/orphans/` folder, `delete` removes all orphans permanently. De-duplication via SHA-256 hash automatically removes orphans whose content matches an existing tracked file.
-- **POST `/api/v1/files?action=cleanup-stale`** - Remove stale database entries for files no longer on disk
 
 ### File Permissions
 - **GET `/api/v1/files/write-permissions`** - Check folder write access

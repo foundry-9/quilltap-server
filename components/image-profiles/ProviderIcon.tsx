@@ -213,13 +213,13 @@ export function ProviderIcon({
 // Provider badge colors and labels
 const PROVIDER_BADGES: Record<string, { bg: string; text: string; label: string }> = {
   OPENAI: { bg: 'qt-bg-success/10', text: 'qt-text-success', label: 'OpenAI' },
-  GROK: { bg: 'qt-bg-primary/10', text: 'text-primary', label: 'Grok' },
+  GROK: { bg: 'qt-bg-primary/10', text: 'qt-text-brand', label: 'Grok' },
   GOOGLE_IMAGEN: { bg: 'qt-bg-info/10', text: 'qt-text-info', label: 'Google Imagen' },
   GOOGLE: { bg: 'qt-bg-info/10', text: 'qt-text-info', label: 'Google' },
   OPENROUTER: { bg: 'qt-bg-warning/10', text: 'qt-text-warning', label: 'OpenRouter' },
   Z_AI: { bg: 'qt-bg-success/10', text: 'qt-text-success', label: 'Z.AI' },
   NANOGPT: { bg: 'qt-bg-primary/10', text: 'qt-text-primary', label: 'NanoGPT' },
-  ETERNAL_AI: { bg: 'qt-bg-primary/10', text: 'text-primary', label: 'Eternal AI' },
+  ETERNAL_AI: { bg: 'qt-bg-primary/10', text: 'qt-text-brand', label: 'Eternal AI' },
   ANTHROPIC: { bg: 'qt-bg-warning/10', text: 'qt-text-warning', label: 'Anthropic' },
   OLLAMA: { bg: 'qt-bg-muted', text: 'qt-text-secondary', label: 'Ollama' },
   OPENAI_COMPATIBLE: { bg: 'qt-bg-muted', text: 'qt-text-secondary', label: 'OpenAI Compatible' },

@@ -6,8 +6,9 @@ url: /salon/:id
 
 > **[Open this page in Quilltap](/salon)**
 
-In an ordinary Salon the company takes its turns by rotation, and in a paused one it waits to be
-nudged. **Storyteller mode** is the third arrangement, for the host who prefers to run the table
+In an ordinary Salon the company takes its turns by rotation; in a Manual one it waits to be
+nudged; in Turns it runs one full round and then waits. **Storyteller mode** is the fourth
+arrangement, for the host who prefers to run the table
 like a magic-lantern showman: every time you speak, the whole company is asked, at once and in
 private, whether they wish to answer and what they mean to do. You read their intentions, tick the
 ones you like, and only those characters take the floor. Nobody else says a word, and nothing is
@@ -15,16 +16,17 @@ done to the world that you have not first seen proposed.
 
 ## Choosing the Mode
 
-The **Participants** drawer of the chat sidebar carries a three-way control:
+The **Participants** drawer of the chat sidebar carries a four-way control:
 
 | Position | What happens when you post |
 |---|---|
 | **Normal** | The company answers in its weighted rotation, as it always has |
-| **Paused** | Your post goes into the record and nobody answers until you nudge them |
+| **Manual** | Your post goes into the record and nobody answers until you nudge them |
+| **Turns** | Everyone present takes one turn (or passes), then the room waits for you |
 | **Storyteller** | Your post opens a *round*: every character bids, and you choose who speaks |
 
-Paused and Storyteller are independent. Pausing a storyteller chat records your posts without
-opening rounds; pressing **Storyteller** again resumes the bidding. Should the house pause the room
+Manual and Storyteller are independent. Setting a storyteller chat to Manual records your posts
+without opening rounds; pressing **Storyteller** again resumes the bidding. Should the house pause the room
 for you — a failed turn, a Stop — the mode is kept, and un-pausing returns you to it.
 
 Beneath the control, in Storyteller mode, sits **Invite by talkativeness**. Off (the default),

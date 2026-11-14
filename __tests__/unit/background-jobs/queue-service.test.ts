@@ -3,6 +3,10 @@ import {
   enqueueMemoryExtraction,
   enqueueMemoryExtractionBatch,
   enqueueCharacterAvatarGeneration,
+  enqueueDeduped,
+  enqueueEmbeddingGenerate,
+  enqueueSceneStateTracking,
+  enqueueTitleUpdate,
   getJobStatus,
   getQueueStats,
   cancelJob,
@@ -46,6 +50,7 @@ type MockBackgroundJobRepo = {
   getStats: jest.Mock;
   cancel: jest.Mock;
   findPendingForChat: jest.Mock;
+  findAbsorbers: jest.Mock;
   cleanupOldJobs: jest.Mock;
   cleanupOldJobsByStatus: jest.Mock;
 };
@@ -54,9 +59,12 @@ const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRep
 const mockEnsureProcessorRunning = ensureProcessorRunning as jest.MockedFunction<typeof ensureProcessorRunning>;
 
 let backgroundJobs: MockBackgroundJobRepo;
+/** The queue `findAbsorbers` reads: filtered by type and status, as the repository does. */
+let queued: Array<{ id: string; type: string; status: string; payload: Record<string, unknown> }>;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  queued = [];
 
   backgroundJobs = {
     create: jest.fn().mockResolvedValue({ id: 'job-123' }),
@@ -65,6 +73,8 @@ beforeEach(() => {
     getStats: jest.fn().mockResolvedValue({ pending: 1, processing: 0, completed: 0, failed: 0, dead: 0, paused: 0 }),
     cancel: jest.fn().mockResolvedValue(true),
     findPendingForChat: jest.fn().mockResolvedValue([{ id: 'job-77' }]),
+    findAbsorbers: jest.fn(async (type: string, statuses: string[]) =>
+      queued.filter(j => j.type === type && statuses.includes(j.status))),
     cleanupOldJobs: jest.fn().mockResolvedValue(5),
     cleanupOldJobsByStatus: jest.fn().mockResolvedValue({ completed: 3, dead: 1 }),
   };
@@ -114,8 +124,6 @@ describe('enqueueJob', () => {
 
 describe('enqueue helpers', () => {
   it('enqueues a per-turn memory extraction job and returns the job id', async () => {
-    backgroundJobs.findByUserId = jest.fn().mockResolvedValue([]);
-
     const payload = {
       chatId: 'chat-1',
       turnOpenerMessageId: 'user-msg-1',
@@ -237,9 +245,7 @@ describe('enqueueCharacterAvatarGeneration', () => {
   const payload = { chatId: 'chat-1', characterId: 'char-1' } as any;
 
   it('collapses onto a still-PENDING avatar job for the same character', async () => {
-    backgroundJobs.findPendingForChat.mockResolvedValue([
-      { id: 'avatar-pending', type: 'CHARACTER_AVATAR_GENERATION', status: 'PENDING', payload },
-    ]);
+    queued = [{ id: 'avatar-pending', type: 'CHARACTER_AVATAR_GENERATION', status: 'PENDING', payload }];
 
     const result = await enqueueCharacterAvatarGeneration('user-1', payload);
 
@@ -249,14 +255,72 @@ describe('enqueueCharacterAvatarGeneration', () => {
 
   it('enqueues a fresh job when the only avatar job is already PROCESSING', async () => {
     // A processing job has built its prompt; an outfit change after that must not be absorbed.
-    backgroundJobs.findPendingForChat.mockResolvedValue([
-      { id: 'avatar-running', type: 'CHARACTER_AVATAR_GENERATION', status: 'PROCESSING', payload },
-    ]);
+    queued = [{ id: 'avatar-running', type: 'CHARACTER_AVATAR_GENERATION', status: 'PROCESSING', payload }];
 
     const result = await enqueueCharacterAvatarGeneration('user-1', payload);
 
     expect(result.isNew).toBe(true);
     expect(result.jobId).toBe('job-123');
     expect(backgroundJobs.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('enqueueDeduped (refactor 4.13 §5.3)', () => {
+  const rule = (absorbs: 'pending' | 'active') => ({
+    key: (p: { chatId: string }) => p.chatId,
+    absorbs,
+    scope: 'chatId' as const,
+    label: 'Test',
+  });
+
+  it("'pending' reuses a queued job but not a running one", async () => {
+    queued = [{ id: 'running', type: 'TITLE_UPDATE', status: 'PROCESSING', payload: { chatId: 'c1' } }];
+    const fresh = await enqueueDeduped('u', 'TITLE_UPDATE', { chatId: 'c1' }, rule('pending'));
+    expect(fresh).toEqual({ jobId: 'job-123', isNew: true });
+    expect(backgroundJobs.findAbsorbers).toHaveBeenCalledWith('TITLE_UPDATE', ['PENDING'], {
+      userId: 'u', payloadField: 'chatId', payloadValue: 'c1',
+    });
+
+    queued.push({ id: 'waiting', type: 'TITLE_UPDATE', status: 'PENDING', payload: { chatId: 'c1' } });
+    const reused = await enqueueDeduped('u', 'TITLE_UPDATE', { chatId: 'c1' }, rule('pending'));
+    expect(reused).toEqual({ jobId: 'waiting', isNew: false });
+  });
+
+  it("'active' lets a running job absorb the request", async () => {
+    queued = [{ id: 'running', type: 'TITLE_UPDATE', status: 'PROCESSING', payload: { chatId: 'c1' } }];
+    const result = await enqueueDeduped('u', 'TITLE_UPDATE', { chatId: 'c1' }, rule('active'));
+    expect(result).toEqual({ jobId: 'running', isNew: false });
+    expect(backgroundJobs.create).not.toHaveBeenCalled();
+  });
+
+  it('compares keys, not just type', async () => {
+    queued = [{ id: 'other', type: 'TITLE_UPDATE', status: 'PENDING', payload: { chatId: 'c2' } }];
+    const result = await enqueueDeduped('u', 'TITLE_UPDATE', { chatId: 'c1' }, rule('active'));
+    expect(result.isNew).toBe(true);
+  });
+
+  it('enqueues anyway when the queue cannot be read', async () => {
+    backgroundJobs.findAbsorbers.mockRejectedValueOnce(new Error('db gone'));
+    const result = await enqueueDeduped('u', 'TITLE_UPDATE', { chatId: 'c1' }, rule('active'));
+    expect(result.isNew).toBe(true);
+  });
+
+  it('skipDedupCheck skips the read', async () => {
+    await enqueueDeduped('u', 'TITLE_UPDATE', { chatId: 'c1' }, rule('active'), { skipDedupCheck: true });
+    expect(backgroundJobs.findAbsorbers).not.toHaveBeenCalled();
+  });
+
+  it('handlers that read state when they run do not absorb into a running job', async () => {
+    queued = [
+      { id: 'scene-running', type: 'SCENE_STATE_TRACKING', status: 'PROCESSING', payload: { chatId: 'c1' } },
+      { id: 'embed-running', type: 'EMBEDDING_GENERATE', status: 'PROCESSING', payload: { entityId: 'e1' } },
+    ];
+    expect((await enqueueSceneStateTracking('u', { chatId: 'c1' } as any)).isNew).toBe(true);
+    expect((await enqueueEmbeddingGenerate('u', { entityId: 'e1', entityType: 'MOUNT_CHUNK', profileId: 'p' } as any)).isNew).toBe(true);
+  });
+
+  it('a title update at the same checkpoint is absorbed by the running job', async () => {
+    queued = [{ id: 'title-running', type: 'TITLE_UPDATE', status: 'PROCESSING', payload: { chatId: 'c1' } }];
+    expect(await enqueueTitleUpdate('u', { chatId: 'c1', connectionProfileId: 'p' } as any)).toBe('title-running');
   });
 });

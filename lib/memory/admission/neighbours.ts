@@ -164,8 +164,13 @@ async function unindexedNeighbourHits(
 
 /**
  * Follow a cold member's `supersededById` (up to {@link MAX_DIGEST_HOPS}) to the
- * digest that replaced it. A missing digest leaves the row as it is, marked
- * `danglingDigest`, so the decider treats it as a cold row nothing supersedes.
+ * digest that replaced it. A hop is followed only when the superseder is a
+ * digest (`source: 'CONSOLIDATED'`) whose `consolidatedFrom` lists the row: a
+ * contradiction also sends a row cold under the carrier of the newer fact, and
+ * redirecting there would absorb a restated old fact into the row that says
+ * the opposite (A7). A superseder that is missing, or is not a digest taking
+ * the row in, leaves the row as it is, marked `danglingDigest`, so the decider
+ * treats it as a cold row nothing supersedes.
  */
 async function resolveDigest(memory: Memory): Promise<{ memory: Memory; via?: string; danglingDigest?: boolean }> {
   if (memory.tier !== 'cold' || !memory.supersededById) return { memory }
@@ -173,11 +178,15 @@ async function resolveDigest(memory: Memory): Promise<{ memory: Memory; via?: st
   let current = memory
   for (let hop = 0; hop < MAX_DIGEST_HOPS && current.tier === 'cold' && current.supersededById; hop++) {
     const [digest] = await repos.memories.findByIds([current.supersededById])
-    if (!digest) {
-      log.debug('Superseding digest missing; the cold row stands for itself', {
-        memoryId: current.id,
-        supersededById: current.supersededById,
-      })
+    const takesItIn =
+      !!digest && digest.source === 'CONSOLIDATED' && (digest.consolidatedFrom ?? []).includes(current.id)
+    if (!takesItIn) {
+      log.debug(
+        digest
+          ? 'Superseder is not a digest listing the row (a contradiction); the cold row stands for itself'
+          : 'Superseding digest missing; the cold row stands for itself',
+        { memoryId: current.id, supersededById: current.supersededById },
+      )
       return current === memory
         ? { memory: current, danglingDigest: true }
         : { memory: current, via: memory.id, danglingDigest: true }

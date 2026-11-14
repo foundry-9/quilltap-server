@@ -32,6 +32,7 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { parseLLMJsonObject } from '@/lib/llm/llm-json'
 import { logger } from '@/lib/logger'
 import { IMPORTANCE_FACT_NOT_TELLING_NOTE, IMPORTANCE_WORK_CEILING_NOTE } from '@/lib/memory/extraction/prompts/shared'
+import { memoryDateStamp } from '@/lib/memory/time/clock'
 import { executeCheapLLMTask } from './core-execution'
 import type { CheapLLMTaskResult, UncensoredFallbackOptions } from './types'
 
@@ -307,6 +308,8 @@ export interface ConsolidationCallInput {
   existingDigest: string | null
   /** Members, oldest first. */
   members: ConsolidationMemberInput[]
+  /** The memory calendar the members' dates print on (#187); the cached instance zone when absent. */
+  timeZone?: string
 }
 
 function voiceLine(input: ConsolidationCallInput): string {
@@ -351,7 +354,7 @@ export function buildConsolidationUserMessage(input: ConsolidationCallInput): st
   }
   lines.push('NOTES (oldest first)')
   for (const m of input.members) {
-    const when = m.when ? m.when.slice(0, 10) : 'undated'
+    const when = memoryDateStamp(m.when, input.timeZone ? { timeZone: input.timeZone } : undefined) ?? 'undated'
     lines.push(
       `${m.handle} | ${when} | ${m.importance.toFixed(2)} | ${m.reinforcementCount} | ${oneLine(m.content)}`,
     )

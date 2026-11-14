@@ -3,7 +3,7 @@
 /**
  * OutfitSlotsPreview — read-only per-slot render of a decided outfit.
  *
- * Used by the chat-creation status dialog to show what an LLM-run character
+ * Used by the Salon's Green Room panel to show what an LLM-run character
  * chose to wear. Deliberately presentational: no add/remove/clear controls (the
  * interactive `EquippedSlotRow` is for the wardrobe editor). Reuses the same
  * slot labels and `qt-badge-wardrobe-*` classes so it reads as one system.
@@ -11,7 +11,7 @@
  * @module components/wardrobe/OutfitSlotsPreview
  */
 
-import type { OutfitPreviewSlots } from '@/lib/chat/creation-progress'
+import type { OutfitPreviewSlots } from '@/lib/chat/opening/narrator'
 import { WARDROBE_SLOT_TYPES, WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 
 const SLOTS = WARDROBE_SLOT_TYPES.map((key) => ({

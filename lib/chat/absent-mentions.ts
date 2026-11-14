@@ -38,7 +38,7 @@ export interface AbsentMention {
 /** The characters a mention scan may name. */
 export type MentionCandidate = Pick<
   Character,
-  'id' | 'name' | 'aliases' | 'pronouns' | 'identity' | 'description'
+  'id' | 'name' | 'aliases' | 'pronouns' | 'birthday' | 'metadata' | 'identity' | 'description'
 >
 
 /**
@@ -111,6 +111,8 @@ export function findAbsentMentions(input: {
             name: c.name,
             aliases: c.aliases ?? undefined,
             pronouns: c.pronouns ?? undefined,
+            birthday: c.birthday ?? undefined,
+            metadata: c.metadata,
             identity: c.identity ?? undefined,
             description: c.description ?? undefined,
           },

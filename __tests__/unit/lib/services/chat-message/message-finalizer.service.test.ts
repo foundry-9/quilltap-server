@@ -1,5 +1,6 @@
 import {
   finalizeMessageResponse,
+  finalizeScriptedOpener,
   saveAssistantMessage,
 } from '@/lib/services/chat-message/message-finalizer.service'
 import * as memoryTriggers from '@/lib/services/chat-message/memory-trigger.service'
@@ -86,6 +87,8 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   // The room's character map is loaded once per selection; these tests assert on
   // the reported next speaker, so it stands in as "no characters resolved".
   loadRoomCharacters: jest.fn().mockResolvedValue(new Map()),
+  isAllLLMChat: jest.fn().mockReturnValue(false),
+  loneCharacterHasAnswered: jest.requireActual('@/lib/chat/turn-manager/utils').loneCharacterHasAnswered,
   isUsersTurn: jest.fn(
     (result: { nextSpeakerId: string | null; reason?: string }) =>
       result.nextSpeakerId === null || result.reason === 'user_turn',
@@ -258,6 +261,88 @@ describe('message-finalizer.service', () => {
       nextSpeakerId: null,
       reason: 'user-turn',
       cycleComplete: true,
+    })
+
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() } as any
+    const encoder = new TextEncoder()
+
+    await finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Alice', aliases: ['Al'], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: false,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-3',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller,
+      encoder,
+      streaming: {
+        fullResponse: 'BLOCK:Alice: closing line',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: { provider: 'raw' },
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
+      },
+      compression: {
+        existingMessages: [],
+        content: 'hello',
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: {
+          enabled: true,
+          windowSize: 5,
+          compressionTargetTokens: 800,
+          systemPromptTargetTokens: 1500,
+          projectContextReinjectInterval: 5,
+        },
+        allProfiles: [],
+      },
+      triggers: {
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
+        chatSettings: {
+          cheapLLMSettings: { strategy: 'USER_DEFINED' },
+          autoDetectRng: false,
+        } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+    expect(memoryTriggers.triggerTurnMemoryExtraction).toHaveBeenCalled()
+  })
+
+  it('finalizeMessageResponse fires per-turn memory extraction when a lone character has answered (#225)', async () => {
+    const turnManager = jest.requireMock('@/lib/chat/turn-manager') as {
+      selectNextSpeaker: jest.Mock
+    }
+    // A persona-less one-on-one: the selector names the same character again
+    // (`only_character`), but the orchestrator hands the floor back, so the
+    // turn closes here.
+    turnManager.selectNextSpeaker.mockReturnValueOnce({
+      nextSpeakerId: 'participant-1',
+      reason: 'only_character',
+      cycleComplete: false,
     })
 
     const repos = createMockRepos()
@@ -868,5 +953,51 @@ describe('message-finalizer.service — inform consumption', () => {
     await expect(finalize([], repos, { vaultId: 'vault-a', paths: ['Mail/one.md'] })).rejects.toThrow('disk on fire')
 
     expect(markMailAlertsDelivered).not.toHaveBeenCalled()
+  })
+})
+
+describe('message-finalizer.service — the scripted opener', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('saves the scripted first line as the opener\'s reply and closes it as a generated one is closed', async () => {
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() } as any
+
+    const result = await finalizeScriptedOpener({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [{ id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' }],
+      } as any,
+      character: { id: 'char-1', name: 'Alice' } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' },
+      userParticipantId: null,
+      isMultiCharacter: false,
+      content: 'Welcome to the Drones Club, Alex.',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      chatSettings: { cheapLLMSettings: { strategy: 'USER_DEFINED' } } as any,
+      participantCharacters: new Map(),
+      controller,
+      encoder: new TextEncoder(),
+    })
+
+    // The speaker is recorded: an ASSISTANT row under the opener's seat, no model fields.
+    expect(repos.chats.addMessage).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      role: 'ASSISTANT',
+      content: 'Welcome to the Drones Club, Alex.',
+      participantId: 'participant-1',
+      provider: null,
+      modelName: null,
+    }))
+    expect(result).toEqual(expect.objectContaining({ hasContent: true, messageId: expect.any(String) }))
+    // The same tail as a generated reply: the done frame, the title check (the
+    // context-summary fold, which carries the auto-title and the Lantern's
+    // cue) and the danger classification. Nothing was spent, so no token tracking.
+    expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({ messageId: result.messageId, participantId: 'participant-1' }))
+    expect(memoryTriggers.triggerContextSummaryCheck).toHaveBeenCalled()
+    expect(memoryTriggers.triggerChatDangerClassification).toHaveBeenCalled()
+    expect(tokenTracking.trackMessageTokenUsage).not.toHaveBeenCalled()
   })
 })

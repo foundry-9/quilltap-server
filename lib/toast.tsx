@@ -18,7 +18,8 @@ let toastContainer: HTMLDivElement | null = null
 let toastRoot: ReturnType<typeof createRoot> | null = null
 let toasts: Toast[] = []
 
-function ensureContainer() {
+/** Creates the live region on first use; returns true when it was just made. */
+function ensureContainer(): boolean {
   if (!toastContainer) {
     toastContainer = document.createElement('div')
     // Polite live region: screen readers announce each toast as it lands.
@@ -38,7 +39,9 @@ function ensureContainer() {
     toastContainer.style.maxWidth = '400px'
     document.body.appendChild(toastContainer)
     toastRoot = createRoot(toastContainer)
+    return true
   }
+  return false
 }
 
 // Theme status colours: every bundle pairs each fill with a foreground at
@@ -90,7 +93,7 @@ function renderToasts() {
  * @param options - Configuration options (duration in ms, type of toast)
  */
 function showToast(message: string, options: ToastOptions = {}): string {
-  ensureContainer()
+  const regionIsNew = ensureContainer()
 
   const {
     duration = 3000,
@@ -107,7 +110,14 @@ function showToast(message: string, options: ToastOptions = {}): string {
   }
 
   toasts.push(toast)
-  renderToasts()
+  if (regionIsNew) {
+    // A live region only announces changes made after the screen reader has
+    // seen it, so the very first toast waits a beat for the empty region to
+    // register (WCAG 4.1.3) instead of arriving in the same tick.
+    setTimeout(renderToasts, 100)
+  } else {
+    renderToasts()
+  }
 
   // Auto-remove after duration
   setTimeout(() => {

@@ -12,11 +12,22 @@ import { getUserRepositories, getRepositories } from '@/lib/repositories/factory
 import type {
   Character,
   ChatMetadata,
-  ChatParticipantBase,
+  ConnectionProfile,
+  EmbeddingProfile,
+  ImageProfile,
   Project,
+  RoleplayTemplate,
 } from '@/lib/schemas/types';
+import {
+  remapEntity,
+  changedFields,
+  type IdEntity,
+  type IdResolver,
+  type IdTarget,
+} from '@/lib/backup/id-fields';
 import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
 import { remapScenarioSource } from '@/lib/scenarios/source-remap';
+import { remapConsoleContext } from '@/lib/brahma-console/context-remap';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { IdMappingState } from './types';
 import { remapImportedMessageId } from './message-id-remap';
@@ -170,8 +181,75 @@ async function discardScaffoldVault(
   }
 }
 
+/** Ids already present on this instance, per target; null when unreadable. */
+type LocalIds = Partial<Record<IdTarget, ReadonlySet<string> | null>>;
+
 /**
- * Updates all entity relationships with correct remapped IDs
+ * The import side's resolver: the id this import gave the row, else the id
+ * itself when the row is already on this instance, else unknown. A target
+ * whose local rows could not be read answers "present", so a failed read
+ * never clears a pointer.
+ */
+export function importResolver(idMaps: IdMappingState, local: LocalIds = {}): IdResolver {
+  const maps: Partial<Record<IdTarget, Map<string, string>>> = {
+    character: idMaps.characters,
+    chat: idMaps.chats,
+    tag: idMaps.tags,
+    connectionProfile: idMaps.connectionProfiles,
+    imageProfile: idMaps.imageProfiles,
+    embeddingProfile: idMaps.embeddingProfiles,
+    roleplayTemplate: idMaps.roleplayTemplates,
+    project: idMaps.projects,
+    group: idMaps.groups,
+    mountPoint: idMaps.mountPoints,
+  };
+  return (target, id) => {
+    const mapped = maps[target]?.get(id);
+    if (mapped) return mapped;
+    if (!(target in local)) return undefined;
+    const ids = local[target];
+    return ids === null || ids?.has(id) ? id : undefined;
+  };
+}
+
+/** Load the ids of the targets whose fields clear when unresolved. */
+async function loadLocalIds(repos: ReturnType<typeof getUserRepositories>): Promise<LocalIds> {
+  const globalRepos = getRepositories();
+  const load = async (target: IdTarget, read: () => Promise<Array<{ id: string }>>): Promise<[IdTarget, ReadonlySet<string> | null]> => {
+    try {
+      return [target, new Set((await read()).map((row) => row.id))];
+    } catch (error) {
+      moduleLogger.warn('Could not read local rows for reconciliation; their pointers are kept', {
+        target,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [target, null];
+    }
+  };
+  const entries = await Promise.all([
+    load('connectionProfile', () => repos.connections.findAll()),
+    load('imageProfile', () => repos.imageProfiles.findAll()),
+    load('embeddingProfile', () => repos.embeddingProfiles.findAll()),
+    load('roleplayTemplate', () => globalRepos.roleplayTemplates.findAll()),
+  ]);
+  // Terminal sessions never travel: an imported pointer to one always clears.
+  return { ...Object.fromEntries(entries), terminalSession: new Set<string>() };
+}
+
+/** Everything reconciliation remaps through the table: not messages, which follow at create. */
+const RECONCILE_TARGETS: ReadonlySet<IdTarget> = new Set<IdTarget>([
+  'character', 'chat', 'participant', 'tag', 'connectionProfile', 'imageProfile', 'embeddingProfile',
+  'roleplayTemplate', 'project', 'group', 'memory', 'file', 'folder', 'mountPoint', 'terminalSession',
+]);
+
+/**
+ * Rewrite every relationship of the rows this import wrote, now that every
+ * phase has populated the id maps. The fields come from the id-field table
+ * (`lib/backup/id-fields.ts`); the few it marks bespoke for import (a
+ * character's vault and avatars, a chat's scenario source and its
+ * character-keyed columns) are handled here by their own rules.
+ *
+ * Rows the import skipped are the instance's own and are left alone.
  */
 export async function reconcileRelationships(
   userId: string,
@@ -189,16 +267,38 @@ export async function reconcileRelationships(
 ): Promise<void> {
   moduleLogger.info('Starting post-import reconciliation', { userId });
 
-  const remapId = (id: string | null | undefined, idMap: Map<string, string>): string | null => {
-    if (!id) return null;
-    return idMap.get(id) || null;
-  };
+  const resolve = importResolver(idMaps, await loadLocalIds(repos));
+  const tableOptions = { side: 'import' as const, targets: RECONCILE_TARGETS };
+  /** Destination ids of the rows of one kind that this import wrote. */
+  const writtenOf = (idMap: Map<string, string>): string[] =>
+    [...new Set(idMap.values())].filter((id) => idMaps.writtenRows.has(id));
+  const remapId = (id: string | null | undefined, idMap: Map<string, string>): string | null =>
+    id ? idMap.get(id) ?? null : null;
 
-  const remapIdArray = (ids: string[] | undefined, idMap: Map<string, string>): string[] => {
-    if (!ids) return [];
-    return ids
-      .map((id) => idMap.get(id) || id)
-      .filter((id) => id !== null) as string[];
+  /** Remap one row through the table and write back the fields that changed. */
+  const reconcileRow = async <T extends object>(
+    noun: string,
+    entity: IdEntity,
+    id: string,
+    read: (id: string) => Promise<T | null>,
+    write: (id: string, patch: Partial<T>) => Promise<unknown>
+  ): Promise<void> => {
+    try {
+      const row = await read(id);
+      if (!row) return;
+      const { row: remapped, changed } = remapEntity(entity, row, resolve, tableOptions);
+      if (!remapped || changed.size === 0) return;
+      await write(id, changedFields(remapped, changed));
+      moduleLogger.debug('Reconciled imported row', { entity, id, fields: [...changed] });
+    } catch (error) {
+      warnings.push(
+        `Failed to reconcile ${noun} relationships: ${error instanceof Error ? error.message : String(error)}`
+      );
+      moduleLogger.warn(`Failed to reconcile ${noun}`, {
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   };
 
   // Reconcile characters
@@ -210,59 +310,17 @@ export async function reconcileRelationships(
       // needed"). Attempting the identity patch anyway would be refused by
       // the archived-row write guard and surface as a spurious warning.
       if (backupId === newId && idMaps.preserveIdsSkips.has(newId)) continue;
+      if (!idMaps.writtenRows.has(newId)) continue;
 
-      const character = await repos.characters.findById(newId);
-      if (!character) continue;
+      const stored = await repos.characters.findById(newId);
+      if (!stored) continue;
 
-      const updates: Partial<Character> = {};
-      let hasUpdates = false;
+      const remap = remapEntity('character', stored, resolve, tableOptions);
+      const character = remap.row ?? stored;
+      const updates: Partial<Character> = changedFields(character, remap.changed);
+      let hasUpdates = remap.changed.size > 0;
       /** Scaffold vault to cascade-delete once the repoint below has landed. */
       let scaffoldMountId: string | null = null;
-
-      // Remap tags
-      if (character.tags && character.tags.length > 0) {
-        const remappedTags = remapIdArray(character.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          updates.tags = remappedTags;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap defaultPartnerId (Characters Not Personas: default user-controlled character to pair with)
-      if (character.defaultPartnerId) {
-        const newPartnerId = remapId(character.defaultPartnerId, idMaps.characters);
-        if (newPartnerId) {
-          updates.defaultPartnerId = newPartnerId;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap defaultConnectionProfileId
-      if (character.defaultConnectionProfileId) {
-        const newConnProfileId = remapId(character.defaultConnectionProfileId, idMaps.connectionProfiles);
-        if (newConnProfileId) {
-          updates.defaultConnectionProfileId = newConnProfileId;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap defaultImageProfileId
-      if (character.defaultImageProfileId) {
-        const newImgProfileId = remapId(character.defaultImageProfileId, idMaps.imageProfiles);
-        if (newImgProfileId) {
-          updates.defaultImageProfileId = newImgProfileId;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap defaultRoleplayTemplateId
-      if (character.defaultRoleplayTemplateId) {
-        const newTemplateId = remapId(character.defaultRoleplayTemplateId, idMaps.roleplayTemplates);
-        if (newTemplateId) {
-          updates.defaultRoleplayTemplateId = newTemplateId;
-          hasUpdates = true;
-        }
-      }
 
       // The bundle carried this character's whole vault (WP A2), and
       // `create()` has already provisioned a scaffold vault whose fresh id is
@@ -309,7 +367,7 @@ export async function reconcileRelationships(
       }
 
       if (character.avatarOverrides && character.avatarOverrides.length > 0) {
-        let overridesChanged = false;
+        let overridesChanged = remap.changed.has('avatarOverrides');
         const remapped = await Promise.all(
           character.avatarOverrides.map(async (override) => {
             const remappedImageId = remapId(override.imageId, idMaps.docMountFileLinks);
@@ -366,54 +424,14 @@ export async function reconcileRelationships(
   }
 
   // Reconcile chats
-  for (const [backupId, newId] of idMaps.chats) {
+  for (const newId of writtenOf(idMaps.chats)) {
     try {
       const chat = await repos.chats.findById(newId);
       if (!chat) continue;
 
-      const updates: Partial<ChatMetadata> = {};
-      let hasUpdates = false;
-
-      // Remap participants
-      if (chat.participants && chat.participants.length > 0) {
-        updates.participants = chat.participants
-          .map((participant) => {
-            const remapped: ChatParticipantBase = { ...participant };
-
-            if (participant.characterId) {
-              const newCharId = remapId(participant.characterId, idMaps.characters);
-              if (newCharId) remapped.characterId = newCharId;
-            }
-
-            if (participant.connectionProfileId) {
-              const newConnId = remapId(
-                participant.connectionProfileId,
-                idMaps.connectionProfiles
-              );
-              if (newConnId) remapped.connectionProfileId = newConnId;
-            }
-
-            if (participant.imageProfileId) {
-              const newImgProfId = remapId(
-                participant.imageProfileId,
-                idMaps.imageProfiles
-              );
-              if (newImgProfId) remapped.imageProfileId = newImgProfId;
-            }
-
-            // Remap roleplayTemplateId
-            if (participant.roleplayTemplateId) {
-              const newTemplateId = remapId(
-                participant.roleplayTemplateId,
-                idMaps.roleplayTemplates
-              );
-              if (newTemplateId) remapped.roleplayTemplateId = newTemplateId;
-            }
-
-            return remapped;
-          });
-        hasUpdates = true;
-      }
+      const remap = remapEntity('chat', chat, resolve, tableOptions);
+      const updates: Partial<ChatMetadata> = remap.row ? changedFields(remap.row, remap.changed) : {};
+      let hasUpdates = remap.changed.size > 0;
 
       // Outfits, outfit avatars, Courier checkpoints and queued outfit notices
       // are keyed by character id (bug 252). A character the bundle did not
@@ -441,24 +459,6 @@ export async function reconcileRelationships(
         });
       }
 
-      // Remap tags
-      if (chat.tags && chat.tags.length > 0) {
-        const remappedTags = remapIdArray(chat.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          updates.tags = remappedTags;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap projectId
-      if (chat.projectId) {
-        const newProjectId = remapId(chat.projectId, idMaps.projects);
-        if (newProjectId) {
-          updates.projectId = newProjectId;
-          hasUpdates = true;
-        }
-      }
-
       // Re-point the scenario source at the imported copy of its store. A
       // source whose mount did not come across (and is not already in this
       // instance) is dropped rather than left dangling.
@@ -474,6 +474,43 @@ export async function reconcileRelationships(
             chatId: newId,
             fromMountPointId: source.mountPointId,
             toMountPointId: remapped?.mountPointId ?? null,
+          });
+        }
+      }
+
+      // A Writing Assistant context names chats, projects and stores by kind.
+      // Each id goes to the imported copy, else stays when this instance has
+      // the row already; an entry whose target is nowhere is dropped.
+      if (Array.isArray(chat.consoleContext) && chat.consoleContext.length > 0) {
+        const present = new Map<string, boolean>();
+        for (const ref of chat.consoleContext) {
+          if (ref.kind === 'general') continue;
+          const mapped =
+            ref.kind === 'chat' ? idMaps.chats.get(ref.id)
+            : ref.kind === 'project' ? idMaps.projects.get(ref.id)
+            : idMaps.mountPoints.get(ref.id);
+          if (mapped) continue;
+          const exists =
+            ref.kind === 'chat' ? !!(await getRepositories().chats.findById(ref.id))
+            : ref.kind === 'project' ? !!(await getRepositories().projects.findByIdRaw(ref.id))
+            : !!(await getRepositories().docMountPoints.findById(ref.id));
+          present.set(`${ref.kind}:${ref.id}`, exists);
+        }
+        const remappedContext = remapConsoleContext(chat.consoleContext, (kind, id) => {
+          const mapped =
+            kind === 'chat' ? idMaps.chats.get(id)
+            : kind === 'project' ? idMaps.projects.get(id)
+            : idMaps.mountPoints.get(id);
+          if (mapped) return mapped;
+          return present.get(`${kind}:${id}`) ? id : null;
+        }) ?? [];
+        if (JSON.stringify(remappedContext) !== JSON.stringify(chat.consoleContext)) {
+          updates.consoleContext = remappedContext;
+          hasUpdates = true;
+          moduleLogger.debug('Remapped Writing Assistant context', {
+            chatId: newId,
+            before: chat.consoleContext.length,
+            after: remappedContext.length,
           });
         }
       }
@@ -494,186 +531,24 @@ export async function reconcileRelationships(
     }
   }
 
-  // Reconcile projects
-  for (const [backupId, newId] of idMaps.projects) {
-    try {
-      const project = await repos.projects.findById(newId);
-      if (!project) continue;
-
-      const updates: Partial<Project> = {};
-      let hasUpdates = false;
-
-      // Remap characterRoster
-      if (project.characterRoster && project.characterRoster.length > 0) {
-        const remappedRoster = remapIdArray(project.characterRoster, idMaps.characters);
-        if (remappedRoster.length > 0) {
-          updates.characterRoster = remappedRoster;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap defaultImageProfileId
-      if (project.defaultImageProfileId) {
-        const newImgProfileId = remapId(project.defaultImageProfileId, idMaps.imageProfiles);
-        if (newImgProfileId) {
-          updates.defaultImageProfileId = newImgProfileId;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap brahmaConnectionProfileId (inline @Brahma's project profile)
-      if (project.brahmaConnectionProfileId) {
-        const newBrahmaProfileId = remapId(project.brahmaConnectionProfileId, idMaps.connectionProfiles);
-        if (newBrahmaProfileId) {
-          updates.brahmaConnectionProfileId = newBrahmaProfileId;
-          hasUpdates = true;
-        }
-      }
-
-      // Remap defaultRoleplayTemplateId (custom templates get fresh ids on import)
-      if (project.defaultRoleplayTemplateId) {
-        const newTemplateId = remapId(project.defaultRoleplayTemplateId, idMaps.roleplayTemplates);
-        if (newTemplateId) {
-          updates.defaultRoleplayTemplateId = newTemplateId;
-          hasUpdates = true;
-        }
-      }
-
-      if (hasUpdates) {
-        await repos.projects.update(newId, updates);
-      }
-    } catch (error) {
-      warnings.push(
-        `Failed to reconcile project relationships: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to reconcile project', {
-        projectId: newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  // Projects, profiles and templates: the table says it all.
+  for (const id of writtenOf(idMaps.projects)) {
+    await reconcileRow<Project>('project', 'project', id, (i) => repos.projects.findById(i), (i, patch) => repos.projects.update(i, patch));
   }
-
-  // Reconcile connection profiles (tags)
-  for (const [backupId, newId] of idMaps.connectionProfiles) {
-    try {
-      const profile = await repos.connections.findById(newId);
-      if (!profile) continue;
-
-      const updates: Record<string, unknown> = {};
-
-      if (profile.tags && profile.tags.length > 0) {
-        const remappedTags = remapIdArray(profile.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          updates.tags = remappedTags;
-        }
-      }
-
-      // Remap fallbackProfileId (the understudy). This has to happen in the
-      // reconcile pass rather than at insert time: a profile may name an
-      // understudy that appears *later* in the bundle, so the map is only
-      // complete once every profile has landed. A reference the map cannot
-      // resolve is left alone — buildFallbackChain() drops a target that
-      // isn't there, and clearing it would throw away a chain that a
-      // preserve-ids import got right.
-      if (profile.fallbackProfileId) {
-        const newFallbackId = remapId(profile.fallbackProfileId, idMaps.connectionProfiles);
-        if (newFallbackId && newFallbackId !== profile.fallbackProfileId) {
-          updates.fallbackProfileId = newFallbackId;
-        }
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await repos.connections.update(newId, updates);
-      }
-    } catch (error) {
-      warnings.push(
-        `Failed to reconcile connection profile relationships: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to reconcile connection profile', {
-        profileId: newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  // A profile may name an understudy that appears later in the bundle, so
+  // `fallbackProfileId` can only be remapped once every profile has landed.
+  for (const id of writtenOf(idMaps.connectionProfiles)) {
+    await reconcileRow<ConnectionProfile>('connection profile', 'connectionProfile', id, (i) => repos.connections.findById(i), (i, patch) => repos.connections.update(i, patch));
   }
-
-  // Reconcile image profiles (tags)
-  for (const [backupId, newId] of idMaps.imageProfiles) {
-    try {
-      const profile = await repos.imageProfiles.findById(newId);
-      if (!profile) continue;
-
-      if (profile.tags && profile.tags.length > 0) {
-        const remappedTags = remapIdArray(profile.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          await repos.imageProfiles.update(newId, { tags: remappedTags });
-        }
-      }
-    } catch (error) {
-      warnings.push(
-        `Failed to reconcile image profile relationships: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to reconcile image profile', {
-        profileId: newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  for (const id of writtenOf(idMaps.imageProfiles)) {
+    await reconcileRow<ImageProfile>('image profile', 'imageProfile', id, (i) => repos.imageProfiles.findById(i), (i, patch) => repos.imageProfiles.update(i, patch));
   }
-
-  // Reconcile embedding profiles (tags)
-  for (const [backupId, newId] of idMaps.embeddingProfiles) {
-    try {
-      const profile = await repos.embeddingProfiles.findById(newId);
-      if (!profile) continue;
-
-      if (profile.tags && profile.tags.length > 0) {
-        const remappedTags = remapIdArray(profile.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          await repos.embeddingProfiles.update(newId, { tags: remappedTags });
-        }
-      }
-    } catch (error) {
-      warnings.push(
-        `Failed to reconcile embedding profile relationships: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to reconcile embedding profile', {
-        profileId: newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  for (const id of writtenOf(idMaps.embeddingProfiles)) {
+    await reconcileRow<EmbeddingProfile>('embedding profile', 'embeddingProfile', id, (i) => repos.embeddingProfiles.findById(i), (i, patch) => repos.embeddingProfiles.update(i, patch));
   }
-
-  // Reconcile roleplay templates (tags)
   const globalRepos = getRepositories();
-  for (const [backupId, newId] of idMaps.roleplayTemplates) {
-    try {
-      const template = await globalRepos.roleplayTemplates.findById(newId);
-      if (!template) continue;
-
-      if (template.tags && template.tags.length > 0) {
-        const remappedTags = remapIdArray(template.tags, idMaps.tags);
-        if (remappedTags.length > 0) {
-          await globalRepos.roleplayTemplates.update(newId, { tags: remappedTags });
-        }
-      }
-    } catch (error) {
-      warnings.push(
-        `Failed to reconcile roleplay template relationships: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      moduleLogger.warn('Failed to reconcile roleplay template', {
-        templateId: newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  for (const id of writtenOf(idMaps.roleplayTemplates)) {
+    await reconcileRow<RoleplayTemplate>('roleplay template', 'roleplayTemplate', id, (i) => globalRepos.roleplayTemplates.findById(i), (i, patch) => globalRepos.roleplayTemplates.update(i, patch));
   }
 
   moduleLogger.info('Post-import reconciliation completed');

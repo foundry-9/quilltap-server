@@ -68,7 +68,7 @@ jest.mock('@/lib/instance-settings', () => ({ getGeneralMountPointId: jest.fn() 
 jest.mock('@/lib/wardrobe/expand-composites', () => ({ detectComponentCycles: jest.fn(() => []) }));
 
 const readMock = jest.fn(async () => ({ items: store.items.map((i) => ({ ...i })) }));
-jest.mock('@/lib/database/repositories/vault-overlay/vault-readers', () => ({
+jest.mock('@/lib/wardrobe/vault-readers', () => ({
   readCharacterVaultWardrobe: () => readMock(),
 }));
 
@@ -78,7 +78,7 @@ const projectMock = jest.fn(async (_mp: string, _owner: string, items: WardrobeI
   // A projection writes every item's id into its file.
   store.unstamped.clear();
 });
-jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-sync', () => ({
+jest.mock('@/lib/wardrobe/vault-sync', () => ({
   projectVaultWardrobe: (...a: [string, string, WardrobeItem[]]) => projectMock(...a),
 }));
 
@@ -146,7 +146,7 @@ import {
   renameFolderInMount,
   updateManyInMount,
   type WardrobeMount,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
+} from '@/lib/wardrobe/vault-writes';
 import {
   WardrobeFolderConflictError,
   WardrobeFolderNotFoundError,

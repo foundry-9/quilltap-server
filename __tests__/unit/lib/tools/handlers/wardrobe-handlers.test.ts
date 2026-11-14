@@ -203,7 +203,7 @@ describe('wardrobe tool handlers', () => {
       const result = await executeWardrobeListTool({}, context)
 
       expect(tieredMountPool.resolveGroupMountsForCharacter).toHaveBeenCalledWith('char-1')
-      expect(repos.wardrobe.readSharedTiers).toHaveBeenCalledWith(['grp-mount'], true, expect.any(Function))
+      expect(repos.wardrobe.readSharedTiers).toHaveBeenCalledWith(['grp-mount'], true, expect.any(Function), { strict: true })
       const byId = Object.fromEntries(result.items.map((i: any) => [i.item_id, i]))
       expect(byId['grp-item'].title).toBe('House Livery')
       expect(byId['grp-item'].is_own).toBe(false)
@@ -426,6 +426,18 @@ describe('wardrobe tool handlers', () => {
         },
         'wardrobe-create-handler',
       )
+    })
+
+    it('refuses an archived component (#184)', async () => {
+      ownItems = [makeWardrobeItem({ id: 'boots', title: 'Old Boots', types: ['footwear'], archivedAt: now })]
+
+      const result = await executeWardrobeCreateTool(
+        { title: 'Walking Out', types: ['footwear'], component_item_ids: ['boots'] },
+        context
+      )
+
+      expect(result.success).toBe(false)
+      expect(location.create).not.toHaveBeenCalled()
     })
 
     it('does not fire the outfit-change effects when the item is only hung up', async () => {

@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { DatabaseCollection, TypedQueryFilter, QueryOptions, UpdateSpec, BaseEntity } from '../interfaces';
 import { getDatabaseAsync, ensureCollection } from '../manager';
 import { logger } from '@/lib/logger';
-import { escapeRegex } from '@/lib/utils/regex';
 import { safeQuery as standaloneSafeQuery, extractErrorMessage } from './safe-query';
 
 // ============================================================================
@@ -168,13 +167,6 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
    */
   protected getCurrentTimestamp(): string {
     return new Date().toISOString();
-  }
-
-  /**
-   * Escape special regex characters in a string for safe use in RegExp construction
-   */
-  protected escapeRegex(str: string): string {
-    return escapeRegex(str);
   }
 
   /**

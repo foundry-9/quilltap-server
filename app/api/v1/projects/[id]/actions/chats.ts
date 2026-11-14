@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { exists, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
+import { readPagination } from '@/lib/api/query-params';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { addChatSchema, removeChatSchema } from '../schemas';
@@ -30,9 +31,7 @@ export async function handleListChats(
     }
 
     // Parse pagination params
-    const { searchParams } = req.nextUrl;
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const { limit, offset } = readPagination(req, { defaultLimit: 20, maxLimit: 200 });
 
     const allChats = await repos.chats.findAll();
     const projectChats = allChats.filter(c => c.projectId === projectId);

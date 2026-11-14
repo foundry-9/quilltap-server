@@ -33,7 +33,7 @@ import { linkifyBareQtapUris } from '@/lib/chat/qtap-linkify'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { QtapLink } from '@/components/qtap/QtapLink'
 import { HiddenInlineImage, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
-import { MentionChipsContext, withMentionChips, type AbsentMentionChip } from '@/components/chat/MentionChip'
+import { MentionChipsContext, withMentionChips, type MentionChipData } from '@/components/chat/MentionChip'
 import { rehypeMentionMarkers } from '@/lib/chat/mention-markers'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
@@ -63,7 +63,7 @@ interface MessageContentProps {
    * Absent characters first named in this message: each one's first eligible
    * occurrence becomes a chip with their card on hover (the Salon only).
    */
-  mentions?: ReadonlyArray<AbsentMentionChip>
+  mentions?: ReadonlyArray<MentionChipData>
   /**
    * Draw closed diagram fences (```mermaid / ```dot / ```graphviz / ```svg)
    * as diagrams rather than code. Only the Salon passes this; every other

@@ -48,10 +48,10 @@ export default function TagsTab() {
     queryFn: ({ signal }) => apiFetch<{ tags: TagOption[] }>('/api/v1/tags', { signal }),
   })
 
-  // Sync SWR data to local state for UI mutations
+  // Copy the query data into local state the UI mutates
   useEffect(() => {
     if (data?.tags) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- tags query data is copied into local state that the save/delete handlers update optimistically
       setTagOptions(data.tags)
     }
   }, [data?.tags])
@@ -245,7 +245,7 @@ export default function TagsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="qt-loading-state">
         <div className="qt-text-secondary">Loading settings...</div>
       </div>
     )
@@ -309,7 +309,7 @@ export default function TagsTab() {
                     </div>
 
                     <div className="space-y-3">
-                      <label className="block qt-text-label text-foreground">
+                      <label className="block qt-text-label qt-text">
                         Emoji
                         <input
                           type="text"
@@ -323,7 +323,7 @@ export default function TagsTab() {
                       </label>
 
                       <div className="space-y-2 pt-1">
-                        <label className="flex items-center gap-2 qt-text-label text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label qt-text">
                           <input
                             type="checkbox"
                             checked={mergedStyle.emojiOnly ?? false}
@@ -334,7 +334,7 @@ export default function TagsTab() {
                           <span>Show emoji only</span>
                         </label>
 
-                        <label className="flex items-center gap-2 qt-text-label text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label qt-text">
                           <input
                             type="checkbox"
                             checked={mergedStyle.bold ?? false}
@@ -345,7 +345,7 @@ export default function TagsTab() {
                           <span className="font-bold">Bold</span>
                         </label>
 
-                        <label className="flex items-center gap-2 qt-text-label text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label qt-text">
                           <input
                             type="checkbox"
                             checked={mergedStyle.italic ?? false}
@@ -356,7 +356,7 @@ export default function TagsTab() {
                           <span className="italic">Italic</span>
                         </label>
 
-                        <label className="flex items-center gap-2 qt-text-label text-foreground">
+                        <label className="flex items-center gap-2 qt-text-label qt-text">
                           <input
                             type="checkbox"
                             checked={mergedStyle.strikethrough ?? false}
@@ -368,7 +368,7 @@ export default function TagsTab() {
                         </label>
 
                         <div className="pt-2 mt-2 border-t border-dashed qt-border-default">
-                          <label className="flex items-center gap-2 qt-text-label text-foreground">
+                          <label className="flex items-center gap-2 qt-text-label qt-text">
                             <input
                               type="checkbox"
                               checked={quickHideEnabled}
@@ -384,7 +384,7 @@ export default function TagsTab() {
                         </div>
                       </div>
 
-                      <label className="block qt-text-label text-foreground">
+                      <label className="block qt-text-label qt-text">
                         Border + Font Color
                         <input
                           type="color"
@@ -395,7 +395,7 @@ export default function TagsTab() {
                         />
                       </label>
 
-                      <label className="block qt-text-label text-foreground">
+                      <label className="block qt-text-label qt-text">
                         Background Color
                         <input
                           type="color"
@@ -420,7 +420,7 @@ export default function TagsTab() {
               })}
             </div>
           ) : (
-            <div className="qt-text-small border border-dashed qt-border-default rounded-lg p-4">
+            <div className="qt-text-small border qt-border-default rounded-lg p-4 border-dashed">
               No custom tag styles yet. Select a tag above to add an emoji and colors.
             </div>
           )}
@@ -435,7 +435,7 @@ export default function TagsTab() {
         </p>
 
         {tagOptions.length > 0 ? (
-          <div className="border qt-border-default rounded-lg divide-y divide-border">
+          <div className="border qt-border-default rounded-lg divide-y qt-divide-default">
             {[...tagOptions].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
               const usage = tag.totalUsage ?? 0
 
@@ -471,7 +471,7 @@ export default function TagsTab() {
             })}
           </div>
         ) : (
-          <div className="qt-text-small border border-dashed qt-border-default rounded-lg p-4">
+          <div className="qt-text-small border qt-border-default rounded-lg p-4 border-dashed">
             No tags exist yet. Tags are created when you assign them to characters, profiles, or other content.
           </div>
         )}

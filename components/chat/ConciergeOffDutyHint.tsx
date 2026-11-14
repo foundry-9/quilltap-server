@@ -8,8 +8,9 @@
  */
 
 import Link from 'next/link'
+import { settingsCardHref } from '@/lib/settings/hrefs'
 
-export const CONCIERGE_OFF_DUTY_SETTINGS_URL = '/settings?tab=concierge&section=on-duty'
+export const CONCIERGE_OFF_DUTY_SETTINGS_URL = settingsCardHref('on-duty')
 
 export function ConciergeOffDutyHint({ className }: { className?: string }) {
   return (

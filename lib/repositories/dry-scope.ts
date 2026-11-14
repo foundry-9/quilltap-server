@@ -58,11 +58,6 @@ export function isInDryScope(): boolean {
   return dryScopeStore.getStore() !== undefined;
 }
 
-/** The writes the current dry scope has discarded so far (tests, diagnostics). */
-export function dryScopeDiscardedWrites(): ReadonlyMap<string, number> {
-  return dryScopeStore.getStore()?.discarded ?? new Map();
-}
-
 const wrappedContainers = new WeakMap<RepositoryContainer, RepositoryContainer>();
 
 /** The dry wrapper over a real container (cached per container). */

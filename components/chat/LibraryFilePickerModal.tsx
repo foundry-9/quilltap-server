@@ -20,6 +20,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useDocumentStoresQuery } from '@/lib/hooks/use-document-stores'
+import { useProjectsQuery } from '@/lib/hooks/use-projects'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
@@ -69,10 +71,6 @@ interface MountPointSummary {
   enabled: boolean
 }
 
-interface MountPointsResponse {
-  mountPoints: MountPointSummary[]
-}
-
 interface GalleryEntry {
   linkId: string
   mountPointId: string
@@ -120,22 +118,15 @@ export default function LibraryFilePickerModal({
   const [selectedMount, setSelectedMount] = useState<MountPointSummary | null>(null)
   const [linking, setLinking] = useState(false)
 
-  const { data: projectsData, isLoading: projectsLoading } = useQuery({
-    queryKey: queryKeys.projects.list(),
-    queryFn: ({ signal }) => apiFetch<{ projects: Project[] }>('/api/v1/projects', { signal }),
-    enabled: isOpen,
-  })
-  const projects = projectsData?.projects || []
+  const { data: projectsData, isLoading: projectsLoading } = useProjectsQuery<Project>({ enabled: isOpen })
+  const projects = projectsData ?? []
 
-  const { data: mountsData, isLoading: mountsLoading } = useQuery({
-    queryKey: queryKeys.mountPoints.list(),
-    queryFn: ({ signal }) => apiFetch<MountPointsResponse>('/api/v1/mount-points', { signal }),
-    enabled: isOpen,
-  })
+  const { data: mountsData, isLoading: mountsLoading } =
+    useDocumentStoresQuery<MountPointSummary>({ enabled: isOpen })
   // Show database-backed stores that aren't private character vaults — those
   // are managed via the character optimizer / Aurora tab and are conceptually
   // off-limits for the human composer.
-  const docStores = (mountsData?.mountPoints || []).filter(
+  const docStores = (mountsData ?? []).filter(
     mp => mp.enabled && mp.mountType === 'database' && mp.storeType !== 'character'
   )
 
@@ -558,7 +549,7 @@ function ScopeCard({
     >
       <span className="text-xl">{icon}</span>
       <div>
-        <div className="font-medium text-foreground">{title}</div>
+        <div className="font-medium qt-text">{title}</div>
         {subtitle && <div className="qt-text-muted text-sm">{subtitle}</div>}
       </div>
     </button>

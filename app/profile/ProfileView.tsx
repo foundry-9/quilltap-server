@@ -32,7 +32,7 @@ export function ProfileView() {
   if (isLoading) {
     return (
       <div className="qt-page-container">
-        <div className="flex items-center justify-center py-12">
+        <div className="qt-loading-state py-12">
           <div className="qt-text-muted">Loading profile...</div>
         </div>
       </div>
@@ -58,7 +58,7 @@ export function ProfileView() {
       <div className="mb-8">
         <Link
           href="/"
-          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label qt-text-brand transition hover:qt-text-brand/80"
         >
           ← Back to Home
         </Link>

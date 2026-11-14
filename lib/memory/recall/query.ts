@@ -27,6 +27,7 @@ import { executeCheapLLMTask, type CheapLLMLatencyClass } from '../cheap-llm-tas
 import type { ChatMessage, CheapLLMTaskResult } from '../cheap-llm-tasks/types'
 import type { ExtractionClock } from '../extraction/prompts/shared'
 import { logger } from '@/lib/logger'
+import { renderLabelledTranscript, type SpeakerNames } from '@/lib/chat/speaker-names'
 import { stripCodeFences } from '@/lib/llm/llm-json'
 import { generateEmbeddingForUser, type EmbeddingResult } from '@/lib/embedding/embedding-service'
 import { traceStage, type RecallTrace } from './types'
@@ -120,6 +121,9 @@ export interface MemorySearchExtraction {
  */
 const DAY_REFERENCE_SCAN_MESSAGES = 4
 
+/** Most search keywords one distillation keeps. */
+const MAX_SEARCH_KEYWORDS = 10
+
 
 /**
  * Merge a deterministically-resolved day reference into the LLM's parsed
@@ -186,6 +190,8 @@ function mergeDayReference(
  *   delivery and takes the `background` default; the dynamic-head fallback in
  *   `context-manager` is awaited inline while the composer is empty and must
  *   pass `interactive` (bug 115).
+ * @param speakerNames - participantId → name (`resolveSpeakerNames`); lines
+ *   with no resolvable seat read `User` / `Character`.
  * @returns Keywords for memory search plus an optional turn-level temporal/context guess
  */
 export async function extractMemorySearchKeywords(
@@ -196,17 +202,17 @@ export async function extractMemorySearchKeywords(
   chatId?: string,
   characterId?: string,
   clock?: ExtractionClock,
-  latency: CheapLLMLatencyClass = 'background'
+  latency: CheapLLMLatencyClass = 'background',
+  speakerNames: SpeakerNames = new Map()
 ): Promise<CheapLLMTaskResult<MemorySearchExtraction>> {
   // Truncate messages to keep cheap LLM call fast
   const cappedMessages = recentMessages.slice(-20)
-  const conversationText = cappedMessages
-    .map(m => {
-      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
-      const content = m.content.length > 500 ? m.content.substring(0, 500) + '...' : m.content
-      return `${speaker}: ${content}`
-    })
-    .join('\n\n')
+  const conversationText = renderLabelledTranscript(cappedMessages, speakerNames, { maxChars: 500 })
+  logger.debug('[extractMemorySearchKeywords] Rendered labelled transcript', {
+    chatId,
+    lines: cappedMessages.length,
+    namedSeats: speakerNames.size,
+  })
 
   // TODAY line (variable — user content, never the cached system prompt) so
   // the model can resolve "last week" into an absolute timeRange.
@@ -270,7 +276,7 @@ export async function extractMemorySearchKeywords(
         const keywords = Array.isArray(rawKeywords)
           ? rawKeywords
               .filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
-              .slice(0, 10)
+              .slice(0, MAX_SEARCH_KEYWORDS)
           : []
 
         const rawTemporal =
@@ -389,6 +395,8 @@ export interface BuildRecallQueryInput {
     characterId?: string
     clock?: ExtractionClock
     latency?: CheapLLMLatencyClass
+    /** participantId → name for labelling `messages` (`resolveSpeakerNames`). */
+    speakerNames?: SpeakerNames
   }
   /**
    * Reuse embeddings by text across calls. The provider's vectors for one text
@@ -434,6 +442,7 @@ export async function buildRecallQuery(
         d.characterId,
         d.clock,
         d.latency,
+        d.speakerNames,
       )
       if (result.success && result.result) {
         signals = result.result

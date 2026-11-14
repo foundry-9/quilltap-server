@@ -23,6 +23,7 @@ import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
 import { requestMessageReveal } from '@/lib/chat/message-navigation'
 import { TAB_KINDS, standaloneDocKey, type DocumentStandaloneTabPayload, type TabKind } from '@/lib/workspace/types'
+import { resolveCharacterPageSection } from '@/lib/characters/page-sections'
 
 const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>(TAB_KINDS)
 
@@ -55,7 +56,9 @@ export function WorkspaceIntent() {
       return
     }
 
-    const kind = open as TabKind
+    // `character-view` / `character-edit` are the retired kinds of the one
+    // character page; an old `?open=` link still lands on it.
+    const kind = (open === 'character-view' || open === 'character-edit' ? 'character' : open) as TabKind
     if (OPENABLE_KINDS.has(kind)) {
       const chatId = searchParams.get('chatId') || undefined
       const tab = searchParams.get('tab') || undefined
@@ -64,7 +67,16 @@ export function WorkspaceIntent() {
 
       let payload: unknown
       if (CHAT_KINDS.has(kind)) payload = chatId ? { chatId } : undefined
-      else if (kind === 'settings') payload = { tab, section }
+      else if (kind === 'settings') {
+        payload = {
+          group: searchParams.get('group') || undefined,
+          tab,
+          section,
+          persona: searchParams.get('persona') || undefined,
+          q: searchParams.get('q') || undefined,
+          provider: searchParams.get('provider') || undefined,
+        }
+      }
       else if (kind === 'custom-tools') {
         const mountPointId = searchParams.get('mount') || undefined
         const path = searchParams.get('path') || undefined
@@ -73,7 +85,14 @@ export function WorkspaceIntent() {
       }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
       else if (kind === 'inventory') payload = characterId ? { characterId } : undefined
-      else if (kind === 'character-edit' || kind === 'character-view') payload = characterId ? { characterId, tab } : undefined
+      else if (kind === 'atlas') {
+        const projectId = searchParams.get('projectId') || undefined
+        payload = characterId || projectId ? { ...(characterId && { characterId }), ...(projectId && { projectId }) } : undefined
+      }
+      else if (kind === 'character') {
+        const sectionId = resolveCharacterPageSection(section, tab)
+        payload = characterId ? { characterId, ...(sectionId ? { section: sectionId } : {}) } : undefined
+      }
       else if (kind === 'prospero') {
         const projectId = searchParams.get('projectId') || undefined
         payload = projectId ? { projectId } : undefined
@@ -105,7 +124,7 @@ export function WorkspaceIntent() {
       // Chat-bound kinds need a chatId and the character editor/detail needs a
       // characterId; skip opening when the required id is missing.
       const missingChatId = CHAT_KINDS.has(kind) && !chatId
-      const missingCharacterId = (kind === 'character-edit' || kind === 'character-view') && !characterId
+      const missingCharacterId = kind === 'character' && !characterId
       if (!missingChatId && !missingCharacterId) {
         if (kind === 'terminal' && chatId) {
           // A terminal tab is a portal fed by its Salon view — open (and mount)
@@ -115,9 +134,9 @@ export function WorkspaceIntent() {
           openTab('terminal', { chatId, sessionId }, { parentTabId: salonTabId })
         } else {
           openTab(kind, payload)
-          // The character detail's `?action=chat` deep-link: also pop the
+          // The character page's `?action=chat` deep-link: also pop the
           // new-chat modal with the character preselected (legacy-page parity).
-          if (kind === 'character-view' && characterId && searchParams.get('action') === 'chat') {
+          if (kind === 'character' && characterId && searchParams.get('action') === 'chat') {
             openNewChat?.({ characterId })
           }
           // `/salon/<id>?msg=<messageId>` (a Message search result) arrives

@@ -70,6 +70,8 @@ export interface ItemActionMenuProps {
   room?: number
   /** Tailwind min-width of the menu. */
   minWidthClass?: string
+  /** Extra classes for the wrapper around the button (e.g. `h-full` for a trigger that fills its row). */
+  containerClassName?: string
 }
 
 const ENTRY_CLASS = 'block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50'
@@ -90,6 +92,7 @@ export function ItemActionMenu({
   room,
   minWidthClass = 'min-w-[14rem]',
   trigger,
+  containerClassName,
 }: ItemActionMenuProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -131,7 +134,7 @@ export function ItemActionMenu({
   if (items.length === 0) return null
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className={containerClassName ? `relative ${containerClassName}` : 'relative'} ref={containerRef}>
       <button
         ref={anchorRef}
         type="button"

@@ -1,16 +1,16 @@
 ---
-url: /settings?tab=system
+url: /settings?group=data-maintenance
 ---
 
 # System Tools
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?group=data-maintenance)**
 
-**Settings** (`/settings`) is your command center for managing and maintaining your Quilltap system. The **Data & System** tab provides utilities for backing up your data, importing/exporting, monitoring tasks, and managing your system's capabilities.
+**Settings** (`/settings`) is your command center for managing and maintaining your Quilltap system. The **Data & Maintenance** group provides utilities for backing up your data, importing/exporting, monitoring tasks, and managing your system's capabilities.
 
 ## Accessing Settings
 
-Navigate to **Settings** in Quilltap at `/settings` or through your app's navigation menu, then click the **Data & System** tab. The page displays several utility cards, each providing different system management features.
+Navigate to **Settings** in Quilltap at `/settings` or through your app's navigation menu, then open the **Data & Maintenance** group in the left rail. The page displays several utility cards, each providing different system management features.
 
 ## Available Tools
 
@@ -56,7 +56,7 @@ For detailed instructions, see [Import & Export Data](system-import-export.md).
 
 ### 3. Memory Maintenance
 
-**Purpose:** Fold repeated memories into one, consolidate related notes into digests, and keep each character under the cap. It lives on the Commonplace Book tab, as the **Maintenance** card; the old Near-Duplicate Folding tool is now the first step of its round.
+**Purpose:** Fold repeated memories into one, consolidate related notes into digests, and keep each character under the cap. It lives in the Context & Memory group of Settings, as the **Maintenance** card; the old Near-Duplicate Folding tool is now the first step of its round.
 
 **How to use it:** press **Run maintenance…**, choose a character or *Every character*, tick the steps, and press **Dry run** to see what each would do — the folding and cap steps can be rehearsed across every character at once and cost nothing, as no model is consulted. **Run for real** queues the round in the background.
 
@@ -157,19 +157,19 @@ For detailed instructions, see [Deleting Your Data](system-delete-data.md).
 
 **For data safety:**
 
-1. Go to **Settings** (`/settings?tab=system`)
+1. Go to **Settings** (`/settings?group=data-maintenance`)
 2. Click **Backup & Restore**
 3. Create a backup
 
 **To transfer data:**
 
-1. Go to **Settings** (`/settings?tab=system`)
+1. Go to **Settings** (`/settings?group=data-maintenance`)
 2. Click **Import / Export**
 3. Choose Export to save your data
 
 **To monitor system:**
 
-1. Go to **Settings** (`/settings?tab=system`)
+1. Go to **Settings** (`/settings?group=data-maintenance`)
 2. Check **Tasks Queue** for active jobs
 3. View **LLM Logs** for recent activity
 
@@ -197,7 +197,7 @@ For detailed instructions, see [Deleting Your Data](system-delete-data.md).
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system")`
+`help_navigate(url: "/settings?group=data-maintenance")`
 
 ## Related Topics
 

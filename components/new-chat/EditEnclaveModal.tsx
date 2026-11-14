@@ -1,10 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { AutonomousRoomCard } from './AutonomousRoomCard'
-import { toAutonomousSettingsHint, type AutonomousSettingsHint } from './autonomous-settings-hint'
+import { toAutonomousSettingsHint } from './autonomous-settings-hint'
 import type { NewChatAutonomousState } from './types'
 
 const MS_PER_HOUR = 60 * 60 * 1000
@@ -84,54 +88,48 @@ export function EditEnclaveModal({
   currentTitle,
   onSaved,
 }: EditEnclaveModalProps) {
+  const queryClient = useQueryClient()
   const [title, setTitle] = useState(currentTitle)
   const [auto, setAuto] = useState<NewChatAutonomousState>(EMPTY_STATE)
-  const [settingsHint, setSettingsHint] = useState<AutonomousSettingsHint | undefined>(undefined)
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
-  // Load current settings + the user-level hints each time the modal opens.
-  useEffect(() => {
-    if (!isOpen || !chatId) return
-    let cancelled = false
+  // The room's current settings, re-read each time the modal opens; the user's
+  // autonomous-room defaults ride the shared chat-settings query.
+  const statusQuery = useQuery({
+    queryKey: queryKeys.chats.autonomousRoom(chatId),
+    queryFn: ({ signal }) => apiFetch<RoomStatus>(`/api/v1/chats/${chatId}/autonomous-room`, { signal }),
+    enabled: isOpen && Boolean(chatId),
+    refetchOnMount: 'always',
+  })
+  const { data: settingsHint } = useChatSettingsQuery(toAutonomousSettingsHint, { enabled: isOpen })
+  const loading = statusQuery.isFetching && !statusQuery.data
+  const loadError = statusQuery.error ? 'Could not load this enclave’s settings.' : null
 
-    const load = async () => {
-      setLoading(true)
-      setLoadError(null)
-      setTitle(currentTitle)
-      try {
-        const [statusRes, settingsRes] = await Promise.all([
-          fetch(`/api/v1/chats/${chatId}/autonomous-room`),
-          fetch('/api/v1/settings/chat'),
-        ])
-        if (cancelled) return
+  // Seed the editable form from each fresh read, and the title on each open
+  // (state adjusted during render, React's pattern for state that follows data).
+  const [seededFrom, setSeededFrom] = useState<RoomStatus | undefined>(undefined)
+  if (statusQuery.data && statusQuery.data !== seededFrom) {
+    setSeededFrom(statusQuery.data)
+    setAuto(statusToFormState(statusQuery.data))
+  }
+  const [seenOpen, setSeenOpen] = useState(false)
+  if (isOpen !== seenOpen) {
+    setSeenOpen(isOpen)
+    if (isOpen) setTitle(currentTitle)
+  }
 
-        if (!statusRes.ok) {
-          throw new Error('Could not load this enclave’s settings.')
-        }
-        const status = (await statusRes.json()) as RoomStatus
-        setAuto(statusToFormState(status))
-
-        if (settingsRes.ok) {
-          const settings = await settingsRes.json()
-          setSettingsHint(toAutonomousSettingsHint(settings))
-        }
-      } catch (err) {
-        if (cancelled) return
-        const msg = err instanceof Error ? err.message : 'Failed to load enclave settings'
-        setLoadError(msg)
-        console.error('[EditEnclaveModal] Failed to load settings', { chatId, error: msg })
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, chatId, currentTitle])
+  const saveMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      apiFetch(`/api/v1/chats/${chatId}/autonomous-room?action=update-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chats.autonomousRoom(chatId) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.system.autonomousRooms })
+    },
+  })
+  const saving = saveMutation.isPending
 
   const updateAuto = useCallback((patch: Partial<NewChatAutonomousState>) => {
     setAuto((prev) => ({ ...prev, ...patch }))
@@ -166,25 +164,14 @@ export function EditEnclaveModal({
     }
 
     try {
-      setSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}/autonomous-room?action=update-settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(data?.error || 'Failed to update enclave')
-      }
+      await saveMutation.mutateAsync(body)
       showSuccessToast('Enclave updated')
       onSaved?.(trimmedTitle)
       onClose()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to update enclave'
+      const msg = apiErrorMessage(err, 'Failed to update enclave')
       showErrorToast(msg)
       console.error('[EditEnclaveModal] Failed to save', { chatId, error: msg })
-    } finally {
-      setSaving(false)
     }
   }
 

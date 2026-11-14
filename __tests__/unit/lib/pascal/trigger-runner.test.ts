@@ -31,7 +31,7 @@ import { resolveCustomToolRoster } from '@/lib/pascal/custom-tools';
 import { runCustomTool } from '@/lib/pascal/run-service';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 import { MAX_TRIGGER_RUNS_PER_MESSAGE } from '@/lib/pascal/trigger-phrases';
-import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
+import { CharacterVaultUnavailableError } from '@/lib/characters/vault/layout';
 
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;
 const rosterMock = resolveCustomToolRoster as jest.Mock;

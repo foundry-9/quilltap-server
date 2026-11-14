@@ -286,7 +286,7 @@ export const chatInventoryResetSchema = z.object({
 export const InventoryScopeSchema = z.enum(['character', 'group', 'project', 'general']);
 export type InventoryScope = z.infer<typeof InventoryScopeSchema>;
 
-/** `POST /api/v1/inventory/transfers` body. */
+/** `POST /api/v1/inventory?action=move-to-tier|copy-to-tier` body (`action` supplied from the query; the deprecated `/transfers` path takes it in the body). */
 export const inventoryTransferSchema = z.object({
   action: z.enum(['move', 'copy']),
   itemId: UUIDSchema,

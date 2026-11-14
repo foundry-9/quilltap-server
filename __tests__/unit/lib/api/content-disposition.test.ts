@@ -9,6 +9,21 @@
 import { buildContentDisposition } from '@/lib/api/content-disposition'
 
 describe('buildContentDisposition', () => {
+  it('escapes quotes and backslashes in an ASCII filename', () => {
+    expect(buildContentDisposition('a"b\\c.txt')).toBe('inline; filename="a\\"b\\\\c.txt"')
+  })
+
+  it('strips CR, LF and other control characters', () => {
+    const header = buildContentDisposition('a\r\nSet-Cookie: x=1\u0000.txt')
+    expect(header).not.toMatch(/[\r\n\u0000]/)
+    expect(header).toBe('inline; filename="aSet-Cookie: x=1.txt"')
+  })
+
+  it('escapes quotes in the ASCII fallback of a non-ASCII name', () => {
+    const header = buildContentDisposition('Ch"âteau.txt')
+    expect(header).toContain('filename="Ch\\"_teau.txt"')
+  })
+
   it('emits a plain filename for pure-ASCII names', () => {
     expect(buildContentDisposition('transcript.md')).toBe('inline; filename="transcript.md"')
   })

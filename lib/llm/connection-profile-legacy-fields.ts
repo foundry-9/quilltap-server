@@ -40,7 +40,7 @@
  */
 
 import type { ConnectionProfile } from '@/lib/schemas/types';
-import { DEFAULT_MAX_IMAGES_PER_REQUEST } from '@/lib/schemas/profile.types';
+import { DEFAULT_MAX_IMAGES_PER_REQUEST, DEFAULT_TOOL_RESULT_VERBATIM_TURNS } from '@/lib/schemas/profile.types';
 
 /**
  * The providers whose models could accept an image before the flag became
@@ -95,6 +95,13 @@ export function seedLegacyConnectionProfileFields<T extends Partial<ConnectionPr
   // only states it — a pre-4.12 profile gets the same cap a new one does.
   if (seeded.maxImagesPerRequest === undefined) {
     seeded.maxImagesPerRequest = DEFAULT_MAX_IMAGES_PER_REQUEST;
+  }
+
+  // Tool-result elision window (4.13). As above, the table DEFAULT is the
+  // documented default — an older profile elides after the same 3 turns it
+  // always did.
+  if (seeded.toolResultVerbatimTurns === undefined) {
+    seeded.toolResultVerbatimTurns = DEFAULT_TOOL_RESULT_VERBATIM_TURNS;
   }
 
   // A profile can't understudy itself: the chain would be one attempt wearing

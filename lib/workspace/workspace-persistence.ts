@@ -5,7 +5,9 @@
  * hydrates it back, validating the shape (Zod) and pruning tabs that reference
  * entities which no longer exist (e.g. a persisted `chatId` whose chat was
  * deleted, or a terminal/document child tab whose parent Salon tab is gone).
- * No DB, no migration. Pure (no `window` access) so it can be unit tested.
+ * No DB. The one in-place upgrade is {@link upgradeLegacyTab}, which folds the
+ * retired `character-view` / `character-edit` kinds into `character`. Pure (no
+ * `window` access) so it can be unit tested.
  *
  * @module lib/workspace/workspace-persistence
  */
@@ -18,6 +20,7 @@ import {
   type WorkspaceTab,
 } from './types'
 import { clampSplitRatio, createInitialState, normalizePanes } from './workspace-reducer'
+import { resolveCharacterPageSection } from '@/lib/characters/page-sections'
 
 /** localStorage key base. Scoped per instance by {@link workspaceStorageKey}. */
 export const WORKSPACE_STORAGE_KEY_BASE = 'quilltap.workspace.layout'
@@ -64,6 +67,31 @@ const WorkspaceStateSchema = z.object({
   splitRatio: z.number(),
 })
 
+/**
+ * Upgrade a persisted tab written by an older build. The character page used to
+ * be two tab kinds, `character-view` and `character-edit`, each carrying the
+ * old page's `?tab=`; both are now the one `character` kind, with the old tab
+ * mapped onto its section. Anything else passes through untouched.
+ */
+export function upgradeLegacyTab(rawTab: unknown): unknown {
+  if (!rawTab || typeof rawTab !== 'object') return rawTab
+  const tab = rawTab as Record<string, unknown>
+  if (tab.kind !== 'character-view' && tab.kind !== 'character-edit') return rawTab
+  const payload = (tab.payload ?? {}) as { characterId?: unknown; tab?: unknown }
+  const characterId = typeof payload.characterId === 'string' ? payload.characterId : undefined
+  const section = resolveCharacterPageSection(
+    undefined,
+    typeof payload.tab === 'string' ? payload.tab : undefined,
+  )
+  return {
+    ...tab,
+    kind: 'character',
+    payload: characterId ? { characterId, ...(section ? { section } : {}) } : undefined,
+    title: 'Character',
+    icon: 'characters',
+  }
+}
+
 export function serializeWorkspaceState(state: WorkspaceState): string {
   return JSON.stringify(state)
 }
@@ -81,9 +109,20 @@ export function deserializeWorkspaceState(raw: string | null | undefined): Works
     if (!result.success) return null
 
     const tabs: Record<string, WorkspaceTab> = {}
+    // A layout from before the character page was unified may hold a view tab
+    // and an edit tab for the same character; both now upgrade to the same
+    // `character` tab, so only the first is kept (the pane reference to the
+    // other is cleaned up by pruning).
+    const characterTabs = new Set<string>()
     for (const [id, rawTab] of Object.entries(result.data.tabs)) {
-      const tab = WorkspaceTabSchema.safeParse(rawTab)
-      if (tab.success) tabs[id] = tab.data as WorkspaceTab
+      const tab = WorkspaceTabSchema.safeParse(upgradeLegacyTab(rawTab))
+      if (!tab.success) continue
+      if (tab.data.kind === 'character') {
+        const characterId = (tab.data.payload as { characterId?: string } | undefined)?.characterId
+        if (!characterId || characterTabs.has(characterId)) continue
+        characterTabs.add(characterId)
+      }
+      tabs[id] = tab.data as WorkspaceTab
     }
 
     return {

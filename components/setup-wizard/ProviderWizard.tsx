@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from 'react'
 import { WizardLayout, WizardNav } from './WizardLayout'
-import { useProviderWizardState } from './useProviderWizardState'
+import { useProviderWizardState, EXISTING_KEY_MASK } from './useProviderWizardState'
 import { loadExistingConfig } from './wizard-api'
 import { ProviderSelectionStep } from './steps/ProviderSelectionStep'
 import { ApiKeyEntryStep } from './steps/ApiKeyEntryStep'
@@ -89,7 +89,7 @@ export function ProviderWizard({ mode, onComplete, onCancel }: ProviderWizardPro
           if (!apiKeys[key.provider]) {
             apiKeys[key.provider] = {
               label: key.label,
-              key: '********',
+              key: EXISTING_KEY_MASK,
               validated: true,
               apiKeyId: key.id,
             }

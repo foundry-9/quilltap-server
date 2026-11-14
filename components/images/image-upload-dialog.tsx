@@ -7,8 +7,7 @@
  */
 
 import { useState, useRef, useId, FormEvent } from 'react';
-import { useDialogFocus } from '@/hooks/useDialogFocus';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { BaseModal } from '@/components/ui/BaseModal';
 import { ImageGenerationDialog } from './image-generation-dialog';
 
 interface ImageUploadDialogProps {
@@ -30,10 +29,6 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const handleFocusKeyDown = useDialogFocus(dialogRef, isOpen && !showGeneration);
-  useEscapeKey(handleClose, isOpen && !showGeneration);
 
   if (!isOpen) return null;
 
@@ -131,139 +126,128 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
       )}
 
       {/* Upload/Import Dialog */}
-      {!showGeneration && (
-        <div className="qt-dialog-overlay" onClick={handleClose}>
-          <div
-            className="qt-dialog max-w-md mx-4"
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            tabIndex={-1}
-            onKeyDown={handleFocusKeyDown}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="qt-dialog-header">
-              <h2 id={titleId} className="qt-dialog-title">Import Image</h2>
+      <BaseModal
+        isOpen={!showGeneration}
+        onClose={handleClose}
+        title="Import Image"
+        maxWidth="md"
+        className="mx-4"
+        busy={uploading}
+        bodyClassName="flex-1 overflow-y-auto"
+      >
+        <form onSubmit={handleSubmit}>
+          <div className="px-6 py-4 space-y-4">
+            {/* Upload Mode Toggle */}
+            <div className="flex space-x-2 border-b qt-border-default">
+              <button
+                type="button"
+                onClick={() => setUploadMode('file')}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  uploadMode === 'file'
+                    ? 'qt-text-brand border-b-2 qt-border-primary'
+                    : 'qt-text-secondary hover:qt-text'
+                }`}
+              >
+                Upload File
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadMode('url')}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  uploadMode === 'url'
+                    ? 'qt-text-brand border-b-2 qt-border-primary'
+                    : 'qt-text-secondary hover:qt-text'
+                }`}
+              >
+                Import from URL
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGeneration(true)}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  showGeneration
+                    ? 'qt-text-brand border-b-2 qt-border-primary'
+                    : 'qt-text-secondary hover:qt-text'
+                }`}
+              >
+                Generate with AI
+              </button>
             </div>
 
-            {/* Body */}
-            <form onSubmit={handleSubmit}>
-              <div className="px-6 py-4 space-y-4">
-                {/* Upload Mode Toggle */}
-                <div className="flex space-x-2 border-b qt-border-default">
-                  <button
-                    type="button"
-                    onClick={() => setUploadMode('file')}
-                    className={`px-4 py-2 font-medium transition-colors ${
-                      uploadMode === 'file'
-                        ? 'text-primary border-b-2 qt-border-primary'
-                        : 'qt-text-secondary hover:text-foreground'
-                    }`}
-                  >
-                    Upload File
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUploadMode('url')}
-                    className={`px-4 py-2 font-medium transition-colors ${
-                      uploadMode === 'url'
-                        ? 'text-primary border-b-2 qt-border-primary'
-                        : 'qt-text-secondary hover:text-foreground'
-                    }`}
-                  >
-                    Import from URL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowGeneration(true)}
-                    className={`px-4 py-2 font-medium transition-colors ${
-                      showGeneration
-                        ? 'text-primary border-b-2 qt-border-primary'
-                        : 'qt-text-secondary hover:text-foreground'
-                    }`}
-                  >
-                    Generate with AI
-                  </button>
-                </div>
-
-                {/* File Upload */}
-                {uploadMode === 'file' && (
-                  <div>
-                    <label htmlFor={`${id}-file`} className="block text-sm qt-text-primary mb-2">
-                      Select Image File
-                    </label>
-                    <input
-                      id={`${id}-file`}
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                      className="block w-full text-sm text-foreground border border-input rounded-lg cursor-pointer qt-bg-muted focus:outline-none"
-                    />
-                    {selectedFile && (
-                      <p className="mt-2 qt-text-small">
-                        Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* URL Import */}
-                {uploadMode === 'url' && (
-                  <div>
-                    <label htmlFor={`${id}-url`} className="block text-sm qt-text-primary mb-2">Image URL</label>
-                    <input
-                      id={`${id}-url`}
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://example.com/image.jpg"
-                      className="qt-input"
-                    />
-                  </div>
-                )}
-
-                {/* Context Info */}
-                {contextType && contextId && (
-                  <div className="qt-bg-muted border qt-border-default rounded-md p-3">
-                    <p className="text-sm text-primary">
-                      This image will be automatically tagged with this {contextType.toLowerCase()}.
-                    </p>
-                  </div>
-                )}
-
-                {/* Error */}
-                {error && (
-                  <div className="qt-alert-error">
-                    <p className="qt-text-small">{error}</p>
-                  </div>
+            {/* File Upload */}
+            {uploadMode === 'file' && (
+              <div>
+                <label htmlFor={`${id}-file`} className="qt-label mb-2">
+                  Select Image File
+                </label>
+                <input
+                  id={`${id}-file`}
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm qt-text border qt-border-input rounded-lg cursor-pointer qt-bg-muted focus:outline-none"
+                />
+                {selectedFile && (
+                  <p className="mt-2 qt-text-small">
+                    Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
+                  </p>
                 )}
               </div>
+            )}
 
-              {/* Footer */}
-              <div className="qt-dialog-footer">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={uploading}
-                  className="qt-button qt-button-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading || (uploadMode === 'file' && !selectedFile) || (uploadMode === 'url' && !imageUrl)}
-                  className="qt-button qt-button-primary"
-                >
-                  {uploading ? 'Uploading...' : uploadMode === 'file' ? 'Upload' : 'Import'}
-                </button>
+            {/* URL Import */}
+            {uploadMode === 'url' && (
+              <div>
+                <label htmlFor={`${id}-url`} className="qt-label mb-2">Image URL</label>
+                <input
+                  id={`${id}-url`}
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  className="qt-input"
+                />
               </div>
-            </form>
+            )}
+
+            {/* Context Info */}
+            {contextType && contextId && (
+              <div className="qt-bg-muted border qt-border-default rounded-md p-3">
+                <p className="text-sm qt-text-brand">
+                  This image will be automatically tagged with this {contextType.toLowerCase()}.
+                </p>
+              </div>
+            )}
+
+            {/* Error */}
+            {error && (
+              <div className="qt-alert-error">
+                <p className="qt-text-small">{error}</p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+
+          {/* Footer */}
+          <div className="qt-dialog-footer">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={uploading}
+              className="qt-button qt-button-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={uploading || (uploadMode === 'file' && !selectedFile) || (uploadMode === 'url' && !imageUrl)}
+              className="qt-button qt-button-primary"
+            >
+              {uploading ? 'Uploading...' : uploadMode === 'file' ? 'Upload' : 'Import'}
+            </button>
+          </div>
+        </form>
+      </BaseModal>
     </>
   );
 }

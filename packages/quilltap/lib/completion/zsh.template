@@ -27,6 +27,7 @@ _quilltap() {
     '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
     '(-i --instance)'{-i,--instance}'[Use a registered instance]:instance:_quilltap_instance_names'
     '(-p --port)'{-p,--port}'[Port to listen on]:port:'
+    '--host[Address to bind (default 127.0.0.1)]:address:'
     '(-o --open)'{-o,--open}'[Open browser after server starts]'
     '(-v --version)'{-v,--version}'[Show version number]'
     '(-h --help)'{-h,--help}'[Show help message]'

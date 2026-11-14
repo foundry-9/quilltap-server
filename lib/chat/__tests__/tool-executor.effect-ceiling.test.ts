@@ -7,8 +7,11 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor';
+import { OPERATOR_TOOL_OFFER, offeredTools } from '@/lib/tools/effects';
 
-const base: ToolExecutionContext = { chatId: 'chat-1', userId: 'u1' };
+// An operator offer skips the offered-set test, so these cases exercise the
+// ceiling alone — and show that a hand-run call is still held to it.
+const base: ToolExecutionContext = { chatId: 'chat-1', userId: 'u1', toolOffer: OPERATOR_TOOL_OFFER };
 
 describe('executeToolCallWithContext: effect ceiling', () => {
   it('refuses a write under a read ceiling, naming both', async () => {
@@ -51,5 +54,42 @@ describe('executeToolCallWithContext: effect ceiling', () => {
       { ...base, effectCeiling: 'read' }
     );
     expect(refused.error).toMatch(/`some_mcp_tool` is a write call/);
+  });
+});
+
+describe('executeToolCallWithContext: tool permit', () => {
+  it('refuses every call when the context carries no offer', async () => {
+    const result = await executeToolCallWithContext(
+      { name: 'doc_read_file', arguments: { path: 'a.md' } },
+      { chatId: 'chat-1', userId: 'u1' }
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/no tool slate/);
+  });
+
+  it('refuses a built-in tool the seat was not offered', async () => {
+    const result = await executeToolCallWithContext(
+      { name: 'wardrobe_wear', arguments: { item: 'hat' } },
+      { chatId: 'chat-1', userId: 'u1', toolOffer: offeredTools(['wardrobe_list', 'rng']) }
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/`wardrobe_wear` is not among the tools offered to you this turn/);
+    expect(result.result).toMatchObject({ formattedText: result.error });
+  });
+
+  it('refuses an unoffered plugin or MCP tool name before any registry lookup', async () => {
+    const result = await executeToolCallWithContext(
+      { name: 'some_mcp_tool', arguments: {} },
+      { chatId: 'chat-1', userId: 'u1', toolOffer: offeredTools([]) }
+    );
+    expect(result.error).toMatch(/not among the tools offered/);
+  });
+
+  it('checks the ceiling after membership for an offered tool', async () => {
+    const result = await executeToolCallWithContext(
+      { name: 'doc_delete_file', arguments: { path: 'a.md' } },
+      { chatId: 'chat-1', userId: 'u1', toolOffer: offeredTools(['doc_delete_file']), effectCeiling: 'write' }
+    );
+    expect(result.error).toMatch(/is a destroy call/);
   });
 });

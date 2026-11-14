@@ -239,7 +239,7 @@ export function HelpGuideTab() {
 
           <div className="flex-1 overflow-y-auto p-3">
             {loading ? (
-              <div className="flex items-center justify-center py-8" style={{ color: 'var(--deco-fg-muted)' }}>
+              <div className="qt-loading-state" style={{ color: 'var(--deco-fg-muted)' }}>
                 Loading guide...
               </div>
             ) : (

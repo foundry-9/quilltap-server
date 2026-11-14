@@ -59,6 +59,12 @@ interface ChatComposerProps {
    */
   disabled: boolean
   sending: boolean
+  /**
+   * A turn stream of any kind — a send, a continue, an opening, a storyteller
+   * round — is still open. Neither Enter nor Send may start another on top of
+   * it (#172); `streaming` / `waitingForResponse` drop between a chain's turns.
+   */
+  streamInFlight?: boolean
   hasActiveCharacters: boolean
   streaming: boolean
   waitingForResponse: boolean
@@ -184,6 +190,7 @@ export function ChatComposer({
   onRemovePendingToolResult,
   disabled,
   sending,
+  streamInFlight = false,
   hasActiveCharacters,
   streaming,
   waitingForResponse,
@@ -237,6 +244,8 @@ export function ChatComposer({
   // once rather than at each control.
   const composerLocked = disabled || sending
   const isGenerating = streaming || waitingForResponse
+  // Enter and the Send button ask the same question (#172).
+  const sendBlocked = isGenerating || streamInFlight
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -348,6 +357,11 @@ export function ChatComposer({
     // Belt and braces: the editor is already disabled, but a keystroke racing
     // the lock must not put a message on top of a turn in flight.
     if (composerLocked) return
+    // A run still holds the floor: refuse aloud and leave the text where it is.
+    if (sendBlocked) {
+      showInfoToast('One moment — the room is still speaking. Your remark waits in the composer.')
+      return
+    }
     const markdown = editorRef.current?.getMarkdown() ?? ''
     if (opts?.establishedFact) {
       if (!markdown.trim()) {
@@ -365,7 +379,7 @@ export function ChatComposer({
         }, 10)
       }
     }
-  }, [id, attachedFiles.length, pendingToolResults.length, composerLocked])
+  }, [id, attachedFiles.length, pendingToolResults.length, composerLocked, sendBlocked])
 
   // Capture the Lexical editor instance when the wrapper mounts
   const composerRefCallback = useCallback(
@@ -476,7 +490,7 @@ export function ChatComposer({
             <div className="qt-chat-attachment-list mb-2">
               <div className="qt-chat-tool-result-chip">
                 <Icon name="deus-ex-machina" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
-                <span className="text-foreground">Deus Ex Machina: this line will be established as fact</span>
+                <span className="qt-text">Deus Ex Machina: this line will be established as fact</span>
                 <Tooltip content="Disarm Deus Ex Machina">
                   <button
                     type="button"
@@ -506,7 +520,7 @@ export function ChatComposer({
                 ) : (
                   <Icon name="file" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
                 )}
-                <span className="text-foreground max-w-[150px] truncate">
+                <span className="qt-text max-w-[150px] truncate">
                   {file.filename}
                 </span>
                 <Tooltip content="Remove attachment">
@@ -538,7 +552,7 @@ export function ChatComposer({
                   anchorClassName="gap-2 min-w-0"
                 >
                   <span className="text-base leading-none">{result.icon}</span>
-                  <span className="text-foreground max-w-[200px] truncate">
+                  <span className="qt-text max-w-[200px] truncate">
                     {result.summary}
                   </span>
                 </Tooltip>
@@ -744,7 +758,7 @@ export function ChatComposer({
             >
               <button
                 type="submit"
-                disabled={composerLocked || isGenerating || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+                disabled={composerLocked || sendBlocked || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
                 className="qt-chat-composer-send"
                 aria-label={factArmed ? 'Send as established fact' : 'Send message'}
               >

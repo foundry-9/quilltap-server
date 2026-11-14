@@ -115,7 +115,7 @@ export function AboutView() {
           Calliope (themes), The Scriptorium (external document stores), The Librarian (Document Mode and file announcements),
           The Host (Salon participation announcements), Saquel Ytzama, the Keeper of Secrets (encryption and key management),
           Ariel (terminals in the Salon), Carina (the ansible &mdash; inline queries to characters), Suparṇā (the Post Office, inter-character mail),
-          Brahma (the Console, a character-less generic-LLM surface), and The Foundry (architecture) &mdash; all extensible through a plugin system.
+          Brahma (the Console, a character-less generic-LLM surface), The Atlas (named things that are not characters), and The Foundry (settings and architecture) &mdash; all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
           <BrandName /> runs as a native desktop application on macOS, Windows, and Linux. For those who
@@ -130,107 +130,111 @@ export function AboutView() {
         <h2 className="qt-heading-3 mb-4">Key Features</h2>
         <ul className="space-y-2 qt-text-primary">
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Native desktop app</strong> &ndash; macOS, Windows, and Linux installers with branded splash screen, data directory management, and managed updates, fronting the back end of your choosing: Direct (the server inside Electron), Docker, or Remote (any Quilltap URL that will have you)</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Docker runtime</strong> &ndash; the sandboxed option: chosen from the splash screen or run standalone via Docker Hub, with filesystem document stores bound through to the container</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>The Workspace</strong> &ndash; a two-pane shell of kept-alive tabs where a chat, a document, a terminal, and a settings panel all stay mounted at once; a streaming conversation keeps streaming while you work beside it, and any tab can be dragged into the other pane</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Aurora &ndash; Characters</strong> &ndash; detailed profiles with pronouns, aliases, personalities, subprompts and progressions, a four-tier wardrobe with folders, pictures and a wear ledger, multi-character turn management, and archiving into an encrypted bundle you can rehydrate later</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
+            <span><strong>Aurora &ndash; Characters</strong> &ndash; one self-saving page per character, a kind for each (roleplay or assistant) that Agent Mode and the prompt generators follow, detailed profiles with pronouns, aliases, birthdays, personalities, subprompts and public or private progressions, a four-tier wardrobe with folders, pictures and a wear ledger, multi-character turn management, and archiving into an encrypted bundle you can rehydrate later</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, embedded tool messages, Inform notes from the wings, Deus Ex Machina established facts that every character knows, the Scenario Builder, and indexed message search that looks in the open conversation first</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
+            <span><strong>The Salon &ndash; Chat</strong> &ndash; chat interface with tool palette, agent mode, server-side rendering, embedded tool messages, Inform notes from the wings, Deus Ex Machina established facts that every character knows, an editable past with a word on what each edit disturbs, Turns mode for one round at a time, an opening narrated by the Green Room as the cast dress and pack, portraits fixed to the moment each line was written, the Scenario Builder, and indexed message search that looks in the open conversation first</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Prospero &ndash; Projects</strong> &ndash; projects with files, folders, semantic search, agent mode, and custom instructions</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>The Commonplace Book &ndash; Memory</strong> &ndash; long-term memory with semantic recall and proactive recall, active and archived shelves, consolidation into digests, and one per-character maintenance pass</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>The Lantern &ndash; Story Backgrounds</strong> &ndash; AI-generated atmospheric background images derived from chat context, with LoRA adapters and per-model options taken from the provider&apos;s own advertised capabilities</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; refusal failover to the uncensored desk, an opt-in pre-screen, quick-hide integration, a Try Uncensored shield on every reply, and a three-state per-chat control (Moderated, Unmoderated, Locked) settable at creation as well as mid-conversation, with the Concierge switching a chat himself after repeated refusals</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Pascal the Croupier &ndash; Gaming</strong> &ndash; persistent state across four registers, dice rolls, coin flips, the Inventory of objects characters carry, stats, plus user-authored custom tools with honest server-side rolls, outcome tables, side effects, and a visual workbench to build them</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
+            <span><strong>The Atlas &ndash; Named Things</strong> &ndash; ships, swords, taverns and towns on four shelves, each with aliases, a description of how it looks, and what is known of it; told to a character when named, chipped in the transcript for you, and handed to the Lantern so it is painted as described</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Calliope &ndash; Themes</strong> &ndash; six bundled themes (Art Deco, Earl Grey, Great Estate, Madman&apos;s Box, Old School, Rains) plus a Default, with live switching, declarative <code>.qtap-theme</code> bundles, and signed remote registries</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>The Scriptorium &ndash; Document Stores</strong> &ndash; mountable external knowledge sources that characters can read, search, and (in Document Mode) write back to, browsed with one folder browser shared with the Wardrobe and the Inventory and read-only viewers for pictures, PDFs and Word files</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>The Librarian &ndash; Document Mode</strong> &ndash; co-authoring on real files in the Scriptorium with open/save/rename/delete announcements posted into the chat on the Librarian&apos;s behalf</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>The Host &ndash; Salon Etiquette</strong> &ndash; synthetic chat announcements when characters join, leave, or change participation status, so everyone in the room knows who is actually present</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Autonomous Rooms (Enclaves)</strong> &ndash; private character-to-character salons that run without a human in the loop, bounded by configurable budgets, with cron scheduling, pacing milestones, and post-creation editing</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Saquel Ytzama &ndash; Keeper of Secrets</strong> &ndash; ChaCha20-Poly1305-encrypted databases, the Pepper Vault for API keys, instance locking, the <code>.dbkey</code> covenant, and the auto-lock idle timer</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Ariel &ndash; Terminals</strong> &ndash; live PTY shell sessions hosted directly inside a Salon chat, with character-readable scrollback and a dedicated Terminal Mode pane</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Carina &ndash; The Ansible</strong> &ndash; inline queries to a designated character via <code>@Name:</code> / <code>@Name?</code> markup or the <code>ask_carina</code> tool, with the answer dropped straight into the scene &mdash; public or whispered</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Suparṇā &ndash; The Post Office</strong> &ndash; inter-character mail delivered to a character&apos;s vault <code>Mail/</code> folder, with anti-hijack safeguards in multi-character chats and a delivery announcement when new letters arrive</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Brahma &ndash; The Console</strong> &ndash; a character-less, memory-free generic-LLM surface for plain model chat and read-only SQL inspection, with lookup shortcuts for characters, memories and conversations, reachable from any Salon as the <code>@Brahma</code> answerer on an engine of its own choosing</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, tools, search, and storage, and the Almanack: a full system report on what this instance can actually do</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
+            <span><strong>The Foundry &ndash; Settings &amp; Architecture</strong> &ndash; a settings page in ten groups filed by what each setting does, with search, a lens for each member of the staff and a strip of things wanting attention; plugin system for themes, providers, templates, tools, search, and storage, and the Almanack: a full system report on what this instance can actually do</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Multi-provider support</strong> &ndash; Anthropic, OpenAI, Google Gemini, Grok, DeepSeek, Z.AI, NanoGPT, Ollama, OpenRouter, and OpenAI-compatible APIs, each profile able to name an understudy to take the call when its provider falls over</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>LLM tools</strong> &ndash; web search, image generation, file management, agent mode, MCP connector, custom tool plugins</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Live interface</strong> &ndash; a single multiplexed socket tells every open tab the moment something changes &mdash; queued errands, autonomous rooms, generated backdrops &mdash; so screens refresh themselves rather than asking again every few seconds, and every &ldquo;4m ago&rdquo; in the house turns over on the same tick</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Database protection</strong> &ndash; automatic integrity checks, WAL checkpoints, and physical backups with tiered retention</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-primary mt-1">&#8226;</span>
+            <span className="qt-text-brand mt-1">&#8226;</span>
             <span><strong>Secure by design</strong> &ndash; AES-256-GCM encrypted API keys, all data stays on your infrastructure, no external dependencies</span>
           </li>
         </ul>

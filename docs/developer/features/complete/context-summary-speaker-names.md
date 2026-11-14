@@ -1,7 +1,7 @@
 # Feature: the context summary names its speakers
 
 **Status:** **complete** — landed in v4.10-dev on 2026-09-21. Design of record for
-[bug 161](../../bugs/fixed/bug-161-summary-invents-a-name.md).
+[bug 161](https://github.com/foundry-9/quilltap-server/blob/dd200c695d4472ad4a268602b5a57e16dd09ca0d/docs/developer/bugs/fixed/bug-161-summary-invents-a-name.md).
 
 Built as specified, with one deviation: the Salon's **Rebuild Summary…** entry is wired through a
 new `hooks/useSummaryActions.ts` rather than `useModalState`. There is no modal — the confirm is a

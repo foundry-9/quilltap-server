@@ -137,6 +137,7 @@ export const ICON_REGISTRY = {
   'dice':          { defaultFile: '/images/icons/dice.svg',          defaultMode: 'mask' },
   'deus-ex-machina': { defaultFile: '/images/icons/deus-ex-machina.svg', defaultMode: 'mask' },
   'inventory':     { defaultFile: '/images/icons/inventory.svg',     defaultMode: 'mask' },
+  'atlas':         { defaultFile: '/images/icons/atlas.svg',         defaultMode: 'mask' },
   'sparkles':      { defaultFile: '/images/icons/sparkles.svg',      defaultMode: 'mask' },
   'wand':          { defaultFile: '/images/icons/wand.svg',          defaultMode: 'mask' },
   // The rocking quill shown while a reply is awaited or streaming. The MOTION

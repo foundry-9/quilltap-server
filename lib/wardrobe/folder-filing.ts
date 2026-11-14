@@ -2,7 +2,7 @@
  * Folder filing with components — moving or copying items to a folder within
  * one wardrobe, with an outfit's components brought along (or not).
  *
- * The folder twin of the cross-wardrobe transfer (`/api/v1/wardrobe/transfers`):
+ * The folder twin of the cross-wardrobe transfer (`/api/v1/wardrobe?action=move-to-tier|copy-to-tier`):
  * the same all-or-nothing `components` choice, gathered by the same walk
  * (`collectContainerComponents` — only components filed in this wardrobe
  * travel; pieces borrowed from a shared tier stay put).
@@ -38,7 +38,7 @@ import { WardrobeItemNotInLocationError } from '@/lib/wardrobe/folders';
 import { carryItemImages } from '@/lib/wardrobe/item-images';
 import { createItem, moveItemsToFolder } from '@/lib/wardrobe/item-mutations';
 import type { WardrobeLocation } from '@/lib/wardrobe/location';
-import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title';
+import { nextCopyTitle } from '@/lib/mount-index/item-rules';
 
 /** What travels with an outfit filed into a folder: its components, or nothing. */
 export type FolderComponentMode = 'move' | 'copy' | 'none';

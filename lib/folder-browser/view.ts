@@ -140,3 +140,13 @@ export function tierRows<T extends BrowserViewItem>(
   }
   return Array.from(rows.values())
 }
+
+/** A count noun's plural: `item` → `items`, `entry` → `entries`. */
+export function pluralWord(word: string): string {
+  return /[^aeiou]y$/i.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`
+}
+
+/** `3 items`, `1 entry`, `2 entries`. */
+export function pluralize(n: number, word: string): string {
+  return `${n} ${n === 1 ? word : pluralWord(word)}`
+}

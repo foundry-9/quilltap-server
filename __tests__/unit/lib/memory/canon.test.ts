@@ -16,11 +16,11 @@ jest.mock('@/lib/logger', () => {
   return { logger: makeLogger() }
 })
 
-jest.mock('@/lib/database/repositories/character-properties-overlay', () => ({
-  readVaultTextFile: jest.fn(),
+jest.mock('@/lib/characters/vault/readers', () => ({
+  readVaultFile: jest.fn(),
 }))
 
-import { readVaultTextFile } from '@/lib/database/repositories/character-properties-overlay'
+import { readVaultFile } from '@/lib/characters/vault/readers'
 import {
   renderSelfCanonBlock,
   renderOtherCanonBlock,
@@ -29,7 +29,7 @@ import {
   NO_CANON_FALLBACK,
 } from '@/lib/memory/cheap-llm-tasks/canon'
 
-const mockReadVaultTextFile = readVaultTextFile as jest.MockedFunction<typeof readVaultTextFile>
+const mockReadVaultTextFile = readVaultFile as jest.MockedFunction<typeof readVaultFile>
 
 describe('renderSelfCanonBlock', () => {
   it('emits all four fields, labelled, manifesto-first', () => {

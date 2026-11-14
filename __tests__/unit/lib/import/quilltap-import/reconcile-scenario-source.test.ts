@@ -25,7 +25,7 @@ const NEW = '22222222-2222-4222-8222-222222222222';
 const SOURCE = { mountPointId: OLD, path: 'Scenarios/tea.md', bodySha256: 'c'.repeat(64) };
 
 function makeIdMaps(mountPoints: Map<string, string>): any {
-  return {
+  const idMaps: any = {
     tags: new Map(),
     characters: new Map(),
     chats: new Map([['chat-old', 'chat-new']]),
@@ -42,7 +42,14 @@ function makeIdMaps(mountPoints: Map<string, string>): any {
     preserveIdsSkips: new Set(),
     wardrobeItems: new Map(),
     messages: new Map(),
+    writtenChats: new Set(),
+    writtenRows: new Set(),
   };
+  // Every mapped row is one this import wrote, so reconciliation visits it.
+  idMaps.writtenRows = new Set(
+    [idMaps.characters, idMaps.chats, idMaps.projects, idMaps.connectionProfiles].flatMap((m: Map<string, string>) => [...m.values()])
+  );
+  return idMaps;
 }
 
 function setup(existingMounts: string[]) {

@@ -91,10 +91,85 @@ export function gcOrphanedFileRow(db: OrphanGcDb, fileId: string | null): Orphan
   return counts;
 }
 
+/** Minimal synchronous handle {@link clearMountLinks} needs. */
+export interface MountLinksDb {
+  prepare(sql: string): {
+    get(...params: unknown[]): unknown;
+    all(...params: unknown[]): unknown[];
+    run(...params: unknown[]): { changes: number };
+  };
+}
+
+/** Per-table rows removed by {@link clearMountLinks}. */
+export interface MountLinksCleared {
+  chunks: number;
+  links: number;
+  files: number;
+  documents: number;
+  blobs: number;
+}
+
+/**
+ * Remove every link a mount point holds, with its chunks, and collect the
+ * content rows that no other mount still links (#191).
+ *
+ * Content rows (`doc_mount_files` and their document/blob payload) are shared
+ * across stores by design — a hard link, or two files of identical bytes. So a
+ * store's content is never deleted by "fileId has a link in this mount"; each
+ * file is ref-counted through {@link gcOrphanedFileRow} after this mount's
+ * links are gone, and one another store still links is left alone.
+ *
+ * Chunks are deleted explicitly rather than left to an `ON DELETE CASCADE`
+ * that schema-translator-built tables do not carry (#189).
+ *
+ * The one implementation behind the store cascade, a `.qtap` overwrite import
+ * and a database → filesystem conversion. Runs synchronously; callers wrap it
+ * in their own `db.transaction(...)`. Tolerates absent tables.
+ */
+export function clearMountLinks(db: MountLinksDb, mountPointId: string): MountLinksCleared {
+  const counts: MountLinksCleared = { chunks: 0, links: 0, files: 0, documents: 0, blobs: 0 };
+  if (!tableExists(db, 'doc_mount_file_links')) {
+    if (tableExists(db, 'doc_mount_chunks')) {
+      counts.chunks = db.prepare('DELETE FROM doc_mount_chunks WHERE mountPointId = ?').run(mountPointId).changes;
+    }
+    return counts;
+  }
+
+  // Snapshot the fileIds BEFORE deleting the links, so content rows are GC'd
+  // against a live ref-count rather than a table an earlier step emptied.
+  const affectedFileIds = (
+    db.prepare('SELECT DISTINCT fileId FROM doc_mount_file_links WHERE mountPointId = ?')
+      .all(mountPointId) as { fileId: string }[]
+  ).map(r => r.fileId);
+
+  if (tableExists(db, 'doc_mount_chunks')) {
+    // Both keys: the denormalised mountPointId, and the link ids in case a
+    // chunk's mountPointId ever drifted from its link's.
+    counts.chunks = db.prepare(
+      `DELETE FROM doc_mount_chunks
+       WHERE mountPointId = ?
+          OR linkId IN (SELECT id FROM doc_mount_file_links WHERE mountPointId = ?)`
+    ).run(mountPointId, mountPointId).changes;
+  }
+
+  counts.links = db.prepare('DELETE FROM doc_mount_file_links WHERE mountPointId = ?')
+    .run(mountPointId).changes;
+
+  for (const fileId of affectedFileIds) {
+    const gc = gcOrphanedFileRow(db, fileId);
+    if (!gc) continue;
+    counts.documents += gc.documents;
+    counts.blobs += gc.blobs;
+    counts.files += gc.files;
+  }
+  return counts;
+}
+
 export interface OrphanedStoreChildrenSwept {
   links: number;
   folders: number;
   documents: number;
+  chunks: number;
 }
 
 /**
@@ -102,7 +177,7 @@ export interface OrphanedStoreChildrenSwept {
  * counts removed.
  */
 export function reapOrphanedStoreChildren(db: DatabaseType): OrphanedStoreChildrenSwept {
-  const result: OrphanedStoreChildrenSwept = { links: 0, folders: 0, documents: 0 };
+  const result: OrphanedStoreChildrenSwept = { links: 0, folders: 0, documents: 0, chunks: 0 };
   const tx = db.transaction(() => {
     // Links whose mount point is gone.
     result.links = db.prepare(
@@ -114,6 +189,18 @@ export function reapOrphanedStoreChildren(db: DatabaseType): OrphanedStoreChildr
       `DELETE FROM doc_mount_folders
        WHERE mountPointId NOT IN (SELECT id FROM doc_mount_points)`
     ).run().changes;
+    // Chunks whose link is gone (#189). Chunks are keyed by linkId and the
+    // ON DELETE CASCADE that should collect them exists only on tables the
+    // pre-4.5 migration built; schema-translator tables carry no foreign keys,
+    // so a deleted, moved or sync-deleted document left its chunks — and their
+    // embeddings — answering semantic search. Runs after the link reap above
+    // so a link reaped there takes its chunks with it.
+    if (tableExists(db, 'doc_mount_chunks')) {
+      result.chunks = db.prepare(
+        `DELETE FROM doc_mount_chunks
+         WHERE linkId NOT IN (SELECT id FROM doc_mount_file_links)`
+      ).run().changes;
+    }
     // Text documents whose file no longer has any link — including files whose
     // last link was just reaped above. Documents carry no mountPointId, so this
     // is the join-through path for "mount point no longer exists."

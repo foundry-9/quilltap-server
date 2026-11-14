@@ -3,13 +3,20 @@
 /**
  * useProjectChats Hook
  *
- * Manages project chats data and operations with pagination support.
+ * The project's chats, a page at a time (`?action=list-chats`), as one
+ * infinite query keyed `projects.chats(id)` — under the `projects` prefix the
+ * Prospero tab refetch sweeps, so coming back to the tab re-reads every page
+ * already loaded. Removing a chat from the project re-reads the list and
+ * the project's counts.
  *
  * @module app/prospero/[id]/hooks/useProjectChats
  */
 
-import { useCallback, useState, useRef } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { apiErrorMessage, apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import type { ProjectChat } from '../types'
 
 interface Pagination {
@@ -19,97 +26,87 @@ interface Pagination {
   hasMore: boolean
 }
 
+interface ProjectChatsPage {
+  chats?: ProjectChat[]
+  pagination?: Pagination
+}
+
 interface UseProjectChatsReturn {
   chats: ProjectChat[]
   loading: boolean
   loadingMore: boolean
   pagination: Pagination
-  fetchChats: () => Promise<void>
   loadMoreChats: () => Promise<void>
   handleRemoveChat: (chatId: string) => Promise<void>
 }
 
-const DEFAULT_LIMIT = 20
+export const PROJECT_CHATS_PAGE_SIZE = 20
+
+const EMPTY_PAGINATION: Pagination = { total: 0, offset: 0, limit: PROJECT_CHATS_PAGE_SIZE, hasMore: false }
 
 export function useProjectChats(projectId: string): UseProjectChatsReturn {
-  const [chats, setChats] = useState<ProjectChat[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [pagination, setPagination] = useState<Pagination>({
-    total: 0,
-    offset: 0,
-    limit: DEFAULT_LIMIT,
-    hasMore: false,
+  const queryClient = useQueryClient()
+  const chatsKey = queryKeys.projects.chats(projectId)
+
+  const query = useInfiniteQuery({
+    queryKey: chatsKey,
+    queryFn: ({ pageParam, signal }) =>
+      apiFetch<ProjectChatsPage>(
+        `/api/v1/projects/${projectId}?action=list-chats&limit=${PROJECT_CHATS_PAGE_SIZE}&offset=${pageParam}`,
+        { signal },
+      ),
+    initialPageParam: 0,
+    getNextPageParam: (last, _all, lastOffset) =>
+      last.pagination?.hasMore ? lastOffset + (last.chats?.length ?? 0) : undefined,
   })
-  const fetchingRef = useRef(false)
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = query
 
-  const fetchChats = useCallback(async () => {
-    if (fetchingRef.current) return
-    fetchingRef.current = true
-    setLoading(true)
-
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}?action=list-chats&limit=${DEFAULT_LIMIT}&offset=0`)
-      if (res.ok) {
-        const data = await res.json()
-        setChats(data.chats || [])
-        setPagination(data.pagination || { total: 0, offset: 0, limit: DEFAULT_LIMIT, hasMore: false })
-      }
-    } catch (err) {
-      console.error('useProjectChats: fetch error', err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-      fetchingRef.current = false
-    }
-  }, [projectId])
+  const chats = useMemo(() => data?.pages.flatMap((p) => p.chats ?? []) ?? [], [data])
+  const lastPage = data?.pages[data.pages.length - 1]
+  const pagination: Pagination = lastPage?.pagination
+    ? { ...lastPage.pagination, hasMore: !!hasNextPage }
+    : EMPTY_PAGINATION
 
   const loadMoreChats = useCallback(async () => {
-    if (fetchingRef.current || !pagination.hasMore) return
-    fetchingRef.current = true
-    setLoadingMore(true)
+    if (!hasNextPage || isFetchingNextPage) return
+    await fetchNextPage()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
-    const newOffset = pagination.offset + pagination.limit
-
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}?action=list-chats&limit=${DEFAULT_LIMIT}&offset=${newOffset}`)
-      if (res.ok) {
-        const data = await res.json()
-        setChats(prev => [...prev, ...(data.chats || [])])
-        setPagination(data.pagination || { total: 0, offset: newOffset, limit: DEFAULT_LIMIT, hasMore: false })
-      }
-    } catch (err) {
-      console.error('useProjectChats: load more error', err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoadingMore(false)
-      fetchingRef.current = false
-    }
-  }, [projectId, pagination])
-
-  const handleRemoveChat = useCallback(async (chatId: string) => {
-    try {
-      const res = await fetch(`/api/v1/projects/${projectId}?action=remove-chat`, {
+  const { mutateAsync: removeChat } = useMutation({
+    mutationFn: (chatId: string) =>
+      apiFetch(`/api/v1/projects/${projectId}?action=remove-chat`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatId }),
-      })
+      }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: chatsKey }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.lists }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.chats.lists }),
+      ]),
+  })
 
-      if (!res.ok) throw new Error('Failed to remove chat')
-      setChats(prev => prev.filter(c => c.id !== chatId))
-      setPagination(prev => ({ ...prev, total: prev.total - 1 }))
-      showSuccessToast('Chat removed from project')
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to remove chat'
-      console.error('useProjectChats: remove error', errorMsg)
-      showErrorToast(errorMsg)
-    }
-  }, [projectId])
+  const handleRemoveChat = useCallback(
+    async (chatId: string) => {
+      try {
+        await removeChat(chatId)
+        showSuccessToast('Chat removed from project')
+      } catch (err) {
+        const message = apiErrorMessage(err, 'Failed to remove chat')
+        console.error('useProjectChats: remove error', { projectId, chatId, message })
+        showErrorToast(message)
+      }
+    },
+    [removeChat, projectId],
+  )
 
   return {
     chats,
-    loading,
-    loadingMore,
+    loading: isLoading,
+    loadingMore: isFetchingNextPage,
     pagination,
-    fetchChats,
     loadMoreChats,
     handleRemoveChat,
   }

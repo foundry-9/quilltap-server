@@ -1,14 +1,14 @@
 ---
-url: /settings?tab=chat
+url: /settings?group=composer-display
 ---
 
 # Chat Settings
 
-> **[Open this page in Quilltap](/settings?tab=chat)**
+> **[Open this page in Quilltap](/settings?group=composer-display)**
 
 Chat Settings control global behavior for all your chats in Quilltap, including how conversations look, how they're stored, and which services are used for special features.
 
-The page is a long gallery of cards, and its guidebook has been bound in three volumes so that no single one grows too heavy to carry:
+The old Chat tab was a long gallery of cards, and its guidebook has been bound in three volumes so that no single one grows too heavy to carry:
 
 - **This volume** — getting there, what "global" means, and the house-wide odds and ends: avatars, automation, timestamps, data retention, and the Taboo list
 - **[The Composer and Your Typing](chat-settings-composer.md)** — composition mode, the composer's emoji and symbol shortcuts, impersonated lines, auto-scroll, text replacement, and smart typography
@@ -17,8 +17,8 @@ The page is a long gallery of cards, and its guidebook has been bound in three v
 ## Accessing Chat Settings
 
 1. Click **Settings** (gear icon) in the left sidebar
-2. Click the **Chat Settings** tab
-3. You'll see multiple setting cards for different aspects of chat behavior
+2. The page is **The Foundry**, and its left rail lists ten groups. The cards described in this guidebook are scattered among **Composer & Display**, **Context & Memory**, **Characters & Prompts**, **Images** and **Games & Tools** — the old Chat tab having been taken apart, polished, and returned to the shelves in their proper departments
+3. Prefer not to hunt? Press `/` to reach the search field at the top of the page and type the name of the card you want
 
 ## Global vs. Per-Chat
 
@@ -218,7 +218,7 @@ Characters with help tools enabled can read your current chat settings during a 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=chat")`
+`help_navigate(url: "/settings?group=composer-display")`
 
 ## Related Settings
 

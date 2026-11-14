@@ -6,7 +6,8 @@
  *
  *   1. Each iteration inspects `currentRawResponse` for provider-native tool
  *      calls (function-calling tool-use blocks, etc.). Zero calls → exit.
- *   2. In agent mode, `submit_final_response` is special: it terminates the
+ *   2. In research-flavoured agent mode (an assistant character), the only
+ *      flavour offered it, `submit_final_response` is special: it terminates the
  *      loop and stamps `streaming.fullResponse` with the model's structured
  *      final answer. The **ghost-wrap guardrail** rejects an iteration-0,
  *      sole-tool-call `submit_final_response` with no prose — almost always
@@ -21,8 +22,10 @@
  *      `streaming.fullResponse`.
  *   4. After the loop, if iterations hit `effectiveMaxTurns` without
  *      `submit_final_response` succeeding, agent mode runs a single
- *      force-final pass that may overwrite `streaming.fullResponse` from a
- *      submit_final_response in the force-final response. Non-agent mode
+ *      force-final pass. For research it may overwrite
+ *      `streaming.fullResponse` from a submit_final_response in the
+ *      force-final response; for in-character (a roleplay character) it
+ *      asks for the turn in prose with no further tools. Non-agent mode
  *      just logs the cap.
  *
  * Mutations: `streaming.fullResponse`, `streaming.usage`, `streaming.cacheUsage`,
@@ -47,7 +50,7 @@ import {
 import { detectToolCallsInResponse, processToolCalls } from './tool-execution.service'
 import { buildAssistantToolCallMessage, buildToolResultMessages } from './tool-call-threading'
 import { buildForceFinalMessage, generateIterationSummary, type ResolvedAgentMode } from './agent-mode-resolver.service'
-import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { extractFinishReason, isTruncatedFinishReason } from '@/lib/llm/extract-finish-reason'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character } from '@/lib/schemas/types'
@@ -85,17 +88,6 @@ const GHOST_WRAP_REJECTION_MESSAGE =
   "Rejected: submit_final_response was called on the first iteration without any accompanying task work or conversational prose this turn. The previous turn already concluded — do not re-wrap completed work. Respond to the user's current message directly, in character, as natural prose. You may use memory or other tools first if helpful, but only call submit_final_response after completing fresh agentic work that warrants a structured summary."
 
 /**
- * Provider finish-reason strings that mean "the output was cut off because it
- * hit the token ceiling." Compared case-insensitively so Google's `MAX_TOKENS`,
- * Anthropic's `max_tokens`, and OpenAI/OpenAI-compatible `length` all match.
- */
-function isTruncatedFinishReason(reason: string | null): boolean {
-  if (!reason) return false
-  const r = reason.toLowerCase()
-  return r === 'max_tokens' || r === 'length' || r === 'model_length'
-}
-
-/**
  * The tool result returned for a tool call that was cut off mid-arguments by
  * the output-token limit. The arguments JSON is incomplete (often missing
  * required fields like `path`), so the call is rejected rather than executed
@@ -106,6 +98,40 @@ function buildToolTruncationMessage(toolName: string): string {
 }
 
 /**
+ * The call the tool loop continues with: `streaming.effectiveCall` when a
+ * failover substitute holds the turn, else the slate's primary values.
+ */
+export function effectiveToolLoopCall(opts: {
+  streaming: StreamingState
+  formattedMessages: StreamOptions['messages']
+  modelParams: Record<string, unknown>
+  actualTools: unknown[]
+  useNativeWebSearch: boolean
+}): Pick<RunNativeToolLoopOptions, 'formattedMessages' | 'modelParams' | 'actualTools' | 'useNativeWebSearch'> {
+  const call = opts.streaming.effectiveCall
+  if (!call) {
+    return {
+      formattedMessages: opts.formattedMessages,
+      modelParams: opts.modelParams,
+      actualTools: opts.actualTools,
+      useNativeWebSearch: opts.useNativeWebSearch,
+    }
+  }
+  logger.debug('Tool loop continues on the substitute\'s call shape', {
+    profileId: opts.streaming.effectiveProfile.id,
+    provider: opts.streaming.effectiveProfile.provider,
+    toolCount: call.tools.length,
+    toolMode: call.toolMode,
+  })
+  return {
+    formattedMessages: call.messages,
+    modelParams: call.modelParams,
+    actualTools: call.tools,
+    useNativeWebSearch: call.useNativeWebSearch,
+  }
+}
+
+/**
  * Run the bounded native-tool loop, including agent-mode `submit_final_response`
  * extraction, the iteration-0 ghost-wrap guardrail, and the max-turns
  * force-final branch.
@@ -113,10 +139,13 @@ function buildToolTruncationMessage(toolName: string): string {
 export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise<void> {
   const {
     repos, chatId, userId, character, preGeneratedAssistantMessageId,
-    agentMode, formattedMessages, modelParams, actualTools, useNativeWebSearch,
-    toolContext, streaming, toolMessages, generatedImagePaths,
+    agentMode, toolContext, streaming, toolMessages, generatedImagePaths,
     controller, encoder, preservePartialOnError,
   } = opts
+  // A stand-in that took the turn continues on its own shape: its provider's
+  // tools, its image-budgeted messages and its params (A15). The slate's
+  // values are the primary's, and right only while the primary holds the turn.
+  const { formattedMessages, modelParams, actualTools, useNativeWebSearch } = effectiveToolLoopCall(opts)
 
   // Initial state: the primary stream's slate + response is what the loop's
   // first iteration sees. `currentResponse` accumulates per-iteration content
@@ -137,6 +166,9 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
   // and keeps wrapping every other turn even when it's purely roleplay.
   let realWorkIterations = 0
   let agentModeCompleted = false
+  // Only the research flavour is offered submit_final_response; an
+  // in-character turn ends when the model stops calling tools.
+  const submitOffered = agentMode.enabled && agentMode.flavor === 'research'
 
   while (currentRawResponse && toolIterations < effectiveMaxTurns) {
     // The operator's hard stop: tools already run stay run, but no further
@@ -162,7 +194,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
     // re-prompt the model to make a smaller call.
     const truncated = isTruncatedFinishReason(extractFinishReason(currentRawResponse))
 
-    const submitFinalCall = agentMode.enabled
+    const submitFinalCall = submitOffered
       ? toolCalls.find(tc => tc.name === 'submit_final_response')
       : undefined
     const nonSubmitToolCalls = submitFinalCall
@@ -408,6 +440,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         chatId,
         iterations: toolIterations,
         maxTurns: effectiveMaxTurns,
+        flavor: agentMode.flavor,
       })
 
       safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -417,7 +450,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
         characterId: character.id,
       }))
 
-      const forceFinalMessage = buildForceFinalMessage()
+      const forceFinalMessage = buildForceFinalMessage(agentMode.flavor)
       currentMessages = [
         ...currentMessages,
         { role: 'assistant' as const, content: currentResponse, thoughtSignature: streaming.thoughtSignature, reasoningContent: streaming.reasoningContent, name: undefined },
@@ -455,7 +488,7 @@ export async function runNativeToolLoop(opts: RunNativeToolLoopOptions): Promise
 
             // If the force-final call still contains submit_final_response,
             // promote its `response` arg over whatever streamed.
-            if (chunk.rawResponse) {
+            if (submitOffered && chunk.rawResponse) {
               const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streaming.effectiveProfile.provider)
               const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
               if (submitCall) {

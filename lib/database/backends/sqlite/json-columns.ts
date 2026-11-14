@@ -5,6 +5,7 @@
  * including serialization, querying, and array operations.
  */
 
+import { sqlInList } from './in-list';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -144,10 +145,10 @@ export function jsonArrayContainsAny(column: string, values: unknown[]): { sql: 
     return { sql: '0', params: [] };
   }
 
-  const placeholders = values.map(() => '?').join(', ');
+  const list = sqlInList(values);
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value IN (${placeholders}))`,
-    params: values,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value IN ${list.sql})`,
+    params: list.params,
   };
 }
 
@@ -156,10 +157,18 @@ export function jsonArrayContainsAny(column: string, values: unknown[]): { sql: 
  * Used for regex-like text search on array fields like keywords
  * @param column The column name containing a JSON array
  * @param pattern The LIKE pattern to match (use % for wildcards)
+ * @param options.escaped The pattern escapes `%`/`_` with `\` (declares ESCAPE)
  */
-export function jsonArrayContainsLike(column: string, pattern: string): { sql: string; params: unknown[] } {
+export function jsonArrayContainsLike(
+  column: string,
+  pattern: string,
+  options: { escaped?: boolean } = {}
+): { sql: string; params: unknown[] } {
+  // An escaped pattern (built by escapeLikeLiteral) must declare its escape
+  // character, or the backslashes are matched literally.
+  const escape = options.escaped ? ` ESCAPE '\\'` : '';
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value LIKE ?)`,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE value LIKE ?${escape})`,
     params: [pattern],
   };
 }
@@ -172,7 +181,9 @@ export function jsonArrayContainsLike(column: string, pattern: string): { sql: s
  *
  * @param column The column name containing a JSON array of objects
  * @param nestedPath The JSON path within each array element (e.g., 'characterId' or 'address.city')
- * @param value The value to match
+ * @param value The value to match. A null/undefined value matches an element
+ *   whose nested field is null or absent (`IS NULL`, no bound parameter) —
+ *   `= ?` bound to NULL never matches anything in SQL (#196).
  */
 export function jsonArrayObjectMatch(
   column: string,
@@ -181,8 +192,15 @@ export function jsonArrayObjectMatch(
 ): { sql: string; params: unknown[] } {
   // Use json_each to iterate array elements, then json_extract to get the nested field
   const jsonPath = '$.' + nestedPath;
+  const fieldExpr = `json_extract(value, '${jsonPath}')`;
+  if (value === null || value === undefined) {
+    return {
+      sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE ${fieldExpr} IS NULL)`,
+      params: [],
+    };
+  }
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') = ?)`,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE ${fieldExpr} = ?)`,
     params: [value],
   };
 }
@@ -205,10 +223,10 @@ export function jsonArrayObjectMatchAny(
   }
 
   const jsonPath = '$.' + nestedPath;
-  const placeholders = values.map(() => '?').join(', ');
+  const list = sqlInList(values);
   return {
-    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') IN (${placeholders}))`,
-    params: values,
+    sql: `EXISTS (SELECT 1 FROM json_each("${column}") WHERE json_extract(value, '${jsonPath}') IN ${list.sql})`,
+    params: list.params,
   };
 }
 

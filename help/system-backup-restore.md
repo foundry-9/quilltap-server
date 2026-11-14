@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system&section=backup-restore
+url: /settings?section=backup-restore
 ---
 
 # Backup & Restore
 
-> **[Open this page in Quilltap](/settings?tab=system&section=backup-restore)**
+> **[Open this page in Quilltap](/settings?section=backup-restore)**
 
 The Backup & Restore tool lets you create complete backups of your Quilltap system and restore from previous backups.
 
@@ -61,6 +61,7 @@ Certain data is intentionally excluded from backups:
 - **Background jobs** — any in-flight or queued tasks (embedding generation, memory extraction, etc.) are not preserved. They will be re-triggered as needed.
 - **Ariel's terminal sessions** — the record of each shell opened in a chat, and the transcript of everything that scrolled past in it, stay behind. A shell is a living thing and cannot be restored, the directories it worked in belong to the old machine, closed sessions are swept away after thirty days in any case, and a transcript keeps every word printed to the screen — including any password, token or key that happened to pass through. Ariel's periodic dispatches to the chat are ordinary messages, so what your characters were told of the proceedings travels with the backup as usual.
 - **Open Storyteller rounds** — a round's bids are scratch paper, cleared the moment the round closes, so a round still open when the backup is taken is simply dropped. The record of a bid that was acted upon rides on its message and is restored with it.
+- **A chat's opening, half-finished** — while a new chat is being opened (the Green Room dressing the cast, the staff making their entrances, the greeting being composed), Quilltap keeps a note of how far it has got. That note stays behind: a restored chat is taken to be fully opened, and simply waits for you to speak. Its transcript, cast and outfits travel as usual; only the stage-manager's clipboard is left in the wings.
 - **Built-in plugins** — these ship with Quilltap and do not need backing up.
 - **The help pages you are reading** — they ship with the application and are re-read from disk whenever a page changes, so an archived copy could only hold you to yesterday's wording. Their search index is rebuilt with them.
 - **Cached provider model lists** — while included in backups for convenience, these are refreshed automatically from your providers.
@@ -69,7 +70,7 @@ Certain data is intentionally excluded from backups:
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=backup-restore`)
 
 2. **Find the Backup & Restore card**
 
@@ -131,7 +132,7 @@ problem: a thin pipe, a full disc, a mail attachment that will not have it.
 
 **Step-by-Step:**
 
-1. **Go to the **AI Providers** tab in Settings** (`/settings?tab=providers`)
+1. **Go to the Settings page, and open the *Data & Maintenance* group** (`/settings?section=backup-restore`)
 
 2. **Find the Backup & Restore card**
 
@@ -164,6 +165,8 @@ problem: a thin pipe, a full disc, a mail attachment that will not have it.
    - Your system reloads with the restored data
    - npm plugins are extracted and ready to use
    - The restore summary may mention re-indexing; see below
+
+**A word on plugins and secrets.** A restore never installs plugin code from a backup; the preview and the result simply list the plugins that were aboard, so that you may reinstall them from the Plugins page at your leisure. Archives containing symbolic links, or an unreasonable number of entries or quantity of data, are refused at the door. Plugin settings a plugin marks as secret (the MCP plugin's server list, tokens and all, for one) are not kept in backups, and must be typed in again after a restore; any values already on the instance are left undisturbed.
 
 ## After a Restore: The Indexing Sweep
 
@@ -234,6 +237,34 @@ project and group now goes straight back to the store it came with. Should an
 archive be damaged — a store missing from it, or two of its entries laying
 claim to the same one — the latecomer is given a fresh store instead, and the
 restore summary says precisely who and why.
+
+The 4.13 season brought four more repairs to the restoring trade.
+
+- **Templates keep their names on the door.** Your own roleplay and prompt
+  templates used to come home under fresh identities, so every chat,
+  character and project that had been dressed in one woke to find it missing.
+  They now return under the very identity they left with. The built-in
+  templates — Standard, Quilltap RP and Novel — now wear the same identity on
+  every instance, so a chat written in one of them finds it wherever it lands.
+  A backup taken before this change cannot say which built-in a chat used;
+  such a chat falls back to the house default and may be re-dressed by hand.
+- **Nothing is invented for a missing guest.** Importing as new data once
+  minted a fresh identity for anything the backup merely *mentioned* — an
+  image profile, a chat, a message — that it did not carry. A reference to
+  something absent is now cleared or left as it was, and the summary
+  anchors, archived-character files, Brahma Console profile and the little
+  annotations inside messages that were previously left behind now follow
+  their owners home.
+- **A character with a stuck vault is no longer left out.** Should a
+  character's, project's or group's store prove unreadable when the backup is
+  made, the backup still carries its row and every memory it owns, and says
+  so in a note that the restore repeats in its warnings. Likewise "delete all
+  my data" and a Replace restore now clear such rows rather than leaving them
+  behind.
+- **Every Inspector log travels.** Backups and data deletion once stopped at
+  the newest ten thousand LLM logs; they now take the lot.
+- The restore summary's figures now count what was actually restored, not
+  what the archive offered.
 
 ## Restore Modes Explained
 
@@ -361,7 +392,7 @@ Untick the box to have the wipe take the archive shelf too.
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/settings?tab=system&section=backup-restore")`
+`help_navigate(url: "/settings?section=backup-restore")`
 
 ## Related Topics
 

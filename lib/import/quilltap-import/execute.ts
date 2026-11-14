@@ -14,6 +14,7 @@ import {
   type ImportOptions,
   type ImportResult,
   type IdMappingState,
+  createIdMappingState,
   getExportData,
 } from './types';
 import {
@@ -33,6 +34,7 @@ import {
 import { importDocumentStores } from './import-document-stores';
 import { buildImportedWardrobeItemIdMap, importWardrobeWear } from './import-wardrobe-wear';
 import { importWardrobeHistory } from './import-wardrobe-history';
+import { importAvatarTimeline } from './import-avatar-timeline';
 import { importWardrobeItemImages } from './import-wardrobe-images';
 import { importFiles } from './import-files';
 import {
@@ -451,24 +453,7 @@ async function executeImportStrict(
   const warnings: string[] = [];
 
   // Initialize ID mapping state
-  const idMaps: IdMappingState = {
-    tags: new Map(),
-    characters: new Map(),
-    chats: new Map(),
-    connectionProfiles: new Map(),
-    imageProfiles: new Map(),
-    embeddingProfiles: new Map(),
-    roleplayTemplates: new Map(),
-    projects: new Map(),
-    groups: new Map(),
-    mountPoints: new Map(),
-    docMountFileLinks: new Map(),
-    characterVaultMounts: new Map(),
-    skippedCharacterVaults: new Set(),
-    preserveIdsSkips: new Set(),
-    wardrobeItems: new Map(),
-    messages: new Map(),
-  };
+  const idMaps: IdMappingState = createIdMappingState();
 
   // Initialize counts
   const imported: QuilltapExportCounts = {
@@ -656,13 +641,30 @@ async function executeImportStrict(
       skipped.chats = counts.skipped;
     }
 
+    // 7a–7b-ii. Chat sidecars. Each is inserted only for a chat whose row
+    // this import wrote: a skipped chat keeps the sidecars it already has,
+    // and inserting the bundle's again duplicated them on every re-import
+    // (#193). An overwritten chat was removed with its sidecars, so it takes
+    // the bundle's.
+    const sidecarsOfWrittenChats = <S extends { chatId: string }>(rows: S[], noun: string): S[] => {
+      const kept = rows.filter((row) => idMaps.writtenChats.has(row.chatId));
+      if (kept.length < rows.length) {
+        moduleLogger.debug('Left chat sidecars of chats this import did not write', {
+          kind: noun,
+          total: rows.length,
+          kept: kept.length,
+        });
+      }
+      return kept;
+    };
+
     // 7a. Conversation annotations attached to imported chats. Remap chatId
     // through idMaps.chats, and sourceMessageId through idMaps.messages for a
     // chat whose message ids were reminted (bug 228).
     if (data.conversationAnnotations && data.conversationAnnotations.length > 0) {
       const globalRepos = getRepositories();
       let annotationsImported = 0;
-      for (const annotation of data.conversationAnnotations) {
+      for (const annotation of sidecarsOfWrittenChats(data.conversationAnnotations, 'conversation annotation')) {
         const remappedChatId = idMaps.chats.get(annotation.chatId) ?? annotation.chatId;
         try {
           const { id, createdAt, updatedAt, ...annotationData } = annotation;
@@ -690,7 +692,7 @@ async function executeImportStrict(
     if (data.chatDocuments && data.chatDocuments.length > 0) {
       const globalRepos = getRepositories();
       let chatDocsImported = 0;
-      for (const cd of data.chatDocuments) {
+      for (const cd of sidecarsOfWrittenChats(data.chatDocuments, 'chat document')) {
         const remappedChatId = idMaps.chats.get(cd.chatId) ?? cd.chatId;
         try {
           const { id, createdAt, updatedAt, ...cdData } = cd;
@@ -757,7 +759,7 @@ async function executeImportStrict(
 
       let informsImported = 0;
       let informsDropped = 0;
-      for (const inform of data.chatInforms) {
+      for (const inform of sidecarsOfWrittenChats(data.chatInforms, 'inform')) {
         const remappedChatId = idMaps.chats.get(inform.chatId) ?? inform.chatId;
         const result = remapChatInform(inform, idMaps, await knownFor(remappedChatId));
 
@@ -838,62 +840,77 @@ async function executeImportStrict(
       imported.documentStoreProjectLinks = counts.projectLinks;
     }
 
-    // 7d. Group character membership and linked document stores. Remap
-    // group and character IDs; skip members/links that don't exist in the import.
+    // 7d. Group character membership and linked document stores. A member or
+    // store resolves to the row this import gave it, else to the instance's
+    // own row of that id — a groups-only bundle carries neither characters nor
+    // stores (#200). Anything still unresolved is named, never dropped quietly.
     if (data.groups && data.groups.length > 0) {
       const groupsData = data.groups as Array<{
         id: string;
+        name?: string;
+        officialMountPointId?: string | null;
         _memberCharacterIds?: string[];
         _linkedStoreMountPointIds?: string[];
       }>;
+      const localCharacter = async (id: string) => ((await repos.characters.findById(id)) ? id : undefined);
+      const localStore = async (id: string) => ((await globalRepos.docMountPoints.findById(id)) ? id : undefined);
 
       for (const groupExport of groupsData) {
         const remappedGroupId = idMaps.groups.get(groupExport.id) ?? groupExport.id;
+        let unresolvedMembers = 0;
+        let unresolvedStores = 0;
 
-        // Re-establish character membership
-        if (groupExport._memberCharacterIds && groupExport._memberCharacterIds.length > 0) {
-          for (const characterId of groupExport._memberCharacterIds) {
-            const remappedCharacterId = idMaps.characters.get(characterId);
-            if (!remappedCharacterId) {
-              moduleLogger.debug('Skipping group member — character not in import', {
-                groupId: groupExport.id,
-                characterId,
-              });
-              continue;
-            }
-            try {
-              await repos.groupCharacterMembers.addMember(remappedGroupId, remappedCharacterId);
-            } catch (error) {
-              moduleLogger.warn('Failed to add group member', {
-                groupId: remappedGroupId,
-                characterId: remappedCharacterId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
+        for (const characterId of groupExport._memberCharacterIds ?? []) {
+          const remappedCharacterId = idMaps.characters.get(characterId) ?? (await localCharacter(characterId));
+          if (!remappedCharacterId) {
+            unresolvedMembers++;
+            moduleLogger.debug('Group member is neither in the import nor on this instance', { groupId: groupExport.id, characterId });
+            continue;
+          }
+          try {
+            await repos.groupCharacterMembers.addMember(remappedGroupId, remappedCharacterId);
+          } catch (error) {
+            moduleLogger.warn('Failed to add group member', {
+              groupId: remappedGroupId,
+              characterId: remappedCharacterId,
+              error: error instanceof Error ? error.message : String(error),
+            });
           }
         }
 
-        // Link additional document stores (beyond the official mount point)
-        if (groupExport._linkedStoreMountPointIds && groupExport._linkedStoreMountPointIds.length > 0) {
-          for (const mountPointId of groupExport._linkedStoreMountPointIds) {
-            const remappedMountPointId = idMaps.mountPoints.get(mountPointId);
-            if (!remappedMountPointId) {
-              moduleLogger.debug('Skipping group linked store — mount point not in import', {
-                groupId: groupExport.id,
-                mountPointId,
-              });
-              continue;
-            }
-            try {
-              await repos.groupDocMountLinks.link(remappedGroupId, remappedMountPointId);
-            } catch (error) {
-              moduleLogger.warn('Failed to link document store to group', {
-                groupId: remappedGroupId,
-                mountPointId: remappedMountPointId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
+        // Additional document stores (beyond the official mount point)
+        for (const mountPointId of groupExport._linkedStoreMountPointIds ?? []) {
+          // The group's own official store is not an "additional" link: the
+          // imported group has its own (a fresh one on create, its existing one
+          // on overwrite). Linking the source's would let a Duplicate copy read
+          // and write the original group's documents (#218).
+          if (groupExport.officialMountPointId && mountPointId === groupExport.officialMountPointId) {
+            moduleLogger.debug('Skipping the source group\'s own official store link', { groupId: groupExport.id, mountPointId });
+            continue;
           }
+          const remappedMountPointId = idMaps.mountPoints.get(mountPointId) ?? (await localStore(mountPointId));
+          if (!remappedMountPointId) {
+            unresolvedStores++;
+            moduleLogger.debug('Group linked store is neither in the import nor on this instance', { groupId: groupExport.id, mountPointId });
+            continue;
+          }
+          try {
+            await repos.groupDocMountLinks.link(remappedGroupId, remappedMountPointId);
+          } catch (error) {
+            moduleLogger.warn('Failed to link document store to group', {
+              groupId: remappedGroupId,
+              mountPointId: remappedMountPointId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        const label = groupExport.name ?? groupExport.id;
+        if (unresolvedMembers > 0) {
+          warnings.push(`Group "${label}": ${unresolvedMembers} member${unresolvedMembers === 1 ? '' : 's'} could not be found and ${unresolvedMembers === 1 ? 'was' : 'were'} left out.`);
+        }
+        if (unresolvedStores > 0) {
+          warnings.push(`Group "${label}": ${unresolvedStores} linked store${unresolvedStores === 1 ? '' : 's'} could not be found and ${unresolvedStores === 1 ? 'was' : 'were'} left out.`);
         }
       }
     }
@@ -928,7 +945,7 @@ async function executeImportStrict(
     if (data.wardrobeHistory && data.wardrobeHistory.length > 0) {
       try {
         imported.wardrobeHistory = await importWardrobeHistory(
-          data.wardrobeHistory,
+          sidecarsOfWrittenChats(data.wardrobeHistory, 'outfit history'),
           data.documents ?? [],
           idMaps,
           warnings
@@ -938,6 +955,25 @@ async function executeImportStrict(
         warnings.push(`Failed to import the outfit history: ${msg}`);
         moduleLogger.warn('Failed to import outfit history', {
           rowCount: data.wardrobeHistory.length,
+          error: msg,
+        });
+      }
+    }
+
+    // 7g. Avatar timeline. After the chats, characters and document stores
+    //    (whose id maps it reads). A timeline already live is never merged into.
+    if (data.avatarTimeline && data.avatarTimeline.length > 0) {
+      try {
+        imported.avatarTimeline = await importAvatarTimeline(
+          sidecarsOfWrittenChats(data.avatarTimeline, 'avatar timeline'),
+          idMaps,
+          warnings
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        warnings.push(`Failed to import the avatar timeline: ${msg}`);
+        moduleLogger.warn('Failed to import avatar timeline', {
+          rowCount: data.avatarTimeline.length,
           error: msg,
         });
       }

@@ -18,8 +18,10 @@ import {
   CONVERSATIONAL_VOICE_DIRECTION,
   TRUST_SAFEGUARDS_DIRECTION,
   GATED_COMPANION_TRUST_DISPOSITION,
+  generatorDirectionFor,
 } from '@/lib/services/character-field-semantics';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { resolveCharacterKind, type CharacterKind } from '@/lib/characters/kind';
 import { pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 const log = logger.child({ module: 'external-prompt-generator' });
@@ -46,7 +48,14 @@ export interface ExternalPromptResult {
 // Meta-Prompt
 // ============================================================================
 
-export const META_SYSTEM_PROMPT = `You are a prompt engineering expert. Your task is to generate a standalone system prompt for an AI character, suitable for pasting into external tools like Claude Desktop, ChatGPT Custom Instructions, or similar hosted environments.
+/**
+ * The meta-prompt for a character of the given kind. The kind-specific
+ * direction (stakes for a roleplay character, the work for an assistant) comes
+ * from `generatorDirectionFor`, between the trust safeguards and the companion
+ * gate.
+ */
+export function buildMetaSystemPrompt(kind: CharacterKind): string {
+  return `You are a prompt engineering expert. Your task is to generate a standalone system prompt for an AI character, suitable for pasting into external tools like Claude Desktop, ChatGPT Custom Instructions, or similar hosted environments.
 
 **Requirements:**
 - Write the entire prompt in second person ("You are [Name]. You always...", etc.)
@@ -64,11 +73,14 @@ ${CONVERSATIONAL_VOICE_DIRECTION}
 
 ${TRUST_SAFEGUARDS_DIRECTION}
 
+${generatorDirectionFor(kind)}
+
 ${GATED_COMPANION_TRUST_DISPOSITION}
 
 The external tool will not substitute placeholders: wherever the directions above say {{user}}, the generated prompt names the person the character talks with in plain words ("the user", or their name if the character data gives one), never the literal {{user}} token.
 
 Stay within the token budget specified by the user. Be thorough but concise.`;
+}
 
 // ============================================================================
 // Service
@@ -115,6 +127,11 @@ export async function generateExternalPrompt(
     return { success: false, prompt: '', tokensUsed: 0, error: 'Character not found' };
   }
 
+  // The meta-prompt follows the character's kind (stakes or the work).
+  const characterKind = resolveCharacterKind(character);
+  const metaSystemPrompt = buildMetaSystemPrompt(characterKind);
+  log.debug('External prompt meta-prompt built for the character\'s kind', { characterId, kind: characterKind });
+
   // Find selected system prompt
   const systemPrompt = character.systemPrompts?.find(sp => sp.id === request.systemPromptId);
   if (!systemPrompt) {
@@ -142,7 +159,7 @@ export async function generateExternalPrompt(
   const userMessage = buildUserMessage(character, systemPrompt, scenarioContent, descriptionContent, undefined, request.maxTokens);
 
   // Estimate input tokens (rough: 1 token ≈ 4 characters)
-  const estimatedInputTokens = Math.ceil((META_SYSTEM_PROMPT.length + userMessage.length) / 4);
+  const estimatedInputTokens = Math.ceil((metaSystemPrompt.length + userMessage.length) / 4);
   const safeInputLimit = getSafeInputLimit(profile.provider, profile.modelName, request.maxTokens, profile);
 
   if (estimatedInputTokens > safeInputLimit) {
@@ -160,7 +177,7 @@ export async function generateExternalPrompt(
   try {
     const provider = await createLLMProvider(profile.provider, profile.baseUrl ?? undefined);
     const messages = [
-      { role: 'system' as const, content: META_SYSTEM_PROMPT },
+      { role: 'system' as const, content: metaSystemPrompt },
       { role: 'user' as const, content: userMessage },
     ];
 
@@ -203,7 +220,7 @@ export async function generateExternalPrompt(
       modelName: profile.modelName,
       request: {
         messages: [
-          { role: 'system', content: META_SYSTEM_PROMPT },
+          { role: 'system', content: metaSystemPrompt },
           { role: 'user', content: userMessage },
         ],
         temperature: 0.7,

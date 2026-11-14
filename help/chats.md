@@ -75,17 +75,23 @@ Chats associated with a specific project:
 
 Most characters have a **First Message** — an introductory message the character sends when you start a new chat. This sets the scene and establishes the character's voice.
 
-### The Green Room — a word on what happens while the curtain rises
+### The Green Room — the curtain rises in the Salon itself
 
-Between the moment you press **Start** and the moment the room is yours to speak in, a good deal of unseen bustle takes place behind the scenes — and it is not always instantaneous. The cast must be gathered, everyone's particulars committed to memory, the opening scene set, and — most time-consuming of all — any character you have asked to *choose their own attire* must repair to the wardrobe and settle on an outfit, each such decision being a small consultation that takes a moment or two.
+Press **Start** and the New Chat dialog bows out at once: the conversation is created in a twinkling and you are shown straight into it. What remains to be done — and a good deal does — happens before your eyes rather than behind a locked door. The cast must have their particulars committed to memory, Prospero must brief the house, the Host must set the scene and introduce you, and — most leisurely of all — any character you have asked to *choose their own attire* must repair to the wardrobe and settle on an outfit (and decide what to [carry](inventory.md#packing-in-the-green-room)).
 
-Rather than leave you drumming your fingers at a blank screen, Quilltap now raises a small status dialog — **The Green Room** — for the duration. It reports, in plain terms, what is presently afoot; and as each character finishes deciding, it displays their chosen ensemble across the five slots (**Top**, **Bottom**, **Footwear**, **Accessories**, and **Hair**), so you may see at a glance what everyone has elected to wear. A blank **Hair** panel means nothing more alarming than hair left in its natural state. A running log beneath keeps a tidy record of the proceedings.
+All of this is narrated by **The Green Room**, a panel that sits above the conversation while the curtain rises. It reports what is presently afoot; as each character finishes deciding, it shows their chosen ensemble across the five slots (**Top**, **Bottom**, **Footwear**, **Accessories**, and **Hair** — a blank **Hair** panel means nothing more alarming than hair left in its natural state) and what they packed; and a running log beneath keeps a tidy record of the proceedings. Then the opening line arrives, streamed into the conversation exactly as every later reply is — composed by the very same machinery, memories and all, so the first words sound like the character who will speak the rest. When all is done the panel folds itself into a single **The Green Room — the curtain is up** line; click it to unfold the record of who chose what.
 
-One quiet rule governs those wardrobe consultations: **an archived garment is never offered.** Whatever a character may be shown, it is drawn only from garments still in circulation — archived pieces are withheld from the candidate list entirely, in every tier, with no way to ask otherwise. (See *Wardrobe* for how to archive and restore.)
+Should the panel overstay its welcome, the small **×** at its right-hand end shows it the door — though not out of the building. The Green Room withdraws from the top of the window and takes up a modest card in the conversation itself, at the very spot where its portion of the proceedings began, and thereafter scrolls along with everything else like a well-behaved footnote. Click the card to unfold who wore what and who carried what; click again to fold it away. A later arrival tidies the previous card into its place in the same fashion. The card is a record for your eyes alone — it is never shown to any character or model — and, like a stage-door memory, it lasts only for as long as you remain in the room.
 
-The dialog cannot be waved away while the work is underway — there would be nothing to return to — and it retires of its own accord the instant the conversation is ready for you. The one exception is trouble: should something go amiss, it will say so and offer you a **Close** button. (This attends fresh conversations and the *Continue Elsewhere* manoeuvre; autonomous rooms keep their own counsel.)
+One quiet rule governs those wardrobe consultations: **an archived garment is never offered.** Whatever a character may be shown, it is drawn only from garments still in circulation. (See *Wardrobe* for how to archive and restore.)
 
-Should your character's provider fall silent while composing the opening line — accepting the commission, and then simply never delivering — the Green Room no longer waits on it indefinitely. It allows ninety seconds, which is ample for a sentence or two, and then proceeds without one: the conversation opens with a plain scripted greeting in place of the composed one, and is yours to speak in as usual. Nothing else is lost; every other preparation was complete long before. Type a line and the chat answers perfectly normally. (See *Connection Profiles* → *The Understudies* for what a silence means elsewhere in the house.)
+A few particulars worth knowing:
+
+- **Stop works.** The Salon's **Stop** button reaches the opening line as it reaches any reply. What was dressed and packed stays dressed and packed; the conversation simply begins with *your* first line instead of theirs.
+- **You may speak at any moment.** Type a line while the curtain is still rising and it will wait politely for the opening to finish, then take its turn.
+- **A closed tab is no catastrophe.** Wander off mid-wardrobe and the house carries on; should it be interrupted outright, the next time you open the conversation it resumes from the step it had reached, never repeating what was already done.
+- **A character with a scripted first message** says it, word for word (with the usual `{{user}}` and `{{char}}` filled in), rather than composing one.
+- **Continue Elsewhere** opens on the previous chapter's history at once; the Green Room then dresses the cast (by default, as they were) and the floor is yours — no greeting, since nobody is arriving for the first time. **Autonomous rooms** go through the same preparations quietly, and an unscheduled room begins its run once they are complete.
 
 ### Taking a Character's Chair — "Play As"
 
@@ -101,7 +107,7 @@ One consequence follows, as surely as a headache follows a particularly long din
 
 A conversation's *roleplay template* decides how prose, dialogue, and murmured asides are dressed — and until now it was a matter to be discovered after the fact, by opening the sidebar of a chat already in progress and adjusting it there. No longer. The new-chat form carries a **Roleplay Template** dropdown of its own, sitting quietly beneath **Play As**.
 
-It arrives already set to whatever this conversation would have chosen for itself: the project's preferred template when you are filing the chat under a project, your own default from **Settings → Templates** otherwise, and **No Template** when you keep no default at all. The option that would have been chosen for you is marked *(default)*, so you may see at a glance whether you are agreeing with the house or overruling it.
+It arrives already set to whatever this conversation would have chosen for itself: the project's preferred template when you are filing the chat under a project, your own default from **Settings → Characters & Prompts → Roleplay Templates** otherwise, and **No Template** when you keep no default at all. The option that would have been chosen for you is marked *(default)*, so you may see at a glance whether you are agreeing with the house or overruling it.
 
 Change it and the new conversation begins in that style — no visit to the sidebar required. Leave it be and nothing whatever is different from before. And should you think better of it once the conversation is under way, the **Roleplay Template** dropdown in the chat's own sidebar remains where it always was, ready to be reconsidered.
 
@@ -119,7 +125,7 @@ Some conversations announce their character before the first syllable is spoken,
 
 The new-chat form therefore carries **The Concierge** directly above **Starting Scenario**, offering the same three postures as the chat's own sidebar:
 
-- *Moderated* — the default, and the state of every chat created without a word on the subject (unless you have told the Concierge that **New chats start as** Unmoderated, on his tab at `/settings?tab=concierge&section=refusals`). The usual providers first; the uncensored desk only when one of them refuses.
+- *Moderated* — the default, and the state of every chat created without a word on the subject (unless you have told the Concierge that **New chats start as** Unmoderated, on his **When a Provider Refuses** card at `/settings?section=refusals`). The usual providers first; the uncensored desk only when one of them refuses.
 - *Unmoderated* — the uncensored desk and nowhere else.
 - *Locked* — the usual providers only, and a refusal stands.
 
@@ -168,7 +174,7 @@ When a gathering grows too large for the header's mantelpiece, the project and t
 
 ### Chat Sidebar
 
-On the right, the **Chat Sidebar** is the single cabinet from which every per-chat dial and action is reached — a five-drawer affair holding **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content**:
+On the right, the **Chat Sidebar** is the single cabinet from which every per-chat dial and action is reached — a five-drawer affair holding **Participants**, **Chat**, **Visibility**, **Organize**, and **Edit Content**, with a sixth, **Concepts Named**, that appears once the chat has mentioned a character who isn't in it or anything from [the Atlas](atlas.md):
 
 - **Character Avatars** — Visual indicator of who's in the chat
 - **Turn Information** — Whose turn it is to speak
@@ -267,7 +273,7 @@ See [Message Actions](chat-message-actions.md) for complete details on editing, 
 Each chat can have its own configuration:
 
 - **Roleplay Template** — Formatting and style settings (Chat drawer of the Chat Sidebar)
-- **Image Generation** — Which image provider to use (Chat drawer of the Chat Sidebar)
+- **Image Generation** — Which image provider to use (Chat drawer of the Chat Sidebar). A new chat takes the project's image profile, else the leading character's, else the profile marked **Default** in Settings; choose **No image generation** in the Start Chat dialog to begin without one
 - **Connection Profiles** — Which LLM to use per participant (on each participant card in the Participants drawer)
 - **System Prompt Overrides** — Custom context per participant (on each participant card in the Participants drawer)
 - **Subprompts** — Which of a character's smaller instructions are in play (beneath the system prompt on each participant card, and in the New Chat dialog — see [Character Subprompts](character-subprompts.md))

@@ -71,22 +71,13 @@ describe('LoadingState', () => {
     expect(wrapper).toHaveClass('custom-class')
   })
 
-  it('centers content by default', () => {
+  it('centres content with the loading-state layout by default', () => {
     const { container } = render(
       <LoadingState />
     )
 
     const wrapper = container.firstChild
-    expect(wrapper).toHaveClass('flex', 'items-center', 'justify-center')
-  })
-
-  it('applies padding to container', () => {
-    const { container } = render(
-      <LoadingState />
-    )
-
-    const wrapper = container.firstChild
-    expect(wrapper).toHaveClass('py-8')
+    expect(wrapper).toHaveClass('qt-loading-state')
   })
 
   it('applies qt-text-secondary to message in spinner variant', () => {
@@ -122,7 +113,7 @@ describe('LoadingState', () => {
     )
 
     const spinner = container.querySelector('.qt-spinner')
-    expect(spinner).toHaveClass('text-primary')
+    expect(spinner).toHaveClass('qt-text-brand')
   })
 
   it('does not render message in spinner variant when not provided', () => {

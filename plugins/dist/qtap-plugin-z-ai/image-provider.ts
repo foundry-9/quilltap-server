@@ -12,6 +12,7 @@ import type { ImageProvider as ImageProviderBase, ImageGenParams, ImageGenRespon
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import { IMAGE_GEN_MODEL_PATTERN } from './models';
 import { ModerationRejectionError } from '@quilltap/plugin-types';
+import { downloadRemoteImage } from './remote-image';
 
 const logger = createPluginLogger('qtap-plugin-z-ai');
 
@@ -109,15 +110,9 @@ export class ZAIImageProvider implements ImageProviderBase {
         let data = img.b64_json;
         let mimeType = 'image/png';
         if (!data && img.url) {
-          const imageResponse = await fetch(img.url);
-          if (!imageResponse.ok) {
-            throw new Error(`Failed to download Z.AI image: HTTP ${imageResponse.status}`);
-          }
-          const contentType = imageResponse.headers.get('content-type');
-          if (contentType && contentType.startsWith('image/')) {
-            mimeType = contentType.split(';')[0];
-          }
-          data = Buffer.from(await imageResponse.arrayBuffer()).toString('base64');
+          const downloaded = await downloadRemoteImage(img.url, 'Z.AI');
+          data = downloaded.data;
+          mimeType = downloaded.mimeType;
         }
         if (!data) {
           throw new Error('Z.AI image entry carried neither base64 data nor a URL');

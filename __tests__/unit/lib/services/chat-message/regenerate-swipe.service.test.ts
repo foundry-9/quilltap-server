@@ -246,6 +246,28 @@ describe('regenerateMessageAsSwipe', () => {
     expect(statuses.map(s => s.stage)).toContain('regenerating')
   })
 
+  it('refuses an empty reply before any write or memory cascade (#183)', async () => {
+    streamMessage.mockImplementationOnce(async function* () {
+      yield { content: '', reasoningContent: 'thinking only', done: false }
+      yield { content: '', done: true, usage: { totalTokens: 3, promptTokens: 3, completionTokens: 0 } }
+    })
+    const findBySourceMessageId = jest.fn(async () => [{ id: 'mem-1' }])
+    const repos = buildRepos({ memories: { findBySourceMessageId, countBySourceMessageId: jest.fn(async () => 1) } })
+    const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')
+
+    await expect(regenerateMessageAsSwipe({
+      repos,
+      userId: 'user-1',
+      chat,
+      targetMessage: target,
+      allMessages: [makeMessage('msg-user', 'USER', now, 'p-revenant'), target],
+    })).rejects.toThrow(/empty reply/)
+
+    expect((repos as any).chats.addMessage).not.toHaveBeenCalled()
+    expect((repos as any).chats.updateMessage).not.toHaveBeenCalled()
+    expect(findBySourceMessageId).not.toHaveBeenCalled()
+  })
+
   it('refuses to regenerate staff/system messages', async () => {
     const repos = buildRepos()
     const staff = makeMessage('msg-host', 'ASSISTANT', now + 100, null, { systemSender: 'host' } as Partial<MessageEvent>)

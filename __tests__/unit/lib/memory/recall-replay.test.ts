@@ -547,12 +547,14 @@ describe('runRecallReplay — harness knobs (R7)', () => {
     primeRepos({
       messages: [
         message('m1', 'USER', 'First.', '2026-07-20T09:00:00.000Z'),
-        { ...message('m2', 'ASSISTANT', 'One.', '2026-07-20T09:01:00.000Z'), debugMemoryLogs: recallLog('old-a') },
+        { ...message('m2', 'ASSISTANT', 'One.', '2026-07-20T09:01:00.000Z'), participantId: 'p-ai', debugMemoryLogs: recallLog('old-a') },
+        // Another character's turn: their ring, not this character's (A14).
+        { ...message('m2b', 'ASSISTANT', 'Aside.', '2026-07-20T09:01:30.000Z'), participantId: 'p-other', debugMemoryLogs: recallLog('theirs') },
         message('m3', 'USER', 'Second.', '2026-07-20T09:02:00.000Z'),
-        { ...message('m4', 'ASSISTANT', 'Two.', '2026-07-20T09:03:00.000Z'), debugMemoryLogs: recallLog('old-b old-c') },
+        { ...message('m4', 'ASSISTANT', 'Two.', '2026-07-20T09:03:00.000Z'), participantId: 'p-ai', debugMemoryLogs: recallLog('old-b old-c') },
         message('m5', 'USER', 'Third.', '2026-07-20T09:04:00.000Z'),
         // Written AFTER the replayed turn opened: not part of its ring.
-        { ...message('m6', 'ASSISTANT', 'Three.', '2026-07-20T09:05:00.000Z'), debugMemoryLogs: recallLog('later') },
+        { ...message('m6', 'ASSISTANT', 'Three.', '2026-07-20T09:05:00.000Z'), participantId: 'p-ai', debugMemoryLogs: recallLog('later') },
       ],
     })
 

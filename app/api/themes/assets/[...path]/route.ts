@@ -17,6 +17,8 @@ import { logger } from '@/lib/logger';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { pluginRegistry } from '@/lib/plugins';
+import { resolveInside, PathOutsideBaseError } from '@/lib/paths/resolve-inside';
+import { serveStoredBytes } from '@/lib/api/serve-stored-bytes';
 
 // MIME types for common asset files
 const ASSET_MIME_TYPES: Record<string, string> = {
@@ -140,15 +142,20 @@ export async function GET(
       );
     }
 
-    // Construct and validate the absolute file path
-    const absoluteAssetPath = path.resolve(baseDir, relativeAssetPath);
-
-    // Security: Ensure the resolved path is within the base directory
-    if (!absoluteAssetPath.startsWith(baseDir)) {
-      logger.warn('Path traversal attempt detected', {
+    // The asset must resolve inside the theme's directory (symlinks resolved
+    // for installed bundles).
+    let absoluteAssetPath: string;
+    try {
+      absoluteAssetPath = await resolveInside(baseDir, relativeAssetPath, {
+        realpath: theme.source === 'bundle',
+      });
+    } catch (err) {
+      if (!(err instanceof PathOutsideBaseError)) throw err;
+      logger.warn('Asset path outside its theme directory', {
         context: 'GET /api/themes/assets',
         baseDir,
-        resolvedPath: absoluteAssetPath,
+        relativeAssetPath,
+        reason: err.reason,
       });
       return NextResponse.json(
         { error: 'Invalid path' },
@@ -161,17 +168,15 @@ export async function GET(
       const assetBuffer = await fs.readFile(absoluteAssetPath);
 
       // Determine MIME type from extension
-      const mimeType = ASSET_MIME_TYPES[ext] || 'application/octet-stream';// Return the asset with appropriate headers
-      return new NextResponse(new Uint8Array(assetBuffer), {
-        status: 200,
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Length': assetBuffer.length.toString(),
-          // Cache for 1 year (theme assets don't change often)
-          'Cache-Control': 'public, max-age=31536000, immutable',
-          // CORS headers
-          'Access-Control-Allow-Origin': '*',
-        },
+      const mimeType = ASSET_MIME_TYPES[ext] || 'application/octet-stream';
+      logger.debug('Serving theme asset', { context: 'GET /api/themes/assets', pluginName, relativeAssetPath });
+      // SVG keeps image/svg+xml (CSS url() needs it) but is never inline: a
+      // direct navigation downloads it, while CSS and <img> ignore disposition.
+      return serveStoredBytes(new Uint8Array(assetBuffer), {
+        mimeType,
+        filename: path.basename(absoluteAssetPath),
+        // Cache for 1 year (theme assets don't change often)
+        cacheControl: 'public, max-age=31536000, immutable',
       });
     } catch (readError) {
       logger.error(

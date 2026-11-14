@@ -38,9 +38,11 @@ import {
   isComputedToolEffect,
   isWithinCeiling,
   maxEffectOfTool,
+  offeredTools,
   toolEffectSpecOf,
   type ToolEffect,
   type ToolEffectContext,
+  type ToolOffer,
 } from '@/lib/tools/effects'
 
 const logger = createServiceLogger('StreamingService')
@@ -147,7 +149,7 @@ function isToolDisabled(
 }
 
 /** Name and description slots of a provider-format tool, whichever shape it takes. */
-function toolNameOf(tool: unknown): string | undefined {
+export function toolNameOf(tool: unknown): string | undefined {
   const toolObj = tool as { function?: { name?: string }; name?: string }
   return toolObj.function?.name || toolObj.name
 }
@@ -283,6 +285,13 @@ export interface BuiltTools {
   customToolEffects: Map<string, ToolEffect>
   /** Plugin / MCP tool name → declared effect (undeclared tools are absent and count as `write`). */
   pluginToolEffects: Map<string, ToolEffect>
+  /**
+   * The names this seat was offered, for the executor's tool permit: every
+   * tool the surface flags, the per-character switches and the chat's
+   * disabled tools left standing (taken before the ceiling filter, so a call
+   * above the ceiling is refused with the ceiling's own message).
+   */
+  offer: ToolOffer
 }
 
 /**
@@ -333,7 +342,8 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
 
   // Profile-level tool override - if allowToolUse is explicitly false, skip all tools
   if (connectionProfile.allowToolUse === false) {
-    return { tools: [], modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
+    logger.debug('Profile allows no tools; the offer is empty', { userId, profileId: connectionProfile.id })
+    return { tools: [], modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects, offer: offeredTools([]) }
   }
 
   // Fetch user's plugin tool configurations from database
@@ -479,11 +489,18 @@ export async function buildTools(options: BuildToolsOptions): Promise<BuiltTools
     })
   }
 
+  const offer = offeredTools(tools.map(toolNameOf).filter((name): name is string => !!name))
+  logger.debug('Tool offer built', {
+    userId,
+    offered: offer.kind === 'offered' ? [...offer.names] : [],
+    effectCeiling,
+  })
+
   if (effectCeiling) {
     tools = applyEffectCeilingToTools(tools, effectCeiling, { customToolEffects, pluginToolEffects })
   }
 
-  return { tools, modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects }
+  return { tools, modelSupportsNativeTools, useNativeWebSearch, customToolEffects, pluginToolEffects, offer }
 }
 
 /**

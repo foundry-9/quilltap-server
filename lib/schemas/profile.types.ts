@@ -44,6 +44,16 @@ export const DEFAULT_MAX_IMAGES_PER_REQUEST = 4;
 /** The highest per-request image cap a profile may store. */
 export const MAX_IMAGES_PER_REQUEST_CEILING = 50;
 
+/**
+ * Turns a tool result is sent to a profile in full before its body is
+ * replaced by a short stub, when the profile names no figure of its own.
+ */
+export const DEFAULT_TOOL_RESULT_VERBATIM_TURNS = 3;
+/** The highest tool-result verbatim window a profile may store. */
+export const TOOL_RESULT_VERBATIM_TURNS_CEILING = 1000;
+/** The stored `toolResultVerbatimTurns` value meaning "never elide". */
+export const TOOL_RESULT_VERBATIM_TURNS_NEVER_ELIDE = 0;
+
 export const ConnectionProfileSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -167,6 +177,16 @@ export const ConnectionProfileSchema = z.object({
    * missing or junk value.
    */
   maxImagesPerRequest: z.number().int().min(1).max(MAX_IMAGES_PER_REQUEST_CEILING).default(DEFAULT_MAX_IMAGES_PER_REQUEST),
+  /**
+   * How many turns a tool result is sent to this profile in full before its
+   * body is replaced with a short stub in the history. `0` keeps every result
+   * in full. Eliding trims the context, but each elision rewrites the history
+   * part-way up, which re-writes any provider prompt cache from that point —
+   * so a cached profile may prefer a long window or none. Never read this
+   * field directly: resolve it through `resolveToolResultVerbatimTurns()` in
+   * `lib/llm/connection-profile-utils.ts`.
+   */
+  toolResultVerbatimTurns: z.number().int().min(0).max(TOOL_RESULT_VERBATIM_TURNS_CEILING).default(DEFAULT_TOOL_RESULT_VERBATIM_TURNS),
   tags: z.array(UUIDSchema).default([]),
 
   /** Custom sort order for display (lower numbers appear first) */
