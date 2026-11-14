@@ -1,0 +1,565 @@
+/**
+ * Quilltap theme defaults — the semantic tier: colours, radii, type and
+ * spacing scales, effects. Component tokens (_variables.css) derive from these.
+ *
+ * !!! GENERATED FILE — DO NOT EDIT BY HAND !!!
+ * Source of truth: lib/themes/registry/ (the groups whose sheet is 'theme-defaults')
+ * Regenerate with: npm run generate:theme-variables
+ *
+ * Declared on :root and .dark (specificity 0,1,0). A version 1 theme's
+ * tokens.json is injected later as :root / .dark and so wins; Tailwind's
+ * --color-* / --radius-* / --font-* map (theme-tokens.css) reads these names.
+ */
+
+/* ============================================================================
+   LIGHT MODE AND SHARED VALUES
+   Also on any element carrying data-theme (a theme preview container), so
+   a theme shown inside another one starts from the defaults, not from
+   the page theme's values inherited down.
+   ============================================================================ */
+:root,
+[data-theme] {
+  /* ==========================================================================
+     COLOURS
+     The semantic colour pairs every component derives from: surfaces, text,
+     actions, status, borders. Each X has an X-foreground meant to read on
+     it. Tailwind maps each to a --color-* utility
+     (app/styles/theme-tokens.css).
+     ========================================================================== */
+  /* Page background - cool off-white */
+  --theme-background: hsl(225 14% 97%);
+
+  /* Card/surface background - pure white, lifted from page */
+  --theme-card: hsl(0 0% 100%);
+  --theme-card-foreground: hsl(225 18% 13%);
+
+  /* Popover/dropdown - same as card, shadow provides elevation */
+  --theme-popover: hsl(0 0% 100%);
+  --theme-popover-foreground: hsl(225 18% 13%);
+
+  /* Text - not pure black, slightly cool */
+  --theme-foreground: hsl(225 18% 13%);
+
+  /* Primary action - confident indigo-blue */
+  --theme-primary: hsl(225 65% 48%);
+  --theme-primary-foreground: hsl(0 0% 100%);
+
+  /* Secondary action - subtle cool-gray tint */
+  --theme-secondary: hsl(225 10% 92%);
+  --theme-secondary-foreground: hsl(225 18% 22%);
+
+  /* Muted - de-emphasized content */
+  --theme-muted: hsl(225 10% 94%);
+  --theme-muted-foreground: hsl(225 8% 42%);
+
+  /* Accent - neutral, same personality as secondary */
+  --theme-accent: hsl(225 10% 93%);
+  --theme-accent-foreground: hsl(225 18% 22%);
+
+  /* Semantic colors */
+  --theme-destructive: hsl(0 68% 50%);
+  --theme-destructive-foreground: hsl(0 0% 100%);
+  --theme-success: hsl(152 60% 31%);
+  --theme-success-foreground: hsl(0 0% 100%);
+  --theme-warning: hsl(38 90% 32%);
+  --theme-warning-foreground: hsl(0 0% 100%);
+  --theme-info: hsl(210 75% 44.5%);
+  --theme-info-foreground: hsl(0 0% 100%);
+
+  /* Borders & inputs */
+  --theme-border: hsl(225 10% 87%);
+  --theme-input: hsl(225 10% 87%);
+  --theme-ring: hsl(225 65% 48%);
+
+  /* Chat - user bubble matches primary hue */
+  --theme-chat-user: hsl(225 62% 50%);
+  --theme-chat-user-foreground: hsl(0 0% 100%);
+
+  /* ==========================================================================
+     SIDEBAR COLOURS
+     The navigation sidebar's own palette, mapped to --color-sidebar-*
+     utilities.
+     ========================================================================== */
+  /* Sidebar */
+  --theme-sidebar-background: hsl(225 14% 95%);
+  --theme-sidebar-foreground: hsl(225 18% 18%);
+  --theme-sidebar-border: hsl(225 10% 87%);
+  --theme-sidebar-muted: hsl(225 8% 44.5%);
+  --theme-sidebar-accent: hsl(225 10% 93%);
+  --theme-sidebar-accent-foreground: hsl(225 18% 22%);
+
+  /* ==========================================================================
+     CORNER RADII
+     The radius scale. Tailwind maps sm / md / lg to --radius-*; components
+     read those.
+     ========================================================================== */
+  /* Radii - tighter for a precise look */
+  --theme-radius-lg: 0.5rem;
+  --theme-radius-md: 0.375rem;
+  --theme-radius-sm: 0.25rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-radius-xl: 0.625rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-radius-full: 9999px;
+
+  /* ==========================================================================
+     TYPE SCALE
+     Font sizes, line heights, weights and letter spacing from the version 1
+     tokens.json shape.
+     ========================================================================== */
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-xs: 0.75rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-sm: 0.875rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-base: 1rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-lg: 1.125rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-xl: 1.25rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-2xl: 1.5rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-3xl: 1.875rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-size-4xl: 2.25rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-line-height-tight: 1.25;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-line-height-normal: 1.5;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-line-height-relaxed: 1.75;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-weight-normal: 400;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-weight-medium: 500;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-weight-semibold: 600;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-font-weight-bold: 700;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-letter-spacing-tight: -0.025em;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-letter-spacing-normal: 0;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-letter-spacing-wide: 0.025em;
+
+  /* ==========================================================================
+     SPACING SCALE
+     The spacing steps from the version 1 tokens.json shape.
+     ========================================================================== */
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-1: 0.25rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-2: 0.5rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-3: 0.75rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-4: 1rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-5: 1.25rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-6: 1.5rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-8: 2rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-10: 2.5rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-12: 3rem;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-spacing-16: 4rem;
+
+  /* ==========================================================================
+     EFFECTS
+     Shadows, transition timing and the focus ring.
+     ========================================================================== */
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-transition-fast: 150ms;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-transition-normal: 200ms;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-transition-slow: 300ms;
+
+  /* Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet. */
+  --theme-transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Read by the app's :focus-visible ring (_base.css), for a theme that turns it on (data-qt-focus-ring). */
+  --theme-focus-ring-width: 2px;
+
+  /* Read by the app's :focus-visible ring (_base.css), for a theme that turns it on (data-qt-focus-ring). */
+  --theme-focus-ring-offset: 2px;
+
+  /* ==========================================================================
+     CATEGORY PALETTE
+     One colour per category of thing a badge labels, with the text colour
+     that reads on its tint. Badge backgrounds are the category colour at
+     the tint strength; badge text is the category foreground.
+     ========================================================================== */
+  /* How strongly a category colour fills its badge background (the colour mixed with transparent at this share). */
+  --theme-category-tint: 12%;
+  --theme-category-character: hsl(225 55% 55%);
+  --theme-category-character-foreground: hsl(225 55% 42%);
+  --theme-category-user-character: hsl(270 45% 55%);
+  --theme-category-user-character-foreground: hsl(270 45% 42%);
+  --theme-category-chat: hsl(152 50% 38%);
+  --theme-category-chat-foreground: hsl(152 50% 30%);
+  --theme-category-tag: hsl(25 70% 48%);
+  --theme-category-tag-foreground: hsl(25 70% 36.5%);
+  --theme-category-memory: hsl(330 55% 52%);
+  --theme-category-memory-foreground: hsl(330 55% 38%);
+  --theme-category-message: hsl(45 70% 48%);
+  --theme-category-message-foreground: hsl(45 70% 29.5%);
+  --theme-category-project: hsl(185 55% 38%);
+  --theme-category-project-foreground: hsl(185 55% 30%);
+  --theme-category-related: hsl(270 45% 55%);
+  --theme-category-related-foreground: hsl(270 45% 42%);
+  --theme-category-source-npm: hsl(0 60% 50%);
+  --theme-category-source-npm-foreground: hsl(0 60% 38%);
+  --theme-category-source-git: hsl(25 70% 48%);
+  --theme-category-source-git-foreground: hsl(25 70% 36.5%);
+  --theme-category-wardrobe-top: hsl(220 60% 55%);
+  --theme-category-wardrobe-top-foreground: hsl(220 60% 42%);
+  --theme-category-wardrobe-bottom: hsl(152 50% 38%);
+  --theme-category-wardrobe-bottom-foreground: hsl(152 50% 30%);
+  --theme-category-wardrobe-footwear: hsl(38 70% 48%);
+  --theme-category-wardrobe-footwear-foreground: hsl(38 70% 32%);
+  --theme-category-wardrobe-accessories: hsl(270 45% 55%);
+  --theme-category-wardrobe-accessories-foreground: hsl(270 45% 42%);
+  --theme-category-wardrobe-hair: hsl(345 55% 55%);
+  --theme-category-wardrobe-hair-foreground: hsl(345 55% 42%);
+  --theme-category-wardrobe-shared: hsl(240 50% 55%);
+  --theme-category-wardrobe-shared-foreground: hsl(240 50% 42%);
+  --theme-category-capability: hsl(225 55% 55%);
+  --theme-category-capability-foreground: hsl(225 55% 42%);
+
+  /* ==========================================================================
+     STATUS PALETTE
+     The colours of alerts and notices: one colour per status, shown at a
+     fill strength for the background and an edge strength for the border,
+     with a text colour of its own. These are lighter than the action
+     colours (--theme-success and friends), which buttons and solid status
+     badges use.
+     ========================================================================== */
+  /* How strongly a status colour fills an alert background. */
+  --theme-status-tint: 8%;
+
+  /* How strongly a status colour draws an alert border. */
+  --theme-status-edge: 25%;
+  --theme-status-success: hsl(152 60% 38%);
+  --theme-status-success-foreground: hsl(152 60% 28%);
+  --theme-status-warning: hsl(38 90% 46%);
+  --theme-status-warning-foreground: hsl(38 90% 28%);
+  --theme-status-danger: hsl(0 68% 50%);
+  --theme-status-danger-foreground: hsl(0 68% 35%);
+  --theme-status-info: hsl(210 75% 48%);
+  --theme-status-info-foreground: hsl(210 75% 30%);
+
+  /* ==========================================================================
+     CHAT SURFACES
+     The Salon's message surfaces. The user bubble is --theme-chat-user
+     (Colours); the assistant surface and text are here, and each special
+     message kind (whisper, silent, wardrobe notice) is the assistant
+     surface mixed with that kind's accent, labelled in its foreground.
+     ========================================================================== */
+  --theme-chat-assistant: var(--theme-muted);
+  --theme-chat-assistant-foreground: var(--theme-foreground);
+
+  /* Mixed into the assistant surface for the one-line Staff bar. */
+  --theme-chat-system: var(--theme-muted);
+  --theme-chat-system-foreground: var(--theme-muted-foreground);
+
+  /* Mixed 40% into the assistant surface for the whisper bubble, and its border. */
+  --theme-chat-whisper: #9b8ec4;
+  --theme-chat-whisper-foreground: #5c447e;
+
+  /* Mixed 35% into the assistant surface for the silent bubble, and its border. */
+  --theme-chat-silent: #7a9e8e;
+  --theme-chat-silent-foreground: #5d7e6e;
+
+  /* Mixed 40% into the assistant surface for the wardrobe bubble, and its border. */
+  --theme-chat-wardrobe: #c4a24e;
+  --theme-chat-wardrobe-foreground: #9a7d2e;
+
+  /* ==========================================================================
+     ROLEPLAY TEXT
+     How a roleplay template's annotations look: dialogue, narration, inner
+     monologue and out-of-character asides each have a surface and a text
+     colour; the four template chips (qt-roleplay-1..4) have a colour and a
+     foreground. The insert buttons (--qt-rp-button-*) stay component
+     tokens.
+     ========================================================================== */
+  --theme-roleplay-dialogue: transparent;
+  --theme-roleplay-dialogue-foreground: var(--theme-foreground);
+  --theme-roleplay-narration: hsl(225 14% 12% / 0.8);
+  --theme-roleplay-narration-foreground: hsl(225 10% 72%);
+  --theme-roleplay-inner-monologue: hsl(270 20% 12% / 0.8);
+  --theme-roleplay-inner-monologue-foreground: hsl(270 50% 72%);
+  --theme-roleplay-ooc: hsl(0 0% 6%);
+  --theme-roleplay-ooc-foreground: hsl(152 60% 58%);
+  --theme-roleplay-chip-1: hsl(217 91% 53%);
+  --theme-roleplay-chip-1-foreground: hsl(0 0% 100%);
+  --theme-roleplay-chip-2: hsl(270 65% 55%);
+  --theme-roleplay-chip-2-foreground: hsl(0 0% 100%);
+  --theme-roleplay-chip-3: hsl(38 92% 50%);
+  --theme-roleplay-chip-3-foreground: hsl(30 45% 12%);
+  --theme-roleplay-chip-4: hsl(168 78% 36%);
+  --theme-roleplay-chip-4-foreground: hsl(0 0% 100%);
+
+  /* ==========================================================================
+     TERMINAL PALETTE
+     Ariel's terminal: background, text, cursor, selection and the sixteen
+     ANSI colours. A terminal keeps its own identity whatever the theme's
+     mode, so these have no dark values of their own.
+     ========================================================================== */
+  --theme-terminal-background: #1a1a1a;
+  --theme-terminal-foreground: #e6e6e6;
+  --theme-terminal-cursor: #e6e6e6;
+  --theme-terminal-selection: rgba(255, 255, 255, 0.2);
+  --theme-terminal-ansi-black: #000000;
+  --theme-terminal-ansi-bright-black: #666666;
+  --theme-terminal-ansi-red: #cd3131;
+  --theme-terminal-ansi-bright-red: #f14c4c;
+  --theme-terminal-ansi-green: #0dbc79;
+  --theme-terminal-ansi-bright-green: #23d18b;
+  --theme-terminal-ansi-yellow: #e5e510;
+  --theme-terminal-ansi-bright-yellow: #f5f543;
+  --theme-terminal-ansi-blue: #2472c8;
+  --theme-terminal-ansi-bright-blue: #3b8eea;
+  --theme-terminal-ansi-magenta: #bc3fbc;
+  --theme-terminal-ansi-bright-magenta: #d670d6;
+  --theme-terminal-ansi-cyan: #11a8cd;
+  --theme-terminal-ansi-bright-cyan: #29b8db;
+  --theme-terminal-ansi-white: #e5e5e5;
+  --theme-terminal-ansi-bright-white: #e5e5e5;
+
+  /* ==========================================================================
+     OVERLAY SCRIM
+     The dark layer behind lightboxes, image viewers and dialogs, and the
+     text and glass buttons on it. Every overlay is the scrim colour at some
+     strength; --theme-scrim-strength sets the full-screen one.
+     ========================================================================== */
+  --theme-scrim: rgb(0 0 0);
+
+  /* How opaque the full-screen overlay is. Lighter overlays (captions, dialog backdrop) use fixed shares of the scrim colour. */
+  --theme-scrim-strength: 85%;
+  --theme-scrim-foreground: rgb(255 255 255);
+
+  /* ==========================================================================
+     INTERACTION STATES
+     What hovering does. A solid fill (a primary or destructive button, a
+     link) mixes toward the shade; a quiet surface (a tab, a filter chip)
+     mixes in a little of the tint. Each component keeps its own share, so a
+     theme changes the direction here and the amount per component.
+     ========================================================================== */
+  /* The colour a solid fill mixes toward on hover. Black darkens; a dark theme may prefer white. */
+  --theme-hover-shade: black;
+
+  /* The colour a quiet surface takes a little of on hover. */
+  --theme-hover-tint: var(--theme-foreground);
+}
+
+/* ============================================================================
+   DARK MODE
+   ============================================================================ */
+.dark {
+  /* ---- Colours ---- */
+  /* Page background - deep cool blue-gray */
+  --theme-background: hsl(225 18% 9%);
+  /* Card/surface - noticeably lighter than page */
+  --theme-card: hsl(225 16% 12%);
+  --theme-card-foreground: hsl(225 10% 92%);
+  /* Popover/dropdown - another step lighter */
+  --theme-popover: hsl(225 16% 14%);
+  --theme-popover-foreground: hsl(225 10% 92%);
+  /* Text - off-white, slightly cool */
+  --theme-foreground: hsl(225 10% 92%);
+  /* Primary action - lighter for dark backgrounds */
+  --theme-primary: hsl(225 55% 68%);
+  --theme-primary-foreground: hsl(225 18% 9%);
+  /* Secondary action */
+  --theme-secondary: hsl(225 14% 17%);
+  --theme-secondary-foreground: hsl(225 10% 85%);
+  /* Muted */
+  --theme-muted: hsl(225 12% 14%);
+  --theme-muted-foreground: hsl(225 8% 58%);
+  /* Accent */
+  --theme-accent: hsl(225 14% 18%);
+  --theme-accent-foreground: hsl(225 10% 85%);
+  /* Semantic colors - adjusted for dark backgrounds */
+  --theme-destructive: hsl(0 60% 62%);
+  --theme-destructive-foreground: hsl(225 18% 9%);
+  --theme-success: hsl(152 55% 44%);
+  --theme-success-foreground: hsl(225 18% 9%);
+  --theme-warning: hsl(38 85% 52%);
+  --theme-warning-foreground: hsl(0 0% 10%);
+  --theme-info: hsl(210 70% 58%);
+  --theme-info-foreground: hsl(225 18% 9%);
+  /* Borders & inputs */
+  --theme-border: hsl(225 12% 20%);
+  --theme-input: hsl(225 12% 20%);
+  --theme-ring: hsl(225 55% 60%);
+  /* Chat - boosted for dark backgrounds */
+  --theme-chat-user: hsl(225 60% 56%);
+
+  /* ---- Sidebar colours ---- */
+  /* Sidebar - darker than main content */
+  --theme-sidebar-background: hsl(225 18% 7%);
+  --theme-sidebar-foreground: hsl(225 10% 88%);
+  --theme-sidebar-border: hsl(225 12% 16%);
+  --theme-sidebar-muted: hsl(225 8% 51%);
+  --theme-sidebar-accent: hsl(225 14% 18%);
+  --theme-sidebar-accent-foreground: hsl(225 10% 85%);
+
+  /* ---- Category palette ---- */
+  --theme-category-tint: 25%;
+  --theme-category-character: hsl(225 55% 58%);
+  --theme-category-character-foreground: hsl(225 55% 72%);
+  --theme-category-user-character: hsl(270 45% 58%);
+  --theme-category-user-character-foreground: hsl(270 45% 72%);
+  --theme-category-chat: hsl(152 50% 40%);
+  --theme-category-chat-foreground: hsl(152 50% 62%);
+  --theme-category-tag: hsl(25 70% 50%);
+  --theme-category-tag-foreground: hsl(25 70% 62%);
+  --theme-category-memory: hsl(330 55% 55%);
+  --theme-category-memory-foreground: hsl(330 55% 68%);
+  --theme-category-message: hsl(45 70% 50%);
+  --theme-category-message-foreground: hsl(45 70% 68%);
+  --theme-category-related: hsl(270 45% 58%);
+  --theme-category-related-foreground: hsl(270 45% 72%);
+  --theme-category-source-npm: hsl(0 60% 55%);
+  --theme-category-source-npm-foreground: hsl(0 60% 68%);
+  --theme-category-source-git: hsl(25 70% 50%);
+  --theme-category-source-git-foreground: hsl(25 70% 62%);
+  --theme-category-wardrobe-top: hsl(220 60% 58%);
+  --theme-category-wardrobe-top-foreground: hsl(220 60% 72%);
+  --theme-category-wardrobe-bottom: hsl(152 50% 40%);
+  --theme-category-wardrobe-bottom-foreground: hsl(152 50% 62%);
+  --theme-category-wardrobe-footwear: hsl(38 70% 50%);
+  --theme-category-wardrobe-footwear-foreground: hsl(38 70% 68%);
+  --theme-category-wardrobe-accessories: hsl(270 45% 58%);
+  --theme-category-wardrobe-accessories-foreground: hsl(270 45% 72%);
+  --theme-category-wardrobe-hair: hsl(345 55% 58%);
+  --theme-category-wardrobe-hair-foreground: hsl(345 55% 72%);
+  --theme-category-wardrobe-shared: hsl(240 50% 58%);
+  --theme-category-wardrobe-shared-foreground: hsl(240 50% 72%);
+  --theme-category-capability: hsl(225 55% 58%);
+  --theme-category-capability-foreground: hsl(225 55% 72%);
+
+  /* ---- Status palette ---- */
+  --theme-status-tint: 15%;
+  --theme-status-edge: 40%;
+  --theme-status-success: hsl(152 55% 38%);
+  --theme-status-success-foreground: hsl(152 55% 62%);
+  --theme-status-warning: hsl(38 85% 50%);
+  --theme-status-warning-foreground: hsl(38 85% 68%);
+  --theme-status-danger: hsl(0 60% 54%);
+  --theme-status-danger-foreground: hsl(0 60% 68%);
+  --theme-status-info: hsl(210 70% 55%);
+  --theme-status-info-foreground: hsl(210 70% 68%);
+
+  /* ---- Chat surfaces ---- */
+  --theme-chat-whisper: #6b5b95;
+  --theme-chat-whisper-foreground: #b5a9d1;
+  --theme-chat-silent: #4a7a6a;
+  --theme-chat-silent-foreground: #8ab8a4;
+  --theme-chat-wardrobe: #8a6d1b;
+  --theme-chat-wardrobe-foreground: #d4b65c;
+
+  /* ---- Roleplay text ---- */
+  --theme-roleplay-chip-1: hsl(217 91% 60%);
+  --theme-roleplay-chip-2: hsl(270 70% 64%);
+  --theme-roleplay-chip-3: hsl(38 95% 56%);
+  --theme-roleplay-chip-4: hsl(168 70% 44%);
+}
+
+/* ============================================================================
+   TAILWIND MAP ON NESTED THEME CONTAINERS
+   Tailwind declares --color-* / --radius-* / --font-* on :root only, so
+   below it they arrive already resolved to the page theme. A container
+   with its own data-theme re-declares them over its own tokens.
+   ============================================================================ */
+[data-theme]:not(:root) {
+  --color-background: var(--theme-background);
+  --color-card: var(--theme-card);
+  --color-card-foreground: var(--theme-card-foreground);
+  --color-popover: var(--theme-popover);
+  --color-popover-foreground: var(--theme-popover-foreground);
+  --color-foreground: var(--theme-foreground);
+  --color-primary: var(--theme-primary);
+  --color-primary-foreground: var(--theme-primary-foreground);
+  --color-secondary: var(--theme-secondary);
+  --color-secondary-foreground: var(--theme-secondary-foreground);
+  --color-muted: var(--theme-muted);
+  --color-muted-foreground: var(--theme-muted-foreground);
+  --color-accent: var(--theme-accent);
+  --color-accent-foreground: var(--theme-accent-foreground);
+  --color-destructive: var(--theme-destructive);
+  --color-destructive-foreground: var(--theme-destructive-foreground);
+  --color-success: var(--theme-success);
+  --color-success-foreground: var(--theme-success-foreground);
+  --color-warning: var(--theme-warning);
+  --color-warning-foreground: var(--theme-warning-foreground);
+  --color-info: var(--theme-info);
+  --color-info-foreground: var(--theme-info-foreground);
+  --color-border: var(--theme-border);
+  --color-input: var(--theme-input);
+  --color-ring: var(--theme-ring);
+  --color-chat-user: var(--theme-chat-user);
+  --color-chat-user-foreground: var(--theme-chat-user-foreground);
+  --color-sidebar-background: var(--theme-sidebar-background);
+  --color-sidebar-foreground: var(--theme-sidebar-foreground);
+  --color-sidebar-border: var(--theme-sidebar-border);
+  --color-sidebar-muted: var(--theme-sidebar-muted);
+  --color-sidebar-accent: var(--theme-sidebar-accent);
+  --color-sidebar-accent-foreground: var(--theme-sidebar-accent-foreground);
+  --radius-lg: var(--theme-radius-lg);
+  --radius-md: var(--theme-radius-md);
+  --radius-sm: var(--theme-radius-sm);
+  --font-sans: var(--theme-font-sans);
+  --font-serif: var(--theme-font-serif);
+  --font-mono: var(--theme-font-mono);
+  --font-brand: var(--theme-font-brand);
+  --font-chat-user: var(--theme-font-chat-user);
+}

@@ -1,0 +1,111 @@
+/**
+ * Theme token registry — Effects (semantic tier).
+ *
+ * Generated into app/styles/_theme-defaults.css by
+ * `npm run generate:theme-variables`; edit here, not there.
+ */
+
+import type { TokenDef } from '../types';
+
+export const EFFECTS_TOKENS: readonly TokenDef[] = [
+  {
+    name: "--theme-shadow-sm",
+    tier: 'semantic',
+    type: 'shadow',
+    group: 'effects',
+    label: "Shadow small",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-shadow-md",
+    tier: 'semantic',
+    type: 'shadow',
+    group: 'effects',
+    label: "Shadow medium",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05)",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-shadow-lg",
+    tier: 'semantic',
+    type: 'shadow',
+    group: 'effects',
+    label: "Shadow large",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04)",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-shadow-xl",
+    tier: 'semantic',
+    type: 'shadow',
+    group: 'effects',
+    label: "Shadow extra large",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04)",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-transition-fast",
+    tier: 'semantic',
+    type: 'duration',
+    group: 'effects',
+    label: "Transition fast",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "150ms",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-transition-normal",
+    tier: 'semantic',
+    type: 'duration',
+    group: 'effects',
+    label: "Transition normal",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "200ms",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-transition-slow",
+    tier: 'semantic',
+    type: 'duration',
+    group: 'effects',
+    label: "Transition slow",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "300ms",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-transition-easing",
+    tier: 'semantic',
+    type: 'easing',
+    group: 'effects',
+    label: "Transition easing",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "cubic-bezier(0.4, 0, 0.2, 1)",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-focus-ring-width",
+    tier: 'semantic',
+    type: 'length',
+    group: 'effects',
+    label: "Focus ring width",
+    description: "Read by the app's :focus-visible ring (_base.css), for a theme that turns it on (data-qt-focus-ring).",
+    default: "2px",
+    visibility: 'standard',
+  },
+  {
+    name: "--theme-focus-ring-offset",
+    tier: 'semantic',
+    type: 'length',
+    group: 'effects',
+    label: "Focus ring offset",
+    description: "Read by the app's :focus-visible ring (_base.css), for a theme that turns it on (data-qt-focus-ring).",
+    default: "2px",
+    visibility: 'standard',
+  },
+];

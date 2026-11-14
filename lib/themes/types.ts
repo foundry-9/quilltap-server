@@ -10,6 +10,8 @@
  */
 
 import { z } from 'zod';
+import { isBundleRelativePath } from './bundle-paths';
+import { ThemeManifestV2Schema, type ThemeManifestV2 } from './engine/document';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -233,18 +235,7 @@ export type ThemeTokens = z.infer<typeof ThemeTokensSchema>;
 // BUNDLE-RELATIVE PATHS
 // ============================================================================
 
-/**
- * Whether `p` names a file inside a theme bundle: relative, no NUL byte, no
- * leading separator or drive letter, and no `..` segment (either separator
- * counts, so `a\\..\\b` is refused too). The loaders still resolve every path
- * through `resolveInside`; this keeps an unusable manifest from validating.
- */
-export function isBundleRelativePath(p: string): boolean {
-  if (p.length === 0 || p.includes('\0')) return false;
-  if (p.startsWith('/') || p.startsWith('\\')) return false;
-  if (/^[A-Za-z]:/.test(p)) return false;
-  return !p.split(/[\\/]/).includes('..');
-}
+export { isBundleRelativePath } from './bundle-paths';
 
 const BUNDLE_PATH_MESSAGE = 'Must be a relative path inside the theme bundle (no leading "/", drive letter or ".." segment)';
 
@@ -341,12 +332,12 @@ export const ThemeCompatibilitySchema = z.object({
 export type ThemeCompatibility = z.infer<typeof ThemeCompatibilitySchema>;
 
 /**
- * .qtap-theme bundle manifest schema (theme.json)
+ * .qtap-theme bundle manifest schema (theme.json), format version 1.
  *
  * This is the manifest format for standalone .qtap-theme bundles,
  * which are logic-free zip archives containing CSS, JSON tokens, and fonts.
  */
-export const QtapThemeManifestSchema = z.object({
+export const QtapThemeManifestV1Schema = z.object({
   $schema: z.string().optional().describe('JSON Schema URL for validation'),
   format: z.literal('qtap-theme').describe('Must be "qtap-theme"'),
   formatVersion: z.literal(1).describe('Format version (currently 1)'),
@@ -403,7 +394,18 @@ export const QtapThemeManifestSchema = z.object({
   { message: 'Either "tokens" or "tokensPath" must be provided' }
 );
 
-export type QtapThemeManifest = z.infer<typeof QtapThemeManifestSchema>;
+export type QtapThemeManifestV1 = z.infer<typeof QtapThemeManifestV1Schema>;
+
+/**
+ * theme.json, either format: version 1 (above, unchanged) or version 2
+ * (`ThemeManifestV2Schema`, lib/themes/engine/document.ts — tokens.json with
+ * primitives, registry overrides and choices; scoped custom CSS; no
+ * extendsTheme). Both load until Spec C retires version 1.
+ */
+export const QtapThemeManifestSchema = z.discriminatedUnion('formatVersion', [QtapThemeManifestV1Schema, ThemeManifestV2Schema]);
+
+export type QtapThemeManifest = QtapThemeManifestV1 | ThemeManifestV2;
+export type { ThemeManifestV2 };
 
 /**
  * Theme bundle index entry

@@ -9,25 +9,27 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ThemeTokens, ThemePreviewImage } from '@/lib/themes/types'
-import type { ThemeFont } from '@/components/providers/theme/types'
+import type { ThemeFont, ThemeTokensResponse as ApiThemeTokensResponse } from '@/components/providers/theme/types'
 
 /**
- * Response from the theme tokens API
+ * Response from the theme tokens API (either format), plus the images list.
  */
-interface ThemeTokensResponse {
-  tokens: ThemeTokens
-  fonts?: ThemeFont[]
-  cssOverrides?: string
-  icons?: { name: string; src: string }[]
-  images?: ThemePreviewImage[]
+type ThemeTokensResponse = ApiThemeTokensResponse & { images?: ThemePreviewImage[] }
+
+/** A version 2 theme's compiled CSS and choices, for ThemePreviewPanelV2. */
+export interface ThemePreviewV2 {
+  css: string
+  choices: Record<string, string>
 }
 
 /**
  * Return value from the useThemePreview hook
  */
 export interface UseThemePreviewResult {
-  /** The loaded theme tokens */
+  /** The loaded theme tokens (version 1 themes) */
   tokens: ThemeTokens | null
+  /** The compiled theme (version 2 themes) */
+  v2: ThemePreviewV2 | null
   /** Custom fonts for the theme */
   fonts: ThemeFont[]
   /** CSS overrides from the theme */
@@ -57,6 +59,7 @@ const tokensCache = new Map<string, ThemeTokensResponse>()
  */
 export function useThemePreview(themeId: string | null): UseThemePreviewResult {
   const [tokens, setTokens] = useState<ThemeTokens | null>(null)
+  const [v2, setV2] = useState<ThemePreviewV2 | null>(null)
   const [fonts, setFonts] = useState<ThemeFont[]>([])
   const [cssOverrides, setCssOverrides] = useState<string | null>(null)
   const [icons, setIcons] = useState<{ name: string; src: string }[]>([])
@@ -67,6 +70,21 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
   // Track active fetch to handle race conditions
   const fetchIdRef = useRef(0)
 
+  const applyResponse = useCallback((data: ThemeTokensResponse) => {
+    if (data.formatVersion === 2) {
+      setTokens(null)
+      setV2({ css: data.css, choices: data.choices || {} })
+      setCssOverrides(null)
+    } else {
+      setTokens(data.tokens)
+      setV2(null)
+      setCssOverrides(data.cssOverrides || null)
+    }
+    setFonts(data.fonts || [])
+    setIcons(data.icons || [])
+    setImages(data.images || [])
+  }, [])
+
   const fetchTokens = useCallback(async () => {
     // For default theme, we don't need to fetch - the tokens will be provided directly
     if (themeId === null) {
@@ -76,11 +94,7 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
     // Check cache first
     const cached = tokensCache.get(themeId)
     if (cached) {
-      setTokens(cached.tokens)
-      setFonts(cached.fonts || [])
-      setCssOverrides(cached.cssOverrides || null)
-      setIcons(cached.icons || [])
-      setImages(cached.images || [])
+      applyResponse(cached)
       return
     }
 
@@ -105,11 +119,7 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
 
       // Only update state if this is still the most recent fetch
       if (currentFetchId === fetchIdRef.current) {
-        setTokens(data.tokens)
-        setFonts(data.fonts || [])
-        setCssOverrides(data.cssOverrides || null)
-        setIcons(data.icons || [])
-        setImages(data.images || [])
+        applyResponse(data)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load theme'
@@ -122,12 +132,13 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
         setIsLoading(false)
       }
     }
-  }, [themeId])
+  }, [themeId, applyResponse])
 
   const clearCache = useCallback(() => {
     if (themeId) {
       tokensCache.delete(themeId)
       setTokens(null)
+      setV2(null)
       setFonts([])
       setCssOverrides(null)
       setIcons([])
@@ -137,6 +148,7 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
 
   return {
     tokens,
+    v2,
     fonts,
     cssOverrides,
     icons,

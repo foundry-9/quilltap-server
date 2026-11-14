@@ -21,6 +21,8 @@ export interface ThemeSummary {
   source?: 'plugin' | 'bundle' | 'default';
   /** Whether this theme's format is deprecated (plugin themes) */
   deprecated?: boolean;
+  /** Theme document format (2: compiled server-side, see ThemeTokensResponseV2) */
+  formatVersion?: 1 | 2;
   previewColors?: {
     light: { background: string; primary: string; secondary: string; accent: string };
     dark: { background: string; primary: string; secondary: string; accent: string };
@@ -125,13 +127,39 @@ export interface ThemeIcon {
 /**
  * Response from theme tokens API
  */
-export interface ThemeTokensResponse {
+/** A version 1 theme: tokens plus raw CSS overrides, turned into CSS in the browser. */
+export interface ThemeTokensResponseV1 {
+  formatVersion?: 1;
   tokens: ThemeTokens;
   fonts?: ThemeFont[];
   icons?: ThemeIcon[];
   cssOverrides?: string;
   subsystems?: Record<string, SubsystemOverride>;
 }
+
+/** App-owned behaviour a version 2 theme switches on. */
+export interface ThemeFeatureFlags {
+  pageBackground: boolean;
+  focusRing: boolean;
+  scrollbar: boolean;
+}
+
+/**
+ * A version 2 theme: its CSS compiled and validated server-side (font faces,
+ * tokens, icons, scoped custom CSS, in injection order), its choices and the
+ * features it switches on. There is no version 1 token shape.
+ */
+export interface ThemeTokensResponseV2 {
+  formatVersion: 2;
+  css: string;
+  choices: Record<string, string>;
+  features: ThemeFeatureFlags;
+  fonts?: ThemeFont[];
+  icons?: ThemeIcon[];
+  subsystems?: Record<string, SubsystemOverride>;
+}
+
+export type ThemeTokensResponse = ThemeTokensResponseV1 | ThemeTokensResponseV2;
 
 /**
  * Response from themes list API

@@ -1362,39 +1362,65 @@
   }
 
   /**
-   * Heading styles
+   * Heading styles. --qt-heading-font-weight / -letter-spacing /
+   * -text-transform / -color are optional hooks: unset, each level keeps
+   * the value written here as the fallback.
    */
   .qt-heading-1 {
-    @apply text-3xl font-bold tracking-tight;
+    @apply text-3xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 700);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-2 {
-    @apply text-2xl font-semibold tracking-tight;
+    @apply text-2xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-3 {
-    @apply text-xl font-semibold;
+    @apply text-xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-4 {
-    @apply text-lg font-semibold;
+    @apply text-lg;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   /**
    * Size-name aliases — prefer the numbered variants above for precision
    */
   .qt-heading-lg {
-    @apply text-2xl font-semibold tracking-tight;
+    @apply text-2xl;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   .qt-heading-sm {
-    @apply text-lg font-semibold;
+    @apply text-lg;
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
 
   /**

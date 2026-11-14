@@ -1,48 +1,34 @@
 /**
- * Default Theme — Professional Neutral
+ * Quilltap theme variables — the defaults for every --qt-* and --theme-*
+ * component token, in both colour modes.
  *
- * A clean, business-appropriate theme for power users who work with
- * Quilltap as a serious tool. System font stack throughout — San Francisco
- * on Mac, Segoe UI on Windows, Roboto on Android/Chrome OS. No decorative
- * fonts, no flourishes. The interface should feel like Notion, Linear, or
- * Stripe: confident, quiet, and out of the way.
+ * !!! GENERATED FILE — DO NOT EDIT BY HAND !!!
+ * Source of truth: lib/themes/registry/ (one file per group under groups/)
+ * Regenerate with: npm run generate:theme-variables
+ * `npm run lint` fails while this file and the registry disagree.
  *
- * Design Philosophy:
- * Light and dark modes are siblings — same personality, different lighting.
- * No pure white or pure black. Slightly cooler hue family (225 vs 220)
- * with lower saturation for a more corporate, less "crafty" feel.
- * Tighter radii and restrained shadows for a precise, engineered look.
+ * Themes override any of these in their own [data-theme="<id>"] blocks.
+ * :root is listed so the defaults resolve before the theme injector sets
+ * data-theme — the startup, instance-lock and version-guard screens render
+ * then, and without it their .qt-card had no background, leaving dark text
+ * on the dark bootstrap art.
  *
- * Color Foundation:
- * Base hue: 225 (cool blue-gray) — neutral, precise, professional.
- * Primary: A confident but not flashy indigo-blue.
- * Saturation: Low across the board. Color is for meaning, not decoration.
+ * The hand-written rules that used to live here (the root baseline,
+ * ::selection, reduced motion) are in _base.css.
  */
 
 /* ============================================================================
-   ROOT BASELINE - SHARED BETWEEN MODES
-   ============================================================================ */
-[data-theme="default"] {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
-  text-rendering: optimizeLegibility;
-}
-
-/* ============================================================================
-   QT-* VARIABLE DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
-   Themes override any of these in their own [data-theme="<name>"] blocks.
-   :root is listed so the defaults resolve before the theme injector sets
-   data-theme — the startup, instance-lock and version-guard screens render
-   then, and without it their .qt-card had no background, leaving dark text
-   on the dark bootstrap art.
+   DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
    ============================================================================ */
 :root,
 [data-theme],
 [data-theme].dark,
 [data-theme].light {
-  /* Font stacks — system fonts only, best per-OS defaults */
+  /* ==========================================================================
+     FONT STACKS
+     System fonts only, the best default on each OS. These five are the
+     semantic tier's type tokens.
+     ========================================================================== */
   --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --theme-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
   --theme-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -50,7 +36,7 @@
   --theme-font-chat-user: var(--theme-font-sans);
 
   /* ==========================================================================
-     BUTTON VARIABLES
+     BUTTON
      ========================================================================== */
   --qt-button-radius: var(--radius-md);
   --qt-button-padding-x: 0.875rem;
@@ -58,51 +44,45 @@
   --qt-button-font-size: 0.875rem;
   --qt-button-font-weight: 500;
   --qt-button-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
-
   --qt-button-primary-bg: var(--color-primary);
   --qt-button-primary-fg: var(--color-primary-foreground);
-  --qt-button-primary-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+  --qt-button-primary-hover-bg: color-mix(in srgb, var(--color-primary) 88%, var(--theme-hover-shade));
   --qt-button-primary-shadow: 0 1px 3px -1px rgb(0 0 0 / 0.12);
-
   --qt-button-secondary-bg: var(--color-secondary);
   --qt-button-secondary-fg: var(--color-secondary-foreground);
   --qt-button-secondary-border: var(--color-border);
-  --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 85%, black);
-
+  --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 85%, var(--theme-hover-shade));
   --qt-button-ghost-bg: transparent;
   --qt-button-ghost-fg: var(--color-foreground);
   --qt-button-ghost-hover-bg: var(--color-muted);
-
   --qt-button-destructive-bg: var(--color-destructive);
   --qt-button-destructive-fg: var(--color-destructive-foreground);
-  --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 88%, black);
-
+  --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 88%, var(--theme-hover-shade));
   --qt-button-success-bg: var(--color-success);
   --qt-button-success-fg: var(--color-success-foreground);
-  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
-
+  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, var(--theme-hover-shade));
   --qt-button-warning-bg: var(--color-warning);
   --qt-button-warning-fg: var(--color-warning-foreground);
-  --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
+  --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, var(--theme-hover-shade));
+
+  /* Optional hooks, read with a fallback and not declared here: --qt-button-letter-spacing, --qt-button-text-transform */
 
   /* ==========================================================================
-     STATUS TOKENS
-     Backgrounds are the status colour at full strength: each X / XForeground
-     token pair is held to 4.5:1, and the old 85% mix let the page show
-     through and dropped white-on-colour badges to ~3.7:1 (WCAG 1.4.3).
+     STATUS
+     Backgrounds are the status colour at full strength: each X /
+     XForeground token pair is held to 4.5:1, and the old 85% mix let the
+     page show through and dropped white-on-colour badges to ~3.7:1 (WCAG
+     1.4.3).
      ========================================================================== */
   --qt-status-success-bg: var(--color-success);
   --qt-status-success-fg: var(--color-success-foreground);
   --qt-status-success-border: var(--color-success);
-
   --qt-status-warning-bg: var(--color-warning);
   --qt-status-warning-fg: var(--color-warning-foreground);
   --qt-status-warning-border: var(--color-warning);
-
   --qt-status-info-bg: var(--color-info);
   --qt-status-info-fg: var(--color-info-foreground);
   --qt-status-info-border: var(--color-info);
-
   --qt-status-danger-bg: var(--color-destructive);
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
@@ -110,9 +90,11 @@
   /* Composer punctuation warnings (PunctuationLintPlugin, ::highlight) */
   --qt-punctuation-warning-bg: color-mix(in srgb, var(--color-warning) 35%, transparent);
   --qt-punctuation-warning-underline: var(--color-warning);
+
   /* Prose mode (Novel-like templates): no dialogue in the draft at all */
   --qt-punctuation-no-dialogue-bg: color-mix(in srgb, var(--color-warning) 14%, transparent);
   --qt-punctuation-no-dialogue-underline: var(--color-warning);
+
   /* Prose mode composer preview: narration, and ((out of character)) asides */
   --qt-composer-narration-fg: color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary));
   --qt-composer-narration-bg: color-mix(in srgb, var(--color-primary) 7%, transparent);
@@ -120,26 +102,23 @@
   --qt-composer-ooc-bg: var(--qt-rp-ooc-bg);
 
   /* ==========================================================================
-     ALERT TOKENS
+     ALERT
      ========================================================================== */
-  --qt-alert-success-bg: hsl(152 60% 38% / 0.08);
-  --qt-alert-success-fg: hsl(152 60% 28%);
-  --qt-alert-success-border: hsl(152 60% 38% / 0.25);
-
-  --qt-alert-warning-bg: hsl(38 90% 46% / 0.08);
-  --qt-alert-warning-fg: hsl(38 90% 28%);
-  --qt-alert-warning-border: hsl(38 90% 46% / 0.25);
-
-  --qt-alert-error-bg: hsl(0 68% 50% / 0.08);
-  --qt-alert-error-fg: hsl(0 68% 35%);
-  --qt-alert-error-border: hsl(0 68% 50% / 0.25);
-
-  --qt-alert-info-bg: hsl(210 75% 48% / 0.08);
-  --qt-alert-info-fg: hsl(210 75% 30%);
-  --qt-alert-info-border: hsl(210 75% 48% / 0.25);
+  --qt-alert-success-bg: color-mix(in srgb, var(--theme-status-success) var(--theme-status-tint), transparent);
+  --qt-alert-success-fg: var(--theme-status-success-foreground);
+  --qt-alert-success-border: color-mix(in srgb, var(--theme-status-success) var(--theme-status-edge), transparent);
+  --qt-alert-warning-bg: color-mix(in srgb, var(--theme-status-warning) var(--theme-status-tint), transparent);
+  --qt-alert-warning-fg: var(--theme-status-warning-foreground);
+  --qt-alert-warning-border: color-mix(in srgb, var(--theme-status-warning) var(--theme-status-edge), transparent);
+  --qt-alert-error-bg: color-mix(in srgb, var(--theme-status-danger) var(--theme-status-tint), transparent);
+  --qt-alert-error-fg: var(--theme-status-danger-foreground);
+  --qt-alert-error-border: color-mix(in srgb, var(--theme-status-danger) var(--theme-status-edge), transparent);
+  --qt-alert-info-bg: color-mix(in srgb, var(--theme-status-info) var(--theme-status-tint), transparent);
+  --qt-alert-info-fg: var(--theme-status-info-foreground);
+  --qt-alert-info-border: color-mix(in srgb, var(--theme-status-info) var(--theme-status-edge), transparent);
 
   /* ==========================================================================
-     CARD VARIABLES
+     CARD
      Restrained shadows — visible but never showy. Tighter radii.
      ========================================================================== */
   --qt-card-radius: var(--radius-lg);
@@ -151,12 +130,11 @@
   --qt-card-shadow: 0 1px 3px hsl(225 18% 10% / 0.06), 0 1px 2px hsl(225 18% 10% / 0.04);
   --qt-card-shadow-hover: 0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05);
   --qt-card-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
-
   --qt-entity-card-radius: var(--radius-lg);
   --qt-entity-card-bg: color-mix(in srgb, var(--color-card) 92%, transparent);
 
   /* ==========================================================================
-     INPUT VARIABLES
+     INPUT
      ========================================================================== */
   --qt-input-radius: var(--radius-md);
   --qt-input-padding-x: 0.75rem;
@@ -164,6 +142,8 @@
   --qt-input-bg: var(--color-background);
   --qt-input-fg: var(--color-foreground);
   --qt-input-border: var(--color-input);
+
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-input-placeholder: var(--color-muted-foreground);
   --qt-input-focus-ring: var(--color-ring);
   --qt-input-transition: colors 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -174,45 +154,45 @@
   --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
 
   /* ==========================================================================
-     CHECKBOX & RADIO VARIABLES
-     accent-color is the real theming hook for native controls (the fill/check);
-     the border/size/radius tokens take effect for appearance:none themes.
+     CHECKBOX AND RADIO
+     accent-color is the real theming hook for native controls (the
+     fill/check); the border/size/radius tokens take effect for
+     appearance:none themes.
      ========================================================================== */
   --qt-checkbox-size: 1rem;
   --qt-checkbox-radius: var(--radius-sm);
   --qt-checkbox-border: var(--color-border);
   --qt-checkbox-accent: var(--color-primary);
   --qt-checkbox-focus-ring: var(--color-ring);
-
   --qt-radio-size: 1rem;
   --qt-radio-border: var(--color-border);
   --qt-radio-accent: var(--color-primary);
   --qt-radio-focus-ring: var(--color-ring);
 
   /* ==========================================================================
-     RANGE (SLIDER) VARIABLES
-     Sliders stay natively rendered on purpose. accent-color is what paints the
-     filled portion of the track *and* the thumb, in every engine we target, so
-     it is the whole theming story for the default look. Do NOT "improve" this
-     into `appearance: none` with a custom ::-webkit-slider-runnable-track /
-     ::-webkit-slider-thumb pair: appearance:none discards the filled bar in
-     Chrome and Safari (Firefox alone keeps it, via ::-moz-range-progress), so
-     a hand-built track trades the value affordance for styling reach and looks
-     different per browser. A theme that genuinely wants a bespoke slider can
-     still opt in by overriding .qt-range itself.
+     RANGE (SLIDER)
+     Sliders stay natively rendered on purpose. accent-color is what paints
+     the filled portion of the track *and* the thumb, in every engine we
+     target, so it is the whole theming story for the default look. Do NOT
+     "improve" this into `appearance: none` with a custom
+     ::-webkit-slider-runnable-track / ::-webkit-slider-thumb pair:
+     appearance:none discards the filled bar in Chrome and Safari (Firefox
+     alone keeps it, via ::-moz-range-progress), so a hand-built track
+     trades the value affordance for styling reach and looks different per
+     browser. A theme that genuinely wants a bespoke slider can still opt in
+     by overriding .qt-range itself.
      ========================================================================== */
   --qt-range-accent: var(--color-primary);
   --qt-range-focus-ring: var(--color-ring);
 
   /* ==========================================================================
-     NAVBAR VARIABLES
+     NAVBAR
      ========================================================================== */
   --qt-navbar-height: 3.5rem;
   --qt-navbar-bg: var(--color-background);
   --qt-navbar-border: var(--color-border);
   --qt-navbar-blur: blur(12px);
   --qt-navbar-shadow: none;
-
   --qt-navbar-link-padding-x: 0.625rem;
   --qt-navbar-link-padding-y: 0.375rem;
   --qt-navbar-link-radius: var(--radius-md);
@@ -221,27 +201,70 @@
   --qt-navbar-link-active-bg: var(--color-muted);
 
   /* ==========================================================================
-     CONTENT AREA VARIABLES
+     PAGE
+     App-owned rules on the root: colour scheme, text selection, scrollbars,
+     the focus ring and an optional page background image. They live in
+     _base.css in cascade layers (or, for the page background, behind an
+     attribute), so a version 1 theme's own unlayered rules still win.
+     ========================================================================== */
+  /* color-scheme on the root (form controls, scrollbars, system colours). "normal" leaves the browser default; set "dark" or "light" per mode. */
+  --qt-color-scheme: normal;
+
+  /* The ::selection rule in _base.css. A version 1 theme's own ::selection rule (unlayered) still wins. */
+  --qt-selection-bg: hsl(225 55% 48% / 0.18);
+  --qt-selection-fg: var(--color-foreground);
+
+  /* scrollbar-width on the root: auto, thin or none. The default theme's baseline (_base.css) makes it thin. */
+  --qt-scrollbar-width: auto;
+
+  /* The ::-webkit-scrollbar width and height. Applies only while <html> carries data-qt-scrollbar, which the theme provider sets for a theme that asks for it; a version 1 theme never does, so its own rules are untouched. */
+  --qt-scrollbar-size: 8px;
+
+  /* The ::-webkit-scrollbar-thumb radius. Applies only while <html> carries data-qt-scrollbar, which the theme provider sets for a theme that asks for it; a version 1 theme never does, so its own rules are untouched. */
+  --qt-scrollbar-radius: 9999px;
+
+  /* The app's :focus-visible ring: --theme-focus-ring-width wide in this colour, --theme-focus-ring-offset out. Applies only while <html> carries data-qt-focus-ring, which the theme provider sets for a theme that asks for it; a version 1 theme never does, so its own rules are untouched. */
+  --qt-focus-ring-color: var(--color-ring);
+
+  /* An optional box-shadow added to the focus ring, e.g. 0 0 0 4px color-mix(in srgb, var(--color-ring) 30%, transparent). */
+  --qt-focus-ring-glow: none;
+
+  /* An image (or a list with gradients) painted behind the whole app. While it is set the theme provider marks <html> with data-qt-page-background, and the app makes its page surfaces transparent over it — except while a story background is showing, which takes precedence. Per mode: set a dark value for dark mode. */
+  --qt-page-background-image: none;
+  --qt-page-background-size: cover;
+  --qt-page-background-position: center center;
+  --qt-page-background-attachment: fixed;
+  --qt-page-background-repeat: no-repeat;
+
+  /* Optional hooks, read with a fallback and not declared here: --qt-scrollbar-thumb, --qt-scrollbar-track, --qt-scrollbar-thumb-hover */
+
+  /* ==========================================================================
+     CONTENT AREA
      ========================================================================== */
   --qt-content-bg: var(--color-card);
   --qt-content-fg: var(--color-card-foreground);
   --qt-content-scroll-bg: var(--color-background);
 
   /* ==========================================================================
-     TYPOGRAPHY VARIABLES
+     TYPOGRAPHY
      ========================================================================== */
   --qt-heading-font: var(--font-sans);
   --qt-text-secondary-fg: var(--color-muted-foreground);
 
+  /* Optional hooks, read with a fallback and not declared here: --qt-heading-font-weight, --qt-heading-letter-spacing, --qt-heading-text-transform, --qt-heading-color */
+
   /* ==========================================================================
-     SIDEBAR VARIABLES
+     SIDEBAR
      ========================================================================== */
   --qt-sidebar-width: 15rem;
   --qt-sidebar-bg: var(--color-sidebar-background);
   --qt-sidebar-border: var(--color-sidebar-border);
-  --qt-sidebar-fg: var(--color-sidebar-foreground);
-  --qt-sidebar-muted: var(--color-sidebar-muted);
 
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
+  --qt-sidebar-fg: var(--color-sidebar-foreground);
+
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
+  --qt-sidebar-muted: var(--color-sidebar-muted);
   --qt-sidebar-item-padding-x: 0.625rem;
   --qt-sidebar-item-padding-y: 0.375rem;
   --qt-sidebar-item-radius: var(--radius-md);
@@ -250,10 +273,14 @@
   --qt-sidebar-item-active-border: var(--color-primary);
 
   /* ==========================================================================
-     LEFT SIDEBAR VARIABLES (App Navigation)
+     LEFT SIDEBAR (APP NAVIGATION)
      ========================================================================== */
   --qt-left-sidebar-width: 15rem;
+
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-left-sidebar-min-width: 15rem;
+
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-left-sidebar-max-width: 28rem;
   --qt-left-sidebar-collapsed-width: 3.5rem;
   --qt-left-sidebar-resize-handle-width: 3px;
@@ -261,21 +288,25 @@
   --qt-left-sidebar-border: var(--color-sidebar-border);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
 
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-left-sidebar-footer-height: auto;
-
   --qt-left-sidebar-section-padding: 0.625rem;
   --qt-left-sidebar-section-gap: 0.125rem;
   --qt-left-sidebar-section-title-fg: var(--color-sidebar-muted);
 
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-left-sidebar-item-gap: 0.375rem;
   --qt-left-sidebar-item-icon-size: 1.125rem;
 
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.4);
+
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-left-sidebar-overlay-z: 40;
   --qt-left-sidebar-z: 50;
 
   /* ==========================================================================
-     APP HEADER VARIABLES
+     APP HEADER
      ========================================================================== */
   --qt-app-header-height: 3.5rem;
   --qt-app-header-bg: var(--color-background);
@@ -283,18 +314,18 @@
   --qt-app-header-blur: blur(12px);
 
   /* ==========================================================================
-     PANEL/DIALOG/POPOVER VARIABLES
+     PANEL, DIALOG AND POPOVER
      ========================================================================== */
   --qt-panel-radius: var(--radius-lg);
   --qt-panel-bg: var(--color-card);
   --qt-panel-border: var(--color-border);
   --qt-panel-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.08);
-
   --qt-dialog-radius: var(--radius-lg);
   --qt-dialog-bg: var(--color-background);
   --qt-dialog-border: var(--color-border);
+  --qt-dialog-border-width: 1px;
   --qt-dialog-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.18);
-  --qt-dialog-backdrop: rgb(0 0 0 / 0.45);
+  --qt-dialog-backdrop: color-mix(in srgb, var(--theme-scrim) 45%, transparent);
 
   /* Topmost floating layer — above every portal modal (z ≤ 101), below the
      startup gates (z 9999). Holds the always-on Brahma Console. */
@@ -305,12 +336,11 @@
   --qt-brahma-launcher-offset: 0.75rem;
   --qt-brahma-launcher-bg: var(--color-primary);
   --qt-brahma-launcher-fg: var(--color-primary-foreground);
-  --qt-brahma-launcher-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+  --qt-brahma-launcher-hover-bg: color-mix(in srgb, var(--color-primary) 88%, var(--theme-hover-shade));
   --qt-brahma-launcher-active-bg: var(--color-background);
   --qt-brahma-launcher-active-fg: var(--color-primary);
   --qt-brahma-launcher-ring: var(--color-primary);
   --qt-brahma-launcher-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35);
-
   --qt-popover-radius: var(--radius-md);
   --qt-popover-bg: var(--color-popover);
   --qt-popover-fg: var(--color-popover-foreground);
@@ -318,38 +348,37 @@
   --qt-popover-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.1);
 
   /* ==========================================================================
-     CHAT VARIABLES
-     Sans-serif throughout — no serif in assistant messages.
-     The user bubble matches the primary hue for brand cohesion.
+     CHAT
+     Sans-serif throughout — no serif in assistant messages. The user bubble
+     matches the primary hue for brand cohesion.
      ========================================================================== */
   --qt-chat-message-radius: var(--radius-lg);
   --qt-chat-message-padding: 0.875rem;
   --qt-chat-message-shadow: 0 1px 4px -1px rgb(0 0 0 / 0.06);
-
   --qt-chat-user-bg: var(--color-chat-user);
   --qt-chat-user-fg: var(--color-chat-user-foreground);
   --qt-chat-user-border: transparent;
   --qt-chat-user-font: var(--font-sans);
-
-  --qt-chat-assistant-bg: var(--color-muted);
-  --qt-chat-assistant-fg: var(--color-foreground);
+  --qt-chat-assistant-bg: var(--theme-chat-assistant);
+  --qt-chat-assistant-fg: var(--theme-chat-assistant-foreground);
   --qt-chat-assistant-border: var(--color-border);
   --qt-chat-assistant-font: var(--font-sans);
   --qt-chat-assistant-font-weight: inherit;
 
   /* Chat: Whisper messages */
-  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%);
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--theme-chat-whisper) 40%);
   --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
-  --qt-chat-whisper-border: #9b8ec4;
+  --qt-chat-whisper-border: var(--theme-chat-whisper);
+
   /* Deep enough to clear WCAG AA (4.5:1) against --qt-chat-whisper-bg at this
      label's 0.75rem size; it also tints .qt-chat-system-bar-whisper. */
-  --qt-chat-whisper-label-fg: #5c447e;
+  --qt-chat-whisper-label-fg: var(--theme-chat-whisper-foreground);
 
   /* Chat: Silent messages — inner thoughts/actions from characters in silent mode */
-  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%);
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, var(--theme-chat-silent) 35%);
   --qt-chat-silent-fg: var(--qt-chat-assistant-fg);
-  --qt-chat-silent-border: #7a9e8e;
-  --qt-chat-silent-label-fg: #5d7e6e;
+  --qt-chat-silent-border: var(--theme-chat-silent);
+  --qt-chat-silent-label-fg: var(--theme-chat-silent-foreground);
 
   /* Chat: Thinking / reasoning blocks — a thinking model's chain-of-thought,
      shown dimmed, italic, and right-justified. DISPLAY ONLY. Defaults dim the
@@ -361,16 +390,16 @@
   --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
 
   /* Chat: Wardrobe action notices — warm amber/gold for dressing room actions */
-  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%);
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--theme-chat-wardrobe) 40%);
   --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
-  --qt-chat-wardrobe-border: #c4a24e;
-  --qt-chat-wardrobe-label-fg: #9a7d2e;
+  --qt-chat-wardrobe-border: var(--theme-chat-wardrobe);
+  --qt-chat-wardrobe-label-fg: var(--theme-chat-wardrobe-foreground);
 
   /* Chat: System-message collapsed bar — thin one-line summary for Staff-authored messages */
-  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 70%, var(--color-muted) 30%);
-  --qt-chat-system-bar-fg: var(--color-muted-foreground);
+  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 70%, var(--theme-chat-system) 30%);
+  --qt-chat-system-bar-fg: var(--theme-chat-system-foreground);
   --qt-chat-system-bar-border: var(--color-border);
-  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--color-muted) 45%);
+  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--theme-chat-system) 45%);
   --qt-chat-system-bar-sender-fg: var(--color-foreground);
 
   /* Chat: Announcement importance dots — high (red), medium (amber), low (hollow grey).
@@ -380,27 +409,22 @@
   --qt-chat-announcement-dot-high: var(--color-destructive, #b4452e);
   --qt-chat-announcement-dot-medium: var(--color-warning, #d08a1e);
   --qt-chat-announcement-dot-low: var(--color-muted-foreground);
-
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
   --qt-chat-composer-padding-x: 1rem;
   --qt-chat-composer-padding-y: 0.75rem;
-
   --qt-chat-toolbar-gap: 0.375rem;
   --qt-chat-toolbar-button-bg: var(--color-muted);
   --qt-chat-toolbar-button-fg: var(--color-muted-foreground);
   --qt-chat-toolbar-button-hover-bg: color-mix(in srgb, var(--color-muted) 85%, transparent);
   --qt-chat-toolbar-button-border: var(--color-border);
-
   --qt-chat-attachment-border: var(--color-border);
   --qt-chat-attachment-hover-border: var(--color-primary);
   --qt-chat-attachment-overlay: rgb(0 0 0 / 0.2);
-
   --qt-chat-message-row-max-width: 900px;
   --qt-page-max-width: 72rem;
   --qt-card-grid-auto-min: 520px;
-
   --qt-chat-sidebar-width: 18rem;
   --qt-chat-sidebar-collapsed-width: 3.5rem;
   --qt-chat-sidebar-bg: var(--color-card);
@@ -413,46 +437,46 @@
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 60%, transparent);
   --qt-response-status-fg: var(--color-muted-foreground);
   --qt-response-status-border: var(--color-border);
-
   --qt-response-status-compressing-fg: var(--qt-status-info-fg);
   --qt-response-status-gathering-fg: hsl(270 55% 55%);
   --qt-response-status-building-fg: hsl(38 85% 48%);
   --qt-response-status-sending-fg: var(--qt-status-info-fg);
   --qt-response-status-streaming-fg: hsl(152 55% 29%);
   --qt-response-status-tool-fg: hsl(270 55% 55%);
-
   --qt-participant-card-radius: var(--radius-lg);
   --qt-participant-card-bg: var(--color-card);
   --qt-participant-card-border: var(--color-border);
   --qt-participant-card-active-border: var(--color-primary);
   --qt-participant-card-active-shadow: 0 0 8px rgb(var(--color-primary) / 0.2);
 
-  /* ==========================================================================
-     ROLEPLAY ANNOTATION VARIABLES
-     Subdued — this theme is for power users, not immersive RP.
-     Annotations are functional, not atmospheric.
-     ========================================================================== */
-  --qt-rp-dialogue-color: var(--color-foreground);
-  --qt-rp-dialogue-bg: transparent;
+  /* Hook: _chat.css reads it as var(--qt-thinking-duration, 1.2s); the default is that fallback. */
+  --qt-thinking-duration: 1.2s;
 
-  --qt-rp-narration-color: hsl(225 10% 72%);
-  --qt-rp-narration-bg: hsl(225 14% 12% / 0.8);
+  /* Hook: _chat.css reads it as var(--qt-thinking-origin, 12.5% 87.5%); the default is that fallback. */
+  --qt-thinking-origin: 12.5% 87.5%;
+
+  /* ==========================================================================
+     ROLEPLAY ANNOTATION
+     Subdued — this theme is for power users, not immersive RP. Annotations
+     are functional, not atmospheric.
+     ========================================================================== */
+  --qt-rp-dialogue-color: var(--theme-roleplay-dialogue-foreground);
+  --qt-rp-dialogue-bg: var(--theme-roleplay-dialogue);
+  --qt-rp-narration-color: var(--theme-roleplay-narration-foreground);
+  --qt-rp-narration-bg: var(--theme-roleplay-narration);
   --qt-rp-narration-style: normal;
   --qt-rp-narration-padding: 0.125rem 0.375rem;
   --qt-rp-narration-radius: 0.1875rem;
-
-  --qt-rp-inner-monologue-color: hsl(270 50% 72%);
-  --qt-rp-inner-monologue-bg: hsl(270 20% 12% / 0.8);
+  --qt-rp-inner-monologue-color: var(--theme-roleplay-inner-monologue-foreground);
+  --qt-rp-inner-monologue-bg: var(--theme-roleplay-inner-monologue);
   --qt-rp-inner-monologue-style: italic;
   --qt-rp-inner-monologue-padding: 0.125rem 0.375rem;
   --qt-rp-inner-monologue-radius: 0.1875rem;
-
-  --qt-rp-ooc-color: hsl(152 60% 58%);
-  --qt-rp-ooc-bg: hsl(0 0% 6%);
+  --qt-rp-ooc-color: var(--theme-roleplay-ooc-foreground);
+  --qt-rp-ooc-bg: var(--theme-roleplay-ooc);
   --qt-rp-ooc-font: var(--font-mono);
   --qt-rp-ooc-padding: 0.125rem 0.375rem;
   --qt-rp-ooc-radius: 0.1875rem;
-
   --qt-rp-button-narration-bg: hsl(225 10% 38%);
   --qt-rp-button-narration-fg: hsl(0 0% 100%);
   --qt-rp-button-internal-bg: hsl(270 45% 48%);
@@ -463,109 +487,106 @@
   /* Roleplay-template palette (qt-roleplay-1..4): four distinct high-contrast
      chips a delimiter can opt into. Each chip carries its own fg/bg so it reads
      on any bubble; themes override these four pairs to taste. */
-  --qt-roleplay-1-bg: hsl(217 91% 53%);
-  --qt-roleplay-1-fg: hsl(0 0% 100%);
-  --qt-roleplay-2-bg: hsl(270 65% 55%);
-  --qt-roleplay-2-fg: hsl(0 0% 100%);
-  --qt-roleplay-3-bg: hsl(38 92% 50%);
-  --qt-roleplay-3-fg: hsl(30 45% 12%);
-  --qt-roleplay-4-bg: hsl(168 78% 36%);
-  --qt-roleplay-4-fg: hsl(0 0% 100%);
+  --qt-roleplay-1-bg: var(--theme-roleplay-chip-1);
+  --qt-roleplay-1-fg: var(--theme-roleplay-chip-1-foreground);
+  --qt-roleplay-2-bg: var(--theme-roleplay-chip-2);
+  --qt-roleplay-2-fg: var(--theme-roleplay-chip-2-foreground);
+  --qt-roleplay-3-bg: var(--theme-roleplay-chip-3);
+  --qt-roleplay-3-fg: var(--theme-roleplay-chip-3-foreground);
+  --qt-roleplay-4-bg: var(--theme-roleplay-chip-4);
+  --qt-roleplay-4-fg: var(--theme-roleplay-chip-4-foreground);
 
   /* ==========================================================================
-     BADGE VARIABLES
+     BADGE
      ========================================================================== */
   --qt-badge-radius: 9999px;
   --qt-badge-padding-x: 0.625rem;
   --qt-badge-padding-y: 0.1875rem;
   --qt-badge-font-size: 0.75rem;
   --qt-badge-font-weight: 500;
-
   --qt-badge-primary-bg: var(--color-primary);
   --qt-badge-primary-fg: var(--color-primary-foreground);
-
   --qt-badge-secondary-bg: var(--color-secondary);
   --qt-badge-secondary-fg: var(--color-secondary-foreground);
-
   --qt-badge-outline-bg: transparent;
   --qt-badge-outline-fg: var(--color-foreground);
   --qt-badge-outline-border: var(--color-border);
 
   /* Entity-type badge colors — desaturated, professional */
-  --qt-badge-character-bg: hsl(225 55% 55% / 0.12);
-  --qt-badge-character-fg: hsl(225 55% 42%);
-  --qt-badge-user-character-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-user-character-fg: hsl(270 45% 42%);
-  --qt-badge-chat-bg: hsl(152 50% 38% / 0.12);
-  --qt-badge-chat-fg: hsl(152 50% 30%);
-  --qt-badge-tag-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-tag-fg: hsl(25 70% 36.5%);
-  --qt-badge-memory-bg: hsl(330 55% 52% / 0.12);
-  --qt-badge-memory-fg: hsl(330 55% 38%);
-  --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
-  --qt-badge-message-fg: hsl(45 70% 29.5%);
-  --qt-badge-project-bg: hsl(185 55% 38% / 0.12);
-  --qt-badge-project-fg: hsl(185 55% 30%);
+  --qt-badge-character-bg: color-mix(in srgb, var(--theme-category-character) var(--theme-category-tint), transparent);
+  --qt-badge-character-fg: var(--theme-category-character-foreground);
+  --qt-badge-user-character-bg: color-mix(in srgb, var(--theme-category-user-character) var(--theme-category-tint), transparent);
+  --qt-badge-user-character-fg: var(--theme-category-user-character-foreground);
+  --qt-badge-chat-bg: color-mix(in srgb, var(--theme-category-chat) var(--theme-category-tint), transparent);
+  --qt-badge-chat-fg: var(--theme-category-chat-foreground);
+  --qt-badge-tag-bg: color-mix(in srgb, var(--theme-category-tag) var(--theme-category-tint), transparent);
+  --qt-badge-tag-fg: var(--theme-category-tag-foreground);
+  --qt-badge-memory-bg: color-mix(in srgb, var(--theme-category-memory) var(--theme-category-tint), transparent);
+  --qt-badge-memory-fg: var(--theme-category-memory-foreground);
+  --qt-badge-message-bg: color-mix(in srgb, var(--theme-category-message) var(--theme-category-tint), transparent);
+  --qt-badge-message-fg: var(--theme-category-message-foreground);
+  --qt-badge-project-bg: color-mix(in srgb, var(--theme-category-project) var(--theme-category-tint), transparent);
+  --qt-badge-project-fg: var(--theme-category-project-foreground);
 
   /* Status badge colors */
-  --qt-badge-enabled-bg: hsl(152 50% 38% / 0.12);
-  --qt-badge-enabled-fg: hsl(152 50% 30%);
+  --qt-badge-enabled-bg: color-mix(in srgb, var(--theme-category-chat) var(--theme-category-tint), transparent);
+  --qt-badge-enabled-fg: var(--theme-category-chat-foreground);
   --qt-badge-disabled-bg: var(--color-muted);
   --qt-badge-disabled-fg: var(--color-muted-foreground);
-  --qt-badge-related-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-related-fg: hsl(270 45% 42%);
-  --qt-badge-manual-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-manual-fg: hsl(270 45% 42%);
+  --qt-badge-related-bg: color-mix(in srgb, var(--theme-category-related) var(--theme-category-tint), transparent);
+  --qt-badge-related-fg: var(--theme-category-related-foreground);
+  --qt-badge-manual-bg: color-mix(in srgb, var(--theme-category-user-character) var(--theme-category-tint), transparent);
+  --qt-badge-manual-fg: var(--theme-category-user-character-foreground);
   --qt-badge-auto-bg: var(--color-muted);
   --qt-badge-auto-fg: var(--color-muted-foreground);
 
   /* Plugin source badge colors */
-  --qt-badge-source-included-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-source-included-fg: hsl(270 45% 42%);
-  --qt-badge-source-npm-bg: hsl(0 60% 50% / 0.12);
-  --qt-badge-source-npm-fg: hsl(0 60% 38%);
-  --qt-badge-source-git-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-source-git-fg: hsl(25 70% 36.5%);
+  --qt-badge-source-included-bg: color-mix(in srgb, var(--theme-category-user-character) var(--theme-category-tint), transparent);
+  --qt-badge-source-included-fg: var(--theme-category-user-character-foreground);
+  --qt-badge-source-npm-bg: color-mix(in srgb, var(--theme-category-source-npm) var(--theme-category-tint), transparent);
+  --qt-badge-source-npm-fg: var(--theme-category-source-npm-foreground);
+  --qt-badge-source-git-bg: color-mix(in srgb, var(--theme-category-source-git) var(--theme-category-tint), transparent);
+  --qt-badge-source-git-fg: var(--theme-category-source-git-foreground);
   --qt-badge-source-manual-bg: var(--color-muted);
   --qt-badge-source-manual-fg: var(--color-muted-foreground);
 
   /* Wardrobe slot badge colors */
-  --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
-  --qt-badge-wardrobe-top-fg: hsl(220 60% 42%);
-  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
-  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
-  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
-  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 32%);
-  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
-  --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);
-  --qt-badge-wardrobe-hair-fg: hsl(345 55% 42%);
-  --qt-badge-wardrobe-shared-bg: hsl(240 50% 55% / 0.12);
-  --qt-badge-wardrobe-shared-fg: hsl(240 50% 42%);
+  --qt-badge-wardrobe-top-bg: color-mix(in srgb, var(--theme-category-wardrobe-top) var(--theme-category-tint), transparent);
+  --qt-badge-wardrobe-top-fg: var(--theme-category-wardrobe-top-foreground);
+  --qt-badge-wardrobe-bottom-bg: color-mix(in srgb, var(--theme-category-wardrobe-bottom) var(--theme-category-tint), transparent);
+  --qt-badge-wardrobe-bottom-fg: var(--theme-category-wardrobe-bottom-foreground);
+  --qt-badge-wardrobe-footwear-bg: color-mix(in srgb, var(--theme-category-wardrobe-footwear) var(--theme-category-tint), transparent);
+  --qt-badge-wardrobe-footwear-fg: var(--theme-category-wardrobe-footwear-foreground);
+  --qt-badge-wardrobe-accessories-bg: color-mix(in srgb, var(--theme-category-wardrobe-accessories) var(--theme-category-tint), transparent);
+  --qt-badge-wardrobe-accessories-fg: var(--theme-category-wardrobe-accessories-foreground);
+  --qt-badge-wardrobe-hair-bg: color-mix(in srgb, var(--theme-category-wardrobe-hair) var(--theme-category-tint), transparent);
+  --qt-badge-wardrobe-hair-fg: var(--theme-category-wardrobe-hair-foreground);
+  --qt-badge-wardrobe-shared-bg: color-mix(in srgb, var(--theme-category-wardrobe-shared) var(--theme-category-tint), transparent);
+  --qt-badge-wardrobe-shared-fg: var(--theme-category-wardrobe-shared-foreground);
 
   /* Capability badge colors */
-  --qt-badge-capability-bg: hsl(225 55% 55% / 0.08);
-  --qt-badge-capability-fg: hsl(225 55% 42%);
+  --qt-badge-capability-bg: color-mix(in srgb, var(--theme-category-capability) 8%, transparent);
+  --qt-badge-capability-fg: var(--theme-category-capability-foreground);
 
-   /* Autonomous-room state badge colors */
-   --qt-badge-autonomous-running-bg: var(--qt-status-success-bg);
-   --qt-badge-autonomous-running-fg: var(--qt-status-success-fg);
-   --qt-badge-autonomous-running-border: var(--qt-status-success-border);
-   --qt-badge-autonomous-idle-bg: var(--qt-status-info-bg);
-   --qt-badge-autonomous-idle-fg: var(--qt-status-info-fg);
-   --qt-badge-autonomous-idle-border: var(--qt-status-info-border);
-   --qt-badge-autonomous-paused-bg: var(--qt-status-warning-bg);
-   --qt-badge-autonomous-paused-fg: var(--qt-status-warning-fg);
-   --qt-badge-autonomous-paused-border: var(--qt-status-warning-border);
-   --qt-badge-autonomous-stopped-bg: var(--color-muted);
-   --qt-badge-autonomous-stopped-fg: var(--color-muted-foreground);
-   --qt-badge-autonomous-stopped-border: var(--color-border);
-   --qt-badge-autonomous-budget-bg: var(--qt-badge-related-bg);
-   --qt-badge-autonomous-budget-fg: var(--qt-badge-related-fg);
-   --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 45%, transparent);
-   --qt-badge-autonomous-error-bg: var(--qt-status-danger-bg);
-   --qt-badge-autonomous-error-fg: var(--qt-status-danger-fg);
-   --qt-badge-autonomous-error-border: var(--qt-status-danger-border);
+  /* Autonomous-room state badge colors */
+  --qt-badge-autonomous-running-bg: var(--qt-status-success-bg);
+  --qt-badge-autonomous-running-fg: var(--qt-status-success-fg);
+  --qt-badge-autonomous-running-border: var(--qt-status-success-border);
+  --qt-badge-autonomous-idle-bg: var(--qt-status-info-bg);
+  --qt-badge-autonomous-idle-fg: var(--qt-status-info-fg);
+  --qt-badge-autonomous-idle-border: var(--qt-status-info-border);
+  --qt-badge-autonomous-paused-bg: var(--qt-status-warning-bg);
+  --qt-badge-autonomous-paused-fg: var(--qt-status-warning-fg);
+  --qt-badge-autonomous-paused-border: var(--qt-status-warning-border);
+  --qt-badge-autonomous-stopped-bg: var(--color-muted);
+  --qt-badge-autonomous-stopped-fg: var(--color-muted-foreground);
+  --qt-badge-autonomous-stopped-border: var(--color-border);
+  --qt-badge-autonomous-budget-bg: var(--qt-badge-related-bg);
+  --qt-badge-autonomous-budget-fg: var(--qt-badge-related-fg);
+  --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 45%, transparent);
+  --qt-badge-autonomous-error-bg: var(--qt-status-danger-bg);
+  --qt-badge-autonomous-error-fg: var(--qt-status-danger-fg);
+  --qt-badge-autonomous-error-border: var(--qt-status-danger-border);
 
   /* Queue status badge colors */
   --qt-queue-badge-radius: var(--radius-sm);
@@ -575,7 +596,6 @@
   --qt-queue-badge-font-weight: 600;
   --qt-queue-badge-group-gap: 1px;
   --qt-queue-badge-group-radius: var(--radius-md);
-
   --qt-queue-badge-memory-bg: hsl(225 55% 48%);
   --qt-queue-badge-memory-fg: hsl(0 0% 100%);
   --qt-queue-badge-embedding-bg: hsl(270 50% 48%);
@@ -596,7 +616,7 @@
   --qt-autonomous-badge-button-hover-bg: hsl(0 0% 100% / 0.18);
 
   /* ==========================================================================
-     AVATAR VARIABLES
+     AVATAR
      ========================================================================== */
   --qt-avatar-radius: 9999px;
   --qt-avatar-size: 2.25rem;
@@ -608,7 +628,7 @@
   --qt-avatar-border: var(--color-border);
 
   /* ==========================================================================
-     CODE BLOCK VARIABLES
+     CODE BLOCK
      ========================================================================== */
   --qt-code-radius: var(--radius-md);
   --qt-code-bg: var(--color-muted);
@@ -616,8 +636,35 @@
   --qt-code-border: var(--color-border);
   --qt-code-font: var(--font-mono);
 
+  /* Hook: _content.css reads it as var(--qt-copy-button-bg, rgba(0, 0, 0, 0.6)); the default is that fallback. */
+  --qt-copy-button-bg: rgba(0, 0, 0, 0.6);
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-text, rgba(255, 255, 255, 0.9)); the default is that fallback. */
+  --qt-copy-button-text: rgba(255, 255, 255, 0.9);
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-border, rgba(255, 255, 255, 0.1)); the default is that fallback. */
+  --qt-copy-button-border: rgba(255, 255, 255, 0.1);
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-hover-bg, rgba(0, 0, 0, 0.8)); the default is that fallback. */
+  --qt-copy-button-hover-bg: rgba(0, 0, 0, 0.8);
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-hover-text, #fff); the default is that fallback. */
+  --qt-copy-button-hover-text: #fff;
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-hover-border, rgba(255, 255, 255, 0.2)); the default is that fallback. */
+  --qt-copy-button-hover-border: rgba(255, 255, 255, 0.2);
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-success-bg, rgba(34, 197, 94, 0.8)); the default is that fallback. */
+  --qt-copy-button-success-bg: rgba(34, 197, 94, 0.8);
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-success-text, #fff); the default is that fallback. */
+  --qt-copy-button-success-text: #fff;
+
+  /* Hook: _content.css reads it as var(--qt-copy-button-success-border, rgba(34, 197, 94, 0.5)); the default is that fallback. */
+  --qt-copy-button-success-border: rgba(34, 197, 94, 0.5);
+
   /* ==========================================================================
-     DIAGRAM VARIABLES
+     DIAGRAM
      ========================================================================== */
   --qt-diagram-radius: var(--radius-md);
   --qt-diagram-bg: var(--color-card);
@@ -628,10 +675,12 @@
   --qt-diagram-toolbar-hover-bg: var(--color-muted);
   --qt-diagram-error-fg: var(--color-muted-foreground);
   --qt-diagram-placeholder-height: 8rem;
+
   /* The face diagrams are lettered in, and the hand a hand-drawn one is
      lettered in (Mermaid's hand-drawn look and sketched Graphviz alike). */
   --qt-diagram-font: var(--font-sans);
   --qt-diagram-hand-font: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Marker Felt", cursive;
+
   /* The lightbox: the overlay's backdrop and glass buttons, a lifted sheet,
      and the checkerboard behind a transparent copy. */
   --qt-diagram-lightbox-backdrop: var(--qt-overlay-bg);
@@ -645,29 +694,31 @@
   --qt-diagram-lightbox-check-b: #d4d4d8;
 
   /* ==========================================================================
-     LINK VARIABLES
+     LINK
      ========================================================================== */
   --qt-link-color: var(--color-primary);
-  --qt-link-hover-color: color-mix(in srgb, var(--color-primary) 80%, black);
+  --qt-link-hover-color: color-mix(in srgb, var(--color-primary) 80%, var(--theme-hover-shade));
   --qt-link-decoration: none;
   --qt-link-decoration-hover: underline;
 
   /* ==========================================================================
-     FOOTER VARIABLES
+     FOOTER
      ========================================================================== */
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-footer-bg: var(--color-background);
   --qt-footer-border: var(--color-border);
   --qt-footer-fg: var(--color-muted-foreground);
   --qt-footer-link-hover: var(--color-primary);
 
   /* ==========================================================================
-     BRAND VARIABLES
+     BRAND
      ========================================================================== */
   --qt-brand-fg: var(--color-foreground);
 
   /* ==========================================================================
-     AUTH PAGE VARIABLES
+     AUTH PAGE
      ========================================================================== */
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-auth-page-bg: linear-gradient(to bottom right, hsl(225 22% 8%), hsl(225 18% 14%));
   --qt-auth-card-bg: var(--color-card);
   --qt-auth-card-fg: var(--color-card-foreground);
@@ -679,7 +730,7 @@
   --qt-auth-divider-color: var(--color-border);
 
   /* ==========================================================================
-     HIGHLIGHT VARIABLES (Search result highlighting)
+     HIGHLIGHT (SEARCH RESULT HIGHLIGHTING)
      ========================================================================== */
   --qt-highlight-bg: hsl(48 100% 50%);
   --qt-highlight-fg: hsl(40 100% 10%);
@@ -688,29 +739,29 @@
   --qt-highlight-font-weight: 500;
 
   /* ==========================================================================
-     OVERLAY VARIABLES
+     OVERLAY
      ========================================================================== */
-  --qt-overlay-bg: rgb(0 0 0 / 0.85);
-  --qt-overlay-medium-bg: rgb(0 0 0 / 0.6);
-  --qt-overlay-light-bg: rgb(0 0 0 / 0.2);
-  --qt-overlay-caption-bg: rgb(0 0 0 / 0.5);
-  --qt-overlay-btn-bg: rgb(255 255 255 / 0.1);
-  --qt-overlay-btn-hover-bg: rgb(255 255 255 / 0.2);
-  --qt-overlay-fg: rgb(255 255 255);
-  --qt-overlay-muted-fg: rgb(255 255 255 / 0.7);
+  --qt-overlay-bg: color-mix(in srgb, var(--theme-scrim) var(--theme-scrim-strength), transparent);
+  --qt-overlay-medium-bg: color-mix(in srgb, var(--theme-scrim) 60%, transparent);
+  --qt-overlay-light-bg: color-mix(in srgb, var(--theme-scrim) 20%, transparent);
+  --qt-overlay-caption-bg: color-mix(in srgb, var(--theme-scrim) 50%, transparent);
+  --qt-overlay-btn-bg: color-mix(in srgb, var(--theme-scrim-foreground) 10%, transparent);
+  --qt-overlay-btn-hover-bg: color-mix(in srgb, var(--theme-scrim-foreground) 20%, transparent);
+  --qt-overlay-fg: var(--theme-scrim-foreground);
+  --qt-overlay-muted-fg: color-mix(in srgb, var(--theme-scrim-foreground) 70%, transparent);
 
   /* ==========================================================================
-     SPINNER VARIABLES
+     SPINNER
      ========================================================================== */
   --qt-spinner-track: color-mix(in srgb, var(--color-primary) 20%, transparent);
   --qt-spinner-indicator: var(--color-primary);
 
   /* ==========================================================================
-     PROGRESS BAR VARIABLES
+     PROGRESS BAR
      Every bar-shaped construct in the app — task progress, value meters —
-     draws its track and fill from these two. A caller wanting a bespoke fill
-     colour (Pascal's per-outcome meters) sets --qt-progress-indicator inline
-     rather than reaching for a raw background utility.
+     draws its track and fill from these two. A caller wanting a bespoke
+     fill colour (Pascal's per-outcome meters) sets --qt-progress-indicator
+     inline rather than reaching for a raw background utility.
      ========================================================================== */
   --qt-progress-track: var(--color-muted);
   --qt-progress-indicator: var(--color-primary);
@@ -718,24 +769,24 @@
   --qt-progress-indicator-danger: var(--color-destructive);
 
   /* ==========================================================================
-     FAVORITE VARIABLES
+     FAVORITE
      ========================================================================== */
   --qt-favorite-color: hsl(45 96% 58%);
 
   /* ==========================================================================
-     TOGGLE VARIABLES
+     TOGGLE
      ========================================================================== */
   --qt-toggle-knob-bg: white;
 
   /* ==========================================================================
-     WARNING BOX VARIABLES
+     WARNING BOX
      ========================================================================== */
   --qt-warning-box-bg: color-mix(in srgb, var(--color-warning) 8%, transparent);
   --qt-warning-box-border: color-mix(in srgb, var(--color-warning) 30%, transparent);
   --qt-warning-box-fg: var(--color-warning);
 
   /* ==========================================================================
-     FILTER CHIP VARIABLES
+     FILTER CHIP
      ========================================================================== */
   --qt-filter-chip-radius: 9999px;
   --qt-filter-chip-padding-x: 0.5rem;
@@ -743,77 +794,85 @@
   --qt-filter-chip-font-size: 0.75rem;
   --qt-filter-chip-font-weight: 500;
   --qt-filter-chip-transition: all 150ms ease;
-
   --qt-filter-chip-active-bg: var(--color-primary);
   --qt-filter-chip-active-fg: var(--color-primary-foreground);
   --qt-filter-chip-active-border: transparent;
-
   --qt-filter-chip-inactive-bg: var(--color-muted);
   --qt-filter-chip-inactive-fg: var(--color-muted-foreground);
   --qt-filter-chip-inactive-border: transparent;
-  --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--color-foreground) 4%);
+  --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--theme-hover-tint) 4%);
 
   /* ==========================================================================
-     TAB VARIABLES
+     TAB
      ========================================================================== */
   --qt-tab-radius: var(--radius-md) var(--radius-md) 0 0;
   --qt-tab-padding-x: 0.875rem;
   --qt-tab-padding-y: 0.5rem;
   --qt-tab-font-size: 0.8125rem;
   --qt-tab-font-weight: 500;
+
+  /* Read by nothing in the app (no stylesheet, no TS). Kept because bundled themes still set it; removal belongs to Calliope Live Spec C. */
   --qt-tab-gap: 0.375rem;
   --qt-tab-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
-
   --qt-tab-bg: var(--color-muted);
   --qt-tab-fg: var(--color-muted-foreground);
   --qt-tab-border: transparent;
-  --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--color-foreground) 4%);
+  --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--theme-hover-tint) 4%);
   --qt-tab-hover-fg: var(--color-foreground);
-
   --qt-tab-active-bg: var(--color-card);
   --qt-tab-active-fg: var(--color-primary);
   --qt-tab-active-border: var(--color-border);
-
   --qt-tab-group-gap: 0.1875rem;
   --qt-tab-divider-color: var(--color-border);
 
   /* ==========================================================================
-     TERMINAL TOKENS — BASELINE
+     WORKSPACE
+     The tabbed workspace (_workspace.css). These are read there as hooks
+     with a fallback; the registry declares them so they are listed.
+     ========================================================================== */
+  /* Hook: _workspace.css reads it as var(--qt-workspace-accent, var(--color-primary)); the default is that fallback. */
+  --qt-workspace-accent: var(--color-primary);
+
+  /* Hook: _workspace.css reads it as var(--qt-workspace-tab-active-fg, var(--color-foreground)); the default is that fallback. */
+  --qt-workspace-tab-active-fg: var(--color-foreground);
+
+  /* ==========================================================================
+     TERMINAL
      Terminals carry a "terminal" identity regardless of the surrounding
      theme's light/dark mode (so a parchment theme can still render a dark
      terminal pane). Themes may override these in their own block.
      ========================================================================== */
-  --qt-terminal-bg: #1a1a1a;
-  --qt-terminal-fg: #e6e6e6;
-  --qt-terminal-cursor: #e6e6e6;
-  --qt-terminal-selection: rgba(255, 255, 255, 0.2);
+  --qt-terminal-bg: var(--theme-terminal-background);
+  --qt-terminal-fg: var(--theme-terminal-foreground);
+  --qt-terminal-cursor: var(--theme-terminal-cursor);
+  --qt-terminal-selection: var(--theme-terminal-selection);
 
   /* Optional terminal knobs, deliberately left undefined. xterm derives each
      from --qt-terminal-bg / --qt-terminal-fg when unset (slider colors default
      to the foreground at 20/40/50% opacity), which already tracks the theme.
      A theme only needs to set one to override that derivation:
-       --qt-terminal-cursor-accent      text color under a block cursor
-       --qt-terminal-selection-fg       text color inside a selection
-       --qt-terminal-selection-inactive selection while the pane is unfocused
-       --qt-terminal-scrollbar          scrollbar slider
-       --qt-terminal-scrollbar-hover    scrollbar slider, hovered
-       --qt-terminal-scrollbar-active   scrollbar slider, dragged           */
-  --qt-terminal-ansi-black: #000000;
-  --qt-terminal-ansi-red: #cd3131;
-  --qt-terminal-ansi-green: #0dbc79;
-  --qt-terminal-ansi-yellow: #e5e510;
-  --qt-terminal-ansi-blue: #2472c8;
-  --qt-terminal-ansi-magenta: #bc3fbc;
-  --qt-terminal-ansi-cyan: #11a8cd;
-  --qt-terminal-ansi-white: #e5e5e5;
-  --qt-terminal-ansi-bright-black: #666666;
-  --qt-terminal-ansi-bright-red: #f14c4c;
-  --qt-terminal-ansi-bright-green: #23d18b;
-  --qt-terminal-ansi-bright-yellow: #f5f543;
-  --qt-terminal-ansi-bright-blue: #3b8eea;
-  --qt-terminal-ansi-bright-magenta: #d670d6;
-  --qt-terminal-ansi-bright-cyan: #29b8db;
-  --qt-terminal-ansi-bright-white: #e5e5e5;
+     --qt-terminal-cursor-accent      text color under a block cursor
+     --qt-terminal-selection-fg       text color inside a selection
+     --qt-terminal-selection-inactive selection while the pane is unfocused
+     --qt-terminal-scrollbar          scrollbar slider
+     --qt-terminal-scrollbar-hover    scrollbar slider, hovered
+     --qt-terminal-scrollbar-active   scrollbar slider, dragged */
+  --qt-terminal-ansi-black: var(--theme-terminal-ansi-black);
+  --qt-terminal-ansi-red: var(--theme-terminal-ansi-red);
+  --qt-terminal-ansi-green: var(--theme-terminal-ansi-green);
+  --qt-terminal-ansi-yellow: var(--theme-terminal-ansi-yellow);
+  --qt-terminal-ansi-blue: var(--theme-terminal-ansi-blue);
+  --qt-terminal-ansi-magenta: var(--theme-terminal-ansi-magenta);
+  --qt-terminal-ansi-cyan: var(--theme-terminal-ansi-cyan);
+  --qt-terminal-ansi-white: var(--theme-terminal-ansi-white);
+  --qt-terminal-ansi-bright-black: var(--theme-terminal-ansi-bright-black);
+  --qt-terminal-ansi-bright-red: var(--theme-terminal-ansi-bright-red);
+  --qt-terminal-ansi-bright-green: var(--theme-terminal-ansi-bright-green);
+  --qt-terminal-ansi-bright-yellow: var(--theme-terminal-ansi-bright-yellow);
+  --qt-terminal-ansi-bright-blue: var(--theme-terminal-ansi-bright-blue);
+  --qt-terminal-ansi-bright-magenta: var(--theme-terminal-ansi-bright-magenta);
+  --qt-terminal-ansi-bright-cyan: var(--theme-terminal-ansi-bright-cyan);
+  --qt-terminal-ansi-bright-white: var(--theme-terminal-ansi-bright-white);
 
   /* Terminal chrome (pop-out page, in-chat embed) */
   --qt-terminal-chrome-bg: color-mix(in srgb, var(--qt-terminal-bg) 78%, var(--qt-terminal-fg) 6%);
@@ -832,178 +891,87 @@
 
 /* ============================================================================
    DARK MODE DEFAULTS - BASELINE FOR ALL THEMES IN DARK MODE
-   Cooler, deeper darks. Sharper contrast on badge colors.
-   Black shadows + faint light edge glow for card definition.
+   Only the tokens whose dark value differs from the shared default.
    ============================================================================ */
 [data-theme].dark {
-  /* Select arrow — lighter slate so the glyph reads on dark surfaces */
-  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-
+  /* ---- Card ---- */
+  --qt-card-border-opacity: 0.75;
   /* Card shadows — true black for depth, faint white edge for definition */
   --qt-card-shadow: 0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04);
   --qt-card-shadow-hover: 0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06);
-  --qt-card-border-opacity: 0.75;
 
-  /* Roleplay-template palette — brightened for dark bubbles */
-  --qt-roleplay-1-bg: hsl(217 91% 60%);
-  --qt-roleplay-2-bg: hsl(270 70% 64%);
-  --qt-roleplay-3-bg: hsl(38 95% 56%);
-  --qt-roleplay-4-bg: hsl(168 70% 44%);
+  /* ---- Input ---- */
+  /* Select arrow — lighter slate so the glyph reads on dark surfaces */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
 
-  /* Alert tokens — lifted brightness for dark backgrounds */
-  --qt-alert-success-bg: hsl(152 55% 38% / 0.15);
-  --qt-alert-success-fg: hsl(152 55% 62%);
-  --qt-alert-success-border: hsl(152 55% 38% / 0.4);
-
-  --qt-alert-warning-bg: hsl(38 85% 50% / 0.15);
-  --qt-alert-warning-fg: hsl(38 85% 68%);
-  --qt-alert-warning-border: hsl(38 85% 50% / 0.4);
-
-  --qt-alert-error-bg: hsl(0 60% 54% / 0.15);
-  --qt-alert-error-fg: hsl(0 60% 68%);
-  --qt-alert-error-border: hsl(0 60% 54% / 0.4);
-
-  --qt-alert-info-bg: hsl(210 70% 55% / 0.15);
-  --qt-alert-info-fg: hsl(210 70% 68%);
-  --qt-alert-info-border: hsl(210 70% 55% / 0.4);
-
-  /* Entity badge tokens — brighter for dark backgrounds */
-  --qt-badge-character-bg: hsl(225 55% 58% / 0.25);
-  --qt-badge-character-fg: hsl(225 55% 72%);
-  --qt-badge-user-character-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-user-character-fg: hsl(270 45% 72%);
-  --qt-badge-chat-bg: hsl(152 50% 40% / 0.25);
-  --qt-badge-chat-fg: hsl(152 50% 62%);
-  --qt-badge-tag-bg: hsl(25 70% 50% / 0.25);
-  --qt-badge-tag-fg: hsl(25 70% 62%);
-  --qt-badge-memory-bg: hsl(330 55% 55% / 0.25);
-  --qt-badge-memory-fg: hsl(330 55% 68%);
-  --qt-badge-message-bg: hsl(45 70% 50% / 0.25);
-  --qt-badge-message-fg: hsl(45 70% 68%);
-
-  /* Status badge tokens */
-  --qt-badge-enabled-bg: hsl(152 50% 40% / 0.25);
-  --qt-badge-enabled-fg: hsl(152 50% 62%);
-  --qt-badge-related-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-related-fg: hsl(270 45% 72%);
-  --qt-badge-manual-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-manual-fg: hsl(270 45% 72%);
-
-  /* Plugin source badge tokens */
-  --qt-badge-source-included-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-source-included-fg: hsl(270 45% 72%);
-  --qt-badge-source-npm-bg: hsl(0 60% 55% / 0.25);
-  --qt-badge-source-npm-fg: hsl(0 60% 68%);
-  --qt-badge-source-git-bg: hsl(25 70% 50% / 0.25);
-  --qt-badge-source-git-fg: hsl(25 70% 62%);
-
-  /* Wardrobe slot badge tokens — dark mode */
-  --qt-badge-wardrobe-top-bg: hsl(220 60% 58% / 0.25);
-  --qt-badge-wardrobe-top-fg: hsl(220 60% 72%);
-  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 40% / 0.25);
-  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 62%);
-  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 50% / 0.25);
-  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 68%);
-  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 72%);
-  --qt-badge-wardrobe-hair-bg: hsl(345 55% 58% / 0.25);
-  --qt-badge-wardrobe-hair-fg: hsl(345 55% 72%);
-  --qt-badge-wardrobe-shared-bg: hsl(240 50% 58% / 0.25);
-  --qt-badge-wardrobe-shared-fg: hsl(240 50% 72%);
-
-  /* Capability badge tokens */
-  --qt-badge-capability-bg: hsl(225 55% 58% / 0.18);
-  --qt-badge-capability-fg: hsl(225 55% 72%);
-
-   /* Autonomous-room state badge tokens */
-   --qt-badge-autonomous-running-bg: var(--qt-status-success-bg);
-   --qt-badge-autonomous-running-fg: var(--qt-status-success-fg);
-   --qt-badge-autonomous-running-border: var(--qt-status-success-border);
-   --qt-badge-autonomous-idle-bg: var(--qt-status-info-bg);
-   --qt-badge-autonomous-idle-fg: var(--qt-status-info-fg);
-   --qt-badge-autonomous-idle-border: var(--qt-status-info-border);
-   --qt-badge-autonomous-paused-bg: var(--qt-status-warning-bg);
-   --qt-badge-autonomous-paused-fg: var(--qt-status-warning-fg);
-   --qt-badge-autonomous-paused-border: var(--qt-status-warning-border);
-   --qt-badge-autonomous-stopped-bg: var(--color-muted);
-   --qt-badge-autonomous-stopped-fg: var(--color-muted-foreground);
-   --qt-badge-autonomous-stopped-border: var(--color-border);
-   --qt-badge-autonomous-budget-bg: var(--qt-badge-related-bg);
-   --qt-badge-autonomous-budget-fg: var(--qt-badge-related-fg);
-   --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 50%, transparent);
-   --qt-badge-autonomous-error-bg: var(--qt-status-danger-bg);
-   --qt-badge-autonomous-error-fg: var(--qt-status-danger-fg);
-   --qt-badge-autonomous-error-border: var(--qt-status-danger-border);
-
-  /* Queue status badges — slightly brighter */
-  --qt-queue-badge-memory-bg: hsl(225 55% 55%);
-  --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
-  --qt-queue-badge-summary-bg: hsl(152 50% 34.5%);
-  --qt-queue-badge-danger-bg: hsl(0 60% 52%);
-  --qt-queue-badge-story-bg: hsl(225 12% 44%);
-
-  /* Chat: Whisper messages — dark mode */
-  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
-  --qt-chat-whisper-border: #6b5b95;
-  --qt-chat-whisper-label-fg: #b5a9d1;
-
-  /* Chat: Silent messages — dark mode */
-  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
-  --qt-chat-silent-border: #4a7a6a;
-  --qt-chat-silent-label-fg: #8ab8a4;
-
+  /* ---- Chat ---- */
   /* Chat: Thinking / reasoning blocks — dark mode */
   --qt-chat-thinking-fg: color-mix(in srgb, var(--qt-chat-assistant-fg) 60%, transparent);
-  --qt-chat-thinking-bg: color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent);
-  --qt-chat-thinking-border: color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent);
-  --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
-
-  /* Chat: Wardrobe action notices — dark mode */
-  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
-  --qt-chat-wardrobe-border: #8a6d1b;
-  --qt-chat-wardrobe-label-fg: #d4b65c;
-
   /* Chat: System-message collapsed bar — dark mode */
-  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--color-muted) 40%);
-  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--color-muted) 55%);
-
+  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--theme-chat-system) 40%);
+  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--theme-chat-system) 55%);
   /* Chat: Announcement importance dots — brighter on dark for contrast. Medium tracks
      the theme warning (themes ship brightened dark-mode warning values); the amber stays
      as a fallback. High keeps a fixed bright red so it reads on dark surfaces. */
   --qt-chat-announcement-dot-high: #e06a52;
   --qt-chat-announcement-dot-medium: var(--color-warning, #e3a94a);
-  --qt-chat-announcement-dot-low: var(--color-muted-foreground);
-
   /* Response status — brighter indicators */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);
-  --qt-response-status-fg: var(--color-muted-foreground);
   --qt-response-status-compressing-fg: hsl(210 70% 68%);
   --qt-response-status-gathering-fg: hsl(270 50% 68%);
   --qt-response-status-building-fg: hsl(38 85% 62%);
   --qt-response-status-sending-fg: hsl(210 70% 68%);
   --qt-response-status-streaming-fg: hsl(152 55% 62%);
   --qt-response-status-tool-fg: hsl(270 50% 68%);
+
+  /* ---- Badge ---- */
+  /* The default theme leaves this badge at its light-mode strength in dark mode. */
+  --qt-badge-project-bg: color-mix(in srgb, var(--theme-category-project) 12%, transparent);
+  /* Capability badge tokens */
+  --qt-badge-capability-bg: color-mix(in srgb, var(--theme-category-capability) 18%, transparent);
+  --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 50%, transparent);
+  /* Queue status badges — slightly brighter */
+  --qt-queue-badge-memory-bg: hsl(225 55% 55%);
+  --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
+  --qt-queue-badge-summary-bg: hsl(152 50% 34.5%);
+  --qt-queue-badge-danger-bg: hsl(0 60% 52%);
+  --qt-queue-badge-story-bg: hsl(225 12% 44%);
 }
 
 /* ============================================================================
-   SELECTION & FOCUS
+   CHOICE: density = comfortable
+   Set by data-qt-density="comfortable" on <html>. compact is the defaults above.
    ============================================================================ */
-[data-theme="default"] ::selection {
-  background: hsl(225 55% 48% / 0.18);
-  color: var(--color-foreground);
-}
-
-/* ============================================================================
-   REDUCED MOTION
-   ============================================================================ */
-/* Every theme, not just the default: a bundle's own animations (and the
-   infinite pulses in qt-components) must honour the OS setting too. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
+[data-theme][data-qt-density="comfortable"] {
+  --qt-button-padding-y: 0.5rem;
+  --qt-button-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --qt-card-padding: 1.5rem;
+  --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --qt-navbar-height: 4rem;
+  --qt-navbar-link-padding-x: 0.75rem;
+  --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-min-width: 16rem;
+  --qt-left-sidebar-max-width: 32rem;
+  --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-resize-handle-width: 4px;
+  --qt-left-sidebar-section-padding: 0.75rem;
+  --qt-left-sidebar-section-gap: 0.25rem;
+  --qt-left-sidebar-item-gap: 0.5rem;
+  --qt-left-sidebar-item-icon-size: 1.25rem;
+  --qt-app-header-height: 4rem;
+  --qt-app-header-blur: blur(8px);
+  --qt-chat-message-padding: 1rem;
+  --qt-page-max-width: 75rem;
+  --qt-card-grid-auto-min: 550px;
+  --qt-chat-sidebar-collapsed-width: 4rem;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-queue-badge-idle-opacity: 0.4;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-filter-chip-padding-y: 0.25rem;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
 }

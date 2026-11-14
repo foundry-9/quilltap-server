@@ -1,0 +1,30 @@
+{
+  "format": "qtap-theme",
+  "formatVersion": 2,
+  "id": "v2-sample",
+  "name": "Version 2 Sample",
+  "description": "A test fixture for the version 2 theme format: primitives, token overrides in both modes, density, a page background, a font, an icon and scoped custom CSS.",
+  "version": "1.0.0",
+  "author": "Quilltap tests",
+  "license": "MIT",
+  "supportsDarkMode": true,
+  "tags": ["fixture"],
+  "tokensPath": "tokens.json",
+  "stylesPath": "styles.css",
+  "fonts": [
+    {
+      "family": "Rethink Sans",
+      "src": "fonts/RethinkSans-latin-ext.woff2",
+      "weight": "400 700",
+      "style": "normal",
+      "display": "swap",
+      "license": "OFL-1.1",
+      "licenseFile": "fonts/OFL.txt"
+    }
+  ],
+  "icons": { "sun": "icons/sun.svg" },
+  "subsystems": {
+    "salon": { "name": "The Parlour", "backgroundImage": "textures/paper.webp" },
+    "lantern": { "thumbnail": "none" }
+  }
+}

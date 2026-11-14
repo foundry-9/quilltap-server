@@ -47,8 +47,12 @@ const TAILWIND_PREFIXES = ['--tw-']
 /** Tokens that already hold a complete colour value. */
 const COMPLETE_COLOUR_TOKEN = /\bhsla?\(\s*var\(\s*--(color|theme)-/
 
+/**
+ * Files git knows about plus new files not yet added (ignored files excluded),
+ * so a stylesheet or generated sheet is checked before it is staged.
+ */
 function tracked(args) {
-  return execFileSync('git', ['ls-files', ...args], { cwd: REPO_ROOT, encoding: 'utf8' })
+  return execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', ...args], { cwd: REPO_ROOT, encoding: 'utf8' })
     .split('\n')
     .filter(Boolean)
 }

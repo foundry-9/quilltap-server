@@ -12,7 +12,9 @@ not a settled design.
   Where its measurements differ from the survey figures below, the audit is
   right.
 - [calliope-live-spec-a-token-registry.md](calliope-live-spec-a-token-registry.md)
-  — Phase 0b: token registry and bundle format v2 (ready to run).
+  — Phase 0b: token registry and bundle format v2 (implemented 4.14-dev).
+  Its fit report is
+  [calliope-live-spec-a-fit.md](calliope-live-spec-a-fit.md).
 - [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md)
   — Phase 0b′: structural hook catalogue (implemented 4.14-dev; reference
   [THEME_HOOKS.md](../THEME_HOOKS.md), generated from `lib/themes/hooks/`).

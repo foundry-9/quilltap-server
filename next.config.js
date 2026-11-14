@@ -47,6 +47,13 @@ const nextConfig = {
       './node_modules/@napi-rs/**/*',
       './node_modules/pdfjs-dist/**/*',
       './node_modules/@xterm/**/*',
+      // PostCSS scopes version 2 theme CSS at load (lib/themes/engine/scope.ts);
+      // server.ts and the WebSocket entries keep it external, so it and its
+      // dependencies must ship in the standalone tree.
+      './node_modules/postcss/**/*',
+      './node_modules/nanoid/**/*',
+      './node_modules/picocolors/**/*',
+      './node_modules/source-map-js/**/*',
       './first-startup/**/*',
       './themes/bundled/**/*',
     ],

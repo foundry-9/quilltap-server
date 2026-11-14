@@ -21,8 +21,9 @@
  *   qt-chat-message, qt-chat-message-user
  */
 
-/* CSS Custom Properties (theme override hooks) */
+/* CSS Custom Properties (theme override hooks) — generated from lib/themes/registry/ */
 @import "./_variables.css";
+@import "./_base.css";          /* Root baseline, ::selection, reduced motion (hand-written) */
 
 /* Component categories */
 /* _icons.css is imported FIRST so the .qt-icon base size (width/height: 1em) is

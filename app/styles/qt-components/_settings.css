@@ -382,4 +382,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  /* Appearance: a version 2 theme previewed inside the page. The container
+     carries its own data-theme, so these read the previewed theme's tokens
+     (the --color-* / --font-* map is re-declared on [data-theme] elements in
+     _theme-defaults.css), not the page theme's. */
+  .qt-theme-preview-surface {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
 }

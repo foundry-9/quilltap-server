@@ -334,12 +334,26 @@ declared layout variant, not custom CSS.
   override rules, then the bundle's `styles.css` verbatim.
 - **No scoping is applied.** Authors write `[data-theme="<id>"]` on every rule
   by hand.
-- **Probable defect, inferred from specificity and not yet run:**
-  `_variables.css` declares the five `--theme-font-*` variables on
-  `[data-theme].light` / `.dark` (specificity 0,2,0), which outranks the
-  injected `:root` (0,1,0). If so, the font families in `tokens.json` never
-  take effect, and that is why every bundled theme re-declares them in
-  `styles.css`. To be confirmed in 0b.
+- **Defect, confirmed by the Spec A snapshot (2026-11-14):** the font
+  families in `tokens.json` (`typography.fontSans` / `fontSerif` /
+  `fontMono`) never take effect. `_variables.css` declares the five
+  `--theme-font-*` variables on `[data-theme].light` / `.dark` (specificity
+  0,2,0), which outranks the injected `:root` (0,1,0). Method: resolve each
+  bundle with the `--theme-font-sans/serif/mono` declarations removed from
+  its `styles.css` (`scripts/theme-snapshot.ts` machinery) and compare with
+  `tokens.json`. Result, all six bundles in both modes: every one resolves to
+  the app's system stacks. The only "match" is rains' serif, whose token
+  happens to equal the default stack.
+  - art-deco, great-estate, madmans-box and old-school re-declare all three in
+    `styles.css` (higher-specificity `[data-theme="<id>"]` blocks), so they
+    render their intended fonts — the workaround is load-bearing.
+  - **earl-grey and rains do not.** They set `--default-font-family` (and
+    rains `--default-mono-font-family`) instead, which only Tailwind's
+    preflight on `html` reads; `body` carries `font-sans` →
+    `var(--theme-font-sans)`, the system stack. So the UI of those two themes
+    renders in system fonts rather than Rethink Sans / Inter / Fira Code, and
+    the bundled font files are loaded for little. Not fixed here: a fix
+    changes rendering, and Spec C decides.
 - `extendsTheme` merges **tokens only** (shallow, per group). The parent's CSS,
   fonts and icons are not inherited; the merge silently falls back to default
   tokens if the parent registered later (no dependency ordering); and the child

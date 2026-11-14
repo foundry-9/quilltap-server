@@ -228,7 +228,7 @@
     @apply w-full max-w-lg;
     border-radius: var(--qt-dialog-radius);
     background: var(--qt-dialog-bg);
-    border: 1px solid var(--qt-dialog-border);
+    border: var(--qt-dialog-border-width) solid var(--qt-dialog-border);
     box-shadow: var(--qt-dialog-shadow);
   }
 

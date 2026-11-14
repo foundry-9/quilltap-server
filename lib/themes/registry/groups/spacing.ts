@@ -1,0 +1,111 @@
+/**
+ * Theme token registry — Spacing scale (semantic tier).
+ *
+ * Generated into app/styles/_theme-defaults.css by
+ * `npm run generate:theme-variables`; edit here, not there.
+ */
+
+import type { TokenDef } from '../types';
+
+export const SPACING_TOKENS: readonly TokenDef[] = [
+  {
+    name: "--theme-spacing-1",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 1",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "0.25rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-2",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 2",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "0.5rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-3",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 3",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "0.75rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-4",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 4",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "1rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-5",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 5",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "1.25rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-6",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 6",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "1.5rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-8",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 8",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "2rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-10",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 10",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "2.5rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-12",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 12",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "3rem",
+    visibility: 'internal',
+  },
+  {
+    name: "--theme-spacing-16",
+    tier: 'semantic',
+    type: 'length',
+    group: 'spacing',
+    label: "Spacing 16",
+    description: "Emitted by a version 1 theme's tokens.json (themeTokensToCSS); nothing in the app reads it yet.",
+    default: "4rem",
+    visibility: 'internal',
+  },
+];

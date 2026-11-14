@@ -63,6 +63,13 @@ export interface ThemeStyleInjectorProps {
 
   /** Per-icon overrides to apply via [data-icon] rules */
   icons?: ThemeIconInfo[];
+
+  /**
+   * A version 2 theme's CSS, compiled and validated server-side (font faces,
+   * tokens, icons, scoped custom CSS). When set it is injected as it is and
+   * `tokens`, `fonts`, `icons` and `cssOverrides` are not used.
+   */
+  compiledCss?: string | null;
 }
 
 // ============================================================================
@@ -93,6 +100,7 @@ export function ThemeStyleInjector({
   themeId,
   fonts,
   icons,
+  compiledCss,
 }: ThemeStyleInjectorProps) {
   // Generate @font-face CSS for custom fonts
   const fontFacesCss = useMemo(() => {
@@ -120,6 +128,7 @@ export function ThemeStyleInjector({
 
   // Combine all CSS: fonts + variables + icon overrides + component overrides
   const fullCss = useMemo(() => {
+    if (compiledCss) return compiledCss;
     if (!baseCss) return null;
 
     const parts: string[] = [];
@@ -143,7 +152,7 @@ export function ThemeStyleInjector({
     }
 
     return parts.join('\n\n');
-  }, [baseCss, cssOverrides, fontFacesCss, iconOverridesCss]);
+  }, [compiledCss, baseCss, cssOverrides, fontFacesCss, iconOverridesCss]);
 
   // Don't render anything if no CSS to inject
   if (!fullCss) {

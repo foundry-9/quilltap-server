@@ -6736,11 +6736,14 @@ Get metadata for a single theme.
 
 #### `GET /api/v1/themes/[themeId]?action=tokens`
 
-Get the resolved design tokens for the theme.
+What the client needs to apply the theme. The shape depends on the theme's format:
+
+- **Version 1** (`formatVersion: 1`, also the default and plugin themes): `{ tokens, fonts, icons, cssOverrides, subsystems, images }` — the browser turns `tokens` into CSS (`themeTokensToCSS`) and appends `cssOverrides`.
+- **Version 2** (`formatVersion: 2`): `{ css, choices, features, fonts, icons, subsystems, images }` and no `tokens`. `css` is everything the injector writes, compiled and validated server-side in order (font faces, tokens, icon overrides, scoped custom CSS); `choices` (e.g. `{ density: "comfortable" }`) and `features` (`pageBackground`, `focusRing`, `scrollbar`) become `data-qt-*` attributes on `<html>` (`applyThemeToDom`).
 
 #### `GET /api/v1/themes/[themeId]?action=export`
 
-Export the theme as a downloadable `.qtap-theme` bundle.
+Export the theme as a downloadable `.qtap-theme` bundle. A version 2 theme is exported as installed (`formatVersion: 2`); a version 1 theme with its tokens written inline.
 
 #### `DELETE /api/v1/themes/[themeId]`
 

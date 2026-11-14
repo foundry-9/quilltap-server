@@ -1,8 +1,8 @@
 /**
  * Default Theme Tokens — Professional Neutral
  *
- * These values match the current globals.css and serve as the
- * fallback when no theme plugin is active. They represent the
+ * Read from the theme token registry, which also generates the CSS defaults,
+ * and serve as the fallback when no theme plugin is active. They represent the
  * "Default" theme that ships with Quilltap.
  *
  * Base hue: 225 (cool blue-gray) — neutral, precise, professional.
@@ -11,181 +11,47 @@
  * @module themes/default-tokens
  */
 
-import type { ThemeTokens, Typography, Spacing, Effects } from './types';
+import type { ThemeTokens, Typography, Spacing, Effects, ColorPalette } from './types';
+import { getThemeToken } from './registry';
+import { COLOR_VAR_MAP, EFFECTS_VAR_MAP, SPACING_VAR_MAP, TYPOGRAPHY_VAR_MAP } from './utils';
 
-// ============================================================================
-// DEFAULT COLOR PALETTES
-// ============================================================================
-
-/**
- * Default light mode colors
- * Cool blue-gray palette (hue 225) with low saturation
- * Professional, neutral, and precise
+/*
+ * Every value here is read from the theme token registry (lib/themes/registry/),
+ * the single source of truth that also generates app/styles/_theme-defaults.css
+ * and _variables.css — so the tokens the default theme injects and the CSS
+ * defaults cannot drift apart. The maps in ./utils name the variable each key
+ * is emitted as.
  */
-const DEFAULT_LIGHT_COLORS = {
-  background: 'hsl(225 14% 97%)',
-  foreground: 'hsl(225 18% 13%)',
-  primary: 'hsl(225 65% 48%)',
-  primaryForeground: 'hsl(0 0% 100%)',
-  secondary: 'hsl(225 10% 92%)',
-  secondaryForeground: 'hsl(225 18% 22%)',
-  muted: 'hsl(225 10% 94%)',
-  mutedForeground: 'hsl(225 8% 42%)',
-  accent: 'hsl(225 10% 93%)',
-  accentForeground: 'hsl(225 18% 22%)',
-  destructive: 'hsl(0 68% 50%)',
-  destructiveForeground: 'hsl(0 0% 100%)',
-  card: 'hsl(0 0% 100%)',
-  cardForeground: 'hsl(225 18% 13%)',
-  popover: 'hsl(0 0% 100%)',
-  popoverForeground: 'hsl(225 18% 13%)',
-  border: 'hsl(225 10% 87%)',
-  input: 'hsl(225 10% 87%)',
-  ring: 'hsl(225 65% 48%)',
-  success: 'hsl(152 60% 31%)',
-  successForeground: 'hsl(0 0% 100%)',
-  warning: 'hsl(38 90% 32%)',
-  warningForeground: 'hsl(0 0% 100%)',
-  info: 'hsl(210 75% 44.5%)',
-  infoForeground: 'hsl(0 0% 100%)',
-  chatUser: 'hsl(225 62% 50%)',
-  chatUserForeground: 'hsl(0 0% 100%)',
-} as const;
 
-/**
- * Default dark mode colors
- * Cool blue-gray palette (hue 225) with low saturation
- * Creates visible surface hierarchy: page (9%) → card (12%) → popover (14%)
- */
-const DEFAULT_DARK_COLORS = {
-  background: 'hsl(225 18% 9%)',
-  foreground: 'hsl(225 10% 92%)',
-  primary: 'hsl(225 55% 68%)',
-  primaryForeground: 'hsl(225 18% 9%)',
-  secondary: 'hsl(225 14% 17%)',
-  secondaryForeground: 'hsl(225 10% 85%)',
-  muted: 'hsl(225 12% 14%)',
-  mutedForeground: 'hsl(225 8% 58%)',
-  accent: 'hsl(225 14% 18%)',
-  accentForeground: 'hsl(225 10% 85%)',
-  destructive: 'hsl(0 60% 62%)',
-  destructiveForeground: 'hsl(225 18% 9%)',
-  card: 'hsl(225 16% 12%)',
-  cardForeground: 'hsl(225 10% 92%)',
-  popover: 'hsl(225 16% 14%)',
-  popoverForeground: 'hsl(225 10% 92%)',
-  border: 'hsl(225 12% 20%)',
-  input: 'hsl(225 12% 20%)',
-  ring: 'hsl(225 55% 60%)',
-  success: 'hsl(152 55% 44%)',
-  successForeground: 'hsl(225 18% 9%)',
-  warning: 'hsl(38 85% 52%)',
-  warningForeground: 'hsl(0 0% 10%)',
-  info: 'hsl(210 70% 58%)',
-  infoForeground: 'hsl(225 18% 9%)',
-  chatUser: 'hsl(225 60% 56%)',
-  chatUserForeground: 'hsl(0 0% 100%)',
-} as const;
+function registryValue(name: string, mode: 'light' | 'dark'): string {
+  const token = getThemeToken(name);
+  if (!token) {
+    throw new Error(`Default theme token ${name} is not in the theme token registry`);
+  }
+  return mode === 'dark' && token.defaultDark !== undefined ? token.defaultDark : token.default;
+}
 
-// ============================================================================
-// DEFAULT TYPOGRAPHY
-// ============================================================================
+function fromRegistry<K extends string>(map: Record<K, string>, mode: 'light' | 'dark'): Record<K, string> {
+  const out = {} as Record<K, string>;
+  for (const key of Object.keys(map) as K[]) out[key] = registryValue(map[key], mode);
+  return out;
+}
 
-/**
- * Default typography settings
- * System font stack throughout — San Francisco on Mac, Segoe UI on Windows
- */
-export const DEFAULT_TYPOGRAPHY: Typography = {
-  // Font families
-  fontSans: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  fontSerif: 'Georgia, Cambria, "Times New Roman", Times, serif',
-  fontMono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+/** Default light mode colors (cool blue-gray, hue 225). */
+const DEFAULT_LIGHT_COLORS: ColorPalette = fromRegistry(COLOR_VAR_MAP, 'light');
 
-  // Font size scale
-  fontSizeXs: '0.75rem',     // 12px
-  fontSizeSm: '0.875rem',    // 14px
-  fontSizeBase: '1rem',      // 16px
-  fontSizeLg: '1.125rem',    // 18px
-  fontSizeXl: '1.25rem',     // 20px
-  fontSize2xl: '1.5rem',     // 24px
-  fontSize3xl: '1.875rem',   // 30px
-  fontSize4xl: '2.25rem',    // 36px
+/** Default dark mode colors: page (9%) → card (12%) → popover (14%). */
+const DEFAULT_DARK_COLORS: ColorPalette = fromRegistry(COLOR_VAR_MAP, 'dark');
 
-  // Line heights
-  lineHeightTight: '1.25',
-  lineHeightNormal: '1.5',
-  lineHeightRelaxed: '1.75',
+/** Default typography: system font stacks, the type scale. */
+export const DEFAULT_TYPOGRAPHY: Typography = fromRegistry(TYPOGRAPHY_VAR_MAP, 'light');
 
-  // Font weights
-  fontWeightNormal: '400',
-  fontWeightMedium: '500',
-  fontWeightSemibold: '600',
-  fontWeightBold: '700',
+/** Default radii and spacing steps. */
+export const DEFAULT_SPACING: Spacing = fromRegistry(SPACING_VAR_MAP, 'light');
 
-  // Letter spacing
-  letterSpacingTight: '-0.025em',
-  letterSpacingNormal: '0',
-  letterSpacingWide: '0.025em',
-};
+/** Default shadows, transitions and focus ring. */
+export const DEFAULT_EFFECTS: Effects = fromRegistry(EFFECTS_VAR_MAP, 'light');
 
-// ============================================================================
-// DEFAULT SPACING
-// ============================================================================
-
-/**
- * Default spacing and border radius values
- * Tighter radii for a precise, engineered look
- */
-export const DEFAULT_SPACING: Spacing = {
-  // Border radius
-  radiusSm: '0.25rem',    // 4px
-  radiusMd: '0.375rem',   // 6px
-  radiusLg: '0.5rem',     // 8px
-  radiusXl: '0.625rem',   // 10px
-  radiusFull: '9999px',   // Full/pill
-
-  // Spacing scale (Tailwind defaults)
-  spacing1: '0.25rem',   // 4px
-  spacing2: '0.5rem',    // 8px
-  spacing3: '0.75rem',   // 12px
-  spacing4: '1rem',      // 16px
-  spacing5: '1.25rem',   // 20px
-  spacing6: '1.5rem',    // 24px
-  spacing8: '2rem',      // 32px
-  spacing10: '2.5rem',   // 40px
-  spacing12: '3rem',     // 48px
-  spacing16: '4rem',     // 64px
-};
-
-// ============================================================================
-// DEFAULT EFFECTS
-// ============================================================================
-
-/**
- * Default visual effects (shadows, transitions)
- * Restrained shadows — visible but never showy
- */
-export const DEFAULT_EFFECTS: Effects = {
-  // Shadows
-  shadowSm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-  shadowMd: '0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05)',
-  shadowLg: '0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04)',
-  shadowXl: '0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04)',
-
-  // Transitions
-  transitionFast: '150ms',
-  transitionNormal: '200ms',
-  transitionSlow: '300ms',
-  transitionEasing: 'cubic-bezier(0.4, 0, 0.2, 1)',
-
-  // Focus ring
-  focusRingWidth: '2px',
-  focusRingOffset: '2px',
-};
-
-// ============================================================================
-// COMPLETE DEFAULT THEME
-// ============================================================================
 
 /**
  * Complete default theme tokens

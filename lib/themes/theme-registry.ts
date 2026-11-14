@@ -18,7 +18,8 @@ import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
 import { getErrorMessage } from '@/lib/error-utils';
 import { loadInstalledBundles, loadBundledThemesFromDir } from './bundle-loader';
-import type { LoadedBundleTheme } from './bundle-loader';
+import type { LoadedBundleTheme, LoadedBundleThemeV2 } from './bundle-loader';
+import { compiledThemeCss, type CompiledThemeV2 } from './engine/compile';
 import { getBundledThemesDir } from '@/lib/paths';
 import type { ThemePlugin, EmbeddedFont } from '@quilltap/plugin-types';
 import { AbstractMapRegistry } from '@/lib/plugins/abstract-map-registry';
@@ -116,8 +117,14 @@ export interface LoadedTheme {
   /** Whether this theme supports dark mode */
   supportsDarkMode: boolean;
 
-  /** Theme tokens */
-  tokens: ThemeTokens;
+  /** Theme document format: 1 (tokens.json + raw CSS, and the default and plugin themes) or 2. */
+  formatVersion: 1 | 2;
+
+  /** Version 1 tokens. Absent for a version 2 theme, which never goes through themeTokensToCSS. */
+  tokens?: ThemeTokens;
+
+  /** A version 2 theme, compiled: its CSS, choices, features and preview swatches. */
+  v2?: CompiledThemeV2;
 
   /** Optional component override CSS */
   cssOverrides?: string;
@@ -327,6 +334,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       version: DEFAULT_THEME_METADATA.version,
       author: DEFAULT_THEME_METADATA.author,
       supportsDarkMode: DEFAULT_THEME_METADATA.supportsDarkMode,
+      formatVersion: 1,
       tokens: DEFAULT_THEME_TOKENS,
       tags: [...DEFAULT_THEME_METADATA.tags],
       pluginName: 'built-in',
@@ -399,7 +407,7 @@ class ThemeRegistry extends AbstractMapRegistry<
         this.extractThemeId(themeConfig.extendsTheme)
       );
       if (baseTheme) {
-        tokens = mergeThemeTokens(baseTheme.tokens, tokens);
+        tokens = mergeThemeTokens(baseTheme.tokens ?? DEFAULT_THEME_TOKENS, tokens);
       } else {
         tokens = mergeThemeTokens(DEFAULT_THEME_TOKENS, tokens);
       }
@@ -438,6 +446,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       version: plugin.manifest.version,
       author: themePlugin.metadata.author || plugin.manifest.author,
       supportsDarkMode: themePlugin.metadata.supportsDarkMode,
+      formatVersion: 1,
       tokens,
       cssOverrides: themePlugin.cssOverrides,
       previewImage: themePlugin.metadata.previewImage,
@@ -544,7 +553,7 @@ class ThemeRegistry extends AbstractMapRegistry<
         this.extractThemeId(themeConfig.extendsTheme)
       );
       if (baseTheme) {
-        tokens = mergeThemeTokens(baseTheme.tokens, tokens);
+        tokens = mergeThemeTokens(baseTheme.tokens ?? DEFAULT_THEME_TOKENS, tokens);
       } else {
         logger.warn('Base theme not found for inheritance', {
           themeId,
@@ -641,6 +650,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       version: plugin.manifest.version,
       author: plugin.manifest.author,
       supportsDarkMode: themeConfig.supportsDarkMode ?? true,
+      formatVersion: 1,
       tokens,
       cssOverrides,
       previewImage: themeConfig.previewImage,
@@ -716,6 +726,10 @@ class ThemeRegistry extends AbstractMapRegistry<
    * Register a loaded bundle theme into the registry
    */
   registerBundleTheme(bundle: LoadedBundleTheme): void {
+    if (bundle.formatVersion === 2) {
+      this.registerBundleThemeV2(bundle);
+      return;
+    }
     const { manifest, tokens, cssOverrides, installPath } = bundle;
     const themeId = manifest.id;
 
@@ -724,7 +738,7 @@ class ThemeRegistry extends AbstractMapRegistry<
     if (manifest.extendsTheme) {
       const baseTheme = this.state.themes.get(manifest.extendsTheme);
       if (baseTheme) {
-        finalTokens = mergeThemeTokens(baseTheme.tokens, tokens);
+        finalTokens = mergeThemeTokens(baseTheme.tokens ?? DEFAULT_THEME_TOKENS, tokens);
       } else {
         finalTokens = mergeThemeTokens(DEFAULT_THEME_TOKENS, tokens);
         logger.warn('Base theme not found for bundle inheritance', {
@@ -783,6 +797,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       version: manifest.version,
       author: manifest.author,
       supportsDarkMode: manifest.supportsDarkMode,
+      formatVersion: 1,
       tokens: finalTokens,
       cssOverrides,
       previewImage: manifest.previewImage,
@@ -812,6 +827,65 @@ class ThemeRegistry extends AbstractMapRegistry<
       supportsDarkMode: loadedTheme.supportsDarkMode,
       fontCount: fonts.length,
       iconCount: icons.length,
+    });
+  }
+
+  /**
+   * Register a version 2 bundle: validated and compiled by the theme engine
+   * when it was loaded (lib/themes/v2-bundle.ts).
+   */
+  private registerBundleThemeV2(bundle: LoadedBundleThemeV2): void {
+    const { manifest, v2, installPath } = bundle;
+    const themeId = manifest.id;
+    const pluginName = `bundle:${themeId}`;
+
+    const fonts: LoadedThemeFont[] = [];
+    for (const fontDef of manifest.fonts ?? []) {
+      const fontPath = themeFilePath(installPath, fontDef.src, { themeId, field: 'fonts.src', realpath: true });
+      if (!fontPath) continue;
+      fonts.push({
+        family: fontDef.family,
+        filePath: fontPath,
+        weight: fontDef.weight || '400',
+        style: fontDef.style || 'normal',
+        display: fontDef.display || 'swap',
+        pluginName,
+        src: fontDef.src,
+      });
+    }
+    const icons: LoadedThemeIcon[] = Object.entries(manifest.icons ?? {}).map(([name, src]) => ({ name, pluginName, src }));
+
+    this.state.themes.set(themeId, {
+      id: themeId,
+      name: manifest.name,
+      description: manifest.description,
+      version: manifest.version,
+      author: manifest.author,
+      supportsDarkMode: manifest.supportsDarkMode,
+      formatVersion: 2,
+      v2: v2.compiled,
+      previewImage: manifest.previewImage,
+      previewImagePath: manifest.previewImage
+        ? themeFilePath(installPath, manifest.previewImage, { themeId, field: 'previewImage', realpath: true })
+        : undefined,
+      tags: manifest.tags || [],
+      pluginName,
+      isDefault: false,
+      source: 'bundle',
+      bundlePath: installPath,
+      fonts: fonts.length > 0 ? fonts : undefined,
+      icons: icons.length > 0 ? icons : undefined,
+      subsystems: resolveSubsystemOverrides(manifest.subsystems, pluginName),
+    });
+
+    logger.info('Theme registered successfully (bundle, version 2)', {
+      themeId,
+      name: manifest.name,
+      version: manifest.version,
+      fontCount: fonts.length,
+      iconCount: icons.length,
+      choices: v2.compiled.choices,
+      features: v2.compiled.features,
     });
   }
 
@@ -866,7 +940,7 @@ class ThemeRegistry extends AbstractMapRegistry<
    * Get theme tokens for a specific theme
    * Falls back to default if theme not found
    */
-  getTokens(themeId: string | null): ThemeTokens {
+  getTokens(themeId: string | null): ThemeTokens | null {
     if (!themeId || themeId === 'default') {
       return DEFAULT_THEME_TOKENS;
     }
@@ -877,15 +951,17 @@ class ThemeRegistry extends AbstractMapRegistry<
       return DEFAULT_THEME_TOKENS;
     }
 
-    return theme.tokens;
+    // A version 2 theme has no version 1 token shape.
+    return theme.tokens ?? null;
   }
 
   /**
    * Get CSS for a specific theme
    */
   getCSS(themeId: string | null): string {
-    const tokens = this.getTokens(themeId);
-    return themeTokensToCSS(tokens);
+    const theme = themeId ? this.state.themes.get(themeId) : undefined;
+    if (theme?.v2) return compiledThemeCss(theme.v2);
+    return themeTokensToCSS(this.getTokens(themeId) ?? DEFAULT_THEME_TOKENS);
   }
 
   /**
@@ -1081,6 +1157,7 @@ class ThemeRegistry extends AbstractMapRegistry<
     isDefault: boolean;
     source: ThemeSource;
     deprecated?: boolean;
+    formatVersion: 1 | 2;
     previewColors?: {
       light: { background: string; primary: string; secondary: string; accent: string };
       dark: { background: string; primary: string; secondary: string; accent: string };
@@ -1096,10 +1173,12 @@ class ThemeRegistry extends AbstractMapRegistry<
       // For default theme, use fontSans since it uses sans-serif for headings
       let headingFont: { family: string; url?: string } | undefined;
 
-      // Get the heading font family from tokens
-      const headingFontFamily = theme.isDefault
-        ? theme.tokens.typography?.fontSans
-        : theme.tokens.typography?.fontSerif;
+      // Get the heading font family from tokens (a version 2 theme: its resolved --qt-heading-font)
+      const headingFontFamily = theme.v2
+        ? theme.v2.headingFont
+        : theme.isDefault
+          ? theme.tokens?.typography?.fontSans
+          : theme.tokens?.typography?.fontSerif;
 
       if (headingFontFamily) {
         // Extract the primary font name (first in the stack)
@@ -1133,21 +1212,24 @@ class ThemeRegistry extends AbstractMapRegistry<
         isDefault: theme.isDefault,
         source: theme.source,
         deprecated: theme.deprecated || false,
+        formatVersion: theme.formatVersion,
         // Include just the preview colors needed for theme cards
-        previewColors: {
-          light: {
-            background: theme.tokens.colors.light.background,
-            primary: theme.tokens.colors.light.primary,
-            secondary: theme.tokens.colors.light.secondary,
-            accent: theme.tokens.colors.light.accent,
-          },
-          dark: {
-            background: theme.tokens.colors.dark.background,
-            primary: theme.tokens.colors.dark.primary,
-            secondary: theme.tokens.colors.dark.secondary,
-            accent: theme.tokens.colors.dark.accent,
-          },
-        },
+        previewColors: theme.v2
+          ? theme.v2.previewColors
+          : {
+              light: {
+                background: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.background,
+                primary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.primary,
+                secondary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.secondary,
+                accent: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.light.accent,
+              },
+              dark: {
+                background: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.background,
+                primary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.primary,
+                secondary: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.secondary,
+                accent: (theme.tokens ?? DEFAULT_THEME_TOKENS).colors.dark.accent,
+              },
+            },
         headingFont,
       };
     });
@@ -1191,7 +1273,7 @@ export function getDefaultTheme(): LoadedTheme {
 /**
  * Get theme tokens
  */
-export function getThemeTokens(themeId: string | null): ThemeTokens {
+export function getThemeTokens(themeId: string | null): ThemeTokens | null {
   return themeRegistry.getTokens(themeId);
 }
 

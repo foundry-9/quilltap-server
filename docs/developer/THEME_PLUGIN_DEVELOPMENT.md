@@ -18,6 +18,23 @@
 
 ---
 
+## Bundle Format Version 2
+
+`theme.json` with `"formatVersion": 2` selects the version 2 document (Calliope Live, Spec A). Version 1 bundles keep loading unchanged. The engine is `lib/themes/engine/`; the fixture `__tests__/fixtures/themes/v2-sample/` exercises every feature.
+
+- **`tokens.json`** stores only what the theme overrides:
+  - `primitives` — author-named, typed values (`{ "gold": { "type": "color", "value": "#C19015", "dark": "#F4BE34" } }`), emitted as `--p-gold`;
+  - `tokens` — registry token names (`--theme-*`, `--qt-*`; the registry is `lib/themes/registry/`) to a value, or `{ "value": …, "dark": … }`;
+  - `choices` — e.g. `{ "density": "comfortable" }`.
+  Values are plain CSS and may use `var()`, `color-mix()`, `calc()`. A `var()` must name a primitive, a registry token or a Tailwind token (`--color-*`, `--radius-*`, `--font-*`), or carry a fallback. Unknown token names are refused with the nearest registry name suggested.
+- **No `extendsTheme`.** Every theme starts from the registry defaults; to start from an installed theme, copy it.
+- **Custom CSS** (`stylesPath`) is written without the theme id: the loader prefixes every selector with `[data-theme="<id>"]` (a leading `:root` / `html` becomes the prefix, `.dark` / `.light` attach to it), prefixes `@keyframes` names, keeps `@media` / `@supports` / `@container` / `@layer`, and refuses `@font-face`, `@import`, `@charset`, `@namespace` and other at-rules.
+- **`url()`** — in tokens and CSS — must be a path to an image file in the bundle (rewritten to the theme's asset route) or a `data:image/…` URI. Remote, rooted and protocol-relative URLs are refused. Bundle paths use letters, digits, `.`, `_`, `-` and `/` only.
+- **Fonts** need a `license` (SPDX identifier or `"proprietary"`), optionally a `licenseFile`. **Icons** must be app icon names (`.svg` or `.webp`). **Subsystem** keys must be subsystem ids; their images are bundle paths or `"none"`.
+- A version 2 theme switches on the app's own focus ring; setting `--qt-page-background-image` or `--qt-scrollbar-thumb` switches on the page background and WebKit scrollbar rules (`app/styles/qt-components/_base.css`).
+
+---
+
 ## Bundle Format: Custom Icon Overrides
 
 Theme bundles may replace any of the application's 85 built-in icons by declaring an `icons` map in `theme.json`. Each entry maps a canonical icon name to a bundle-relative asset path (`.svg` or `.webp`):

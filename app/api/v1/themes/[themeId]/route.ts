@@ -14,8 +14,9 @@ import { logger } from '@/lib/logger';
 import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { successResponse, notFound, badRequest, serverError, messageResponse } from '@/lib/api/responses';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { uninstallThemeBundle, exportThemeAsBundle } from '@/lib/themes/bundle-loader';
-import type { QtapThemeManifest } from '@/lib/themes/types';
+import { uninstallThemeBundle, exportThemeAsBundle, exportThemeV2AsBundle } from '@/lib/themes/bundle-loader';
+import { compiledThemeCss } from '@/lib/themes/engine/compile';
+import type { QtapThemeManifestV1 } from '@/lib/themes/types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -32,7 +33,11 @@ async function ensureInitialized() {
 
 /**
  * Handle GET ?action=tokens
- * Returns the tokens and fonts for a specific theme
+ * Returns what the client needs to apply a theme. A version 1 theme
+ * (`formatVersion: 1`): its tokens, raw CSS overrides, fonts and icons. A
+ * version 2 theme (`formatVersion: 2`): its compiled CSS (font faces, tokens,
+ * icons, scoped custom CSS, built and validated server-side), its choices and
+ * the app-owned features it switches on — and no version 1 token shape.
  */
 async function handleGetTokens(themeId: string): Promise<Response> {
   if (!themeRegistry.has(themeId)) {
@@ -69,7 +74,21 @@ async function handleGetTokens(themeId: string): Promise<Response> {
   const subsystems = theme?.subsystems || undefined;
   const images = themeRegistry.getImages(themeId);
 
-  return successResponse({ tokens, fonts, icons, cssOverrides, subsystems, images });
+  if (theme?.v2) {
+    logger.debug('Serving version 2 theme', { context: 'theme-item-api', themeId, choices: theme.v2.choices, features: theme.v2.features });
+    return successResponse({
+      formatVersion: 2 as const,
+      css: compiledThemeCss(theme.v2),
+      choices: theme.v2.choices,
+      features: theme.v2.features,
+      fonts,
+      icons,
+      subsystems,
+      images,
+    });
+  }
+
+  return successResponse({ formatVersion: 1 as const, tokens, fonts, icons, cssOverrides, subsystems, images });
 }
 
 /**
@@ -86,7 +105,22 @@ async function handleExport(themeId: string): Promise<Response> {
   const outputPath = path.join(tempDir, `${themeId}.qtap-theme`);
 
   try {
-    const manifest: QtapThemeManifest = {
+    if (theme.formatVersion === 2) {
+      if (!theme.bundlePath) return serverError('Theme has no bundle to export');
+      await exportThemeV2AsBundle(themeId, theme.bundlePath, outputPath);
+      const v2Buffer = await fs.readFile(outputPath);
+      return new NextResponse(new Uint8Array(v2Buffer), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': buildContentDisposition(`${themeId}.qtap-theme`, 'attachment'),
+          'Content-Length': v2Buffer.length.toString(),
+        },
+      });
+    }
+    if (!theme.tokens) return serverError('Theme has no tokens to export');
+
+    const manifest: QtapThemeManifestV1 = {
       format: 'qtap-theme',
       formatVersion: 1,
       id: theme.id,

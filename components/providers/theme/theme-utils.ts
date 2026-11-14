@@ -6,7 +6,8 @@
 
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens';
 import type { ThemeTokens, ColorMode } from '@/lib/themes/types';
-import type { ThemeSummary, ThemeTokensResponse, ThemesListResponse, ThemeFont, ThemeIcon, SubsystemOverride } from './types';
+import { THEME_CHOICES } from '@/lib/themes/registry/choices';
+import type { ThemeSummary, ThemeTokensResponse, ThemesListResponse, ThemeFont, ThemeIcon, SubsystemOverride, ThemeFeatureFlags } from './types';
 
 /**
  * Resolve the actual color mode based on preference and system settings
@@ -22,11 +23,36 @@ export function resolveColorMode(
 }
 
 /**
+ * App-owned theme behaviour a theme can switch on (Calliope Live, Spec A).
+ * Each is an attribute on <html> that keys rules in
+ * app/styles/qt-components/_base.css:
+ * - `pageBackground` → `data-qt-page-background`: paint --qt-page-background-image
+ *   behind the app and make the page surfaces transparent over it;
+ * - `focusRing` → `data-qt-focus-ring`: the app's :focus-visible ring;
+ * - `scrollbar` → `data-qt-scrollbar`: WebKit scrollbar styling from the
+ *   --qt-scrollbar-* tokens.
+ * A version 1 theme switches none of them on, so its own rules are untouched.
+ */
+export interface ThemeDomFeatures {
+  pageBackground?: boolean;
+  focusRing?: boolean;
+  scrollbar?: boolean;
+}
+
+export const THEME_FEATURE_ATTRIBUTES: Readonly<Record<keyof ThemeDomFeatures, string>> = {
+  pageBackground: 'data-qt-page-background',
+  focusRing: 'data-qt-focus-ring',
+  scrollbar: 'data-qt-scrollbar',
+};
+
+/**
  * Apply theme colors and mode to the DOM
  */
 export function applyThemeToDom(
   resolvedColorMode: 'light' | 'dark',
-  activeThemeId: string | null
+  activeThemeId: string | null,
+  features: ThemeDomFeatures = {},
+  choices: Readonly<Record<string, string>> = {}
 ): void {
   if (typeof window === 'undefined') return;
 
@@ -44,6 +70,21 @@ export function applyThemeToDom(
   // Set data attribute for theme-aware CSS selectors
   root.setAttribute('data-theme', activeThemeId ?? 'default');
   root.setAttribute('data-color-mode', resolvedColorMode);
+
+  for (const [feature, attribute] of Object.entries(THEME_FEATURE_ATTRIBUTES) as Array<[keyof ThemeDomFeatures, string]>) {
+    if (features[feature]) root.setAttribute(attribute, '');
+    else root.removeAttribute(attribute);
+  }
+
+  // Choices (density, …): data-qt-<name>="<option>". The default option is
+  // the generated defaults, so it needs no attribute; neither does a theme
+  // that picks nothing.
+  for (const choice of THEME_CHOICES) {
+    const attribute = `data-qt-${choice.name}`;
+    const option = choices[choice.name];
+    if (option && option !== choice.default && choice.options.includes(option)) root.setAttribute(attribute, option);
+    else root.removeAttribute(attribute);
+  }
 }
 
 /**
@@ -83,23 +124,43 @@ export function getSystemDarkModePreference(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
+/** A theme as the provider applies it: version 1 tokens, or version 2 compiled CSS. */
+export type LoadedThemeTokens =
+  | {
+      formatVersion: 1;
+      tokens: ThemeTokens;
+      fonts: ThemeFont[];
+      icons: ThemeIcon[];
+      cssOverrides: string | undefined;
+      subsystems: Record<string, SubsystemOverride> | null;
+    }
+  | {
+      formatVersion: 2;
+      css: string;
+      choices: Record<string, string>;
+      features: ThemeFeatureFlags;
+      subsystems: Record<string, SubsystemOverride> | null;
+    };
+
 /**
  * Fetch theme tokens from API
  */
-export async function fetchThemeTokens(
-  themeId: string
-): Promise<{
-  tokens: ThemeTokens;
-  fonts: ThemeFont[];
-  icons: ThemeIcon[];
-  cssOverrides: string | undefined;
-  subsystems: Record<string, SubsystemOverride> | null;
-} | null> {
+export async function fetchThemeTokens(themeId: string): Promise<LoadedThemeTokens | null> {
   try {
     const response = await fetch(`/api/v1/themes/${themeId}?action=tokens`);
     if (response.ok) {
       const data: ThemeTokensResponse = await response.json();
+      if (data.formatVersion === 2) {
+        return {
+          formatVersion: 2,
+          css: data.css,
+          choices: data.choices || {},
+          features: data.features,
+          subsystems: data.subsystems || null,
+        };
+      }
       return {
+        formatVersion: 1,
         tokens: data.tokens,
         fonts: data.fonts || [],
         icons: data.icons || [],

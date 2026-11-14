@@ -21,7 +21,7 @@ import { Icon, type IconName } from '@/components/ui/icon'
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 import { generateScopedThemeCSS, generateIconOverridesCSS } from '@/lib/themes/utils'
 import { useThemePreview } from '../hooks/useThemePreview'
-import { ThemePreviewPanel } from './ThemePreviewPanel'
+import { ThemePreviewPanel, ThemePreviewPanelV2 } from './ThemePreviewPanel'
 import { getContrastingTextColor, getMutedTextColor, getSourceBadge } from '../utils/contrast'
 
 interface ThemePreviewModalProps {
@@ -69,7 +69,7 @@ export function ThemePreviewModal({
     : theme.description
   const supportsDarkMode = isDefault ? true : theme.supportsDarkMode
 
-  const { tokens, fonts, cssOverrides, icons, images, isLoading, error, fetchTokens } =
+  const { tokens, v2, fonts, cssOverrides, icons, images, isLoading, error, fetchTokens } =
     useThemePreview(isDefault ? null : themeId)
 
   // Fetch tokens (and icons/images) when the modal opens for a real theme.
@@ -88,7 +88,10 @@ export function ThemePreviewModal({
   const previewTokens = isDefault ? DEFAULT_THEME_TOKENS : tokens
 
   // Banner (Option B): theme-derived background → computed accessible foreground.
-  const bannerBg = previewTokens?.colors?.[effectiveMode]?.background || '#1a1a1a'
+  const bannerBg =
+    previewTokens?.colors?.[effectiveMode]?.background ||
+    (v2 ? theme?.previewColors?.[effectiveMode]?.background : undefined) ||
+    '#1a1a1a'
   const fg = getContrastingTextColor(bannerBg)
   const muted = getMutedTextColor(bannerBg)
   const badge = isDefault
@@ -212,17 +215,20 @@ export function ThemePreviewModal({
 
         {/* 4b. Live element preview */}
         <section>
-          {isLoading && !previewTokens && (
+          {isLoading && !previewTokens && !v2 && (
             <div className="qt-loading-state py-12">
               <div className="qt-spinner" />
               <span className="ml-2 qt-text-small">Loading theme preview...</span>
             </div>
           )}
-          {error && !previewTokens && (
+          {error && !previewTokens && !v2 && (
             <div className="qt-alert-error p-4 rounded-lg">
               <p className="font-medium">Failed to load theme preview</p>
               <p className="qt-text-small mt-1">{error}</p>
             </div>
+          )}
+          {v2 && !isDefault && (
+            <ThemePreviewPanelV2 compiledCss={v2.css} themeId={themeId} mode={effectiveMode} choices={v2.choices} />
           )}
           {previewTokens && (
             <ThemePreviewPanel

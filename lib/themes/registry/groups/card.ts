@@ -1,0 +1,116 @@
+/**
+ * Theme token registry — Card.
+ *
+ * Generated into app/styles/qt-components/_variables.css by
+ * `npm run generate:theme-variables`; edit here, not there.
+ */
+
+import type { TokenDef } from '../types';
+
+export const CARD_TOKENS: readonly TokenDef[] = [
+  {
+    name: "--qt-card-radius",
+    tier: 'component',
+    type: 'radius',
+    group: 'card',
+    label: "Card radius",
+    default: "var(--radius-lg)",
+    visibility: 'advanced',
+  },
+  {
+    name: "--qt-card-padding",
+    tier: 'component',
+    type: 'length',
+    group: 'card',
+    label: "Card padding",
+    default: "1.25rem",
+    byChoice: {"density":{"comfortable":"1.5rem"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-card-bg",
+    tier: 'component',
+    type: 'color',
+    group: 'card',
+    label: "Card background",
+    default: "var(--color-card)",
+    visibility: 'advanced',
+  },
+  {
+    name: "--qt-card-fg",
+    tier: 'component',
+    type: 'color',
+    group: 'card',
+    label: "Card text colour",
+    default: "var(--color-card-foreground)",
+    visibility: 'advanced',
+  },
+  {
+    name: "--qt-card-border",
+    tier: 'component',
+    type: 'color',
+    group: 'card',
+    label: "Card border",
+    default: "var(--color-border)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-card-border-opacity",
+    tier: 'component',
+    type: 'opacity',
+    group: 'card',
+    label: "Card border opacity",
+    default: "0.6",
+    defaultDark: "0.75",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-card-shadow",
+    tier: 'component',
+    type: 'shadow',
+    group: 'card',
+    label: "Card shadow",
+    descriptionDark: "Card shadows — true black for depth, faint white edge for definition",
+    default: "0 1px 3px hsl(225 18% 10% / 0.06), 0 1px 2px hsl(225 18% 10% / 0.04)",
+    defaultDark: "0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-card-shadow-hover",
+    tier: 'component',
+    type: 'shadow',
+    group: 'card',
+    label: "Card shadow hover",
+    default: "0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05)",
+    defaultDark: "0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-card-transition",
+    tier: 'component',
+    type: 'transition',
+    group: 'card',
+    label: "Card transition",
+    default: "all 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+    byChoice: {"density":{"comfortable":"all 200ms cubic-bezier(0.4, 0, 0.2, 1)"}},
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-entity-card-radius",
+    tier: 'component',
+    type: 'radius',
+    group: 'card',
+    label: "Entity card radius",
+    default: "var(--radius-lg)",
+    visibility: 'standard',
+  },
+  {
+    name: "--qt-entity-card-bg",
+    tier: 'component',
+    type: 'color',
+    group: 'card',
+    label: "Entity card background",
+    default: "color-mix(in srgb, var(--color-card) 92%, transparent)",
+    visibility: 'standard',
+  },
+];

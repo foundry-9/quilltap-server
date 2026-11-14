@@ -31,6 +31,7 @@ import type { ColorMode } from '@/lib/themes/types';
 import {
   resolveColorMode,
   applyThemeToDom,
+  type ThemeDomFeatures,
   setupSystemPreferenceListener,
   getSystemDarkModePreference,
   fetchThemeTokens,
@@ -79,6 +80,10 @@ export function ThemeProvider({
   const [themeFonts, setThemeFonts] = useState<ThemeFont[]>([]);
   const [themeIcons, setThemeIcons] = useState<ThemeIcon[]>([]);
   const [cssOverrides, setCssOverrides] = useState<string | undefined>(initialCssOverrides);
+  // A version 2 theme: compiled CSS, the app-owned features it switches on, its choices.
+  const [compiledCss, setCompiledCss] = useState<string | null>(null);
+  const [themeFeatures, setThemeFeatures] = useState<ThemeDomFeatures>({});
+  const [themeChoices, setThemeChoices] = useState<Record<string, string>>({});
   const [subsystems, setSubsystems] = useState<Record<string, SubsystemOverride> | null>(null);
   const [showNavThemeSelector, setShowNavThemeSelectorState] = useState<boolean>(
     initialPreference?.showNavThemeSelector ?? false
@@ -116,8 +121,8 @@ export function ThemeProvider({
   // ============================================================================
 
   useEffect(() => {
-    applyThemeToDom(resolvedColorMode, activeThemeId);
-  }, [resolvedColorMode, activeThemeId]);
+    applyThemeToDom(resolvedColorMode, activeThemeId, themeFeatures, themeChoices);
+  }, [resolvedColorMode, activeThemeId, themeFeatures, themeChoices]);
 
   // ============================================================================
   // LOAD INITIAL DATA
@@ -125,7 +130,20 @@ export function ThemeProvider({
 
   const loadThemeTokens = useCallback(async (themeId: string) => {
     const result = await fetchThemeTokens(themeId);
-    if (result) {
+    if (result?.formatVersion === 2) {
+      // Version 2: the server compiled everything; nothing goes through themeTokensToCSS.
+      setCompiledCss(result.css);
+      setThemeFeatures(result.features);
+      setThemeChoices(result.choices);
+      setTokens(getDefaultTokens());
+      setThemeFonts([]);
+      setThemeIcons([]);
+      setCssOverrides(undefined);
+      setSubsystems(result.subsystems);
+    } else if (result) {
+      setCompiledCss(null);
+      setThemeFeatures({});
+      setThemeChoices({});
       setTokens(result.tokens);
       setThemeFonts(result.fonts);
       setThemeIcons(result.icons);
@@ -133,6 +151,9 @@ export function ThemeProvider({
       setSubsystems(result.subsystems);
     } else {
       // Fall back to default tokens
+      setCompiledCss(null);
+      setThemeFeatures({});
+      setThemeChoices({});
       setTokens(getDefaultTokens());
       setThemeFonts([]);
       setThemeIcons([]);
@@ -204,6 +225,9 @@ export function ThemeProvider({
       if (themeId) {
         await loadThemeTokens(themeId);
       } else {
+        setCompiledCss(null);
+        setThemeFeatures({});
+        setThemeChoices({});
         setTokens(getDefaultTokens());
         setThemeFonts([]);
         setThemeIcons([]);
@@ -295,6 +319,7 @@ export function ThemeProvider({
         icons={themeIcons}
         themeId={activeThemeId}
         cssOverrides={cssOverrides}
+        compiledCss={compiledCss}
       />
       {children}
     </ThemeContext.Provider>

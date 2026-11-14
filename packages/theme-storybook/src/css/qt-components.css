@@ -21,42 +21,25 @@
    SOURCE: app/styles/qt-components/_variables.css
    ========================================================================== */
 /**
- * Default Theme — Professional Neutral
+ * Quilltap theme variables — the defaults for every --qt-* and --theme-*
+ * component token, in both colour modes.
  *
- * A clean, business-appropriate theme for power users who work with
- * Quilltap as a serious tool. System font stack throughout — San Francisco
- * on Mac, Segoe UI on Windows, Roboto on Android/Chrome OS. No decorative
- * fonts, no flourishes. The interface should feel like Notion, Linear, or
- * Stripe: confident, quiet, and out of the way.
+ * !!! GENERATED FILE — DO NOT EDIT BY HAND !!!
+ * Source of truth: lib/themes/registry/ (one file per group under groups/)
+ * Regenerate with: npm run generate:theme-variables
+ * `npm run lint` fails while this file and the registry disagree.
  *
- * Design Philosophy:
- * Light and dark modes are siblings — same personality, different lighting.
- * No pure white or pure black. Slightly cooler hue family (225 vs 220)
- * with lower saturation for a more corporate, less "crafty" feel.
- * Tighter radii and restrained shadows for a precise, engineered look.
+ * Themes override any of these in their own [data-theme="<id>"] blocks.
+ * :root is listed so the defaults resolve before the theme injector sets
+ * data-theme — the startup, instance-lock and version-guard screens render
+ * then, and without it their .qt-card had no background, leaving dark text
+ * on the dark bootstrap art.
  *
- * Color Foundation:
- * Base hue: 225 (cool blue-gray) — neutral, precise, professional.
- * Primary: A confident but not flashy indigo-blue.
- * Saturation: Low across the board. Color is for meaning, not decoration.
+ * The hand-written rules that used to live here (the root baseline,
+ * ::selection, reduced motion) are in _base.css.
  */
 /* ============================================================================
-   ROOT BASELINE - SHARED BETWEEN MODES
-   ============================================================================ */
-[data-theme="default"] {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
-  text-rendering: optimizeLegibility;
-}
-/* ============================================================================
-   QT-* VARIABLE DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
-   Themes override any of these in their own [data-theme="<name>"] blocks.
-   :root is listed so the defaults resolve before the theme injector sets
-   data-theme — the startup, instance-lock and version-guard screens render
-   then, and without it their .qt-card had no background, leaving dark text
-   on the dark bootstrap art.
+   DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
    ============================================================================ */
 :root, [data-theme], [data-theme].dark, [data-theme].light {
   --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -74,7 +57,7 @@
   --qt-button-primary-fg: var(--color-primary-foreground);
   --qt-button-primary-hover-bg: var(--color-primary);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-button-primary-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+    --qt-button-primary-hover-bg: color-mix(in srgb, var(--color-primary) 88%, var(--theme-hover-shade));
   }
   --qt-button-primary-shadow: 0 1px 3px -1px rgb(0 0 0 / 0.12);
   --qt-button-secondary-bg: var(--color-secondary);
@@ -82,7 +65,7 @@
   --qt-button-secondary-border: var(--color-border);
   --qt-button-secondary-hover-bg: var(--color-secondary);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 85%, black);
+    --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 85%, var(--theme-hover-shade));
   }
   --qt-button-ghost-bg: transparent;
   --qt-button-ghost-fg: var(--color-foreground);
@@ -91,19 +74,19 @@
   --qt-button-destructive-fg: var(--color-destructive-foreground);
   --qt-button-destructive-hover-bg: var(--color-destructive);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 88%, black);
+    --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 88%, var(--theme-hover-shade));
   }
   --qt-button-success-bg: var(--color-success);
   --qt-button-success-fg: var(--color-success-foreground);
   --qt-button-success-hover-bg: var(--color-success);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
+    --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, var(--theme-hover-shade));
   }
   --qt-button-warning-bg: var(--color-warning);
   --qt-button-warning-fg: var(--color-warning-foreground);
   --qt-button-warning-hover-bg: var(--color-warning);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, black);
+    --qt-button-warning-hover-bg: color-mix(in srgb, var(--color-warning) 85%, var(--theme-hover-shade));
   }
   --qt-status-success-bg: var(--color-success);
   --qt-status-success-fg: var(--color-success-foreground);
@@ -137,18 +120,42 @@
   }
   --qt-composer-ooc-fg: var(--qt-rp-ooc-color);
   --qt-composer-ooc-bg: var(--qt-rp-ooc-bg);
-  --qt-alert-success-bg: hsl(152 60% 38% / 0.08);
-  --qt-alert-success-fg: hsl(152 60% 28%);
-  --qt-alert-success-border: hsl(152 60% 38% / 0.25);
-  --qt-alert-warning-bg: hsl(38 90% 46% / 0.08);
-  --qt-alert-warning-fg: hsl(38 90% 28%);
-  --qt-alert-warning-border: hsl(38 90% 46% / 0.25);
-  --qt-alert-error-bg: hsl(0 68% 50% / 0.08);
-  --qt-alert-error-fg: hsl(0 68% 35%);
-  --qt-alert-error-border: hsl(0 68% 50% / 0.25);
-  --qt-alert-info-bg: hsl(210 75% 48% / 0.08);
-  --qt-alert-info-fg: hsl(210 75% 30%);
-  --qt-alert-info-border: hsl(210 75% 48% / 0.25);
+  --qt-alert-success-bg: var(--theme-status-success);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-success-bg: color-mix(in srgb, var(--theme-status-success) var(--theme-status-tint), transparent);
+  }
+  --qt-alert-success-fg: var(--theme-status-success-foreground);
+  --qt-alert-success-border: var(--theme-status-success);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-success-border: color-mix(in srgb, var(--theme-status-success) var(--theme-status-edge), transparent);
+  }
+  --qt-alert-warning-bg: var(--theme-status-warning);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-warning-bg: color-mix(in srgb, var(--theme-status-warning) var(--theme-status-tint), transparent);
+  }
+  --qt-alert-warning-fg: var(--theme-status-warning-foreground);
+  --qt-alert-warning-border: var(--theme-status-warning);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-warning-border: color-mix(in srgb, var(--theme-status-warning) var(--theme-status-edge), transparent);
+  }
+  --qt-alert-error-bg: var(--theme-status-danger);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-error-bg: color-mix(in srgb, var(--theme-status-danger) var(--theme-status-tint), transparent);
+  }
+  --qt-alert-error-fg: var(--theme-status-danger-foreground);
+  --qt-alert-error-border: var(--theme-status-danger);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-error-border: color-mix(in srgb, var(--theme-status-danger) var(--theme-status-edge), transparent);
+  }
+  --qt-alert-info-bg: var(--theme-status-info);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-info-bg: color-mix(in srgb, var(--theme-status-info) var(--theme-status-tint), transparent);
+  }
+  --qt-alert-info-fg: var(--theme-status-info-foreground);
+  --qt-alert-info-border: var(--theme-status-info);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-alert-info-border: color-mix(in srgb, var(--theme-status-info) var(--theme-status-edge), transparent);
+  }
   --qt-card-radius: var(--radius-lg);
   --qt-card-padding: 1.25rem;
   --qt-card-bg: var(--color-card);
@@ -195,6 +202,19 @@
   --qt-navbar-link-fg: var(--color-foreground);
   --qt-navbar-link-hover-bg: var(--color-muted);
   --qt-navbar-link-active-bg: var(--color-muted);
+  --qt-color-scheme: normal;
+  --qt-selection-bg: hsl(225 55% 48% / 0.18);
+  --qt-selection-fg: var(--color-foreground);
+  --qt-scrollbar-width: auto;
+  --qt-scrollbar-size: 8px;
+  --qt-scrollbar-radius: 9999px;
+  --qt-focus-ring-color: var(--color-ring);
+  --qt-focus-ring-glow: none;
+  --qt-page-background-image: none;
+  --qt-page-background-size: cover;
+  --qt-page-background-position: center center;
+  --qt-page-background-attachment: fixed;
+  --qt-page-background-repeat: no-repeat;
   --qt-content-bg: var(--color-card);
   --qt-content-fg: var(--color-card-foreground);
   --qt-content-scroll-bg: var(--color-background);
@@ -242,8 +262,12 @@
   --qt-dialog-radius: var(--radius-lg);
   --qt-dialog-bg: var(--color-background);
   --qt-dialog-border: var(--color-border);
+  --qt-dialog-border-width: 1px;
   --qt-dialog-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.18);
-  --qt-dialog-backdrop: rgb(0 0 0 / 0.45);
+  --qt-dialog-backdrop: var(--theme-scrim);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-dialog-backdrop: color-mix(in srgb, var(--theme-scrim) 45%, transparent);
+  }
   --qt-floating-layer-z: 1000;
   --qt-brahma-launcher-size: 2.75rem;
   --qt-brahma-launcher-offset: 0.75rem;
@@ -251,7 +275,7 @@
   --qt-brahma-launcher-fg: var(--color-primary-foreground);
   --qt-brahma-launcher-hover-bg: var(--color-primary);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-brahma-launcher-hover-bg: color-mix(in srgb, var(--color-primary) 88%, black);
+    --qt-brahma-launcher-hover-bg: color-mix(in srgb, var(--color-primary) 88%, var(--theme-hover-shade));
   }
   --qt-brahma-launcher-active-bg: var(--color-background);
   --qt-brahma-launcher-active-fg: var(--color-primary);
@@ -269,25 +293,25 @@
   --qt-chat-user-fg: var(--color-chat-user-foreground);
   --qt-chat-user-border: transparent;
   --qt-chat-user-font: var(--font-sans);
-  --qt-chat-assistant-bg: var(--color-muted);
-  --qt-chat-assistant-fg: var(--color-foreground);
+  --qt-chat-assistant-bg: var(--theme-chat-assistant);
+  --qt-chat-assistant-fg: var(--theme-chat-assistant-foreground);
   --qt-chat-assistant-border: var(--color-border);
   --qt-chat-assistant-font: var(--font-sans);
   --qt-chat-assistant-font-weight: inherit;
   --qt-chat-whisper-bg: var(--qt-chat-assistant-bg);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%);
+    --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--theme-chat-whisper) 40%);
   }
   --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
-  --qt-chat-whisper-border: #9b8ec4;
-  --qt-chat-whisper-label-fg: #5c447e;
+  --qt-chat-whisper-border: var(--theme-chat-whisper);
+  --qt-chat-whisper-label-fg: var(--theme-chat-whisper-foreground);
   --qt-chat-silent-bg: var(--qt-chat-assistant-bg);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%);
+    --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, var(--theme-chat-silent) 35%);
   }
   --qt-chat-silent-fg: var(--qt-chat-assistant-fg);
-  --qt-chat-silent-border: #7a9e8e;
-  --qt-chat-silent-label-fg: #5d7e6e;
+  --qt-chat-silent-border: var(--theme-chat-silent);
+  --qt-chat-silent-label-fg: var(--theme-chat-silent-foreground);
   --qt-chat-thinking-fg: var(--qt-chat-assistant-fg);
   @supports (color: color-mix(in lab, red, red)) {
     --qt-chat-thinking-fg: color-mix(in srgb, var(--qt-chat-assistant-fg) 55%, transparent);
@@ -303,20 +327,20 @@
   --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
   --qt-chat-wardrobe-bg: var(--qt-chat-assistant-bg);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%);
+    --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--theme-chat-wardrobe) 40%);
   }
   --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
-  --qt-chat-wardrobe-border: #c4a24e;
-  --qt-chat-wardrobe-label-fg: #9a7d2e;
+  --qt-chat-wardrobe-border: var(--theme-chat-wardrobe);
+  --qt-chat-wardrobe-label-fg: var(--theme-chat-wardrobe-foreground);
   --qt-chat-system-bar-bg: var(--qt-chat-assistant-bg);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 70%, var(--color-muted) 30%);
+    --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 70%, var(--theme-chat-system) 30%);
   }
-  --qt-chat-system-bar-fg: var(--color-muted-foreground);
+  --qt-chat-system-bar-fg: var(--theme-chat-system-foreground);
   --qt-chat-system-bar-border: var(--color-border);
   --qt-chat-system-bar-hover-bg: var(--qt-chat-assistant-bg);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--color-muted) 45%);
+    --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--theme-chat-system) 45%);
   }
   --qt-chat-system-bar-sender-fg: var(--color-foreground);
   --qt-chat-announcement-dot-high: var(--color-destructive, #b4452e);
@@ -365,20 +389,22 @@
   --qt-participant-card-border: var(--color-border);
   --qt-participant-card-active-border: var(--color-primary);
   --qt-participant-card-active-shadow: 0 0 8px rgb(var(--color-primary) / 0.2);
-  --qt-rp-dialogue-color: var(--color-foreground);
-  --qt-rp-dialogue-bg: transparent;
-  --qt-rp-narration-color: hsl(225 10% 72%);
-  --qt-rp-narration-bg: hsl(225 14% 12% / 0.8);
+  --qt-thinking-duration: 1.2s;
+  --qt-thinking-origin: 12.5% 87.5%;
+  --qt-rp-dialogue-color: var(--theme-roleplay-dialogue-foreground);
+  --qt-rp-dialogue-bg: var(--theme-roleplay-dialogue);
+  --qt-rp-narration-color: var(--theme-roleplay-narration-foreground);
+  --qt-rp-narration-bg: var(--theme-roleplay-narration);
   --qt-rp-narration-style: normal;
   --qt-rp-narration-padding: 0.125rem 0.375rem;
   --qt-rp-narration-radius: 0.1875rem;
-  --qt-rp-inner-monologue-color: hsl(270 50% 72%);
-  --qt-rp-inner-monologue-bg: hsl(270 20% 12% / 0.8);
+  --qt-rp-inner-monologue-color: var(--theme-roleplay-inner-monologue-foreground);
+  --qt-rp-inner-monologue-bg: var(--theme-roleplay-inner-monologue);
   --qt-rp-inner-monologue-style: italic;
   --qt-rp-inner-monologue-padding: 0.125rem 0.375rem;
   --qt-rp-inner-monologue-radius: 0.1875rem;
-  --qt-rp-ooc-color: hsl(152 60% 58%);
-  --qt-rp-ooc-bg: hsl(0 0% 6%);
+  --qt-rp-ooc-color: var(--theme-roleplay-ooc-foreground);
+  --qt-rp-ooc-bg: var(--theme-roleplay-ooc);
   --qt-rp-ooc-font: var(--font-mono);
   --qt-rp-ooc-padding: 0.125rem 0.375rem;
   --qt-rp-ooc-radius: 0.1875rem;
@@ -388,14 +414,14 @@
   --qt-rp-button-internal-fg: hsl(0 0% 100%);
   --qt-rp-button-ooc-bg: hsl(152 60% 28%);
   --qt-rp-button-ooc-fg: hsl(152 60% 80%);
-  --qt-roleplay-1-bg: hsl(217 91% 53%);
-  --qt-roleplay-1-fg: hsl(0 0% 100%);
-  --qt-roleplay-2-bg: hsl(270 65% 55%);
-  --qt-roleplay-2-fg: hsl(0 0% 100%);
-  --qt-roleplay-3-bg: hsl(38 92% 50%);
-  --qt-roleplay-3-fg: hsl(30 45% 12%);
-  --qt-roleplay-4-bg: hsl(168 78% 36%);
-  --qt-roleplay-4-fg: hsl(0 0% 100%);
+  --qt-roleplay-1-bg: var(--theme-roleplay-chip-1);
+  --qt-roleplay-1-fg: var(--theme-roleplay-chip-1-foreground);
+  --qt-roleplay-2-bg: var(--theme-roleplay-chip-2);
+  --qt-roleplay-2-fg: var(--theme-roleplay-chip-2-foreground);
+  --qt-roleplay-3-bg: var(--theme-roleplay-chip-3);
+  --qt-roleplay-3-fg: var(--theme-roleplay-chip-3-foreground);
+  --qt-roleplay-4-bg: var(--theme-roleplay-chip-4);
+  --qt-roleplay-4-fg: var(--theme-roleplay-chip-4-foreground);
   --qt-badge-radius: 9999px;
   --qt-badge-padding-x: 0.625rem;
   --qt-badge-padding-y: 0.1875rem;
@@ -408,52 +434,112 @@
   --qt-badge-outline-bg: transparent;
   --qt-badge-outline-fg: var(--color-foreground);
   --qt-badge-outline-border: var(--color-border);
-  --qt-badge-character-bg: hsl(225 55% 55% / 0.12);
-  --qt-badge-character-fg: hsl(225 55% 42%);
-  --qt-badge-user-character-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-user-character-fg: hsl(270 45% 42%);
-  --qt-badge-chat-bg: hsl(152 50% 38% / 0.12);
-  --qt-badge-chat-fg: hsl(152 50% 30%);
-  --qt-badge-tag-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-tag-fg: hsl(25 70% 36.5%);
-  --qt-badge-memory-bg: hsl(330 55% 52% / 0.12);
-  --qt-badge-memory-fg: hsl(330 55% 38%);
-  --qt-badge-message-bg: hsl(45 70% 48% / 0.12);
-  --qt-badge-message-fg: hsl(45 70% 29.5%);
-  --qt-badge-project-bg: hsl(185 55% 38% / 0.12);
-  --qt-badge-project-fg: hsl(185 55% 30%);
-  --qt-badge-enabled-bg: hsl(152 50% 38% / 0.12);
-  --qt-badge-enabled-fg: hsl(152 50% 30%);
+  --qt-badge-character-bg: var(--theme-category-character);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-character-bg: color-mix(in srgb, var(--theme-category-character) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-character-fg: var(--theme-category-character-foreground);
+  --qt-badge-user-character-bg: var(--theme-category-user-character);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-user-character-bg: color-mix(in srgb, var(--theme-category-user-character) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-user-character-fg: var(--theme-category-user-character-foreground);
+  --qt-badge-chat-bg: var(--theme-category-chat);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-chat-bg: color-mix(in srgb, var(--theme-category-chat) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-chat-fg: var(--theme-category-chat-foreground);
+  --qt-badge-tag-bg: var(--theme-category-tag);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-tag-bg: color-mix(in srgb, var(--theme-category-tag) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-tag-fg: var(--theme-category-tag-foreground);
+  --qt-badge-memory-bg: var(--theme-category-memory);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-memory-bg: color-mix(in srgb, var(--theme-category-memory) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-memory-fg: var(--theme-category-memory-foreground);
+  --qt-badge-message-bg: var(--theme-category-message);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-message-bg: color-mix(in srgb, var(--theme-category-message) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-message-fg: var(--theme-category-message-foreground);
+  --qt-badge-project-bg: var(--theme-category-project);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-project-bg: color-mix(in srgb, var(--theme-category-project) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-project-fg: var(--theme-category-project-foreground);
+  --qt-badge-enabled-bg: var(--theme-category-chat);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-enabled-bg: color-mix(in srgb, var(--theme-category-chat) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-enabled-fg: var(--theme-category-chat-foreground);
   --qt-badge-disabled-bg: var(--color-muted);
   --qt-badge-disabled-fg: var(--color-muted-foreground);
-  --qt-badge-related-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-related-fg: hsl(270 45% 42%);
-  --qt-badge-manual-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-manual-fg: hsl(270 45% 42%);
+  --qt-badge-related-bg: var(--theme-category-related);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-related-bg: color-mix(in srgb, var(--theme-category-related) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-related-fg: var(--theme-category-related-foreground);
+  --qt-badge-manual-bg: var(--theme-category-user-character);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-manual-bg: color-mix(in srgb, var(--theme-category-user-character) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-manual-fg: var(--theme-category-user-character-foreground);
   --qt-badge-auto-bg: var(--color-muted);
   --qt-badge-auto-fg: var(--color-muted-foreground);
-  --qt-badge-source-included-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-source-included-fg: hsl(270 45% 42%);
-  --qt-badge-source-npm-bg: hsl(0 60% 50% / 0.12);
-  --qt-badge-source-npm-fg: hsl(0 60% 38%);
-  --qt-badge-source-git-bg: hsl(25 70% 48% / 0.12);
-  --qt-badge-source-git-fg: hsl(25 70% 36.5%);
+  --qt-badge-source-included-bg: var(--theme-category-user-character);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-source-included-bg: color-mix(in srgb, var(--theme-category-user-character) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-source-included-fg: var(--theme-category-user-character-foreground);
+  --qt-badge-source-npm-bg: var(--theme-category-source-npm);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-source-npm-bg: color-mix(in srgb, var(--theme-category-source-npm) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-source-npm-fg: var(--theme-category-source-npm-foreground);
+  --qt-badge-source-git-bg: var(--theme-category-source-git);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-source-git-bg: color-mix(in srgb, var(--theme-category-source-git) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-source-git-fg: var(--theme-category-source-git-foreground);
   --qt-badge-source-manual-bg: var(--color-muted);
   --qt-badge-source-manual-fg: var(--color-muted-foreground);
-  --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
-  --qt-badge-wardrobe-top-fg: hsl(220 60% 42%);
-  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
-  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
-  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
-  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 32%);
-  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
-  --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);
-  --qt-badge-wardrobe-hair-fg: hsl(345 55% 42%);
-  --qt-badge-wardrobe-shared-bg: hsl(240 50% 55% / 0.12);
-  --qt-badge-wardrobe-shared-fg: hsl(240 50% 42%);
-  --qt-badge-capability-bg: hsl(225 55% 55% / 0.08);
-  --qt-badge-capability-fg: hsl(225 55% 42%);
+  --qt-badge-wardrobe-top-bg: var(--theme-category-wardrobe-top);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-wardrobe-top-bg: color-mix(in srgb, var(--theme-category-wardrobe-top) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-wardrobe-top-fg: var(--theme-category-wardrobe-top-foreground);
+  --qt-badge-wardrobe-bottom-bg: var(--theme-category-wardrobe-bottom);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-wardrobe-bottom-bg: color-mix(in srgb, var(--theme-category-wardrobe-bottom) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-wardrobe-bottom-fg: var(--theme-category-wardrobe-bottom-foreground);
+  --qt-badge-wardrobe-footwear-bg: var(--theme-category-wardrobe-footwear);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-wardrobe-footwear-bg: color-mix(in srgb, var(--theme-category-wardrobe-footwear) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-wardrobe-footwear-fg: var(--theme-category-wardrobe-footwear-foreground);
+  --qt-badge-wardrobe-accessories-bg: var(--theme-category-wardrobe-accessories);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-wardrobe-accessories-bg: color-mix(in srgb, var(--theme-category-wardrobe-accessories) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-wardrobe-accessories-fg: var(--theme-category-wardrobe-accessories-foreground);
+  --qt-badge-wardrobe-hair-bg: var(--theme-category-wardrobe-hair);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-wardrobe-hair-bg: color-mix(in srgb, var(--theme-category-wardrobe-hair) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-wardrobe-hair-fg: var(--theme-category-wardrobe-hair-foreground);
+  --qt-badge-wardrobe-shared-bg: var(--theme-category-wardrobe-shared);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-wardrobe-shared-bg: color-mix(in srgb, var(--theme-category-wardrobe-shared) var(--theme-category-tint), transparent);
+  }
+  --qt-badge-wardrobe-shared-fg: var(--theme-category-wardrobe-shared-foreground);
+  --qt-badge-capability-bg: var(--theme-category-capability);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-capability-bg: color-mix(in srgb, var(--theme-category-capability) 8%, transparent);
+  }
+  --qt-badge-capability-fg: var(--theme-category-capability-foreground);
   --qt-badge-autonomous-running-bg: var(--qt-status-success-bg);
   --qt-badge-autonomous-running-fg: var(--qt-status-success-fg);
   --qt-badge-autonomous-running-border: var(--qt-status-success-border);
@@ -511,6 +597,15 @@
   --qt-code-fg: var(--color-foreground);
   --qt-code-border: var(--color-border);
   --qt-code-font: var(--font-mono);
+  --qt-copy-button-bg: rgba(0, 0, 0, 0.6);
+  --qt-copy-button-text: rgba(255, 255, 255, 0.9);
+  --qt-copy-button-border: rgba(255, 255, 255, 0.1);
+  --qt-copy-button-hover-bg: rgba(0, 0, 0, 0.8);
+  --qt-copy-button-hover-text: #fff;
+  --qt-copy-button-hover-border: rgba(255, 255, 255, 0.2);
+  --qt-copy-button-success-bg: rgba(34, 197, 94, 0.8);
+  --qt-copy-button-success-text: #fff;
+  --qt-copy-button-success-border: rgba(34, 197, 94, 0.5);
   --qt-diagram-radius: var(--radius-md);
   --qt-diagram-bg: var(--color-card);
   --qt-diagram-fg: var(--color-foreground);
@@ -534,7 +629,7 @@
   --qt-link-color: var(--color-primary);
   --qt-link-hover-color: var(--color-primary);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-link-hover-color: color-mix(in srgb, var(--color-primary) 80%, black);
+    --qt-link-hover-color: color-mix(in srgb, var(--color-primary) 80%, var(--theme-hover-shade));
   }
   --qt-link-decoration: none;
   --qt-link-decoration-hover: underline;
@@ -557,14 +652,35 @@
   --qt-highlight-radius: 0.125rem;
   --qt-highlight-padding-x: 0.125rem;
   --qt-highlight-font-weight: 500;
-  --qt-overlay-bg: rgb(0 0 0 / 0.85);
-  --qt-overlay-medium-bg: rgb(0 0 0 / 0.6);
-  --qt-overlay-light-bg: rgb(0 0 0 / 0.2);
-  --qt-overlay-caption-bg: rgb(0 0 0 / 0.5);
-  --qt-overlay-btn-bg: rgb(255 255 255 / 0.1);
-  --qt-overlay-btn-hover-bg: rgb(255 255 255 / 0.2);
-  --qt-overlay-fg: rgb(255 255 255);
-  --qt-overlay-muted-fg: rgb(255 255 255 / 0.7);
+  --qt-overlay-bg: var(--theme-scrim);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-overlay-bg: color-mix(in srgb, var(--theme-scrim) var(--theme-scrim-strength), transparent);
+  }
+  --qt-overlay-medium-bg: var(--theme-scrim);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-overlay-medium-bg: color-mix(in srgb, var(--theme-scrim) 60%, transparent);
+  }
+  --qt-overlay-light-bg: var(--theme-scrim);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-overlay-light-bg: color-mix(in srgb, var(--theme-scrim) 20%, transparent);
+  }
+  --qt-overlay-caption-bg: var(--theme-scrim);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-overlay-caption-bg: color-mix(in srgb, var(--theme-scrim) 50%, transparent);
+  }
+  --qt-overlay-btn-bg: var(--theme-scrim-foreground);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-overlay-btn-bg: color-mix(in srgb, var(--theme-scrim-foreground) 10%, transparent);
+  }
+  --qt-overlay-btn-hover-bg: var(--theme-scrim-foreground);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-overlay-btn-hover-bg: color-mix(in srgb, var(--theme-scrim-foreground) 20%, transparent);
+  }
+  --qt-overlay-fg: var(--theme-scrim-foreground);
+  --qt-overlay-muted-fg: var(--theme-scrim-foreground);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-overlay-muted-fg: color-mix(in srgb, var(--theme-scrim-foreground) 70%, transparent);
+  }
   --qt-spinner-track: var(--color-primary);
   @supports (color: color-mix(in lab, red, red)) {
     --qt-spinner-track: color-mix(in srgb, var(--color-primary) 20%, transparent);
@@ -599,7 +715,7 @@
   --qt-filter-chip-inactive-border: transparent;
   --qt-filter-chip-inactive-hover-bg: var(--color-muted);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--color-foreground) 4%);
+    --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--theme-hover-tint) 4%);
   }
   --qt-tab-radius: var(--radius-md) var(--radius-md) 0 0;
   --qt-tab-padding-x: 0.875rem;
@@ -613,7 +729,7 @@
   --qt-tab-border: transparent;
   --qt-tab-hover-bg: var(--color-muted);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--color-foreground) 4%);
+    --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 82%, var(--theme-hover-tint) 4%);
   }
   --qt-tab-hover-fg: var(--color-foreground);
   --qt-tab-active-bg: var(--color-card);
@@ -621,26 +737,28 @@
   --qt-tab-active-border: var(--color-border);
   --qt-tab-group-gap: 0.1875rem;
   --qt-tab-divider-color: var(--color-border);
-  --qt-terminal-bg: #1a1a1a;
-  --qt-terminal-fg: #e6e6e6;
-  --qt-terminal-cursor: #e6e6e6;
-  --qt-terminal-selection: rgba(255, 255, 255, 0.2);
-  --qt-terminal-ansi-black: #000000;
-  --qt-terminal-ansi-red: #cd3131;
-  --qt-terminal-ansi-green: #0dbc79;
-  --qt-terminal-ansi-yellow: #e5e510;
-  --qt-terminal-ansi-blue: #2472c8;
-  --qt-terminal-ansi-magenta: #bc3fbc;
-  --qt-terminal-ansi-cyan: #11a8cd;
-  --qt-terminal-ansi-white: #e5e5e5;
-  --qt-terminal-ansi-bright-black: #666666;
-  --qt-terminal-ansi-bright-red: #f14c4c;
-  --qt-terminal-ansi-bright-green: #23d18b;
-  --qt-terminal-ansi-bright-yellow: #f5f543;
-  --qt-terminal-ansi-bright-blue: #3b8eea;
-  --qt-terminal-ansi-bright-magenta: #d670d6;
-  --qt-terminal-ansi-bright-cyan: #29b8db;
-  --qt-terminal-ansi-bright-white: #e5e5e5;
+  --qt-workspace-accent: var(--color-primary);
+  --qt-workspace-tab-active-fg: var(--color-foreground);
+  --qt-terminal-bg: var(--theme-terminal-background);
+  --qt-terminal-fg: var(--theme-terminal-foreground);
+  --qt-terminal-cursor: var(--theme-terminal-cursor);
+  --qt-terminal-selection: var(--theme-terminal-selection);
+  --qt-terminal-ansi-black: var(--theme-terminal-ansi-black);
+  --qt-terminal-ansi-red: var(--theme-terminal-ansi-red);
+  --qt-terminal-ansi-green: var(--theme-terminal-ansi-green);
+  --qt-terminal-ansi-yellow: var(--theme-terminal-ansi-yellow);
+  --qt-terminal-ansi-blue: var(--theme-terminal-ansi-blue);
+  --qt-terminal-ansi-magenta: var(--theme-terminal-ansi-magenta);
+  --qt-terminal-ansi-cyan: var(--theme-terminal-ansi-cyan);
+  --qt-terminal-ansi-white: var(--theme-terminal-ansi-white);
+  --qt-terminal-ansi-bright-black: var(--theme-terminal-ansi-bright-black);
+  --qt-terminal-ansi-bright-red: var(--theme-terminal-ansi-bright-red);
+  --qt-terminal-ansi-bright-green: var(--theme-terminal-ansi-bright-green);
+  --qt-terminal-ansi-bright-yellow: var(--theme-terminal-ansi-bright-yellow);
+  --qt-terminal-ansi-bright-blue: var(--theme-terminal-ansi-bright-blue);
+  --qt-terminal-ansi-bright-magenta: var(--theme-terminal-ansi-bright-magenta);
+  --qt-terminal-ansi-bright-cyan: var(--theme-terminal-ansi-bright-cyan);
+  --qt-terminal-ansi-bright-white: var(--theme-terminal-ansi-bright-white);
   --qt-terminal-chrome-bg: var(--qt-terminal-bg);
   @supports (color: color-mix(in lab, red, red)) {
     --qt-terminal-chrome-bg: color-mix(in srgb, var(--qt-terminal-bg) 78%, var(--qt-terminal-fg) 6%);
@@ -666,158 +784,198 @@
 }
 /* ============================================================================
    DARK MODE DEFAULTS - BASELINE FOR ALL THEMES IN DARK MODE
-   Cooler, deeper darks. Sharper contrast on badge colors.
-   Black shadows + faint light edge glow for card definition.
+   Only the tokens whose dark value differs from the shared default.
    ============================================================================ */
 [data-theme].dark {
-  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  --qt-card-border-opacity: 0.75;
   --qt-card-shadow: 0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04);
   --qt-card-shadow-hover: 0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06);
-  --qt-card-border-opacity: 0.75;
-  --qt-roleplay-1-bg: hsl(217 91% 60%);
-  --qt-roleplay-2-bg: hsl(270 70% 64%);
-  --qt-roleplay-3-bg: hsl(38 95% 56%);
-  --qt-roleplay-4-bg: hsl(168 70% 44%);
-  --qt-alert-success-bg: hsl(152 55% 38% / 0.15);
-  --qt-alert-success-fg: hsl(152 55% 62%);
-  --qt-alert-success-border: hsl(152 55% 38% / 0.4);
-  --qt-alert-warning-bg: hsl(38 85% 50% / 0.15);
-  --qt-alert-warning-fg: hsl(38 85% 68%);
-  --qt-alert-warning-border: hsl(38 85% 50% / 0.4);
-  --qt-alert-error-bg: hsl(0 60% 54% / 0.15);
-  --qt-alert-error-fg: hsl(0 60% 68%);
-  --qt-alert-error-border: hsl(0 60% 54% / 0.4);
-  --qt-alert-info-bg: hsl(210 70% 55% / 0.15);
-  --qt-alert-info-fg: hsl(210 70% 68%);
-  --qt-alert-info-border: hsl(210 70% 55% / 0.4);
-  --qt-badge-character-bg: hsl(225 55% 58% / 0.25);
-  --qt-badge-character-fg: hsl(225 55% 72%);
-  --qt-badge-user-character-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-user-character-fg: hsl(270 45% 72%);
-  --qt-badge-chat-bg: hsl(152 50% 40% / 0.25);
-  --qt-badge-chat-fg: hsl(152 50% 62%);
-  --qt-badge-tag-bg: hsl(25 70% 50% / 0.25);
-  --qt-badge-tag-fg: hsl(25 70% 62%);
-  --qt-badge-memory-bg: hsl(330 55% 55% / 0.25);
-  --qt-badge-memory-fg: hsl(330 55% 68%);
-  --qt-badge-message-bg: hsl(45 70% 50% / 0.25);
-  --qt-badge-message-fg: hsl(45 70% 68%);
-  --qt-badge-enabled-bg: hsl(152 50% 40% / 0.25);
-  --qt-badge-enabled-fg: hsl(152 50% 62%);
-  --qt-badge-related-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-related-fg: hsl(270 45% 72%);
-  --qt-badge-manual-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-manual-fg: hsl(270 45% 72%);
-  --qt-badge-source-included-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-source-included-fg: hsl(270 45% 72%);
-  --qt-badge-source-npm-bg: hsl(0 60% 55% / 0.25);
-  --qt-badge-source-npm-fg: hsl(0 60% 68%);
-  --qt-badge-source-git-bg: hsl(25 70% 50% / 0.25);
-  --qt-badge-source-git-fg: hsl(25 70% 62%);
-  --qt-badge-wardrobe-top-bg: hsl(220 60% 58% / 0.25);
-  --qt-badge-wardrobe-top-fg: hsl(220 60% 72%);
-  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 40% / 0.25);
-  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 62%);
-  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 50% / 0.25);
-  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 68%);
-  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 72%);
-  --qt-badge-wardrobe-hair-bg: hsl(345 55% 58% / 0.25);
-  --qt-badge-wardrobe-hair-fg: hsl(345 55% 72%);
-  --qt-badge-wardrobe-shared-bg: hsl(240 50% 58% / 0.25);
-  --qt-badge-wardrobe-shared-fg: hsl(240 50% 72%);
-  --qt-badge-capability-bg: hsl(225 55% 58% / 0.18);
-  --qt-badge-capability-fg: hsl(225 55% 72%);
-  --qt-badge-autonomous-running-bg: var(--qt-status-success-bg);
-  --qt-badge-autonomous-running-fg: var(--qt-status-success-fg);
-  --qt-badge-autonomous-running-border: var(--qt-status-success-border);
-  --qt-badge-autonomous-idle-bg: var(--qt-status-info-bg);
-  --qt-badge-autonomous-idle-fg: var(--qt-status-info-fg);
-  --qt-badge-autonomous-idle-border: var(--qt-status-info-border);
-  --qt-badge-autonomous-paused-bg: var(--qt-status-warning-bg);
-  --qt-badge-autonomous-paused-fg: var(--qt-status-warning-fg);
-  --qt-badge-autonomous-paused-border: var(--qt-status-warning-border);
-  --qt-badge-autonomous-stopped-bg: var(--color-muted);
-  --qt-badge-autonomous-stopped-fg: var(--color-muted-foreground);
-  --qt-badge-autonomous-stopped-border: var(--color-border);
-  --qt-badge-autonomous-budget-bg: var(--qt-badge-related-bg);
-  --qt-badge-autonomous-budget-fg: var(--qt-badge-related-fg);
-  --qt-badge-autonomous-budget-border: var(--qt-badge-related-fg);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 50%, transparent);
-  }
-  --qt-badge-autonomous-error-bg: var(--qt-status-danger-bg);
-  --qt-badge-autonomous-error-fg: var(--qt-status-danger-fg);
-  --qt-badge-autonomous-error-border: var(--qt-status-danger-border);
-  --qt-queue-badge-memory-bg: hsl(225 55% 55%);
-  --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
-  --qt-queue-badge-summary-bg: hsl(152 50% 34.5%);
-  --qt-queue-badge-danger-bg: hsl(0 60% 52%);
-  --qt-queue-badge-story-bg: hsl(225 12% 44%);
-  --qt-chat-whisper-bg: var(--qt-chat-assistant-bg);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
-  }
-  --qt-chat-whisper-border: #6b5b95;
-  --qt-chat-whisper-label-fg: #b5a9d1;
-  --qt-chat-silent-bg: var(--qt-chat-assistant-bg);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
-  }
-  --qt-chat-silent-border: #4a7a6a;
-  --qt-chat-silent-label-fg: #8ab8a4;
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   --qt-chat-thinking-fg: var(--qt-chat-assistant-fg);
   @supports (color: color-mix(in lab, red, red)) {
     --qt-chat-thinking-fg: color-mix(in srgb, var(--qt-chat-assistant-fg) 60%, transparent);
   }
-  --qt-chat-thinking-bg: var(--qt-chat-silent-bg);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-thinking-bg: color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent);
-  }
-  --qt-chat-thinking-border: var(--qt-chat-silent-border);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-thinking-border: color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent);
-  }
-  --qt-chat-thinking-label-fg: var(--qt-chat-silent-label-fg);
-  --qt-chat-wardrobe-bg: var(--qt-chat-assistant-bg);
-  @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
-  }
-  --qt-chat-wardrobe-border: #8a6d1b;
-  --qt-chat-wardrobe-label-fg: #d4b65c;
   --qt-chat-system-bar-bg: var(--qt-chat-assistant-bg);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--color-muted) 40%);
+    --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--theme-chat-system) 40%);
   }
   --qt-chat-system-bar-hover-bg: var(--qt-chat-assistant-bg);
   @supports (color: color-mix(in lab, red, red)) {
-    --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--color-muted) 55%);
+    --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--theme-chat-system) 55%);
   }
   --qt-chat-announcement-dot-high: #e06a52;
   --qt-chat-announcement-dot-medium: var(--color-warning, #e3a94a);
-  --qt-chat-announcement-dot-low: var(--color-muted-foreground);
   --qt-response-status-bg: var(--color-muted);
   @supports (color: color-mix(in lab, red, red)) {
     --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);
   }
-  --qt-response-status-fg: var(--color-muted-foreground);
   --qt-response-status-compressing-fg: hsl(210 70% 68%);
   --qt-response-status-gathering-fg: hsl(270 50% 68%);
   --qt-response-status-building-fg: hsl(38 85% 62%);
   --qt-response-status-sending-fg: hsl(210 70% 68%);
   --qt-response-status-streaming-fg: hsl(152 55% 62%);
   --qt-response-status-tool-fg: hsl(270 50% 68%);
+  --qt-badge-project-bg: var(--theme-category-project);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-project-bg: color-mix(in srgb, var(--theme-category-project) 12%, transparent);
+  }
+  --qt-badge-capability-bg: var(--theme-category-capability);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-capability-bg: color-mix(in srgb, var(--theme-category-capability) 18%, transparent);
+  }
+  --qt-badge-autonomous-budget-border: var(--qt-badge-related-fg);
+  @supports (color: color-mix(in lab, red, red)) {
+    --qt-badge-autonomous-budget-border: color-mix(in srgb, var(--qt-badge-related-fg) 50%, transparent);
+  }
+  --qt-queue-badge-memory-bg: hsl(225 55% 55%);
+  --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
+  --qt-queue-badge-summary-bg: hsl(152 50% 34.5%);
+  --qt-queue-badge-danger-bg: hsl(0 60% 52%);
+  --qt-queue-badge-story-bg: hsl(225 12% 44%);
 }
 /* ============================================================================
-   SELECTION & FOCUS
+   CHOICE: density = comfortable
+   Set by data-qt-density="comfortable" on <html>. compact is the defaults above.
    ============================================================================ */
-[data-theme="default"] ::-moz-selection {
-  background: hsl(225 55% 48% / 0.18);
-  color: var(--color-foreground);
+[data-theme][data-qt-density="comfortable"] {
+  --qt-button-padding-y: 0.5rem;
+  --qt-button-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --qt-card-padding: 1.5rem;
+  --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --qt-navbar-height: 4rem;
+  --qt-navbar-link-padding-x: 0.75rem;
+  --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-min-width: 16rem;
+  --qt-left-sidebar-max-width: 32rem;
+  --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-resize-handle-width: 4px;
+  --qt-left-sidebar-section-padding: 0.75rem;
+  --qt-left-sidebar-section-gap: 0.25rem;
+  --qt-left-sidebar-item-gap: 0.5rem;
+  --qt-left-sidebar-item-icon-size: 1.25rem;
+  --qt-app-header-height: 4rem;
+  --qt-app-header-blur: blur(8px);
+  --qt-chat-message-padding: 1rem;
+  --qt-page-max-width: 75rem;
+  --qt-card-grid-auto-min: 550px;
+  --qt-chat-sidebar-collapsed-width: 4rem;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-queue-badge-idle-opacity: 0.4;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-filter-chip-padding-y: 0.25rem;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
 }
-[data-theme="default"] ::selection {
-  background: hsl(225 55% 48% / 0.18);
-  color: var(--color-foreground);
+/* ==========================================================================
+   SOURCE: app/styles/qt-components/_base.css — Root baseline, ::selection, reduced motion (hand-written)
+   ========================================================================== */
+/**
+ * Quilltap theme base — the hand-written root rules every theme sits on.
+ *
+ * The --qt-* / --theme-* variable defaults are generated into _variables.css
+ * from lib/themes/registry/; these rules are not variables, so they live here,
+ * imported straight after it (the order they always had). The root baseline
+ * stays scoped to the default theme: applied to every theme it would change
+ * text-rendering and font smoothing for bundles that do not set them.
+ *
+ * Default Theme — Professional Neutral
+ *
+ * A clean, business-appropriate theme for power users who work with
+ * Quilltap as a serious tool. System font stack throughout — San Francisco
+ * on Mac, Segoe UI on Windows, Roboto on Android/Chrome OS. No decorative
+ * fonts, no flourishes. The interface should feel like Notion, Linear, or
+ * Stripe: confident, quiet, and out of the way.
+ *
+ * Design Philosophy:
+ * Light and dark modes are siblings — same personality, different lighting.
+ * No pure white or pure black. Slightly cooler hue family (225 vs 220)
+ * with lower saturation for a more corporate, less "crafty" feel.
+ * Tighter radii and restrained shadows for a precise, engineered look.
+ *
+ * Color Foundation:
+ * Base hue: 225 (cool blue-gray) — neutral, precise, professional.
+ * Primary: A confident but not flashy indigo-blue.
+ * Saturation: Low across the board. Color is for meaning, not decoration.
+ */
+/* ============================================================================
+   ROOT BASELINE - SHARED BETWEEN MODES
+   ============================================================================ */
+[data-theme="default"] {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  text-rendering: optimizeLegibility;
+}
+@layer base {
+  /* ============================================================================
+     APP-OWNED ROOT RULES (token-driven)
+     Each reads tokens from the registry (lib/themes/registry/groups/page.ts).
+     They sit in @layer base — or behind an attribute the theme provider sets —
+     so a version 1 theme's own unlayered rules still win, and with their tokens
+     at the defaults they render as the app always has.
+     ============================================================================ */
+  :root {
+    color-scheme: var(--qt-color-scheme);
+    scrollbar-width: var(--qt-scrollbar-width);
+    scrollbar-color: var(--qt-scrollbar-thumb, auto) var(--qt-scrollbar-track, );
+  }
+  ::-moz-selection {
+    background-color: var(--qt-selection-bg);
+    color: var(--qt-selection-fg);
+  }
+  ::selection {
+    background-color: var(--qt-selection-bg);
+    color: var(--qt-selection-fg);
+  }
+  /* WebKit-only scrollbar styling (Safari ignores scrollbar-color). Any
+     ::-webkit-scrollbar rule switches WebKit to custom scrollbars, so these
+     apply only for a theme that asks for them. */
+  :root[data-qt-scrollbar] ::-webkit-scrollbar {
+    width: var(--qt-scrollbar-size);
+    height: var(--qt-scrollbar-size);
+  }
+  :root[data-qt-scrollbar] ::-webkit-scrollbar-track {
+    background-color: var(--qt-scrollbar-track, transparent);
+  }
+  :root[data-qt-scrollbar] ::-webkit-scrollbar-thumb {
+    background-color: var(--qt-scrollbar-thumb, currentColor);
+    border-radius: var(--qt-scrollbar-radius);
+  }
+  :root[data-qt-scrollbar] ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--qt-scrollbar-thumb-hover, var(--qt-scrollbar-thumb, currentColor));
+  }
+  /* The focus ring from the version 1 effects tokens. No default value of an
+     outline is a no-op against the browser's own ring, so it applies only for a
+     theme that turns it on. */
+  :root[data-qt-focus-ring] :focus-visible {
+    outline: var(--theme-focus-ring-width) solid var(--qt-focus-ring-color);
+    outline-offset: var(--theme-focus-ring-offset);
+    box-shadow: var(--qt-focus-ring-glow);
+  }
+}
+/* ============================================================================
+   PAGE BACKGROUND
+   With --qt-page-background-image set, the theme provider marks <html> with
+   data-qt-page-background: the image is painted on body and the page surfaces
+   go transparent over it. A story background takes precedence — while one is
+   showing (the app marks it with --story-background-url inline, as _content.css
+   reads it), none of this applies. Unlayered, so the transparency beats the
+   Tailwind bg-background utility on the shell.
+   ============================================================================ */
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"])) {
+  background-image: var(--qt-page-background-image);
+  background-size: var(--qt-page-background-size);
+  background-position: var(--qt-page-background-position);
+  background-attachment: var(--qt-page-background-attachment);
+  background-repeat: var(--qt-page-background-repeat);
+}
+:root[data-qt-page-background] body:not(:has([style*="--story-background-url"])) :is( .bg-background, .qt-app-layout, .qt-app-main, .qt-page, .qt-page-with-navbar, .qt-content, .qt-content-scroll, .qt-auth-page, .qt-page-container ) {
+  background: transparent;
 }
 /* ============================================================================
    REDUCED MOTION
@@ -1310,6 +1468,8 @@
     border-radius: var(--qt-button-radius);
     font-size: var(--qt-button-font-size);
     font-weight: var(--qt-button-font-weight);
+    letter-spacing: var(--qt-button-letter-spacing, revert-layer);
+    text-transform: var(--qt-button-text-transform, revert-layer);
     transition: var(--qt-button-transition);
   }
   /* ==========================================================================
@@ -1975,7 +2135,7 @@
     max-width: var(--container-lg, 32rem);
     border-radius: var(--qt-dialog-radius);
     background: var(--qt-dialog-bg);
-    border: 1px solid var(--qt-dialog-border);
+    border: var(--qt-dialog-border-width) solid var(--qt-dialog-border);
     box-shadow: var(--qt-dialog-shadow);
   }
   /**
@@ -11696,39 +11856,45 @@
     z-index: 10;
   }
   /**
-   * Heading styles
+   * Heading styles. --qt-heading-font-weight / -letter-spacing /
+   * -text-transform / -color are optional hooks: unset, each level keeps
+   * the value written here as the fallback.
    */
   .qt-heading-1 {
     font-size: var(--text-3xl, 1.875rem);
     line-height: var(--tw-leading, var(--text-3xl--line-height, calc(2.25 / 1.875)));
-    --tw-font-weight: var(--font-weight-bold, 700);
-    font-weight: var(--font-weight-bold, 700);
-    --tw-tracking: var(--tracking-tight, -0.025em);
-    letter-spacing: var(--tracking-tight, -0.025em);
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 700);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
   .qt-heading-2 {
     font-size: var(--text-2xl, 1.5rem);
     line-height: var(--tw-leading, var(--text-2xl--line-height, calc(2 / 1.5)));
-    --tw-font-weight: var(--font-weight-semibold, 600);
-    font-weight: var(--font-weight-semibold, 600);
-    --tw-tracking: var(--tracking-tight, -0.025em);
-    letter-spacing: var(--tracking-tight, -0.025em);
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
   .qt-heading-3 {
     font-size: var(--text-xl, 1.25rem);
     line-height: var(--tw-leading, var(--text-xl--line-height, calc(1.75 / 1.25)));
-    --tw-font-weight: var(--font-weight-semibold, 600);
-    font-weight: var(--font-weight-semibold, 600);
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
   .qt-heading-4 {
     font-size: var(--text-lg, 1.125rem);
     line-height: var(--tw-leading, var(--text-lg--line-height, calc(1.75 / 1.125)));
-    --tw-font-weight: var(--font-weight-semibold, 600);
-    font-weight: var(--font-weight-semibold, 600);
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
   /**
    * Size-name aliases — prefer the numbered variants above for precision
@@ -11736,18 +11902,20 @@
   .qt-heading-lg {
     font-size: var(--text-2xl, 1.5rem);
     line-height: var(--tw-leading, var(--text-2xl--line-height, calc(2 / 1.5)));
-    --tw-font-weight: var(--font-weight-semibold, 600);
-    font-weight: var(--font-weight-semibold, 600);
-    --tw-tracking: var(--tracking-tight, -0.025em);
-    letter-spacing: var(--tracking-tight, -0.025em);
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, -0.025em);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
   .qt-heading-sm {
     font-size: var(--text-lg, 1.125rem);
     line-height: var(--tw-leading, var(--text-lg--line-height, calc(1.75 / 1.125)));
-    --tw-font-weight: var(--font-weight-semibold, 600);
-    font-weight: var(--font-weight-semibold, 600);
     font-family: var(--qt-heading-font);
+    font-weight: var(--qt-heading-font-weight, 600);
+    letter-spacing: var(--qt-heading-letter-spacing, inherit);
+    text-transform: var(--qt-heading-text-transform, inherit);
+    color: var(--qt-heading-color, inherit);
   }
   /**
    * Text styles
@@ -12759,6 +12927,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Appearance: a version 2 theme previewed inside the page. The container
+     carries its own data-theme, so these read the previewed theme's tokens
+     (the --color-* / --font-* map is re-declared on [data-theme] elements in
+     _theme-defaults.css), not the page theme's. */
+  .qt-theme-preview-surface {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
   }
   /* ==========================================================================
      SOURCE: app/styles/qt-components/_typography.css — Semantic typography classes

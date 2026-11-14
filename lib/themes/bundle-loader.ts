@@ -17,8 +17,11 @@ import { safeFetch, SafeFetchError } from '@/lib/net/safe-fetch';
 import { getThemesDir } from '@/lib/paths';
 import { resolveInside, resolveInsideSync } from '@/lib/paths/resolve-inside';
 import { getErrorMessage } from '@/lib/error-utils';
+import { listBundleFiles, loadThemeV2FromDir, ThemeBundleV2Error, type LoadedThemeV2 } from './v2-bundle';
 import {
   type QtapThemeManifest,
+  type QtapThemeManifestV1,
+  type ThemeManifestV2,
   type ThemeBundleIndex,
   type ThemeBundleIndexEntry,
   type ThemeTokens,
@@ -77,13 +80,26 @@ export interface UninstallResult {
   error?: string;
 }
 
-export interface LoadedBundleTheme {
-  manifest: QtapThemeManifest;
+export interface LoadedBundleThemeV1 {
+  formatVersion: 1;
+  manifest: QtapThemeManifestV1;
   tokens: ThemeTokens;
   cssOverrides?: string;
   installPath: string;
   indexEntry: ThemeBundleIndexEntry;
 }
+
+export interface LoadedBundleThemeV2 {
+  formatVersion: 2;
+  manifest: ThemeManifestV2;
+  /** The validated document and the CSS compiled from it. */
+  v2: LoadedThemeV2;
+  installPath: string;
+  indexEntry: ThemeBundleIndexEntry;
+}
+
+/** A loaded bundle: version 1 (tokens + raw CSS) or version 2 (validated, compiled). */
+export type LoadedBundleTheme = LoadedBundleThemeV1 | LoadedBundleThemeV2;
 
 // ============================================================================
 // INDEX MANAGEMENT
@@ -322,9 +338,22 @@ export async function validateThemeBundle(zipPath: string): Promise<ValidationRe
       await extractZipToDir(zipPath, tempDir);
 
       // Find and validate theme.json
-      const manifest = await findAndValidateManifest(tempDir, errors, warnings);
-      if (!manifest) {
+      const found = await findAndValidateManifest(tempDir, errors, warnings);
+      if (!found) {
         return { valid: false, errors, warnings, fileCount, totalSize };
+      }
+      const manifest = found.manifest;
+
+      // Version 2: the engine validates the whole document (tokens, files,
+      // custom CSS) against the bundle's own file list.
+      if (manifest.formatVersion === 2) {
+        try {
+          await loadThemeV2FromDir(found.dir, found.json);
+        } catch (err) {
+          if (err instanceof ThemeBundleV2Error) errors.push(...err.errors);
+          else errors.push(`Failed to load version 2 theme: ${getErrorMessage(err)}`);
+        }
+        return { valid: errors.length === 0, manifest: errors.length === 0 ? manifest : undefined, errors, warnings, fileCount, totalSize };
       }
 
       // Validate tokens if referenced by path
@@ -384,7 +413,7 @@ async function findAndValidateManifest(
   dir: string,
   errors: string[],
   warnings: string[]
-): Promise<QtapThemeManifest | null> {
+): Promise<{ manifest: QtapThemeManifest; dir: string; json: unknown } | null> {
   // Look for theme.json at root level
   const themeJsonPath = path.join(dir, 'theme.json');
   let manifestPath = themeJsonPath;
@@ -425,7 +454,7 @@ async function findAndValidateManifest(
       return null;
     }
 
-    return result.data;
+    return { manifest: result.data, dir: path.dirname(manifestPath), json: manifestJson };
   } catch (err) {
     errors.push(`Failed to parse theme.json: ${getErrorMessage(err)}`);
     return null;
@@ -676,7 +705,27 @@ export async function loadInstalledBundles(): Promise<LoadedBundleTheme[]> {
         continue;
       }
 
-      const manifest = manifestResult.data;
+      const parsed = manifestResult.data;
+
+      // Find index entry
+      const indexEntryFor = (id: string, version: string): ThemeBundleIndexEntry =>
+        index.themes.find(t => t.id === id) || {
+          id,
+          version,
+          installedAt: new Date().toISOString(),
+          source: 'file' as const,
+          sourceUrl: null,
+          registrySource: null,
+          signatureVerified: false,
+        };
+
+      if (parsed.formatVersion === 2) {
+        const v2 = await loadThemeV2FromDir(themePath, manifestJson);
+        loaded.push({ formatVersion: 2, manifest: v2.document.manifest, v2, installPath: themePath, indexEntry: indexEntryFor(parsed.id, parsed.version) });
+        bundleLogger.debug('Loaded theme bundle (version 2)', { themeId: parsed.id, version: parsed.version });
+        continue;
+      }
+      const manifest = parsed;
 
       // Load tokens
       let tokens: ThemeTokens;
@@ -716,18 +765,10 @@ export async function loadInstalledBundles(): Promise<LoadedBundleTheme[]> {
         }
       }
 
-      // Find index entry
-      const indexEntry = index.themes.find(t => t.id === manifest.id) || {
-        id: manifest.id,
-        version: manifest.version,
-        installedAt: new Date().toISOString(),
-        source: 'file' as const,
-        sourceUrl: null,
-        registrySource: null,
-        signatureVerified: false,
-      };
+      const indexEntry = indexEntryFor(manifest.id, manifest.version);
 
       loaded.push({
+        formatVersion: 1,
         manifest,
         tokens,
         cssOverrides,
@@ -799,7 +840,24 @@ export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundl
         continue;
       }
 
-      const manifest = manifestResult.data;
+      const parsed = manifestResult.data;
+      const bundledIndexEntry = (id: string, version: string): ThemeBundleIndexEntry => ({
+        id,
+        version,
+        installedAt: new Date().toISOString(),
+        source: 'file' as const,
+        sourceUrl: null,
+        registrySource: null,
+        signatureVerified: false,
+      });
+
+      if (parsed.formatVersion === 2) {
+        const v2 = await loadThemeV2FromDir(themePath, manifestJson);
+        loaded.push({ formatVersion: 2, manifest: v2.document.manifest, v2, installPath: themePath, indexEntry: bundledIndexEntry(parsed.id, parsed.version) });
+        bundleLogger.debug('Loaded bundled theme (version 2)', { themeId: parsed.id, version: parsed.version });
+        continue;
+      }
+      const manifest = parsed;
 
       // Load tokens
       let tokens: ThemeTokens;
@@ -839,17 +897,10 @@ export async function loadBundledThemesFromDir(dir: string): Promise<LoadedBundl
         }
       }
 
-      const indexEntry: ThemeBundleIndexEntry = {
-        id: manifest.id,
-        version: manifest.version,
-        installedAt: new Date().toISOString(),
-        source: 'file' as const,
-        sourceUrl: null,
-        registrySource: null,
-        signatureVerified: false,
-      };
+      const indexEntry = bundledIndexEntry(manifest.id, manifest.version);
 
       loaded.push({
+        formatVersion: 1,
         manifest,
         tokens,
         cssOverrides,
@@ -880,7 +931,7 @@ export async function exportThemeAsBundle(
   themeId: string,
   outputPath: string,
   themeData: {
-    manifest: QtapThemeManifest;
+    manifest: QtapThemeManifestV1;
     tokens: ThemeTokens;
     cssOverrides?: string;
     fonts?: Array<{ src: string; filePath: string; family: string; weight: string; style: string; display: string }>;
@@ -895,7 +946,7 @@ export async function exportThemeAsBundle(
 
   try {
     // Write theme.json
-    const manifestData: QtapThemeManifest = {
+    const manifestData: QtapThemeManifestV1 = {
       ...themeData.manifest,
       $schema: './qtap-theme.schema.json',
       format: 'qtap-theme',
@@ -980,6 +1031,33 @@ export async function exportThemeAsBundle(
     });
 
     bundleLogger.info('Theme exported successfully', { themeId, outputPath });
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Export an installed version 2 theme: the bundle exactly as installed
+ * (theme.json with formatVersion 2, tokens.json, custom CSS, assets), zipped.
+ * Symbolic links are not followed.
+ */
+export async function exportThemeV2AsBundle(themeId: string, installPath: string, outputPath: string): Promise<void> {
+  bundleLogger.info('Exporting version 2 theme as bundle', { themeId, outputPath });
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-export-'));
+  try {
+    for (const rel of await listBundleFiles(installPath)) {
+      const source = await resolveInside(installPath, rel, { realpath: true });
+      const dest = path.join(tempDir, ...rel.split('/'));
+      await fs.mkdir(path.dirname(dest), { recursive: true });
+      await fs.copyFile(source, dest);
+    }
+    const manifest = JSON.parse(await fs.readFile(path.join(tempDir, 'theme.json'), 'utf-8')) as { formatVersion?: unknown };
+    if (manifest.formatVersion !== 2) throw new Error(`Theme ${themeId} is not a version 2 bundle on disk`);
+    const { execFileSync } = await import('node:child_process');
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    bundleLogger.debug('Zipping version 2 theme export', { themeId, tempDir, outputPath });
+    execFileSync('zip', ['-r', path.resolve(outputPath), '.'], { cwd: tempDir, stdio: 'pipe' });
+    bundleLogger.info('Version 2 theme exported', { themeId, outputPath });
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
