@@ -5,6 +5,19 @@ planning conversation (2026-11-14) and hands the work to a Claude Code session.
 Everything under "Proposed shape" is a recommendation to be tested by Phase 0,
 not a settled design.
 
+**Follow-on documents:**
+
+- [calliope-live-audit.md](calliope-live-audit.md) — the Phase 0a audit
+  (done), with [calliope-live-audit-matrix.csv](calliope-live-audit-matrix.csv).
+  Where its measurements differ from the survey figures below, the audit is
+  right.
+- [calliope-live-spec-a-token-registry.md](calliope-live-spec-a-token-registry.md)
+  — Phase 0b: token registry and bundle format v2 (ready to run).
+- [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md)
+  — Phase 0b′: structural hook catalogue (ready to run).
+- Spec C (Phase 0c, migration) is not written; it waits on Spec A's fit report
+  and Spec B's selector report.
+
 **Scope:** `quilltap-server` (v4) only. Porting to v5 is a separate concern and
 does not shape decisions here.
 

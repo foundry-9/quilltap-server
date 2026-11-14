@@ -1,0 +1,740 @@
+variable,group,class,themes_setting,distinct_values,read_by_app_css_files,default_shared,default_dark,art-deco,earl-grey,great-estate,madmans-box,old-school,rains
+--accent-brand,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-main-000,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-main-100,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-main-200,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-main-900,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-pro-000,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-pro-100,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-pro-200,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-pro-900,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-secondary-000,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-secondary-100,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-secondary-200,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--accent-secondary-900,accent,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--always-black,always,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--always-white,always,theme-private-or-dead,2,2,0,"","",,set,,,,mode
+--bg-000,bg,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--bg-100,bg,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--bg-200,bg,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--bg-300,bg,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--bg-400,bg,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--bg-500,bg,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--bg-hover,bg,theme-private-or-dead,1,1,0,"","",,mode,,,,
+--bg-input,bg,theme-private-or-dead,1,1,0,"","",,mode,,,,
+--bg-main,bg,theme-private-or-dead,1,1,0,"","",,mode,,,,
+--bg-sidebar,bg,theme-private-or-dead,1,1,0,"","",,mode,,,,
+--border-100,border,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--border-200,border,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--border-300,border,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--border-400,border,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--box-brass,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-brass-dark,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-brass-light,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-corner-size,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-line-medium,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-line-thin,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-walnut,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-walnut-mid,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-walnut-panel,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--box-walnut-rim,box,theme-private-or-dead,1,1,0,"","",,,,set,,
+--card-shadow,card,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--chat-shadow,chat,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--danger-000,danger,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--danger-100,danger,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--danger-200,danger,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--danger-900,danger,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--deco-bronze,deco,theme-private-or-dead,1,1,0,"","",set,,,,,
+--deco-corner-size,deco,theme-private-or-dead,1,1,0,"","",set,,,,,
+--deco-gold,deco,declared-elsewhere,1,1,1,"","",mode,,,,,
+--deco-gold-dark,deco,theme-private-or-dead,1,1,0,"","",mode,,,,,
+--deco-gold-light,deco,theme-private-or-dead,1,1,0,"","",mode,,,,,
+--deco-ivory,deco,theme-private-or-dead,1,1,0,"","",mode,,,,,
+--deco-line-medium,deco,theme-private-or-dead,1,1,0,"","",set,,,,,
+--deco-line-thin,deco,theme-private-or-dead,1,1,0,"","",set,,,,,
+--deco-navy,deco,theme-private-or-dead,1,1,0,"","",mode,,,,,
+--deco-navy-mid,deco,theme-private-or-dead,1,1,0,"","",mode,,,,,
+--default-font-family,default,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--default-mono-font-family,default,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--estate-bronze,estate,theme-private-or-dead,1,1,0,"","",,,set,,,
+--estate-brown,estate,theme-private-or-dead,1,1,0,"","",,,mode,,,
+--estate-brown-mid,estate,theme-private-or-dead,1,1,0,"","",,,mode,,,
+--estate-cream,estate,theme-private-or-dead,1,1,0,"","",,,mode,,,
+--estate-gold,estate,theme-private-or-dead,1,1,0,"","",,,mode,,,
+--estate-gold-dark,estate,theme-private-or-dead,1,1,0,"","",,,mode,,,
+--estate-gold-light,estate,theme-private-or-dead,1,1,0,"","",,,mode,,,
+--font-anthropic-sans,font,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--font-anthropic-serif,font,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--font-claude-response,font,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--font-dyslexia,font,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--font-jetbrains,font,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--font-mono,font,declared-elsewhere,2,1,3,"","",,set,,,,set
+--font-open-dyslexic,font,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--font-sans-serif,font,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--font-serif,font,declared-elsewhere,2,1,0,"","",,set,,,,set
+--font-system,font,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--font-ui,font,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--font-ui-serif,font,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--font-user-message,font,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--lamp-green,lamp,theme-private-or-dead,1,1,0,"","",,,,set,,
+--lamp-green-bright,lamp,theme-private-or-dead,1,1,0,"","",,,,set,,
+--oncolor-100,oncolor,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--oncolor-200,oncolor,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--oncolor-300,oncolor,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--oncolor-brand,oncolor,theme-private-or-dead,1,1,0,"","",,,,,,mode
+--pictogram-100,pictogram,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--pictogram-200,pictogram,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--pictogram-300,pictogram,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--pictogram-400,pictogram,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-alert-error-bg,alert,most,6,3,1,"hsl(0 68% 50% / 0.08)","hsl(0 60% 54% / 0.15)",mode,mode,mode,set,mode,mode
+--qt-alert-error-border,alert,most,6,3,2,"hsl(0 68% 50% / 0.25)","hsl(0 60% 54% / 0.4)",mode,mode,mode,set,mode,mode
+--qt-alert-error-fg,alert,most,6,4,3,"hsl(0 68% 35%)","hsl(0 60% 68%)",mode,mode,mode,set,mode,mode
+--qt-alert-info-bg,alert,most,6,4,2,"hsl(210 75% 48% / 0.08)","hsl(210 70% 55% / 0.15)",mode,mode,mode,set,mode,mode
+--qt-alert-info-border,alert,most,6,4,2,"hsl(210 75% 48% / 0.25)","hsl(210 70% 55% / 0.4)",mode,mode,mode,set,mode,mode
+--qt-alert-info-fg,alert,most,6,5,2,"hsl(210 75% 30%)","hsl(210 70% 68%)",mode,mode,mode,set,mode,mode
+--qt-alert-success-bg,alert,most,6,3,1,"hsl(152 60% 38% / 0.08)","hsl(152 55% 38% / 0.15)",mode,mode,mode,set,mode,mode
+--qt-alert-success-border,alert,most,6,3,2,"hsl(152 60% 38% / 0.25)","hsl(152 55% 38% / 0.4)",mode,mode,mode,set,mode,mode
+--qt-alert-success-fg,alert,most,6,5,2,"hsl(152 60% 28%)","hsl(152 55% 62%)",mode,mode,mode,set,mode,mode
+--qt-alert-warning-bg,alert,most,6,4,1,"hsl(38 90% 46% / 0.08)","hsl(38 85% 50% / 0.15)",mode,mode,mode,set,mode,mode
+--qt-alert-warning-border,alert,most,6,4,2,"hsl(38 90% 46% / 0.25)","hsl(38 85% 50% / 0.4)",mode,mode,mode,set,mode,mode
+--qt-alert-warning-fg,alert,most,6,4,3,"hsl(38 90% 28%)","hsl(38 85% 68%)",mode,mode,mode,set,mode,mode
+--qt-app-header-bg,app,never,0,0,1,"var(--color-background)","",,,,,,
+--qt-app-header-blur,app,most,6,1,1,"blur(12px)","",set,set,set,set,set,set
+--qt-app-header-border,app,never,0,0,1,"var(--color-border)","",,,,,,
+--qt-app-header-height,app,most,6,1,1,"3.5rem","",set,set,set,set,set,set
+--qt-auth-card-bg,auth,few,2,1,1,"var(--color-card)","",,set,,,,set
+--qt-auth-card-fg,auth,few,2,1,1,"var(--color-card-foreground)","",,set,,,,set
+--qt-auth-divider-color,auth,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-auth-footer-fg,auth,few,2,2,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-auth-hint-fg,auth,few,2,2,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-auth-label-fg,auth,few,2,1,1,"var(--color-foreground)","",,set,,,,set
+--qt-auth-page-bg,auth,most,6,6,0,"linear-gradient(to bottom right, hsl(225 22% 8%), hsl(225 18% 14%))","",mode,set,mode,set,set,set
+--qt-auth-subtitle-fg,auth,few,2,2,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-auth-title-fg,auth,most,5,4,1,"var(--color-foreground)","",mode,set,mode,set,,set
+--qt-autonomous-badge-button-hover-bg,autonomous,never,0,0,1,"hsl(0 0% 100% / 0.18)","",,,,,,
+--qt-autonomous-badge-idle-bg,autonomous,never,0,0,1,"hsl(225 12% 38%)","",,,,,,
+--qt-autonomous-badge-idle-fg,autonomous,never,0,0,1,"hsl(0 0% 100%)","",,,,,,
+--qt-autonomous-badge-running-bg,autonomous,never,0,0,1,"hsl(152 55% 38%)","",,,,,,
+--qt-autonomous-badge-running-fg,autonomous,never,0,0,1,"hsl(0 0% 100%)","",,,,,,
+--qt-avatar-bg,avatar,few,2,2,1,"var(--color-muted)","",,set,,,,set
+--qt-avatar-border,avatar,most,5,5,1,"var(--color-border)","",set,set,set,set,,set
+--qt-avatar-fg,avatar,few,2,1,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-avatar-radius,avatar,some,3,2,2,"9999px","",set,,set,set,,
+--qt-avatar-size,avatar,most,6,1,1,"2.25rem","",set,set,set,set,set,set
+--qt-avatar-size-lg,avatar,most,6,1,1,"2.75rem","",set,set,set,set,set,set
+--qt-avatar-size-sm,avatar,most,6,1,1,"1.75rem","",set,set,set,set,set,set
+--qt-avatar-size-xl,avatar,most,6,1,1,"3.5rem","",set,set,set,set,set,set
+--qt-badge-auto-bg,badge,never,0,0,1,"var(--color-muted)","",,,,,,
+--qt-badge-auto-fg,badge,never,0,0,1,"var(--color-muted-foreground)","",,,,,,
+--qt-badge-autonomous-budget-bg,badge,never,0,0,1,"var(--qt-badge-related-bg)","var(--qt-badge-related-bg)",,,,,,
+--qt-badge-autonomous-budget-border,badge,never,0,0,1,"color-mix(in srgb, var(--qt-badge-related-fg) 45%, transparent)","color-mix(in srgb, var(--qt-badge-related-fg) 50%, transparent)",,,,,,
+--qt-badge-autonomous-budget-fg,badge,never,0,0,1,"var(--qt-badge-related-fg)","var(--qt-badge-related-fg)",,,,,,
+--qt-badge-autonomous-error-bg,badge,never,0,0,1,"var(--qt-status-danger-bg)","var(--qt-status-danger-bg)",,,,,,
+--qt-badge-autonomous-error-border,badge,never,0,0,1,"var(--qt-status-danger-border)","var(--qt-status-danger-border)",,,,,,
+--qt-badge-autonomous-error-fg,badge,never,0,0,1,"var(--qt-status-danger-fg)","var(--qt-status-danger-fg)",,,,,,
+--qt-badge-autonomous-idle-bg,badge,never,0,0,1,"var(--qt-status-info-bg)","var(--qt-status-info-bg)",,,,,,
+--qt-badge-autonomous-idle-border,badge,never,0,0,1,"var(--qt-status-info-border)","var(--qt-status-info-border)",,,,,,
+--qt-badge-autonomous-idle-fg,badge,never,0,0,1,"var(--qt-status-info-fg)","var(--qt-status-info-fg)",,,,,,
+--qt-badge-autonomous-paused-bg,badge,never,0,0,1,"var(--qt-status-warning-bg)","var(--qt-status-warning-bg)",,,,,,
+--qt-badge-autonomous-paused-border,badge,never,0,0,1,"var(--qt-status-warning-border)","var(--qt-status-warning-border)",,,,,,
+--qt-badge-autonomous-paused-fg,badge,never,0,0,1,"var(--qt-status-warning-fg)","var(--qt-status-warning-fg)",,,,,,
+--qt-badge-autonomous-running-bg,badge,never,0,0,1,"var(--qt-status-success-bg)","var(--qt-status-success-bg)",,,,,,
+--qt-badge-autonomous-running-border,badge,never,0,0,1,"var(--qt-status-success-border)","var(--qt-status-success-border)",,,,,,
+--qt-badge-autonomous-running-fg,badge,never,0,0,1,"var(--qt-status-success-fg)","var(--qt-status-success-fg)",,,,,,
+--qt-badge-autonomous-stopped-bg,badge,never,0,0,1,"var(--color-muted)","var(--color-muted)",,,,,,
+--qt-badge-autonomous-stopped-border,badge,never,0,0,1,"var(--color-border)","var(--color-border)",,,,,,
+--qt-badge-autonomous-stopped-fg,badge,never,0,0,1,"var(--color-muted-foreground)","var(--color-muted-foreground)",,,,,,
+--qt-badge-capability-bg,badge,most,6,4,1,"hsl(225 55% 55% / 0.08)","hsl(225 55% 58% / 0.18)",mode,mode,mode,set,mode,mode
+--qt-badge-capability-fg,badge,most,6,5,1,"hsl(225 55% 42%)","hsl(225 55% 72%)",mode,mode,mode,set,mode,mode
+--qt-badge-character-bg,badge,most,6,4,1,"hsl(225 55% 55% / 0.12)","hsl(225 55% 58% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-character-fg,badge,most,6,5,1,"hsl(225 55% 42%)","hsl(225 55% 72%)",mode,mode,mode,set,mode,mode
+--qt-badge-chat-bg,badge,most,6,3,1,"hsl(152 50% 38% / 0.12)","hsl(152 50% 40% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-chat-fg,badge,most,6,5,1,"hsl(152 50% 30%)","hsl(152 50% 62%)",mode,mode,mode,set,mode,mode
+--qt-badge-disabled-bg,badge,never,0,0,2,"var(--color-muted)","",,,,,,
+--qt-badge-disabled-fg,badge,never,0,0,2,"var(--color-muted-foreground)","",,,,,,
+--qt-badge-enabled-bg,badge,most,6,3,2,"hsl(152 50% 38% / 0.12)","hsl(152 50% 40% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-enabled-fg,badge,most,6,5,2,"hsl(152 50% 30%)","hsl(152 50% 62%)",mode,mode,mode,set,mode,mode
+--qt-badge-font-size,badge,some,3,2,1,"0.75rem","",,set,,,set,set
+--qt-badge-font-weight,badge,most,5,1,1,"500","",set,set,set,set,set,
+--qt-badge-manual-bg,badge,most,6,4,1,"hsl(270 45% 55% / 0.12)","hsl(270 45% 58% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-manual-fg,badge,most,6,5,1,"hsl(270 45% 42%)","hsl(270 45% 72%)",mode,mode,mode,set,mode,mode
+--qt-badge-memory-bg,badge,most,6,3,1,"hsl(330 55% 52% / 0.12)","hsl(330 55% 55% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-memory-fg,badge,most,6,6,1,"hsl(330 55% 38%)","hsl(330 55% 68%)",mode,mode,mode,set,mode,mode
+--qt-badge-message-bg,badge,most,5,3,1,"hsl(45 70% 48% / 0.12)","hsl(45 70% 50% / 0.25)",set,set,mode,set,set,
+--qt-badge-message-fg,badge,most,5,5,1,"hsl(45 70% 29.5%)","hsl(45 70% 68%)",set,set,mode,set,set,
+--qt-badge-outline-bg,badge,never,0,0,1,"transparent","",,,,,,
+--qt-badge-outline-border,badge,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-badge-outline-fg,badge,few,2,1,1,"var(--color-foreground)","",,set,,,,set
+--qt-badge-padding-x,badge,most,6,1,1,"0.625rem","",set,set,set,set,set,set
+--qt-badge-padding-y,badge,most,6,1,1,"0.1875rem","",set,set,set,set,set,set
+--qt-badge-primary-bg,badge,few,2,2,1,"var(--color-primary)","",,mode,,,,set
+--qt-badge-primary-fg,badge,few,2,2,1,"var(--color-primary-foreground)","",,mode,,,,set
+--qt-badge-project-bg,badge,most,6,4,1,"hsl(185 55% 38% / 0.12)","",mode,set,mode,set,set,set
+--qt-badge-project-fg,badge,most,6,5,1,"hsl(185 55% 30%)","",mode,set,mode,set,set,set
+--qt-badge-radius,badge,most,5,4,1,"9999px","",set,set,set,set,,set
+--qt-badge-related-bg,badge,most,6,4,2,"hsl(270 45% 55% / 0.12)","hsl(270 45% 58% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-related-fg,badge,most,6,5,2,"hsl(270 45% 42%)","hsl(270 45% 72%)",mode,mode,mode,set,mode,mode
+--qt-badge-secondary-bg,badge,few,2,2,1,"var(--color-secondary)","",,set,,,,set
+--qt-badge-secondary-border,badge,undeclared-but-read,2,2,1,"","",,set,,,,set
+--qt-badge-secondary-fg,badge,few,2,2,1,"var(--color-secondary-foreground)","",,set,,,,set
+--qt-badge-source-git-bg,badge,most,6,4,1,"hsl(25 70% 48% / 0.12)","hsl(25 70% 50% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-source-git-fg,badge,most,6,6,1,"hsl(25 70% 36.5%)","hsl(25 70% 62%)",mode,mode,mode,set,mode,mode
+--qt-badge-source-included-bg,badge,most,6,4,1,"hsl(270 45% 55% / 0.12)","hsl(270 45% 58% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-source-included-fg,badge,most,6,5,1,"hsl(270 45% 42%)","hsl(270 45% 72%)",mode,mode,mode,set,mode,mode
+--qt-badge-source-manual-bg,badge,never,0,0,1,"var(--color-muted)","",,,,,,
+--qt-badge-source-manual-fg,badge,never,0,0,1,"var(--color-muted-foreground)","",,,,,,
+--qt-badge-source-npm-bg,badge,most,6,3,1,"hsl(0 60% 50% / 0.12)","hsl(0 60% 55% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-source-npm-fg,badge,most,6,6,1,"hsl(0 60% 38%)","hsl(0 60% 68%)",mode,mode,set,set,mode,mode
+--qt-badge-tag-bg,badge,most,6,3,1,"hsl(25 70% 48% / 0.12)","hsl(25 70% 50% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-tag-fg,badge,most,6,6,1,"hsl(25 70% 36.5%)","hsl(25 70% 62%)",mode,mode,mode,set,mode,mode
+--qt-badge-user-character-bg,badge,most,6,4,1,"hsl(270 45% 55% / 0.12)","hsl(270 45% 58% / 0.25)",mode,mode,mode,set,mode,mode
+--qt-badge-user-character-fg,badge,most,6,5,1,"hsl(270 45% 42%)","hsl(270 45% 72%)",mode,mode,mode,set,mode,mode
+--qt-badge-wardrobe-accessories-bg,badge,never,0,0,1,"hsl(270 45% 55% / 0.12)","hsl(270 45% 58% / 0.25)",,,,,,
+--qt-badge-wardrobe-accessories-fg,badge,never,0,0,1,"hsl(270 45% 42%)","hsl(270 45% 72%)",,,,,,
+--qt-badge-wardrobe-bottom-bg,badge,never,0,0,1,"hsl(152 50% 38% / 0.12)","hsl(152 50% 40% / 0.25)",,,,,,
+--qt-badge-wardrobe-bottom-fg,badge,never,0,0,1,"hsl(152 50% 30%)","hsl(152 50% 62%)",,,,,,
+--qt-badge-wardrobe-footwear-bg,badge,never,0,0,1,"hsl(38 70% 48% / 0.12)","hsl(38 70% 50% / 0.25)",,,,,,
+--qt-badge-wardrobe-footwear-fg,badge,never,0,0,1,"hsl(38 70% 32%)","hsl(38 70% 68%)",,,,,,
+--qt-badge-wardrobe-hair-bg,badge,never,0,0,1,"hsl(345 55% 55% / 0.12)","hsl(345 55% 58% / 0.25)",,,,,,
+--qt-badge-wardrobe-hair-fg,badge,never,0,0,1,"hsl(345 55% 42%)","hsl(345 55% 72%)",,,,,,
+--qt-badge-wardrobe-shared-bg,badge,never,0,0,1,"hsl(240 50% 55% / 0.12)","hsl(240 50% 58% / 0.25)",,,,,,
+--qt-badge-wardrobe-shared-fg,badge,never,0,0,1,"hsl(240 50% 42%)","hsl(240 50% 72%)",,,,,,
+--qt-badge-wardrobe-top-bg,badge,never,0,0,1,"hsl(220 60% 55% / 0.12)","hsl(220 60% 58% / 0.25)",,,,,,
+--qt-badge-wardrobe-top-fg,badge,never,0,0,1,"hsl(220 60% 42%)","hsl(220 60% 72%)",,,,,,
+--qt-brahma-launcher-active-bg,brahma,never,0,0,1,"var(--color-background)","",,,,,,
+--qt-brahma-launcher-active-fg,brahma,never,0,0,1,"var(--color-primary)","",,,,,,
+--qt-brahma-launcher-bg,brahma,never,0,0,1,"var(--color-primary)","",,,,,,
+--qt-brahma-launcher-fg,brahma,never,0,0,1,"var(--color-primary-foreground)","",,,,,,
+--qt-brahma-launcher-hover-bg,brahma,never,0,0,1,"color-mix(in srgb, var(--color-primary) 88%, black)","",,,,,,
+--qt-brahma-launcher-offset,brahma,never,0,0,1,"0.75rem","",,,,,,
+--qt-brahma-launcher-ring,brahma,never,0,0,1,"var(--color-primary)","",,,,,,
+--qt-brahma-launcher-shadow,brahma,never,0,0,1,"0 6px 18px -4px rgb(0 0 0 / 0.35)","",,,,,,
+--qt-brahma-launcher-size,brahma,never,0,0,1,"2.75rem","",,,,,,
+--qt-brand-fg,brand,most,5,5,1,"var(--color-foreground)","",mode,set,mode,set,,set
+--qt-button-destructive-bg,button,few,2,1,1,"var(--color-destructive)","",,set,,,,set
+--qt-button-destructive-fg,button,few,2,1,1,"var(--color-destructive-foreground)","",,set,,,,set
+--qt-button-destructive-hover-bg,button,most,6,2,1,"color-mix(in srgb, var(--color-destructive) 88%, black)","",set,set,set,set,set,set
+--qt-button-font-size,button,some,3,1,1,"0.875rem","",set,,set,set,,
+--qt-button-font-weight,button,few,1,1,1,"500","",,,set,,,
+--qt-button-ghost-bg,button,never,0,0,1,"transparent","",,,,,,
+--qt-button-ghost-fg,button,few,2,1,1,"var(--color-foreground)","",,set,,,,set
+--qt-button-ghost-hover-bg,button,few,2,2,1,"var(--color-muted)","",,set,,,,set
+--qt-button-padding-x,button,most,6,2,1,"0.875rem","",set,set,set,set,set,set
+--qt-button-padding-y,button,most,6,1,1,"0.4375rem","",set,set,set,set,set,set
+--qt-button-primary-bg,button,some,3,3,2,"var(--color-primary)","",,mode,mode,,,set
+--qt-button-primary-fg,button,some,3,3,2,"var(--color-primary-foreground)","",,mode,set,,,set
+--qt-button-primary-hover-bg,button,most,6,6,2,"color-mix(in srgb, var(--color-primary) 88%, black)","",set,mode,mode,set,set,set
+--qt-button-primary-shadow,button,most,6,5,2,"0 1px 3px -1px rgb(0 0 0 / 0.12)","",set,set,set,set,set,set
+--qt-button-radius,button,most,6,3,2,"var(--radius-md)","",set,set,set,set,set,set
+--qt-button-secondary-bg,button,few,2,2,1,"var(--color-secondary)","",,mode,,,,set
+--qt-button-secondary-border,button,few,2,2,1,"var(--color-border)","",,mode,,,,set
+--qt-button-secondary-fg,button,few,2,2,1,"var(--color-secondary-foreground)","",,mode,,,,set
+--qt-button-secondary-hover-bg,button,most,6,4,1,"color-mix(in srgb, var(--color-secondary) 85%, black)","",set,mode,set,set,set,set
+--qt-button-success-bg,button,never,0,0,1,"var(--color-success)","",,,,,,
+--qt-button-success-fg,button,never,0,0,1,"var(--color-success-foreground)","",,,,,,
+--qt-button-success-hover-bg,button,never,0,0,1,"color-mix(in srgb, var(--color-success) 85%, black)","",,,,,,
+--qt-button-transition,button,most,6,1,2,"all 150ms cubic-bezier(0.4, 0, 0.2, 1)","",set,set,set,set,set,set
+--qt-button-warning-bg,button,never,0,0,1,"var(--color-warning)","",,,,,,
+--qt-button-warning-fg,button,never,0,0,1,"var(--color-warning-foreground)","",,,,,,
+--qt-button-warning-hover-bg,button,never,0,0,1,"color-mix(in srgb, var(--color-warning) 85%, black)","",,,,,,
+--qt-card-bg,card,few,2,2,2,"var(--color-card)","",,set,,,,set
+--qt-card-border,card,most,5,5,3,"var(--color-border)","",set,set,set,set,,set
+--qt-card-border-opacity,card,most,6,6,2,"0.6","0.75",set,mode,mode,set,mode,mode
+--qt-card-fg,card,few,2,1,1,"var(--color-card-foreground)","",,set,,,,set
+--qt-card-grid-auto-min,card,most,6,1,1,"520px","",set,set,set,set,set,set
+--qt-card-padding,card,most,6,1,2,"1.25rem","",set,set,set,set,set,set
+--qt-card-radius,card,few,2,2,1,"var(--radius-lg)","",,set,,,,set
+--qt-card-shadow,card,most,6,6,4,"0 1px 3px hsl(225 18% 10% / 0.06), 0 1px 2px hsl(225 18% 10% / 0.04)","0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04)",mode,mode,mode,set,mode,mode
+--qt-card-shadow-hover,card,most,6,6,2,"0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05)","0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06)",mode,mode,mode,set,mode,mode
+--qt-card-transition,card,most,6,1,1,"all 150ms cubic-bezier(0.4, 0, 0.2, 1)","",set,set,set,set,set,set
+--qt-chat-announcement-dot-high,chat,never,0,0,1,"var(--color-destructive, #b4452e)","#e06a52",,,,,,
+--qt-chat-announcement-dot-low,chat,never,0,0,1,"var(--color-muted-foreground)","var(--color-muted-foreground)",,,,,,
+--qt-chat-announcement-dot-medium,chat,never,0,0,1,"var(--color-warning, #d08a1e)","var(--color-warning, #e3a94a)",,,,,,
+--qt-chat-assistant-bg,chat,few,2,2,2,"var(--color-muted)","",,set,,,,set
+--qt-chat-assistant-border,chat,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-chat-assistant-fg,chat,few,2,2,2,"var(--color-foreground)","",,set,,,,set
+--qt-chat-assistant-font,chat,most,6,3,1,"var(--font-sans)","",set,set,set,set,set,set
+--qt-chat-assistant-font-weight,chat,few,2,1,1,"inherit","",set,,,set,,
+--qt-chat-attachment-border,chat,few,2,1,1,"var(--color-border)","",,set,,,,set
+--qt-chat-attachment-hover-border,chat,most,5,5,1,"var(--color-primary)","",set,set,set,set,,set
+--qt-chat-attachment-overlay,chat,most,6,3,1,"rgb(0 0 0 / 0.2)","",set,set,set,set,set,set
+--qt-chat-composer-bg,chat,few,2,2,1,"var(--color-background)","",,set,,,,set
+--qt-chat-composer-border,chat,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-chat-composer-padding-x,chat,most,5,2,1,"1rem","",set,,set,set,set,set
+--qt-chat-composer-padding-y,chat,most,5,2,1,"0.75rem","",set,set,set,set,set,
+--qt-chat-composer-radius,chat,few,2,2,1,"var(--radius-lg)","",,set,,,,set
+--qt-chat-message-padding,chat,most,6,1,1,"0.875rem","",set,set,set,set,set,set
+--qt-chat-message-radius,chat,few,2,2,1,"var(--radius-lg)","",,set,,,,set
+--qt-chat-message-row-max-width,chat,never,0,0,1,"900px","",,,,,,
+--qt-chat-message-shadow,chat,most,6,6,1,"0 1px 4px -1px rgb(0 0 0 / 0.06)","",set,set,set,set,set,set
+--qt-chat-sidebar-bg,chat,few,2,2,1,"var(--color-card)","",,set,,,,set
+--qt-chat-sidebar-border,chat,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-chat-sidebar-collapsed-width,chat,most,6,1,1,"3.5rem","",set,set,set,set,set,set
+--qt-chat-sidebar-header-border,chat,few,2,1,1,"var(--color-border)","",,set,,,,set
+--qt-chat-sidebar-heading,chat,few,2,1,1,"var(--color-foreground)","",,set,,,,set
+--qt-chat-sidebar-muted,chat,few,2,1,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-chat-sidebar-width,chat,most,6,3,1,"18rem","",set,set,set,set,set,set
+--qt-chat-silent-bg,chat,most,6,6,2,"color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%)","color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%)",mode,mode,mode,set,mode,mode
+--qt-chat-silent-border,chat,most,6,6,2,"#7a9e8e","#4a7a6a",mode,mode,mode,set,mode,mode
+--qt-chat-silent-fg,chat,few,2,2,1,"var(--qt-chat-assistant-fg)","",,mode,,,,mode
+--qt-chat-silent-label-fg,chat,most,6,6,2,"#5d7e6e","#8ab8a4",mode,mode,mode,set,mode,mode
+--qt-chat-system-bar-bg,chat,never,0,0,1,"color-mix(in srgb, var(--qt-chat-assistant-bg) 70%, var(--color-muted) 30%)","color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--color-muted) 40%)",,,,,,
+--qt-chat-system-bar-border,chat,never,0,0,1,"var(--color-border)","",,,,,,
+--qt-chat-system-bar-fg,chat,never,0,0,1,"var(--color-muted-foreground)","",,,,,,
+--qt-chat-system-bar-hover-bg,chat,never,0,0,1,"color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--color-muted) 45%)","color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--color-muted) 55%)",,,,,,
+--qt-chat-system-bar-sender-fg,chat,never,0,0,1,"var(--color-foreground)","",,,,,,
+--qt-chat-thinking-bg,chat,never,0,0,1,"color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent)","color-mix(in srgb, var(--qt-chat-silent-bg) 40%, transparent)",,,,,,
+--qt-chat-thinking-border,chat,never,0,0,1,"color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent)","color-mix(in srgb, var(--qt-chat-silent-border) 60%, transparent)",,,,,,
+--qt-chat-thinking-fg,chat,never,0,0,1,"color-mix(in srgb, var(--qt-chat-assistant-fg) 55%, transparent)","color-mix(in srgb, var(--qt-chat-assistant-fg) 60%, transparent)",,,,,,
+--qt-chat-thinking-label-fg,chat,never,0,0,1,"var(--qt-chat-silent-label-fg)","var(--qt-chat-silent-label-fg)",,,,,,
+--qt-chat-toolbar-button-bg,chat,few,2,2,1,"var(--color-muted)","",,set,,,,set
+--qt-chat-toolbar-button-border,chat,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-chat-toolbar-button-fg,chat,few,2,2,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-chat-toolbar-button-hover-bg,chat,few,2,2,1,"color-mix(in srgb, var(--color-muted) 85%, transparent)","",,set,,,,set
+--qt-chat-toolbar-gap,chat,most,6,2,1,"0.375rem","",set,set,set,set,set,set
+--qt-chat-user-bg,chat,few,2,2,1,"var(--color-chat-user)","",,set,,,,set
+--qt-chat-user-border,chat,some,4,4,1,"transparent","",set,,set,set,,set
+--qt-chat-user-fg,chat,few,2,1,1,"var(--color-chat-user-foreground)","",,set,,,,set
+--qt-chat-user-font,chat,most,6,3,1,"var(--font-sans)","",set,set,set,set,set,set
+--qt-chat-user-font-weight,chat,theme-private-or-dead,1,1,0,"","",,,,,,set
+--qt-chat-wardrobe-bg,chat,most,6,6,1,"color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%)","color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%)",mode,mode,mode,set,mode,mode
+--qt-chat-wardrobe-border,chat,most,6,6,1,"#c4a24e","#8a6d1b",mode,mode,mode,set,mode,mode
+--qt-chat-wardrobe-fg,chat,never,0,0,1,"var(--qt-chat-assistant-fg)","",,,,,,
+--qt-chat-wardrobe-label-fg,chat,most,6,6,1,"#9a7d2e","#d4b65c",mode,mode,mode,set,mode,mode
+--qt-chat-whisper-bg,chat,most,6,6,1,"color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%)","color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%)",mode,mode,mode,set,mode,mode
+--qt-chat-whisper-border,chat,most,6,6,1,"#9b8ec4","#6b5b95",mode,mode,mode,set,mode,mode
+--qt-chat-whisper-fg,chat,few,2,2,1,"var(--qt-chat-assistant-fg)","",,mode,,,,mode
+--qt-chat-whisper-label-fg,chat,most,6,6,1,"#5c447e","#b5a9d1",mode,mode,mode,set,mode,mode
+--qt-checkbox-accent,checkbox,never,0,0,1,"var(--color-primary)","",,,,,,
+--qt-checkbox-border,checkbox,never,0,0,1,"var(--color-border)","",,,,,,
+--qt-checkbox-focus-ring,checkbox,never,0,0,1,"var(--color-ring)","",,,,,,
+--qt-checkbox-radius,checkbox,never,0,0,1,"var(--radius-sm)","",,,,,,
+--qt-checkbox-size,checkbox,never,0,0,1,"1rem","",,,,,,
+--qt-code-bg,code,few,2,2,2,"var(--color-muted)","",,set,,,,set
+--qt-code-border,code,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-code-fg,code,few,2,1,1,"var(--color-foreground)","",,set,,,,set
+--qt-code-font,code,some,3,1,1,"var(--font-mono)","",set,,set,set,,
+--qt-code-radius,code,few,2,2,1,"var(--radius-md)","",,set,,,,set
+--qt-composer-narration-bg,composer,never,0,0,1,"color-mix(in srgb, var(--color-primary) 7%, transparent)","",,,,,,
+--qt-composer-narration-fg,composer,never,0,0,1,"color-mix(in srgb, var(--color-foreground) 65%, var(--color-primary))","",,,,,,
+--qt-composer-ooc-bg,composer,never,0,0,1,"var(--qt-rp-ooc-bg)","",,,,,,
+--qt-composer-ooc-fg,composer,never,0,0,1,"var(--qt-rp-ooc-color)","",,,,,,
+--qt-content-bg,content,few,2,2,2,"var(--color-card)","",,set,,,,set
+--qt-content-fg,content,few,2,1,1,"var(--color-card-foreground)","",,set,,,,set
+--qt-content-scroll-bg,content,few,2,2,1,"var(--color-background)","",,set,,,,set
+--qt-copy-button-bg,copy,undeclared-but-read,2,2,1,"","",,set,,,,set
+--qt-copy-button-border,copy,undeclared-but-read,2,1,1,"","",,set,,,,set
+--qt-copy-button-hover-bg,copy,undeclared-but-read,2,2,1,"","",,set,,,,set
+--qt-copy-button-hover-border,copy,undeclared-but-read,2,1,1,"","",,set,,,,set
+--qt-copy-button-hover-text,copy,undeclared-but-read,2,1,1,"","",,set,,,,set
+--qt-copy-button-success-bg,copy,undeclared-but-read,2,1,1,"","",,set,,,,set
+--qt-copy-button-success-border,copy,undeclared-but-read,2,1,1,"","",,set,,,,set
+--qt-copy-button-success-text,copy,undeclared-but-read,2,1,1,"","",,set,,,,set
+--qt-copy-button-text,copy,undeclared-but-read,2,1,1,"","",,set,,,,set
+--qt-debug-amber-bg,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-debug-amber-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-amber-content-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-amber-fg,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-debug-amber-hover,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-amber-meta,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-debug-cyan-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-cyan-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-cyan-content-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-cyan-fg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-cyan-hover,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-cyan-meta,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-emerald-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-emerald-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-emerald-content-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-emerald-fg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-emerald-hover,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-emerald-meta,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-incoming-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-incoming-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-debug-incoming-fg,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-debug-indigo-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-indigo-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-indigo-content-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-indigo-fg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-indigo-hover,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-indigo-meta,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-outgoing-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-outgoing-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-debug-outgoing-fg,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-debug-purple-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-purple-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-purple-content-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-purple-fg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-purple-hover,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-purple-meta,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-violet-bg,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-debug-violet-border,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-violet-content-bg,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-violet-fg,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-debug-violet-hover,debug,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-debug-violet-meta,debug,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-devconsole-bg,devconsole,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-devconsole-border,devconsole,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-devconsole-content-bg,devconsole,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-devconsole-footer-bg,devconsole,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-devconsole-header-bg,devconsole,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-devconsole-tabs-bg,devconsole,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-diagram-bg,diagram,few,1,1,1,"var(--color-card)","",,,,set,,
+--qt-diagram-border,diagram,few,1,1,1,"var(--color-border)","",,,,set,,
+--qt-diagram-error-fg,diagram,never,0,0,1,"var(--color-muted-foreground)","",,,,,,
+--qt-diagram-fg,diagram,never,0,0,1,"var(--color-foreground)","",,,,,,
+--qt-diagram-font,diagram,never,0,0,0,"var(--font-sans)","",,,,,,
+--qt-diagram-hand-font,diagram,never,0,0,0,"""Segoe Print"", ""Bradley Hand"", ""Chalkboard SE"", ""Marker Felt"", cursive","",,,,,,
+--qt-diagram-lightbox-backdrop,diagram,never,0,0,1,"var(--qt-overlay-bg)","",,,,,,
+--qt-diagram-lightbox-button-bg,diagram,never,0,0,1,"var(--qt-overlay-btn-bg)","",,,,,,
+--qt-diagram-lightbox-button-hover-bg,diagram,never,0,0,1,"var(--qt-overlay-btn-hover-bg)","",,,,,,
+--qt-diagram-lightbox-check-a,diagram,never,0,0,1,"#ffffff","",,,,,,
+--qt-diagram-lightbox-check-b,diagram,never,0,0,1,"#d4d4d8","",,,,,,
+--qt-diagram-lightbox-fg,diagram,never,0,0,1,"var(--qt-overlay-fg)","",,,,,,
+--qt-diagram-lightbox-muted-fg,diagram,never,0,0,1,"var(--qt-overlay-muted-fg)","",,,,,,
+--qt-diagram-lightbox-pressed-border,diagram,never,0,0,1,"var(--qt-overlay-muted-fg)","",,,,,,
+--qt-diagram-lightbox-shadow,diagram,never,0,0,1,"0 10px 40px rgb(0 0 0 / 0.45)","",,,,,,
+--qt-diagram-muted-fg,diagram,never,0,0,1,"var(--color-muted-foreground)","",,,,,,
+--qt-diagram-placeholder-height,diagram,never,0,0,1,"8rem","",,,,,,
+--qt-diagram-radius,diagram,never,0,0,1,"var(--radius-md)","",,,,,,
+--qt-diagram-toolbar-fg,diagram,never,0,0,1,"var(--color-muted-foreground)","",,,,,,
+--qt-diagram-toolbar-hover-bg,diagram,few,1,1,1,"var(--color-muted)","",,,,set,,
+--qt-dialog-backdrop,dialog,most,6,4,1,"rgb(0 0 0 / 0.45)","",set,set,set,set,set,set
+--qt-dialog-bg,dialog,few,2,1,1,"var(--color-background)","",,set,,,,set
+--qt-dialog-border,dialog,most,5,5,1,"var(--color-border)","",set,set,set,set,,set
+--qt-dialog-radius,dialog,few,2,2,1,"var(--radius-lg)","",,set,,,,set
+--qt-dialog-shadow,dialog,most,6,6,2,"0 24px 48px -12px rgb(0 0 0 / 0.18)","",set,set,set,set,set,set
+--qt-empty-state-description-color,empty,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--qt-empty-state-icon-color,empty,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--qt-empty-state-title-color,empty,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-entity-card-bg,entity,most,6,2,1,"color-mix(in srgb, var(--color-card) 92%, transparent)","",set,set,set,set,set,set
+--qt-entity-card-radius,entity,most,6,2,1,"var(--radius-lg)","",set,set,set,set,set,set
+--qt-favorite-color,favorite,most,5,5,1,"hsl(45 96% 58%)","",set,,set,set,set,set
+--qt-filter-chip-active-bg,filter,few,2,2,1,"var(--color-primary)","",,mode,,,,set
+--qt-filter-chip-active-border,filter,never,0,0,1,"transparent","",,,,,,
+--qt-filter-chip-active-fg,filter,few,2,2,1,"var(--color-primary-foreground)","",,mode,,,,set
+--qt-filter-chip-font-size,filter,never,0,0,1,"0.75rem","",,,,,,
+--qt-filter-chip-font-weight,filter,never,0,0,1,"500","",,,,,,
+--qt-filter-chip-inactive-bg,filter,few,2,2,1,"var(--color-muted)","",,set,,,,set
+--qt-filter-chip-inactive-border,filter,never,0,0,1,"transparent","",,,,,,
+--qt-filter-chip-inactive-fg,filter,few,2,1,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-filter-chip-inactive-hover-bg,filter,most,6,4,1,"color-mix(in srgb, var(--color-muted) 82%, var(--color-foreground) 4%)","",set,set,set,set,set,set
+--qt-filter-chip-padding-x,filter,never,0,0,1,"0.5rem","",,,,,,
+--qt-filter-chip-padding-y,filter,most,6,1,1,"0.1875rem","",set,set,set,set,set,set
+--qt-filter-chip-radius,filter,some,3,2,1,"9999px","",set,,set,set,,
+--qt-filter-chip-transition,filter,never,0,0,1,"all 150ms ease","",,,,,,
+--qt-floating-layer-z,floating,never,0,0,1,"1000","",,,,,,
+--qt-footer-bg,footer,few,2,2,0,"var(--color-background)","",,set,,,,set
+--qt-footer-border,footer,few,2,1,1,"var(--color-border)","",,set,,,,set
+--qt-footer-fg,footer,few,2,2,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-footer-link-hover,footer,most,5,4,1,"var(--color-primary)","",mode,set,mode,set,,set
+--qt-heading-font,heading,most,5,3,2,"var(--font-sans)","",set,set,set,set,,set
+--qt-highlight-bg,highlight,most,6,6,2,"hsl(48 100% 50%)","",mode,set,mode,set,set,mode
+--qt-highlight-fg,highlight,most,5,4,2,"hsl(40 100% 10%)","",mode,set,mode,set,,set
+--qt-highlight-font-weight,highlight,never,0,0,1,"500","",,,,,,
+--qt-highlight-padding-x,highlight,never,0,0,1,"0.125rem","",,,,,,
+--qt-highlight-radius,highlight,never,0,0,1,"0.125rem","",,,,,,
+--qt-input-bg,input,some,3,3,3,"var(--color-background)","",,set,mode,,,set
+--qt-input-border,input,few,2,2,3,"var(--color-input)","",,set,,,,set
+--qt-input-fg,input,few,2,1,2,"var(--color-foreground)","",,set,,,,set
+--qt-input-focus-ring,input,few,2,2,2,"var(--color-ring)","",,set,,,,set
+--qt-input-padding-x,input,never,0,0,2,"0.75rem","",,,,,,
+--qt-input-padding-y,input,never,0,0,2,"0.5rem","",,,,,,
+--qt-input-placeholder,input,few,2,1,0,"var(--color-muted-foreground)","",,set,,,,set
+--qt-input-radius,input,few,1,1,1,"var(--radius-md)","",,set,,,,
+--qt-input-transition,input,never,0,0,1,"colors 150ms cubic-bezier(0.4, 0, 0.2, 1)","",,,,,,
+--qt-left-sidebar-bg,left,some,4,4,1,"var(--color-sidebar-background)","",mode,set,mode,set,,
+--qt-left-sidebar-border,left,some,4,4,1,"var(--color-sidebar-border)","",mode,set,mode,set,,
+--qt-left-sidebar-collapsed-width,left,most,6,1,2,"3.5rem","",set,set,set,set,set,set
+--qt-left-sidebar-footer-height,left,never,0,0,0,"auto","",,,,,,
+--qt-left-sidebar-header-height,left,theme-private-or-dead,6,1,0,"","",set,set,set,set,set,set
+--qt-left-sidebar-item-gap,left,most,6,1,0,"0.375rem","",set,set,set,set,set,set
+--qt-left-sidebar-item-icon-size,left,most,6,1,1,"1.125rem","",set,set,set,set,set,set
+--qt-left-sidebar-max-width,left,most,6,1,0,"28rem","",set,set,set,set,set,set
+--qt-left-sidebar-min-width,left,most,6,1,0,"15rem","",set,set,set,set,set,set
+--qt-left-sidebar-overlay-bg,left,most,6,2,0,"rgb(0 0 0 / 0.4)","",set,set,set,set,set,set
+--qt-left-sidebar-overlay-z,left,never,0,0,0,"40","",,,,,,
+--qt-left-sidebar-resize-handle-width,left,most,6,1,1,"3px","",set,set,set,set,set,set
+--qt-left-sidebar-section-gap,left,most,6,1,1,"0.125rem","",set,set,set,set,set,set
+--qt-left-sidebar-section-padding,left,most,6,1,1,"0.625rem","",set,set,set,set,set,set
+--qt-left-sidebar-section-title-fg,left,some,3,3,1,"var(--color-sidebar-muted)","",mode,,set,set,,
+--qt-left-sidebar-transition,left,never,0,0,1,"width 200ms ease, transform 300ms ease","",,,,,,
+--qt-left-sidebar-width,left,most,6,1,1,"15rem","",set,set,set,set,set,set
+--qt-left-sidebar-z,left,never,0,0,1,"50","",,,,,,
+--qt-link-color,link,most,5,5,2,"var(--color-primary)","",mode,mode,mode,set,,mode
+--qt-link-decoration,link,some,4,1,1,"none","",set,,set,set,set,
+--qt-link-decoration-hover,link,never,0,0,1,"underline","",,,,,,
+--qt-link-hover-color,link,most,5,5,2,"color-mix(in srgb, var(--color-primary) 80%, black)","",mode,set,mode,set,,mode
+--qt-log-debug-bg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-debug-border,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-debug-fg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-default-bg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-default-border,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-default-fg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-error-bg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-log-error-border,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-error-details-bg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-log-error-fg,log,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-log-error-stack-fg,log,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-log-info-bg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-log-info-border,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-info-fg,log,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-log-warn-bg,log,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--qt-log-warn-border,log,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--qt-log-warn-fg,log,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--qt-mobile-composer-input-min-height,mobile,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--qt-mobile-tool-palette-bg,mobile,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-mobile-tool-palette-border,mobile,theme-private-or-dead,2,2,0,"","",,set,,,,set
+--qt-mobile-tool-palette-max-height,mobile,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--qt-navbar-bg,navbar,few,2,2,1,"var(--color-background)","",,set,,,,set
+--qt-navbar-blur,navbar,most,6,3,1,"blur(12px)","",set,set,set,set,set,set
+--qt-navbar-border,navbar,few,2,1,1,"var(--color-border)","",,set,,,,set
+--qt-navbar-height,navbar,most,6,1,1,"3.5rem","",set,set,set,set,set,set
+--qt-navbar-link-active-bg,navbar,few,2,2,1,"var(--color-muted)","",,set,,,,set
+--qt-navbar-link-fg,navbar,few,2,2,1,"var(--color-foreground)","",,set,,,,set
+--qt-navbar-link-hover-bg,navbar,few,2,2,1,"var(--color-muted)","",,set,,,,set
+--qt-navbar-link-padding-x,navbar,most,6,1,1,"0.625rem","",set,set,set,set,set,set
+--qt-navbar-link-padding-y,navbar,most,6,2,1,"0.375rem","",set,set,set,set,set,set
+--qt-navbar-link-radius,navbar,few,2,2,1,"var(--radius-md)","",,set,,,,set
+--qt-navbar-shadow,navbar,never,0,0,1,"none","",,,,,,
+--qt-overlay-bg,overlay,most,6,6,2,"rgb(0 0 0 / 0.85)","",set,set,set,set,set,mode
+--qt-overlay-btn-bg,overlay,most,6,6,2,"rgb(255 255 255 / 0.1)","",set,set,set,set,set,set
+--qt-overlay-btn-hover-bg,overlay,most,6,6,2,"rgb(255 255 255 / 0.2)","",set,set,set,set,set,set
+--qt-overlay-caption-bg,overlay,most,6,6,1,"rgb(0 0 0 / 0.5)","",set,set,set,set,set,set
+--qt-overlay-fg,overlay,most,5,5,2,"rgb(255 255 255)","",set,set,set,set,,set
+--qt-overlay-light-bg,overlay,most,6,6,1,"rgb(0 0 0 / 0.2)","",set,set,set,set,set,mode
+--qt-overlay-medium-bg,overlay,most,6,6,1,"rgb(0 0 0 / 0.6)","",set,set,set,set,set,mode
+--qt-overlay-muted-fg,overlay,most,5,5,2,"rgb(255 255 255 / 0.7)","",set,set,set,set,,set
+--qt-page-max-width,page,most,6,1,3,"72rem","",set,set,set,set,set,set
+--qt-panel-bg,panel,few,2,2,2,"var(--color-card)","",,set,,,,set
+--qt-panel-border,panel,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-panel-radius,panel,few,2,2,1,"var(--radius-lg)","",,set,,,,set
+--qt-panel-shadow,panel,most,6,5,1,"0 8px 24px -4px rgb(0 0 0 / 0.08)","",set,set,set,set,set,set
+--qt-participant-card-active-border,participant,most,5,5,1,"var(--color-primary)","",set,set,set,set,,set
+--qt-participant-card-active-shadow,participant,most,6,5,1,"0 0 8px rgb(var(--color-primary) / 0.2)","",set,set,set,set,set,set
+--qt-participant-card-bg,participant,few,2,2,1,"var(--color-card)","",,set,,,,set
+--qt-participant-card-border,participant,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-participant-card-radius,participant,few,2,2,1,"var(--radius-lg)","",,set,,,,set
+--qt-popover-bg,popover,few,2,2,4,"var(--color-popover)","",,set,,,,set
+--qt-popover-border,popover,few,2,2,2,"var(--color-border)","",,set,,,,set
+--qt-popover-fg,popover,few,2,1,2,"var(--color-popover-foreground)","",,set,,,,set
+--qt-popover-radius,popover,few,1,1,2,"var(--radius-md)","",,set,,,,
+--qt-popover-shadow,popover,most,6,5,2,"0 8px 24px -4px rgb(0 0 0 / 0.1)","",set,set,set,set,set,set
+--qt-progress-indicator,progress,never,0,0,1,"var(--color-primary)","",,,,,,
+--qt-progress-indicator-danger,progress,never,0,0,1,"var(--color-destructive)","",,,,,,
+--qt-progress-indicator-success,progress,never,0,0,1,"var(--color-success)","",,,,,,
+--qt-progress-track,progress,never,0,0,1,"var(--color-muted)","",,,,,,
+--qt-punctuation-no-dialogue-bg,punctuation,never,0,0,1,"color-mix(in srgb, var(--color-warning) 14%, transparent)","",,,,,,
+--qt-punctuation-no-dialogue-underline,punctuation,never,0,0,1,"var(--color-warning)","",,,,,,
+--qt-punctuation-warning-bg,punctuation,never,0,0,1,"color-mix(in srgb, var(--color-warning) 35%, transparent)","",,,,,,
+--qt-punctuation-warning-underline,punctuation,never,0,0,1,"var(--color-warning)","",,,,,,
+--qt-queue-badge-danger-bg,queue,most,5,2,1,"hsl(0 60% 48%)","hsl(0 60% 52%)",mode,mode,,set,mode,mode
+--qt-queue-badge-danger-fg,queue,never,0,0,1,"hsl(0 0% 100%)","",,,,,,
+--qt-queue-badge-embedding-bg,queue,most,6,4,1,"hsl(270 50% 48%)","hsl(270 50% 55%)",mode,mode,mode,set,mode,mode
+--qt-queue-badge-embedding-fg,queue,some,3,3,1,"hsl(0 0% 100%)","",mode,,mode,set,,
+--qt-queue-badge-font-size,queue,never,0,0,1,"0.6875rem","",,,,,,
+--qt-queue-badge-font-weight,queue,never,0,0,1,"600","",,,,,,
+--qt-queue-badge-group-gap,queue,never,0,0,1,"1px","",,,,,,
+--qt-queue-badge-group-radius,queue,never,0,0,1,"var(--radius-md)","",,,,,,
+--qt-queue-badge-idle-opacity,queue,most,6,1,1,"0.35","",set,set,set,set,set,set
+--qt-queue-badge-memory-bg,queue,most,6,4,1,"hsl(225 55% 48%)","hsl(225 55% 55%)",mode,mode,mode,set,mode,mode
+--qt-queue-badge-memory-fg,queue,some,3,3,1,"hsl(0 0% 100%)","",mode,,mode,set,,
+--qt-queue-badge-padding-x,queue,never,0,0,1,"0.375rem","",,,,,,
+--qt-queue-badge-padding-y,queue,never,0,0,1,"0.125rem","",,,,,,
+--qt-queue-badge-radius,queue,never,0,0,1,"var(--radius-sm)","",,,,,,
+--qt-queue-badge-story-bg,queue,most,6,4,1,"hsl(225 12% 38%)","hsl(225 12% 44%)",mode,mode,mode,set,mode,mode
+--qt-queue-badge-story-fg,queue,some,3,3,1,"hsl(0 0% 100%)","",mode,,mode,set,,
+--qt-queue-badge-summary-bg,queue,most,6,3,1,"hsl(152 55% 33.5%)","hsl(152 50% 34.5%)",mode,mode,mode,set,mode,mode
+--qt-queue-badge-summary-fg,queue,never,0,0,1,"hsl(0 0% 100%)","",,,,,,
+--qt-radio-accent,radio,never,0,0,1,"var(--color-primary)","",,,,,,
+--qt-radio-border,radio,never,0,0,1,"var(--color-border)","",,,,,,
+--qt-radio-focus-ring,radio,never,0,0,1,"var(--color-ring)","",,,,,,
+--qt-radio-size,radio,never,0,0,1,"1rem","",,,,,,
+--qt-range-accent,range,never,0,0,1,"var(--color-primary)","",,,,,,
+--qt-range-focus-ring,range,never,0,0,1,"var(--color-ring)","",,,,,,
+--qt-response-status-bg,response,some,4,1,1,"color-mix(in srgb, var(--color-muted) 60%, transparent)","color-mix(in srgb, var(--color-muted) 40%, transparent)",set,set,,set,set,
+--qt-response-status-border,response,never,0,0,1,"var(--color-border)","",,,,,,
+--qt-response-status-building-fg,response,most,6,4,1,"hsl(38 85% 48%)","hsl(38 85% 62%)",mode,mode,mode,set,mode,mode
+--qt-response-status-compressing-fg,response,most,6,5,1,"var(--qt-status-info-fg)","hsl(210 70% 68%)",mode,mode,set,set,mode,mode
+--qt-response-status-fg,response,never,0,0,1,"var(--color-muted-foreground)","var(--color-muted-foreground)",,,,,,
+--qt-response-status-gathering-fg,response,most,6,4,1,"hsl(270 55% 55%)","hsl(270 50% 68%)",mode,mode,mode,set,mode,mode
+--qt-response-status-sending-fg,response,most,6,5,1,"var(--qt-status-info-fg)","hsl(210 70% 68%)",mode,mode,set,set,mode,mode
+--qt-response-status-streaming-fg,response,most,6,5,1,"hsl(152 55% 29%)","hsl(152 55% 62%)",mode,mode,mode,set,mode,mode
+--qt-response-status-tool-fg,response,most,6,4,1,"hsl(270 55% 55%)","hsl(270 50% 68%)",mode,mode,mode,set,mode,mode
+--qt-roleplay-1-bg,roleplay,most,6,6,1,"hsl(217 91% 53%)","hsl(217 91% 60%)",set,set,set,set,set,set
+--qt-roleplay-1-fg,roleplay,most,6,4,1,"hsl(0 0% 100%)","",set,set,set,set,set,set
+--qt-roleplay-2-bg,roleplay,most,6,6,1,"hsl(270 65% 55%)","hsl(270 70% 64%)",set,set,set,set,set,set
+--qt-roleplay-2-fg,roleplay,most,6,4,1,"hsl(0 0% 100%)","",set,set,set,set,set,set
+--qt-roleplay-3-bg,roleplay,most,6,6,1,"hsl(38 92% 50%)","hsl(38 95% 56%)",set,set,set,set,set,set
+--qt-roleplay-3-fg,roleplay,most,6,4,1,"hsl(30 45% 12%)","",set,set,set,set,set,set
+--qt-roleplay-4-bg,roleplay,most,6,6,1,"hsl(168 78% 36%)","hsl(168 70% 44%)",set,set,set,set,set,set
+--qt-roleplay-4-fg,roleplay,most,6,5,1,"hsl(0 0% 100%)","",set,set,set,set,set,set
+--qt-rp-button-internal-bg,rp,most,6,4,1,"hsl(270 45% 48%)","",set,set,set,set,set,set
+--qt-rp-button-internal-fg,rp,few,2,1,1,"hsl(0 0% 100%)","",,set,,,,set
+--qt-rp-button-narration-bg,rp,most,6,5,1,"hsl(225 10% 38%)","",set,set,set,set,set,set
+--qt-rp-button-narration-fg,rp,most,5,4,1,"hsl(0 0% 100%)","",set,set,set,set,,set
+--qt-rp-button-ooc-bg,rp,most,6,6,1,"hsl(152 60% 28%)","",set,mode,set,set,set,mode
+--qt-rp-button-ooc-fg,rp,most,6,5,1,"hsl(152 60% 80%)","",set,mode,set,set,set,mode
+--qt-rp-dialogue-bg,rp,never,0,0,1,"transparent","",,,,,,
+--qt-rp-dialogue-color,rp,few,2,1,1,"var(--color-foreground)","",,set,,,,set
+--qt-rp-inner-monologue-bg,rp,most,6,5,1,"hsl(270 20% 12% / 0.8)","",set,mode,set,set,set,set
+--qt-rp-inner-monologue-color,rp,most,6,5,1,"hsl(270 50% 72%)","",set,mode,set,set,set,set
+--qt-rp-inner-monologue-padding,rp,never,0,0,1,"0.125rem 0.375rem","",,,,,,
+--qt-rp-inner-monologue-radius,rp,most,6,2,1,"0.1875rem","",set,set,set,set,set,set
+--qt-rp-inner-monologue-style,rp,never,0,0,1,"italic","",,,,,,
+--qt-rp-narration-bg,rp,most,6,6,1,"hsl(225 14% 12% / 0.8)","",set,set,set,set,set,set
+--qt-rp-narration-color,rp,most,6,5,1,"hsl(225 10% 72%)","",set,set,set,set,set,set
+--qt-rp-narration-padding,rp,never,0,0,1,"0.125rem 0.375rem","",,,,,,
+--qt-rp-narration-radius,rp,most,6,2,1,"0.1875rem","",set,set,set,set,set,set
+--qt-rp-narration-style,rp,never,0,0,1,"normal","",,,,,,
+--qt-rp-ooc-bg,rp,most,6,6,2,"hsl(0 0% 6%)","",set,mode,set,set,set,mode
+--qt-rp-ooc-color,rp,most,6,6,2,"hsl(152 60% 58%)","",set,mode,set,set,set,mode
+--qt-rp-ooc-font,rp,some,3,1,1,"var(--font-mono)","",set,,set,set,,
+--qt-rp-ooc-padding,rp,never,0,0,1,"0.125rem 0.375rem","",,,,,,
+--qt-rp-ooc-radius,rp,most,6,2,1,"0.1875rem","",set,set,set,set,set,set
+--qt-select-arrow,select,some,3,3,1,"url(""data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"")","url(""data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"")",mode,,mode,set,,
+--qt-sidebar-bg,sidebar,few,2,2,1,"var(--color-sidebar-background)","",,set,,,,set
+--qt-sidebar-border,sidebar,few,2,2,1,"var(--color-sidebar-border)","",,mode,,,,set
+--qt-sidebar-fg,sidebar,never,0,0,0,"var(--color-sidebar-foreground)","",,,,,,
+--qt-sidebar-item-active-bg,sidebar,most,6,6,1,"color-mix(in srgb, var(--color-primary) 8%, transparent)","",mode,set,set,set,set,set
+--qt-sidebar-item-active-border,sidebar,most,5,5,1,"var(--color-primary)","",set,set,set,set,,set
+--qt-sidebar-item-hover-bg,sidebar,most,5,5,1,"var(--color-sidebar-accent)","",mode,set,set,set,,set
+--qt-sidebar-item-padding-x,sidebar,most,6,2,1,"0.625rem","",set,set,set,set,set,set
+--qt-sidebar-item-padding-y,sidebar,most,6,3,1,"0.375rem","",set,set,set,set,set,set
+--qt-sidebar-item-radius,sidebar,few,2,2,1,"var(--radius-md)","",,set,,,,set
+--qt-sidebar-muted,sidebar,never,0,0,0,"var(--color-sidebar-muted)","",,,,,,
+--qt-sidebar-width,sidebar,most,6,2,1,"15rem","",set,set,set,set,set,set
+--qt-spinner-indicator,spinner,most,5,4,1,"var(--color-primary)","",set,set,set,set,,set
+--qt-spinner-track,spinner,most,5,4,1,"color-mix(in srgb, var(--color-primary) 20%, transparent)","",set,set,set,set,,set
+--qt-status-danger-bg,status,few,2,2,3,"var(--color-destructive)","",,set,,,,set
+--qt-status-danger-border,status,few,2,2,4,"var(--color-destructive)","",,set,,,,set
+--qt-status-danger-fg,status,few,2,2,3,"var(--color-destructive-foreground)","",,mode,,,,mode
+--qt-status-info-bg,status,few,2,2,3,"var(--color-info)","",,mode,,,,set
+--qt-status-info-border,status,few,2,2,3,"var(--color-info)","",,set,,,,set
+--qt-status-info-fg,status,few,2,2,4,"var(--color-info-foreground)","",,mode,,,,mode
+--qt-status-success-bg,status,few,2,2,3,"var(--color-success)","",,set,,,,set
+--qt-status-success-border,status,few,2,2,3,"var(--color-success)","",,set,,,,set
+--qt-status-success-fg,status,few,2,2,4,"var(--color-success-foreground)","",,mode,,,,mode
+--qt-status-warning-bg,status,few,2,2,4,"var(--color-warning)","",,set,,,,set
+--qt-status-warning-border,status,few,2,2,3,"var(--color-warning)","",,set,,,,set
+--qt-status-warning-fg,status,few,2,2,5,"var(--color-warning-foreground)","",,mode,,,,mode
+--qt-tab-active-bg,tab,few,2,2,1,"var(--color-card)","",,set,,,,set
+--qt-tab-active-border,tab,few,2,2,2,"var(--color-border)","",,set,,,,set
+--qt-tab-active-fg,tab,most,5,5,1,"var(--color-primary)","",mode,set,mode,set,,set
+--qt-tab-bg,tab,few,2,1,1,"var(--color-muted)","",,set,,,,set
+--qt-tab-border,tab,few,1,1,1,"transparent","",,,,,,set
+--qt-tab-divider-color,tab,few,2,2,1,"var(--color-border)","",,set,,,,set
+--qt-tab-fg,tab,few,2,1,1,"var(--color-muted-foreground)","",,set,,,,set
+--qt-tab-font-size,tab,some,3,1,1,"0.8125rem","",,set,,,set,set
+--qt-tab-font-weight,tab,never,0,0,1,"500","",,,,,,
+--qt-tab-gap,tab,most,6,3,0,"0.375rem","",set,set,set,set,set,set
+--qt-tab-group-gap,tab,most,6,2,2,"0.1875rem","",set,set,set,set,set,set
+--qt-tab-hover-bg,tab,most,6,4,1,"color-mix(in srgb, var(--color-muted) 82%, var(--color-foreground) 4%)","",set,set,set,set,set,set
+--qt-tab-hover-fg,tab,few,2,2,1,"var(--color-foreground)","",,set,,,,set
+--qt-tab-padding-x,tab,most,6,1,1,"0.875rem","",set,set,set,set,set,set
+--qt-tab-padding-y,tab,most,6,1,1,"0.5rem","",set,set,set,set,set,set
+--qt-tab-radius,tab,most,6,3,1,"var(--radius-md) var(--radius-md) 0 0","",set,set,set,set,set,set
+--qt-tab-transition,tab,never,0,0,1,"all 150ms cubic-bezier(0.4, 0, 0.2, 1)","",,,,,,
+--qt-terminal-ansi-black,terminal,most,5,5,0,"#000000","",set,,set,set,set,set
+--qt-terminal-ansi-blue,terminal,most,5,5,0,"#2472c8","",set,,set,set,set,set
+--qt-terminal-ansi-bright-black,terminal,most,5,5,0,"#666666","",set,,set,set,set,set
+--qt-terminal-ansi-bright-blue,terminal,most,5,5,0,"#3b8eea","",set,,set,set,set,set
+--qt-terminal-ansi-bright-cyan,terminal,most,5,4,0,"#29b8db","",set,,set,set,set,set
+--qt-terminal-ansi-bright-green,terminal,most,5,5,0,"#23d18b","",set,,set,set,set,set
+--qt-terminal-ansi-bright-magenta,terminal,most,5,5,0,"#d670d6","",set,,set,set,set,set
+--qt-terminal-ansi-bright-red,terminal,most,5,5,0,"#f14c4c","",set,,set,set,set,set
+--qt-terminal-ansi-bright-white,terminal,most,5,5,0,"#e5e5e5","",set,,set,set,set,set
+--qt-terminal-ansi-bright-yellow,terminal,most,5,5,0,"#f5f543","",set,,set,set,set,set
+--qt-terminal-ansi-cyan,terminal,most,5,4,0,"#11a8cd","",set,,set,set,set,set
+--qt-terminal-ansi-green,terminal,most,5,5,0,"#0dbc79","",set,,set,set,set,set
+--qt-terminal-ansi-magenta,terminal,most,5,5,0,"#bc3fbc","",set,,set,set,set,set
+--qt-terminal-ansi-red,terminal,most,5,5,0,"#cd3131","",set,,set,set,set,set
+--qt-terminal-ansi-white,terminal,most,5,5,0,"#e5e5e5","",set,,set,set,set,set
+--qt-terminal-ansi-yellow,terminal,most,5,5,0,"#e5e510","",set,,set,set,set,set
+--qt-terminal-bg,terminal,most,6,6,2,"#1a1a1a","",set,set,set,set,set,set
+--qt-terminal-chrome-bg,terminal,most,6,6,1,"color-mix(in srgb, var(--qt-terminal-bg) 78%, var(--qt-terminal-fg) 6%)","",set,set,set,set,set,set
+--qt-terminal-chrome-border,terminal,most,6,6,1,"color-mix(in srgb, var(--qt-terminal-bg) 55%, var(--qt-terminal-fg) 22%)","",set,set,set,set,set,set
+--qt-terminal-chrome-fg,terminal,most,6,6,1,"var(--qt-terminal-fg)","",set,set,set,set,set,set
+--qt-terminal-chrome-muted-fg,terminal,most,6,6,1,"color-mix(in srgb, var(--qt-terminal-fg) 55%, transparent)","",set,set,set,set,set,set
+--qt-terminal-closed-badge-bg,terminal,most,6,6,1,"color-mix(in srgb, var(--qt-terminal-bg) 50%, var(--qt-terminal-fg) 18%)","",set,set,set,set,set,set
+--qt-terminal-closed-badge-fg,terminal,most,6,6,1,"var(--qt-terminal-fg)","",set,set,set,set,set,set
+--qt-terminal-cursor,terminal,most,6,6,0,"#e6e6e6","",set,set,set,set,set,set
+--qt-terminal-embed-bg,terminal,never,0,0,1,"var(--color-card)","",,,,,,
+--qt-terminal-embed-border,terminal,never,0,0,1,"var(--color-border)","",,,,,,
+--qt-terminal-embed-header-bg,terminal,never,0,0,1,"var(--color-muted)","",,,,,,
+--qt-terminal-embed-header-border,terminal,never,0,0,1,"var(--color-border)","",,,,,,
+--qt-terminal-fg,terminal,most,6,6,1,"#e6e6e6","",set,set,set,set,set,set
+--qt-terminal-selection,terminal,most,6,6,0,"rgba(255, 255, 255, 0.2)","",set,set,set,set,set,set
+--qt-text-secondary-fg,text,few,2,1,3,"var(--color-muted-foreground)","",,set,,,,set
+--qt-thinking-duration,thinking,undeclared-but-read,1,1,1,"","",,,,set,,
+--qt-thinking-origin,thinking,undeclared-but-read,1,1,1,"","",,,,set,,
+--qt-toggle-knob-bg,toggle,most,5,5,1,"white","",set,mode,set,set,,mode
+--qt-warning-box-bg,warning,most,6,5,1,"color-mix(in srgb, var(--color-warning) 8%, transparent)","",set,set,set,set,set,set
+--qt-warning-box-border,warning,most,6,5,1,"color-mix(in srgb, var(--color-warning) 30%, transparent)","",set,set,set,set,set,set
+--qt-warning-box-fg,warning,most,6,5,2,"var(--color-warning)","",set,set,set,set,set,set
+--qt-workspace-accent,workspace,undeclared-but-read,6,6,1,"","",set,set,set,set,set,set
+--qt-workspace-tab-active-fg,workspace,undeclared-but-read,1,1,1,"","",,,,set,,
+--radius-lg,radius,declared-elsewhere,1,1,2,"","",,,,,,set
+--radius-md,radius,declared-elsewhere,1,1,2,"","",,,,,,set
+--radius-pill,radius,theme-private-or-dead,1,1,0,"","",,,,,,set
+--radius-sm,radius,declared-elsewhere,1,1,3,"","",,,,,,set
+--radius-xl,radius,theme-private-or-dead,1,1,0,"","",,,,,,set
+--rotor-cyan,rotor,theme-private-or-dead,1,1,0,"","",,,,set,,
+--rotor-cyan-bright,rotor,theme-private-or-dead,1,1,0,"","",,,,set,,
+--rotor-cyan-dim,rotor,theme-private-or-dead,1,1,0,"","",,,,set,,
+--rotor-glow,rotor,theme-private-or-dead,1,1,0,"","",,,,set,,
+--rotor-glow-soft,rotor,theme-private-or-dead,1,1,0,"","",,,,set,,
+--stroke-soft,stroke,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--stroke-strong,stroke,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--success-000,success,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--success-100,success,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--success-200,success,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--success-900,success,theme-private-or-dead,2,1,0,"","",,mode,,,,mode
+--surface-base,surface,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--surface-deep,surface,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--surface-muted,surface,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--surface-raised,surface,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--text-000,text,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--text-100,text,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--text-200,text,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--text-300,text,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--text-400,text,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--text-500,text,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--theme-destructive,theme,declared-elsewhere,2,1,1,"","",,mode,,,,mode
+--theme-destructive-foreground,theme,declared-elsewhere,2,1,1,"","",,mode,,,,mode
+--theme-font-brand,theme,some,4,3,1,"system-ui, -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, ""Helvetica Neue"", Arial, sans-serif","",set,,set,set,set,
+--theme-font-chat-user,theme,some,4,4,1,"var(--theme-font-sans)","",set,,set,set,set,
+--theme-font-mono,theme,some,4,2,2,"ui-monospace, SFMono-Regular, ""SF Mono"", Menlo, Consolas, ""Liberation Mono"", monospace","",set,,set,set,set,
+--theme-font-sans,theme,some,4,3,4,"system-ui, -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, ""Helvetica Neue"", Arial, sans-serif","",set,,set,set,set,
+--theme-font-serif,theme,some,4,4,2,"Georgia, Cambria, ""Times New Roman"", Times, serif","",set,,set,set,set,
+--theme-info,theme,declared-elsewhere,2,2,1,"","",,mode,,,,mode
+--theme-info-foreground,theme,declared-elsewhere,2,1,1,"","",,mode,,,,mode
+--theme-success,theme,declared-elsewhere,2,2,1,"","",,mode,,,,mode
+--theme-success-foreground,theme,declared-elsewhere,2,1,1,"","",,mode,,,,mode
+--theme-warning,theme,declared-elsewhere,2,2,1,"","",,mode,,,,mode
+--theme-warning-foreground,theme,declared-elsewhere,2,1,1,"","",,mode,,,,mode
+--tube-amber,tube,theme-private-or-dead,1,1,0,"","",,,,set,,
+--tube-amber-bright,tube,theme-private-or-dead,1,1,0,"","",,,,set,,
+--tube-amber-glow,tube,theme-private-or-dead,1,1,0,"","",,,,set,,
+--tube-amber-glow-soft,tube,theme-private-or-dead,1,1,0,"","",,,,set,,
+--tw-border-spacing-x,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-border-spacing-y,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-ring-color,tw,declared-elsewhere,2,2,0,"","",,mode,,,,mode
+--tw-ring-inset,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-ring-offset-color,tw,theme-private-or-dead,2,2,0,"","",,mode,,,,set
+--tw-ring-offset-shadow,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-ring-offset-width,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-ring-shadow,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-rotate,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-scale-x,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-scale-y,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-shadow,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-shadow-colored,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-skew-x,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-skew-y,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-translate-x,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--tw-translate-y,tw,theme-private-or-dead,2,1,0,"","",,set,,,,set
+--warning-000,warning,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--warning-100,warning,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--warning-200,warning,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
+--warning-900,warning,theme-private-or-dead,2,2,0,"","",,mode,,,,mode
