@@ -78,6 +78,8 @@ Every ledger is shuttered when the lock falls — the main database, the convers
 
 Should the wrong passphrase be offered several times running, the unlock screen makes you wait a little longer before each further attempt.
 
+Should the server still be finding its feet when the unlock screen first asks after it, the screen does not sulk behind a spinner: it says the front desk is not answering just yet and keeps ringing every couple of seconds until someone picks up, then presents the passphrase field. Until the passphrase is in, the rest of the establishment declines requests at once rather than keeping them waiting at the door.
+
 **To configure auto-lock:**
 
 1. Navigate to **Settings > Security > Auto-Lock** (or use the navigation tool below)

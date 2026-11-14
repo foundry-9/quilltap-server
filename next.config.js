@@ -94,6 +94,22 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
 
+  // The landing redirect is a real HTTP 307, sent before any rendering. As a
+  // `redirect()` inside app/page.tsx it is thrown after the root layout has
+  // started streaming, so Next answers 200 and leaves the client router to
+  // perform it after hydration; on a cold dev start the on-demand compile of
+  // /workspace then reloaded `/` before that redirect landed, in a loop.
+  // app/page.tsx keeps the same redirect as a fallback.
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/workspace?open=home',
+        permanent: false,
+      },
+    ];
+  },
+
   // Security headers
   async headers() {
     return [

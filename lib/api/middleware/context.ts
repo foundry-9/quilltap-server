@@ -26,6 +26,20 @@ const contextLogger = logger.child({ module: 'api-context-middleware' });
  * This ensures plugins and providers are fully loaded.
  */
 async function ensureServerReady(): Promise<void> {
+  // Without a resolved key, startup stops before readiness (instrumentation
+  // returns early) and only the operator can move it on — through /setup or
+  // /unlock. Waiting out the 30s below would hold the browser's connections
+  // open for nothing and starve the very navigation to those pages, so refuse
+  // at once.
+  if (!startupState.isPepperResolved()) {
+    const pepperState = startupState.getPepperState();
+    contextLogger.debug('Refusing API request — database key not resolved', {
+      pepperState,
+      lockedMode: startupState.isLockedMode(),
+    });
+    throw new PepperNotReadyError(pepperState);
+  }
+
   if (!startupState.isReady()) {
     const isReady = await startupState.waitForReady(30000);
     if (!isReady) {
@@ -98,6 +112,16 @@ async function buildRequestContext(): Promise<ContextBuildResult> {
     await ensureServerReady();
   } catch (error) {
     if (error instanceof PepperNotReadyError) {
+      // Locked (passphrase pending) answers 423, like /api/health; a key that
+      // still needs first-run setup keeps its 503.
+      if (error.pepperState === 'needs-passphrase') {
+        return {
+          response: NextResponse.json(
+            { error: 'Locked', unlockUrl: '/unlock', pepperState: error.pepperState },
+            { status: 423 }
+          ),
+        };
+      }
       return {
         response: NextResponse.json(
           { error: 'Setup required', setupUrl: '/setup', pepperState: error.pepperState },

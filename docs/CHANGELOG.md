@@ -4,6 +4,12 @@
 
 ### 4.13-dev
 
+#### Startup: cold load of a locked instance could hang or reload-loop
+
+- `/` now redirects with a real 307 (`redirects()` in `next.config.js`). As a `redirect()` in `app/page.tsx` it was thrown after the root layout had started streaming, so Next answered 200 and left the redirect to the client router. On a cold dev start the on-demand compile of `/workspace` reloaded `/` before that redirect landed, in a loop (thousands of requests on a locked instance). `app/page.tsx` keeps the redirect as a fallback.
+- Context-handled API routes (`createContextHandler` / `withContext`) no longer wait up to 30s for startup readiness when the database key is unresolved; startup cannot finish until the operator acts. They answer at once: 423 `{ error: 'Locked', unlockUrl, pepperState }` while a passphrase is pending, 503 `Setup required` as before for first-run setup. The 30s waits (`/api/v1/session`, `/api/v1/settings/chat`) held browser connections and slowed the navigation to `/unlock`. The session provider treats 423 like a 5xx (5s retry, no console error).
+- The unlock page retries its `GET /api/v1/system/unlock` check every 2s until it gets a valid state, and says so under the spinner. It used to check once: a failed fetch or a non-JSON reply left a bare spinner with no message and no retry. `needs-vault-storage` now returns to the app like `resolved` instead of spinning.
+
 #### Release process: bugfix branch merges each release
 
 - `/tag-for-release` now restarts the bugfix branch with a merge of release (`-s ours`, then the existing tree-copy) instead of a plain tree-copy, in both the main and bugfix flows. The release commit and tag become ancestors of bugfix, so `git log <tag>..bugfix` shows only bugfix work since the release; the new branch's tree still matches release exactly.

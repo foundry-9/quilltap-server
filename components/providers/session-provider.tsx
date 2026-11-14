@@ -85,7 +85,9 @@ function CustomSessionProvider({
         // we want the same 5-second retry loop in all those cases so the UI
         // recovers as soon as the server is healthy, instead of waiting out
         // the 5-minute refetchInterval.
-        if (response.status >= 500 && response.status < 600) {
+        // 423 is a locked instance awaiting its passphrase — the same
+        // "not ready yet, ask again soon" case.
+        if (response.status === 423 || (response.status >= 500 && response.status < 600)) {
           setSession(null);
           setStatus("loading");
           setServerNotReady(true);
