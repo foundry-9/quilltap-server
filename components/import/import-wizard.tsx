@@ -457,7 +457,7 @@ export function ImportWizard({
         maxWidth="2xl"
         className="w-[90vw]"
         footer={renderFooter()}
-        footerClassName="qt-dialog-footer flex-shrink-0"
+        footerClassName="qt-dialog-footer-default flex-shrink-0"
       >
         {/* Step indicator */}
         <div className="flex items-center gap-1 mb-4">

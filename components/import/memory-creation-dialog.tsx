@@ -121,7 +121,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
         onClose={onClose}
         title="Memory Analysis Queued"
         maxWidth="md"
-        bodyClassName="qt-dialog-body"
+        bodyClassName="qt-dialog-body-default"
         footer={
           <button
             type="button"
@@ -151,7 +151,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
       subtitle="Queue message analysis to extract meaningful memories from this conversation."
       busy={creating}
       maxWidth="lg"
-      bodyClassName="qt-dialog-body"
+      bodyClassName="qt-dialog-body-default"
       footer={
         <>
           <button

@@ -166,7 +166,12 @@ export function CollapsibleCard({
   }, [forceOpen, isControlled, controlledIsOpen, onOpenChange, setOpen])
 
   return (
-    <div className={className ? `qt-collapsible-card ${className}` : 'qt-collapsible-card'} id={sectionId} ref={cardRef}>
+    <div
+      className={className ? `qt-collapsible-card ${className}` : 'qt-collapsible-card'}
+      id={sectionId}
+      data-card={sectionId}
+      ref={cardRef}
+    >
       <button
         type="button"
         className="qt-collapsible-card-header"

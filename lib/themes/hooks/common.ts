@@ -1,0 +1,92 @@
+/**
+ * Theme hooks — shared building blocks used across every surface: cards,
+ * buttons, form fields, badges, alerts, headings, avatars and tabs.
+ *
+ * Most of these are standalone classes (a `qt-button-primary` needs no
+ * `qt-button` beside it), so each is catalogued as its own hook.
+ *
+ * @module lib/themes/hooks/common
+ */
+
+import type { HookDef, QtClass } from './types'
+import { TAB_KIND_VARIANT } from './workspace'
+
+function family(className: QtClass, label: string, description?: string): HookDef {
+  return { className, surface: 'common', label, ...(description ? { description } : {}), since: 1 }
+}
+
+export const COMMON_HOOKS: readonly HookDef[] = [
+  // Pages
+  family('qt-page-container', 'Page container', 'The width-limited column most full pages (Settings, a character, the lists) sit in.'),
+
+  // Cards
+  family('qt-card', 'Card'),
+  { ...family('qt-card-header', 'Card header'), within: ['qt-card'] },
+  family('qt-card-title', 'Card title'),
+  family('qt-card-subtitle', 'Card subtitle'),
+  family('qt-card-description', 'Card description'),
+  family('qt-card-interactive', 'Clickable card'),
+
+  // Buttons
+  family('qt-button', 'Button', 'The base button; usually paired with a variant class.'),
+  family('qt-button-primary', 'Primary button'),
+  family('qt-button-secondary', 'Secondary button'),
+  family('qt-button-ghost', 'Ghost button'),
+  family('qt-button-destructive', 'Destructive button'),
+  family('qt-button-success', 'Success button'),
+  family('qt-button-warning', 'Warning button'),
+  family('qt-button-sm', 'Small button', 'A size modifier, beside a variant.'),
+  family('qt-button-icon', 'Icon button'),
+
+  // Form fields
+  { ...family('qt-input', 'Text input'), states: [{ kind: 'class', className: 'qt-input-error', label: 'Invalid' }] },
+  family('qt-textarea', 'Text area'),
+  family('qt-select', 'Select'),
+  family('qt-select-sm', 'Small select'),
+
+  // Badges
+  family('qt-badge', 'Badge'),
+  family('qt-badge-primary', 'Primary badge'),
+  family('qt-badge-secondary', 'Secondary badge'),
+  family('qt-badge-success', 'Success badge'),
+  family('qt-badge-warning', 'Warning badge'),
+  family('qt-badge-info', 'Info badge'),
+  family('qt-badge-destructive', 'Destructive badge'),
+  family('qt-badge-outline', 'Outline badge'),
+
+  // Alerts
+  family('qt-alert', 'Alert'),
+  family('qt-alert-info', 'Info alert'),
+  family('qt-alert-success', 'Success alert'),
+  family('qt-alert-warning', 'Warning alert'),
+  family('qt-alert-error', 'Error alert'),
+
+  // Headings
+  family('qt-heading-1', 'Heading, level 1 size'),
+  family('qt-heading-2', 'Heading, level 2 size'),
+  family('qt-heading-3', 'Heading, level 3 size'),
+  family('qt-heading-4', 'Heading, level 4 size'),
+
+  // Avatars (components/ui/Avatar.tsx)
+  family('qt-avatar-image', 'Avatar picture box', 'The framed box holding an avatar picture or its initial.'),
+  family('qt-avatar-labels', 'Avatar caption', 'Name and title beneath an avatar.'),
+  { ...family('qt-avatar-name', 'Avatar name'), within: ['qt-avatar-labels'] },
+  { ...family('qt-avatar-title', 'Avatar title'), within: ['qt-avatar-labels'] },
+
+  // Tabs
+  family('qt-tab-group', 'In-page tab group', 'Entity-page tabs (a character, a project) and small view switchers.'),
+  {
+    className: 'qt-tab',
+    surface: 'common',
+    label: 'Tab',
+    description:
+      'Shared by the workspace tab strip (`.qt-tab-strip .qt-tab`) and the in-page tabs (`.qt-tab-group .qt-tab`): scope by the parent. Only workspace tabs carry `data-tab-kind`.',
+    within: ['qt-tab-strip', 'qt-tab-group'],
+    variants: [TAB_KIND_VARIANT],
+    states: [
+      { kind: 'class', className: 'qt-tab-active', label: 'The selected tab' },
+      { kind: 'class', className: 'qt-tab-dragging', label: 'Being dragged (workspace)' },
+    ],
+    since: 1,
+  },
+]

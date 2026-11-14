@@ -1,6 +1,6 @@
 # Calliope Live — Spec B: structural hook catalogue
 
-**Status:** ready to run, 2026-11-14 (design decisions confirmed by the human). Implements Phase 0b′ of
+**Status:** implemented 2026-11-14 (4.14-dev); see "As built" at the end. Design decisions confirmed by the human. Implements Phase 0b′ of
 [calliope-live.md](calliope-live.md). Read that document and the audit,
 [calliope-live-audit.md](calliope-live-audit.md) — sections 2.3 and 4 in
 particular — before starting.
@@ -304,3 +304,61 @@ Spec A also edits `components/providers/theme/theme-utils.ts`; this spec does
 not. The project's rule is not to run agents in separate worktrees, so the
 simple course is to run this spec after Spec A's Stage 1 has been committed,
 or before Spec A starts.
+
+## As built
+
+Implemented 2026-11-14 (4.14-dev). Catalogue version 1, 156 hooks, in
+`lib/themes/hooks/` (one file per surface; `index.ts`, `lint.ts`, `doc.ts`).
+`npm run lint` runs `scripts/check-theme-hooks.ts`; the reference is
+[THEME_HOOKS.md](../THEME_HOOKS.md) (`npm run generate:theme-hooks-doc`).
+
+Departures from the text above:
+
+- **Tool-call card is `qt-chat-tool-call`, not `qt-chat-tool-card`.** The card
+  has a visible border, and art-deco, great-estate and madmans-box all recolour
+  the border of anything matching `[class*="card"]`; a class containing "card"
+  would have restyled it under those three themes.
+- **Great-estate lost two dead rules.** Its `[data-role="assistant"]` /
+  `[data-role="user"]` borders had never matched anything; with `data-role`
+  on message rows they would have started to. Removed on the human's
+  instruction (theme 1.0.13), so nothing changes; Spec C can restore the accent
+  deliberately.
+- **Streaming bubble** carries `qt-chat-message-streaming` alone: the finished
+  bubble's `qt-chat-message-assistant` sets its own padding, background and
+  border, so adding it would restyle the stream.
+- **`data-role="tool"`** is on the standalone pending-tool row (a
+  `qt-chat-message-row`) and on `qt-chat-message-row-tool` (which is not a
+  `qt-chat-message-row`; giving it that class would restyle it).
+- **Added beyond the list:** `qt-app-scroll` on the scroll area under the page
+  toolbar; `data-pane` on `qt-tab-pane` as well as the pane chrome;
+  `qt-left-sidebar-popout` on the profile menu too; `qt-page-container` in
+  `common`; `aria-pressed` and `aria-busy` states where the markup already
+  carried them.
+- **Section anchors are a closed list, and required.** `CHARACTER_SECTION_ANCHORS`
+  in `lib/themes/hooks/character.ts` types `SectionCard`'s `anchor` prop, which
+  is no longer optional, so the compiler keeps the catalogue and the page in
+  step. Seven cards had no anchor and were given one: `facts`, `dossier`,
+  `connection-profile`, `conversation-partner`, `image-profile`, `timestamps`,
+  `chat-tools`.
+- **The theme-selector check** also flags data attributes the app does not set
+  (`[data-sidebar]`), inline-style matches (`[style*=…]`), and a catalogued
+  attribute given a value outside its list (`[data-role="narrator"]`). The
+  root's `.dark` / `.light` / `data-theme` / `data-color-mode` and
+  `data-qt-modal` are allowed.
+- **Headings:** no `qt-heading-*` class was added. Every bare heading in scope
+  already carries its own component class (`qt-homepage-section-title`,
+  `qt-card-title`, `qt-dialog-title`) that sets size and font; a heading class
+  would change the font family. Left alone: the three home card titles, the
+  dialog title, the settings card titles (`CollapsibleCard`), the Salon's
+  screen-reader-only `h1`, `ScenariosCard`'s scenario titles and
+  `VaultRepairCard`'s heading.
+- **Dialog callers:** `BaseModal` writes the identity class itself; the 27
+  files whose class strings named `qt-dialog-body` / `qt-dialog-footer` now
+  name the `-default` modifier (prop strings) or carry both (footers and bodies
+  drawn by hand inside the dialog). No bundled theme targets either class.
+
+Spec C's worklist (report-only run at the time of writing): art-deco 24
+selectors, earl-grey 32, great-estate 32, madmans-box 30, old-school 9,
+rains 38 — 105 uncatalogued `qt-*` classes, 33 bare elements, 25 uncatalogued
+attributes, 13 non-`qt` classes, 9 class-substring selectors.
+`tsx scripts/check-theme-hooks.ts --verbose` lists them.

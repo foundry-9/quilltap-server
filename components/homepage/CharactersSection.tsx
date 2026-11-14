@@ -76,7 +76,7 @@ export function CharactersSection({ characters }: CharactersSectionProps) {
   }, [visibleCharacters, maxCards])
 
   return (
-    <div className="qt-homepage-section">
+    <div className="qt-homepage-section" data-section="characters">
       <div className="qt-homepage-section-header">
         <h2 className="qt-homepage-section-title">Characters</h2>
         <Link href="/aurora" className="qt-homepage-section-link">
@@ -85,7 +85,7 @@ export function CharactersSection({ characters }: CharactersSectionProps) {
       </div>
       <div ref={containerRef} className="qt-homepage-section-content">
         {visibleCharacters.length === 0 ? (
-          <div className="text-center py-6 qt-text-secondary">
+          <div className="qt-homepage-empty text-center py-6 qt-text-secondary">
             <p className="text-sm">No favorite characters</p>
             <Link href="/aurora" className="text-xs qt-text-brand hover:underline">
               Mark some as favorites

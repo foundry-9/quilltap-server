@@ -33,7 +33,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
   }, [chats, shouldHideChat])
 
   return (
-    <div className="qt-homepage-section">
+    <div className="qt-homepage-section" data-section="chats">
       <div className="qt-homepage-section-header">
         <h2 className="qt-homepage-section-title">Recent Chats</h2>
         <Link href="/salon" className="qt-homepage-section-link">
@@ -42,7 +42,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
       </div>
       <div className="qt-homepage-section-content">
         {visibleChats.length === 0 ? (
-          <div className="text-center py-6 qt-text-secondary">
+          <div className="qt-homepage-empty text-center py-6 qt-text-secondary">
             <p className="text-sm">No chats yet</p>
             <Link href="/salon/new" className="text-xs qt-text-brand hover:underline">
               Start your first chat

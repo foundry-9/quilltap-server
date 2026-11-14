@@ -29,7 +29,7 @@ function CarriedGlyphs({ chatId, characterId }: { chatId?: string; characterId?:
   const carried = useChatCarriedItems(chatId, characterId)
   if (carried.length === 0) return null
   return (
-    <ul className="flex flex-wrap justify-center gap-1 w-32 mt-1" aria-label="Carrying" data-testid="salon-avatar-carried">
+    <ul className="qt-chat-avatar-carried flex flex-wrap justify-center gap-1 w-32 mt-1" aria-label="Carrying" data-testid="salon-avatar-carried">
       {carried.map((item) => {
         const name = inventoryDisplayName(item)
         return (

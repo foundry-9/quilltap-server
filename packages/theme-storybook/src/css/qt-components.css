@@ -2006,16 +2006,19 @@
     color: var(--theme-muted-foreground);
   }
   /**
-   * Dialog body
+   * Dialog body — default look. `.qt-dialog-body` itself is a theme hook with
+   * no styling: BaseModal always applies it, and applies this modifier only
+   * when the caller passes no body classes of its own.
    */
-  .qt-dialog-body {
+  .qt-dialog-body-default {
     padding-inline: calc(var(--spacing, 0.25rem) * 6);
     padding-block: calc(var(--spacing, 0.25rem) * 4);
   }
   /**
-   * Dialog footer - action buttons
+   * Dialog footer - action buttons — default look. `.qt-dialog-footer` is the
+   * unstyled theme hook, as above.
    */
-  .qt-dialog-footer {
+  .qt-dialog-footer-default {
     display: flex;
     justify-content: flex-end;
     gap: calc(var(--spacing, 0.25rem) * 2);

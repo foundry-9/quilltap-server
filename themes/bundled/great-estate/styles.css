@@ -712,15 +712,6 @@
   border-color: color-mix(in srgb, var(--estate-gold) calc(var(--qt-card-border-opacity) * 100%), transparent);
 }
 
-/* --- Chat message border accents --- */
-[data-theme="great-estate"] [data-role="assistant"] {
-  border-left: 3px solid var(--estate-gold);
-}
-
-[data-theme="great-estate"] [data-role="user"] {
-  border-right: 3px solid var(--estate-brown-mid);
-}
-
 /* --- Light-mode left sidebar: the panel is estate brown in both modes, so
    its items need cream ink rather than the page's dark-brown foreground --- */
 [data-theme="great-estate"]:not(.dark) .qt-left-sidebar {

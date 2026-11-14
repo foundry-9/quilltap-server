@@ -68,7 +68,7 @@ export function AIWizardModal({
       maxWidth="2xl"
       className="w-full m-4"
       bodyClassName="flex-1 min-h-0 flex flex-col"
-      footerClassName="qt-dialog-footer flex justify-between flex-shrink-0"
+      footerClassName="qt-dialog-footer-default flex justify-between flex-shrink-0"
       footer={wizard.currentStep < 4 ? (
         <>
           <button

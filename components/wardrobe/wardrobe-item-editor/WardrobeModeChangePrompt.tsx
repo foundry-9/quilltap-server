@@ -28,7 +28,7 @@ export function WardrobeModeChangePrompt({
       role="alertdialog"
       title="Switch to a single garment?"
       maxWidth="md"
-      footerClassName="qt-dialog-footer flex flex-wrap gap-2 justify-end"
+      footerClassName="qt-dialog-footer-default flex flex-wrap gap-2 justify-end"
       footer={
         <>
           <button

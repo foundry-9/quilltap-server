@@ -49,10 +49,10 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-body">
+            <div className="qt-dialog-body qt-dialog-body-default">
               <p>Dialog content area with additional details and information.</p>
             </div>
-            <div className="qt-dialog-footer">
+            <div className="qt-dialog-footer qt-dialog-footer-default">
               <button className="qt-button qt-button-primary" onClick={() => setBasicOpen(false)}>
                 Got it
               </button>
@@ -74,10 +74,10 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-body">
+            <div className="qt-dialog-body qt-dialog-body-default">
               <p>This will remove the item from your collection permanently.</p>
             </div>
-            <div className="qt-dialog-footer">
+            <div className="qt-dialog-footer qt-dialog-footer-default">
               <button className="qt-button qt-button-ghost" onClick={() => setConfirmOpen(false)}>
                 Cancel
               </button>
@@ -102,7 +102,7 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-body">
+            <div className="qt-dialog-body qt-dialog-body-default">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 500 }}>
@@ -129,7 +129,7 @@ export const Dialogs: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="qt-dialog-footer">
+            <div className="qt-dialog-footer qt-dialog-footer-default">
               <button className="qt-button qt-button-ghost" onClick={() => setFormOpen(false)}>
                 Cancel
               </button>
@@ -157,10 +157,10 @@ export const Dialogs: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="qt-dialog-body">
+            <div className="qt-dialog-body qt-dialog-body-default">
               <p>Dialog content area. This can contain text, forms, or any other content.</p>
             </div>
-            <div className="qt-dialog-footer">
+            <div className="qt-dialog-footer qt-dialog-footer-default">
               <button className="qt-button qt-button-ghost">Secondary Action</button>
               <button className="qt-button qt-button-primary">Primary Action</button>
             </div>
@@ -181,7 +181,7 @@ export const Dialogs: React.FC = () => {
                 <div className="qt-dialog-header">
                   <h3 className="qt-dialog-title">Small Dialog</h3>
                 </div>
-                <div className="qt-dialog-body">
+                <div className="qt-dialog-body qt-dialog-body-default">
                   <p>Compact dialog for simple confirmations.</p>
                 </div>
               </div>
@@ -194,7 +194,7 @@ export const Dialogs: React.FC = () => {
                 <div className="qt-dialog-header">
                   <h3 className="qt-dialog-title">Large Dialog</h3>
                 </div>
-                <div className="qt-dialog-body">
+                <div className="qt-dialog-body qt-dialog-body-default">
                   <p>Larger dialog for complex forms or detailed content that needs more space.</p>
                 </div>
               </div>

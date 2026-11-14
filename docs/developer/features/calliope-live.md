@@ -14,7 +14,8 @@ not a settled design.
 - [calliope-live-spec-a-token-registry.md](calliope-live-spec-a-token-registry.md)
   — Phase 0b: token registry and bundle format v2 (ready to run).
 - [calliope-live-spec-b-hook-catalogue.md](calliope-live-spec-b-hook-catalogue.md)
-  — Phase 0b′: structural hook catalogue (ready to run).
+  — Phase 0b′: structural hook catalogue (implemented 4.14-dev; reference
+  [THEME_HOOKS.md](../THEME_HOOKS.md), generated from `lib/themes/hooks/`).
 - Spec C (Phase 0c, migration) is not written; it waits on Spec A's fit report
   and Spec B's selector report.
 

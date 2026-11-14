@@ -371,6 +371,7 @@ function SettingsPage({ address, inWorkspace }: { address: AddressParams; inWork
                 key={g.id}
                 type="button"
                 className="qt-settings-rail-item"
+                data-group={g.id}
                 aria-current={g.id === activeGroup ? 'page' : undefined}
                 onClick={() => selectGroup(g.id)}
               >

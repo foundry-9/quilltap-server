@@ -255,16 +255,19 @@
   }
 
   /**
-   * Dialog body
+   * Dialog body — default look. `.qt-dialog-body` itself is a theme hook with
+   * no styling: BaseModal always applies it, and applies this modifier only
+   * when the caller passes no body classes of its own.
    */
-  .qt-dialog-body {
+  .qt-dialog-body-default {
     @apply px-6 py-4;
   }
 
   /**
-   * Dialog footer - action buttons
+   * Dialog footer - action buttons — default look. `.qt-dialog-footer` is the
+   * unstyled theme hook, as above.
    */
-  .qt-dialog-footer {
+  .qt-dialog-footer-default {
     @apply flex justify-end gap-2;
     @apply px-6 py-4;
     @apply bg-muted;

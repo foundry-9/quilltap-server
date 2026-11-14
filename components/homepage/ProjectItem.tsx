@@ -15,7 +15,7 @@ interface ProjectItemProps {
 
 export function ProjectItem({ project }: ProjectItemProps) {
   return (
-    <div className="flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors">
+    <div className="qt-homepage-row flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors">
       <Link
         href={`/prospero/${project.id}`}
         className="flex items-center gap-3 flex-1 min-w-0"

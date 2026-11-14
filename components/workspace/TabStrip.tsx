@@ -99,6 +99,7 @@ export function TabStrip({
             key={id}
             ref={isActive ? activeTabRef : undefined}
             role="presentation"
+            data-tab-kind={tab.kind}
             draggable
             className={
               'qt-tab' +

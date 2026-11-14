@@ -637,6 +637,10 @@ For advanced customization, create `styles.css` with component overrides. This u
 
 ### Available Component Classes
 
+The authoritative list of what a theme's CSS may target is
+[THEME_HOOKS.md](THEME_HOOKS.md), generated from the hook catalogue in
+`lib/themes/hooks/`. The table below is an older summary.
+
 | Class | Description |
 |-------|-------------|
 | `.qt-button`, `.qt-button-primary`, `.qt-button-secondary`, `.qt-button-ghost`, `.qt-button-destructive` | Button variants |

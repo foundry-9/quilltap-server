@@ -407,7 +407,7 @@ function LoadedCharacterPage({
 
   return (
     <CharacterPageContext.Provider value={context}>
-      <div className="character-page qt-page-container min-h-screen qt-text">
+      <div className="character-page qt-character-page qt-page-container min-h-screen qt-text">
         <CharacterHeader
           avatarStyle={avatarStyle}
           rehydrating={rehydrating}
@@ -439,7 +439,7 @@ function LoadedCharacterPage({
         />
 
         {readOnly && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border qt-border-default qt-bg-muted/60 p-4">
+          <div className="qt-character-archived-banner mb-6 flex items-start gap-3 rounded-2xl border qt-border-default qt-bg-muted/60 p-4">
             <span className="text-2xl" aria-hidden>
               🗄️
             </span>

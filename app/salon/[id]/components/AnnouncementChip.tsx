@@ -157,6 +157,7 @@ export const AnnouncementChip = memo(function AnnouncementChip({
       type="button"
       id={`message-${message.id}`}
       data-message-id={message.id}
+      data-staff={message.systemSender ?? undefined}
       onClick={() => onToggleExpanded(message.id)}
       className={`qt-chat-announcement-chip${accent ? ` ${accent}` : ''}${
         isWhisper ? ' qt-chat-announcement-chip-whisper' : ''

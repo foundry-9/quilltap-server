@@ -10,7 +10,7 @@ import type { ProjectsSectionProps } from './types'
 
 export function ProjectsSection({ projects }: ProjectsSectionProps) {
   return (
-    <div className="qt-homepage-section">
+    <div className="qt-homepage-section" data-section="projects">
       <div className="qt-homepage-section-header">
         <h2 className="qt-homepage-section-title">Active Projects</h2>
         <Link href="/prospero" className="qt-homepage-section-link">
@@ -19,7 +19,7 @@ export function ProjectsSection({ projects }: ProjectsSectionProps) {
       </div>
       <div className="qt-homepage-section-content">
         {projects.length === 0 ? (
-          <div className="text-center py-6 qt-text-secondary">
+          <div className="qt-homepage-empty text-center py-6 qt-text-secondary">
             <p className="text-sm">No projects yet</p>
             <p className="text-xs">Create a project to organize your chats</p>
           </div>

@@ -160,7 +160,7 @@ export default function ReattributeMessageDialog({
       title="Re-attribute Message"
       maxWidth="md"
       busy={isSubmitting}
-      footerClassName="qt-dialog-footer flex justify-end gap-2"
+      footerClassName="qt-dialog-footer-default flex justify-end gap-2"
       headerActions={
         <button
           aria-label="Close"

@@ -209,6 +209,7 @@ export function SidebarFooter() {
           <button
             type="button"
             onClick={helpChat.openHelpChat}
+            data-nav="help"
             disabled={!helpChat.isEligible && !helpChat.eligibilityLoading}
             className={`qt-left-sidebar-item justify-center px-0 ${!helpChat.isEligible && !helpChat.eligibilityLoading ? 'opacity-40 cursor-not-allowed' : ''}`}
             title={helpChat.isEligible ? 'Help' : 'Help (requires a help-enabled character with a tool-capable connection)'}
@@ -223,6 +224,7 @@ export function SidebarFooter() {
               if (inWorkspace) workspace!.openTab('brahma')
               else brahmaConsole.openConsole()
             }}
+            data-nav="brahma"
             disabled={!brahmaConsole.isEligible}
             className={`qt-left-sidebar-item justify-center px-0 ${!brahmaConsole.isEligible ? 'opacity-40 cursor-not-allowed' : ''}`}
             title={brahmaConsole.isEligible ? 'Brahma Console' : 'Brahma Console (requires a connection profile)'}
@@ -251,6 +253,7 @@ export function SidebarFooter() {
                 characterId ? { chatId, characterId } : { chatId },
               )
             }}
+            data-nav="wardrobe"
             className="qt-left-sidebar-item justify-center px-0"
             title="Wardrobe"
           >
@@ -276,6 +279,7 @@ export function SidebarFooter() {
               const characterId = await resolveDefaultCharacterForChat(chatId)
               inventoryDialog.open(characterId ? { chatId, characterId } : { chatId })
             }}
+            data-nav="inventory"
             className="qt-left-sidebar-item justify-center px-0"
             title="Inventory"
           >
@@ -307,6 +311,7 @@ export function SidebarFooter() {
               }
               atlasDialog.open(projectId ? { chatId, projectId } : { chatId })
             }}
+            data-nav="atlas"
             className="qt-left-sidebar-item justify-center px-0"
             title="The Atlas"
             aria-label="The Atlas"
@@ -318,6 +323,7 @@ export function SidebarFooter() {
         <button
           type="button"
           onClick={() => setShowDocumentPicker(true)}
+          data-nav="document-mode"
           className="qt-left-sidebar-item justify-center px-0"
           title="Document Mode"
         >
@@ -326,6 +332,7 @@ export function SidebarFooter() {
 
         <a
           href="/settings"
+          data-nav="settings"
           className="qt-left-sidebar-item justify-center px-0"
           title="Settings"
         >
@@ -337,13 +344,15 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleThemeClick}
+              data-nav="themes"
+              aria-expanded={openPopout === 'themes'}
               className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'themes' ? 'qt-bg-primary/10' : ''}`}
               title="Themes"
             >
               <Icon name="themes" className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'themes' && (
-              <div className="absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
+              <div className="qt-left-sidebar-popout absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
                 <NavUserMenuThemeContent onThemeSelected={handleThemeSelected} />
               </div>
             )}
@@ -355,13 +364,15 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleQuickHideClick}
+              data-nav="quick-hide"
+              aria-expanded={openPopout === 'quickHide'}
               className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'quickHide' ? 'qt-bg-primary/10' : ''}`}
               title={hasAnyHidden ? 'Show' : 'Hide'}
             >
               <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'quickHide' && (
-              <div className="absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
+              <div className="qt-left-sidebar-popout absolute bottom-full left-0 mb-1 w-56 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
                 <NavUserMenuQuickHideContent />
               </div>
             )}

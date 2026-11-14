@@ -76,7 +76,7 @@ export function ProfileMenu() {
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className="absolute bottom-full mb-2 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg overflow-hidden z-50 left-0 w-48">
+        <div className="qt-left-sidebar-popout absolute bottom-full mb-2 qt-bg-popover border qt-border-default rounded-lg qt-shadow-lg overflow-hidden z-50 left-0 w-48">
           <div className="p-2 space-y-1">
             {/* Profile link */}
             <button

@@ -43,7 +43,7 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
     <Link
       href={href}
       onClick={(e) => openInWorkspace(href, e)}
-      className="flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors"
+      className="qt-homepage-row flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors"
     >
       {/* Story background thumbnail (preferred) or Avatar stack */}
       {chat.storyBackgroundUrl ? (
