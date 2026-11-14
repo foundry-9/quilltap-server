@@ -4,6 +4,13 @@
 
 ### 4.14-dev
 
+#### Dependencies: npm update across root, packages and plugins
+
+- Ran `npm update -S` in the root project, every package and every plugin. Notable bumps: `better-sqlite3-multiple-ciphers` 13.1.1, `openai` 7.57, `@anthropic-ai/sdk` 1.8, `@openrouter/sdk` 1.5.103, `eslint` 10.15, `storybook` 10.6.7, `ws` 8.23; patch bumps to `tar`, `postcss`, `dompurify`, `croner`, `@napi-rs/canvas`, `@testing-library/user-event`
+- Plugins and plugin-utils now require `@quilltap/plugin-types` ^2.11.0; the root and plugins require `@quilltap/plugin-utils` ^2.7.6
+- postcss 8.5.33 types `Declaration.important` as `boolean | undefined`; the theme snapshot cascade (`lib/themes/snapshot/cascade.ts`) now coerces it
+- plugin-utils 2.7.6, theme-storybook 1.0.120; patch bumps to all 15 plugins (`package.json` and `manifest.json`), rebuilt
+
 #### Themes: version 2 theme document (Calliope Live, Spec A Stage 3)
 
 - Added the version 2 theme format (`theme.json` with `formatVersion: 2`): `tokens.json` holds author-named primitives (emitted as `--p-<name>`), overrides of registry tokens (one value, or light and dark) and choices; custom CSS is written without the theme id. `extendsTheme` is not part of version 2

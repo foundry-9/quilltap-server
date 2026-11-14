@@ -195,7 +195,7 @@ export function resolveRootVariables(sheets: CascadeSheet[], root: RootElementSt
         const list = candidates.get(decl.prop) ?? [];
         list.push({
           value: decl.value,
-          important: decl.important,
+          important: decl.important === true,
           layer: layer === layerRoot ? null : layer,
           specificity: context.match.specificity,
           order: order++,

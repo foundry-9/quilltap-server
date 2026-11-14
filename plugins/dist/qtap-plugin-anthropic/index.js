@@ -403,7 +403,7 @@ var init_sleep = __esm({
 var VERSION;
 var init_version = __esm({
   "node_modules/@anthropic-ai/sdk/version.mjs"() {
-    VERSION = "1.7.0";
+    VERSION = "1.8.0";
   }
 });
 
@@ -14554,11 +14554,10 @@ var init_versions2 = __esm({
        * Only a Plugin in a `manual` marketplace takes uploads; a Plugin synchronized
        * from a repository gets its versions from the repository. When the Plugin is in
        * the organization's library marketplace, a version that adds a skill with the
-       * name of an organization skill (a skill an administrator uploaded for the whole
-       * organization in claude.ai) is refused with a 409: `error_code`
-       * `skill_name_taken`, with that name in `details.skill_name`. A 503 with
-       * `error_code` `registration_pending` means the version was stored but is not yet
-       * usable; a later version create on the Plugin completes it.
+       * name of an organization skill that this API does not list is refused with a 409:
+       * `error_code` `skill_name_taken`, with that name in `details.skill_name`. A 503
+       * with `error_code` `registration_pending` means the version was stored but is not
+       * yet usable; a later version create on the Plugin completes it.
        *
        * For a worked example, see
        * [Create a version](/docs/en/manage-claude/plugins-api#create-a-version) in the
@@ -14837,13 +14836,13 @@ var init_plugins2 = __esm({
          * 409 with `error_code` `plugin_name_taken` and, when a Plugin holds it, that
          * Plugin's ID in `details.plugin_id`. A Plugin going into the organization's
          * library marketplace is also refused with a 409 when one of its skills has the
-         * name of an organization skill (a skill an administrator uploaded for the whole
-         * organization in claude.ai): `error_code` `skill_name_taken`, with that name in
-         * `details.skill_name`; rename the skill, or remove the organization skill in
-         * claude.ai. A 503 with `error_code` `registration_pending` means the Plugin and
-         * its version were stored (their IDs are in `details`) but are not yet usable in
-         * claude.ai: do not retry the create (the retry would return `plugin_name_taken`);
-         * create a version on the stored Plugin instead, which completes it.
+         * name of an organization skill that this API does not list: `error_code`
+         * `skill_name_taken`, with that name in `details.skill_name`; rename the skill, or
+         * remove the organization skill in claude.ai. A 503 with `error_code`
+         * `registration_pending` means the Plugin and its version were stored (their IDs
+         * are in `details`) but are not yet usable in claude.ai: do not retry the create
+         * (the retry would return `plugin_name_taken`); create a version on the stored
+         * Plugin instead, which completes it.
          *
          * For a worked example, see
          * [Create a plugin](/docs/en/manage-claude/plugins-api#create-a-plugin) in the
@@ -14947,10 +14946,9 @@ var init_plugins2 = __esm({
          * accepted. If the scan outcome cannot be read at that moment, the request fails
          * with a retryable 503 instead. When the Plugin is in the organization's library
          * marketplace, a version other than the one served is also refused with a 409 when
-         * one of its skills has a name that an organization skill (one an administrator
-         * uploaded for the whole organization in claude.ai) has since taken: `error_code`
-         * `skill_name_taken`, with that name in `details.skill_name`. A member-owned
-         * Plugin cannot be updated here (403).
+         * an organization skill that this API does not list has since taken the name of
+         * one of its skills: `error_code` `skill_name_taken`, with that name in
+         * `details.skill_name`. A member-owned Plugin cannot be updated here (403).
          *
          * This endpoint does not write installation settings; they are written at
          * `/v1/organizations/plugins/{plugin_id}/installation_settings/{target}`.
@@ -15057,7 +15055,9 @@ var init_plugins2 = __esm({
         /**
          * Permanently delete a Plugin and every version it holds, exactly as when an
          * administrator deletes it in claude.ai. The Plugin may belong to the organization
-         * or to a member, including a member who has since left the organization.
+         * or to a member, including a member who has since left the organization. Do not
+         * delete a Plugin only because your pipeline did not create it: a member or an
+         * administrator might have added it in claude.ai.
          *
          * An organization-owned Plugin's installation settings go with it; a member-owned
          * Plugin's shares are withdrawn and its owner no longer has it.
@@ -32178,7 +32178,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION3 = "7.54.0";
+var VERSION3 = "7.57.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -44228,14 +44228,11 @@ var Events3 = class extends APIResource2 {
    *       {
    *         request_id: 'request_id',
    *         response: {
-   *           action: 'submit',
-   *           fields: [
-   *             { field_id: 'field_id', value: 'value' },
-   *           ],
-   *           type: 'browser_authentication',
+   *           decision: 'approve',
+   *           type: 'mcp_tool_call',
    *         },
    *         type:
-   *           'agent.session.input.computer_use_approval_request_result',
+   *           'agent.session.input.mcp_approval_request_result',
    *       },
    *     ],
    *   },
@@ -44258,20 +44255,14 @@ var Events3 = class extends APIResource2 {
       __security: { bearerAuth: true }
     })));
   }
-  /**
-   * Streams live events for an agent session. See
-   * [session events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events).
-   *
-   * @example
-   * ```ts
-   * const agentSessionEvent =
-   *   await client.beta.agents.sessions.events.stream(
-   *     'session_id',
-   *   );
-   * ```
-   */
-  stream(sessionID, options) {
+  stream(sessionID, query = {}, options) {
+    if (arguments.length < 3) {
+      options = query;
+      query = {};
+    }
+    query = query;
     return this._client.get(path4`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions51(options, (options2) => ({
+      query,
       ...options2,
       headers: buildHeaders2([
         { "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" },
@@ -45444,7 +45435,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
     if (session.status !== "idle") {
       throw new OpenAIError("sessions.stream requires an idle session; use sessions.events.stream for active sessions");
     }
-    const subscription = await __classPrivateFieldGet2(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet2(this, _AgentSessionStream_sessionID, "f"), options).withResponse();
+    const subscription = await __classPrivateFieldGet2(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet2(this, _AgentSessionStream_sessionID, "f"), {}, options).withResponse();
     __classPrivateFieldSet2(this, _AgentSessionStream_stream, subscription.data, "f");
     __classPrivateFieldSet2(this, _AgentSessionStream_response, subscription.response, "f");
     __classPrivateFieldGet2(this, _AgentSessionStream_instances, "m", _AgentSessionStream_checkAbort).call(this);
@@ -45665,8 +45656,9 @@ var Sessions2 = class extends APIResource2 {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, or service tier. Model
-   * settings apply to subsequent turns. Omitted fields are unchanged. See
+   * Updates session tools, metadata, model, reasoning effort, service tier, or the
+   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
+   * fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -49529,13 +49521,30 @@ var Images = class extends APIResource2 {
     return this._client.post("/images/variations", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions2({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   edit(body, options) {
-    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions2(withBodyFinalization9(((requestOptions) => ({
-      ...requestOptions,
-      body: Object.fromEntries(Object.entries(requestOptions.body ?? {}).map(([key, value]) => [
-        key,
-        key === "safety_identifier" && value === null ? void 0 : value
-      ]))
-    }))({
+    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions2(withBodyFinalization9(((requestOptions) => {
+      const omitNulls = (value, paths) => {
+        if (value === null || typeof value !== "object" || Array.isArray(value))
+          return value;
+        return Object.fromEntries(Object.entries(value).map(([key, field]) => {
+          const selected = paths.filter((path5) => path5[0] === key);
+          if (field === null && selected.some((path5) => path5.length === 1))
+            return [key, void 0];
+          const children = selected.filter((path5) => path5.length > 1).map((path5) => path5.slice(1));
+          return [key, children.length === 0 ? field : omitNulls(field, children)];
+        }));
+      };
+      return {
+        ...requestOptions,
+        body: omitNulls(requestOptions.body ?? {}, [
+          ["safety_identifier"],
+          ["complexity"],
+          ["frame_count"],
+          ["frame_duration_ms"],
+          ["svg"],
+          ["svg", "reasoning"]
+        ])
+      };
+    })({
       body,
       ...options2,
       stream: body.stream ?? false,

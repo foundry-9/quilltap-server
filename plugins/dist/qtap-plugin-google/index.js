@@ -21165,12 +21165,17 @@ var require_websocket = __commonJS({
               protocols = [protocols];
             }
           }
-          initAsClient(this, address, protocols, options);
+          options = initAsClient(this, address, protocols, options);
         } else {
-          this._autoPong = options.autoPong;
-          this._closeTimeout = options.closeTimeout;
           this._isServer = true;
         }
+        if (options.autoPong) {
+          this._autoPong = true;
+          this._autoPongComplete = () => autoPongComplete(this);
+          this._pendingAutoPongs = 0;
+          this._maxPendingAutoPongs = options.maxPendingAutoPongs | 0;
+        }
+        this._closeTimeout = options.closeTimeout;
       }
       /**
        * For historical reasons, the custom "nodebuffer" type is used by the default
@@ -21581,6 +21586,7 @@ var require_websocket = __commonJS({
         maxBufferedChunks: 256 * 1024,
         maxFragments: 16 * 1024,
         maxPayload: 100 * 1024 * 1024,
+        maxPendingAutoPongs: 60,
         skipUTF8Validation: false,
         perMessageDeflate: true,
         followRedirects: false,
@@ -21596,8 +21602,6 @@ var require_websocket = __commonJS({
         path: void 0,
         port: void 0
       };
-      websocket._autoPong = opts.autoPong;
-      websocket._closeTimeout = opts.closeTimeout;
       if (!protocolVersions.includes(opts.protocolVersion)) {
         throw new RangeError(
           `Unsupported protocol version: ${opts.protocolVersion} (supported versions: ${protocolVersions.join(", ")})`
@@ -21840,6 +21844,7 @@ var require_websocket = __commonJS({
       } else {
         req.end();
       }
+      return opts;
     }
     function emitErrorAndClose(websocket, err) {
       websocket._readyState = WebSocket2.CLOSING;
@@ -21928,8 +21933,18 @@ var require_websocket = __commonJS({
     }
     function receiverOnPing(data) {
       const websocket = this[kWebSocket];
-      if (websocket._autoPong) websocket.pong(data, !this._isServer, NOOP);
+      if (websocket._autoPong && websocket.readyState === WebSocket2.OPEN) {
+        if (websocket._maxPendingAutoPongs > 0 && websocket._pendingAutoPongs >= websocket._maxPendingAutoPongs) {
+          websocket.terminate();
+        } else {
+          websocket._pendingAutoPongs++;
+          websocket.pong(data, !this._isServer, websocket._autoPongComplete);
+        }
+      }
       websocket.emit("ping", data);
+    }
+    function autoPongComplete(websocket) {
+      websocket._pendingAutoPongs--;
     }
     function receiverOnPong(data) {
       this[kWebSocket].emit("pong", data);
@@ -22184,6 +22199,8 @@ var require_websocket_server = __commonJS({
        *     fragments
        * @param {Number} [options.maxPayload=104857600] The maximum allowed message
        *     size
+       * @param {Number} [options.maxPendingAutoPongs=60] The maximum number of
+       *     pending automatic pongs
        * @param {Boolean} [options.noServer=false] Enable no server mode
        * @param {String} [options.path] Accept only connections matching this path
        * @param {(Boolean|Object)} [options.perMessageDeflate=false] Enable/disable
@@ -22206,6 +22223,7 @@ var require_websocket_server = __commonJS({
           maxBufferedChunks: 256 * 1024,
           maxFragments: 16 * 1024,
           maxPayload: 100 * 1024 * 1024,
+          maxPendingAutoPongs: 60,
           skipUTF8Validation: false,
           perMessageDeflate: false,
           handleProtocols: null,
@@ -48906,7 +48924,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.54.0";
+var VERSION = "7.57.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -60956,14 +60974,11 @@ var Events = class extends APIResource {
    *       {
    *         request_id: 'request_id',
    *         response: {
-   *           action: 'submit',
-   *           fields: [
-   *             { field_id: 'field_id', value: 'value' },
-   *           ],
-   *           type: 'browser_authentication',
+   *           decision: 'approve',
+   *           type: 'mcp_tool_call',
    *         },
    *         type:
-   *           'agent.session.input.computer_use_approval_request_result',
+   *           'agent.session.input.mcp_approval_request_result',
    *       },
    *     ],
    *   },
@@ -60986,20 +61001,14 @@ var Events = class extends APIResource {
       __security: { bearerAuth: true }
     })));
   }
-  /**
-   * Streams live events for an agent session. See
-   * [session events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events).
-   *
-   * @example
-   * ```ts
-   * const agentSessionEvent =
-   *   await client.beta.agents.sessions.events.stream(
-   *     'session_id',
-   *   );
-   * ```
-   */
-  stream(sessionID, options) {
+  stream(sessionID, query = {}, options) {
+    if (arguments.length < 3) {
+      options = query;
+      query = {};
+    }
+    query = query;
     return this._client.get(path2`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions51(options, (options2) => ({
+      query,
       ...options2,
       headers: buildHeaders([
         { "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" },
@@ -62172,7 +62181,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
     if (session.status !== "idle") {
       throw new OpenAIError("sessions.stream requires an idle session; use sessions.events.stream for active sessions");
     }
-    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), options).withResponse();
+    const subscription = await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.stream(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), {}, options).withResponse();
     __classPrivateFieldSet(this, _AgentSessionStream_stream, subscription.data, "f");
     __classPrivateFieldSet(this, _AgentSessionStream_response, subscription.response, "f");
     __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_checkAbort).call(this);
@@ -62393,8 +62402,9 @@ var Sessions = class extends APIResource {
     })));
   }
   /**
-   * Updates session tools, metadata, model, reasoning effort, or service tier. Model
-   * settings apply to subsequent turns. Omitted fields are unchanged. See
+   * Updates session tools, metadata, model, reasoning effort, service tier, or the
+   * default prompt cache lifetime. Model settings apply to subsequent turns. Omitted
+   * fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -66257,13 +66267,30 @@ var Images = class extends APIResource {
     return this._client.post("/images/variations", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   edit(body, options) {
-    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => ({
-      ...requestOptions,
-      body: Object.fromEntries(Object.entries(requestOptions.body ?? {}).map(([key, value]) => [
-        key,
-        key === "safety_identifier" && value === null ? void 0 : value
-      ]))
-    }))({
+    return this._client.post("/images/edits", resolveResourceRequestOptions89(options, (options2) => multipartFormRequestOptions(withBodyFinalization9(((requestOptions) => {
+      const omitNulls = (value, paths) => {
+        if (value === null || typeof value !== "object" || Array.isArray(value))
+          return value;
+        return Object.fromEntries(Object.entries(value).map(([key, field]) => {
+          const selected = paths.filter((path3) => path3[0] === key);
+          if (field === null && selected.some((path3) => path3.length === 1))
+            return [key, void 0];
+          const children = selected.filter((path3) => path3.length > 1).map((path3) => path3.slice(1));
+          return [key, children.length === 0 ? field : omitNulls(field, children)];
+        }));
+      };
+      return {
+        ...requestOptions,
+        body: omitNulls(requestOptions.body ?? {}, [
+          ["safety_identifier"],
+          ["complexity"],
+          ["frame_count"],
+          ["frame_duration_ms"],
+          ["svg"],
+          ["svg", "reasoning"]
+        ])
+      };
+    })({
       body,
       ...options2,
       stream: body.stream ?? false,
