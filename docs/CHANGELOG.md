@@ -7,6 +7,7 @@
 #### Release process: bugfix branch merges each release
 
 - `/tag-for-release` now restarts the bugfix branch with a merge of release (`-s ours`, then the existing tree-copy) instead of a plain tree-copy, in both the main and bugfix flows. The release commit and tag become ancestors of bugfix, so `git log <tag>..bugfix` shows only bugfix work since the release; the new branch's tree still matches release exactly.
+- `/tag-for-release` no longer tags the "started X.Y.0 development" commit on main with a bare `X.Y.0-dev` tag; that tag's release workflow always failed for lack of a build number.
 
 #### Files: stale image types and sizes after the 4.10 re-encode
 

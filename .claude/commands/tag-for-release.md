@@ -141,15 +141,14 @@ Add a new dev heading above the release heading:
 - (entries from the release)
 ```
 
-### Step 8: Commit and tag main
+### Step 8: Commit main
 
 ```bash
 git add package.json package-lock.json README.md
 git commit --no-verify -m "dev: started NEWDEVVERSION development"
-git tag -s -m "NEWDEVVERSION-dev" NEWDEVVERSION-dev
 ```
 
-(Replace NEWDEVVERSION with the actual version, e.g., `4.2.0`)
+(Replace NEWDEVVERSION with the actual version, e.g., `4.2.0`.) Do not tag this commit: a bare `X.Y.0-dev` tag has no build number, so its release workflow always fails. The first dev tag is the `X.Y.0-dev.N` one cut by the ordinary dev flow.
 
 ### Step 9: Set up the new bugfix branch
 
