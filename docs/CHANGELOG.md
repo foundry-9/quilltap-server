@@ -4,6 +4,10 @@
 
 ### 4.13-dev
 
+#### Release process: bugfix branch merges each release
+
+- `/tag-for-release` now restarts the bugfix branch with a merge of release (`-s ours`, then the existing tree-copy) instead of a plain tree-copy, in both the main and bugfix flows. The release commit and tag become ancestors of bugfix, so `git log <tag>..bugfix` shows only bugfix work since the release; the new branch's tree still matches release exactly.
+
 #### Files: stale image types and sizes after the 4.10 re-encode
 
 - `recompress-oversized-mount-blobs-v1` re-encoded bitmap blobs to WebP and updated `files.sha256`, but not `files.mimeType` or `files.size`. Those rows kept claiming PNG or JPEG at the pre-encode size (67 rows on the reference instance), which is the mismatch that once made Anthropic reject attachments as the wrong media type. The migration now updates all three columns. New migration `repair-files-mime-and-size-from-mount-blob-v2` re-runs the v1 reconcile after it for instances that already ran it; v1 and v2 share one body.
